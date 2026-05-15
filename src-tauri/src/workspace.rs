@@ -1,0 +1,173 @@
+/// Workspace/Sandbox module for restricting agent file operations
+/// 
+/// This module provides path validation to ensure agents can only operate
+/// within a designated workspace folder, preventing unauthorized access to
+/// sensitive system files.
+
+use std::path::{Path, PathBuf};
+use anyhow::{Result, Context};
+
+/// Validates that a path is within the workspace folder
+/// 
+/// Returns Ok(canonical_path) if the path is safe, Err otherwise.
+/// Prevents path traversal attacks (../, symlinks, etc.)
+pub fn validate_workspace_path(
+    workspace_root: &Path,
+    requested_path: &Path,
+) -> Result<PathBuf> {
+    // Canonicalize the workspace root first
+    let canonical_root = workspace_root
+        .canonicalize()
+        .with_context(|| format!("Failed to resolve workspace root: {}", workspace_root.display()))?;
+    
+    // If the requested path exists, canonicalize it
+    // If it doesn't exist yet (e.g., new file), we need to validate the parent
+    let canonical_path = if requested_path.exists() {
+        requested_path
+            .canonicalize()
+            .with_context(|| format!("Failed to resolve path: {}", requested_path.display()))?
+    } else {
+        // For non-existent paths, validate the parent directory
+        let parent = requested_path
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("Invalid path: no parent directory"))?;
+        
+        // If parent doesn't exist, we'll create it - validate what does exist
+        if parent.exists() {
+            let canonical_parent = parent
+                .canonicalize()
+                .with_context(|| format!("Failed to resolve parent directory: {}", parent.display()))?;
+            
+            // Check if parent is within workspace
+            if !canonical_parent.starts_with(&canonical_root) {
+                return Err(anyhow::anyhow!(
+                    "Path traversal detected: {} is outside workspace {}",
+                    requested_path.display(),
+                    workspace_root.display()
+                ));
+            }
+        }
+        
+        // Return the original path (will be created by caller)
+        requested_path.to_path_buf()
+    };
+    
+    // Critical security check: ensure the canonical path starts with workspace root
+    if !canonical_path.starts_with(&canonical_root) {
+        return Err(anyhow::anyhow!(
+            "SECURITY VIOLATION: Path {} is outside workspace boundary {}",
+            canonical_path.display(),
+            canonical_root.display()
+        ));
+    }
+    
+    Ok(canonical_path)
+}
+
+/// Resolves a path string (absolute or relative) to an absolute path within workspace
+pub fn resolve_workspace_path(
+    workspace_root: &Path,
+    path_str: &str,
+) -> Result<PathBuf> {
+    let requested = PathBuf::from(path_str);
+
+    // If it's an absolute path, validate it's within workspace
+    if requested.is_absolute() {
+        return validate_workspace_path(workspace_root, &requested);
+    }
+
+    // Relative path - join with workspace root
+    let full_path = workspace_root.join(&requested);
+    validate_workspace_path(workspace_root, &full_path)
+}
+
+/// Resolves a path within a session-specific sub-folder
+/// Creates the session folder structure: workspace/sessions/{session_id}/{relative_path}
+pub fn resolve_session_path(
+    workspace_root: &Path,
+    session_id: &str,
+    relative_path: &str,
+) -> Result<PathBuf> {
+    // Create session folder: workspace/sessions/{session_id}/
+    let session_root = workspace_root.join("sessions").join(session_id);
+
+    // Validate the session root is within workspace
+    if !session_root.starts_with(workspace_root) {
+        return Err(anyhow::anyhow!("Invalid session folder structure"));
+    }
+
+    // Resolve the relative path within session folder
+    let full_path = session_root.join(relative_path);
+    validate_workspace_path(workspace_root, &full_path)
+}
+
+/// Checks if a path attempts to traverse outside the workspace
+/// Quick pre-validation before doing expensive canonicalization
+pub fn looks_like_path_traversal(path_str: &str) -> bool {
+    // Check for common path traversal patterns
+    path_str.contains("..") ||
+    path_str.starts_with('/') ||
+    path_str.starts_with('\\') ||
+    path_str.contains('~') ||
+    path_str.starts_with('$')
+}
+
+/// Gets the default workspace folder (user's home directory / projects)
+pub fn get_default_workspace() -> PathBuf {
+    // Try to get user's home directory
+    if let Some(home) = dirs::home_dir() {
+        // Prefer a 'zen-projects' subdirectory if it exists, or use home
+        let projects = home.join("zen-projects");
+        if projects.exists() {
+            return projects;
+        }
+        return home;
+    }
+    
+    // Fallback to current directory
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+    
+    #[test]
+    fn test_valid_workspace_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace = temp_dir.path();
+        
+        // Create a test file
+        let test_file = workspace.join("test.txt");
+        std::fs::write(&test_file, "content").unwrap();
+        
+        // Should succeed
+        let result = validate_workspace_path(workspace, &test_file);
+        assert!(result.is_ok());
+    }
+    
+    #[test]
+    fn test_path_traversal_blocked() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace = temp_dir.path();
+        
+        // Try to escape workspace
+        let escape_path = workspace.join("../escape.txt");
+        
+        // Should fail
+        let result = validate_workspace_path(workspace, &escape_path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("outside workspace"));
+    }
+    
+    #[test]
+    fn test_absolute_path_outside_workspace() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace = temp_dir.path();
+        
+        // Try to access /etc/passwd or similar
+        let result = validate_workspace_path(workspace, Path::new("/etc/passwd"));
+        assert!(result.is_err());
+    }
+}

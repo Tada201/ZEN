@@ -1,0 +1,77 @@
+use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use std::io::{Read, Write};
+use tauri::{AppHandle, Emitter};
+
+pub struct TerminalSession {
+    pub id: String,
+    pub writer: Box<dyn Write + Send>,
+}
+
+pub struct TerminalService {
+    pub sessions: Arc<Mutex<Vec<TerminalSession>>>,
+}
+
+impl TerminalService {
+    pub fn new() -> Self {
+        Self {
+            sessions: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    pub fn spawn(&self, id: String, app_handle: AppHandle) -> Result<(), String> {
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|e: anyhow::Error| e.to_string())?;
+
+        let shell = if cfg!(windows) { "powershell.exe" } else { "bash" };
+        let cmd = CommandBuilder::new(shell);
+        
+        let _child = pair.slave.spawn_command(cmd).map_err(|e: anyhow::Error| e.to_string())?;
+        
+        let reader = pair.master.try_clone_reader().map_err(|e: anyhow::Error| e.to_string())?;
+        let writer = pair.master.take_writer().map_err(|e: anyhow::Error| e.to_string())?;
+
+        let session = TerminalSession {
+            id: id.clone(),
+            writer,
+        };
+
+        let sessions = self.sessions.clone();
+        tauri::async_runtime::spawn(async move {
+            sessions.lock().await.push(session);
+        });
+
+        // Spawn read thread
+        let id_clone = id.clone();
+        std::thread::spawn(move || {
+            let mut reader = reader;
+            let mut buffer = [0u8; 1024];
+            while let Ok(n) = reader.read(&mut buffer) {
+                if n == 0 { break; }
+                let data = String::from_utf8_lossy(&buffer[..n]).to_string();
+                let _ = app_handle.emit(&format!("terminal-stdout-{}", id_clone), data);
+            }
+        });
+
+        Ok(())
+    }
+
+    pub async fn write(&self, id: String, data: String) -> Result<(), String> {
+        let mut sessions = self.sessions.lock().await;
+        if let Some(session) = sessions.iter_mut().find(|s| s.id == id) {
+            session.writer.write_all(data.as_bytes()).map_err(|e: std::io::Error| e.to_string())?;
+            session.writer.flush().map_err(|e: std::io::Error| e.to_string())?;
+            Ok(())
+        } else {
+            Err("Session not found".to_string())
+        }
+    }
+}

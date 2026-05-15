@@ -1,0 +1,49 @@
+# Tauri
+src-tauri/target/
+src-tauri/gen/
+src-tauri/bin/
+
+# Graphify
+graphify-out/
+
+# Spec Kit & Antigravity
+.agents/
+.bg-shell/
+.gsd/
+.specify/
+
+# Generated / Handoff files
+*.tmp
+*.tmp.*
+REPORT.md
+HANDOFF.md
+HANDOFF_INSTRUCTIONS.md
+continue.md
+c.txt
+tsc-errors.tmp
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Editor directories and files
+.vscode/
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+EXAMPLE_NO_EDITS/

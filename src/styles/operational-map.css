@@ -1,0 +1,89 @@
+/* Palantir GTSM v2.4 Design System */
+:root {
+    --gtsm-bg: #0A0F1A;
+    --gtsm-cyan: #00E6E6;
+    --gtsm-lime: #39FF14;
+    --gtsm-red: #FF2D55;
+    --gtsm-amber: #FFB300;
+    --hud-glass: rgba(10, 15, 26, 0.85);
+    --hud-border: rgba(0, 230, 230, 0.25);
+    --hud-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.tactical-map-sidebar {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--gtsm-bg);
+    font-family: monospace;
+    overflow: hidden;
+    color: #fff;
+}
+
+.tactical-map-container {
+    background: #000;
+    flex: 1;
+    min-height: 350px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    cursor: crosshair;
+    position: relative;
+    overflow: hidden;
+}
+
+.tactical-hud-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    user-select: none;
+    z-index: 10;
+}
+
+.tactical-grid-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+        linear-gradient(rgba(0, 230, 230, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 230, 230, 0.03) 1px, transparent 1px);
+    background-size: 25px 25px;
+}
+
+.animate-spin-slow {
+    animation: spin 20s linear infinite;
+}
+
+.animate-spin-reverse {
+    animation: spin-reverse 25s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes spin-reverse {
+    from { transform: rotate(360deg); }
+    to { transform: rotate(0deg); }
+}
+
+.tactical-sidebar-hud {
+    flex-shrink: 0;
+}
+
+.cesium-viewer {
+    background: #000;
+}
+
+.cesium-viewer-bottom,
+.cesium-viewer-animationContainer,
+.cesium-viewer-timelineContainer,
+.cesium-viewer-toolbar,
+.cesium-viewer-fullscreenContainer,
+.cesium-geocoder-searchButton,
+.cesium-navigation-help,
+.cesium-home-button,
+.cesium-scene-mode-picker,
+.cesium-base-layer-picker,
+.cesium-widget-credits {
+    display: none !important;
+}

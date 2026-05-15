@@ -1,0 +1,170 @@
+@import "tailwindcss";
+
+@theme {
+  /* UI Atlas Design Tokens - Default Dark */
+  --color-background: #0e0f11;
+  --color-foreground: #ffffff;
+  --color-card: #111827;
+  --color-muted: #1a1b23;
+  --color-muted-foreground: #6b7280;
+  --color-border: #1f2937;
+  --color-border-strong: #374151;
+  --color-primary: #a78bfa;
+  --color-primary-glow: #c4b5fd;
+  --color-ring: #a78bfa;
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+
+  /* UI Atlas accent swatches */
+  --color-violet: hsl(262 83% 58%);
+  --color-indigo: hsl(239 84% 60%);
+  --color-emerald: hsl(160 84% 39%);
+  --color-rose: hsl(346 77% 50%);
+  --color-amber: hsl(32 95% 50%);
+  --color-sky: hsl(199 89% 48%);
+  --color-slate-accent: hsl(222 47% 25%);
+
+  /* VS Code Standard Widths */
+  --activity-bar-width: 48px;
+  --sidebar-collapsed-width: 48px;
+  --sidebar-expanded-width: 260px;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: sans-serif;
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Premium Zen Backgrounds */
+.ui-zen-bg {
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.05) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(59, 130, 246, 0.05) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.05) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(59, 130, 246, 0.05) 0px, transparent 50%);
+  background-attachment: fixed;
+}
+
+.ui-zen-grid {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+}
+
+/* Scrollbar Styles */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* UI Atlas Design System Utility Classes */
+.press {
+  transition: transform 80ms ease-out, opacity 80ms ease-out;
+}
+.press:active {
+  transform: scale(0.97);
+  opacity: 0.9;
+}
+
+/* Card base styles from UI Atlas */
+.card {
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  background-color: var(--color-card);
+  padding: 1.25rem;
+}
+
+/* Badge variants */
+.badge-default {
+  border-radius: 9999px;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background-color: var(--color-primary);
+  color: white;
+}
+.badge-secondary {
+  border-radius: 9999px;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background-color: var(--color-muted);
+  color: var(--color-muted-foreground);
+}
+.badge-outline {
+  border-radius: 9999px;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid var(--color-border);
+  color: var(--color-muted-foreground);
+}
+.badge-destructive {
+  border-radius: 9999px;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background-color: var(--color-destructive);
+  color: white;
+}
+
+/* Glass morphism style */
+.glass {
+  background: rgba(17, 24, 39, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Subtle style */
+.subtle {
+  background-color: var(--color-muted);
+  border: 1px solid transparent;
+}
+
+/* Bordered style */
+.bordered {
+  border: 1px solid var(--color-border);
+}
+
+/* Gradient accent */
+.gradient-accent {
+  background: linear-gradient(135deg, var(--color-primary), hsl(199 89% 48%));
+}
+
+/* Shadow accent */
+.shadow-accent {
+  box-shadow: 0 0 20px -5px hsla(var(--color-primary), 0.5);
+}
+
+/* Glow text */
+.glow-text {
+  text-shadow: 0 0 10px hsla(var(--color-primary), 0.5);
+}
+
+/* Mono font utility */
+.font-mono {
+  font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+}
