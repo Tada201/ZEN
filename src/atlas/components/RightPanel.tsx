@@ -56,15 +56,15 @@ export function RightPanel() {
       case 'drawing':
         return (
           <div className="flex-grow flex flex-col relative w-full h-full overflow-hidden">
-            <div className="absolute top-[-44px] right-14 z-50 bg-[#050506] border border-white/10 rounded px-2 py-1 text-[10px] text-white/70 font-mono flex items-center gap-2">
-              <span className="text-white/40">MODE:</span>
+            <div className="absolute top-[-44px] right-14 z-50 bg-card border border-border rounded-full px-3 py-1 text-[10px] text-muted-foreground font-mono flex items-center gap-2 press">
+              <span className="text-muted-foreground/60">MODE:</span>
               <select
                 value={canvasMode}
                 onChange={(e) => setCanvasMode(e.target.value as 'draw' | 'mathplot')}
-                className="bg-transparent outline-none cursor-pointer text-[#00ff9f] font-bold uppercase"
+                className="bg-transparent outline-none cursor-pointer text-primary font-bold uppercase"
               >
-                <option value="mathplot" className="bg-[#050506]">MATH PLOT</option>
-                <option value="draw" className="bg-[#050506]">FREE DRAW</option>
+                <option value="mathplot" className="bg-card text-foreground">MATH PLOT</option>
+                <option value="draw" className="bg-card text-foreground">FREE DRAW</option>
               </select>
             </div>
             <div className="flex-grow overflow-hidden relative w-full h-full flex flex-col">
@@ -115,8 +115,8 @@ export function RightPanel() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#050506] border-l border-white/5">
-      <header className="h-14 border-b border-white/5 flex items-center justify-between px-4 bg-white/[0.02] shrink-0">
+    <div className="flex flex-col h-full bg-background border-l border-border">
+      <header className="h-14 border-b border-border flex items-center justify-between px-4 bg-card/20 backdrop-blur shrink-0">
         <div className="flex items-center gap-2.5">
           {getIcon()}
           <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-zinc-300">{getTitle()}</span>
@@ -155,7 +155,7 @@ export function RightPanel() {
                 <CesiumCanvas />
               </Suspense>
             ) : (
-              <div className="flex-grow flex flex-col items-center justify-center p-6 text-center bg-[#050506]">
+              <div className="flex-grow flex flex-col items-center justify-center p-6 text-center bg-background">
                 <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-4 animate-pulse">
                   <MapIcon size={24} />
                 </div>
@@ -172,12 +172,12 @@ export function RightPanel() {
               </div>
             )}
           </div>
-          <div className="px-4 py-2.5 bg-[#08080a] border-t border-white/5 text-[9px] text-zinc-500 font-mono flex items-center justify-between shrink-0">
+          <div className="px-4 py-2.5 bg-card/40 border-t border-border text-[9px] text-muted-foreground font-mono flex items-center justify-between shrink-0">
             <span>Coordinates System: WGS 84</span>
             <span className="truncate max-w-[180px]">Target: {operationalParams?.label || "Active Search"}</span>
           </div>
         </div>
-      ) : activeRightTab === 'drawing' || activeRightTab === 'agents' ? (
+      ) : activeRightTab === 'drawing' || activeRightTab === 'agents' || activeRightTab === 'terminal' || activeRightTab === 'artifacts' ? (
         <div className="flex-1 relative overflow-hidden bg-black flex flex-col">
           <AnimatePresence mode="wait">
             <motion.div

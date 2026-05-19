@@ -12,10 +12,54 @@ export function useStreamingChat(
   const unlistenRefs = useRef<UnlistenFn[]>([]);
   const queryClient = useQueryClient();
 
+  // Performance: Buffer streaming deltas and flush once per animation frame
+  // instead of triggering a React state update on every single token.
+  const chunkBufferRef = useRef('');
+  const chunkRafRef = useRef<number | null>(null);
+
+  const flushChunkBuffer = useCallback(() => {
+    const delta = chunkBufferRef.current;
+    if (!delta) {
+      chunkRafRef.current = null;
+      return;
+    }
+    chunkBufferRef.current = '';
+    chunkRafRef.current = null;
+
+    setMessages(prev => {
+      const last = prev[prev.length - 1];
+      if (!last || last.role !== "assistant") return prev;
+
+      const updated = { ...last };
+      updated.content += delta;
+
+      // Basic interleaving into steps
+      updated.steps = updated.steps || [];
+      const lastStep = updated.steps[updated.steps.length - 1];
+      if (lastStep && lastStep.type === "text") {
+        lastStep.content = (lastStep.content || "") + delta;
+      } else {
+        updated.steps.push({ type: "text", content: delta });
+      }
+
+      const next = [...prev];
+      next[next.length - 1] = updated;
+      return next;
+    });
+  }, [setMessages]);
+
   const cleanup = useCallback(() => {
     unlistenRefs.current.forEach(u => u());
     unlistenRefs.current = [];
-  }, []);
+    // Flush any remaining buffered chunks on cleanup
+    if (chunkRafRef.current) {
+      cancelAnimationFrame(chunkRafRef.current);
+      chunkRafRef.current = null;
+    }
+    if (chunkBufferRef.current) {
+      flushChunkBuffer();
+    }
+  }, [flushChunkBuffer]);
 
   useEffect(() => {
     if (!chatId) return;
@@ -25,41 +69,22 @@ export function useStreamingChat(
 
       console.log(`[useStreamingChat] Registering Tauri event listeners for chatId: ${chatId}`);
 
-      // Listen for text chunks
+      // Listen for text chunks — buffered via rAF for performance
       const unlistenChunk = await listen<any>("chat:chunk", (event) => {
-        console.log("[useStreamingChat] Received 'chat:chunk' event:", event);
-        if (event.payload.chat_id !== chatId) {
-          console.warn(`[useStreamingChat] Chat ID mismatch on chunk. Event chatId: ${event.payload.chat_id}, Hook chatId: ${chatId}`);
-          return;
-        }
+        if (event.payload.chat_id !== chatId) return;
         setIsStreaming(true);
 
-        setMessages(prev => {
-          const last = prev[prev.length - 1];
-          if (!last || last.role !== "assistant") return prev;
-
-          const updated = { ...last };
-          updated.content += event.payload.delta;
-          
-          // Basic interleaving into steps
-          updated.steps = updated.steps || [];
-          const lastStep = updated.steps[updated.steps.length - 1];
-          if (lastStep && lastStep.type === "text") {
-            lastStep.content = (lastStep.content || "") + event.payload.delta;
-          } else {
-            updated.steps.push({ type: "text", content: event.payload.delta });
-          }
-
-          const next = [...prev];
-          next[next.length - 1] = updated;
-          return next;
-        });
+        // Buffer the delta and schedule a flush on the next animation frame
+        chunkBufferRef.current += event.payload.delta;
+        if (!chunkRafRef.current) {
+          chunkRafRef.current = requestAnimationFrame(flushChunkBuffer);
+        }
       });
 
       // Listen for tool starts
       const unlistenToolStart = await listen<any>("tool:start", (event) => {
-        console.log("[useStreamingChat] Received 'tool:start' event:", event);
         if (event.payload.chat_id !== chatId) return;
+        setIsStreaming(true);
         
         setMessages(prev => {
           const last = prev[prev.length - 1];

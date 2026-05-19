@@ -26,10 +26,10 @@ function parseCardTags(text: string): { cards: ParsedCard[]; cleanText: string }
     return { cards, cleanText: text || '' };
   }
 
-  // Regex to extract <card>...</card> blocks
+  // Single-pass regex: collect all card matches and their positions
   const regex = /<card>\s*([\s\S]*?)\s*<\/card>/gi;
   let match;
-  let tempCleanText = text;
+  const replacements: { start: number; end: number }[] = [];
 
   while ((match = regex.exec(text)) !== null) {
     const rawTag = match[0];
@@ -43,20 +43,35 @@ function parseCardTags(text: string): { cards: ParsedCard[]; cleanText: string }
           data: parsed.data || parsed,
           raw: rawTag
         });
-        tempCleanText = tempCleanText.replace(rawTag, '');
+        replacements.push({ start: match.index, end: match.index + rawTag.length });
       }
     } catch (e) {
       // Partial JSON during stream - skip until complete
     }
   }
 
-  // Also clean up any unclosed trailing <card> tags so they don't render raw JSON text to user during streaming
-  if (tempCleanText.includes('<card>')) {
-    const idx = tempCleanText.indexOf('<card>');
-    tempCleanText = tempCleanText.substring(0, idx).trim();
+  // Build clean text in one pass by skipping matched regions
+  let cleanText: string;
+  if (replacements.length > 0) {
+    const parts: string[] = [];
+    let lastEnd = 0;
+    for (const { start, end } of replacements) {
+      parts.push(text.slice(lastEnd, start));
+      lastEnd = end;
+    }
+    parts.push(text.slice(lastEnd));
+    cleanText = parts.join('').trim();
+  } else {
+    cleanText = text;
   }
 
-  return { cards, cleanText: tempCleanText.trim() };
+  // Also clean up any unclosed trailing <card> tags so they don't render raw JSON text to user during streaming
+  if (cleanText.includes('<card>')) {
+    const idx = cleanText.indexOf('<card>');
+    cleanText = cleanText.substring(0, idx).trim();
+  }
+
+  return { cards, cleanText };
 }
 
 export function MessageItem({

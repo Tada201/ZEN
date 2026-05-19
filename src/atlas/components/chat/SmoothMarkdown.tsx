@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -34,7 +34,24 @@ export function SmoothMarkdown({
   const [displayedContent, setDisplayedContent] = useState('');
   const targetContentRef = useRef(content);
   const currentPosRef = useRef(0);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const lastTickTimeRef = useRef(0);
+
+  // Performance Fix #4: Memoize plugin arrays so ReactMarkdown doesn't
+  // re-create its processing pipeline on every render tick.
+  const remarkPlugins = useMemo(() => [
+    chatPlugins?.gfm !== false && [remarkGfm, { singleTilde: false }], 
+    chatPlugins?.math !== false && remarkMath, 
+    remarkBreaks, 
+    chatPlugins?.gemoji !== false && remarkGemoji, 
+    chatPlugins?.supersub !== false && remarkSupersub
+  ].filter(Boolean) as any, [chatPlugins?.gfm, chatPlugins?.math, chatPlugins?.gemoji, chatPlugins?.supersub]);
+
+  const rehypePlugins = useMemo(() => [
+    rehypeKatex, 
+    rehypeHighlight, 
+    rehypeSlug
+  ] as any, []);
 
   // Sync target content
   useEffect(() => {
@@ -49,7 +66,14 @@ export function SmoothMarkdown({
   }, [content, isStreaming]);
 
   useEffect(() => {
-    const tick = () => {
+    const tick = (timestamp: number) => {
+      // Throttle to respect tickMs interval using rAF timing
+      if (timestamp - lastTickTimeRef.current < tickMs) {
+        rafRef.current = requestAnimationFrame(tick);
+        return;
+      }
+      lastTickTimeRef.current = timestamp;
+
       const target = targetContentRef.current;
       const current = currentPosRef.current;
 
@@ -59,59 +83,50 @@ export function SmoothMarkdown({
         const backtickCount = (textBefore.match(/```/g) || []).length;
         const inCodeBlock = backtickCount % 2 !== 0;
 
-        // 2. Determine increment size with organic variability
+        // 2. Determine increment — more aggressive catch-up to reduce
+        //    the number of intermediate ReactMarkdown re-parses
         const remaining = target.length - current;
         let baseIncrement = Math.random() > 0.85 ? 2 : 1; 
         
         let speedMultiplier = 1;
-        if (remaining > 1000) speedMultiplier = 15;
-        else if (remaining > 400) speedMultiplier = 8;
-        else if (remaining > 100) speedMultiplier = 4;
+        if (remaining > 2000) speedMultiplier = 40;
+        else if (remaining > 1000) speedMultiplier = 25;
+        else if (remaining > 400) speedMultiplier = 12;
+        else if (remaining > 100) speedMultiplier = 6;
 
-        let increment = inCodeBlock ? 30 : Math.max(1, baseIncrement * speedMultiplier);
+        let increment = inCodeBlock ? 50 : Math.max(1, baseIncrement * speedMultiplier);
 
         // 3. Update position
         const nextPos = Math.min(current + increment, target.length);
         currentPosRef.current = nextPos;
         setDisplayedContent(target.slice(0, nextPos));
 
-        // 4. Organic timing jitter
-        const jitter = Math.floor(Math.random() * 10);
-        timerRef.current = setTimeout(tick, tickMs + jitter);
+        // 4. Schedule next frame
+        rafRef.current = requestAnimationFrame(tick);
       } else {
         if (!isStreaming) {
           onComplete?.();
         }
-        timerRef.current = null;
+        rafRef.current = null;
       }
     };
 
-    if (!timerRef.current && currentPosRef.current < targetContentRef.current.length) {
-      tick();
+    if (!rafRef.current && currentPosRef.current < targetContentRef.current.length) {
+      rafRef.current = requestAnimationFrame(tick);
     }
 
     return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
       }
     };
   }, [content, isStreaming, baseSpeed, tickMs, onComplete]);
 
   return (
     <ReactMarkdown 
-      remarkPlugins={[
-        chatPlugins?.gfm !== false && [remarkGfm, { singleTilde: false }], 
-        chatPlugins?.math !== false && remarkMath, 
-        remarkBreaks, 
-        chatPlugins?.gemoji !== false && remarkGemoji, 
-        chatPlugins?.supersub !== false && remarkSupersub
-      ].filter(Boolean) as any} 
-      rehypePlugins={[
-        rehypeKatex, 
-        rehypeHighlight, 
-        rehypeSlug
-      ].filter(Boolean) as any}
+      remarkPlugins={remarkPlugins} 
+      rehypePlugins={rehypePlugins}
       components={components}
     >
       {displayedContent}

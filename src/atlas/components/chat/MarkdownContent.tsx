@@ -1,4 +1,5 @@
 import React, { useMemo, memo, Component, type ReactNode } from "react";
+import { useShallow } from "zustand/react/shallow";
 import type { Components } from "react-markdown";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
@@ -126,7 +127,7 @@ const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
     );
   }
 
-  const chatPlugins = useSettingsStore(s => s.chatPlugins);
+  const chatPlugins = useSettingsStore(useShallow(s => s.chatPlugins));
 
   // Text blocks: render through ReactMarkdown via SmoothMarkdown
   return (
@@ -292,7 +293,7 @@ export function MarkdownContent({
     td: ({ children }) => <TableCell>{children}</TableCell>,
     strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
     hr: () => <hr className="my-8 border-border/20" />,
-  }), [onOpenArtifact, isStreaming]);
+  }), [onOpenArtifact]);
 
   return (
     <div className="space-y-6">

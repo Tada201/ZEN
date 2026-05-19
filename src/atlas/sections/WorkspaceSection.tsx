@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useTransition } from "react";
+import { useState, useCallback, useEffect, useTransition, useMemo } from "react";
 import { useChat } from "@/atlas/hooks/useChat";
 import { WorkspaceLayout } from "../layouts/WorkspaceLayout";
 import { MessageList } from "../components/chat/MessageList";
@@ -44,6 +44,17 @@ export function WorkspaceApp() {
       generativeUI: data.generativeUI ?? generativeUI
     });
   }, [handleSendMessage, generativeUI]);
+
+  // Derive loading state from both isStreaming (backend events flowing)
+  // AND last message status (covers the gap between Send press and first event)
+  const isLoading = useMemo(() => {
+    if (isStreaming) return true;
+    if (messages.length > 0) {
+      const last = messages[messages.length - 1];
+      if (last.role === 'assistant' && last.status === 'sending') return true;
+    }
+    return false;
+  }, [isStreaming, messages]);
 
   // Global Cmd+K shortcut — reads latest store state directly to avoid re-registering on every toggle
   useEffect(() => {
@@ -126,7 +137,7 @@ export function WorkspaceApp() {
               <div className="flex-1 overflow-hidden relative w-full h-full">
                 {!activeArtifact ? (
                   <div className="flex-1 flex flex-col items-center justify-between overflow-hidden h-full w-full bg-transparent">
-                    <div className="w-full max-w-5xl flex flex-col flex-1 overflow-hidden border-x border-border/5 bg-transparent">
+                    <div className="w-full max-w-3xl flex flex-col flex-1 overflow-hidden border-x border-border/5 bg-transparent">
                       <MessageList
                         messages={messages}
                         onOpenArtifact={setActiveArtifact}
@@ -137,7 +148,7 @@ export function WorkspaceApp() {
                         <PremiumChatInput
                           onSend={handleSendMessageInternal}
                           onAbort={abortStream}
-                          isLoading={isStreaming}
+                          isLoading={isLoading}
                           models={models}
                           selectedModelId={selectedModelId}
                           selectedProvider={selectedProvider}
@@ -163,7 +174,7 @@ export function WorkspaceApp() {
                   <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
                     <ResizablePanel defaultSize={60} minSize={30} className="flex flex-col h-full relative">
                       <div className="flex-1 flex flex-col items-center justify-between overflow-hidden h-full w-full">
-                        <div className="w-full max-w-5xl flex flex-col flex-1 overflow-hidden border-x border-border/5 bg-transparent">
+                        <div className="w-full max-w-3xl flex flex-col flex-1 overflow-hidden border-x border-border/5 bg-transparent">
                           <MessageList
                             messages={messages}
                             onOpenArtifact={setActiveArtifact}
@@ -174,7 +185,7 @@ export function WorkspaceApp() {
                             <PremiumChatInput
                               onSend={handleSendMessageInternal}
                               onAbort={abortStream}
-                              isLoading={isStreaming}
+                              isLoading={isLoading}
                               models={models}
                               selectedModelId={selectedModelId}
                               selectedProvider={selectedProvider}

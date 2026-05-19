@@ -1,10 +1,21 @@
-import { useEffect, useRef, memo } from "react";
+import { useEffect, useRef, memo, useCallback } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Message, ArtifactData } from "./types";
 import { MessageItem } from "./MessageItem";
 
-const MemoizedMessageItem = memo(MessageItem);
+// Fix #9: Custom memo comparator — the message prop is a new object reference
+// on every streaming update (spread in useStreamingChat), so default shallow
+// memo never prevents a re-render. Compare meaningful fields instead.
+const MemoizedMessageItem = memo(MessageItem, (prev, next) => {
+  return prev.message.id === next.message.id
+    && prev.message.content === next.message.content
+    && prev.message.status === next.message.status
+    && prev.message.steps?.length === next.message.steps?.length
+    && prev.message.error === next.message.error
+    && prev.isStreaming === next.isStreaming
+    && prev.compact === next.compact;
+});
 
 export const MessageList = memo(function MessageList({
   messages,
@@ -23,16 +34,32 @@ export const MessageList = memo(function MessageList({
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const isAutoScrolling = useRef(true);
+  // Fix #3: Throttle scroll updates to max 20/sec
+  const lastScrollTime = useRef(0);
 
   // Get the actual scrollable element from Radix ScrollArea
   const getViewport = () => scrollRef.current?.querySelector("[data-radix-scroll-area-viewport]") as HTMLElement;
 
+  // Fix #8: Dynamic estimateSize — track measured sizes for better scroll bar accuracy
+  const sizeCache = useRef(new Map<number, number>());
+
   const rowVirtualizer = useVirtualizer({
     count: messages.length,
     getScrollElement: getViewport,
-    estimateSize: () => 150, // Average message height estimate
+    estimateSize: (index) => sizeCache.current.get(index) || 200,
     overscan: 5,
   });
+
+  // Callback for caching measured sizes from the virtualizer
+  const measureElementWithCache = useCallback((el: HTMLElement | null) => {
+    if (el) {
+      rowVirtualizer.measureElement(el);
+      const index = Number(el.dataset.index);
+      if (!isNaN(index) && el.offsetHeight > 0) {
+        sizeCache.current.set(index, el.offsetHeight);
+      }
+    }
+  }, [rowVirtualizer]);
 
   // Track if the user manually scrolled up
   useEffect(() => {
@@ -50,16 +77,20 @@ export const MessageList = memo(function MessageList({
     return () => viewport.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Auto-scroll to bottom on new messages or streaming updates
+  // Fix #1 & #3: Auto-scroll using virtualizer API with throttle.
+  // Removed content.length dependency — virtualizer handles size changes via measureElement.
   useEffect(() => {
-    const viewport = getViewport();
-    if (viewport && isAutoScrolling.current) {
-      viewport.scrollTo({
-        top: viewport.scrollHeight,
-        behavior: isStreaming ? "auto" : "smooth"
-      });
-    }
-  }, [messages.length, messages[messages.length - 1]?.content.length, isStreaming]);
+    if (!isAutoScrolling.current || messages.length === 0) return;
+
+    const now = Date.now();
+    if (now - lastScrollTime.current < 50) return; // Max 20 scroll/sec
+    lastScrollTime.current = now;
+
+    rowVirtualizer.scrollToIndex(messages.length - 1, {
+      align: 'end',
+      behavior: isStreaming ? 'auto' : 'smooth',
+    });
+  }, [messages.length, messages[messages.length - 1]?.content.length, isStreaming, rowVirtualizer]);
 
   const virtualItems = rowVirtualizer.getVirtualItems();
 
@@ -92,7 +123,7 @@ export const MessageList = memo(function MessageList({
               <div
                 key={virtualItem.key}
                 data-index={virtualItem.index}
-                ref={rowVirtualizer.measureElement}
+                ref={measureElementWithCache}
                 className="absolute top-0 left-0 w-full"
                 style={{
                   transform: `translateY(${virtualItem.start}px)`,

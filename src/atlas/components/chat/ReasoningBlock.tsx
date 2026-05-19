@@ -103,24 +103,18 @@ function ThoughtItem({ text, index, isLast }: { text: string; index: number; isL
 function ElapsedTimer({ running }: { running?: boolean }) {
   const [elapsed, setElapsed] = useState(0);
   const startRef = useRef<number | null>(null);
-  const rafRef   = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!running) {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      return;
-    }
+    if (!running) return;
     startRef.current = Date.now();
-    const tick = () => {
+    // Update at 100ms intervals — matches the 0.1s display precision
+    // instead of 60fps rAF which wastes renders
+    const interval = setInterval(() => {
       if (startRef.current) {
         setElapsed(Date.now() - startRef.current);
       }
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
+    }, 100);
+    return () => clearInterval(interval);
   }, [running]);
 
   if (!running && elapsed === 0) return null;
