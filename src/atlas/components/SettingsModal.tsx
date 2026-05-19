@@ -1,10 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, type ComponentType } from "react";import { Settings2, Key, BrainCircuit, Shield,
-  Save, Loader2,
-  Sparkles, MessageSquare,
-  Monitor,
-  Eye, Headphones, Bot, Terminal, FolderOpen, Search,
-  Cpu, Download, Zap, Link2, RefreshCw, Code, BookOpen, Map
-} from "lucide-react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   Dialog, DialogContent,
   DialogTitle, DialogDescription,
@@ -48,6 +42,7 @@ import { HooksSettings } from "@/components/settings/Tabs/plugins/HooksSettings"
 import { UpdatesSettings } from "@/components/settings/Tabs/system/UpdatesSettings";
 import { SkillRegistry } from "@/components/settings/Tabs/skills/SkillRegistry";
 import { MapConfiguration } from "@/components/GTSM/MapConfiguration";
+import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 
 export type TabId = "general" | "appearance" | "chat" | "ai-config" | "providers" | "capabilities" | "intelligence" | "agents" | "skills" | "audio" | "terminal" | "workspace" | "tools" | "system" | "raw" | "mcp" | "embedding-models" | "commands" | "hooks" | "updates" | "map-config";
 
@@ -59,7 +54,7 @@ interface SettingsTabGroup {
 interface SettingsTab {
   id: TabId;
   label: string;
-  icon: ComponentType<{ className?: string }>;
+  icon: string;
   description: string;
 }
 
@@ -67,42 +62,42 @@ const TAB_GROUPS: SettingsTabGroup[] = [
   {
     label: "General",
     tabs: [
-      { id: "general", label: "General", icon: Settings2, description: "Workspace & UI" },
-      { id: "appearance", label: "Appearance", icon: Eye, description: "Theme & layout" },
+      { id: "general", label: "General", icon: "lucide:settings-2", description: "Workspace & UI" },
+      { id: "appearance", label: "Appearance", icon: "lucide:eye", description: "Theme & layout" },
     ],
   },
   {
     label: "AI & Chat",
     tabs: [
-      { id: "chat", label: "Chat", icon: MessageSquare, description: "Conversation settings" },
-      { id: "ai-config", label: "Models", icon: BrainCircuit, description: "Model selection" },
-      { id: "providers", label: "Providers", icon: Key, description: "API keys" },
-      { id: "capabilities", label: "Capabilities", icon: Sparkles, description: "Agent skills" },
-      { id: "intelligence", label: "Intelligence", icon: Search, description: "RAG & memory" },
-      { id: "agents", label: "Agents", icon: Bot, description: "Sub-agent config" },
-      { id: "commands", label: "Commands", icon: Zap, description: "Slash commands" },
-      { id: "hooks", label: "Hooks", icon: Link2, description: "Event hooks" },
-      { id: "mcp", label: "MCP", icon: Cpu, description: "MCP servers" },
-      { id: "embedding-models", label: "Embedding Models", icon: Download, description: "Download embedding models" },
+      { id: "chat", label: "Chat", icon: "lucide:message-square", description: "Conversation settings" },
+      { id: "ai-config", label: "Models", icon: "lucide:brain-circuit", description: "Model selection" },
+      { id: "providers", label: "Providers", icon: "lucide:key", description: "API keys" },
+      { id: "capabilities", label: "Capabilities", icon: "lucide:sparkles", description: "Agent skills" },
+      { id: "intelligence", label: "Intelligence", icon: "lucide:search", description: "RAG & memory" },
+      { id: "agents", label: "Agents", icon: "lucide:bot", description: "Sub-agent config" },
+      { id: "commands", label: "Commands", icon: "lucide:zap", description: "Slash commands" },
+      { id: "hooks", label: "Hooks", icon: "lucide:link-2", description: "Event hooks" },
+      { id: "mcp", label: "MCP", icon: "lucide:cpu", description: "MCP servers" },
+      { id: "embedding-models", label: "Embedding Models", icon: "lucide:download", description: "Download embedding models" },
     ],
   },
   {
     label: "Interface",
     tabs: [
-      { id: "audio", label: "Audio", icon: Headphones, description: "Sound & voice" },
-      { id: "terminal", label: "Terminal", icon: Terminal, description: "Shell & safety" },
-      { id: "workspace", label: "Workspace", icon: FolderOpen, description: "Directories & Git" },
-      { id: "skills", label: "Skills", icon: BookOpen, description: "Tactical modules" },
-      { id: "map-config", label: "Map Config", icon: Map, description: "GTSM operational layers" },
+      { id: "audio", label: "Audio", icon: "lucide:headphones", description: "Sound & voice" },
+      { id: "terminal", label: "Terminal", icon: "lucide:terminal", description: "Shell & safety" },
+      { id: "workspace", label: "Workspace", icon: "lucide:folder-open", description: "Directories & Git" },
+      { id: "skills", label: "Skills", icon: "lucide:book-open", description: "Tactical modules" },
+      { id: "map-config", label: "Map Config", icon: "lucide:map", description: "GTSM operational layers" },
     ],
   },
   {
     label: "System",
     tabs: [
-      { id: "tools", label: "Tools", icon: Shield, description: "Tool permissions & safety" },
-      { id: "system", label: "System", icon: Monitor, description: "Performance & maintenance" },
-      { id: "raw", label: "Raw Config", icon: Code, description: "Raw settings editor" },
-      { id: "updates", label: "Updates", icon: RefreshCw, description: "Update & version info" },
+      { id: "tools", label: "Tools", icon: "lucide:shield", description: "Tool permissions & safety" },
+      { id: "system", label: "System", icon: "lucide:monitor", description: "Performance & maintenance" },
+      { id: "raw", label: "Raw Config", icon: "lucide:code", description: "Raw settings editor" },
+      { id: "updates", label: "Updates", icon: "lucide:refresh-cw", description: "Update & version info" },
     ],
   },
 ];
@@ -233,7 +228,7 @@ export function SettingsContent({
   if (!isHydrated) {
     return (
       <div className="flex-1 flex items-center justify-center p-12 bg-background">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        <WorkbenchIcon name="lucide:loader-2" className="h-6 w-6 animate-spin text-primary" />
       </div>
     );
   }
@@ -246,12 +241,12 @@ export function SettingsContent({
       <div className="w-full md:w-56 bg-[#050506] border-b md:border-b-0 md:border-r border-white/[0.06] flex flex-col shrink-0">
         <div className="p-4 border-b border-white/[0.06] flex items-center justify-between">
           <h2 className="font-bold text-sm flex items-center gap-2 tracking-tight text-zinc-100">
-            <Settings2 className="h-4 w-4 text-primary" />
+            <WorkbenchIcon name="lucide:settings-2" size={16} className="text-primary" />
             Settings
           </h2>
         </div>
 
-        <ScrollArea className="flex-1 py-2">
+        <div className="flex-1 overflow-y-auto py-2 pr-1 custom-scrollbar">
           {TAB_GROUPS.map((group) => (
             <div key={group.label} className="mb-2">
               <div className="px-3 py-1.5">
@@ -261,21 +256,20 @@ export function SettingsContent({
               </div>
               <div className="flex md:flex-col gap-0.5 px-2">
                 {group.tabs.map((tab) => {
-                    const Icon = tab.icon;
                     const isActive = activeTab === tab.id;
                     return (
                       <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
                         className={cn(
-                          "relative w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-all text-left group",
+                          "relative w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-colors duration-150 text-left group",
                           isActive
                             ? "bg-muted text-primary font-bold"
                             : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
                         )}
                       >
                         {isActive && <div className="nav-rail-indicator" />}
-                        <Icon className={cn("h-3.5 w-3.5 shrink-0", isActive ? "text-primary" : "opacity-40 group-hover:opacity-100")} />
+                        <WorkbenchIcon name={tab.icon} size={14} className={cn("shrink-0", isActive ? "text-primary" : "opacity-40 group-hover:opacity-100")} />
                         <span className="text-[12.5px] tracking-tight truncate">{tab.label}</span>
                       </button>
                     );
@@ -283,11 +277,11 @@ export function SettingsContent({
               </div>
             </div>
           ))}
-        </ScrollArea>
+        </div>
 
         <div className="hidden md:block p-4 border-t border-white/[0.06]">
           <div className="flex items-center gap-2 mb-1">
-            <Sparkles className="h-3 w-3 text-primary" />
+            <WorkbenchIcon name="lucide:sparkles" size={12} className="text-primary" />
             <span className="text-[9px] font-black uppercase tracking-[0.15em] text-primary">Zen Engine</span>
           </div>
           <p className="text-[9px] text-zinc-600">v1.0 Stable Build</p>
@@ -482,12 +476,12 @@ export function SettingsContent({
           <Button className="h-8 text-[11px] px-5 font-bold shadow-md shadow-primary/10" onClick={handleSave} disabled={saving}>
             {saving ? (
               <>
-                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                <WorkbenchIcon name="lucide:loader-2" size={12} className="animate-spin mr-1" />
                 {isSyncing ? "Syncing…" : "Saving…"}
               </>
             ) : (
               <>
-                <Save className="h-3.5 w-3.5 mr-1" />
+                <WorkbenchIcon name="lucide:save" size={14} className="mr-1" />
                 Save
               </>
             )}

@@ -17,6 +17,12 @@
   --color-success: hsl(142 65% 50%);
   --color-warning: hsl(38 92% 55%);
 
+  /* Popover and dropdown components (fix transparent select dropdowns) */
+  --color-popover: hsl(225 8% 11%);
+  --color-popover-foreground: hsl(0 0% 98%);
+  --color-accent: hsl(240 6% 16%);
+  --color-accent-foreground: hsl(0 0% 98%);
+
   /* UI Atlas accent swatches */
   --color-violet: hsl(262 83% 58%);
   --color-indigo: hsl(239 84% 60%);

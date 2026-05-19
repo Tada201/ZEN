@@ -1,12 +1,8 @@
 import { SettingsSection } from "../SettingsSection";
 import { SettingsRow } from "../SettingsRow";
-import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
-import {
-  Brain, Search, Library, BookOpen,
-  Layers, Bookmark, GitBranch, Database
-} from "lucide-react";
+import { WorkbenchSwitch } from "../ui/WorkbenchSwitch";
+import { WorkbenchSelect } from "../ui/WorkbenchSelect";
+import { WorkbenchSlider } from "../ui/WorkbenchSlider";
 
 interface IntelligenceSettingsProps {
   settings: Record<string, string>;
@@ -21,98 +17,94 @@ export function IntelligenceSettings({ settings, onUpdate }: IntelligenceSetting
         <p className="text-[13px] text-muted-foreground">Configure RAG, embeddings, and memory systems.</p>
       </div>
 
-      <SettingsSection title="Retrieval" icon={Search} description="Retrieval-Augmented Generation configuration">
+      <SettingsSection title="Retrieval" icon="lucide:search" description="Retrieval-Augmented Generation configuration">
         <SettingsRow
           label="Enable RAG"
           description="Augment prompts with retrieved context"
           control={
-            <Switch
+            <WorkbenchSwitch
               checked={settings["rag.enabled"] !== "false"}
               onCheckedChange={v => onUpdate("rag.enabled", String(v))}
             />
           }
-          icon={BookOpen}
+          icon="lucide:book-open"
         />
 
         <SettingsRow
           label="Strict Grounding"
           description="Only answer from retrieved context"
           control={
-            <Switch
+            <WorkbenchSwitch
               checked={settings["rag.strict-grounding"] === "true"}
               onCheckedChange={v => onUpdate("rag.strict-grounding", String(v))}
             />
           }
-          icon={GitBranch}
+          icon="lucide:git-branch"
         />
 
         <SettingsRow
           label="Show Citations"
           description="Display source references in responses"
           control={
-            <Switch
+            <WorkbenchSwitch
               checked={settings["rag.citations"] !== "false"}
               onCheckedChange={v => onUpdate("rag.citations", String(v))}
             />
           }
-          icon={Bookmark}
+          icon="lucide:bookmark"
         />
 
         <SettingsRow
           label="Search Strategy"
           description="Method for retrieving relevant context"
           control={
-            <Select value={settings["rag.search-strategy"] || "hybrid"} onValueChange={v => onUpdate("rag.search-strategy", v)}>
-              <SelectTrigger className="w-[140px] h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="vector">Vector Search</SelectItem>
-                <SelectItem value="hybrid">Hybrid Search</SelectItem>
-                <SelectItem value="semantic">Semantic Search</SelectItem>
-              </SelectContent>
-            </Select>
+            <WorkbenchSelect
+              value={settings["rag.search-strategy"] || "hybrid"}
+              onValueChange={v => onUpdate("rag.search-strategy", v)}
+              options={[
+                { value: "vector", label: "Vector Search" },
+                { value: "hybrid", label: "Hybrid Search" },
+                { value: "semantic", label: "Semantic Search" },
+              ]}
+              width={140}
+            />
           }
-          icon={Search}
+          icon="lucide:search"
         />
 
         <SettingsRow
           label="Top-K Results"
           description="Number of documents to retrieve"
           control={
-            <Select value={settings["rag.top-k"] || "5"} onValueChange={v => onUpdate("rag.top-k", v)}>
-              <SelectTrigger className="w-[100px] h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[3, 5, 10, 15, 20].map(n => (
-                  <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <WorkbenchSelect
+              value={settings["rag.top-k"] || "5"}
+              onValueChange={v => onUpdate("rag.top-k", v)}
+              options={[3, 5, 10, 15, 20].map(n => ({ value: String(n), label: String(n) }))}
+              width={100}
+            />
           }
-          icon={Layers}
+          icon="lucide:layers"
         />
       </SettingsSection>
 
-      <SettingsSection title="Embeddings" icon={Brain} description="Document vectorization settings">
+      <SettingsSection title="Embeddings" icon="lucide:brain" description="Document vectorization settings">
         <SettingsRow
           label="Embedding Model"
           description="Model used to generate document vectors"
           control={
-            <Select value={settings["embeddings.model"] || "nomic"} onValueChange={v => onUpdate("embeddings.model", v)}>
-              <SelectTrigger className="w-[140px] h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="nomic">Nomic Embed Text</SelectItem>
-                <SelectItem value="openai">OpenAI Ada 002</SelectItem>
-                <SelectItem value="cohere">Cohere Embed</SelectItem>
-                <SelectItem value="nine_router">9Router Embedding</SelectItem>
-              </SelectContent>
-            </Select>
+            <WorkbenchSelect
+              value={settings["embeddings.model"] || "nomic"}
+              onValueChange={v => onUpdate("embeddings.model", v)}
+              options={[
+                { value: "nomic", label: "Nomic Embed Text" },
+                { value: "openai", label: "OpenAI Ada 002" },
+                { value: "cohere", label: "Cohere Embed" },
+                { value: "nine_router", label: "9Router Embedding" },
+              ]}
+              width={140}
+            />
           }
-          icon={Database}
+          icon="lucide:database"
         />
 
         <SettingsRow
@@ -120,7 +112,7 @@ export function IntelligenceSettings({ settings, onUpdate }: IntelligenceSetting
           description="Maximum tokens per document chunk"
           control={
             <div className="flex items-center gap-2 w-[140px]">
-              <Slider
+              <WorkbenchSlider
                 value={[parseInt(settings["embeddings.chunk-size"] || "512")]}
                 onValueChange={([v]) => onUpdate("embeddings.chunk-size", String(v))}
                 min={128}
@@ -133,7 +125,7 @@ export function IntelligenceSettings({ settings, onUpdate }: IntelligenceSetting
               </span>
             </div>
           }
-          icon={Layers}
+          icon="lucide:layers"
         />
 
         <SettingsRow
@@ -141,7 +133,7 @@ export function IntelligenceSettings({ settings, onUpdate }: IntelligenceSetting
           description="Token overlap between consecutive chunks"
           control={
             <div className="flex items-center gap-2 w-[140px]">
-              <Slider
+              <WorkbenchSlider
                 value={[parseInt(settings["embeddings.chunk-overlap"] || "64")]}
                 onValueChange={([v]) => onUpdate("embeddings.chunk-overlap", String(v))}
                 min={0}
@@ -149,44 +141,40 @@ export function IntelligenceSettings({ settings, onUpdate }: IntelligenceSetting
                 step={32}
                 className="flex-1"
               />
-              <span className="text-[11px] font-mono text-muted-foreground w-8 text-right">
+              <span className="text-[11px] font-mono text-muted-foreground w-8 text-right font-mono">
                 {settings["embeddings.chunk-overlap"] || "64"}
               </span>
             </div>
           }
-          icon={GitBranch}
+          icon="lucide:git-branch"
         />
       </SettingsSection>
 
-      <SettingsSection title="Memory" icon={Library} description="Conversation context management">
+      <SettingsSection title="Memory" icon="lucide:library" description="Conversation context management">
         <SettingsRow
           label="Session Memory"
           description="Remember context across conversation turns"
           control={
-            <Switch
+            <WorkbenchSwitch
               checked={settings["memory.enabled"] !== "false"}
               onCheckedChange={v => onUpdate("memory.enabled", String(v))}
             />
           }
-          icon={BookOpen}
+          icon="lucide:book-open"
         />
 
         <SettingsRow
           label="Max Turns"
           description="Number of previous turns to retain"
           control={
-            <Select value={settings["memory.max-turns"] || "20"} onValueChange={v => onUpdate("memory.max-turns", v)}>
-              <SelectTrigger className="w-[100px] h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[10, 20, 50, 100].map(n => (
-                  <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <WorkbenchSelect
+              value={settings["memory.max-turns"] || "20"}
+              onValueChange={v => onUpdate("memory.max-turns", v)}
+              options={[10, 20, 50, 100].map(n => ({ value: String(n), label: String(n) }))}
+              width={100}
+            />
           }
-          icon={Layers}
+          icon="lucide:layers"
         />
       </SettingsSection>
     </div>

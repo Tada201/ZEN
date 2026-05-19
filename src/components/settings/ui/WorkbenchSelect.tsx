@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface Option {
@@ -16,15 +16,27 @@ interface WorkbenchSelectProps {
 }
 
 export const WorkbenchSelect = memo(({ value, onValueChange, options, placeholder, className, width }: WorkbenchSelectProps) => {
+    // Map empty string values to a unique sentinel value because Radix UI prohibits empty string values for items
+    const sentinelValue = value === "" ? "__none__" : value;
+
+    const handleValueChange = useCallback((val: string) => {
+        onValueChange(val === "__none__" ? "" : val);
+    }, [onValueChange]);
+
     return (
-        <Select value={value} onValueChange={onValueChange}>
+        <Select value={sentinelValue} onValueChange={handleValueChange}>
             <SelectTrigger className={className || "h-9 text-xs bg-slate-950 border-white/10"} style={width ? { width } : undefined}>
                 <SelectValue placeholder={placeholder} />
             </SelectTrigger>
             <SelectContent>
-                {options.map(option => (
-                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                ))}
+                {options.map(option => {
+                    const optVal = option.value === "" ? "__none__" : option.value;
+                    return (
+                        <SelectItem key={optVal} value={optVal}>
+                            {option.label}
+                        </SelectItem>
+                    );
+                })}
             </SelectContent>
         </Select>
     );

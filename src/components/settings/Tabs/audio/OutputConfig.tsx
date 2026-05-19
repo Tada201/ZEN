@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { WorkbenchSettingRow } from '@/components/settings/ui/WorkbenchSettingRow';
 import { WorkbenchSlider } from '@/components/settings/ui/WorkbenchSlider';
+import { WorkbenchSwitch } from '@/components/settings/ui/WorkbenchSwitch';
 import { SettingsCard } from '@/components/settings/ui/SettingsCard';
 
 export const OutputConfig = memo(() => {
@@ -40,11 +41,9 @@ export const OutputConfig = memo(() => {
                     label="Mute All Audio"
                     description="Suppress all audio output including notifications"
                     control={
-                        <input
-                            type="checkbox"
+                        <WorkbenchSwitch
                             checked={isMuted}
-                            onChange={(e) => updateSetting({ isMuted: e.target.checked })}
-                            className="accent-primary"
+                            onCheckedChange={(v) => updateSetting({ isMuted: v })}
                         />
                     }
                 />

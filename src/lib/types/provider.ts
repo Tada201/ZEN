@@ -88,7 +88,7 @@ export const providerOrder: ProviderInfo[] = [
         name: '9Router',
         description: 'Offline-first local coding proxy and local orchestration gateway.',
         isLocal: true,
-        requiresKey: false,
+        requiresKey: true,
         baseUrl: 'http://localhost:20128/v1',
         category: 'local',
         icon: 'lucide:router'

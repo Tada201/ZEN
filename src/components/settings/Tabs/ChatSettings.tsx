@@ -1,14 +1,9 @@
 import { SettingsSection } from "../SettingsSection";
 import { SettingsRow } from "../SettingsRow";
-import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
-import { Textarea } from "@/components/ui/textarea";
-
-import {
-  MessageSquare, Bot, Sparkles, Zap, Cpu,
-  Brain, Lightbulb, Gauge, Wrench
-} from "lucide-react";
+import { WorkbenchSwitch } from "../ui/WorkbenchSwitch";
+import { WorkbenchSelect } from "../ui/WorkbenchSelect";
+import { WorkbenchSlider } from "../ui/WorkbenchSlider";
+import { WorkbenchTextArea } from "../ui/WorkbenchTextArea";
 
 interface ChatSettingsProps {
   settings: Record<string, string>;
@@ -23,32 +18,32 @@ export function ChatSettings({ settings, onUpdate }: ChatSettingsProps) {
         <p className="text-[13px] text-muted-foreground">Configure conversation behavior and AI response settings.</p>
       </div>
 
-      <SettingsSection title="Persona" icon={Bot} description="AI response personality and instructions">
+      <SettingsSection title="Persona" icon="lucide:bot" description="AI response personality and instructions">
         <SettingsRow
           label="Response Style"
           description="Default communication tone"
           control={
-            <Select value={settings["chat.response-style"] || "neutral"} onValueChange={v => onUpdate("chat.response-style", v)}>
-              <SelectTrigger className="w-[140px] h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="neutral">Neutral</SelectItem>
-                <SelectItem value="friendly">Friendly</SelectItem>
-                <SelectItem value="technical">Technical</SelectItem>
-                <SelectItem value="concise">Concise</SelectItem>
-                <SelectItem value="detailed">Detailed</SelectItem>
-              </SelectContent>
-            </Select>
+            <WorkbenchSelect
+              value={settings["chat.response-style"] || "neutral"}
+              onValueChange={v => onUpdate("chat.response-style", v)}
+              options={[
+                { value: "neutral", label: "Neutral" },
+                { value: "friendly", label: "Friendly" },
+                { value: "technical", label: "Technical" },
+                { value: "concise", label: "Concise" },
+                { value: "detailed", label: "Detailed" },
+              ]}
+              width={140}
+            />
           }
-          icon={MessageSquare}
+          icon="lucide:message-square"
         />
 
         <div className="px-3 py-2 space-y-2">
           <label className="text-[13px] font-medium text-foreground/80">System Instructions</label>
-          <Textarea
+          <WorkbenchTextArea
             value={settings["chat.system-instructions"] || ""}
-            onChange={e => onUpdate("chat.system-instructions", e.target.value)}
+            onChangeText={v => onUpdate("chat.system-instructions", v)}
             placeholder="Custom instructions for the AI assistant..."
             className="min-h-[80px] text-xs bg-background/50"
           />
@@ -58,14 +53,14 @@ export function ChatSettings({ settings, onUpdate }: ChatSettingsProps) {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="Generation" icon={Sparkles} description="Response generation parameters">
+      <SettingsSection title="Generation" icon="lucide:sparkles" description="Response generation parameters">
         <SettingsRow
           label="Temperature"
           description="Controls randomness: lower is more precise, higher is more creative"
           control={
             <div className="flex items-center gap-2 w-[160px]">
               <span className="text-[10px] text-muted-foreground">Precise</span>
-              <Slider
+              <WorkbenchSlider
                 value={[parseFloat(settings["chat.temperature"] || "0.7")]}
                 onValueChange={([v]) => onUpdate("chat.temperature", v.toFixed(1))}
                 min={0}
@@ -79,82 +74,82 @@ export function ChatSettings({ settings, onUpdate }: ChatSettingsProps) {
               </span>
             </div>
           }
-          icon={Gauge}
+          icon="lucide:gauge"
         />
 
         <SettingsRow
           label="Max Output Tokens"
           description="Maximum length of generated responses"
           control={
-            <Select value={settings["chat.max-tokens"] || "4096"} onValueChange={v => onUpdate("chat.max-tokens", v)}>
-              <SelectTrigger className="w-[120px] h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1024">1,024</SelectItem>
-                <SelectItem value="2048">2,048</SelectItem>
-                <SelectItem value="4096">4,096</SelectItem>
-                <SelectItem value="8192">8,192</SelectItem>
-                <SelectItem value="16384">16,384</SelectItem>
-              </SelectContent>
-            </Select>
+            <WorkbenchSelect
+              value={settings["chat.max-tokens"] || "4096"}
+              onValueChange={v => onUpdate("chat.max-tokens", v)}
+              options={[
+                { value: "1024", label: "1,024" },
+                { value: "2048", label: "2,048" },
+                { value: "4096", label: "4,096" },
+                { value: "8192", label: "8,192" },
+                { value: "16384", label: "16,384" },
+              ]}
+              width={120}
+            />
           }
-          icon={Zap}
+          icon="lucide:zap"
         />
 
         <SettingsRow
           label="Streaming Speed"
           description="How tokens appear in the UI"
           control={
-            <Select value={settings["chat.streaming-speed"] || "instant"} onValueChange={v => onUpdate("chat.streaming-speed", v)}>
-              <SelectTrigger className="w-[140px] h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="instant">Instant</SelectItem>
-                <SelectItem value="typewriter">Typewriter</SelectItem>
-              </SelectContent>
-            </Select>
+            <WorkbenchSelect
+              value={settings["chat.streaming-speed"] || "instant"}
+              onValueChange={v => onUpdate("chat.streaming-speed", v)}
+              options={[
+                { value: "instant", label: "Instant" },
+                { value: "typewriter", label: "Typewriter" },
+              ]}
+              width={140}
+            />
           }
-          icon={Cpu}
+          icon="lucide:cpu"
         />
 
         <SettingsRow
           label="External Tools"
           description="Allow AI to use file system and terminal tools"
           control={
-            <Switch
+            <WorkbenchSwitch
               checked={settings["chat.external-tools"] !== "false"}
               onCheckedChange={v => onUpdate("chat.external-tools", String(v))}
             />
           }
-          icon={Wrench}
+          icon="lucide:wrench"
         />
       </SettingsSection>
 
-      <SettingsSection title="Streaming & Reasoning" icon={Brain} description="Advanced response behavior">
+      <SettingsSection title="Streaming & Reasoning" icon="lucide:brain" description="Advanced response behavior">
         <SettingsRow
           label="Response Streaming"
           description="Stream responses token-by-token as they're generated"
           control={
-            <Switch
+            <WorkbenchSwitch
               checked={settings["chat.streaming"] !== "false"}
               onCheckedChange={v => onUpdate("chat.streaming", String(v))}
             />
           }
-          icon={Zap}
+          icon="lucide:zap"
         />
 
         <SettingsRow
           label="Chain-of-Thought"
           description="Show the AI's step-by-step reasoning process"
           control={
-            <Switch
+            <WorkbenchSwitch
               checked={settings["chat.chain-of-thought"] === "true"}
               onCheckedChange={v => onUpdate("chat.chain-of-thought", String(v))}
             />
           }
-          icon={Brain}
+          icon="lucide:brain"
         />
 
         {settings["chat.chain-of-thought"] === "true" && (
@@ -164,7 +159,7 @@ export function ChatSettings({ settings, onUpdate }: ChatSettingsProps) {
               description="Max tokens allocated for reasoning"
               control={
                 <div className="flex items-center gap-2 w-[140px]">
-                  <Slider
+                  <WorkbenchSlider
                     value={[parseInt(settings["chat.reasoning-budget"] || "1024")]}
                     onValueChange={([v]) => onUpdate("chat.reasoning-budget", String(v))}
                     min={256}
@@ -177,25 +172,25 @@ export function ChatSettings({ settings, onUpdate }: ChatSettingsProps) {
                   </span>
                 </div>
               }
-              icon={Lightbulb}
+              icon="lucide:lightbulb"
             />
 
             <SettingsRow
               label="Reasoning Effort"
               description="Depth of reasoning analysis"
               control={
-                <Select value={settings["chat.reasoning-effort"] || "medium"} onValueChange={v => onUpdate("chat.reasoning-effort", v)}>
-                  <SelectTrigger className="w-[120px] h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                  </SelectContent>
-                </Select>
+                <WorkbenchSelect
+                  value={settings["chat.reasoning-effort"] || "medium"}
+                  onValueChange={v => onUpdate("chat.reasoning-effort", v)}
+                  options={[
+                    { value: "low", label: "Low" },
+                    { value: "medium", label: "Medium" },
+                    { value: "high", label: "High" },
+                  ]}
+                  width={120}
+                />
               }
-              icon={Brain}
+              icon="lucide:brain"
             />
           </>
         )}
@@ -204,24 +199,24 @@ export function ChatSettings({ settings, onUpdate }: ChatSettingsProps) {
           label="Prompt Caching"
           description="Cache repeated prompt prefixes for faster responses"
           control={
-            <Switch
+            <WorkbenchSwitch
               checked={settings["chat.prompt-caching"] !== "false"}
               onCheckedChange={v => onUpdate("chat.prompt-caching", String(v))}
             />
           }
-          icon={Cpu}
+          icon="lucide:cpu"
         />
 
         <SettingsRow
           label="Hardware Acceleration"
           description="Use GPU for model inference when available"
           control={
-            <Switch
+            <WorkbenchSwitch
               checked={settings["chat.hardware-accel"] !== "false"}
               onCheckedChange={v => onUpdate("chat.hardware-accel", String(v))}
             />
           }
-          icon={Zap}
+          icon="lucide:zap"
         />
       </SettingsSection>
     </div>

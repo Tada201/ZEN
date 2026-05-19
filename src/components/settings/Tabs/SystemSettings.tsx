@@ -1,14 +1,10 @@
 import { SettingsSection } from "../SettingsSection";
 import { SettingsRow } from "../SettingsRow";
-import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
-import { Button } from "@/components/ui/button";
-import {
-  Cpu, HardDrive, Monitor, Wifi, Gauge,
-  Server, Zap, Thermometer, Trash2, Download,
-  Activity
-} from "lucide-react";
+import { WorkbenchSwitch } from "../ui/WorkbenchSwitch";
+import { WorkbenchSelect } from "../ui/WorkbenchSelect";
+import { WorkbenchSlider } from "../ui/WorkbenchSlider";
+import { WorkbenchButton } from "@/components/ui/WorkbenchButton";
+import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 
 interface SystemSettingsProps {
   settings: Record<string, string>;
@@ -23,18 +19,17 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
         <p className="text-[13px] text-muted-foreground">Hardware resources, performance tuning, and maintenance.</p>
       </div>
 
-      <SettingsSection title="Hardware Resources" icon={Server} description="Detected system capabilities">
+      <SettingsSection title="Hardware Resources" icon="lucide:server" description="Detected system capabilities">
         <div className="grid grid-cols-2 gap-2 px-3 py-2">
           {[
-            { label: "CPU", value: "8 Cores", icon: Cpu },
-            { label: "Memory", value: "32 GB", icon: HardDrive },
-            { label: "GPU", value: "8 GB VRAM", icon: Monitor },
-            { label: "Platform", value: "Windows", icon: Wifi },
+            { label: "CPU", value: "8 Cores", icon: "lucide:cpu" },
+            { label: "Memory", value: "32 GB", icon: "lucide:hard-drive" },
+            { label: "GPU", value: "8 GB VRAM", icon: "lucide:monitor" },
+            { label: "Platform", value: "Windows", icon: "lucide:wifi" },
           ].map(item => {
-            const Icon = item.icon;
             return (
               <div key={item.label} className="flex items-center gap-2.5 p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06]">
-                <Icon className="h-4 w-4 text-muted-foreground" />
+                <WorkbenchIcon name={item.icon} size={16} className="text-muted-foreground shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] font-medium text-muted-foreground">{item.label}</p>
                   <p className="text-[13px] font-bold text-foreground">{item.value}</p>
@@ -45,47 +40,43 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="Performance" icon={Gauge} description="Resource allocation and performance tuning">
+      <SettingsSection title="Performance" icon="lucide:gauge" description="Resource allocation and performance tuning">
         <SettingsRow
           label="Low Resource Mode"
           description="Reduce resource usage on constrained hardware"
           control={
-            <Switch
+            <WorkbenchSwitch
               checked={settings["system.low-resource-mode"] === "true"}
               onCheckedChange={v => onUpdate("system.low-resource-mode", String(v))}
             />
           }
-          icon={Thermometer}
+          icon="lucide:thermometer"
         />
 
         <SettingsRow
           label="Max CPU Threads"
           description="Maximum threads for processing tasks"
           control={
-            <Select value={settings["system.max-cpu-threads"] || "8"} onValueChange={v => onUpdate("system.max-cpu-threads", v)}>
-              <SelectTrigger className="w-[100px] h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[2, 4, 8, 16].map(n => (
-                  <SelectItem key={n} value={String(n)}>{n} Threads</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <WorkbenchSelect
+              value={settings["system.max-cpu-threads"] || "8"}
+              onValueChange={v => onUpdate("system.max-cpu-threads", v)}
+              options={[2, 4, 8, 16].map(n => ({ value: String(n), label: `${n} Threads` }))}
+              width={100}
+            />
           }
-          icon={Activity}
+          icon="lucide:activity"
         />
 
         <SettingsRow
           label="GPU Offloading"
           description="Use GPU for accelerated inference"
           control={
-            <Switch
+            <WorkbenchSwitch
               checked={settings["system.gpu-offloading"] !== "false"}
               onCheckedChange={v => onUpdate("system.gpu-offloading", String(v))}
             />
           }
-          icon={Zap}
+          icon="lucide:zap"
         />
 
         <SettingsRow
@@ -93,7 +84,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
           description="Maximum RAM allocated to the application"
           control={
             <div className="flex items-center gap-2 w-[140px]">
-              <Slider
+              <WorkbenchSlider
                 value={[parseInt(settings["system.max-memory"] || "8")]}
                 onValueChange={([v]) => onUpdate("system.max-memory", String(v))}
                 min={2}
@@ -106,32 +97,32 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
               </span>
             </div>
           }
-          icon={Server}
+          icon="lucide:server"
         />
       </SettingsSection>
 
-      <SettingsSection title="Maintenance" icon={Activity} description="System upkeep and diagnostics">
+      <SettingsSection title="Maintenance" icon="lucide:activity" description="System upkeep and diagnostics">
         <SettingsRow
           label="Auto-Cleanup"
           description="Automatically remove temporary files and old logs"
           control={
-            <Switch
+            <WorkbenchSwitch
               checked={settings["system.auto-cleanup"] !== "false"}
               onCheckedChange={v => onUpdate("system.auto-cleanup", String(v))}
             />
           }
-          icon={Trash2}
+          icon="lucide:trash-2"
         />
 
         <div className="px-3 py-2 space-y-2">
-          <Button variant="outline" className="w-full justify-start gap-3 text-[13px] h-9 border-white/[0.06] hover:bg-white/[0.03] text-foreground">
-            <Download className="h-4 w-4 text-muted-foreground" />
+          <WorkbenchButton variant="outline" className="w-full justify-start gap-3 h-9 text-[13px]">
+            <WorkbenchIcon name="lucide:download" size={16} className="text-muted-foreground" />
             Export Database
-          </Button>
-          <Button variant="outline" className="w-full justify-start gap-3 text-[13px] h-9 border-white/[0.06] hover:bg-red-500/5 text-red-400 hover:text-red-300">
-            <Trash2 className="h-4 w-4" />
+          </WorkbenchButton>
+          <WorkbenchButton variant="outline" className="w-full justify-start gap-3 h-9 text-[13px] hover:bg-red-500/5 text-red-400 hover:text-red-300">
+            <WorkbenchIcon name="lucide:trash-2" size={16} />
             Reset Factory Settings
-          </Button>
+          </WorkbenchButton>
         </div>
       </SettingsSection>
     </div>

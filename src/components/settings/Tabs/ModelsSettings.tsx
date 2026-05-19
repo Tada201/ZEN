@@ -1,19 +1,12 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import {
-  Search, Check, Brain, Globe, Cpu,
-  RefreshCw,
-  Filter,
-} from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Select, SelectContent, SelectItem,
-  SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
+import { WorkbenchInput } from "../ui/WorkbenchInput";
+import { WorkbenchButton } from "@/components/ui/WorkbenchButton";
+import { WorkbenchSelect } from "../ui/WorkbenchSelect";
+import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 
 /* ── Types ─────────────────────────────────────────────────────── */
 
@@ -42,9 +35,9 @@ const PROVIDER_COLORS: Record<string, string> = {
 
 function ProviderIcon({ provider, className }: { provider: string; className?: string }) {
   if (["ollama", "lmstudio"].includes(provider)) {
-    return <Cpu className={cn("h-4 w-4", className)} />;
+    return <WorkbenchIcon name="lucide:cpu" className={className} size={16} />;
   }
-  return <Globe className={cn("h-4 w-4", className)} />;
+  return <WorkbenchIcon name="lucide:globe" className={className} size={16} />;
 }
 
 /* ── Props ─────────────────────────────────────────────────────── */
@@ -94,6 +87,13 @@ export function ModelsSettings({ settings, onUpdate }: ModelsSettingsProps) {
     const p = new Set(storeAvailableModels.map((m) => m.provider).filter(Boolean));
     return ["all", ...Array.from(p).sort()] as string[];
   }, [storeAvailableModels]);
+
+  const providerOptions = useMemo(() => {
+    return providers.map((p) => ({
+      value: p,
+      label: p === "all" ? "All Providers" : p.charAt(0).toUpperCase() + p.slice(1),
+    }));
+  }, [providers]);
 
   const filteredModels = useMemo(() => {
     return storeAvailableModels.filter((m) => {
@@ -151,29 +151,22 @@ export function ModelsSettings({ settings, onUpdate }: ModelsSettingsProps) {
       {/* Toolbar: Search + Filter + Sync */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-600" />
-          <Input
+          <WorkbenchInput
             placeholder="Search models..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 h-8 text-[12px] bg-white/[0.03] border-white/[0.08]
-              focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+            onChangeText={setSearch}
+            icon="lucide:search"
+            className="h-8 text-[12px] bg-white/[0.03] border-white/[0.08]"
           />
         </div>
-        <Select value={providerFilter} onValueChange={setProviderFilter}>
-          <SelectTrigger className="w-[140px] h-8 text-[11px] bg-white/[0.03] border-white/[0.08]">
-            <Filter className="h-3 w-3 mr-1 text-zinc-500" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {providers.map((p) => (
-              <SelectItem key={p} value={p} className="text-[12px]">
-                {p === "all" ? "All Providers" : p.charAt(0).toUpperCase() + p.slice(1)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button
+        <WorkbenchSelect
+          value={providerFilter}
+          onValueChange={setProviderFilter}
+          width={140}
+          options={providerOptions}
+          className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08]"
+        />
+        <WorkbenchButton
           variant="ghost"
           size="sm"
           className="h-8 w-8 p-0 text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]"
@@ -181,15 +174,15 @@ export function ModelsSettings({ settings, onUpdate }: ModelsSettingsProps) {
           disabled={syncing}
           title="Sync models from providers"
         >
-          <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
-        </Button>
+          <WorkbenchIcon name="lucide:refresh-cw" className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
+        </WorkbenchButton>
       </div>
 
       {/* Model list */}
       <ScrollArea className="max-h-[300px] -mx-1 px-1">
         {Object.keys(groupedModels).length === 0 ? (
           <div className="py-10 text-center border border-dashed border-border/40 rounded-lg bg-muted/20">
-            <Brain className="h-5 w-5 mx-auto text-muted-foreground/30 mb-2" />
+            <WorkbenchIcon name="lucide:brain" className="h-5 w-5 mx-auto text-muted-foreground/30 mb-2" />
             <p className="text-[11px] text-muted-foreground/50">
               {syncing
                 ? "Synchronizing handshake..."
@@ -198,15 +191,15 @@ export function ModelsSettings({ settings, onUpdate }: ModelsSettingsProps) {
                 : "No matching models."}
             </p>
             {storeAvailableModels.length === 0 && !syncing && (
-              <Button
+              <WorkbenchButton
                 variant="ghost"
                 size="sm"
                 className="mt-2 h-7 text-[10px] text-primary hover:text-primary/80"
                 onClick={handleSync}
               >
-                <RefreshCw className="h-3 w-3 mr-1" />
+                <WorkbenchIcon name="lucide:refresh-cw" className="h-3 w-3 mr-1" />
                 Sync Catalog
-              </Button>
+              </WorkbenchButton>
             )}
           </div>
         ) : (
@@ -233,7 +226,7 @@ export function ModelsSettings({ settings, onUpdate }: ModelsSettingsProps) {
                       className={cn(
                         "group relative flex items-center gap-2.5 p-2 rounded-lg border transition-all text-left w-full",
                         isSelected(model.id, model.provider)
-                          ? "bg-primary/[0.03] border-primary/30"
+                           ? "bg-primary/[0.03] border-primary/30"
                           : "border-border/40 bg-muted/10 hover:bg-muted/30"
                       )}
                     >
@@ -245,7 +238,7 @@ export function ModelsSettings({ settings, onUpdate }: ModelsSettingsProps) {
                             : "border-border/40 bg-muted/20 text-muted-foreground/60"
                         )}
                       >
-                        <Brain className="h-3.5 w-3.5" />
+                        <WorkbenchIcon name="lucide:brain" className="h-3.5 w-3.5" />
                       </div>
 
                       <div className="flex-1 min-w-0">
@@ -279,7 +272,7 @@ export function ModelsSettings({ settings, onUpdate }: ModelsSettingsProps) {
                       </div>
 
                       {isSelected(model.id, model.provider) && (
-                        <Check className="h-3.5 w-3.5 text-primary mr-1 shrink-0" />
+                        <WorkbenchIcon name="lucide:check" className="h-3.5 w-3.5 text-primary mr-1 shrink-0" />
                       )}
                     </button>
                   ))}

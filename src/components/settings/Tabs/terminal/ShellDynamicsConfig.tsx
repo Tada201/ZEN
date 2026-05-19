@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { WorkbenchSettingRow } from '@/components/settings/ui/WorkbenchSettingRow';
 import { WorkbenchSelect } from '@/components/settings/ui/WorkbenchSelect';
+import { WorkbenchInput } from '@/components/settings/ui/WorkbenchInput';
 import { SettingsCard } from '@/components/settings/ui/SettingsCard';
 
 export const ShellDynamicsConfig = memo(() => {
@@ -28,7 +29,7 @@ export const ShellDynamicsConfig = memo(() => {
                                 { label: 'CMD', value: 'cmd' },
                                 { label: 'Bash (WSL)', value: 'bash' },
                                 { label: 'Zsh', value: 'zsh' },
-                            ]}
+                             ]}
                             width={160}
                         />
                     }
@@ -38,12 +39,11 @@ export const ShellDynamicsConfig = memo(() => {
                     label="Shell Arguments"
                     description="Additional arguments passed to the shell on startup"
                     control={
-                        <input
-                            type="text"
+                        <WorkbenchInput
                             value={shellArgs}
-                            onChange={(e) => updateSetting({ shellArgs: e.target.value })}
+                            onChangeText={(val) => updateSetting({ shellArgs: val })}
                             placeholder="-NoLogo"
-                            className="w-[200px] h-9 px-3 bg-slate-950/50 border border-white/5 rounded-lg font-mono text-[11px] text-zinc-300 focus:border-emerald-500/30 transition-colors"
+                            className="w-[200px] h-8 bg-slate-950/50 border border-white/5 rounded-lg font-mono text-[11px] text-zinc-300 focus:border-emerald-500/30 transition-colors"
                         />
                     }
                 />

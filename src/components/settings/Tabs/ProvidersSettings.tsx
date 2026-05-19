@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils/style';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
 import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
 import { WorkbenchInput } from '@/components/settings/ui/WorkbenchInput';
+import { WorkbenchSelect } from '@/components/settings/ui/WorkbenchSelect';
 import { PROVIDER_ICONS } from './providers/constants';
 import { ApiKeyConfig } from './providers/ApiKeyConfig';
 import { EndpointConfig } from './providers/EndpointConfig';
@@ -295,54 +296,58 @@ export const ProvidersSettings = memo(() => {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="flex flex-col gap-1.5">
                                         <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Embeddings Model</label>
-                                        <select
+                                        <WorkbenchSelect
                                             value={providerParams.embeddingModel || ''}
-                                            onChange={(e) => updateProviderParams('aihubmix', { embeddingModel: e.target.value })}
-                                            className="h-8 px-2 text-[11px] bg-white/[0.03] border border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400"
-                                        >
-                                            <option value="" className="bg-[#0b0c10] text-white/40">No model selected</option>
-                                            <option value="text-embedding-3-small" className="bg-[#0b0c10]">text-embedding-3-small</option>
-                                            <option value="text-embedding-3-large" className="bg-[#0b0c10]">text-embedding-3-large</option>
-                                            <option value="text-embedding-ada-002" className="bg-[#0b0c10]">text-embedding-ada-002</option>
-                                        </select>
+                                            onValueChange={(val) => updateProviderParams('aihubmix', { embeddingModel: val })}
+                                            className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                            options={[
+                                                { value: "", label: "No model selected" },
+                                                { value: "text-embedding-3-small", label: "text-embedding-3-small" },
+                                                { value: "text-embedding-3-large", label: "text-embedding-3-large" },
+                                                { value: "text-embedding-ada-002", label: "text-embedding-ada-002" }
+                                            ]}
+                                        />
                                     </div>
                                     <div className="flex flex-col gap-1.5">
                                         <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Image Generator Model</label>
-                                        <select
+                                        <WorkbenchSelect
                                             value={providerParams.imageModel || ''}
-                                            onChange={(e) => updateProviderParams('aihubmix', { imageModel: e.target.value })}
-                                            className="h-8 px-2 text-[11px] bg-white/[0.03] border border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400"
-                                        >
-                                            <option value="" className="bg-[#0b0c10] text-white/40">No model selected</option>
-                                            <option value="dall-e-3" className="bg-[#0b0c10]">DALL-E 3 (Premium)</option>
-                                            <option value="dall-e-2" className="bg-[#0b0c10]">DALL-E 2</option>
-                                            <option value="midjourney" className="bg-[#0b0c10]">Midjourney API</option>
-                                            <option value="flux-schnell" className="bg-[#0b0c10]">Flux Schnell</option>
-                                        </select>
+                                            onValueChange={(val) => updateProviderParams('aihubmix', { imageModel: val })}
+                                            className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                            options={[
+                                                { value: "", label: "No model selected" },
+                                                { value: "dall-e-3", label: "DALL-E 3 (Premium)" },
+                                                { value: "dall-e-2", label: "DALL-E 2" },
+                                                { value: "midjourney", label: "Midjourney API" },
+                                                { value: "flux-schnell", label: "Flux Schnell" }
+                                            ]}
+                                        />
                                     </div>
                                     <div className="flex flex-col gap-1.5">
                                         <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Speech-to-Text Model</label>
-                                        <select
+                                        <WorkbenchSelect
                                             value={providerParams.sttModel || ''}
-                                            onChange={(e) => updateProviderParams('aihubmix', { sttModel: e.target.value })}
-                                            className="h-8 px-2 text-[11px] bg-white/[0.03] border border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400"
-                                        >
-                                            <option value="" className="bg-[#0b0c10] text-white/40">No model selected</option>
-                                            <option value="whisper-1" className="bg-[#0b0c10]">Whisper v1</option>
-                                            <option value="whisper-large-v3" className="bg-[#0b0c10]">Whisper Large v3</option>
-                                        </select>
+                                            onValueChange={(val) => updateProviderParams('aihubmix', { sttModel: val })}
+                                            className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                            options={[
+                                                { value: "", label: "No model selected" },
+                                                { value: "whisper-1", label: "Whisper v1" },
+                                                { value: "whisper-large-v3", label: "Whisper Large v3" }
+                                            ]}
+                                        />
                                     </div>
                                     <div className="flex flex-col gap-1.5">
                                         <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Text-to-Speech Model</label>
-                                        <select
+                                        <WorkbenchSelect
                                             value={providerParams.ttsModel || ''}
-                                            onChange={(e) => updateProviderParams('aihubmix', { ttsModel: e.target.value })}
-                                            className="h-8 px-2 text-[11px] bg-white/[0.03] border border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400"
-                                        >
-                                            <option value="" className="bg-[#0b0c10] text-white/40">No model selected</option>
-                                            <option value="tts-1" className="bg-[#0b0c10]">TTS OpenAI v1</option>
-                                            <option value="tts-1-hd" className="bg-[#0b0c10]">TTS OpenAI HD</option>
-                                        </select>
+                                            onValueChange={(val) => updateProviderParams('aihubmix', { ttsModel: val })}
+                                            className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                            options={[
+                                                { value: "", label: "No model selected" },
+                                                { value: "tts-1", label: "TTS OpenAI v1" },
+                                                { value: "tts-1-hd", label: "TTS OpenAI HD" }
+                                            ]}
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -357,67 +362,72 @@ export const ProvidersSettings = memo(() => {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="flex flex-col gap-1.5">
                                         <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Embeddings Model</label>
-                                        <select
+                                        <WorkbenchSelect
                                             value={providerParams.embeddingModel || ''}
-                                            onChange={(e) => updateProviderParams('nine_router', { embeddingModel: e.target.value })}
-                                            className="h-8 px-2 text-[11px] bg-white/[0.03] border border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400"
-                                        >
-                                            <option value="" className="bg-[#0b0c10] text-white/40">No model selected</option>
-                                            <option value="nomic-embed-text" className="bg-[#0b0c10]">Nomic Embed Text (Local)</option>
-                                            <option value="bge-large-en-v1.5" className="bg-[#0b0c10]">BGE Large English</option>
-                                            <option value="text-embedding-3-small" className="bg-[#0b0c10]">text-embedding-3-small</option>
-                                        </select>
+                                            onValueChange={(val) => updateProviderParams('nine_router', { embeddingModel: val })}
+                                            className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                            options={[
+                                                { value: "", label: "No model selected" },
+                                                { value: "nomic-embed-text", label: "Nomic Embed Text (Local)" },
+                                                { value: "bge-large-en-v1.5", label: "BGE Large English" },
+                                                { value: "text-embedding-3-small", label: "text-embedding-3-small" }
+                                            ]}
+                                        />
                                     </div>
                                     <div className="flex flex-col gap-1.5">
                                         <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Image Generator Model</label>
-                                        <select
+                                        <WorkbenchSelect
                                             value={providerParams.imageModel || ''}
-                                            onChange={(e) => updateProviderParams('nine_router', { imageModel: e.target.value })}
-                                            className="h-8 px-2 text-[11px] bg-white/[0.03] border border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400"
-                                        >
-                                            <option value="" className="bg-[#0b0c10] text-white/40">No model selected</option>
-                                            <option value="flux" className="bg-[#0b0c10]">Flux (Local Standard)</option>
-                                            <option value="dall-e-3" className="bg-[#0b0c10]">DALL-E 3 (Cloud Fallback)</option>
-                                            <option value="stable-diffusion-xl" className="bg-[#0b0c10]">SDXL (Local)</option>
-                                        </select>
+                                            onValueChange={(val) => updateProviderParams('nine_router', { imageModel: val })}
+                                            className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                            options={[
+                                                { value: "", label: "No model selected" },
+                                                { value: "flux", label: "Flux (Local Standard)" },
+                                                { value: "dall-e-3", label: "DALL-E 3 (Cloud Fallback)" },
+                                                { value: "stable-diffusion-xl", label: "SDXL (Local)" }
+                                            ]}
+                                        />
                                     </div>
                                     <div className="flex flex-col gap-1.5">
                                         <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Speech-to-Text Model</label>
-                                        <select
+                                        <WorkbenchSelect
                                             value={providerParams.sttModel || ''}
-                                            onChange={(e) => updateProviderParams('nine_router', { sttModel: e.target.value })}
-                                            className="h-8 px-2 text-[11px] bg-white/[0.03] border border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400"
-                                        >
-                                            <option value="" className="bg-[#0b0c10] text-white/40">No model selected</option>
-                                            <option value="stt" className="bg-[#0b0c10]">Local STT Engine</option>
-                                            <option value="whisper-1" className="bg-[#0b0c10]">Whisper v1 Proxy</option>
-                                        </select>
+                                            onValueChange={(val) => updateProviderParams('nine_router', { sttModel: val })}
+                                            className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                            options={[
+                                                { value: "", label: "No model selected" },
+                                                { value: "stt", label: "Local STT Engine" },
+                                                { value: "whisper-1", label: "Whisper v1 Proxy" }
+                                            ]}
+                                        />
                                     </div>
                                     <div className="flex flex-col gap-1.5">
                                         <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Text-to-Speech Model</label>
-                                        <select
+                                        <WorkbenchSelect
                                             value={providerParams.ttsModel || ''}
-                                            onChange={(e) => updateProviderParams('nine_router', { ttsModel: e.target.value })}
-                                            className="h-8 px-2 text-[11px] bg-white/[0.03] border border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400"
-                                        >
-                                            <option value="" className="bg-[#0b0c10] text-white/40">No model selected</option>
-                                            <option value="tts" className="bg-[#0b0c10]">Local TTS Engine</option>
-                                            <option value="tts-1" className="bg-[#0b0c10]">TTS OpenAI Proxy</option>
-                                        </select>
+                                            onValueChange={(val) => updateProviderParams('nine_router', { ttsModel: val })}
+                                            className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                            options={[
+                                                { value: "", label: "No model selected" },
+                                                { value: "tts", label: "Local TTS Engine" },
+                                                { value: "tts-1", label: "TTS OpenAI Proxy" }
+                                            ]}
+                                        />
                                     </div>
                                     <div className="flex flex-col gap-1.5 col-span-2">
                                         <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Web Search Strategy & Model</label>
-                                        <select
+                                        <WorkbenchSelect
                                             value={providerParams.searchModel || ''}
-                                            onChange={(e) => updateProviderParams('nine_router', { searchModel: e.target.value })}
-                                            className="h-8 px-2 text-[11px] bg-white/[0.03] border border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400"
-                                        >
-                                            <option value="" className="bg-[#0b0c10] text-white/40">No model selected</option>
-                                            <option value="kr/claude-sonnet-4.5" className="bg-[#0b0c10]">kr/claude-sonnet-4.5 (Smart Discovery)</option>
-                                            <option value="perplexity/sonar" className="bg-[#0b0c10]">perplexity/sonar (Online Agentic)</option>
-                                            <option value="google/gemini-2.0-flash-exp" className="bg-[#0b0c10]">google/gemini-2.0-flash-exp</option>
-                                            <option value="openai/gpt-4o-mini" className="bg-[#0b0c10]">openai/gpt-4o-mini (Speed Optimized)</option>
-                                        </select>
+                                            onValueChange={(val) => updateProviderParams('nine_router', { searchModel: val })}
+                                            className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                            options={[
+                                                { value: "", label: "No model selected" },
+                                                { value: "kr/claude-sonnet-4.5", label: "kr/claude-sonnet-4.5 (Smart Discovery)" },
+                                                { value: "perplexity/sonar", label: "perplexity/sonar (Online Agentic)" },
+                                                { value: "google/gemini-2.0-flash-exp", label: "google/gemini-2.0-flash-exp" },
+                                                { value: "openai/gpt-4o-mini", label: "openai/gpt-4o-mini (Speed Optimized)" }
+                                            ]}
+                                        />
                                     </div>
                                 </div>
                             </div>

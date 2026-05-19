@@ -1,33 +1,57 @@
 import React from "react";
 import type { ComponentType } from "react";
 import { cn } from "@/lib/utils";
+import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 
 interface SettingsSectionProps {
   title: string;
+  subtitle?: string;
   description?: string;
-  icon?: ComponentType<{ className?: string }>;
+  icon?: string | ComponentType<{ className?: string }>;
   children: React.ReactNode;
   className?: string;
 }
 
-export function SettingsSection({ title, icon: Icon, description, children, className }: SettingsSectionProps) {
+export function SettingsSection({
+  title,
+  subtitle,
+  icon,
+  description,
+  children,
+  className
+}: SettingsSectionProps) {
   return (
-    <section className={cn("flex flex-col gap-3", className)}>
-      <div className="px-1">
-        <div className="flex items-center gap-2 mb-0.5">
-          {Icon && <Icon className="h-3.5 w-3.5 text-zinc-500" />}
-          <h3 className="text-[11px] font-bold text-zinc-400 uppercase tracking-[0.15em]">
+    <section className={cn(
+      "rounded-2xl border border-white/5 bg-slate-950/40 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.18)] backdrop-blur-md",
+      className
+    )}>
+      <div className="flex items-start gap-3 mb-5">
+        {icon && (
+          <div className="h-9 w-9 rounded-xl bg-white/[0.03] border border-white/5 flex items-center justify-center shrink-0">
+            {typeof icon === "string" ? (
+              <WorkbenchIcon name={icon} size={16} className="text-primary" />
+            ) : (
+              React.createElement(icon, { className: "h-4 w-4 text-primary" })
+            )}
+          </div>
+        )}
+        <div className="flex flex-col gap-1 min-w-0">
+          {subtitle && (
+            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-primary/80">
+              {subtitle}
+            </span>
+          )}
+          <h3 className="text-[13px] font-bold text-white uppercase tracking-tight">
             {title}
           </h3>
+          {description && (
+            <p className="text-[11px] text-zinc-500 leading-relaxed max-w-3xl">
+              {description}
+            </p>
+          )}
         </div>
-        {description && (
-          <p className="text-[10px] text-zinc-600 mt-1 leading-relaxed">
-            {description}
-          </p>
-        )}
       </div>
-      <div className="border-t border-white/[0.06] mb-1" />
-      <div className="space-y-0.5">
+      <div className="space-y-2">
         {children}
       </div>
     </section>

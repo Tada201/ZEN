@@ -21,7 +21,7 @@ struct ModelCapabilities {
 /// or any server implementing the `/v1/chat/completions` endpoint.
 pub struct OpenAiCompatProvider {
     client: Client,
-    base_url: String,
+    base_url: RwLock<String>,
     api_key: String,
     provider_name: String,
     extra_headers: Vec<(String, String)>,
@@ -209,7 +209,7 @@ impl OpenAiCompatProvider {
                 .connect_timeout(std::time::Duration::from_secs(10))
                 .build()
                 .expect("Failed to build OpenAI-Compat HTTP client"),
-            base_url: base_url.trim_end_matches('/').to_string(),
+            base_url: RwLock::new(base_url.trim_end_matches('/').to_string()),
             api_key: api_key.to_string(),
             provider_name: provider_name.to_string(),
             extra_headers,
@@ -217,10 +217,20 @@ impl OpenAiCompatProvider {
         }
     }
 
+    /// Helper to update the base url if a fallback was successful
+    fn update_base_url(&self, old_url: &str, new_url: &str) {
+        if let Ok(mut base) = self.base_url.write() {
+            if *base == old_url {
+                *base = new_url.to_string();
+            }
+        }
+    }
+
     /// Check if this is Groq provider (needs special rate limit handling)
     fn is_groq(&self) -> bool {
+        let base = self.base_url.read().unwrap().clone();
         self.provider_name.to_lowercase().contains("groq") 
-            || self.base_url.contains("groq.com")
+            || base.contains("groq.com")
     }
 
     /// Build the full URL for an API endpoint.
@@ -228,7 +238,8 @@ impl OpenAiCompatProvider {
     /// (e.g. Gemini's OpenAI-compat proxy) or contains `/gateway`
     /// (e.g. Kilo Gateway's `https://api.kilo.ai/api/gateway`).
     fn url(&self, path: &str) -> String {
-        let base = self.base_url.trim_end_matches('/');
+        let base_locked = self.base_url.read().unwrap();
+        let base = base_locked.trim_end_matches('/');
         if base.ends_with("/v1") || base.contains("/gateway") {
             format!("{}{}", base, path)
         } else {
@@ -238,7 +249,10 @@ impl OpenAiCompatProvider {
 
     /// Create an authorized request builder with extra headers.
     fn auth_get(&self, url: &str) -> reqwest::RequestBuilder {
-        let mut req = self.client.get(url).bearer_auth(&self.api_key);
+        let mut req = self.client.get(url);
+        if !self.api_key.is_empty() {
+            req = req.bearer_auth(&self.api_key);
+        }
         for (key, value) in &self.extra_headers {
             req = req.header(key, value);
         }
@@ -246,7 +260,10 @@ impl OpenAiCompatProvider {
     }
 
     fn auth_post(&self, url: &str) -> reqwest::RequestBuilder {
-        let mut req = self.client.post(url).bearer_auth(&self.api_key);
+        let mut req = self.client.post(url);
+        if !self.api_key.is_empty() {
+            req = req.bearer_auth(&self.api_key);
+        }
         for (key, value) in &self.extra_headers {
             req = req.header(key, value);
         }
@@ -346,7 +363,34 @@ impl LlmProvider for OpenAiCompatProvider {
         let url = self.url("/models");
         info!(provider = %self.provider_name, url = %url, "Fetching model list");
 
-        let resp = self.send_with_retry(self.auth_get(&url)).await?;
+        let resp = match self.send_with_retry(self.auth_get(&url)).await {
+            Ok(resp) => resp,
+            Err(e) => {
+                let base_str = self.base_url.read().unwrap().clone();
+                if base_str.contains("localhost") {
+                    let alt_base = base_str.replace("localhost", "127.0.0.1");
+                    let alt_provider = Self {
+                        client: self.client.clone(),
+                        base_url: RwLock::new(alt_base.clone()),
+                        api_key: self.api_key.clone(),
+                        provider_name: self.provider_name.clone(),
+                        extra_headers: self.extra_headers.clone(),
+                        model_capabilities: RwLock::new(HashMap::new()),
+                    };
+                    let alt_url = alt_provider.url("/models");
+                    warn!(error = %e, alt_url = %alt_url, "Failed to reach OpenAI-compat on localhost, trying 127.0.0.1");
+                    match alt_provider.send_with_retry(alt_provider.auth_get(&alt_url)).await {
+                        Ok(resp) => {
+                            self.update_base_url(&base_str, &alt_base);
+                            resp
+                        }
+                        Err(_) => return Err(e),
+                    }
+                } else {
+                    return Err(e);
+                }
+            }
+        };
 
         if !resp.status().is_success() {
             let status = resp.status();
@@ -695,7 +739,29 @@ impl LlmProvider for OpenAiCompatProvider {
         let url = self.url("/models");
         match self.auth_get(&url).send().await {
             Ok(resp) => resp.status().is_success(),
-            Err(_) => false,
+            Err(_) => {
+                let base_str = self.base_url.read().unwrap().clone();
+                if base_str.contains("localhost") {
+                    let alt_base = base_str.replace("localhost", "127.0.0.1");
+                    let alt_provider = Self {
+                        client: self.client.clone(),
+                        base_url: RwLock::new(alt_base.clone()),
+                        api_key: self.api_key.clone(),
+                        provider_name: self.provider_name.clone(),
+                        extra_headers: self.extra_headers.clone(),
+                        model_capabilities: RwLock::new(HashMap::new()),
+                    };
+                    let alt_url = alt_provider.url("/models");
+                    debug!(url = %alt_url, "Trying 127.0.0.1 fallback for health check");
+                    if let Ok(resp) = alt_provider.auth_get(&alt_url).send().await {
+                        if resp.status().is_success() {
+                            self.update_base_url(&base_str, &alt_base);
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
         }
     }
 

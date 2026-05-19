@@ -1,22 +1,13 @@
 import { useState } from "react";
 import { SettingsSection } from "../SettingsSection";
 import { SettingsRow } from "../SettingsRow";
-import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
-import { Textarea } from "@/components/ui/textarea";
+import { WorkbenchSwitch } from "../ui/WorkbenchSwitch";
+import { WorkbenchSelect } from "../ui/WorkbenchSelect";
+import { WorkbenchSlider } from "../ui/WorkbenchSlider";
+import { WorkbenchTextArea } from "../ui/WorkbenchTextArea";
+import { WorkbenchButton } from "@/components/ui/WorkbenchButton";
+import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Shield, ShieldCheck, ShieldAlert, ShieldOff,
-  Zap, Gauge, Clock, Terminal,
-  FileText, Globe, Search, Cpu,
-  AlertTriangle, ChevronDown, ChevronRight,
-  FilePen, Eye, Lock, Unlock,
-  Rocket, Download,
-  Pen, Map, Cloud, Bot, Radar, Route, MapPin,
-  Database, Activity, UserPlus, UserCheck, FileSearch
-} from "lucide-react";
 
 interface ToolsSettingsProps {
   settings: Record<string, string>;
@@ -28,54 +19,54 @@ interface ToolsSettingsProps {
 interface ToolMeta {
   id: string;
   name: string;
-  icon: typeof Terminal;
+  icon: string;
   riskLevel: "Low" | "Medium" | "High" | "Critical";
   description: string;
 }
 
 const KNOWN_TOOLS: ToolMeta[] = [
   // ── Terminal & Execution ──
-  { id: "terminal", name: "Terminal", icon: Terminal, riskLevel: "Critical", description: "Execute shell commands and scripts" },
-  { id: "run_command", name: "Run Command", icon: Terminal, riskLevel: "Critical", description: "Execute a single shell command with timeout" },
+  { id: "terminal", name: "Terminal", icon: "lucide:terminal", riskLevel: "Critical", description: "Execute shell commands and scripts" },
+  { id: "run_command", name: "Run Command", icon: "lucide:terminal", riskLevel: "Critical", description: "Execute a single shell command with timeout" },
 
   // ── File Operations ──
-  { id: "file_write", name: "File Write", icon: FilePen, riskLevel: "High", description: "Create, edit, and overwrite files" },
-  { id: "file_read", name: "File Read", icon: FileText, riskLevel: "Medium", description: "Read file contents from disk" },
-  { id: "edit_file", name: "Edit File", icon: FilePen, riskLevel: "High", description: "Precise patch-based file edits via old/new text" },
-  { id: "list_documents", name: "List Documents", icon: FileText, riskLevel: "Low", description: "List ingested documents in the knowledge base" },
-  { id: "read_document_content", name: "Read Document", icon: FileText, riskLevel: "Medium", description: "Read raw text content of ingested documents" },
-  { id: "grep_documents", name: "Grep Documents", icon: FileSearch, riskLevel: "Low", description: "Text-based search across all ingested documents" },
+  { id: "file_write", name: "File Write", icon: "lucide:file-signature", riskLevel: "High", description: "Create, edit, and overwrite files" },
+  { id: "file_read", name: "File Read", icon: "lucide:file-text", riskLevel: "Medium", description: "Read file contents from disk" },
+  { id: "edit_file", name: "Edit File", icon: "lucide:file-signature", riskLevel: "High", description: "Precise patch-based file edits via old/new text" },
+  { id: "list_documents", name: "List Documents", icon: "lucide:file-text", riskLevel: "Low", description: "List ingested documents in the knowledge base" },
+  { id: "read_document_content", name: "Read Document", icon: "lucide:file-text", riskLevel: "Medium", description: "Read raw text content of ingested documents" },
+  { id: "grep_documents", name: "Grep Documents", icon: "lucide:file-search", riskLevel: "Low", description: "Text-based search across all ingested documents" },
 
   // ── Web & Search ──
-  { id: "web_fetch", name: "Web Fetch", icon: Globe, riskLevel: "High", description: "Make HTTP requests to external URLs" },
-  { id: "web_search", name: "Web Search", icon: Search, riskLevel: "Medium", description: "Search the web via DuckDuckGo" },
-  { id: "search", name: "Search", icon: Search, riskLevel: "Medium", description: "Search local files and codebase" },
-  { id: "vector_search", name: "Vector Search", icon: Search, riskLevel: "Low", description: "Semantic search over ingested documents" },
+  { id: "web_fetch", name: "Web Fetch", icon: "lucide:globe", riskLevel: "High", description: "Make HTTP requests to external URLs" },
+  { id: "web_search", name: "Web Search", icon: "lucide:search", riskLevel: "Medium", description: "Search the web via DuckDuckGo" },
+  { id: "search", name: "Search", icon: "lucide:search", riskLevel: "Medium", description: "Search local files and codebase" },
+  { id: "vector_search", name: "Vector Search", icon: "lucide:search", riskLevel: "Low", description: "Semantic search over ingested documents" },
 
   // ── OSINT & Geospatial ──
-  { id: "get_weather", name: "Weather", icon: Cloud, riskLevel: "Low", description: "Get current weather at a coordinate" },
-  { id: "get_earthquakes", name: "Earthquakes", icon: Activity, riskLevel: "Low", description: "Fetch recent USGS earthquake data" },
-  { id: "get_military_aircraft", name: "Aircraft Radar", icon: Radar, riskLevel: "Low", description: "Track military aircraft via ADS-B data" },
-  { id: "activate_3d_globe", name: "3D Globe", icon: Globe, riskLevel: "Medium", description: "Activate Cesium 3D globe at coordinates" },
-  { id: "activate_2d_operational_map", name: "2D Operational Map", icon: Map, riskLevel: "Low", description: "Activate 2D operational wireframe map" },
-  { id: "calculate_route", name: "Routing", icon: Route, riskLevel: "Low", description: "Calculate driving route between two points" },
-  { id: "geocode_search", name: "Geocode Search", icon: MapPin, riskLevel: "Low", description: "Convert place names to coordinates" },
-  { id: "reverse_geocode", name: "Reverse Geocode", icon: MapPin, riskLevel: "Low", description: "Convert coordinates to place names" },
-  { id: "create_geofence", name: "Geofence", icon: MapPin, riskLevel: "Medium", description: "Create circular or polygonal geofence zones" },
+  { id: "get_weather", name: "Weather", icon: "lucide:cloud", riskLevel: "Low", description: "Get current weather at a coordinate" },
+  { id: "get_earthquakes", name: "Earthquakes", icon: "lucide:activity", riskLevel: "Low", description: "Fetch recent USGS earthquake data" },
+  { id: "get_military_aircraft", name: "Aircraft Radar", icon: "lucide:radar", riskLevel: "Low", description: "Track military aircraft via ADS-B data" },
+  { id: "activate_3d_globe", name: "3D Globe", icon: "lucide:globe", riskLevel: "Medium", description: "Activate Cesium 3D globe at coordinates" },
+  { id: "activate_2d_operational_map", name: "2D Operational Map", icon: "lucide:map", riskLevel: "Low", description: "Activate 2D operational wireframe map" },
+  { id: "calculate_route", name: "Routing", icon: "lucide:route", riskLevel: "Low", description: "Calculate driving route between two points" },
+  { id: "geocode_search", name: "Geocode Search", icon: "lucide:map-pin", riskLevel: "Low", description: "Convert place names to coordinates" },
+  { id: "reverse_geocode", name: "Reverse Geocode", icon: "lucide:map-pin", riskLevel: "Low", description: "Convert coordinates to place names" },
+  { id: "create_geofence", name: "Geofence", icon: "lucide:map-pin", riskLevel: "Medium", description: "Create circular or polygonal geofence zones" },
 
   // ── Agent & Orchestration ──
-  { id: "spawn_agent", name: "Spawn Agent", icon: Bot, riskLevel: "Medium", description: "Spawn sub-agent for parallel task execution" },
-  { id: "delegate_to_agent", name: "Delegate to Agent", icon: UserPlus, riskLevel: "Medium", description: "Transfer conversation to another specialist agent" },
-  { id: "handoff_to_agent", name: "Handoff", icon: UserCheck, riskLevel: "Low", description: "Hand off conversation to another agent" },
-  { id: "write_to_memory", name: "Write Memory", icon: Database, riskLevel: "Low", description: "Write findings to session vector memory" },
-  { id: "search_session_memory", name: "Search Memory", icon: Search, riskLevel: "Low", description: "Search session-scoped vector memory" },
-  { id: "graph_session", name: "Graph Session", icon: Database, riskLevel: "Low", description: "Manage graph database sessions" },
+  { id: "spawn_agent", name: "Spawn Agent", icon: "lucide:bot", riskLevel: "Medium", description: "Spawn sub-agent for parallel task execution" },
+  { id: "delegate_to_agent", name: "Delegate to Agent", icon: "lucide:user-plus", riskLevel: "Medium", description: "Transfer conversation to another specialist agent" },
+  { id: "handoff_to_agent", name: "Handoff", icon: "lucide:user-check", riskLevel: "Low", description: "Hand off conversation to another agent" },
+  { id: "write_to_memory", name: "Write Memory", icon: "lucide:database", riskLevel: "Low", description: "Write findings to session vector memory" },
+  { id: "search_session_memory", name: "Search Memory", icon: "lucide:search", riskLevel: "Low", description: "Search session-scoped vector memory" },
+  { id: "graph_session", name: "Graph Session", icon: "lucide:database", riskLevel: "Low", description: "Manage graph database sessions" },
 
   // ── Drawing & Visualization ──
-  { id: "draw", name: "Drawing Canvas", icon: Pen, riskLevel: "Low", description: "Draw shapes and diagrams on a canvas" },
+  { id: "draw", name: "Drawing Canvas", icon: "lucide:pen", riskLevel: "Low", description: "Draw shapes and diagrams on a canvas" },
 
   // ── System ──
-  { id: "system_metrics", name: "System Metrics", icon: Cpu, riskLevel: "Low", description: "Read CPU, memory, and system stats" },
+  { id: "system_metrics", name: "System Metrics", icon: "lucide:cpu", riskLevel: "Low", description: "Read CPU, memory, and system stats" },
 ];
 
 const RISK_COLORS: Record<string, string> = {
@@ -105,7 +96,6 @@ function ToolPermissionCard({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const Icon = tool.icon;
   const prefix = `tools.permission.${tool.id}`;
   const permissionDefault = settings[`${prefix}.default`] || "inherit";
   const allowPatterns = settings[`${prefix}.allow-patterns`] || "";
@@ -119,14 +109,14 @@ function ToolPermissionCard({
         <button
           type="button"
           onClick={onToggle}
-          className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 transition-opacity text-left"
+          className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 transition-opacity text-left cursor-pointer"
           aria-expanded={expanded}
           aria-label={`${expanded ? "Collapse" : "Expand"} ${tool.name} settings`}
         >
           <div className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${
             isOverridden ? "bg-primary/10" : "bg-white/[0.03]"
           }`}>
-            <Icon className={`h-3.5 w-3.5 ${isOverridden ? "text-primary" : "text-muted-foreground"}`} />
+            <WorkbenchIcon name={tool.icon} className={`h-3.5 w-3.5 ${isOverridden ? "text-primary" : "text-muted-foreground"}`} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -153,33 +143,23 @@ function ToolPermissionCard({
           <div
             onClick={(e) => e.stopPropagation()}
           >
-            <Select
+            <WorkbenchSelect
               value={permissionDefault}
               onValueChange={(v) => onUpdate(`${prefix}.default`, v)}
-            >
-              <SelectTrigger className="w-[100px] h-7 text-[10px] bg-background/50 border-white/[0.06]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PERMISSION_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              options={PERMISSION_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
+              width={100}
+            />
           </div>
           <button
             type="button"
             onClick={onToggle}
-            className="p-0.5 hover:bg-white/[0.06] rounded transition-colors"
+            className="p-0.5 hover:bg-white/[0.06] rounded transition-colors cursor-pointer"
             aria-label={`${expanded ? "Collapse" : "Expand"} ${tool.name} patterns`}
           >
-            {expanded ? (
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-            )}
+            <WorkbenchIcon
+              name={expanded ? "lucide:chevron-down" : "lucide:chevron-right"}
+              className="h-3.5 w-3.5 text-muted-foreground"
+            />
           </button>
         </div>
       </div>
@@ -189,12 +169,12 @@ function ToolPermissionCard({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div className="space-y-1.5">
               <div className="flex items-center gap-1.5">
-                <Eye className="h-3 w-3 text-emerald-400" />
+                <WorkbenchIcon name="lucide:eye" className="h-3 w-3 text-emerald-400" />
                 <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Allow Patterns</span>
               </div>
-              <Textarea
+              <WorkbenchTextArea
                 value={allowPatterns}
-                onChange={(e) => onUpdate(`${prefix}.allow-patterns`, e.target.value)}
+                onChangeText={(v) => onUpdate(`${prefix}.allow-patterns`, v)}
                 placeholder=".*\.txt$&#10;^/tmp/"
                 className="min-h-[52px] text-[10px] font-mono bg-background/50 resize-none"
               />
@@ -202,12 +182,12 @@ function ToolPermissionCard({
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center gap-1.5">
-                <ShieldOff className="h-3 w-3 text-red-400" />
+                <WorkbenchIcon name="lucide:shield-off" className="h-3 w-3 text-red-400" />
                 <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Deny Patterns</span>
               </div>
-              <Textarea
+              <WorkbenchTextArea
                 value={denyPatterns}
-                onChange={(e) => onUpdate(`${prefix}.deny-patterns`, e.target.value)}
+                onChangeText={(v) => onUpdate(`${prefix}.deny-patterns`, v)}
                 placeholder="\.env$&#10;secret"
                 className="min-h-[52px] text-[10px] font-mono bg-background/50 resize-none"
               />
@@ -215,12 +195,12 @@ function ToolPermissionCard({
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center gap-1.5">
-                <ShieldAlert className="h-3 w-3 text-amber-400" />
+                <WorkbenchIcon name="lucide:shield-alert" className="h-3 w-3 text-amber-400" />
                 <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Confirm Patterns</span>
               </div>
-              <Textarea
+              <WorkbenchTextArea
                 value={confirmPatterns}
-                onChange={(e) => onUpdate(`${prefix}.confirm-patterns`, e.target.value)}
+                onChangeText={(v) => onUpdate(`${prefix}.confirm-patterns`, v)}
                 placeholder="rm .*&#10;write:.*"
                 className="min-h-[52px] text-[10px] font-mono bg-background/50 resize-none"
               />
@@ -266,38 +246,23 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
       </div>
 
       {/* ── Global Tool Policy ── */}
-      <SettingsSection title="Global Tool Policy" icon={Shield} description="Default permission rules for all tool calls">
+      <SettingsSection title="Global Tool Policy" icon="lucide:shield" description="Default permission rules for all tool calls">
         <SettingsRow
           label="Global Default"
           description="Fallback permission when no tool-specific rule matches"
           control={
-            <Select value={globalDefault} onValueChange={(v) => onUpdate("tools.global-default", v)}>
-              <SelectTrigger className="w-[140px] h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="confirm">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="h-3.5 w-3.5 text-amber-400" />
-                    <span>Always Confirm</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="always_allow">
-                  <div className="flex items-center gap-2">
-                    <Unlock className="h-3.5 w-3.5 text-emerald-400" />
-                    <span>Always Allow</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="always_deny">
-                  <div className="flex items-center gap-2">
-                    <Lock className="h-3.5 w-3.5 text-red-400" />
-                    <span>Always Deny</span>
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <WorkbenchSelect
+              value={globalDefault}
+              onValueChange={(v) => onUpdate("tools.global-default", v)}
+              options={[
+                { value: "confirm", label: "Always Confirm" },
+                { value: "always_allow", label: "Always Allow" },
+                { value: "always_deny", label: "Always Deny" },
+              ]}
+              width={140}
+            />
           }
-          icon={ShieldCheck}
+          icon="lucide:shield-check"
         />
 
         {/* YOLO Mode with warning */}
@@ -306,16 +271,16 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
             label="YOLO Mode"
             description="Bypass all confirmations — automatically approve every tool call (except hardcoded security rules)"
             control={
-              <Switch
+              <WorkbenchSwitch
                 checked={yoloMode}
                 onCheckedChange={(v) => onUpdate("tools.yolo-mode", String(v))}
               />
             }
-            icon={Rocket}
+            icon="lucide:rocket"
           />
           {yoloMode && (
             <div className="mx-3 mb-2 flex items-start gap-2 p-2 rounded-lg bg-red-500/5 border border-red-500/15">
-              <AlertTriangle className="h-3.5 w-3.5 text-red-400 mt-0.5 shrink-0" />
+              <WorkbenchIcon name="lucide:alert-triangle" className="h-3.5 w-3.5 text-red-400 mt-0.5 shrink-0" />
               <div>
                 <p className="text-[11px] font-semibold text-red-400">Security Warning</p>
                 <p className="text-[10px] text-red-300/60">
@@ -330,17 +295,17 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
           label="Auto-Approve Low Risk"
           description="Automatically allow read-only and safe operations without confirmation"
           control={
-            <Switch
+            <WorkbenchSwitch
               checked={autoApproveLowRisk}
               onCheckedChange={(v) => onUpdate("tools.auto-approve-low-risk", String(v))}
             />
           }
-          icon={Shield}
+          icon="lucide:shield"
         />
       </SettingsSection>
 
       {/* ── Per-Tool Permissions ── */}
-      <SettingsSection title="Per-Tool Permissions" icon={ShieldAlert} description="Override global policy for individual tools">
+      <SettingsSection title="Per-Tool Permissions" icon="lucide:shield-alert" description="Override global policy for individual tools">
         <div className="px-3 py-1">
           <div className="flex items-center justify-between mb-2">
             <p className="text-[10px] text-zinc-500">
@@ -362,7 +327,7 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
           </div>
 
           <div className="mt-2">
-            <Button
+            <WorkbenchButton
               variant="ghost"
               size="sm"
               onClick={() => setShowAllTools(!showAllTools)}
@@ -373,7 +338,7 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
               ) : (
                 <>Show all {KNOWN_TOOLS.length} tools ({KNOWN_TOOLS.length - 3} more)</>
               )}
-            </Button>
+            </WorkbenchButton>
           </div>
 
           <div className="mt-3 p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04]">
@@ -385,17 +350,17 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
       </SettingsSection>
 
       {/* ── Execution Safety ── */}
-      <SettingsSection title="Execution Safety" icon={Gauge} description="Constraints and limits for tool execution">
+      <SettingsSection title="Execution Safety" icon="lucide:gauge" description="Constraints and limits for tool execution">
         <SettingsRow
           label="Sandbox Mode"
           description="Isolate tool execution in a restricted environment"
           control={
-            <Switch
+            <WorkbenchSwitch
               checked={sandboxEnabled}
               onCheckedChange={(v) => onUpdate("tools.sandbox-enabled", String(v))}
             />
           }
-          icon={Lock}
+          icon="lucide:lock"
         />
 
         <SettingsRow
@@ -403,7 +368,7 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
           description="Maximum execution time per tool call"
           control={
             <div className="flex items-center gap-2 w-[160px]">
-              <Slider
+              <WorkbenchSlider
                 value={[toolTimeout]}
                 onValueChange={([v]) => onUpdate("tools.timeout-seconds", String(v))}
                 min={5}
@@ -416,24 +381,24 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
               </span>
             </div>
           }
-          icon={Clock}
+          icon="lucide:clock"
         />
 
         <SettingsRow
           label="Tool Logging"
           description="Log all tool calls and their results for auditing"
           control={
-            <Switch
+            <WorkbenchSwitch
               checked={settings["tools.logging-enabled"] !== "false"}
               onCheckedChange={(v) => onUpdate("tools.logging-enabled", String(v))}
             />
           }
-          icon={Download}
+          icon="lucide:download"
         />
       </SettingsSection>
 
       {/* ── Quick Presets ── */}
-      <SettingsSection title="Quick Presets" icon={Zap} description="Apply pre-configured permission profiles">
+      <SettingsSection title="Quick Presets" icon="lucide:zap" description="Apply pre-configured permission profiles">
         <div className="px-3 py-2 space-y-2">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <button
@@ -444,9 +409,9 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
                 onUpdate("tools.auto-approve-low-risk", "false");
                 onUpdate("tools.sandbox-enabled", "true");
               }}
-              className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-white/[0.06] hover:bg-white/[0.03] transition-colors"
+              className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-white/[0.06] hover:bg-white/[0.03] transition-colors cursor-pointer"
             >
-              <Lock className="h-5 w-5 text-red-400" />
+              <WorkbenchIcon name="lucide:lock" size={20} className="text-red-400" />
               <span className="text-[11px] font-bold text-foreground">Locked Down</span>
               <span className="text-[9px] text-zinc-500 text-center leading-relaxed">All tools require confirmation. Maximum safety.</span>
             </button>
@@ -459,9 +424,9 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
                 onUpdate("tools.auto-approve-low-risk", "true");
                 onUpdate("tools.sandbox-enabled", "true");
               }}
-              className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-white/[0.06] border-primary/20 bg-primary/[0.03] hover:bg-primary/[0.06] transition-colors"
+              className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-white/[0.06] border-primary/20 bg-primary/[0.03] hover:bg-primary/[0.06] transition-colors cursor-pointer"
             >
-              <ShieldCheck className="h-5 w-5 text-amber-400" />
+              <WorkbenchIcon name="lucide:shield-check" size={20} className="text-amber-400" />
               <span className="text-[11px] font-bold text-foreground">Balanced</span>
               <span className="text-[9px] text-zinc-500 text-center leading-relaxed">Confirm by default, auto-approve low risk.</span>
             </button>
@@ -474,9 +439,9 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
                 onUpdate("tools.auto-approve-low-risk", "true");
                 onUpdate("tools.sandbox-enabled", "false");
               }}
-              className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-white/[0.06] hover:bg-white/[0.03] transition-colors"
+              className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-white/[0.06] hover:bg-white/[0.03] transition-colors cursor-pointer"
             >
-              <Rocket className="h-5 w-5 text-emerald-400" />
+              <WorkbenchIcon name="lucide:rocket" size={20} className="text-emerald-400" />
               <span className="text-[11px] font-bold text-foreground">Full Auto</span>
               <span className="text-[9px] text-zinc-500 text-center leading-relaxed">All tools auto-approved. Maximum speed, use with care.</span>
             </button>
