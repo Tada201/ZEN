@@ -423,11 +423,11 @@ export function SurfacesSection() {
         selection={{
           id: "s-resizable", name: "Resizable Panels", category: "Surfaces",
           variants: ["horizontal", "with handle"],
-          jsx: `<ResizablePanelGroup direction="horizontal">\n  <ResizablePanel defaultSize={30} />\n  <ResizableHandle withHandle />\n  <ResizablePanel />\n</ResizablePanelGroup>`,
+          jsx: `<ResizablePanelGroup orientation="horizontal">\n  <ResizablePanel defaultSize={30} />\n  <ResizableHandle withHandle />\n  <ResizablePanel />\n</ResizablePanelGroup>`,
         }}
       >
         <div onClick={(e) => e.stopPropagation()} className="h-32 overflow-hidden rounded-lg border border-border">
-          <ResizablePanelGroup direction="horizontal">
+          <ResizablePanelGroup orientation="horizontal">
             <ResizablePanel defaultSize={30} minSize={20} className="bg-muted/40">
               <div className="flex h-full items-center justify-center text-xs font-medium text-muted-foreground">Sidebar</div>
             </ResizablePanel>

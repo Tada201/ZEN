@@ -14,11 +14,13 @@ use crate::agent::tools::ToolRegistry;
 use crate::agent::hooks::{HookRegistry, HookDecision};
 use crate::tools::permission::PermissionDecision;
 use crate::tools::GlobalToolRegistry;
+use crate::tools::manager::ToolManager;
 use crate::db::models::ChatMessage;
 use crate::agent::cache::ToolCache;
 use std::collections::{HashMap, HashSet};
 use tokio_util::sync::CancellationToken;
 use sha2::{Sha256, Digest};
+use tracing::error;
 
 /// Parse file change data from tool result (for write_file, edit_file)
 fn parse_file_changes(result: &serde_json::Value) -> Option<Vec<FileChange>> {
@@ -114,6 +116,7 @@ pub struct Runner {
     agent_registry: Arc<AgentRegistry>,
     hook_registry: Arc<HookRegistry>,
     permissions: GlobalToolRegistry,
+    tool_manager: Arc<ToolManager>,
     config: RunConfig,
     db_pool: Option<SqlitePool>,
     pub depth: u32,
@@ -129,6 +132,7 @@ impl Runner {
         agent_registry: Arc<AgentRegistry>,
         hook_registry: Arc<HookRegistry>,
         permissions: GlobalToolRegistry,
+        tool_manager: Arc<ToolManager>,
     ) -> Self {
         Self {
             app,
@@ -136,6 +140,7 @@ impl Runner {
             agent_registry,
             hook_registry,
             permissions,
+            tool_manager,
             config: RunConfig::default(),
             db_pool: None,
             depth: 0,
@@ -200,6 +205,7 @@ impl Runner {
             agent_registry: self.agent_registry.clone(),
             hook_registry: self.hook_registry.clone(),
             permissions: self.permissions.clone(),
+            tool_manager: self.tool_manager.clone(),
             config: RunConfig {
                 max_iterations,
                 ..RunConfig::default()
@@ -273,6 +279,31 @@ impl Runner {
                     done: false,
                 }));
 
+                // Save max iterations reached assistant response to SQLite database
+                if let Some(ref db) = self.db_pool {
+                    if let Err(e) = queries::add_message(
+                        db,
+                        &chat_id,
+                        None,
+                        "assistant",
+                        &final_msg,
+                        Some(&model),
+                        true, // is_complete = true
+                        None,
+                        None,
+                        None,
+                        None,
+                        Some(total_tokens_in),
+                        Some(total_tokens_out),
+                        None,
+                        None,
+                    ).await {
+                        tracing::error!("Failed to save max iterations assistant message to SQLite: {:?}", e);
+                    } else {
+                        message_persisted = true;
+                    }
+                }
+
                 // Emit completion event to unlock the chat UI
                 self.emit(AgentEvent::ChatDone(ChatDonePayload {
                     chat_id: chat_id.clone(),
@@ -314,16 +345,21 @@ impl Runner {
             // ── Build authorized tools for current agent ──
             // If tools are globally disabled, present an empty tool list so the LLM
             // receives no tool definitions and cannot call any tools.
-            let authorized_tools: Vec<_> = if self.config.tools_enabled {
+            // With the meta-tool pattern, we inject only 3 meta-tools (tool_list,
+            // tool_info, tool_exec) instead of all individual tool schemas.
+            // The LLM discovers tools dynamically via tool_list / tool_info.
+            let authorized_tool_ids: Vec<String> = if self.config.tools_enabled {
                 self.tool_registry.read().await.list()
                     .into_iter()
                     .filter(|t| current_agent.tool_ids.contains(&t.id().to_string()))
-                    .map(|t| crate::tools::ToolInfo {
-                        name: t.id().to_string(),
-                        description: t.description().to_string(),
-                        parameters: t.input_schema(),
-                    })
+                    .map(|t| t.id().to_string())
                     .collect()
+            } else {
+                Vec::new()
+            };
+
+            let meta_tools: Vec<crate::tools::ToolInfo> = if self.config.tools_enabled {
+                crate::tools::manager::meta_tool_definitions()
             } else {
                 Vec::new()
             };
@@ -346,7 +382,7 @@ impl Runner {
             system_content.push_str("1. When generating SVGs or visual assets, ALWAYS wrap the raw `<svg>` code inside a markdown code block with the `svg` language identifier (e.g. ```svg\n<svg>...</svg>\n```). Do NOT output raw SVG tags directly in the text body.\n");
             system_content.push_str("2. Structure your responses with clear markdown headings and bullet points.\n");
             // Inject canvas context if draw tool is available
-            if authorized_tools.iter().any(|t| t.name == "draw") {
+            if authorized_tool_ids.iter().any(|t| t == "draw") {
                 system_content.push_str("\n\n## Drawing Canvas\n");
                 system_content.push_str("You have access to a drawing canvas (800x600 pixels).\n");
                 system_content.push_str("Use the 'draw' tool to create diagrams, flowcharts, or visual content.\n");
@@ -355,7 +391,7 @@ impl Runner {
             }
 
             // Inject graph_session context if available
-            if authorized_tools.iter().any(|t| t.name == "graph_session") {
+            if authorized_tool_ids.iter().any(|t| t == "graph_session") {
                 system_content.push_str("\n\n## Interactive Math Graphs\n");
                 system_content.push_str("You have access to an interactive graphing engine for mathematical expressions.\n");
                 system_content.push_str("Use the 'graph_session' tool to:\n");
@@ -408,20 +444,20 @@ impl Runner {
                 }
             }
 
-            if !tools_supported && !authorized_tools.is_empty() {
-                system_content.push_str("\n\n## Available Tools\n");
-                system_content.push_str("You MUST use tools to help the user. To call a tool, output EXACTLY one JSON block:\n");
-                system_content.push_str("```json\n{\"tool\": \"TOOL_NAME\", \"args\": {\"param\": \"value\"}}\n```\n");
-                system_content.push_str("RULES:\n");
-                system_content.push_str("- Output ONLY the JSON block when calling a tool. No extra text before or after.\n");
-                system_content.push_str("- After you receive the tool result, narrate what you found, then call another tool or give your final answer.\n");
-                system_content.push_str("- Pick the BEST tool for the job. Do not ask the user which tool to use.\n\n");
-                for tool in &authorized_tools {
-                    system_content.push_str(&format!("### `{}`\n{}\n**Parameters**: {}\n\n",
-                        tool.name, tool.description,
-                        serde_json::to_string_pretty(&tool.parameters).unwrap_or_default()
-                    ));
-                }
+            if !tools_supported && !meta_tools.is_empty() {
+                system_content.push_str("\n\n## Tool System (Deferred Discovery)\n");
+                system_content.push_str("You have access to a library of tools. Instead of loading all schemas upfront, you use 3 meta-tools to discover and invoke them dynamically:\n\n");
+                system_content.push_str("1. **tool_list** - Lists all available tools with 1-line descriptions. Call this first to discover what you can do.\n");
+                system_content.push_str("2. **tool_info** - Gets the full JSON schema, parameters, and usage details for a specific tool.\n");
+                system_content.push_str("3. **tool_exec** - Executes a tool by name with the given arguments.\n\n");
+                system_content.push_str("### Workflow\n");
+                system_content.push_str("1. Call `tool_list({})` to see available tools.\n");
+                system_content.push_str("2. Call `tool_info({\"tool_id\": \"tool_name\"})` to learn a tool's parameters.\n");
+                system_content.push_str("3. Call `tool_exec({\"tool_id\": \"tool_name\", \"arguments\": {\"param\": \"value\"}})` to execute it.\n\n");
+                system_content.push_str("### Rules\n");
+                system_content.push_str("- Output EXACTLY one JSON block per tool call: ```json\n{\"tool\": \"TOOL_NAME\", \"args\": {\"...\"}}\n```\n");
+                system_content.push_str("- After receiving a tool result, incorporate the data into your response.\n");
+                system_content.push_str("- Do NOT ask the user which tool to use - you have full autonomy.\n");
             }
 
             let mut full_context = vec![ChatMessage {
@@ -438,8 +474,8 @@ impl Runner {
             let app_inner = self.app.clone();
 
             // P1: Only pass structured tools if provider supports them
-            let tools_arg = if tools_supported && !authorized_tools.is_empty() {
-                Some(authorized_tools)
+            let tools_arg = if tools_supported && !meta_tools.is_empty() {
+                Some(meta_tools)
             } else {
                 None
             };
@@ -568,6 +604,31 @@ impl Runner {
                 // Emit intermediate text if present before completing
                 // [DELETED redundant chat:chunk - already streamed via callback]
 
+                // Save final completed assistant response to SQLite database
+                if let Some(ref db) = self.db_pool {
+                    if let Err(e) = queries::add_message(
+                        db,
+                        &chat_id,
+                        None,
+                        "assistant",
+                        &response.content,
+                        Some(&model),
+                        true, // is_complete = true
+                        None,
+                        None,
+                        None,
+                        None,
+                        Some(total_tokens_in),
+                        Some(total_tokens_out),
+                        None,
+                        None,
+                    ).await {
+                        tracing::error!("Failed to save final assistant message to SQLite: {:?}", e);
+                    } else {
+                        message_persisted = true;
+                    }
+                }
+
                 // Emit completion event to unlock the chat UI
                 self.emit(AgentEvent::ChatDone(ChatDonePayload {
                     chat_id: chat_id.clone(),
@@ -659,6 +720,7 @@ impl Runner {
                 iteration,
                 &current_agent.id,
                 &current_agent.name,
+                &authorized_tool_ids,
                 token.clone(),
             ).await;
             let tool_exec_elapsed_ms = tool_exec_start.elapsed().as_millis() as u64;
@@ -932,8 +994,84 @@ impl Runner {
         iteration: usize,
         agent_id: &str,
         agent_name: &str,
+        authorized_tool_ids: &[String],
         token: CancellationToken,
     ) -> Vec<ToolResult> {
+        // Preprocess tool calls for meta-tool dispatch
+        // Meta-tools (tool_list, tool_info) are handled inline.
+        // tool_exec is transformed to use the real tool name and arguments.
+        let processed_calls: Vec<(ToolCall, Option<ToolResult>)> = tool_calls.iter().map(|tc| {
+            match tc.name.as_str() {
+                "tool_list" => {
+                    let descriptors = self.tool_manager.list_allowed(authorized_tool_ids);
+                    let result = ToolResult {
+                        tool_call_id: tc.id.clone(),
+                        content: serde_json::to_value(&descriptors).unwrap_or_default(),
+                        is_error: false,
+                    };
+                    (tc.clone(), Some(result))
+                }
+                "tool_info" => {
+                    let tool_id = tc.args.get("tool_id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    let schema = self.tool_manager.get_info(tool_id);
+                    let result = match schema {
+                        Some(s) => ToolResult {
+                            tool_call_id: tc.id.clone(),
+                            content: serde_json::to_value(&s).unwrap_or_default(),
+                            is_error: false,
+                        },
+                        None => ToolResult {
+                            tool_call_id: tc.id.clone(),
+                            content: serde_json::json!({
+                                "error": format!("Tool \'{} \' not found. Use tool_list to see available tools.", tool_id),
+                                "hint": "Check the tool_id spelling or call tool_list first to see all available tools."
+                            }),
+                            is_error: true,
+                        },
+                    };
+                    (tc.clone(), Some(result))
+                }
+                "tool_exec" => {
+                    // Transform tool_exec into the real tool call
+                    if let Some((real_id, real_args)) = self.tool_manager.resolve_tool_exec(&tc.args) {
+                        let real_tc = ToolCall {
+                            id: tc.id.clone(),
+                            name: real_id,
+                            args: real_args,
+                        };
+                        (real_tc, None)
+                    } else {
+                        let result = ToolResult {
+                            tool_call_id: tc.id.clone(),
+                            content: serde_json::json!({
+                                "error": "Tool not found or invalid arguments. Use tool_list and tool_info to discover valid tools.",
+                                "hint": "Call tool_list() to see available tools, then tool_info({\"tool_id\": \"name\"}) for the schema."
+                            }),
+                            is_error: true,
+                        };
+                        (tc.clone(), Some(result))
+                    }
+                }
+                _ => {
+                    // Normal tool call — pass through unchanged
+                    (tc.clone(), None)
+                }
+            }
+        }).collect();
+
+        // Separate inline results from calls that need the full pipeline
+        let mut results: Vec<ToolResult> = Vec::new();
+        let mut pipeline_calls: Vec<ToolCall> = Vec::new();
+        for (tc, inline_result) in processed_calls {
+            match inline_result {
+                Some(r) => results.push(r),
+                None => pipeline_calls.push(tc),
+            }
+        }
+
+        // Process pipeline calls (non-meta-tools and transformed tool_exec)
         let mut handles = Vec::new();
 
         for tool_call in tool_calls {
@@ -1265,7 +1403,7 @@ impl Runner {
             }
         }
 
-        let mut results = Vec::new();
+        // Collect pipeline results into the existing results vec (which already has inline meta-tool results)
         for (tc_id, handle) in handles {
             match handle.await {
                 Ok(result) => results.push(result),
@@ -2060,7 +2198,13 @@ impl Runner {
                     }
                 }
 
-                let mut data = buffer_clone.lock().unwrap();
+                let mut data = match buffer_clone.lock() {
+                    Ok(guard) => guard,
+                    Err(poisoned) => {
+                        error!("[runner] buffer mutex poisoned, recovering");
+                        poisoned.into_inner()
+                    }
+                };
                 
                 // If type changed, flush immediately
                 if data.2 != chunk_type && !data.0.is_empty() {
@@ -2099,7 +2243,13 @@ impl Runner {
         ).await;
 
         // Final flush: Send any remaining tokens in the buffer
-        let mut data = buffer.lock().unwrap();
+        let mut data = match buffer.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                error!("[runner] buffer mutex poisoned during final flush");
+                poisoned.into_inner()
+            }
+        };
         if !data.0.is_empty() {
             let text = std::mem::take(&mut data.0);
             let current_type = data.2;

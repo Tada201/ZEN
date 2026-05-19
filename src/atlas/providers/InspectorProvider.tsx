@@ -1,5 +1,5 @@
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 export type InspectorState = {
   liveLabOpen: boolean;
@@ -17,7 +17,7 @@ export function InspectorProvider({ children }: { children: ReactNode }) {
   const [liveLabOpen, setLiveLabOpen] = useState(false);
   const [fps, setFps] = useState(60);
   const [frameDelta, setFrameDelta] = useState(16);
-  const [renderCount, setRenderCount] = useState(0);
+  const [renderCount] = useState(0);
   const [gridOverlay, setGridOverlay] = useState(false);
 
   const frameRef = useRef(0);

@@ -3,7 +3,6 @@ pub mod types;
 pub mod tools;
 pub mod runner;
 pub mod hooks;
-pub mod stellar_catalog;
 pub mod agents;
 pub mod cache;
 pub mod router;
@@ -29,8 +28,6 @@ pub use types::*;
 pub use tools::*;
 #[allow(unused_imports)]
 pub use runner::*;
-#[allow(unused_imports)]
-pub use stellar_catalog::*;
 #[allow(unused_imports)]
 pub use cache::*;
 #[allow(unused_imports)]

@@ -172,6 +172,13 @@ export const createAppSlice: StateCreator<SettingsState, [], [], AppSlice> = (se
           )
         );
       }
+
+      // After syncing all settings, sync tool permissions to ToolManager
+      try {
+        await invoke("sync_tool_permissions");
+      } catch (e) {
+        console.warn("[SettingsStore] Failed to sync tool permissions:", e);
+      }
     } catch (e) {
       console.warn("[SettingsStore] Failed to sync settings to backend:", e);
       syncFailed = true;

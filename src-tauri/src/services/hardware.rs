@@ -10,20 +10,26 @@ pub struct HardwareInfo {
     pub memory_gb: f64,
     pub os: String,
     pub hostname: String,
+    pub has_cuda: bool,
 }
 
 pub struct HardwareService {
     sys: System,
+    has_cuda: bool,
 }
 
 impl HardwareService {
     pub fn new() -> Self {
+        // Simple CUDA check (could be improved by checking with a crate or searching for nvml)
+        let has_cuda = std::path::Path::new("C:\\Windows\\System32\\nvcuda.dll").exists();
+
         Self {
             sys: System::new_with_specifics(
                 RefreshKind::nothing()
                     .with_cpu(CpuRefreshKind::everything())
                     .with_memory(MemoryRefreshKind::everything()),
             ),
+            has_cuda,
         }
     }
 
@@ -35,6 +41,7 @@ impl HardwareService {
             memory_gb: (self.sys.total_memory() as f64) / (1024.0 * 1024.0 * 1024.0),
             os: System::long_os_version().unwrap_or_else(|| "Unknown".to_string()),
             hostname: System::host_name().unwrap_or_else(|| "Unknown".to_string()),
+            has_cuda: self.has_cuda,
         }
     }
 

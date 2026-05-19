@@ -90,8 +90,8 @@ impl AgentTool for MapTool {
             }
         }
 
-        let lat = final_lat.unwrap();
-        let lon = final_lon.unwrap();
+        let lat = final_lat.ok_or_else(|| anyhow!("Latitude must be provided"))?;
+        let lon = final_lon.ok_or_else(|| anyhow!("Longitude must be provided"))?;
         let zoom_val = args.zoom.unwrap_or(10.0) as u8;
 
         let (lat, lon, zoom) = self.apply_guardrails(lat, lon, zoom_val);

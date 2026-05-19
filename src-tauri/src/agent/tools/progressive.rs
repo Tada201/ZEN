@@ -203,16 +203,16 @@ impl ProgressiveToolRegistry {
         }));
 
         self.register_metadata(ToolMetadata::new(
-            "list_directory",
-            "List Directory",
-            "List files and directories in a given path.",
+            "list_documents",
+            "List Documents",
+            "List all documents currently ingested and available in local knowledge base",
             "file",
             vec!["file", "directory", "list", "filesystem", "disk"],
             DetailLevel::Full,
         ));
 
         self.register_metadata(ToolMetadata::new(
-            "terminal_exec",
+            "run_command",
             "Terminal Execution",
             "Execute a command in the system terminal.",
             "system",
@@ -221,7 +221,7 @@ impl ProgressiveToolRegistry {
         ));
 
         self.register_metadata(ToolMetadata::new(
-            "osint_flight",
+            "get_military_aircraft",
             "Flight Tracking",
             "Track real-time flight information by flight number or route.",
             "osint",
@@ -230,16 +230,7 @@ impl ProgressiveToolRegistry {
         ));
 
         self.register_metadata(ToolMetadata::new(
-            "osint_satellite",
-            "Satellite Tracking",
-            "Track satellite positions and passes over a location.",
-            "osint",
-            vec!["satellite", "space", "orbit", "tracking", "tle"],
-            DetailLevel::Full,
-        ));
-
-        self.register_metadata(ToolMetadata::new(
-            "osint_earthquake",
+            "get_earthquakes",
             "Earthquake Data",
             "Get recent earthquake data from USGS.",
             "osint",
@@ -257,7 +248,7 @@ impl ProgressiveToolRegistry {
         ));
 
         self.register_metadata(ToolMetadata::new(
-            "transfer_to_agent",
+            "delegate_to_agent",
             "Transfer to Agent",
             "Transfer conversation control to another specialized agent.",
             "agent",
@@ -266,16 +257,34 @@ impl ProgressiveToolRegistry {
         ));
 
         self.register_metadata(ToolMetadata::new(
-            "session_memory",
-            "Session Memory",
-            "Store and retrieve information in session memory for context.",
+            "write_to_memory",
+            "Write to Memory",
+            "Writes a finding, observation, or intermediate result to session-scoped vector memory.",
             "memory",
-            vec!["memory", "session", "store", "remember", "context"],
+            vec!["memory", "write", "store", "save", "session"],
             DetailLevel::Full,
         ));
 
         self.register_metadata(ToolMetadata::new(
-            "control_3d_globe",
+            "search_session_memory",
+            "Search Session Memory",
+            "Searches within the current session's vector memory for relevant findings.",
+            "memory",
+            vec!["memory", "search", "retrieve", "find", "session"],
+            DetailLevel::Full,
+        ));
+
+        self.register_metadata(ToolMetadata::new(
+            "get_memory_stats",
+            "Get Memory Stats",
+            "Returns statistics about the current session's vector memory, including entry count.",
+            "memory",
+            vec!["memory", "stats", "count", "info", "session"],
+            DetailLevel::Full,
+        ));
+
+        self.register_metadata(ToolMetadata::new(
+            "activate_space_observatory",
             "3D Globe Control",
             "Control the 3D globe visualization - zoom, pan, fly to locations.",
             "visualization",
@@ -284,7 +293,7 @@ impl ProgressiveToolRegistry {
         ));
 
         self.register_metadata(ToolMetadata::new(
-            "draw_on_canvas",
+            "draw",
             "Draw on Canvas",
             "Draw shapes, lines, annotations on the operational canvas.",
             "visualization",
@@ -293,13 +302,96 @@ impl ProgressiveToolRegistry {
         ));
 
         self.register_metadata(ToolMetadata::new(
-            "activate_space_view",
+            "deep_space_query",
             "Space View",
             "Activate the space/stellar view with astronomical data.",
             "visualization",
             vec!["space", "stars", "astronomy", "stellar", "sky"],
             DetailLevel::Full,
         ));
+
+        self.register_metadata(ToolMetadata::new(
+            "reverse_geocode",
+            "Reverse Geocode",
+            "Convert coordinates to address.",
+            "map",
+            vec!["geocode", "location", "address", "reverse"],
+            DetailLevel::Standard,
+        ));
+
+        self.register_metadata(ToolMetadata::new(
+            "get_weather",
+            "Weather Info",
+            "Get weather for a location.",
+            "osint",
+            vec!["weather", "forecast", "climate"],
+            DetailLevel::Standard,
+        ));
+
+        self.register_metadata(ToolMetadata::new(
+            "grep_documents",
+            "Grep Documents",
+            "Search for text within documents.",
+            "file",
+            vec!["file", "search", "grep", "text"],
+            DetailLevel::Full,
+        ));
+
+        self.register_metadata(ToolMetadata::new(
+            "write_file",
+            "Write File",
+            "Write content to a file.",
+            "file",
+            vec!["file", "write", "save", "create"],
+            DetailLevel::Full,
+        ));
+
+        self.register_metadata(ToolMetadata::new(
+            "edit_file",
+            "Edit File",
+            "Edit content of a file.",
+            "file",
+            vec!["file", "edit", "modify", "update"],
+            DetailLevel::Full,
+        ));
+
+        self.register_metadata(ToolMetadata::new(
+            "create_geofence",
+            "Create Geofence",
+            "Create a geofence around a location.",
+            "map",
+            vec!["geofence", "map", "boundary", "area"],
+            DetailLevel::Full,
+        ));
+
+        self.register_metadata(ToolMetadata::new(
+            "graph_session",
+            "Graph Session",
+            "Manage graph sessions.",
+            "visualization",
+            vec!["graph", "session", "visualization"],
+            DetailLevel::Full,
+        ));
+
+        self.tool_factory.insert("get_system_metrics".to_string(), Box::new(|| Arc::new(crate::agent::tools::system_tools::SystemMetricsTool) as Arc<dyn AgentTool>));
+        self.tool_factory.insert("calculate_route".to_string(), Box::new(|| Arc::new(crate::agent::tools::routing_tools::RouteTool) as Arc<dyn AgentTool>));
+        self.tool_factory.insert("geocode_search".to_string(), Box::new(|| Arc::new(crate::agent::tools::routing_tools::GeocodeTool) as Arc<dyn AgentTool>));
+        self.tool_factory.insert("reverse_geocode".to_string(), Box::new(|| Arc::new(crate::agent::tools::routing_tools::ReverseGeocodeTool) as Arc<dyn AgentTool>));
+        self.tool_factory.insert("run_command".to_string(), Box::new(|| Arc::new(crate::agent::tools::terminal_tools::RunCommandTool) as Arc<dyn AgentTool>));
+        self.tool_factory.insert("get_military_aircraft".to_string(), Box::new(|| Arc::new(crate::agent::tools::osint_tools::MilitaryTrackingTool) as Arc<dyn AgentTool>));
+        self.tool_factory.insert("get_weather".to_string(), Box::new(|| Arc::new(crate::agent::tools::osint_tools::WeatherTool) as Arc<dyn AgentTool>));
+        self.tool_factory.insert("get_earthquakes".to_string(), Box::new(|| Arc::new(crate::agent::tools::osint_tools::EarthquakeTool) as Arc<dyn AgentTool>));
+        self.tool_factory.insert("draw".to_string(), Box::new(|| Arc::new(crate::agent::tools::drawing_tools::DrawTool) as Arc<dyn AgentTool>));
+        self.tool_factory.insert("list_documents".to_string(), Box::new(|| Arc::new(crate::agent::tools::fs_tools::ListDocumentsTool) as Arc<dyn AgentTool>));
+        self.tool_factory.insert("grep_documents".to_string(), Box::new(|| Arc::new(crate::agent::tools::fs_tools::GrepDocumentsTool) as Arc<dyn AgentTool>));
+        self.tool_factory.insert("write_file".to_string(), Box::new(|| Arc::new(crate::agent::tools::fs_tools::WriteFileTool) as Arc<dyn AgentTool>));
+        self.tool_factory.insert("edit_file".to_string(), Box::new(|| Arc::new(crate::agent::tools::fs_tools::EditFileTool) as Arc<dyn AgentTool>));
+        self.tool_factory.insert("create_geofence".to_string(), Box::new(|| Arc::new(crate::agent::tools::geofence_tools::CreateGeofenceTool) as Arc<dyn AgentTool>));
+        self.tool_factory.insert("graph_session".to_string(), Box::new(|| Arc::new(crate::agent::tools::graph_session::GraphSessionTool) as Arc<dyn AgentTool>));
+        self.tool_factory.insert("write_to_memory".to_string(), Box::new(|| Arc::new(crate::agent::tools::session_memory_tools::WriteToMemoryTool) as Arc<dyn AgentTool>));
+        self.tool_factory.insert("search_session_memory".to_string(), Box::new(|| Arc::new(crate::agent::tools::session_memory_tools::SearchSessionMemoryTool) as Arc<dyn AgentTool>));
+        self.tool_factory.insert("get_memory_stats".to_string(), Box::new(|| Arc::new(crate::agent::tools::session_memory_tools::GetMemoryStatsTool) as Arc<dyn AgentTool>));
+
 
         let mut guard = self.loaded_tools.lock().unwrap();
         // tools_search and list_tools will be loaded on-demand via get_or_load_tool when registry_arc is set
@@ -321,6 +413,40 @@ impl ProgressiveToolRegistry {
     pub fn setup_list_tools(&mut self, registry_arc: Arc<RwLock<ProgressiveToolRegistry>>) {
         self.tool_factory.insert("list_tools".to_string(), Box::new(move || {
             Arc::new(ListToolsStandalone::new(Arc::clone(&registry_arc))) as Arc<dyn AgentTool>
+        }));
+    }
+
+    pub fn setup_agent_tools(
+        &mut self,
+        tool_registry: Arc<tokio::sync::RwLock<crate::agent::tools::ToolRegistry>>,
+        agent_registry: Arc<crate::agent::types::AgentRegistry>,
+        hook_registry: Arc<crate::agent::hooks::HookRegistry>,
+        permissions: crate::tools::GlobalToolRegistry,
+    ) {
+        let tr = tool_registry.clone();
+        let ar = agent_registry.clone();
+        let hr = hook_registry.clone();
+        let p = permissions.clone();
+        self.tool_factory.insert("spawn_agent".to_string(), Box::new(move || {
+            Arc::new(crate::agent::tools::spawn_tools::SpawnAgentTool::new(
+                tr.clone(),
+                ar.clone(),
+                hr.clone(),
+                p.clone(),
+            )) as Arc<dyn AgentTool>
+        }));
+
+        let tr2 = tool_registry.clone();
+        let ar2 = agent_registry.clone();
+        let hr2 = hook_registry.clone();
+        let p2 = permissions.clone();
+        self.tool_factory.insert("delegate_to_agent".to_string(), Box::new(move || {
+            Arc::new(crate::agent::tools::delegate_to_agent::DelegateToAgentTool::new(
+                tr2.clone(),
+                ar2.clone(),
+                hr2.clone(),
+                p2.clone(),
+            )) as Arc<dyn AgentTool>
         }));
     }
 
@@ -782,8 +908,7 @@ impl AgentTool for VectorSearchStandalone {
             .await
             .map_err(|e| anyhow!("Embedding failed: {}", e))?;
 
-        let rag_lock = state.rag.read().await;
-        let rag = rag_lock.as_deref().ok_or_else(|| anyhow!("RAG not initialized"))?;
+        let rag = state.rag.get().await.map_err(|_| anyhow!("RAG not initialized"))?;
         let results = rag.search(query_vec, limit).await
             .map_err(|e| anyhow!("Vector search failed: {}", e))?;
 

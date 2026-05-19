@@ -46,7 +46,7 @@ impl AgentTool for EarthquakeTool {
         } else {
             let max_quake = quakes.iter()
                 .max_by(|a, b| a.magnitude.partial_cmp(&b.magnitude).unwrap_or(std::cmp::Ordering::Equal))
-                .unwrap();
+                .ok_or_else(|| anyhow::anyhow!("No quake found despite non-empty list"))?;
             let strong_count = quakes.iter().filter(|q| q.magnitude >= 5.0).count();
             let tsunami_count = quakes.iter().filter(|q| q.tsunami).count();
             

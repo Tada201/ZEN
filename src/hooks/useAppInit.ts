@@ -51,7 +51,7 @@ export function useAppInit(onStepsUpdate?: (steps: InitStep[]) => void) {
 
                 setStep('provider', 'loading');
                 try {
-                    const models = await invoke<any[]>('get_available_models', {});
+                    const models = await invoke<any[]>('get_all_available_models', { provider: null as any });
                     if (models?.length > 0) {
                         setStep('provider', 'done', 'Connected');
                     } else {

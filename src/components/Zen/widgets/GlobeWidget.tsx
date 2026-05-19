@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils/style';
 import { Globe } from 'lucide-react';
 
@@ -60,7 +60,7 @@ export function GlobeWidget({ className = '' }: GlobeWidgetProps) {
             </div>
 
             {/* Node markers */}
-            {markers.map((marker, i) => (
+            {markers.map((_marker, i) => (
               <div
                 key={i}
                 className="absolute w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(167,139,250,0.5)]"

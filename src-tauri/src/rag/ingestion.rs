@@ -62,7 +62,7 @@ impl IngestionEngine {
 
     async fn extract_pdf(&self, path: &Path) -> Result<String> {
         let path_buf = path.to_path_buf();
-        let text = tokio::task::spawn_blocking(move || {
+        let text = tokio::task::spawn_blocking(move || -> Result<String> {
             let result = pdf_inspector::process_pdf(&path_buf)
                 .map_err(|e| anyhow::anyhow!("PDF extraction failed: {}", e))?;
 

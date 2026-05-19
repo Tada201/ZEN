@@ -81,9 +81,7 @@ impl AgentTool for VectorSearchTool {
             .map_err(|e| anyhow!("Embedding failed: {}", e))?;
 
         let limit = args.limit.unwrap_or(5).clamp(1, 20);
-        let rag_lock = state.rag.read().await;
-        let rag = rag_lock.as_deref().ok_or_else(|| anyhow!("RAG not initialized"))?;
-        let results = rag.search(query_vec, limit).await
+        let results = state.search_rag(query_vec, limit).await
             .map_err(|e| anyhow!("Vector search failed: {}", e))?;
 
         if results.is_empty() {

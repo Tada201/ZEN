@@ -1,5 +1,4 @@
 import { useState, useEffect, memo } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SettingsCard } from '@/components/settings/ui/SettingsCard';
@@ -63,7 +62,14 @@ export const EmbeddingModelDownloader = memo(({
     const serviceUrl = isOllama ? 'https://ollama.com/download' : 'https://lmstudio.ai/';
 
     useEffect(() => {
-        checkStatus();
+        // Backend check_ollama_status / check_lmstudio_status not yet implemented
+        setOllamaStatus({
+            installed: false,
+            running: false,
+            models: [],
+            has_embedding_model: false,
+        });
+        setCheckingStatus(false);
     }, [provider]);
 
     useEffect(() => {
@@ -76,29 +82,8 @@ export const EmbeddingModelDownloader = memo(({
     }, []);
 
     const checkStatus = async () => {
-        setCheckingStatus(true);
-        try {
-            if (isOllama) {
-                const status = await invoke<OllamaStatus>('check_ollama_status');
-                setOllamaStatus(status);
-            } else {
-                const lmStatus = await invoke<OllamaStatus>('check_lmstudio_status');
-                setOllamaStatus(lmStatus);
-            }
-            setError(null);
-        } catch (e: unknown) {
-            const eMsg = e instanceof Error ? e.message : String(e);
-            setError(`Failed to check ${serviceName} status: ${eMsg}`);
-            // Fallback status
-            setOllamaStatus({
-                installed: false,
-                running: false,
-                models: [],
-                has_embedding_model: false,
-            });
-        } finally {
-            setCheckingStatus(false);
-        }
+        // Backend check not available — rely on default disconnected state
+        setCheckingStatus(false);
     };
 
     const downloadModel = async (modelName: string) => {
@@ -112,16 +97,10 @@ export const EmbeddingModelDownloader = memo(({
         setDownloadComplete(false);
         setError(null);
 
-        try {
-            await invoke('download_embedding_model', { modelName });
-            setDownloadComplete(true);
-            setDownloadingModel(null);
-            setTimeout(checkStatus, 1000);
-        } catch (e: unknown) {
-            const eMsg = e instanceof Error ? e.message : String(e);
-            setError(`Retrieval failed: ${eMsg}`);
-            setDownloadingModel(null);
-        }
+        // Backend download_embedding_model not yet implemented
+        setDownloadComplete(false);
+        setDownloadingModel(null);
+        setError(`Automated download not available from frontend. Use ${provider} CLI directly.`);
     };
 
     const formatBytes = (bytes: number) => {
@@ -259,7 +238,7 @@ export const EmbeddingModelDownloader = memo(({
                                     <div className="flex items-center gap-3">
                                         {!hasModel ? (
                                             <WorkbenchButton
-                                                variant={!isDownloading && isOllama ? "accent" : "secondary"}
+                                                variant={!isDownloading && isOllama ? "primary" : "secondary"}
                                                 onClick={() => downloadModel(model.name)}
                                                 disabled={isDownloading || !ollamaStatus?.running || !isOllama}
                                                 className="h-8 px-4 gap-2"

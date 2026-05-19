@@ -104,7 +104,9 @@ fn parse_toon(input: &str) -> Result<Vec<Value>> {
 
         // Special handling for `tx` command — need to preserve quoted text
         if line.starts_with("tx ") {
-            let rest = line.strip_prefix("tx ").unwrap();
+            let rest = line.strip_prefix("tx ").ok_or_else(|| {
+                anyhow::anyhow!("line {ln}: 'tx' expected prefix 'tx '")
+            })?;
             // find the quoted string
             let quote_start = rest.find('"')
                 .ok_or_else(|| anyhow::anyhow!("line {ln}: 'tx' missing opening quote"))?;

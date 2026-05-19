@@ -108,6 +108,7 @@ export function IntelligenceSettings({ settings, onUpdate }: IntelligenceSetting
                 <SelectItem value="nomic">Nomic Embed Text</SelectItem>
                 <SelectItem value="openai">OpenAI Ada 002</SelectItem>
                 <SelectItem value="cohere">Cohere Embed</SelectItem>
+                <SelectItem value="nine_router">9Router Embedding</SelectItem>
               </SelectContent>
             </Select>
           }

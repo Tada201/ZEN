@@ -22,6 +22,13 @@ pub struct ChatRequestConfig {
     pub stream: bool,
     pub temperature: Option<f64>,
     pub max_tokens: Option<i64>,
+    pub top_p: Option<f64>,
+    pub top_k: Option<i64>,
+    pub presence_penalty: Option<f64>,
+    pub frequency_penalty: Option<f64>,
+    pub repeat_penalty: Option<f64>,
+    pub seed: Option<i64>,
+    pub stop: Option<Vec<String>>,
     pub json_schema: Option<serde_json::Value>,
     pub reasoning_effort: Option<String>,
     pub thinking_budget: Option<i64>,
@@ -93,6 +100,8 @@ pub fn default_base_url(provider: &str) -> String {
         "mistral" => "https://api.mistral.ai/v1".to_string(),
         "perplexity" => "https://api.perplexity.ai".to_string(),
         "lmstudio" => "http://localhost:1234".to_string(),
+        "nine_router" => "http://localhost:20128/v1".to_string(),
+        "aihubmix" => "https://aihubmix.com/v1".to_string(),
         "google" | "gemini" => "https://generativelanguage.googleapis.com/v1beta/openai".to_string(),
         "deepseek" => "https://api.deepseek.com".to_string(),
         "qwen" => "https://dashscope.aliyuncs.com/compatible-mode/v1".to_string(),
@@ -103,18 +112,11 @@ pub fn default_base_url(provider: &str) -> String {
 }
 
 /// Provides a reliable "standard" model for a given provider, used during auto-escalation.
-pub fn default_model_for_provider(provider: &str) -> String {
-    match provider.to_lowercase().as_str() {
-        "openai" => "gpt-4o-mini".to_string(),
-        "anthropic" => "claude-3-5-sonnet-latest".to_string(),
-        "groq" => "llama-3.3-70b-versatile".to_string(),
-        "openrouter" => "openai/gpt-4o-mini".to_string(),
-        "google" | "gemini" => "gemini-2.0-flash".to_string(),
-        "mistral" => "mistral-small-latest".to_string(),
-        "kilocode" | "kilo" | "kilo.ai" => "kilo-1-pro".to_string(),
-        "ollama" => "llama3.3".to_string(),
-        _ => "gpt-4o-mini".to_string(), // Safe fallback
-    }
+pub fn default_model_for_provider(_provider: &str) -> String {
+    // No hardcoded fallback models — the user selects their own model in settings.
+    // Auto-escalation will fail gracefully if no model is configured, prompting
+    // the user to select one rather than silently using an outdated default.
+    String::new()
 }
 
 

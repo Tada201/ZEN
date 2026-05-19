@@ -1,0 +1,202 @@
+/* Cesium eDEX-UI Overrides */
+
+.cesium-viewer {
+    background: #000;
+}
+
+/* Hide default widgets for a cleaner HUD look */
+.cesium-viewer-bottom,
+.cesium-viewer-animationContainer,
+.cesium-viewer-timelineContainer,
+.cesium-viewer-toolbar,
+.cesium-viewer-fullscreenContainer,
+.cesium-geocoder-searchButton,
+.cesium-navigation-help,
+.cesium-home-button,
+.cesium-scene-mode-picker,
+.cesium-base-layer-picker {
+    display: none !important;
+}
+
+/* Credits styling - minimize but keep visible if required by terms */
+.cesium-widget-credits {
+    display: none !important;
+}
+
+/* Cesium canvas styling */
+.cesium-widget canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Sphere HUD styling - circular mask like the user screenshot */
+#mod_globe_innercontainer {
+    overflow: hidden;
+    position: relative;
+    border: 1px solid rgba(0, 255, 255, 0.2);
+    box-shadow: inset 0 0 20px rgba(0, 255, 255, 0.1);
+}
+
+.cesium-viewer-canvas-container {
+    filter: brightness(0.9) contrast(1.1) saturate(1.2);
+}
+
+#mod_globe.offline .cesium-viewer-canvas-container {
+    filter: grayscale(1) opacity(0.5);
+}
+
+/* Custom Tactical Info Text Styling */
+.mod_globe_stats {
+    pointer-events: none;
+    text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+}
+
+/* Palantir GTSM v2.4 Design System */
+:root {
+    --gtsm-bg: #0A0F1A;
+    /* Deep Palantir Blue-Black */
+    --gtsm-cyan: #00E6E6;
+    /* Neon Cyan */
+    --gtsm-lime: #39FF14;
+    /* Status Green */
+    --gtsm-red: #FF2D55;
+    /* Threat Red */
+    --gtsm-amber: #FFB300;
+    /* Warning */
+    --hud-glass: rgba(10, 15, 26, 0.85);
+    --hud-border: rgba(0, 230, 230, 0.25);
+    --hud-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.tactical-map-sidebar {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--gtsm-bg);
+    font-family: var(--font_mono), monospace;
+    overflow: hidden;
+    color: #fff;
+}
+
+.hud-plate {
+    background: var(--hud-glass);
+    background: rgba(5, 8, 13, 0.7);
+    border: 1px solid var(--hud-border);
+    box-shadow: var(--hud-shadow);
+    border-radius: 2px;
+    pointer-events: auto;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hud-header {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--hud-border);
+    background: rgba(0, 230, 230, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    white-space: nowrap;
+}
+
+.hud-header-title {
+    font-size: clamp(10px, 0.8vw, 12px);
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tactical-map-container {
+    background: #000;
+    flex: 1;
+    min-height: 250px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Cesium HUD Overlays */
+.tactical-hud-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    user-select: none;
+    z-index: 10;
+}
+
+.animate-spin-slow {
+    animation: spin 30s linear infinite;
+}
+
+.animate-spin-reverse {
+    animation: spin-reverse 20s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes spin-reverse {
+    from {
+        transform: rotate(360deg);
+    }
+    to {
+        transform: rotate(0deg);
+    }
+}
+
+.tactical-grid-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+        linear-gradient(rgba(0, 230, 230, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 230, 230, 0.03) 1px, transparent 1px);
+    background-size: 25px 25px;
+}
+
+/* Layout Utilities (GTSM specific since no Tailwind) */
+.gtsm-absolute-inset {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.gtsm-flex-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.gtsm-pointer-none {
+    pointer-events: none;
+}
+
+.gtsm-pointer-auto {
+    pointer-events: auto;
+}
+
+/* Scrollbar styling for tactical sidebar */
+.tactical-sidebar-hud::-webkit-scrollbar {
+    width: 4px;
+}
+
+.tactical-sidebar-hud::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.tactical-sidebar-hud::-webkit-scrollbar-thumb {
+    background: var(--hud-border);
+}
+
+.tactical-sidebar-hud::-webkit-scrollbar-thumb:hover {
+    background: var(--gtsm-cyan);
+}

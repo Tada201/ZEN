@@ -23,7 +23,10 @@ interface BridgeEntry {
 
 const DOT_TO_FIELD: Record<string, BridgeEntry> = {
   // Interface
-  "ui.theme":        { field: "themeId",        type: "string" },
+  "ui.theme":              { field: "themeId",            type: "string" },
+  "ui.background-image":   { field: "backgroundImageUrl", type: "string" },
+  "ui.background-opacity": { field: "backgroundOpacity", type: "number" },
+  "ui.background-blur":    { field: "backgroundBlur",    type: "number" },
 
   // Workspace
   "workspace.root":  { field: "workspacePath",  type: "string" },
@@ -40,6 +43,23 @@ const DOT_TO_FIELD: Record<string, BridgeEntry> = {
   "audio.vad":          { field: "vadEnabled",           type: "boolean" },
   "audio.tts":          { field: "ttsEnabled",           type: "boolean" },
   "audio.notifications": { field: "notificationSounds",  type: "boolean" },
+  "audio.tts-engine":    { field: "ttsEngine",            type: "string" },
+  "audio.stt-engine":    { field: "sttEngine",            type: "string" },
+  "audio.push-to-talk":  { field: "sttHotkeysEnabled",    type: "boolean" },
+  "audio.tts-rate":      { field: "webTtsRate",           type: "number" },
+  "audio.system-sounds": { field: "systemSoundsEnabled",  type: "boolean" },
+  "audio.haptic":        { field: "hapticFeedbackEnabled",type: "boolean" },
+
+  // Intelligence / RAG
+  "rag.enabled":             { field: "ragEnabled",       type: "boolean" },
+  "rag.strict-grounding":    { field: "strictGrounding",  type: "boolean" },
+  "rag.citations":           { field: "citationsEnabled", type: "boolean" },
+  "rag.search-strategy":     { field: "searchStrategy",   type: "string" },
+  "rag.top-k":               { field: "topK",             type: "number" },
+  "embeddings.model":        { field: "embeddingModel",   type: "string" },
+  "embeddings.chunk-size":   { field: "chunkSize",        type: "number" },
+  "embeddings.chunk-overlap":{ field: "chunkOverlap",     type: "number" },
+  "providerParams":          { field: "providerParams",   type: "json" },
 };
 
 /* ── Reverse map ────────────────────────────────────────────────── */
@@ -55,6 +75,8 @@ const TRANSIENT_FIELDS = new Set<string>([
   "isHydrated",
   "isDirty",
   "activeSettings",
+  "availableModels",
+  "availableModelsByProvider",
   "fetchingModels",
   "connectionStatuses",
   "powerStatus",

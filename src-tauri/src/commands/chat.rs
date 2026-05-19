@@ -6,6 +6,7 @@ use crate::db::queries;
 use crate::agent::runner::Runner;
 use crate::llm::ChatRequestConfig;
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 #[tauri::command]
 pub async fn create_chat(
@@ -13,8 +14,11 @@ pub async fn create_chat(
     title: String,
     model: Option<String>,
 ) -> ZenResult<Chat> {
+    info!(title = ?title, model = ?model, "Creating new chat session");
     let db = state.db().await?;
-    queries::create_chat(&db, &title, model.as_deref()).await
+    let chat = queries::create_chat(&db, &title, model.as_deref()).await?;
+    info!(chat_id = %chat.id, "Chat session created successfully");
+    Ok(chat)
 }
 
 #[tauri::command]
@@ -49,16 +53,35 @@ pub async fn send_message(
     chat_id: String,
     content: String,
     model: Option<String>,
-    _provider: Option<String>,
+    provider: Option<String>,
     web_search: Option<bool>,
+    temperature: Option<f64>,
+    max_tokens: Option<i64>,
+    top_p: Option<f64>,
+    top_k: Option<i64>,
+    presence_penalty: Option<f64>,
+    frequency_penalty: Option<f64>,
+    repeat_penalty: Option<f64>,
+    seed: Option<i64>,
+    stop: Option<Vec<String>>,
     thinking: Option<ThinkingConfig>,
-    _generative_ui: Option<bool>,
+    generative_ui: Option<bool>,
     tools: Option<Vec<String>>,
     _attachments: Option<Vec<crate::db::models::Attachment>>,
+    system_prompt: Option<String>,
 ) -> ZenResult<()> {
+    info!(
+        chat_id = %chat_id,
+        content_len = %content.len(),
+        model = ?model,
+        provider = ?provider,
+        web_search = ?web_search,
+        "Received send_message command"
+    );
     let db = state.db().await?;
     
     // 1. Add user message to DB
+    info!(chat_id = %chat_id, "Inserting user message into database");
     queries::add_message(
         &db,
         &chat_id,
@@ -76,13 +99,45 @@ pub async fn send_message(
         None,
         None,
     ).await?;
+    info!(chat_id = %chat_id, "User message successfully saved to database");
 
     // 2. Get active provider and model
-    let llm_provider = state.provider().await?;
-    let active_model = model.unwrap_or_else(|| "gpt-4o-mini".to_string());
+    let resolved_provider_name = match provider.as_deref() {
+        Some(p) if !p.is_empty() => p.to_string(),
+        _ => {
+            let active_setting = crate::db::queries::get_setting(&db, "active_provider")
+                .await
+                .unwrap_or_default();
+            active_setting.unwrap_or_else(|| "ollama".to_string())
+        }
+    };
+    info!(
+        chat_id = %chat_id,
+        resolved_provider_name = %resolved_provider_name,
+        "Resolving active LLM provider instance"
+    );
+    let llm_provider = crate::llm::create_provider(&db, &resolved_provider_name).await;
+    let active_model = model.ok_or_else(|| crate::error::ZenError::Custom(
+        "No model selected. Open Settings → Models to choose a model.".to_string()
+    ))?;
+    info!(
+        active_model = %active_model,
+        resolved_provider = %resolved_provider_name,
+        "Resolved active LLM provider and model"
+    );
 
     // 3. Prepare config
     let mut config = ChatRequestConfig::default();
+    config.temperature = temperature;
+    config.max_tokens = max_tokens;
+    config.top_p = top_p;
+    config.top_k = top_k;
+    config.presence_penalty = presence_penalty;
+    config.frequency_penalty = frequency_penalty;
+    config.repeat_penalty = repeat_penalty;
+    config.seed = seed;
+    config.stop = stop;
+    
     if let Some(t) = thinking {
         if t.enabled {
             config.reasoning_effort = t.effort;
@@ -93,13 +148,16 @@ pub async fn send_message(
     let token = CancellationToken::new();
     
     // Register cancellation token
+    let cancel_tokens = state.chat_cancellation_tokens.clone();
     {
-        let mut tokens = state.chat_cancellation_tokens.lock().await;
+        let mut tokens = cancel_tokens.lock().await;
         tokens.insert(chat_id.clone(), token.clone());
     }
 
     // 4. Fetch history for context
+    info!(chat_id = %chat_id, "Fetching chat history for LLM context");
     let history = queries::get_messages(&db, &chat_id).await?;
+    info!(chat_id = %chat_id, history_count = %history.len(), "Retrieved chat history context");
     let chat_messages: Vec<ChatMessage> = history.into_iter().map(|m| ChatMessage {
         role: m.role,
         content: m.content,
@@ -121,10 +179,43 @@ pub async fn send_message(
         tool_ids.extend(vec!["read_file".to_string(), "list_dir".to_string(), "run_command".to_string()]);
     }
 
+    // Retrieve custom system prompt from SQLite settings table (key: "systemPrompt")
+    let custom_prompt_setting = crate::db::queries::get_setting(&db, "systemPrompt")
+        .await
+        .unwrap_or_default();
+    
+    let default_instructions = "You are Zen, a powerful agentic AI assistant. Keep responses direct, short, and highly concise. Avoid redundant conversational fluff.
+
+## 🌟 Rich Content Markdown Support
+Always use these specialized code blocks for visual scenarios:
+1. 📊 CHARTS: Use ```chart with JSON schema: {\"type\":\"bar|line|area|pie\",\"title\":\"...\",\"xAxis\":\"x_key\",\"keys\":[\"y_key\"],\"data\":[{\"x_key\":\"val\",\"y_key\":num}]}.
+2. 📐 ARCHITECTURE: Use ```mermaid code blocks for flowcharts, sequences, or component relationships.
+3. 📁 STRUCTURE: Use ```tree with indentations to describe folder trees or directory structures.
+4. 🧪 CANVAS (openui): Use ```openui containing layout primitive tags to render live interactive canvas widgets (when Gen UI is enabled).
+5. 📢 ALERTS: Wrap callouts in standard blockquotes with headers (> [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION]).
+
+## 🚫 Critical Limitations
+- Do not render raw HTML/React tags directly in plain text. All designs must be enclosed in the structural markdown blocks listed above.".to_string();
+
+    let mut instructions = match system_prompt {
+        Some(p) if !p.trim().is_empty() => p,
+        _ => match custom_prompt_setting {
+            Some(p) if !p.trim().is_empty() => p,
+            _ => default_instructions,
+        }
+    };
+
+    // Inject state watcher directive to prevent LLM context confusion
+    if generative_ui.unwrap_or(false) {
+        instructions.push_str("\n\n[SYSTEM STATE WARNING]\nIMPORTANT: The Generative UI feature is currently ENABLED for this message turn. You MUST generate any visual mockups, dashboards, grids, stacks, or styled templates inside ```openui ... ``` code blocks using the specified DSL catalog.");
+    } else {
+        instructions.push_str("\n\n[SYSTEM STATE WARNING]\nIMPORTANT: The Generative UI feature is currently DISABLED for this message turn. Do NOT generate any 'openui' or visual sandbox layout blocks. Provide all responses in plain, standard markdown or text.");
+    }
+
     let agent = crate::agent::types::Agent {
         id: "zen_assistant".to_string(),
         name: "Zen".to_string(),
-        instructions: "You are Zen, a powerful agentic AI assistant. Use tools to solve the user's request directly.".to_string(),
+        instructions,
         tool_ids,
         model_override: None,
         max_iterations: Some(20),
@@ -136,57 +227,70 @@ pub async fn send_message(
     
     // 6. Check if we should use Orchestrator (Phase 3)
     let use_orchestrator = web_search.unwrap_or(false) || content.len() > 500; // Heuristic
-    
-    if use_orchestrator {
-        let orchestrator_opt = {
-            let lock = state.orchestrator.read().await;
-            lock.clone()
-        };
 
-        if let Some(orchestrator) = orchestrator_opt {
-            let provider_clone = llm_provider.clone();
-            let chat_id_inner = chat_id.clone();
-            let content_inner = content.clone();
-            let model_inner = active_model.clone();
-            let config_clone = config.clone();
-            let token_clone = token.clone();
-            
-            tokio::spawn(async move {
-                if let Err(e) = orchestrator.run_orchestrator_loop(
-                    provider_clone,
-                    &model_inner,
-                    chat_messages,
-                    &chat_id_inner,
-                    &content_inner,
-                    config_clone,
-                    token_clone,
-                    None,
-                ).await {
-                    tracing::error!("Orchestrator error: {:?}", e);
-                }
-            });
-            return Ok(());
+    if use_orchestrator {
+        match state.orchestrator.get().await {
+            Ok(orchestrator) => {
+                let provider_clone = llm_provider.clone();
+                let chat_id_inner = chat_id.clone();
+                let content_inner = content.clone();
+                let model_inner = active_model.clone();
+                let config_clone = config.clone();
+                let token_clone = token.clone();
+
+                info!(chat_id = %chat_id, "Routing request to Orchestrator (multi-agent loop)");
+                let cancel_tokens_clone = cancel_tokens.clone();
+                tokio::spawn(async move {
+                    let result = orchestrator.run_orchestrator_loop(
+                        provider_clone,
+                        &model_inner,
+                        chat_messages,
+                        &chat_id_inner,
+                        &content_inner,
+                        config_clone,
+                        token_clone,
+                        None,
+                    ).await;
+                    // Clean up cancellation token on completion
+                    let mut tokens = cancel_tokens_clone.lock().await;
+                    tokens.remove(&chat_id_inner);
+                    if let Err(e) = &result {
+                        tracing::error!("Orchestrator error: {:?}", e);
+                    }
+                });
+                return Ok(());
+            }
+            Err(e) => {
+                tracing::warn!("Orchestrator not available: {:?}. Falling back to Runner.", e);
+            }
         }
     }
     // Fallback to Runner
+    info!(chat_id = %chat_id_clone, "Routing request to standard Agent Chat Runner");
     let runner = Runner::new(
         app.clone(),
         state.tool_registry_v1.clone(),
         state.agent_registry.clone(),
         state.hook_registry.clone(),
         state.tools.clone(),
+        state.tool_manager.clone(),
     ).with_db_pool(db.clone());
 
+    let cancel_tokens_runner = cancel_tokens.clone();
     tokio::spawn(async move {
-        if let Err(e) = runner.run(
+        let result = runner.run(
             &*llm_provider,
-            chat_id_clone,
+            chat_id_clone.clone(),
             active_model,
             chat_messages,
             agent,
             config,
             token,
-        ).await {
+        ).await;
+        // Clean up cancellation token on completion
+        let mut tokens = cancel_tokens_runner.lock().await;
+        tokens.remove(&chat_id_clone);
+        if let Err(e) = result {
             tracing::error!("Error in chat runner: {:?}", e);
         }
     });
@@ -297,21 +401,16 @@ pub async fn fork_chat(state: State<'_, AppState>, chat_id: String, message_id: 
 
 #[tauri::command]
 pub async fn abort_chat(
-    app: AppHandle,
     state: State<'_, AppState>,
     chat_id: String,
 ) -> ZenResult<()> {
+    info!(chat_id = %chat_id, "Aborting chat runner/orchestrator stream requested by user");
     let mut tokens = state.chat_cancellation_tokens.lock().await;
     if let Some(token) = tokens.remove(&chat_id) {
         token.cancel();
-        
-        use tauri::Emitter;
-        let _ = app.emit("chat:done", serde_json::json!({
-            "chat_id": chat_id,
-            "content": "Chat aborted by user.",
-            "done": true,
-            "reason": "aborted"
-        }));
+        info!(chat_id = %chat_id, "Successfully cancelled active chat stream cancellation token");
+    } else {
+        info!(chat_id = %chat_id, "No active stream cancellation token found for chat");
     }
     Ok(())
 }

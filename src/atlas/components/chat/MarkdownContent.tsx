@@ -1,6 +1,8 @@
 import React, { useMemo, memo, Component, type ReactNode } from "react";
 import type { Components } from "react-markdown";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { ArtifactData } from "./types";
 import { CodeBlock } from "./CodeBlock";
 import { OpenUIRenderer } from "../OpenUIRenderer";
@@ -10,6 +12,7 @@ import { MermaidDiagram } from "./MermaidDiagram";
 import { ChartBlock } from "./ChartBlock";
 import { FileTree } from "./FileTree";
 import { splitMarkdownIntoBlocks, type MarkdownBlock } from "./markdown-utils";
+import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 
 /**
 /**
@@ -123,6 +126,8 @@ const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
     );
   }
 
+  const chatPlugins = useSettingsStore(s => s.chatPlugins);
+
   // Text blocks: render through ReactMarkdown via SmoothMarkdown
   return (
     <MarkdownErrorBoundary content={block.content}>
@@ -131,6 +136,7 @@ const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
           content={block.content}
           isStreaming={isStreaming}
           components={components}
+          chatPlugins={chatPlugins}
         />
       </div>
     </MarkdownErrorBoundary>
@@ -254,15 +260,15 @@ export function MarkdownContent({
         const cleanChildren = removeAlertTag(children);
 
         return (
-          <div className={`my-6 rounded-r-lg border-l-4 px-4 py-3 ${colorClass}`}>
-            <div className="flex items-center gap-2 font-bold mb-1">
+          <Alert className={`my-6 border-l-4 rounded-r-lg ${colorClass}`}>
+            <AlertTitle className="flex items-center gap-2 font-bold mb-1">
               <span>{icon}</span>
               <span>{title}</span>
-            </div>
-            <div className="text-current opacity-90 [&>p:first-child]:mt-0">
+            </AlertTitle>
+            <AlertDescription className="text-current opacity-90">
               {cleanChildren}
-            </div>
-          </div>
+            </AlertDescription>
+          </Alert>
         );
       }
 
@@ -275,19 +281,15 @@ export function MarkdownContent({
     table: ({ children }) => (
       <div className="my-6 overflow-hidden rounded-xl border border-border/40 bg-card/30 shadow-sm">
         <ScrollArea className="w-full">
-          <table className="w-full text-[13px] border-collapse">{children}</table>
+          <Table className="w-full text-[13px] border-collapse">{children}</Table>
         </ScrollArea>
       </div>
     ),
-    thead: ({ children }) => (
-      <thead className="bg-muted/30 text-[10px] uppercase font-bold tracking-[0.15em] text-muted-foreground/50 border-b border-border/20">
-        {children}
-      </thead>
-    ),
-    tbody: ({ children }) => <tbody className="divide-y divide-border/10">{children}</tbody>,
-    tr: ({ children }) => <tr className="hover:bg-muted/10 transition-colors">{children}</tr>,
-    th: ({ children }) => <th className="px-4 py-3 text-left font-bold">{children}</th>,
-    td: ({ children }) => <td className="px-4 py-3 text-foreground/80">{children}</td>,
+    thead: ({ children }) => <TableHeader>{children}</TableHeader>,
+    tbody: ({ children }) => <TableBody>{children}</TableBody>,
+    tr: ({ children }) => <TableRow>{children}</TableRow>,
+    th: ({ children }) => <TableHead>{children}</TableHead>,
+    td: ({ children }) => <TableCell>{children}</TableCell>,
     strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
     hr: () => <hr className="my-8 border-border/20" />,
   }), [onOpenArtifact, isStreaming]);

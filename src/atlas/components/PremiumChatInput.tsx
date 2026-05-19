@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo, memo } from 'react';
+import { useState, useRef, useEffect, useMemo, memo } from 'react';
 import { 
   ArrowUp
 } from 'lucide-react';
@@ -37,6 +37,7 @@ interface PremiumChatInputProps {
   onSelectModel: (id: string, provider: string) => void;
   onOpenModelSelector?: () => void;
   onOpenSkills?: () => void;
+  onOpenSettings?: () => void;
   input?: string;
   onInputChange?: (value: string) => void;
   generativeUI?: boolean;
@@ -135,6 +136,22 @@ export const PremiumChatInput = memo(({
   };
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width);
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const isCompact = (containerWidth > 0 && containerWidth < 480) || isSidebar;
 
   const [internalGenerativeUI, setInternalGenerativeUI] = useState(generativeUI ?? false);
   
@@ -259,18 +276,28 @@ export const PremiumChatInput = memo(({
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+      if (!message) {
+        textareaRef.current.style.height = '32px';
+      } else {
+        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+      }
     }
   }, [message]);
 
   return (
-    <div className={cn(
-      "w-full relative bg-white dark:bg-[#0a0a0b] rounded-xl shadow-[0_2px_14px_-4px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_14px_-4px_rgba(0,0,0,0.4)] ring-1 ring-black/5 dark:ring-white/5 overflow-visible transition-all duration-200",
-      isLoading && "ring-primary/40 dark:ring-primary/50 shadow-[0_0_15px_-3px_rgba(var(--primary-rgb),0.1)]"
-    )}>
+    <div 
+      ref={containerRef}
+      className={cn(
+        "w-full relative bg-white dark:bg-[#141415] rounded-2xl shadow-[0_2px_14px_-4px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_14px_-4px_rgba(0,0,0,0.2)] ring-1 ring-black/5 dark:ring-white/10 overflow-visible transition-all duration-200",
+        isLoading && "ring-primary/40 dark:ring-primary/50 shadow-[0_0_15px_-3px_rgba(var(--primary-rgb),0.1)]"
+      )}
+    >
+      {isLoading && (
+        <div className="absolute inset-x-4 -top-px h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent animate-shimmer-slide z-10" />
+      )}
       <div className="flex flex-col">
         {isSidebar && (
-          <div className="px-3 pt-2 flex items-center justify-between border-b border-white/5">
+          <div className="px-3 pt-2 flex items-center justify-between border-b border-border/10">
              <ModelSearchDropdown 
               isOpen={isModelOpen}
               setIsOpen={setIsModelOpen}
@@ -279,6 +306,7 @@ export const PremiumChatInput = memo(({
               selectedProvider={selectedProvider}
               onSelectModel={onSelectModel}
               onOpenModelSelector={onOpenModelSelector}
+              isCompact={isCompact}
             />
           </div>
         )}
@@ -297,7 +325,7 @@ export const PremiumChatInput = memo(({
           removeFile={removeFile}
         />
 
-        <div className="flex items-start p-2 gap-1">
+        <div className="flex items-start p-3 gap-2">
           <PlusActionMenu 
             isOpen={isPlusMenuOpen}
             setIsOpen={setIsPlusMenuOpen}
@@ -321,7 +349,7 @@ export const PremiumChatInput = memo(({
             supportsImageGen={supportsImageGen}
           />
 
-          <div className="flex-1 min-h-[32px] flex items-center">
+          <div className="flex-1 min-h-[38px] flex items-center">
             <textarea
               ref={textareaRef}
               value={message}
@@ -334,12 +362,12 @@ export const PremiumChatInput = memo(({
               }}
               placeholder="Ask anything..."
               rows={1}
-              className="w-full bg-transparent border-none focus:ring-0 focus:outline-none outline-none ring-0 resize-none text-[14px] py-1.5 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 shadow-none"
+              className="w-full bg-transparent border-none focus:ring-0 focus:outline-none outline-none ring-0 resize-none text-[15px] py-1 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 shadow-none"
             />
           </div>
         </div>
 
-        <div className="flex items-center justify-between px-2.5 py-1.5 bg-transparent">
+        <div className="flex items-center justify-between px-3 py-2 bg-transparent">
           <div className="flex items-center gap-1.5 overflow-visible">
             {!isSidebar && (
               <ModelSearchDropdown 
@@ -350,6 +378,7 @@ export const PremiumChatInput = memo(({
                 selectedProvider={selectedProvider}
                 onSelectModel={onSelectModel}
                 onOpenModelSelector={onOpenModelSelector}
+                isCompact={isCompact}
               />
             )}
 
@@ -373,22 +402,21 @@ export const PremiumChatInput = memo(({
               isAuto={isAuto}
               isToolsDisabled={isToolsDisabled}
               provider={selectedProvider}
+              isCompact={isCompact}
             />
           </div>
-
-          <div className="flex-1" />
 
           <button 
             onClick={handleSend}
             className={cn(
-              "p-1.5 rounded-lg transition-all duration-300",
+              "p-1.5 rounded-full transition-all duration-300",
               (message.trim() || selectedFiles.length > 0 || isLoading)
-                ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-sm hover:opacity-90 active:scale-95" 
+                ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-sm hover:scale-105 active:scale-95" 
                 : "bg-zinc-100 dark:bg-zinc-800 text-zinc-300 dark:text-zinc-600 cursor-not-allowed"
             )}
           >
             {isLoading ? (
-              <div className="w-4 h-4 bg-current rounded-[2px] animate-pulse" />
+              <div className="w-4 h-4 bg-current rounded-[2px]" />
             ) : (
               <ArrowUp className="w-4 h-4 stroke-[3px]" />
             )}

@@ -14,10 +14,13 @@ export const SettingsSchema = z.object({
   customCssPath: z.string().default(""),
   sidebarPosition: z.enum(["left", "right"]).default("left"),
   activityBarStyle: z.enum(["icons", "icons-text"]).default("icons"),
+  backgroundImageUrl: z.string().default(""),
+  backgroundOpacity: z.number().min(0).max(1).default(0.15),
+  backgroundBlur: z.number().min(0).max(100).default(0),
 
   // ─── Audio ───────────────────────────────────────────────────────────────
   ttsEnabled: z.boolean().default(false),
-  ttsEngine: z.enum(["piper", "web", "system"]).default("piper"),
+  ttsEngine: z.enum(["piper", "web", "system", "nine_router"]).default("piper"),
   sttEnabled: z.boolean().default(false),
   sttEngine: z.enum(["whisper", "web"]).default("whisper"),
   sttWhisperModel: z.string().default("base"),
@@ -111,6 +114,9 @@ export const SettingsSchema = z.object({
   openrouterApiKey: z.string().default(""),
   togetherApiKey: z.string().default(""),
   perplexityApiKey: z.string().default(""),
+  nineRouterBaseUrl: z.string().default("http://localhost:20128/v1"),
+  nineRouterApiKey: z.string().default(""),
+  aihubmixApiKey: z.string().default(""),
 
   // ─── Workspace ───────────────────────────────────────────────────────────
   workspacePath: z.string().default(""),
@@ -142,6 +148,11 @@ export const SettingsSchema = z.object({
   thinkingBudget: z.number().default(4096),
   gpuAcceleration: z.boolean().default(true),
   enablePromptCaching: z.boolean().default(true),
+  chatPlugins: z.record(z.string(), z.boolean()).default({}),
+  providerParams: z.record(z.string(), z.record(z.string(), z.any())).default({}),
+  autoCheckEnabled: z.boolean().default(true),
+  checkBeta: z.boolean().default(false),
+  customProviders: z.array(z.any()).default([]),
 });
 
 export type ValidatedSettings = z.infer<typeof SettingsSchema>;

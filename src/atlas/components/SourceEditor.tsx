@@ -9,7 +9,7 @@ interface SourceEditorProps {
   maxHeight?: string;
 }
 
-export function SourceEditor({ content, language, className, maxHeight = "500px" }: SourceEditorProps) {
+export function SourceEditor({ content, className, maxHeight = "500px" }: SourceEditorProps) {
   const lines = useMemo(() => content.split("\n"), [content]);
 
   const highlightLine = (line: string) => {

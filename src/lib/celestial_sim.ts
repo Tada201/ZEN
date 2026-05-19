@@ -55,6 +55,7 @@ export function getPlanetPositions(date: Date = new Date()): PlanetPosition[] {
         const period = ORBITAL_PERIODS[name];
 
         // Simplified circular orbit
+        // Using arbitrary initial phase for visual distribution
         const initialPhase = (radius * 1337) % (2 * Math.PI);
         const angularVelocity = (2 * Math.PI) / period;
         const currentAngle = initialPhase + (angularVelocity * daysSinceEpoch);
@@ -77,6 +78,7 @@ export function getOrbitPath(planetName: string, segments: number = 100): number
     const points: number[][] = [];
     for (let i = 0; i <= segments; i++) {
         const angle = (2 * Math.PI * i) / segments;
+        // Match the initial phase logic if possible, but static circles are fine for UI
         points.push([
             radius * Math.cos(angle),
             radius * Math.sin(angle),

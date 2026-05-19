@@ -51,7 +51,7 @@ impl AgentTool for DelegateToAgentTool {
             "properties": {
                 "agent_id": {
                     "type": "string",
-                    "description": "ID of the specialist agent to delegate to (e.g. 'operational_expert', 'researcher', 'space_observer')."
+                    "description": "ID of the specialist agent to delegate to (e.g. 'operational_expert', 'researcher')."
                 },
                 "task": {
                     "type": "string",
@@ -119,12 +119,15 @@ impl AgentTool for DelegateToAgentTool {
         };
 
         // Create parent runner with inherited depth and permissions
+        let state_ref = app.state::<crate::commands::AppState>();
+        let tool_manager = state_ref.tool_manager.clone();
         let mut parent_runner = Runner::new(
             app.clone(),
             self.tool_registry.clone(),
             self.agent_registry.clone(),
             self.hook_registry.clone(),
             self.permissions.clone(),
+            tool_manager,
         ).with_depth(depth);
 
         if let Some(allowed) = allowed_tools {
@@ -203,7 +206,8 @@ You are {}, a specialized AI agent.
         });
 
         // Access LLM provider
-        let provider = state.llm.read().await;
+        let provider = state.provider().await?;
+        let provider_clone = provider.clone();
 
         // Generate unique spawn_id for event tracking and cancellation
         let spawn_id = Uuid::new_v4().to_string();
@@ -270,7 +274,7 @@ You are {}, a specialized AI agent.
                 Err(anyhow::anyhow!("Delegated task cancelled by user"))
             }
             res = child_runner.run(
-                provider.as_deref().ok_or_else(|| anyhow::anyhow!("LLM not initialized"))?,
+                provider_clone.as_ref(),
                 chat_id.clone(),
                 model,
                 child_messages,

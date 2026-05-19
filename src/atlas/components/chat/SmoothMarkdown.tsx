@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -9,7 +9,6 @@ import remarkBreaks from 'remark-breaks';
 import remarkGemoji from 'remark-gemoji';
 import remarkSupersub from 'remark-supersub';
 import rehypeSlug from 'rehype-slug';
-import rehypeAutolinkHeadings from 'rehype-autolink-headings';
 import 'katex/dist/katex.min.css';
 import 'highlight.js/styles/github-dark.css';
 
@@ -20,6 +19,7 @@ interface SmoothMarkdownProps {
   onComplete?: () => void;
   baseSpeed?: number; // chars per tick
   tickMs?: number;
+  chatPlugins?: Record<string, boolean>;
 }
 
 export function SmoothMarkdown({ 
@@ -28,7 +28,8 @@ export function SmoothMarkdown({
   components, 
   onComplete,
   baseSpeed = 1,
-  tickMs = 20
+  tickMs = 20,
+  chatPlugins = {}
 }: SmoothMarkdownProps) {
   const [displayedContent, setDisplayedContent] = useState('');
   const targetContentRef = useRef(content);
@@ -100,18 +101,17 @@ export function SmoothMarkdown({
   return (
     <ReactMarkdown 
       remarkPlugins={[
-        [remarkGfm, { singleTilde: false }], 
-        remarkMath, 
+        chatPlugins?.gfm !== false && [remarkGfm, { singleTilde: false }], 
+        chatPlugins?.math !== false && remarkMath, 
         remarkBreaks, 
-        remarkGemoji, 
-        remarkSupersub
-      ]} 
+        chatPlugins?.gemoji !== false && remarkGemoji, 
+        chatPlugins?.supersub !== false && remarkSupersub
+      ].filter(Boolean) as any} 
       rehypePlugins={[
         rehypeKatex, 
         rehypeHighlight, 
-        rehypeSlug, 
-        [rehypeAutolinkHeadings, { behavior: 'wrap' }]
-      ]}
+        rehypeSlug
+      ].filter(Boolean) as any}
       components={components}
     >
       {displayedContent}

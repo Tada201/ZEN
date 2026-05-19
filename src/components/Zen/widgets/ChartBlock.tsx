@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -153,8 +153,7 @@ export function ChartBlock({ code, className }: ChartBlockProps) {
   const chartKey = `${chartData.type}-${isExpanded ? 'expanded' : 'compact'}`;
 
   const renderChart = () => {
-    const props = {
-      key: chartKey,
+    const commonProps = {
       ref: chartRef,
       data: chartData.data,
       options: { ...options, ...chartData.options }
@@ -162,17 +161,17 @@ export function ChartBlock({ code, className }: ChartBlockProps) {
 
     switch (chartData.type) {
       case 'bar':
-        return <Bar {...props} />;
+        return <Bar key={chartKey} {...commonProps} />;
       case 'pie':
-        return <Pie {...props} />;
+        return <Pie key={chartKey} {...commonProps} />;
       case 'radar':
-        return <Radar {...props} />;
+        return <Radar key={chartKey} {...commonProps} />;
       case 'doughnut':
-        return <Doughnut {...props} />;
+        return <Doughnut key={chartKey} {...commonProps} />;
       case 'polarArea':
-        return <PolarArea {...props} />;
+        return <PolarArea key={chartKey} {...commonProps} />;
       default:
-        return <Line {...props} />;
+        return <Line key={chartKey} {...commonProps} />;
     }
   };
 

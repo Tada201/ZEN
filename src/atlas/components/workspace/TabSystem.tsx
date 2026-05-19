@@ -1,14 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
-  X, 
-  FileCode, 
-  Globe, 
-  FolderTree, 
-  Settings, 
-  Plus,
-  ChevronLeft,
-  ChevronRight,
-  Code2
+  X,
+  Plus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';

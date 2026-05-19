@@ -60,6 +60,43 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         .execute(pool)
         .await;
 
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS messages (
+            id           TEXT PRIMARY KEY,
+            chat_id      TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+            role         TEXT NOT NULL CHECK(role IN ('user','assistant','system','tool')),
+            content      TEXT NOT NULL,
+            tokens_in    INTEGER,
+            tokens_out   INTEGER,
+            model        TEXT,
+            is_complete  INTEGER DEFAULT 1,
+            tool_calls   TEXT,
+            tool_call_id TEXT,
+            images       TEXT,
+            attachments  TEXT,
+            kind         TEXT DEFAULT 'text',
+            metadata     TEXT,
+            created_at   TEXT DEFAULT (datetime('now'))
+        );
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    // Attempt to add columns if the DB already exists from an older version
+    let _ = sqlx::query("ALTER TABLE messages ADD COLUMN tokens_in INTEGER;")
+        .execute(pool)
+        .await;
+
+    let _ = sqlx::query("ALTER TABLE messages ADD COLUMN tokens_out INTEGER;")
+        .execute(pool)
+        .await;
+
+    let _ = sqlx::query("ALTER TABLE messages ADD COLUMN model TEXT;")
+        .execute(pool)
+        .await;
+
     let _ = sqlx::query("ALTER TABLE messages ADD COLUMN tool_calls TEXT;")
         .execute(pool)
         .await;
@@ -76,26 +113,17 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         .execute(pool)
         .await;
 
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS messages (
-            id          TEXT PRIMARY KEY,
-            chat_id     TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
-            role        TEXT NOT NULL CHECK(role IN ('user','assistant','system','tool')),
-            content     TEXT NOT NULL,
-            tokens_in   INTEGER,
-            tokens_out  INTEGER,
-            model       TEXT,
-            is_complete INTEGER DEFAULT 1,
-            tool_calls  TEXT,
-            tool_call_id TEXT,
-            images      TEXT,
-            created_at  TEXT DEFAULT (datetime('now'))
-        );
-        "#,
-    )
-    .execute(pool)
-    .await?;
+    let _ = sqlx::query("ALTER TABLE messages ADD COLUMN is_complete INTEGER DEFAULT 1;")
+        .execute(pool)
+        .await;
+
+    let _ = sqlx::query("ALTER TABLE messages ADD COLUMN kind TEXT DEFAULT 'text';")
+        .execute(pool)
+        .await;
+
+    let _ = sqlx::query("ALTER TABLE messages ADD COLUMN metadata TEXT;")
+        .execute(pool)
+        .await;
 
     sqlx::query(
         "CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id, created_at);",
@@ -252,6 +280,11 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
     .execute(pool)
     .await?;
 
+    // Attempt to add columns if the DB already exists from an older version
+    let _ = sqlx::query("ALTER TABLE settings ADD COLUMN updated_at TEXT DEFAULT (datetime('now'));")
+        .execute(pool)
+        .await;
+
     // ── Telemetry snapshots for historical data ──
     sqlx::query(
         r#"
@@ -278,6 +311,21 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
     let _ = sqlx::query(
         "CREATE INDEX IF NOT EXISTS idx_snap_entity ON telemetry_snapshots(entity_id, timestamp);"
     ).execute(pool).await;
+
+    // ── Graph Sessions ──
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS graph_sessions (
+            id TEXT PRIMARY KEY,
+            chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+            nodes TEXT NOT NULL DEFAULT '[]',
+            edges TEXT NOT NULL DEFAULT '[]',
+            metadata TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
+        "#
+    ).execute(pool).await?;
 
     let _ = sqlx::query(
         "CREATE INDEX IF NOT EXISTS idx_graph_sessions_chat ON graph_sessions(chat_id);"

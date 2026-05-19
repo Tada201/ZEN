@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { 
   Wrench, Globe, FileText, FolderTree, 
-  Terminal, Database, Code2, Sparkles, 
-  Users, Bot, Check, X, Search, Info, ImageIcon
+  Terminal, Database, Code2,
+  Users, Bot, Search, Info, ImageIcon
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -84,7 +83,7 @@ export function SkillsSettingsContent({
     });
   };
 
-  const filteredTools = Object.entries(TOOL_METADATA).filter(([id, meta]) => 
+  const filteredTools = Object.entries(TOOL_METADATA).filter(([, meta]) => 
     meta.label.toLowerCase().includes(search.toLowerCase()) || 
     meta.description.toLowerCase().includes(search.toLowerCase()) ||
     meta.category.toLowerCase().includes(search.toLowerCase())

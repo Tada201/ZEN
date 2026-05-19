@@ -154,16 +154,24 @@ export function AudioSettings({ settings, onUpdate }: AudioSettingsProps) {
           label="TTS Engine"
           description="Voice synthesis backend"
           control={
-            <Select value={settings["audio.tts-engine"] || "piper"} onValueChange={v => onUpdate("audio.tts-engine", v)}>
-              <SelectTrigger className="w-[140px] h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="piper">Piper (Local)</SelectItem>
-                <SelectItem value="web-speech">Web Speech API</SelectItem>
-                <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex flex-col gap-1.5 items-end">
+              <Select value={settings["audio.tts-engine"] || "piper"} onValueChange={v => onUpdate("audio.tts-engine", v)}>
+                <SelectTrigger className="w-[140px] h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="piper">Piper (Local)</SelectItem>
+                  <SelectItem value="web-speech">Web Speech API</SelectItem>
+                  <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
+                  <SelectItem value="nine_router">9Router TTS (Proxy)</SelectItem>
+                </SelectContent>
+              </Select>
+              {settings["audio.tts-engine"] === "nine_router" && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded border border-blue-500/20 bg-blue-500/5 text-blue-400 font-bold uppercase tracking-wider text-right animate-in fade-in duration-300">
+                  Offline Voice Capture Configured
+                </span>
+              )}
+            </div>
           }
           icon={Headphones}
         />

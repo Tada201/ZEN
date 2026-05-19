@@ -29,101 +29,20 @@ const DEFAULT_RESEARCHER_CONTEXT: i32 = 16384;
 const DEFAULT_RESEARCHER_MAX_MESSAGES: i32 = 25;
 const DEFAULT_RESEARCHER_MAX_ITERATIONS: i32 = 12;
 
-const DEFAULT_SPACE_OBSERVER_MODEL: &str = "llama3.2:latest";
-const DEFAULT_SPACE_OBSERVER_CONTEXT: i32 = 8192;
-const DEFAULT_SPACE_OBSERVER_MAX_MESSAGES: i32 = 15;
-const DEFAULT_SPACE_OBSERVER_MAX_ITERATIONS: i32 = 10;
-
 // ─── Agent System Prompts with Team Awareness ───
 
 /// Generalist agent system prompt with multi-agent team awareness
 /// Based on Claude Code's "Chief of Staff" pattern
-const GENERALIST_SYSTEM_PROMPT: &str = r#"You are ZEN, the lead coordinator of a multi-agent AI team.
+const GENERALIST_SYSTEM_PROMPT: &str = r#"You are ZEN, the lead coordinator of a multi-agent AI team. Your job is to delegate specialized work to your sub-agents and synthesize the results into coherent final responses.
 
-## Your Specialist Team
+## 🛰️ Sub-Agent Roster & Scope:
+1. **ZEN-COSMOS** (space_observer): Space events, astronomy, satellite/ISS tracking.
+2. **ZEN-OP** (operational_expert): Aviation/military flight tracking, route plotting, geospatial geofencing, navigation.
+3. **ZEN-DOCS** (researcher): Vector document search, deep web research, knowledge retrieval, information synthesis.
 
-You have access to specialized sub-agents via the `spawn_agent` tool:
-
-1. **ZEN-OP** (operational_expert)
-   - Operational analysis, mapping, geofencing
-   - Military/flight tracking, threat assessment
-   - Route calculation, navigation
-   - Use for: "Where is that aircraft?", "Calculate a route", "Set up a geofence"
-
-2. **ZEN-DOCS** (researcher)
-   - Research, document analysis, web search
-   - Knowledge retrieval, vector search
-   - Information synthesis
-   - Use for: "Research this topic", "Find documents about", "Search the web for"
-
-3. **ZEN-COSMOS** (space_observer)
-   - Astronomy, satellite tracking
-   - Celestial observations, space events
-   - Use for: "Where is the ISS?", "Show satellites", "Astronomy query"
-
-## Delegation Protocol
-
-When to spawn a sub-agent:
-- **Complex research** requiring deep analysis → Spawn `researcher`
-- **Operational/geospatial tasks** → Spawn `operational_expert`
-- **Space/astronomy queries** → Spawn `space_observer`
-- **Specialized expertise** outside your scope → Spawn appropriate specialist
-
-How to delegate:
-1. Use the `spawn_agent` tool
-2. Provide a clear, specific task description
-3. Include all necessary context from the conversation
-4. Specify expected output format
-5. Review and synthesize the sub-agent's result
-
-## Triggering Examples
-
-<example>
-Context: User asks about satellite positions
-user: "Where is the ISS right now?"
-assistant: "I'll use the spawn_agent tool to delegate this to ZEN-COSMOS."
-<commentary>
-Space query triggers space_observer agent delegation.
-</commentary>
-</example>
-
-<example>
-Context: User asks about military aircraft
-user: "Show me military flights in the area"
-assistant: "I'll spawn the operational_expert agent to analyze military aircraft data."
-<commentary>
-Operational query triggers operational_expert agent delegation.
-</commentary>
-</example>
-
-<example>
-Context: User asks for research
-user: "Research quantum computing advances"
-assistant: "I'll delegate this research task to the researcher agent."
-<commentary>
-Research request triggers researcher agent delegation.
-</commentary>
-</example>
-
-<example>
-Context: After retrieving satellite data, proactive analysis
-user: "Get the satellite data"
-assistant: "[Retrieves satellite data] Now let me have ZEN-COSMOS analyze this."
-<commentary>
-After data retrieval, proactively spawn specialist for analysis.
-</commentary>
-</example>
-
-## Your Role as Coordinator
-
-You are the user's primary interface. Your responsibilities:
-1. Understand the user's request
-2. Determine if delegation is needed
-3. Spawn appropriate sub-agents with clear tasks
-4. Synthesize results into coherent responses
-5. Ask clarifying questions when needed
-
-Be proactive in delegating specialized work to your team."#;
+## 📑 Delegation Protocol:
+- Spawning: Use `spawn_agent` when a query requires specialized domain knowledge outside your immediate scope (research, space, aviation).
+- Method: State your delegation intent, pass a specific goal with complete context, and then compile the agent's output into a cohesive final summary."#;
 
 /// Agent configuration stored in database
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -181,15 +100,6 @@ impl AgentConfig {
                 context_window: DEFAULT_RESEARCHER_CONTEXT,
                 max_messages_in_memory: DEFAULT_RESEARCHER_MAX_MESSAGES,
                 max_iterations: DEFAULT_RESEARCHER_MAX_ITERATIONS,
-                enabled_tools: vec![],
-                system_prompt_override: None,
-            },
-            "space_observer" => Self {
-                agent_id: "space_observer".to_string(),
-                model_name: DEFAULT_SPACE_OBSERVER_MODEL.to_string(),
-                context_window: DEFAULT_SPACE_OBSERVER_CONTEXT,
-                max_messages_in_memory: DEFAULT_SPACE_OBSERVER_MAX_MESSAGES,
-                max_iterations: DEFAULT_SPACE_OBSERVER_MAX_ITERATIONS,
                 enabled_tools: vec![],
                 system_prompt_override: None,
             },
@@ -266,7 +176,7 @@ impl AgentConfigManager {
         }
         
         // Add defaults for any agents without saved configs
-        let default_agent_ids = ["generalist", "operational_expert", "researcher", "space_observer"];
+        let default_agent_ids = ["generalist", "operational_expert", "researcher"];
         for agent_id in &default_agent_ids {
             if !configs.iter().any(|c| c.agent_id == *agent_id) {
                 configs.push(AgentConfig::default_for_agent(agent_id));
@@ -335,7 +245,6 @@ pub fn get_all_default_configs() -> Vec<AgentConfig> {
         AgentConfig::default_for_agent("generalist"),
         AgentConfig::default_for_agent("operational_expert"),
         AgentConfig::default_for_agent("researcher"),
-        AgentConfig::default_for_agent("space_observer"),
     ]
 }
 
@@ -346,7 +255,7 @@ mod tests {
     #[test]
     fn test_default_configs() {
         let configs = get_all_default_configs();
-        assert_eq!(configs.len(), 4);
+        assert_eq!(configs.len(), 3);
         
         let generalist = configs.iter().find(|c| c.agent_id == "generalist").unwrap();
         assert_eq!(generalist.model_name, DEFAULT_GENERALIST_MODEL);

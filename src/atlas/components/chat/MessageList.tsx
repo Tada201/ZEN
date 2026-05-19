@@ -66,7 +66,7 @@ export const MessageList = memo(function MessageList({
   return (
     <ScrollArea 
       ref={scrollRef} 
-      className="flex-1 bg-background/50"
+      className="flex-1 bg-transparent"
     >
       <div 
         className="relative w-full"

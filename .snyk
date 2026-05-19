@@ -1,0 +1,9 @@
+# Snyk project policy file
+version: v1.25.0
+exclude:
+  code:
+    - EXAMPLE_NO_EDITS/
+    - EXAMPLE_NO_EDITS/**
+  global:
+    - EXAMPLE_NO_EDITS/
+    - EXAMPLE_NO_EDITS/**

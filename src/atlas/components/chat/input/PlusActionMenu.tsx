@@ -1,8 +1,9 @@
 import React, { useRef } from 'react';
-import { Plus, Paperclip, Camera, ImageIcon, Lightbulb, Compass, Globe, Layout, Zap, ShieldOff } from 'lucide-react';
+import { Plus, Paperclip, Camera, ImageIcon, Lightbulb, Compass, Globe, Layout, Zap, ShieldOff, Mic } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { MenuItem } from './MenuItem';
+import { useUIStore } from '@/lib/stores/useUIStore';
 
 interface PlusActionMenuProps {
   isOpen: boolean;
@@ -41,6 +42,7 @@ export const PlusActionMenu = ({
   supportsImageGen
 }: PlusActionMenuProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const toggleVoiceMode = useUIStore(s => s.toggleVoiceMode);
 
   return (
     <div className="relative">
@@ -79,7 +81,8 @@ export const PlusActionMenu = ({
                 <MenuItem icon={Paperclip} label="Photos & Files" onClick={() => fileInputRef.current?.click()} />
                 <MenuItem icon={Camera} label="Screenshot" />
                 <MenuItem icon={ImageIcon} label="Create Image" disabled={!supportsImageGen} />
-                
+                <MenuItem icon={Mic} label="Voice Mode" onClick={() => { toggleVoiceMode(); setIsOpen(false); }} />
+
                 <div className="h-px bg-zinc-200 dark:bg-zinc-800 my-1 mx-2" />
                 
                 <div className="px-3 py-1.5 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Capabilities</div>

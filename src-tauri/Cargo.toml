@@ -74,6 +74,9 @@ ab_glyph = "0.2"
 pdf-inspector = { git = "https://github.com/firecrawl/pdf-inspector" }
 meval = "0.2"
 
+[dev-dependencies]
+wiremock = "0.6"
+
 [profile.dev]
 opt-level = 0
 incremental = false

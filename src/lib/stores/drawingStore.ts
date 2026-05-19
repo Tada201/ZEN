@@ -160,7 +160,7 @@ export const useDrawingStore = create<DrawingStore>((set, get) => ({
         } else {
           // Add operation
           newOps.push(op);
-
+          
           // Compute and track bounding box
           const bbox = computeBbox(op);
           if (bbox) {

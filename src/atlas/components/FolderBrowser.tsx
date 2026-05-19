@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { invoke } from "@tauri-apps/api/core";
 import {
-  Dialog, DialogContent, DialogHeader,
+  Dialog, DialogContent,
   DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 
@@ -36,19 +37,13 @@ export function FolderBrowser({ value, onChange }: FolderBrowserProps) {
     setLoading(true);
     setError(null);
     try {
-      const params = dirPath ? `?path=${encodeURIComponent(dirPath)}` : "";
-      const r = await fetch(`/chat-api/browse-folder${params}`);
-      if (!r.ok) {
-        const err = await r.json();
-        throw new Error(err.error || "Failed to browse");
-      }
-      const data: BrowseResult = await r.json();
+      const data = await invoke<BrowseResult>("browseFolder", { path: dirPath });
       setBrowseData(data);
       if (data.current) {
         setSelectedPath(data.current);
       }
     } catch (e: any) {
-      setError(e.message);
+      setError(e.message || "Failed to browse");
     } finally {
       setLoading(false);
     }

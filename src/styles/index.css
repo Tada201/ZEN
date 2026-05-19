@@ -2,20 +2,20 @@
 
 @theme {
   /* UI Atlas Design Tokens - Default Dark */
-  --color-background: #0e0f11;
-  --color-foreground: #ffffff;
-  --color-card: #111827;
-  --color-muted: #1a1b23;
-  --color-muted-foreground: #6b7280;
-  --color-border: #1f2937;
-  --color-border-strong: #374151;
-  --color-primary: #a78bfa;
-  --color-primary-glow: #c4b5fd;
-  --color-ring: #a78bfa;
-  --color-destructive: #ef4444;
-  --color-destructive-foreground: #ffffff;
-  --color-success: #22c55e;
-  --color-warning: #f59e0b;
+  --color-background: hsl(225 8% 9%);
+  --color-foreground: hsl(0 0% 98%);
+  --color-card: hsl(225 8% 11%);
+  --color-muted: hsl(240 6% 16%);
+  --color-muted-foreground: hsl(240 5% 70%);
+  --color-border: hsl(240 6% 15%);
+  --color-border-strong: hsl(240 6% 22%);
+  --color-primary: hsl(262 83% 65%);
+  --color-primary-glow: hsl(280 90% 75%);
+  --color-ring: hsl(262 83% 65%);
+  --color-destructive: hsl(0 72% 55%);
+  --color-destructive-foreground: hsl(0 0% 98%);
+  --color-success: hsl(142 65% 50%);
+  --color-warning: hsl(38 92% 55%);
 
   /* UI Atlas accent swatches */
   --color-violet: hsl(262 83% 58%);
@@ -34,53 +34,61 @@
 
 body {
   background-color: var(--color-background);
-  color: var(--color-foreground);
-  font-family: sans-serif;
-}
-
-.glass-panel {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* Premium Zen Backgrounds */
-.ui-zen-bg {
-  background-image: 
-    radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.05) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgba(59, 130, 246, 0.05) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.05) 0px, transparent 50%),
-    radial-gradient(at 0% 100%, rgba(59, 130, 246, 0.05) 0px, transparent 50%);
+  background-image:
+    radial-gradient(ellipse 65% 55% at 50% 45%, transparent 25%, var(--color-background) 80%),
+    radial-gradient(circle, hsla(0, 0%, 100%, 0.04) 1px, transparent 1px);
+  background-size: auto, 28px 28px;
   background-attachment: fixed;
-}
-
-.ui-zen-grid {
-  background-size: 40px 40px;
-  background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  color: var(--color-foreground);
+  font-family: "Inter", "Geist", sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Scrollbar Styles */
-.scrollbar-thin::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
 }
-
-.scrollbar-thin::-webkit-scrollbar-track {
+::-webkit-scrollbar-track {
   background: transparent;
 }
-
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+::-webkit-scrollbar-thumb {
+  background: hsl(240 6% 18%);
+  border-radius: 999px;
+  border: 2px solid hsl(225 10% 6%);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsla(240, 5%, 64%, 0.5);
 }
 
-.scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+/* ===== Glassmorphism Utility Classes ===== */
+
+.glass-panel {
+  background: hsla(225, 5%, 3%, 0.85);
+  border: 1px solid hsla(0, 0%, 100%, 0.08);
+  box-shadow:
+    inset 0 1px 0 hsla(0, 0%, 100%, 0.08),
+    inset 0 -1px 0 hsla(0, 0%, 0%, 0.3),
+    inset -1px 0 0 hsla(0, 0%, 100%, 0.04);
 }
 
-/* UI Atlas Design System Utility Classes */
+.glass-panel-strong {
+  background: hsla(225, 5%, 3%, 0.92);
+  border-top: 1px solid hsla(0, 0%, 100%, 0.1);
+  box-shadow:
+    inset 0 1px 0 hsla(0, 0%, 100%, 0.06),
+    inset 0 -1px 0 hsla(0, 0%, 0%, 0.25);
+}
+
+.glass-panel-activity {
+  background: hsla(225, 5%, 3%, 0.75);
+  border-left: 1px solid hsla(0, 0%, 100%, 0.06);
+  box-shadow:
+    inset 0 1px 0 hsla(0, 0%, 100%, 0.06),
+    inset 0 -1px 0 hsla(0, 0%, 0%, 0.2);
+}
+
+/* ===== UI Atlas Design System Utility Classes ===== */
 .press {
   transition: transform 80ms ease-out, opacity 80ms ease-out;
 }
@@ -89,82 +97,32 @@ body {
   opacity: 0.9;
 }
 
-/* Card base styles from UI Atlas */
-.card {
-  border: 1px solid var(--color-border);
-  border-radius: 0.5rem;
-  background-color: var(--color-card);
-  padding: 1.25rem;
+/* Navigation rail indicator */
+@keyframes rail-in {
+  from { transform: scaleY(0); opacity: 0; }
+  to { transform: scaleY(1); opacity: 1; }
 }
 
-/* Badge variants */
-.badge-default {
-  border-radius: 9999px;
-  padding: 0.125rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 500;
+.nav-rail-indicator {
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
   background-color: var(--color-primary);
-  color: white;
-}
-.badge-secondary {
-  border-radius: 9999px;
-  padding: 0.125rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  background-color: var(--color-muted);
-  color: var(--color-muted-foreground);
-}
-.badge-outline {
-  border-radius: 9999px;
-  padding: 0.125rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  border: 1px solid var(--color-border);
-  color: var(--color-muted-foreground);
-}
-.badge-destructive {
-  border-radius: 9999px;
-  padding: 0.125rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  background-color: var(--color-destructive);
-  color: white;
-}
-
-/* Glass morphism style */
-.glass {
-  background: rgba(17, 24, 39, 0.6);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-/* Subtle style */
-.subtle {
-  background-color: var(--color-muted);
-  border: 1px solid transparent;
-}
-
-/* Bordered style */
-.bordered {
-  border: 1px solid var(--color-border);
-}
-
-/* Gradient accent */
-.gradient-accent {
-  background: linear-gradient(135deg, var(--color-primary), hsl(199 89% 48%));
-}
-
-/* Shadow accent */
-.shadow-accent {
-  box-shadow: 0 0 20px -5px hsla(var(--color-primary), 0.5);
-}
-
-/* Glow text */
-.glow-text {
-  text-shadow: 0 0 10px hsla(var(--color-primary), 0.5);
+  border-radius: 999px;
+  animation: rail-in 200ms ease;
 }
 
 /* Mono font utility */
 .font-mono {
   font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+}
+
+/* Premium Glassmorphic Vignette Grid overlay class */
+.bg-vignette-grid {
+  background-image:
+    radial-gradient(ellipse 65% 55% at 50% 45%, transparent 20%, var(--color-background) 90%),
+    radial-gradient(circle, hsla(0, 0%, 100%, 0.04) 1.2px, transparent 1.2px);
+  background-size: auto, 24px 24px;
 }

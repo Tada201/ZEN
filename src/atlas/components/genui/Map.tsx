@@ -1,17 +1,17 @@
 import { cn } from "@/lib/utils";
 
 export function MapComponent({ 
-  lat = 0, 
-  lng = 0, 
-  zoom = 10, 
+  latitude = 0, 
+  longitude = 0, 
   className 
 }: { 
-  lat?: number; 
-  lng?: number; 
+  latitude?: number; 
+  longitude?: number; 
   zoom?: number; 
+  label?: string;
   className?: string;
 }) {
-  const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${lng-0.01}%2C${lat-0.01}%2C${lng+0.01}%2C${lat+0.01}&layer=mapnik&marker=${lat}%2C${lng}`;
+  const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${longitude-0.01}%2C${latitude-0.01}%2C${longitude+0.01}%2C${latitude+0.01}&layer=mapnik&marker=${latitude}%2C${longitude}`;
   
   return (
     <div className={cn("relative w-full aspect-video rounded-xl overflow-hidden border border-border/50 shadow-sm", className)}>

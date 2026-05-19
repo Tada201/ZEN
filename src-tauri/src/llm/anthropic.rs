@@ -32,6 +32,12 @@ struct AnthropicChatRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    top_p: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_k: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stop_sequences: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<AnthropicTool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     thinking: Option<AnthropicThinking>,
@@ -553,6 +559,9 @@ impl LlmProvider for AnthropicProvider {
             max_tokens: config.max_tokens.unwrap_or(4096),
             stream: true,
             temperature: config.temperature,
+            top_p: config.top_p,
+            top_k: config.top_k,
+            stop_sequences: config.stop,
             tools: anthropic_tools,
             thinking,
         };
@@ -587,7 +596,13 @@ impl LlmProvider for AnthropicProvider {
         let mut stream = resp.bytes_stream();
         let mut buffer = String::new();
 
-        while let Some(chunk_result) = stream.next().await {
+        while let Some(chunk_result) = tokio::select! {
+            res = stream.next() => res,
+            _ = token.cancelled() => {
+                debug!("Anthropic stream cancelled by client via select!");
+                None
+            }
+        } {
             if token.is_cancelled() {
                 debug!("Anthropic stream cancelled by client");
                 break;

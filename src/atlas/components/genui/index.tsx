@@ -4,9 +4,9 @@ import { openuiLibrary } from "@openuidev/react-ui/genui-lib";
 import { cn } from "@/lib/utils";
 
 import { Stack } from "./Stack";
-import { Card, CardHeader } from "./Card";
+import { Card } from "./Card";
 import { TextContent } from "./TextContent";
-import { Grid, Row, Col } from "./Layout";
+import { Grid } from "./Layout";
 import { Icon } from "./Icon";
 
 /* ── Core Layout Primitives ─────────────────────────────────── */
@@ -18,7 +18,7 @@ export const RootDef = defineComponent({
     children: z.any().describe("The components to display"),
     gap: z.coerce.number().optional().default(6),
     className: z.string().optional()
-  }),
+  }) as any,
   component: ({ props, renderNode }: any) => (
     <div className={cn("w-full min-h-full bg-background p-4 sm:p-6 lg:p-8 flex flex-col", props.className)}>
       <Stack gap={props.gap} direction="column" className="w-full h-full max-w-6xl mx-auto">
@@ -36,7 +36,7 @@ export const TagDef = defineComponent({
     variant: z.enum(["success", "warning", "error", "info", "default"]).optional().default("default"),
     size: z.enum(["sm", "md", "lg"]).optional().default("md"),
     className: z.string().optional()
-  }),
+  }) as any,
   component: ({ props }: any) => (
     <div className={cn(
       "inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
@@ -60,7 +60,7 @@ export const StackDef = defineComponent({
     gap: z.coerce.number().optional().default(4),
     direction: z.enum(["row", "column"]).optional().default("column"),
     className: z.string().optional()
-  }),
+  }) as any,
   component: ({ props, renderNode }: any) => (
     <Stack gap={props.gap} direction={props.direction} className={props.className}>
       {renderNode(props.children)}
@@ -74,7 +74,7 @@ export const CardDef = defineComponent({
   props: z.object({
     children: z.any().describe("The content of the card"),
     className: z.string().optional()
-  }),
+  }) as any,
   component: ({ props, renderNode }: any) => (
     <Card className={props.className}>
       {renderNode(props.children)}
@@ -89,7 +89,7 @@ export const TextDef = defineComponent({
     content: z.string(),
     variant: z.enum(["body", "heading", "label"]).optional().default("body"),
     className: z.string().optional()
-  }),
+  }) as any,
   component: ({ props }: any) => <TextContent {...props} />
 });
 
@@ -127,23 +127,23 @@ const coreComponents = [
   CardDef,
   TextDef,
   TextContentDef,
-  defineComponent({ name: "Grid", description: "A grid layout container.", props: z.object({ children: z.any(), columns: z.number().optional().default(1), gap: z.number().optional().default(4) }), component: ({ props, renderNode }: any) => <Grid cols={props.columns} gap={props.gap}>{renderNode(props.children)}</Grid> }),
-  defineComponent({ name: "Icon", description: "Renders an icon.", props: z.object({ name: z.string() }), component: ({ props }: any) => <Icon name={props.name} /> }),
+  defineComponent({ name: "Grid", description: "A grid layout container.", props: z.object({ children: z.any(), columns: z.number().optional().default(1), gap: z.number().optional().default(4) }) as any, component: ({ props, renderNode }: any) => <Grid cols={props.columns} gap={props.gap}>{renderNode(props.children)}</Grid> }),
+  defineComponent({ name: "Icon", description: "Renders an icon.", props: z.object({ name: z.string() }) as any, component: ({ props }: any) => <Icon name={props.name} /> }),
 ];
 
 // Combine base openui components with our core layout components
-const baseComponents = Array.isArray((openuiLibrary as any).components) 
+const baseComponents = Array.isArray((openuiLibrary as any)?.components) 
   ? (openuiLibrary as any).components 
-  : Object.values((openuiLibrary as any).components || {});
+  : Object.values((openuiLibrary as any)?.components || {});
 
-const customNames = new Set(coreComponents.map(c => c.name));
+const customNames = new Set(coreComponents.filter(c => c && c.name).map(c => c.name));
 
 const mergedComponents = [
   ...baseComponents.filter((c: any) => c && c.name && !customNames.has(c.name)),
   ...coreComponents
 ].filter(c => c && c.name && c.props) as any[];
 
-const baseLibrary = createLibrary({ components: mergedComponents });
+const baseLibrary = createLibrary({ components: mergedComponents || [] });
 
 export const extendedLibrary = {
   ...baseLibrary,

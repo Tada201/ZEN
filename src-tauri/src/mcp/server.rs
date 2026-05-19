@@ -248,7 +248,13 @@ impl McpServer {
             },
         };
 
-        JsonRpcResponse::success(serde_json::to_value(result).unwrap(), id)
+        match serde_json::to_value(result) {
+            Ok(val) => JsonRpcResponse::success(val, id),
+            Err(e) => {
+                let err = JsonRpcError::internal_error(format!("Failed to serialize initialize result: {}", e));
+                JsonRpcResponse::failure(err, id)
+            }
+        }
     }
 
     /// Handle tools/list request

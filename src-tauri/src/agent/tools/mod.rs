@@ -11,6 +11,9 @@ pub mod spawn_tools;
 pub mod delegate_to_agent;
 pub mod session_memory_tools;
 pub mod progressive;
+pub mod graph_session;
+pub mod drawing_tools;
+pub mod geofence_tools;
 
 use serde_json::Value;
 use anyhow::Result;

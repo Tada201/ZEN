@@ -14,10 +14,10 @@ use std::sync::Arc;
 use tauri::AppHandle;
 use tokio_util::sync::CancellationToken;
 use tokio::time::timeout;
-use tracing::{info, warn, instrument};
+use tracing::{info, warn, error, instrument};
 
 use crate::agent::event_bus::{
-    AgentEvent, ChatChunkPayload,
+    AgentEvent, ChatChunkPayload, ChatDonePayload, ChatErrorPayload,
 };
 use crate::agent::runner::{self, Runner};
 use crate::agent::types::{AgentRegistry, AgentResponse, MessageKind, ActionMeta, SpawnMeta};
@@ -29,6 +29,7 @@ use crate::llm::{LlmProvider, ChatRequestConfig, LlmChunk};
 use crate::db::models::{ChatMessage, OrchestrationPlan, OrchestrationTask};
 use crate::db::queries;
 use crate::tools::GlobalToolRegistry;
+use crate::tools::manager::ToolManager;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 use chrono::Utc;
@@ -40,6 +41,7 @@ pub struct Orchestrator {
     tool_registry: Arc<tokio::sync::RwLock<ToolRegistry>>,
     hook_registry: Arc<HookRegistry>,
     permissions: GlobalToolRegistry,
+    tool_manager: Arc<ToolManager>,
     event_bus: Arc<crate::agent::event_bus::EventBus>,
     agent_memory: Arc<crate::agent::memory::UnifiedMemoryBackend>,
     db_pool: Option<SqlitePool>,
@@ -98,6 +100,7 @@ impl Orchestrator {
         tool_registry: Arc<tokio::sync::RwLock<ToolRegistry>>,
         hook_registry: Arc<HookRegistry>,
         permissions: GlobalToolRegistry,
+        tool_manager: Arc<ToolManager>,
         event_bus: Arc<crate::agent::event_bus::EventBus>,
         agent_memory: Arc<crate::agent::memory::UnifiedMemoryBackend>,
     ) -> Self {
@@ -107,6 +110,7 @@ impl Orchestrator {
             tool_registry,
             hook_registry,
             permissions,
+            tool_manager,
             event_bus,
             agent_memory,
             db_pool: None,
@@ -159,7 +163,7 @@ Available specialist agents:
 - **generalist**: General-purpose tasks, simple queries, coordination
 - **operational_expert**: Operational analysis, mapping, geofencing, military/flight tracking
 - **researcher**: Research, document analysis, web search, knowledge retrieval
-- **space_observer**: Astronomy, satellite tracking, celestial observations
+- **researcher**: Research, document analysis, web search
 
 Output format (JSON):
 {
@@ -208,10 +212,7 @@ Be specific in task descriptions. Include all necessary context for the assigned
             stream: false,
             temperature: Some(0.3), // Lower temperature for more structured output
             max_tokens: Some(2000),
-            json_schema: None,
-            reasoning_effort: None,
-            thinking_budget: None,
-            enable_prompt_caching: false,
+            ..ChatRequestConfig::default()
         };
 
         let response = provider.chat_stream(
@@ -320,7 +321,17 @@ Be specific in task descriptions. Include all necessary context for the assigned
         // Phase 2: Plan - Break goal into tasks
         self.emit_progress(chat_id, OrchestratorPhase::Planning, 10.0, "Breaking down goal into subtasks...")?;
         
-        let breakdown = self.break_goal_into_tasks(&*provider, model, &messages, goal).await?;
+        let breakdown = match self.break_goal_into_tasks(&*provider, model, &messages, goal).await {
+            Ok(b) => b,
+            Err(e) => {
+                let _ = self.emit(AgentEvent::ChatError(ChatErrorPayload {
+                    chat_id: chat_id.to_string(),
+                    error: format!("Failed to break goal into tasks: {}", e),
+                    recoverable: false,
+                }));
+                return Err(e);
+            }
+        };
         
         // --- PERSISTENCE: Save initial plan and tasks ---
         let plan_id = Uuid::new_v4().to_string();
@@ -390,6 +401,17 @@ Be specific in task descriptions. Include all necessary context for the assigned
                     }
 
                     self.emit_progress(chat_id, OrchestratorPhase::Complete, 0.0, "Orchestration rejected by user.")?;
+
+                    // Emit ChatDone to signal frontend that streaming is complete
+                    let _ = self.emit(AgentEvent::ChatDone(ChatDonePayload {
+                        chat_id: chat_id.to_string(),
+                        content: Some("Orchestration was cancelled by the user after reviewing the plan.".to_string()),
+                        tokens_in: 0,
+                        tokens_out: 0,
+                        reason: "cancelled".to_string(),
+                        done: true,
+                    }));
+
                     return Ok(AgentResponse {
                         content: Some("Orchestration was cancelled by the user after reviewing the plan.".to_string()),
                         tool_calls: vec![],
@@ -520,6 +542,29 @@ Be specific in task descriptions. Include all necessary context for the assigned
             }
         }
 
+        // If all tasks were cancelled before any executed, emit ChatDone and return early
+        if token.is_cancelled() && task_results.is_empty() {
+            info!("Orchestrator task execution cancelled — no tasks completed, no synthesis needed");
+            let _ = self.emit(AgentEvent::ChatDone(ChatDonePayload {
+                chat_id: chat_id.to_string(),
+                content: Some("Orchestration cancelled before any tasks could complete.".to_string()),
+                tokens_in: 0,
+                tokens_out: 0,
+                reason: "cancelled".to_string(),
+                done: true,
+            }));
+            self.emit_progress(chat_id, OrchestratorPhase::Complete, 100.0, "Orchestration cancelled")?;
+            return Ok(AgentResponse {
+                content: Some("Orchestration cancelled before any tasks could complete.".to_string()),
+                tool_calls: vec![],
+                reasoning: None,
+                handoff: None,
+                tokens_in: None,
+                tokens_out: None,
+                message_persisted: false,
+            });
+        }
+
         // Phase 4: Synthesize - Combine all results
         self.emit_progress(chat_id, OrchestratorPhase::Synthesizing, 85.0, "Synthesizing results...")?;
 
@@ -527,7 +572,7 @@ Be specific in task descriptions. Include all necessary context for the assigned
             let _ = queries::update_orchestration_plan_status(pool, &plan_id, "synthesizing").await;
         }
 
-        let final_response = self.synthesize_results(
+        let final_response = match self.synthesize_results(
             &*provider,
             model,
             goal,
@@ -536,7 +581,18 @@ Be specific in task descriptions. Include all necessary context for the assigned
             config,
             token,
             chat_id,
-        ).await?;
+        ).await {
+            Ok(response) => response,
+            Err(e) => {
+                // Emit ChatError — frontend handler sets isStreaming(false), status="failed", and displays error
+                let _ = self.emit(AgentEvent::ChatError(crate::agent::event_bus::ChatErrorPayload {
+                    chat_id: chat_id.to_string(),
+                    error: format!("Orchestration synthesis failed: {}", e),
+                    recoverable: false,
+                }));
+                return Err(e);
+            }
+        };
 
         // Phase 5: Complete
         self.emit_progress(chat_id, OrchestratorPhase::Complete, 100.0, "Orchestrator complete")?;
@@ -544,6 +600,16 @@ Be specific in task descriptions. Include all necessary context for the assigned
         if let Some(ref pool) = self.db_pool {
             let _ = queries::update_orchestration_plan_status(pool, &plan_id, "completed").await;
         }
+
+        // Emit chat:done to signal frontend that streaming is complete
+        let _ = self.emit(AgentEvent::ChatDone(ChatDonePayload {
+            chat_id: chat_id.to_string(),
+            content: final_response.content.clone(),
+            tokens_in: final_response.tokens_in.unwrap_or(0) as i64,
+            tokens_out: final_response.tokens_out.unwrap_or(0) as i64,
+            reason: "complete".to_string(),
+            done: true,
+        }));
 
         info!("Orchestrator loop completed");
         Ok(final_response)
@@ -577,6 +643,7 @@ Be specific in task descriptions. Include all necessary context for the assigned
             self.agent_registry.clone(),
             self.hook_registry.clone(),
             self.permissions.clone(),
+            self.tool_manager.clone(),
         );
 
         // Pass direct channel for high-performance streaming if available
@@ -884,7 +951,13 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
             }
 
             if !chunk_text.is_empty() {
-                let mut data = buffer_clone.lock().unwrap();
+                let mut data = match buffer_clone.lock() {
+                    Ok(guard) => guard,
+                    Err(poisoned) => {
+                        error!("[orchestrator] buffer mutex poisoned, recovering");
+                        poisoned.into_inner()
+                    }
+                };
                 
                 // If type changed, flush immediately
                 if data.2 != chunk_type && !data.0.is_empty() {
@@ -930,7 +1003,13 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
         ).await?;
 
         // Final flush: Send any remaining tokens in the buffer
-        let mut data = buffer.lock().unwrap();
+        let mut data = match buffer.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                error!("[orchestrator] buffer mutex poisoned during final flush");
+                poisoned.into_inner()
+            }
+        };
         if !data.0.is_empty() {
             let text = std::mem::take(&mut data.0);
             let current_type = data.2;

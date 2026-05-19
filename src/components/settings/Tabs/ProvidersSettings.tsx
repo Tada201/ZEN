@@ -1,224 +1,559 @@
-import { useCallback, useMemo, useState } from "react";
-import type { ReactNode } from "react";
-import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
-import { ProviderCard } from "./providers/ProviderCard";
-import type { ConnectionStatus } from "./providers/ConnectionTestButton";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Globe, Cpu } from "lucide-react";
+import React, { useState, memo, useCallback, useMemo } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { useSettingsStore } from '@/lib/stores/useSettingsStore';
+import { providerOrder, PROVIDER_KEY_MAP } from '@/lib/types/provider';
+import { cn } from '@/lib/utils/style';
+import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
+import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
+import { WorkbenchInput } from '@/components/settings/ui/WorkbenchInput';
+import { PROVIDER_ICONS } from './providers/constants';
+import { ApiKeyConfig } from './providers/ApiKeyConfig';
+import { EndpointConfig } from './providers/EndpointConfig';
+import { ModelConfig } from './providers/ModelConfig';
+import { CustomProviderConfig } from './providers/CustomProviderConfig';
+import { ConnectionStatus } from './providers/ConnectionStatus';
+import { ProviderParamsConfig } from './providers/ProviderParamsConfig';
 
-/* ── Provider definitions ──────────────────────────────────────── */
-
-interface ProviderDef {
-  id: string;
-  name: string;
-  icon: ReactNode;
-  usesKey: boolean;
-  usesUrl: boolean;
-  keyPlaceholder?: string;
-  urlPlaceholder?: string;
-}
-
-const CLOUD_PROVIDERS: ProviderDef[] = [
-  { id: "openai",      name: "OpenAI",       icon: <WorkbenchIcon name="simple-icons:openai" size={16} />,       usesKey: true,  usesUrl: false, keyPlaceholder: "sk-..." },
-  { id: "anthropic",   name: "Anthropic",    icon: <WorkbenchIcon name="simple-icons:anthropic" size={16} />,    usesKey: true,  usesUrl: false, keyPlaceholder: "sk-ant-..." },
-  { id: "google",      name: "Google Gemini",icon: <WorkbenchIcon name="simple-icons:googlegemini" size={16} />, usesKey: true,  usesUrl: false, keyPlaceholder: "AIza..." },
-  { id: "groq",        name: "Groq",         icon: <WorkbenchIcon name="lucide:zap" size={16} />,                usesKey: true,  usesUrl: false, keyPlaceholder: "gsk_..." },
-  { id: "mistral",     name: "Mistral AI",   icon: <WorkbenchIcon name="simple-icons:mistralai" size={16} />,    usesKey: true,  usesUrl: false, keyPlaceholder: "..." },
-  { id: "deepseek",    name: "DeepSeek",     icon: <WorkbenchIcon name="simple-icons:deepseek" size={16} />,     usesKey: true,  usesUrl: false, keyPlaceholder: "sk-..." },
-  { id: "openrouter",  name: "OpenRouter",   icon: <WorkbenchIcon name="simple-icons:openrouter" size={16} />,   usesKey: true,  usesUrl: false, keyPlaceholder: "sk-or-..." },
-  { id: "together",    name: "Together AI",  icon: <WorkbenchIcon name="lucide:globe" size={16} />,              usesKey: true,  usesUrl: false, keyPlaceholder: "..." },
-  { id: "perplexity",  name: "Perplexity",   icon: <WorkbenchIcon name="lucide:sparkles" size={16} />,           usesKey: true,  usesUrl: false, keyPlaceholder: "pplx-..." },
+const CATEGORIES = [
+    { id: 'cloud', label: 'Cloud Intelligence', providers: ['openai', 'anthropic', 'google', 'xai', 'mistral', 'groq', 'perplexity', 'deepseek', 'openrouter', 'together', 'kilo', 'aihubmix'] },
+    { id: 'local', label: 'Local & Private', providers: ['ollama', 'lmstudio', 'nine_router'] },
+    { id: 'custom', label: 'Custom Nodes', providers: [] },
 ];
 
-const LOCAL_PROVIDERS: ProviderDef[] = [
-  { id: "ollama",      name: "Ollama",     icon: <WorkbenchIcon name="simple-icons:ollama" size={16} />,     usesKey: false, usesUrl: true,  urlPlaceholder: "http://localhost:11434" },
-  { id: "lmstudio",    name: "LM Studio",  icon: <WorkbenchIcon name="lucide:monitor" size={16} />,          usesKey: false, usesUrl: true,  urlPlaceholder: "http://localhost:1234" },
-];
+export const ProvidersSettings = memo(() => {
+    const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
-const ALL_PROVIDERS = [...CLOUD_PROVIDERS, ...LOCAL_PROVIDERS];
+    const customProviders = useSettingsStore(s => s.customProviders);
+    const connectionStatuses = useSettingsStore(s => s.connectionStatuses);
+    const fetchModels = useSettingsStore(s => s.fetchModels);
+    const addCustomProvider = useSettingsStore(s => s.addCustomProvider);
+    const allProviderParams = useSettingsStore(s => s.providerParams);
+    const updateProviderParams = useSettingsStore(s => s.updateProviderParams);
 
-/* ── Settings key helpers ──────────────────────────────────────── */
+    const [isAddingCustom, setIsAddingCustom] = useState(false);
+    const [addForm, setAddForm] = useState({
+        displayName: '',
+        baseUrl: '',
+        apiKey: '',
+        testStatus: 'idle' as 'idle' | 'testing' | 'success' | 'error',
+        discoveredModels: [] as any[],
+        validationError: null as string | null,
+    });
 
-function apiKeySettingsKey(providerId: string): string {
-  return `${providerId}ApiKey`;
-}
+    // Filtered categories and providers
+    const filteredCategories = useMemo(() => {
+        return CATEGORIES.map(cat => {
+            let providers = [];
+            if (cat.id === 'custom') {
+                providers = customProviders.map(cp => ({
+                    id: cp.id,
+                    label: cp.displayName,
+                    icon: 'lucide:network',
+                    isCustom: true
+                }));
+            } else {
+                providers = providerOrder
+                    .filter(p => cat.providers.includes(p.key) || (cat.id === 'cloud' && !p.isLocal && !cat.providers.includes(p.key)))
+                    .map(p => ({
+                        id: p.key,
+                        label: p.name,
+                        icon: p.icon,
+                        isCustom: false
+                    }));
+            }
 
-function baseUrlSettingsKey(providerId: string): string {
-  return `${providerId}BaseUrl`;
-}
+            const filtered = providers.filter(p => 
+                p.label.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                p.id.toLowerCase().includes(searchQuery.toLowerCase())
+            );
 
-/* ── Component ─────────────────────────────────────────────────── */
+            return { ...cat, providers: filtered };
+        }).filter(cat => cat.providers.length > 0);
+    }, [searchQuery, customProviders]);
 
-interface ProvidersSettingsProps {
-  settings: Record<string, string>;
-  onUpdate: (key: string, value: string) => void;
-}
+    const handleProviderClick = useCallback((id: string) => {
+        setSelectedProviderId(id);
+        fetchModels(id);
+    }, [fetchModels]);
 
-export function ProvidersSettings({ settings, onUpdate }: ProvidersSettingsProps) {
-  const [search, setSearch] = useState("");
-  const [connectionStatuses, setConnectionStatuses] = useState<
-    Record<string, ConnectionStatus>
-  >({});
+    const getProviderStatus = useCallback((id: string) => {
+        const state = useSettingsStore.getState();
+        const status = connectionStatuses[id];
+        if (status === 'success') return 'active';
+        if (status === 'error') return 'failed';
+        
+        // Check if inference params are configured
+        const params = state.providerParams[id];
+        if (params && Object.keys(params).length > 0) return 'configured';
 
-  const filtered = useMemo(() => {
-    if (!search.trim()) return ALL_PROVIDERS;
-    const q = search.toLowerCase();
-    return ALL_PROVIDERS.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.id.toLowerCase().includes(q)
-    );
-  }, [search]);
-
-  const handleApiKeyChange = useCallback(
-    (providerId: string, value: string) => {
-      onUpdate(apiKeySettingsKey(providerId), value);
-    },
-    [onUpdate]
-  );
-
-  const handleBaseUrlChange = useCallback(
-    (providerId: string, value: string) => {
-      onUpdate(baseUrlSettingsKey(providerId), value);
-    },
-    [onUpdate]
-  );
-
-  const handleTestConnection = useCallback(
-    async (providerId: string) => {
-      setConnectionStatuses((prev) => ({
-        ...prev,
-        [providerId]: { state: "testing" },
-      }));
-
-      const start = performance.now();
-
-      try {
-        const provider = ALL_PROVIDERS.find((p) => p.id === providerId);
-        if (!provider) throw new Error("Unknown provider");
-
-        if (provider.usesUrl) {
-          const url = settings[baseUrlSettingsKey(providerId)];
-          if (!url) throw new Error("No base URL configured");
-          const res = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(5000) });
-          if (!res.ok && res.status !== 405) throw new Error(`HTTP ${res.status}`);
-        } else {
-          const key = settings[apiKeySettingsKey(providerId)];
-          if (!key) throw new Error("No API key configured");
-          if (key.length < 8) throw new Error("Key looks too short");
-          // TODO: Replace with actual provider-specific endpoint validation
-          await new Promise((r) => setTimeout(r, 600));
+        // Check if API key is configured
+        const configKey = PROVIDER_KEY_MAP[id];
+        if (configKey) {
+            const value = (state as any)[configKey];
+            if (value) return 'configured';
         }
+        return 'none';
+    }, [connectionStatuses]);
 
-        const latency = Math.round(performance.now() - start);
-        setConnectionStatuses((prev) => ({
-          ...prev,
-          [providerId]: { state: "connected", latency },
-        }));
-      } catch (err) {
-        const latency = Math.round(performance.now() - start);
-        setConnectionStatuses((prev) => ({
-          ...prev,
-          [providerId]: {
-            state: "failed",
-            error: err instanceof Error ? err.message : "Connection failed",
-            ...(latency > 0 ? { latency } : {}),
-          },
-        }));
-      }
-    },
-    [settings]
-  );
+    const handleAddFormTest = useCallback(async () => {
+        if (addForm.testStatus === 'testing') return;
+        setAddForm(prev => ({ ...prev, testStatus: 'testing', validationError: null }));
+        try {
+            const models = await invoke<any[]>('test_provider_connection', {
+                config: {
+                    providerType: 'custom',
+                    baseUrl: addForm.baseUrl,
+                    apiKey: addForm.apiKey,
+                    displayName: addForm.displayName || 'Custom Node',
+                }
+            });
+            setAddForm(prev => ({ 
+                ...prev, 
+                testStatus: models && models.length > 0 ? 'success' : 'error',
+                discoveredModels: models || []
+            }));
+        } catch (err: any) {
+            setAddForm(prev => ({ ...prev, testStatus: 'error', discoveredModels: [] }));
+        }
+    }, [addForm]);
 
-  return (
-    <section className="space-y-6">
-      <div className="space-y-1">
-        <h3 className="text-lg font-bold tracking-tight text-zinc-100">AI Providers</h3>
-        <p className="text-[13px] text-zinc-500">
-          Manage API keys for cloud providers and configure local endpoints.
-        </p>
-      </div>
+    const handleAddFormRegister = useCallback(() => {
+        if (!addForm.displayName || !addForm.baseUrl) return;
+        addCustomProvider({ 
+            displayName: addForm.displayName, 
+            baseUrl: addForm.baseUrl, 
+            apiKey: addForm.apiKey, 
+            customModels: addForm.discoveredModels 
+        } as any);
+        setIsAddingCustom(false);
+        setAddForm({ displayName: '', baseUrl: '', apiKey: '', testStatus: 'idle', discoveredModels: [], validationError: null });
+    }, [addForm, addCustomProvider]);
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-600" />
-        <Input
-          type="text"
-          placeholder="Search providers..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-8 h-9 text-[12px] bg-white/[0.03] border-white/[0.08]
-            focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
-        />
-      </div>
+    if (isAddingCustom) {
+        return (
+            <div className="flex flex-col h-full animate-in slide-in-from-right-4 duration-300">
+                <div className="flex items-center gap-4 mb-4 px-6 pt-4">
+                    <WorkbenchButton 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 rounded-lg hover:bg-white/[0.05]"
+                        onClick={() => setIsAddingCustom(false)}
+                    >
+                        <WorkbenchIcon name="lucide:chevron-left" size={14} />
+                    </WorkbenchButton>
+                    <div className="h-9 w-9 rounded-xl border border-blue-500/20 bg-blue-500/5 flex items-center justify-center">
+                        <WorkbenchIcon name="lucide:plus" size={18} className="text-blue-400" />
+                    </div>
+                    <div>
+                        <h3 className="text-base font-bold tracking-tight text-white/90 leading-tight">Register Custom Node</h3>
+                        <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">New OAI-Compatible Endpoint</p>
+                    </div>
+                </div>
 
-      <ScrollArea className="max-h-[380px] pr-2">
-        <div className="space-y-3">
-          {/* Cloud Provider Section */}
-          {filtered.some((p) => CLOUD_PROVIDERS.some((cp) => cp.id === p.id)) && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 px-1">
-                <Globe className="h-3 w-3 text-zinc-600" />
-                <span className="text-[9px] font-black uppercase tracking-[0.15em] text-zinc-600">
-                  Cloud
-                </span>
-              </div>
-              <div className="space-y-1.5">
-                {filtered
-                  .filter((p) => CLOUD_PROVIDERS.some((cp) => cp.id === p.id))
-                  .map((p) => (
-                    <ProviderCard
-                      key={p.id}
-                      provider={p}
-                      apiKey={settings[apiKeySettingsKey(p.id)] || ""}
-                      connectionStatus={connectionStatuses[p.id] || { state: "idle" }}
-                      onApiKeyChange={(v) => handleApiKeyChange(p.id, v)}
-                      onTestConnection={() => handleTestConnection(p.id)}
-                    />
-                  ))}
-              </div>
+                <ScrollArea className="flex-1 px-8 pb-12">
+                    <div className="max-w-xl space-y-6">
+                        <div className="flex flex-col gap-2">
+                            <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest">Node Alias</label>
+                            <WorkbenchInput
+                                value={addForm.displayName}
+                                placeholder="e.g., Private Research Cluster"
+                                onChangeText={(val) => setAddForm(prev => ({ ...prev, displayName: val }))}
+                                className="h-11 bg-white/[0.03] border-white/[0.08] rounded-xl"
+                            />
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                            <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest">Endpoint URL</label>
+                            <WorkbenchInput
+                                value={addForm.baseUrl}
+                                placeholder="https://api.domain.ai/v1"
+                                onChangeText={(val) => setAddForm(prev => ({ ...prev, baseUrl: val, validationError: null }))}
+                                className="h-11 font-mono text-xs bg-white/[0.03] border-white/[0.08] rounded-xl"
+                            />
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                            <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest">Secret Key (Optional)</label>
+                            <WorkbenchInput
+                                type="password"
+                                value={addForm.apiKey}
+                                placeholder="sk-..."
+                                onChangeText={(val) => setAddForm(prev => ({ ...prev, apiKey: val }))}
+                                className="h-11 font-mono text-xs bg-white/[0.03] border-white/[0.08] rounded-xl"
+                            />
+                        </div>
+
+                        {addForm.testStatus !== 'idle' && (
+                            <div className={cn(
+                                "p-3 rounded-xl border flex items-center gap-3",
+                                addForm.testStatus === 'testing' && "bg-amber-500/5 border-amber-500/10 text-amber-400",
+                                addForm.testStatus === 'success' && "bg-emerald-500/5 border-emerald-500/10 text-emerald-400",
+                                addForm.testStatus === 'error' && "bg-red-500/5 border-red-500/10 text-red-400"
+                            )}>
+                                <WorkbenchIcon
+                                    name={addForm.testStatus === 'testing' ? "lucide:loader-2" : addForm.testStatus === 'success' ? "lucide:check-circle" : "lucide:alert-circle"}
+                                    size={14}
+                                    className={cn(addForm.testStatus === 'testing' && "animate-spin")}
+                                />
+                                <span className="text-[10px] font-bold uppercase tracking-wider">
+                                    {addForm.testStatus === 'testing' ? 'Synchronizing Handshake...' : addForm.testStatus === 'success' ? 'Telemetry Established' : 'Connection Refused'}
+                                </span>
+                            </div>
+                        )}
+
+                        <div className="flex gap-3 mt-10">
+                            <WorkbenchButton
+                                variant="secondary"
+                                className="flex-1 h-10 rounded-xl font-bold bg-white/[0.03] border-white/[0.08]"
+                                onClick={handleAddFormTest}
+                                disabled={!addForm.baseUrl || addForm.testStatus === 'testing'}
+                            >
+                                {addForm.testStatus === 'testing' ? 'Testing...' : 'Test Connection'}
+                            </WorkbenchButton>
+                            <WorkbenchButton
+                                variant="blue"
+                                className="flex-1 h-10 rounded-xl font-bold"
+                                onClick={handleAddFormRegister}
+                                disabled={!addForm.displayName || !addForm.baseUrl || addForm.testStatus === 'testing'}
+                            >
+                                Register Node
+                            </WorkbenchButton>
+                        </div>
+                    </div>
+                </ScrollArea>
             </div>
-          )}
+        );
+    }
 
-          {/* Local Provider Section */}
-          {filtered.some((p) => LOCAL_PROVIDERS.some((lp) => lp.id === p.id)) && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 px-1 pt-1">
-                <Cpu className="h-3 w-3 text-zinc-600" />
-                <span className="text-[9px] font-black uppercase tracking-[0.15em] text-zinc-600">
-                  Local
-                </span>
-              </div>
-              <div className="space-y-1.5">
-                {filtered
-                  .filter((p) => LOCAL_PROVIDERS.some((lp) => lp.id === p.id))
-                  .map((p) => (
-                    <ProviderCard
-                      key={p.id}
-                      provider={p}
-                      baseUrl={settings[baseUrlSettingsKey(p.id)] || ""}
-                      connectionStatus={connectionStatuses[p.id] || { state: "idle" }}
-                      onBaseUrlChange={(v) => handleBaseUrlChange(p.id, v)}
-                      onTestConnection={() => handleTestConnection(p.id)}
-                    />
-                  ))}
-              </div>
+    if (selectedProviderId) {
+        const providerParams = allProviderParams[selectedProviderId] || {};
+        const providerData = providerOrder.find(p => p.key === selectedProviderId) || 
+                           customProviders.find(cp => cp.id === selectedProviderId);
+        
+        const isCustom = !providerOrder.find(p => p.key === selectedProviderId);
+        const displayData = isCustom ? {
+            name: (providerData as any).displayName,
+            category: 'custom'
+        } : {
+            name: (providerData as any).name,
+            category: (providerData as any).category
+        };
+
+        return (
+            <div className="flex flex-col h-full animate-in slide-in-from-right-4 duration-300">
+                <div className="flex items-center gap-4 mb-4 px-6 pt-4">
+                    <WorkbenchButton 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 rounded-lg hover:bg-white/[0.05]"
+                        onClick={() => setSelectedProviderId(null)}
+                    >
+                        <WorkbenchIcon name="lucide:chevron-left" size={14} />
+                    </WorkbenchButton>
+                    <div className="h-9 w-9 rounded-xl border border-blue-500/20 bg-blue-500/5 flex items-center justify-center shrink-0">
+                        {PROVIDER_ICONS[selectedProviderId] || <WorkbenchIcon name={isCustom ? "lucide:network" : "lucide:cpu"} size={20} className="text-blue-400" />}
+                    </div>
+                    <div className="min-w-0">
+                        <h3 className="text-base font-bold tracking-tight text-white/90 truncate leading-tight">{displayData.name}</h3>
+                        <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Provider Configuration</p>
+                    </div>
+                </div>
+
+                <ScrollArea className="flex-1 px-8 pb-12">
+                    <div className="max-w-2xl flex flex-col gap-8">
+                        {isCustom ? (
+                            <CustomProviderConfig
+                                providerId={selectedProviderId}
+                                displayName={(providerData as any).displayName}
+                                baseUrl={(providerData as any).baseUrl}
+                                apiKey={(providerData as any).apiKey}
+                            />
+                        ) : (
+                            <>
+                                {(providerData as any).requiresKey && (
+                                    <ApiKeyConfig
+                                        providerKey={selectedProviderId}
+                                        displayName={(providerData as any).name}
+                                    />
+                                )}
+                                {(providerData as any).isLocal && (
+                                    <EndpointConfig
+                                        providerKey={selectedProviderId}
+                                        displayName={(providerData as any).name}
+                                    />
+                                )}
+                            </>
+                        )}
+
+                        {selectedProviderId === 'aihubmix' && (
+                            <div className="p-4 rounded-xl border border-white/[0.04] bg-white/[0.02] flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                <div className="flex items-center gap-2 border-b border-white/[0.04] pb-2">
+                                    <WorkbenchIcon name="lucide:sliders" size={14} className="text-pink-400" />
+                                    <span className="text-[11px] font-bold text-white/80 uppercase tracking-wider">Gateway Model Mappings</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Embeddings Model</label>
+                                        <select
+                                            value={providerParams.embeddingModel || ''}
+                                            onChange={(e) => updateProviderParams('aihubmix', { embeddingModel: e.target.value })}
+                                            className="h-8 px-2 text-[11px] bg-white/[0.03] border border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400"
+                                        >
+                                            <option value="" className="bg-[#0b0c10] text-white/40">No model selected</option>
+                                            <option value="text-embedding-3-small" className="bg-[#0b0c10]">text-embedding-3-small</option>
+                                            <option value="text-embedding-3-large" className="bg-[#0b0c10]">text-embedding-3-large</option>
+                                            <option value="text-embedding-ada-002" className="bg-[#0b0c10]">text-embedding-ada-002</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Image Generator Model</label>
+                                        <select
+                                            value={providerParams.imageModel || ''}
+                                            onChange={(e) => updateProviderParams('aihubmix', { imageModel: e.target.value })}
+                                            className="h-8 px-2 text-[11px] bg-white/[0.03] border border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400"
+                                        >
+                                            <option value="" className="bg-[#0b0c10] text-white/40">No model selected</option>
+                                            <option value="dall-e-3" className="bg-[#0b0c10]">DALL-E 3 (Premium)</option>
+                                            <option value="dall-e-2" className="bg-[#0b0c10]">DALL-E 2</option>
+                                            <option value="midjourney" className="bg-[#0b0c10]">Midjourney API</option>
+                                            <option value="flux-schnell" className="bg-[#0b0c10]">Flux Schnell</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Speech-to-Text Model</label>
+                                        <select
+                                            value={providerParams.sttModel || ''}
+                                            onChange={(e) => updateProviderParams('aihubmix', { sttModel: e.target.value })}
+                                            className="h-8 px-2 text-[11px] bg-white/[0.03] border border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400"
+                                        >
+                                            <option value="" className="bg-[#0b0c10] text-white/40">No model selected</option>
+                                            <option value="whisper-1" className="bg-[#0b0c10]">Whisper v1</option>
+                                            <option value="whisper-large-v3" className="bg-[#0b0c10]">Whisper Large v3</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Text-to-Speech Model</label>
+                                        <select
+                                            value={providerParams.ttsModel || ''}
+                                            onChange={(e) => updateProviderParams('aihubmix', { ttsModel: e.target.value })}
+                                            className="h-8 px-2 text-[11px] bg-white/[0.03] border border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400"
+                                        >
+                                            <option value="" className="bg-[#0b0c10] text-white/40">No model selected</option>
+                                            <option value="tts-1" className="bg-[#0b0c10]">TTS OpenAI v1</option>
+                                            <option value="tts-1-hd" className="bg-[#0b0c10]">TTS OpenAI HD</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {selectedProviderId === 'nine_router' && (
+                            <div className="p-4 rounded-xl border border-white/[0.04] bg-white/[0.02] flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                <div className="flex items-center gap-2 border-b border-white/[0.04] pb-2">
+                                    <WorkbenchIcon name="lucide:sliders" size={14} className="text-blue-400" />
+                                    <span className="text-[11px] font-bold text-white/80 uppercase tracking-wider">Proxy Capabilities Config</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Embeddings Model</label>
+                                        <select
+                                            value={providerParams.embeddingModel || ''}
+                                            onChange={(e) => updateProviderParams('nine_router', { embeddingModel: e.target.value })}
+                                            className="h-8 px-2 text-[11px] bg-white/[0.03] border border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400"
+                                        >
+                                            <option value="" className="bg-[#0b0c10] text-white/40">No model selected</option>
+                                            <option value="nomic-embed-text" className="bg-[#0b0c10]">Nomic Embed Text (Local)</option>
+                                            <option value="bge-large-en-v1.5" className="bg-[#0b0c10]">BGE Large English</option>
+                                            <option value="text-embedding-3-small" className="bg-[#0b0c10]">text-embedding-3-small</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Image Generator Model</label>
+                                        <select
+                                            value={providerParams.imageModel || ''}
+                                            onChange={(e) => updateProviderParams('nine_router', { imageModel: e.target.value })}
+                                            className="h-8 px-2 text-[11px] bg-white/[0.03] border border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400"
+                                        >
+                                            <option value="" className="bg-[#0b0c10] text-white/40">No model selected</option>
+                                            <option value="flux" className="bg-[#0b0c10]">Flux (Local Standard)</option>
+                                            <option value="dall-e-3" className="bg-[#0b0c10]">DALL-E 3 (Cloud Fallback)</option>
+                                            <option value="stable-diffusion-xl" className="bg-[#0b0c10]">SDXL (Local)</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Speech-to-Text Model</label>
+                                        <select
+                                            value={providerParams.sttModel || ''}
+                                            onChange={(e) => updateProviderParams('nine_router', { sttModel: e.target.value })}
+                                            className="h-8 px-2 text-[11px] bg-white/[0.03] border border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400"
+                                        >
+                                            <option value="" className="bg-[#0b0c10] text-white/40">No model selected</option>
+                                            <option value="stt" className="bg-[#0b0c10]">Local STT Engine</option>
+                                            <option value="whisper-1" className="bg-[#0b0c10]">Whisper v1 Proxy</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Text-to-Speech Model</label>
+                                        <select
+                                            value={providerParams.ttsModel || ''}
+                                            onChange={(e) => updateProviderParams('nine_router', { ttsModel: e.target.value })}
+                                            className="h-8 px-2 text-[11px] bg-white/[0.03] border border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400"
+                                        >
+                                            <option value="" className="bg-[#0b0c10] text-white/40">No model selected</option>
+                                            <option value="tts" className="bg-[#0b0c10]">Local TTS Engine</option>
+                                            <option value="tts-1" className="bg-[#0b0c10]">TTS OpenAI Proxy</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex flex-col gap-1.5 col-span-2">
+                                        <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Web Search Strategy & Model</label>
+                                        <select
+                                            value={providerParams.searchModel || ''}
+                                            onChange={(e) => updateProviderParams('nine_router', { searchModel: e.target.value })}
+                                            className="h-8 px-2 text-[11px] bg-white/[0.03] border border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400"
+                                        >
+                                            <option value="" className="bg-[#0b0c10] text-white/40">No model selected</option>
+                                            <option value="kr/claude-sonnet-4.5" className="bg-[#0b0c10]">kr/claude-sonnet-4.5 (Smart Discovery)</option>
+                                            <option value="perplexity/sonar" className="bg-[#0b0c10]">perplexity/sonar (Online Agentic)</option>
+                                            <option value="google/gemini-2.0-flash-exp" className="bg-[#0b0c10]">google/gemini-2.0-flash-exp</option>
+                                            <option value="openai/gpt-4o-mini" className="bg-[#0b0c10]">openai/gpt-4o-mini (Speed Optimized)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="h-px bg-white/[0.04]" />
+
+                        <ProviderParamsConfig providerKey={selectedProviderId} />
+
+                        <div className="h-px bg-white/[0.04]" />
+
+                        <ModelConfig
+                            providerKey={selectedProviderId}
+                            displayName={displayData.name}
+                            requiresKey={(providerData as any).requiresKey || false}
+                            isLocal={(providerData as any).isLocal || false}
+                            apiKeyPresent={true} // Simplified for now
+                        />
+
+                        <ConnectionStatus providerKey={selectedProviderId} providerName={displayData.name} />
+                    </div>
+                </ScrollArea>
             </div>
-          )}
+        );
+    }
 
-          {filtered.length === 0 && (
-            <p className="text-[12px] text-zinc-600 text-center py-8">
-              No providers match &ldquo;{search}&rdquo;
-            </p>
-          )}
+    return (
+        <div className="flex flex-col h-full overflow-hidden p-6 animate-in fade-in duration-300">
+            {/* Gallery Header */}
+            <div className="flex items-center justify-between mb-6">
+                <div className="space-y-0.5">
+                    <h3 className="text-lg font-bold tracking-tight flex items-center gap-2 text-white/90">
+                        Discovery Center
+                        <span className="text-[9px] h-4 px-1.5 flex items-center border border-blue-500/30 bg-blue-500/10 text-blue-400 rounded-full font-bold">v2.0</span>
+                    </h3>
+                    <p className="text-[11px] text-white/30 font-medium">Manage node connections and credentials.</p>
+                </div>
+                <div className="relative w-56">
+                    <WorkbenchIcon name="lucide:search" size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/20" />
+                    <WorkbenchInput
+                        placeholder="Search providers..."
+                        className="h-8 pl-8 text-[11px] bg-white/[0.02] border-white/[0.06] focus:bg-white/[0.04] rounded-lg"
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                    />
+                </div>
+            </div>
+
+            {/* Categorized Grid */}
+            <ScrollArea className="flex-1 -mx-2 px-2">
+                <div className="space-y-10 pb-12">
+                    {filteredCategories.map(cat => (
+                        <div key={cat.id} className="space-y-4">
+                            <div className="flex items-center gap-3 px-1">
+                                <div className="h-1.5 w-1.5 rounded-full bg-blue-500/50 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                                <span className="text-[11px] font-black uppercase tracking-[0.2em] text-white/30">{cat.label}</span>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                                {cat.providers.map(p => {
+                                    const status = getProviderStatus(p.id);
+                                    return (
+                                        <button
+                                            key={p.id}
+                                            onClick={() => handleProviderClick(p.id)}
+                                            className={cn(
+                                                "group relative flex flex-col p-3.5 rounded-xl border transition-all active:scale-95 text-left",
+                                                status !== 'none' 
+                                                  ? "bg-primary/[0.03] border-primary/20" 
+                                                  : "bg-white/[0.01] border-white/[0.05] hover:bg-white/[0.03] hover:border-white/10"
+                                            )}
+                                        >
+                                            <div className="relative h-10 w-10 flex items-center justify-center rounded-lg bg-background border border-border/50 mb-3 group-hover:border-primary/20 transition-colors">
+                                                {PROVIDER_ICONS[p.id] || <WorkbenchIcon name={p.icon || "lucide:cpu"} size={20} className="text-white/60" />}
+                                                {status !== 'none' && (
+                                                    <div className={cn(
+                                                        "absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full border-2 border-background",
+                                                        status === 'active' ? "bg-emerald-500" : "bg-amber-400"
+                                                    )} />
+                                                )}
+                                            </div>
+                                            <span className="text-[12px] font-bold uppercase tracking-tight text-white/90 truncate w-full">
+                                                {p.label}
+                                            </span>
+                                            <span className="text-[10px] text-white/20 font-bold uppercase mt-1 tracking-wider">
+                                                {status === 'none' ? 'Configure' : 'Managed'}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                                
+                                 {cat.id === 'custom' && (
+                                    <button
+                                        onClick={() => setIsAddingCustom(true)}
+                                        className="flex flex-col p-3.5 rounded-xl border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.02] hover:border-white/20 transition-all text-left"
+                                    >
+                                        <div className="h-10 w-10 flex items-center justify-center rounded-lg bg-white/[0.01] border border-white/5 mb-3">
+                                            <WorkbenchIcon name="lucide:plus" size={18} className="text-white/20" />
+                                        </div>
+                                        <span className="text-[11px] font-bold uppercase tracking-tight text-white/30">Register Node</span>
+                                        <span className="text-[9px] text-white/10 font-bold uppercase mt-1 tracking-wider">OAI Endpoint</span>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </ScrollArea>
+
+            {/* Footer Status */}
+            <div className="pt-6 border-t border-white/5 flex items-center justify-between mt-auto">
+                <div className="flex items-center gap-4">
+                    <div className="flex -space-x-2">
+                        {providerOrder.slice(0, 3).map(p => (
+                            <div key={p.key} className="h-7 w-7 rounded-full border-2 border-slate-950 bg-slate-900 flex items-center justify-center">
+                                {PROVIDER_ICONS[p.key] || <WorkbenchIcon name={p.icon || "lucide:cpu"} size={12} className="text-white/40" />}
+                            </div>
+                        ))}
+                    </div>
+                    <span className="text-[10px] font-bold text-white/20 uppercase tracking-[0.15em]">
+                        Encryption: AES-256 GCM Local
+                    </span>
+                </div>
+                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/5 border border-emerald-500/10">
+                    <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-[9px] font-bold text-emerald-500/70 uppercase tracking-widest">Backend Synchronized</span>
+                </div>
+            </div>
         </div>
-      </ScrollArea>
+    );
+});
 
-      <p className="text-[10px] text-zinc-700 leading-relaxed">
-        API keys are stored locally and never sent to our servers.
-        Cloud providers are only contacted when you explicitly test a connection or send a chat message.
-      </p>
-    </section>
-  );
-}
+// Minimal ScrollArea component since we don't have the shadcn one handy or it might be different
+const ScrollArea = ({ children, className }: { children: React.ReactNode, className?: string }) => (
+    <div className={cn("overflow-y-auto custom-scrollbar", className)}>
+        {children}
+    </div>
+);
+
+export default ProvidersSettings;

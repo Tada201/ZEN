@@ -1,32 +1,36 @@
-import { memo } from 'react';
+import React from 'react';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { WorkbenchInput } from '@/components/settings/ui/WorkbenchInput';
+import { PROVIDER_BASE_URL_MAP } from '@/lib/types/provider';
+import { SettingsState } from '@/lib/stores/settings/types';
 
 interface EndpointConfigProps {
     providerKey: string;
     displayName: string;
 }
 
-export const EndpointConfig = memo(({ providerKey, displayName }: EndpointConfigProps) => {
-    const ollamaBaseUrl = useSettingsStore(s => s.ollamaBaseUrl ?? 'http://localhost:11434');
-    const lmstudioBaseUrl = useSettingsStore(s => s.lmstudioBaseUrl ?? 'http://localhost:1234');
+export const EndpointConfig = React.memo(({ providerKey, displayName }: EndpointConfigProps) => {
     const updateSetting = useSettingsStore(s => s.updateSetting);
-
-    const value = providerKey === 'ollama' ? ollamaBaseUrl : lmstudioBaseUrl;
+    const value = useSettingsStore(s => {
+        const target = PROVIDER_BASE_URL_MAP[providerKey];
+        return target ? (s[target as keyof SettingsState] as string) : '';
+    });
 
     return (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2.5">
             <div className="flex flex-col">
-                <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1">Base URL</label>
-                <span className="text-[10px] text-white/30 mb-2">Endpoint address for the {displayName} inference server.</span>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">Base URL</label>
+                <span className="text-[11px] text-muted-foreground/60">Endpoint address for {displayName}.</span>
             </div>
             <WorkbenchInput
                 value={value}
                 onChangeText={(text: string) => {
-                    if (providerKey === 'ollama') updateSetting({ ollamaBaseUrl: text } as any);
-                    else updateSetting({ lmstudioBaseUrl: text } as any);
+                    const target = PROVIDER_BASE_URL_MAP[providerKey];
+                    if (target) {
+                        updateSetting({ [target]: text } as any);
+                    }
                 }}
-                className="max-w-md h-11 font-mono text-xs bg-white/[0.02] border-white/[0.08] rounded-xl"
+                className="max-w-lg h-9 font-mono text-xs bg-muted/20 border-border/60 rounded-lg"
             />
         </div>
     );

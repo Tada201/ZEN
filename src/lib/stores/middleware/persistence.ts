@@ -25,6 +25,8 @@ const TRANSIENT_KEYS = new Set([
   "isHydrated",
   "isDirty",
   "activeSettings",
+  "availableModels",
+  "availableModelsByProvider",
   "fetchingModels",
   "connectionStatuses",
   "powerStatus",
@@ -75,28 +77,33 @@ export function getPersistableState(state: Partial<SettingsState>): Partial<Sett
  * 4. Otherwise → return empty object (start fresh)
  */
 function deserializeState(rawState: Record<string, unknown>): Partial<SettingsState> {
+  let result: Partial<SettingsState> = {};
+
   // Strategy 1: Known old-format camelCase keys → pass through
   if (isOldCamelFormat(rawState)) {
-    return rawState as Partial<SettingsState>;
+    result = rawState as Partial<SettingsState>;
+  } else {
+    // Strategy 2: Try snake_case → camelCase conversion
+    const converted = mapSqliteToState(rawState as any);
+    if (Object.keys(converted).length > 0) {
+      result = converted;
+    } else if (Object.keys(rawState).length > 0) {
+      // Strategy 3: Fallback — raw data has keys but conversion returned empty
+      console.warn(
+        "[SettingsPersistence] mapSqliteToState returned empty for non-empty data — passing through raw state as fallback"
+      );
+      result = rawState as Partial<SettingsState>;
+    }
   }
 
-  // Strategy 2: Try snake_case → camelCase conversion
-  const converted = mapSqliteToState(rawState);
-  if (Object.keys(converted).length > 0) {
-    return converted;
+  // Sanitization: Ensure nested objects are never null if present
+  if (result) {
+    if ((result as any).providerParams === null) delete (result as any).providerParams;
+    if ((result as any).chatPlugins === null) delete (result as any).chatPlugins;
+    if ((result as any).toolSettings === null) delete (result as any).toolSettings;
   }
 
-  // Strategy 3: Fallback — raw data has keys but conversion returned empty
-  // (e.g., partially corrupted or non-standard format)
-  if (Object.keys(rawState).length > 0) {
-    console.warn(
-      "[SettingsPersistence] mapSqliteToState returned empty for non-empty data — passing through raw state as fallback"
-    );
-    return rawState as Partial<SettingsState>;
-  }
-
-  // Strategy 4: Empty data → start fresh
-  return {};
+  return result;
 }
 
 /**
@@ -107,7 +114,7 @@ function deserializeState(rawState: Record<string, unknown>): Partial<SettingsSt
  * - Migration: detects old camelCase format and handles it transparently
  * - Hydration: after loading, calls `seedSettings` to merge into the store
  */
-export const createSettingsStorage = (key: string): PersistStorage<SettingsState> => {
+export const createSettingsStorage = (_key: string): PersistStorage<SettingsState> => {
   return {
     getItem: async (name: string): Promise<StorageValue<SettingsState> | null> => {
       try {
@@ -122,7 +129,7 @@ export const createSettingsStorage = (key: string): PersistStorage<SettingsState
         const camelState = deserializeState(sqliteData);
 
         return {
-          state: camelState as Partial<SettingsState>,
+          state: camelState as any,
           version: stateVersion,
         };
       } catch {

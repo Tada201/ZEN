@@ -13,6 +13,7 @@ interface ModelSearchDropdownProps {
   selectedProvider: string;
   onSelectModel: (id: string, provider: string) => void;
   onOpenModelSelector?: () => void;
+  isCompact?: boolean;
 }
 
 export const ModelSearchDropdown = ({
@@ -21,7 +22,8 @@ export const ModelSearchDropdown = ({
   selectedModelId,
   selectedProvider,
   onSelectModel,
-  onOpenModelSelector
+  onOpenModelSelector,
+  isCompact
 }: ModelSearchDropdownProps) => {
   const [modelSearch, setModelSearch] = useState('');
   const [focusedModelIndex, setFocusedModelIndex] = useState(0);
@@ -61,10 +63,13 @@ export const ModelSearchDropdown = ({
     <div className="relative">
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-zinc-100 dark:hover:hover:bg-zinc-800 transition-colors text-[13px] font-semibold text-zinc-600 dark:text-zinc-400 max-w-[160px] min-w-[100px]"
+        className={cn(
+          "flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-[13px] font-semibold text-zinc-600 dark:text-zinc-400 shrink-0",
+          isCompact ? "max-w-[40px] min-w-0" : "max-w-[160px] min-w-[100px]"
+        )}
       >
         <ProviderIcon provider={selectedModelInfo.provider} className="w-3.5 h-3.5 shrink-0" />
-        <span className="truncate flex-1">{selectedModelInfo.name}</span>
+        {!isCompact && <span className="truncate flex-1">{selectedModelInfo.name}</span>}
         <ChevronDown className="w-3 h-3 opacity-50 shrink-0" />
       </button>
 

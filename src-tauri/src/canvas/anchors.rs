@@ -214,7 +214,7 @@ mod tests {
                 assert_eq!(object_id, "circle1");
                 assert_eq!(point, "bottom");
             }
-            _ => panic!("Wrong anchor type"),
+            _ => panic!("Wrong anchor type expected Object anchor"),
         }
     }
 

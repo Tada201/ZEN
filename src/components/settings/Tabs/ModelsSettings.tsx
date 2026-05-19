@@ -1,13 +1,12 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Search, Check, Brain, Globe, Cpu,
-  RefreshCw, Thermometer,
+  RefreshCw,
   Filter,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select, SelectContent, SelectItem,
@@ -68,7 +67,6 @@ export function ModelsSettings({ settings, onUpdate }: ModelsSettingsProps) {
 
   const activeProvider = settings["activeProvider"] || "";
   const activeModel = settings["activeModel"] || "";
-  const temperature = parseFloat(settings["chat.temperature"] || "0.7");
 
   /* ── Model sync ───────────────────────────────────────────── */
   const handleSync = useCallback(async () => {
@@ -82,18 +80,19 @@ export function ModelsSettings({ settings, onUpdate }: ModelsSettingsProps) {
     }
   }, [storeFetchModels]);
 
+  const modelsLoading = useSettingsStore((s) => s.fetchingModels);
+
   // Auto-sync on first mount
   useEffect(() => {
-    if (storeAvailableModels.length === 0) {
+    if (storeAvailableModels.length === 0 && !modelsLoading && !syncing) {
       handleSync();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [storeAvailableModels.length, modelsLoading, syncing, handleSync]);
 
   /* ── Derived data ─────────────────────────────────────────── */
   const providers = useMemo(() => {
-    const p = new Set(storeAvailableModels.map((m) => m.provider));
-    return ["all", ...Array.from(p).sort()];
+    const p = new Set(storeAvailableModels.map((m) => m.provider).filter(Boolean));
+    return ["all", ...Array.from(p).sort()] as string[];
   }, [storeAvailableModels]);
 
   const filteredModels = useMemo(() => {
@@ -102,8 +101,8 @@ export function ModelsSettings({ settings, onUpdate }: ModelsSettingsProps) {
       const matchesSearch =
         !q ||
         m.name.toLowerCase().includes(q) ||
-        m.provider.toLowerCase().includes(q);
-      const matchesProvider = providerFilter === "all" || m.provider === providerFilter;
+        (m.provider || "").toLowerCase().includes(q);
+      const matchesProvider = providerFilter === "all" || (m.provider || "unknown") === providerFilter;
       return matchesSearch && matchesProvider;
     });
   }, [storeAvailableModels, search, providerFilter]);
@@ -111,8 +110,14 @@ export function ModelsSettings({ settings, onUpdate }: ModelsSettingsProps) {
   const groupedModels = useMemo(() => {
     const groups: Record<string, ModelEntry[]> = {};
     for (const m of filteredModels) {
-      if (!groups[m.provider]) groups[m.provider] = [];
-      groups[m.provider].push(m);
+      const p = m.provider || "unknown";
+      if (!groups[p]) groups[p] = [];
+      groups[p].push({
+        id: m.id,
+        name: m.name,
+        provider: p,
+        contextWindow: m.contextWindow
+      });
     }
     return groups;
   }, [filteredModels]);
@@ -127,19 +132,19 @@ export function ModelsSettings({ settings, onUpdate }: ModelsSettingsProps) {
   );
 
   const isSelected = useCallback(
-    (modelId: string, provider: string) =>
-      activeModel === modelId && activeProvider === provider,
+    (modelId: string, provider?: string) =>
+      activeModel === modelId && activeProvider === (provider || ""),
     [activeModel, activeProvider]
   );
 
   /* ── Render ───────────────────────────────────────────────── */
   return (
-    <section className="space-y-6">
+    <section className="space-y-4">
       {/* Header */}
-      <div className="space-y-1">
-        <h3 className="text-lg font-bold tracking-tight text-zinc-100">AI Models</h3>
-        <p className="text-[13px] text-zinc-500">
-          Browse available models and select one for chat sessions.
+      <div className="space-y-0.5">
+        <h3 className="text-base font-bold tracking-tight text-foreground">AI Models</h3>
+        <p className="text-[11px] text-muted-foreground/60 font-medium">
+          Select the active intelligence for chat sessions.
         </p>
       </div>
 
@@ -181,26 +186,26 @@ export function ModelsSettings({ settings, onUpdate }: ModelsSettingsProps) {
       </div>
 
       {/* Model list */}
-      <ScrollArea className="max-h-[280px] -mx-1 px-1">
+      <ScrollArea className="max-h-[300px] -mx-1 px-1">
         {Object.keys(groupedModels).length === 0 ? (
-          <div className="py-12 text-center border border-dashed border-white/[0.06] rounded-xl bg-white/[0.01]">
-            <Brain className="h-6 w-6 mx-auto text-zinc-700 mb-2" />
-            <p className="text-[12px] text-zinc-600">
+          <div className="py-10 text-center border border-dashed border-border/40 rounded-lg bg-muted/20">
+            <Brain className="h-5 w-5 mx-auto text-muted-foreground/30 mb-2" />
+            <p className="text-[11px] text-muted-foreground/50">
               {syncing
-                ? "Syncing models..."
+                ? "Synchronizing handshake..."
                 : storeAvailableModels.length === 0
-                ? "No models found. Add API keys in Providers then sync."
-                : "No models match your search."}
+                ? "No models found. Add API keys then sync."
+                : "No matching models."}
             </p>
             {storeAvailableModels.length === 0 && !syncing && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="mt-3 h-7 text-[11px] text-zinc-500"
+                className="mt-2 h-7 text-[10px] text-primary hover:text-primary/80"
                 onClick={handleSync}
               >
                 <RefreshCw className="h-3 w-3 mr-1" />
-                Sync Now
+                Sync Catalog
               </Button>
             )}
           </div>
@@ -223,36 +228,36 @@ export function ModelsSettings({ settings, onUpdate }: ModelsSettingsProps) {
                 <div className="space-y-1">
                   {models.map((model) => (
                     <button
-                      key={`${model.provider}-${model.id}`}
-                      onClick={() => handleSelect(model.id, model.provider)}
+                      key={`${model.provider || "unknown"}-${model.id}`}
+                      onClick={() => handleSelect(model.id, model.provider || "unknown")}
                       className={cn(
-                        "group relative flex items-center gap-3 p-2.5 rounded-xl border transition-all text-left w-full",
+                        "group relative flex items-center gap-2.5 p-2 rounded-lg border transition-all text-left w-full",
                         isSelected(model.id, model.provider)
-                          ? "bg-primary/5 border-primary/40"
-                          : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]"
+                          ? "bg-primary/[0.03] border-primary/30"
+                          : "border-border/40 bg-muted/10 hover:bg-muted/30"
                       )}
                     >
                       <div
                         className={cn(
-                          "shrink-0 h-8 w-8 rounded-lg flex items-center justify-center border",
+                          "shrink-0 h-7 w-7 rounded-md flex items-center justify-center border",
                           isSelected(model.id, model.provider)
                             ? "bg-primary/10 border-primary/20 text-primary"
-                            : "border-white/[0.06] bg-white/[0.03] text-zinc-500"
+                            : "border-border/40 bg-muted/20 text-muted-foreground/60"
                         )}
                       >
-                        <Brain className="h-4 w-4" />
+                        <Brain className="h-3.5 w-3.5" />
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-[13px] text-zinc-200 truncate">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-[12.5px] text-foreground truncate">
                             {model.name}
                           </span>
                           <span
                             className={cn(
-                              "text-[9px] px-1.5 py-0.5 rounded border uppercase tracking-tighter font-black",
-                              PROVIDER_COLORS[model.provider] ||
-                                "bg-zinc-800/50 text-zinc-500 border-zinc-700/50"
+                              "text-[8px] px-1.5 py-0.5 rounded border uppercase tracking-widest font-black",
+                              PROVIDER_COLORS[model.provider || "unknown"] ||
+                                "bg-muted text-muted-foreground border-border"
                             )}
                           >
                             {model.provider}
@@ -284,37 +289,6 @@ export function ModelsSettings({ settings, onUpdate }: ModelsSettingsProps) {
           </div>
         )}
       </ScrollArea>
-
-      {/* Temperature Slider */}
-      <div className="space-y-3 pt-2 border-t border-white/[0.06]">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Thermometer className="h-3.5 w-3.5 text-zinc-500" />
-            <Label className="text-[12px] font-bold text-zinc-300">Temperature</Label>
-          </div>
-          <span className="text-[10px] font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded">
-            {temperature.toFixed(1)}
-          </span>
-        </div>
-        <input
-          type="range"
-          min="0"
-          max="2"
-          step="0.1"
-          className="w-full h-1 bg-zinc-800 rounded-full appearance-none cursor-pointer accent-primary
-            [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5
-            [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary
-            [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-primary/30
-            [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-125"
-          value={temperature}
-          onChange={(e) => onUpdate("chat.temperature", e.target.value)}
-        />
-        <div className="flex justify-between text-[9px] text-zinc-700 px-0.5">
-          <span>Precise (0)</span>
-          <span>Balanced (1)</span>
-          <span>Creative (2)</span>
-        </div>
-      </div>
 
       {/* Footer */}
       <p className="text-[10px] text-zinc-700 leading-relaxed">

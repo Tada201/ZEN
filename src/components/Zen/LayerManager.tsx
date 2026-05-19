@@ -6,8 +6,6 @@ const LayerManager: React.FC = () => {
     const {
         selectedLayers,
         toggleLayer,
-        imageryProvider,
-        setImageryProvider,
         collapsedPanels,
         togglePanel
     } = useGTSMStore();

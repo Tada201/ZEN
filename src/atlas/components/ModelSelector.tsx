@@ -2,12 +2,12 @@ import { useState, useMemo, useEffect } from "react";
 import {
   Search, Check, Zap, Brain, Sparkles,
   MessageSquare, Code, Eye, Clock,
-  ChevronRight, Info, Loader2, Key,
-  Copy, RefreshCw, AlertCircle, Plus, Trash2, Shield,
-  ExternalLink, Globe, ImageIcon
+  Info, Loader2, Key,
+  RefreshCw, Plus, Trash2, Shield,
+  ExternalLink, ImageIcon
 } from "lucide-react";
 import {
-  Dialog, DialogContent, DialogHeader,
+  Dialog, DialogContent,
   DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,6 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { motion } from "framer-motion";
 import { toast } from "sonner";
 
 export type Model = {
@@ -103,8 +102,8 @@ const PROVIDERS = [
   { id: "together", label: "Together AI", placeholder: "API Key...", docsUrl: "https://api.together.xyz/" },
   { id: "kilocode", label: "Kilocode", placeholder: "API Key...", docsUrl: "https://kilo.ai", defaultBaseUrl: "https://api.kilo.ai/api/gateway" },
   { id: "nvidia", label: "NVIDIA", placeholder: "nvapi-...", docsUrl: "https://build.nvidia.com/", defaultBaseUrl: "https://integrate.api.nvidia.com/v1" },
-  { id: "ollama", label: "Ollama (Local)", placeholder: "Not required", docsUrl: "https://ollama.com/", defaultBaseUrl: "http://localhost:11434/v1", isLocal: true },
-  { id: "lmstudio", label: "LM Studio (Local)", placeholder: "Not required", docsUrl: "https://lmstudio.ai/", defaultBaseUrl: "http://localhost:1234/v1", isLocal: true },
+  { id: "ollama", label: "Ollama (Local)", placeholder: "Not required", docsUrl: "https://ollama.com/", defaultBaseUrl: "http://localhost:11434", isLocal: true },
+  { id: "lmstudio", label: "LM Studio (Local)", placeholder: "Not required", docsUrl: "https://lmstudio.ai/", defaultBaseUrl: "http://localhost:1234", isLocal: true },
   { id: "custom", label: "Custom OpenAI", placeholder: "sk-...", docsUrl: "", showBaseUrl: true },
 ];
 

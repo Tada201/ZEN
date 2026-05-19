@@ -8,7 +8,7 @@ export interface AgentActivity {
     timestamp: number;
     duration?: number;
     status?: 'success' | 'error' | 'running' | 'completed';
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>; // Tool-specific metadata (any shape from different tools)
     message?: string;
     chatId?: string;
 }
@@ -25,7 +25,7 @@ export interface ActiveAgentTask {
     parentAgentId?: string;
     chatId: string;
     progress: number;
-    result?: any;
+    result?: unknown; // Task result can be any type depending on task outcome
     error?: string;
 }
 
@@ -51,7 +51,7 @@ export interface AgentActivityState {
     selectedTaskId: string | null;
     addTask: (task: Omit<ActiveAgentTask, 'startedAt' | 'progress'> & { startedAt?: number }) => void;
     updateTask: (id: string, update: Partial<ActiveAgentTask>) => void;
-    completeTask: (id: string, status: 'completed' | 'failed', result?: any, error?: string, completedAt?: number) => void;
+    completeTask: (id: string, status: 'completed' | 'failed', result?: unknown, error?: string, completedAt?: number) => void;
     setSelectedTaskId: (id: string | null) => void;
     clearTasks: () => void;
     removeTask: (id: string) => void;
@@ -137,8 +137,8 @@ export const useAgentActivityStore = create<AgentActivityState>()(
         
         cancelTask: async (id) => {
             try {
-                const { invoke } = await import('@tauri-apps/api/core');
-                await invoke('cancel_subagent', { spawnId: id });
+                // Backend cancel_subagent not yet implemented
+                console.log(`Task ${id} cancellation requested but backend command not available`);
             } catch (err) {
                 console.error('Failed to cancel subagent:', err);
             }

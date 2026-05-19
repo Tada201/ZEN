@@ -50,8 +50,7 @@ pub async fn create_clarification_request(
     let id = uuid::Uuid::new_v4().to_string();
     let created_at = chrono::Utc::now().to_rfc3339();
 
-    let pool = app_state.db.read().await;
-    let pool = pool.as_ref().ok_or_else(|| ZenError::Internal("Database not initialized".to_string()))?;
+    let pool = app_state.db().await?;
 
     // Store in database
     let options_json = serde_json::to_string(&options)
@@ -69,7 +68,7 @@ pub async fn create_clarification_request(
     .bind(clarification_type)
     .bind(&options_json)
     .bind(&created_at)
-    .execute(pool)
+    .execute(&pool)
     .await
     .map_err(|e| ZenError::Database(e))?;
 
@@ -95,8 +94,7 @@ pub async fn submit_clarification_response(
 ) -> Result<(), String> {
     tracing::info!(chat_id = %chat_id, "Clarification response received");
 
-    let pool = state.db.read().await;
-    let pool = pool.as_ref().ok_or("Database not initialized")?;
+    let pool = state.db().await.map_err(|e| e.to_string())?;
 
     // Update database
     let response_json = serde_json::to_string(&selected_ids)
@@ -114,7 +112,7 @@ pub async fn submit_clarification_response(
     .bind(&response_json)
     .bind(&responded_at)
     .bind(&chat_id)
-    .execute(pool)
+    .execute(&pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
 

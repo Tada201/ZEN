@@ -22,7 +22,7 @@ pub async fn create_chat(pool: &SqlitePool, title: &str, model: Option<&str>) ->
 
 pub async fn get_chat(pool: &SqlitePool, id: &str) -> ZenResult<Chat> {
     let chat = sqlx::query_as::<_, Chat>(
-        "SELECT c.*, cfm.folder_id FROM chats c LEFT JOIN chat_folder_members cfm ON c.id = cfm.chat_id WHERE c.id = ?"
+        "SELECT c.id, c.title, c.model, c.created_at, c.updated_at, c.pinned, c.is_archived, c.archived_at, c.message_count, c.total_tokens_in, c.total_tokens_out, c.last_activity, COALESCE(c.folder_id, cfm.folder_id) as folder_id FROM chats c LEFT JOIN chat_folder_members cfm ON c.id = cfm.chat_id WHERE c.id = ?"
     )
     .bind(id)
     .fetch_one(pool)
@@ -117,7 +117,7 @@ pub async fn delete_document(pool: &SqlitePool, id: &str) -> ZenResult<()> {
 
 pub async fn list_chats(pool: &SqlitePool) -> ZenResult<Vec<Chat>> {
     let chats = sqlx::query_as::<_, Chat>(
-        "SELECT c.*, cfm.folder_id FROM chats c LEFT JOIN chat_folder_members cfm ON c.id = cfm.chat_id WHERE c.is_archived = 0 OR c.is_archived IS NULL ORDER BY c.updated_at DESC"
+        "SELECT c.id, c.title, c.model, c.created_at, c.updated_at, c.pinned, c.is_archived, c.archived_at, c.message_count, c.total_tokens_in, c.total_tokens_out, c.last_activity, COALESCE(c.folder_id, cfm.folder_id) as folder_id FROM chats c LEFT JOIN chat_folder_members cfm ON c.id = cfm.chat_id WHERE c.is_archived = 0 OR c.is_archived IS NULL ORDER BY c.updated_at DESC"
     )
     .fetch_all(pool)
     .await?;
@@ -1070,4 +1070,5 @@ pub async fn add_hook_log(pool: &SqlitePool, log: &HookLogEntry) -> ZenResult<()
     .await?;
     Ok(())
 }
+
 

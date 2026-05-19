@@ -43,6 +43,16 @@ struct OpenAiChatRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_completion_tokens: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_p: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub presence_penalty: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frequency_penalty: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seed: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<serde_json::Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub response_format: Option<serde_json::Value>,
@@ -264,9 +274,10 @@ impl OpenAiCompatProvider {
                 match current_ref.try_clone() {
                     Some(cloned) => cloned,
                     None => {
-                        // Request has a non-cloneable body (e.g. a stream). 
+                        // Request has a non-cloneable body (e.g. a stream).
                         // We must consume the original and can't retry.
-                        current_req.take().unwrap()
+                        current_req.take()
+                            .ok_or_else(|| ZenError::Custom("Request body not available for retry".to_string()))?
                     }
                 }
             } else {
@@ -361,13 +372,21 @@ impl LlmProvider for OpenAiCompatProvider {
                     _ => m.id.clone(),
                 };
 
-                let has_vision_keyword = model_id_lower.contains("vision");
-                let is_multimodal_family = model_id_lower.contains("claude-3") 
+                let has_vision_keyword = model_id_lower.contains("vision")
+                    || model_id_lower.contains("-vl")
+                    || model_id_lower.contains("vl-")
+                    || model_id_lower.contains("-v1")
+                    || model_id_lower.contains("visual");
+                let is_multimodal_family = model_id_lower.contains("claude-3")
+                    || model_id_lower.contains("claude-sonnet")
+                    || model_id_lower.contains("claude-opus")
                     || model_id_lower.contains("gpt-4")
-                    || model_id_lower.contains("gemini-1.5")
+                    || model_id_lower.contains("gemini")
                     || model_id_lower.contains("pixtral")
                     || model_id_lower.contains("llama-3.2-11b")
-                    || model_id_lower.contains("llama-3.2-90b");
+                    || model_id_lower.contains("llama-3.2-90b")
+                    || model_id_lower.contains("qwen-vl")
+                    || model_id_lower.contains("deepseek-vl");
 
                 let supports_vision = has_vision_keyword || is_multimodal_family;
                 
@@ -507,6 +526,11 @@ impl LlmProvider for OpenAiCompatProvider {
             temperature: config.temperature,
             max_tokens: max_tokens_mapped,
             max_completion_tokens,
+            top_p: config.top_p,
+            presence_penalty: config.presence_penalty,
+            frequency_penalty: config.frequency_penalty,
+            seed: config.seed,
+            stop: config.stop,
             tools: oai_tools,
             response_format,
             reasoning_effort: config.reasoning_effort,
@@ -696,7 +720,8 @@ impl OpenAiCompatProvider {
         match p.as_str() {
             // Curated / official catalogs — all models support tools
             "openai" | "groq" | "mistral" | "gemini" | "google" |
-            "deepseek" | "qwen" | "xai" | "kilocode" => true,
+            "deepseek" | "qwen" | "xai" | "kilocode" | "nine_router" | "nine-router" |
+            "n9router" | "9router" | "aihubmix" => true,
 
             // Mixed catalogs — many models lack tool support
             "openrouter" | "together" | "perplexity" => false,
@@ -712,4 +737,269 @@ struct ToolCallAccumulator {
     id: String,
     name: String,
     arguments: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::{method, path}};
+
+    async fn mock_provider() -> (OpenAiCompatProvider, MockServer) {
+        let server = MockServer::start().await;
+        let provider = OpenAiCompatProvider::new(&server.uri(), "test-key-123", "openai");
+        (provider, server)
+    }
+
+    const OPENAI_MODELS_RESPONSE: &str = r#"{
+        "data": [
+            {
+                "id": "gpt-4o",
+                "name": "GPT-4o",
+                "description": "High-intelligence multimodal model",
+                "context_length": 128000,
+                "owned_by": "openai",
+                "created": 1715368132
+            },
+            {
+                "id": "gpt-4o-mini",
+                "name": "GPT-4o Mini",
+                "context_length": 128000,
+                "owned_by": "openai",
+                "created": 1715368132
+            },
+            {
+                "id": "text-embedding-3-small",
+                "context_length": 8192,
+                "owned_by": "openai",
+                "created": 1715368132
+            },
+            {
+                "id": "claude-3-5-sonnet-20241022",
+                "owned_by": "anthropic"
+            },
+            {
+                "id": "gemini-1.5-flash"
+            }
+        ]
+    }"#;
+
+    #[tokio::test]
+    async fn test_openai_compat_list_models_parses_all_fields() -> ZenResult<()> {
+        let (provider, server) = mock_provider().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/models"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                OPENAI_MODELS_RESPONSE.as_bytes().to_vec(),
+                "application/json",
+            ))
+            .mount(&server)
+            .await;
+
+        let models = provider.list_models().await?;
+        assert_eq!(models.len(), 5);
+
+        // gpt-4o — full fields
+        assert_eq!(models[0].id, "gpt-4o");
+        assert_eq!(models[0].name, "gpt-4o");
+        assert_eq!(models[0].display_name.as_deref(), Some("GPT-4o"));
+        assert_eq!(models[0].description.as_deref(), Some("High-intelligence multimodal model"));
+        assert_eq!(models[0].max_context_length, Some(128000));
+        assert_eq!(models[0].provider.as_deref(), Some("openai"));
+        assert!(models[0].modified_at.is_some());
+        // gpt-4 family -> vision & tools supported
+        assert_eq!(models[0].supports_vision, Some(true));
+        assert_eq!(models[0].supports_tools, Some(true));
+
+        // text-embedding-3-small — minimal fields
+        assert_eq!(models[2].id, "text-embedding-3-small");
+        assert_eq!(models[2].display_name.as_deref(), Some("text-embedding-3-small")); // falls back to id
+        assert_eq!(models[2].max_context_length, Some(8192));
+
+        // gemini-1.5-flash — no owned_by
+        assert_eq!(models[4].id, "gemini-1.5-flash");
+        assert_eq!(models[4].provider.as_deref(), Some("openai")); // falls back to provider_name
+        assert!(models[4].max_context_length.is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_openai_compat_list_models_infers_capabilities() -> ZenResult<()> {
+        let (provider, server) = mock_provider().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/models"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": [
+                    {"id": "gpt-4-vision-preview"},
+                    {"id": "llama-3.2-11b-vision-instruct"},
+                    {"id": "claude-3-haiku-20240307"},
+                    {"id": "llama-3.3-70b-versatile"},
+                    {"id": "pixtral-large"}
+                ]
+            })))
+            .mount(&server)
+            .await;
+
+        let models = provider.list_models().await?;
+
+        // gpt-4-vision-preview — "vision" in name
+        assert_eq!(models[0].supports_vision, Some(true));
+
+        // llama-3.2-11b-vision-instruct — "vision" in name
+        assert_eq!(models[1].supports_vision, Some(true));
+
+        // claude-3-haiku — claude-3 family
+        assert_eq!(models[2].supports_vision, Some(true));
+
+        // llama-3.3-70b-versatile — no keywords
+        assert_eq!(models[3].supports_vision, Some(false));
+
+        // pixtral-large — known multimodal
+        assert_eq!(models[4].supports_vision, Some(true));
+    }
+
+    #[tokio::test]
+    async fn test_openai_compat_list_models_empty_response() -> ZenResult<()> {
+        let (provider, server) = mock_provider().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/models"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"data": []})))
+            .mount(&server)
+            .await;
+
+        let models = provider.list_models().await?;
+        assert!(models.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_openai_compat_list_models_unauthorized() -> ZenResult<()> {
+        let (provider, server) = mock_provider().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/models"))
+            .respond_with(ResponseTemplate::new(401).set_body_json(serde_json::json!({
+                "error": {
+                    "message": "Incorrect API key",
+                    "type": "authentication_error"
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let result = provider.list_models().await;
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("401") || err.contains("unauthorized") || err.contains("Incorrect")
+            || err.contains("openai"));
+    }
+
+    #[tokio::test]
+    async fn test_openai_compat_list_models_sends_auth_header() -> ZenResult<()> {
+        let (provider, server) = mock_provider().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/models"))
+            .and(wiremock::matchers::header("authorization", "Bearer test-key-123"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"data": [{"id": "gpt-4o"}]})))
+            .mount(&server)
+            .await;
+
+        let models = provider.list_models().await?;
+        assert_eq!(models.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_openai_compat_list_models_sends_extra_headers() -> ZenResult<()> {
+        let server = MockServer::start().await;
+        let provider = OpenAiCompatProvider::with_headers(
+            &server.uri(),
+            "test-key",
+            "openrouter",
+            vec![
+                ("HTTP-Referer".to_string(), "https://zen.local".to_string()),
+                ("X-Title".to_string(), "Zen AI".to_string()),
+            ],
+        );
+
+        Mock::given(method("GET"))
+            .and(path("/v1/models"))
+            .and(wiremock::matchers::header("http-referer", "https://zen.local"))
+            .and(wiremock::matchers::header("x-title", "Zen AI"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"data": [{"id": "openai/gpt-4o"}]})))
+            .mount(&server)
+            .await;
+
+        let models = provider.list_models().await?;
+        assert_eq!(models.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_openai_compat_caches_capabilities() {
+        let (provider, server) = mock_provider().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/models"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": [
+                    {"id": "gpt-4o"},
+                    {"id": "davinci-002"}
+                ]
+            })))
+            .mount(&server)
+            .await;
+
+        let models = provider.list_models().await?;
+        assert_eq!(models.len(), 2);
+
+        // After list_models, the cache should be populated
+        // gpt-4o should support tools
+        assert!(provider.supports_tools("gpt-4o"));
+        // davinci-002 should also support tools (OpenAI provider)
+        assert!(provider.supports_tools("davinci-002"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_openai_compat_list_models_retries_on_rate_limit() -> ZenResult<()> {
+        let server = MockServer::start().await;
+        let provider = OpenAiCompatProvider::new(&server.uri(), "test-key", "openai");
+
+        // First request gets rate limited
+        Mock::given(method("GET"))
+            .and(path("/v1/models"))
+            .respond_with(ResponseTemplate::new(429).insert_header("retry-after", "1"))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        // Second request succeeds
+        Mock::given(method("GET"))
+            .and(path("/v1/models"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"data": [{"id": "gpt-4o"}]})))
+            .mount(&server)
+            .await;
+
+        let models = provider.list_models().await?;
+        assert_eq!(models.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_openai_compat_list_models_exhausts_retries() -> ZenResult<()> {
+        let server = MockServer::start().await;
+        let provider = OpenAiCompatProvider::new(&server.uri(), "test-key", "openai");
+
+        // All requests fail with 429
+        Mock::given(method("GET"))
+            .and(path("/v1/models"))
+            .respond_with(ResponseTemplate::new(429).insert_header("retry-after", "1"))
+            .expect(3) // default max_attempts is 3 for non-Groq
+            .mount(&server)
+            .await;
+
+        let result = provider.list_models().await;
+        assert!(result.is_err());
+        Ok(())
+    }
 }

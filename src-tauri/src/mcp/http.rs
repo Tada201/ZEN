@@ -100,9 +100,6 @@ pub async fn start_http_server(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::body::Body;
-    use http_body_util::BodyExt;
-    use tower::ServiceExt;
 
     #[tokio::test]
     async fn test_health_check() {

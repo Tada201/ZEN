@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/utils/style';
 
 interface ConnectionStatusProps {
     providerKey: string;
@@ -10,33 +10,30 @@ interface ConnectionStatusProps {
 }
 
 export const ConnectionStatus = memo(({ providerKey, providerName }: ConnectionStatusProps) => {
-    const connectionStatus = useSettingsStore(s => {
-        const statuses = s.connectionStatuses as unknown as Record<string, string> || {};
-        return statuses[providerKey] || 'idle';
-    });
+    const connectionStatus = useSettingsStore(s => s.connectionStatuses[providerKey] || 'idle');
 
     if (connectionStatus === 'idle') return null;
 
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 10 }}
+        <motion.div 
+            initial={{ opacity: 0, y: 5 }}
             animate={{ opacity: 1, y: 0 }}
             className={cn(
-                "flex items-center gap-3 p-4 rounded-xl border transition-all",
-                connectionStatus === 'success'
-                    ? "bg-emerald-500/5 border-emerald-500/10 text-emerald-400/80"
-                    : "bg-red-500/5 border-red-500/10 text-red-400/80"
+                "flex items-center gap-3 p-3 rounded-lg border transition-all",
+                connectionStatus === 'success' 
+                    ? "bg-emerald-500/5 border-emerald-500/10 text-emerald-400" 
+                    : "bg-red-500/5 border-red-500/10 text-red-400"
             )}
         >
-            <WorkbenchIcon name={connectionStatus === 'success' ? "codicon:pass" : "codicon:error"} size={16} />
-            <div className="flex flex-col gap-0.5 flex-1">
-                <span className="text-[10px] font-bold uppercase tracking-widest">
+            <WorkbenchIcon name={connectionStatus === 'success' ? "lucide:shield-check" : "lucide:shield-alert"} size={14} />
+            <div className="flex flex-col flex-1">
+                <span className="text-[10px] font-bold uppercase tracking-widest leading-none">
                     {connectionStatus === 'success' ? 'Protocol Synchronized' : 'Handshake Failed'}
                 </span>
-                <span className="text-[10px] text-slate-500 font-medium">
-                    {connectionStatus === 'success'
-                        ? `Telemetry established with ${providerName}.`
-                        : `Connection refused by ${providerName} node.`}
+                <span className="text-[10px] opacity-60 font-medium mt-0.5">
+                    {connectionStatus === 'success' 
+                        ? `Telemetry established with ${providerName}.` 
+                        : `Connection refused by ${providerName}.`}
                 </span>
             </div>
         </motion.div>

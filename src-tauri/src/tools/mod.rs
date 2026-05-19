@@ -3,6 +3,7 @@ pub mod sys_metrics;
 pub mod web_fetch;
 pub mod fs_tools;
 pub mod operational_map;
+pub mod manager;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};

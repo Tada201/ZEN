@@ -1,29 +1,6 @@
 import type { StateCreator } from "zustand";
-import type { SettingsState } from "./types";
-import { DEFAULT_WIDGET_SETTINGS, type WidgetSettings } from "./types";
-
-export interface InterfaceSlice {
-  themeId: string;
-  customThemeSource: string;
-  animationsEnabled: boolean;
-  lowResourceMode: boolean;
-  bootEnabled: boolean;
-  bootDuration: number;
-  bootDurationMs: number;
-  widgetSettings: WidgetSettings;
-  reducedMotion: boolean;
-  customCssPath: string;
-  customCssEnabled: boolean;
-  sidebarPosition: "left" | "right";
-  activityBarStyle: "icons" | "icons-text";
-
-  setAnimationsEnabled: (enabled: boolean) => void;
-  setLowResourceMode: (enabled: boolean) => void;
-
-  handleWidgetToggle: (widgetId: string) => void;
-  handleWidgetReorder: (widgetId: string, direction: "up" | "down") => void;
-  handleWidgetReset: () => void;
-}
+import type { SettingsState, InterfaceSlice } from "./types";
+import { DEFAULT_WIDGET_SETTINGS } from "./types";
 
 export const createInterfaceSlice: StateCreator<SettingsState, [], [], InterfaceSlice> = (_set, get) => ({
   themeId: "neon-grid",
@@ -39,6 +16,9 @@ export const createInterfaceSlice: StateCreator<SettingsState, [], [], Interface
   customCssEnabled: false,
   sidebarPosition: "left",
   activityBarStyle: "icons",
+  backgroundImageUrl: "",
+  backgroundOpacity: 0.15,
+  backgroundBlur: 0,
 
   setAnimationsEnabled: (enabled: boolean) => {
     get().updateSetting("animationsEnabled", enabled);
@@ -75,5 +55,17 @@ export const createInterfaceSlice: StateCreator<SettingsState, [], [], Interface
 
   handleWidgetReset: () => {
     get().updateSetting("widgetSettings", DEFAULT_WIDGET_SETTINGS);
+  },
+
+  setBackgroundImageUrl: (url: string) => {
+    get().updateSetting("backgroundImageUrl", url);
+  },
+
+  setBackgroundOpacity: (opacity: number) => {
+    get().updateSetting("backgroundOpacity", opacity);
+  },
+
+  setBackgroundBlur: (blur: number) => {
+    get().updateSetting("backgroundBlur", blur);
   },
 });

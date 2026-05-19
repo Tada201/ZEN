@@ -117,6 +117,19 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: 'zen-ui-storage',
+      partialize: (state) => {
+        const {
+          settingsOpen,
+          isCommandPaletteOpen,
+          chatManagerOpen,
+          aboutModalOpen,
+          voiceModeOpen,
+          aiSpeaking,
+          appUptimeSecs,
+          ...rest
+        } = state;
+        return rest;
+      },
     }
   )
 );

@@ -1,9 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, Copy, Terminal as TerminalIcon, Globe, Map as MapIcon, Cloud, Trophy, FileText, Code2, Clock, XCircle, RotateCcw, History } from 'lucide-react';
+import { ChevronRight, Copy, Code2, Clock, XCircle, RotateCcw, History } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ToolCall, ArtifactData } from './chat/types';
+import { WeatherCard } from './genui/WeatherCard';
+import { SportsCard } from './genui/SportsCard';
+import { RecipeCard } from './genui/RecipeCard';
+import { PremiumCard } from './genui/PremiumCard';
+
+/* ── Specialized Data Interfaces ─────────────────────────── */
+
+interface SearchResult {
+  url?: string;
+  title?: string;
+  snippet?: string;
+}
+
+
+interface TerminalOutput {
+  exitCode?: number;
+  stdout?: string;
+  stderr?: string;
+  result?: string;
+}
 
 export interface ToolCallCardProps {
   toolCall: ToolCall;
@@ -55,13 +75,30 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
   // ── Specialized Parsers ───────────────────────────────────────
   const safeName = (name || '').toLowerCase();
   const isSearch = safeName.includes('search');
-  const isWeather = safeName.includes('weather');
-  const isSports = safeName.includes('sports');
-  const isMap = safeName.includes('map') || safeName.includes('places');
+  const isWeather = safeName.includes('weather') || safeName === 'get_weather';
+  const isSports = safeName.includes('sports') || safeName === 'get_sports';
+  const isRecipe = safeName.includes('recipe') || safeName === 'get_recipe';
   const isTerminal = safeName.includes('bash') || safeName.includes('exec');
   const isArtifact = safeName.includes('artifact');
 
-  let parsedOutput: any = null;
+  const getPremiumCardType = (toolName: string): string | null => {
+    const n = toolName.toLowerCase();
+    if (n.includes('stock') || n.includes('financial')) return 'stock';
+    if (n.includes('flight')) return 'flight';
+    if (n.includes('package') || n.includes('tracking')) return 'package';
+    if (n.includes('product')) return 'product';
+    if (n.includes('job')) return 'job';
+    if (n.includes('event')) return 'event';
+    if (n.includes('movie') || n.includes('show')) return 'movie';
+    if (n.includes('book')) return 'book';
+    if (n.includes('person') || n.includes('contact')) return 'person';
+    if (n.includes('nutrition') || n.includes('food')) return 'nutrition';
+    return null;
+  };
+
+  const premiumCardType = getPremiumCardType(name);
+
+  let parsedOutput: Record<string, unknown> | string | null = null;
   const safeOutput = output || '';
   try {
     parsedOutput = safeOutput ? JSON.parse(safeOutput) : null;
@@ -69,14 +106,14 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
     parsedOutput = safeOutput;
   }
 
-  let safeInput: any = {};
+  let safeInput: Record<string, unknown> = {};
   const safeInputRaw = input || {};
   if (typeof safeInputRaw === 'string') {
     try {
       safeInput = JSON.parse(safeInputRaw || '{}');
     } catch (e) {
       // Partial JSON extraction for streaming
-      const rawStr = safeInputRaw as any;
+      const rawStr = safeInputRaw as string;
       if (rawStr.includes('"query":')) {
         const match = /"query":\s*"([^"]*)/.exec(rawStr);
         if (match) safeInput.query = match[1];
@@ -93,7 +130,7 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
       }
     }
   } else {
-    safeInput = safeInputRaw;
+    safeInput = safeInputRaw as Record<string, unknown>;
   }
 
   // Auto-expand artifacts when they start running
@@ -108,18 +145,24 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
     if (status === 'running') return isArtifact ? 'streaming...' : 'fetching...';
     if (status === 'awaiting_approval') return 'pending';
     if (status === 'error') return 'error';
-    if (isSearch) return `${parsedOutput?.results?.length || 0} results`;
+    if (isSearch) {
+      const results = (parsedOutput as Record<string, unknown>)?.results as unknown[] | undefined;
+      return `${results?.length || 0} results`;
+    }
     if (isWeather) return '200 OK';
-    if (isTerminal) return `exit ${parsedOutput?.exitCode ?? 0}`;
+    if (isTerminal) {
+      const terminalOut = parsedOutput as TerminalOutput;
+      return `exit ${terminalOut?.exitCode ?? 0}`;
+    }
     return 'done';
   };
 
   const getArgText = () => {
-    if (isSearch) return safeInput.query || 'searching...';
-    if (isWeather) return safeInput.location || 'current area';
-    if (isArtifact) return safeInput.title || 'new module';
-    if (isTerminal) return (safeInput.command || safeInput.script || '').slice(0, 50);
-    
+    if (isSearch) return String(safeInput.query || 'searching...');
+    if (isWeather) return String(safeInput.location || 'current area');
+    if (isArtifact) return String(safeInput.title || 'new module');
+    if (isTerminal) return String(safeInput.command || safeInput.script || '').slice(0, 50);
+
     const keys = Object.keys(safeInput);
     if (keys.length > 0) return String(safeInput[keys[0]]).slice(0, 50);
     return 'executing operation';
@@ -127,20 +170,10 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
 
   const hasRetries = retries && retries > 0 && !!(attempts && attempts.length > 1);
 
-  const handleCopy = (e: React.MouseEvent, text: any, label: string) => {
+  const handleCopy = (e: React.MouseEvent, text: string | Record<string, unknown>, label: string) => {
     e.stopPropagation();
     navigator.clipboard.writeText(typeof text === 'string' ? text : JSON.stringify(text, null, 2));
     toast.success(`${label} copied`);
-  };
-
-  const handleCancelClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onCancel?.(toolCall.id);
-  };
-
-  const handleRetryClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onRetry?.(toolCall.id);
   };
 
   const dotColor = status === 'completed' ? "bg-emerald-500" 
@@ -257,30 +290,55 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
           >
             <div className="pt-2 pb-4 space-y-4">
               <div className="rounded-xl overflow-hidden border border-white/[0.08] bg-white/[0.02]">
-                {isWeather && parsedOutput && (
-                  <WeatherWidget data={parsedOutput} />
+                {isWeather && parsedOutput && typeof parsedOutput === 'object' && (
+                  <WeatherCard
+                    location={(parsedOutput as any).location}
+                    temp={(parsedOutput as any).temp ?? (parsedOutput as any).temperature}
+                    condition={(parsedOutput as any).condition}
+                    high={(parsedOutput as any).high}
+                    low={(parsedOutput as any).low}
+                    forecast={(parsedOutput as any).forecast || []}
+                  />
                 )}
-                {isSports && parsedOutput && (
-                  <SportsWidget data={parsedOutput} />
+                {isSports && parsedOutput && typeof parsedOutput === 'object' && (
+                  <SportsCard
+                    league={(parsedOutput as any).league ?? "Sports"}
+                    status={(parsedOutput as any).status ?? "Live"}
+                    data={(parsedOutput as any).data ?? parsedOutput}
+                  />
+                )}
+                {isRecipe && parsedOutput && typeof parsedOutput === 'object' && (
+                  <RecipeCard
+                    title={(parsedOutput as any).title}
+                    description={(parsedOutput as any).description}
+                    ingredients={(parsedOutput as any).ingredients || []}
+                    instructions={(parsedOutput as any).instructions || []}
+                    servings={(parsedOutput as any).servings ?? 1}
+                  />
                 )}
                 {isTerminal && (
-                  <TerminalWidget output={parsedOutput} command={String(safeInput.command || safeInput.script || '')} />
+                  <TerminalWidget output={typeof parsedOutput === 'object' ? parsedOutput as TerminalOutput : null} command={String(safeInput.command || safeInput.script || '')} />
                 )}
-                {isSearch && parsedOutput?.results && (
-                  <SearchResults results={parsedOutput.results} />
+                {isSearch && parsedOutput && typeof parsedOutput === 'object' && (
+                  <SearchResults results={(parsedOutput as Record<string, unknown>).results as SearchResult[]} />
                 )}
                 {isArtifact && (
-                  <ArtifactPreview 
-                    content={safeInput.content || parsedOutput?.content || output} 
-                    title={safeInput.title as string || 'Artifact'} 
-                    onView={() => onViewArtifact?.({ 
-                      type: 'openui', 
-                      title: safeInput.title as string || 'Artifact', 
-                      content: safeInput.content || parsedOutput?.content || output 
+                  <ArtifactPreview
+                    content={(safeInput.content || (typeof parsedOutput === 'object' ? (parsedOutput as Record<string, unknown>).content : null) || output) as string}
+                    title={String(safeInput.title || 'Artifact')}
+                    onView={() => onViewArtifact?.({
+                      type: 'openui',
+                      title: String(safeInput.title || 'Artifact'),
+                      content: (safeInput.content || (typeof parsedOutput === 'object' && parsedOutput !== null ? (parsedOutput as Record<string, unknown>).content : null) || output) as string
                     })}
                   />
                 )}
-                {!isWeather && !isSports && !isTerminal && !isSearch && !isArtifact && (
+                {premiumCardType && parsedOutput && typeof parsedOutput === 'object' && (
+                  <div className="p-4 flex justify-center bg-black/25">
+                    <PremiumCard type={premiumCardType} data={parsedOutput} />
+                  </div>
+                )}
+                {!isWeather && !isSports && !isRecipe && !isTerminal && !isSearch && !isArtifact && !premiumCardType && (
                   <div className="p-3">
                     <pre className="text-[12px] font-mono text-white/50 break-words whitespace-pre-wrap leading-relaxed">
                       {typeof parsedOutput === 'object' ? JSON.stringify(parsedOutput, null, 2) : output}
@@ -382,7 +440,12 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
 
 // ── Specialized Sub-Components (Maintained but updated styles) ──
 
-function SearchResults({ results }: { results: any[] }) {
+interface SearchResult {
+  url?: string;
+  title?: string;
+}
+
+function SearchResults({ results }: { results: SearchResult[] }) {
   const getHostname = (urlString: string) => {
     try {
       if (!urlString) return 'link';
@@ -395,10 +458,10 @@ function SearchResults({ results }: { results: any[] }) {
   return (
     <div className="divide-y divide-white/[0.04]">
       {results.slice(0, 5).map((res, i) => res && (
-        <a 
-          key={i} 
-          href={res.url || '#'} 
-          target="_blank" 
+        <a
+          key={i}
+          href={res.url || '#'}
+          target="_blank"
           rel="noreferrer"
           className="flex items-start gap-3 p-3 hover:bg-white/[0.04] transition-colors group/res"
         >
@@ -408,7 +471,7 @@ function SearchResults({ results }: { results: any[] }) {
               {res.title || 'Untitled Result'}
             </div>
             <div className="text-[11px] font-mono text-white/20 mt-0.5 truncate italic">
-              {getHostname(res.url)}
+              {getHostname(res.url || '')}
             </div>
           </div>
         </a>
@@ -417,39 +480,15 @@ function SearchResults({ results }: { results: any[] }) {
   );
 }
 
-function WeatherWidget({ data }: { data: any }) {
-  return (
-    <div className="p-4 flex items-center gap-6">
-      <div className="text-4xl">{data.icon || '☀️'}</div>
-      <div className="flex-1">
-        <div className="text-2xl font-bold tracking-tight text-white/90">{data.temp || data.temperature || '--'}°F</div>
-        <div className="text-[12px] text-white/40">{data.location} · {data.condition || 'clear'}</div>
-      </div>
-    </div>
-  );
+
+interface TerminalOutput {
+  stdout?: string;
+  stderr?: string;
+  exitCode?: number;
 }
 
-function SportsWidget({ data }: { data: any }) {
-  const matchups = data.matchups || [];
-  return (
-    <div className="divide-y divide-white/[0.04]">
-      {matchups.slice(0, 3).map((m: any, i: number) => m && (
-        <div key={i} className="flex items-center justify-between p-3">
-          <div className="flex items-center gap-3">
-            {m.status === 'live' && <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />}
-            <div className="text-[13px] text-white/70">
-              <span className="font-bold text-white">{m.team1}</span> vs <span>{m.team2}</span>
-            </div>
-          </div>
-          <div className="font-mono text-[13px] tracking-widest text-white/50">{m.score1}–{m.score2}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function TerminalWidget({ output, command }: { output: any, command: string }) {
-  const safeOutput = typeof output === 'object' ? (output || {}) : {};
+function TerminalWidget({ output, command }: { output: TerminalOutput | null | undefined, command: string }) {
+  const safeOutput = output || {};
   return (
     <div className="bg-black/40 font-mono text-[12.5px] leading-relaxed">
       <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.04] border-b border-white/[0.06]">

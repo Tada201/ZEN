@@ -63,15 +63,13 @@ impl Tool for VectorSearchTool {
             .unwrap_or_default()
             .unwrap_or_else(|| "nomic-embed-text".to_string());
 
-        let llm_lock = state.llm.read().await;
-        let llm = llm_lock.as_deref().ok_or_else(|| ToolError::ExecutionFailed { message: "LLM not initialized".into() })?;
-        let query_vec = llm.embed(&model_name, &parsed_args.query).await
+        let provider = state.provider().await
+            .map_err(|e| ToolError::ExecutionFailed { message: format!("LLM not initialized: {}", e) })?;
+        let query_vec = provider.embed(&model_name, &parsed_args.query).await
             .map_err(|e| ToolError::ExecutionFailed { message: format!("Embedding failed: {}", e) })?;
 
         let limit = parsed_args.limit.unwrap_or(5).clamp(1, 20);
-        let rag_lock = state.rag.read().await;
-        let rag = rag_lock.as_deref().ok_or_else(|| ToolError::ExecutionFailed { message: "RAG not initialized".into() })?;
-        let results = rag.search(query_vec, limit).await
+        let results = state.search_rag(query_vec, limit).await
             .map_err(|e| ToolError::ExecutionFailed { message: format!("Vector search failed: {}", e) })?;
 
         if results.is_empty() {

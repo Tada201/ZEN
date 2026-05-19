@@ -2,6 +2,8 @@
 src-tauri/target/
 src-tauri/gen/
 src-tauri/bin/
+src-tauri/resources/binaries/
+src-tauri/resources/models/
 
 # Graphify
 graphify-out/
@@ -34,6 +36,12 @@ node_modules/
 dist/
 dist-ssr/
 *.local
+*.db
+*.db-journal
+*.sqlite
+pnpm-lock.yaml
+src-tauri/nul
+public/audio/
 
 # Editor directories and files
 .vscode/

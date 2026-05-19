@@ -34,9 +34,11 @@ export interface AiSlice {
   messageRetentionThreshold: number;
   pinLimit: number;
   chatPlugins: Record<string, boolean>;
+  providerParams: Record<string, any>;
 
   switchModel: (provider: string, model?: string) => Promise<void>;
   toggleChatPlugin: (pluginId: string) => void;
+  updateProviderParams: (provider: string, params: any) => void;
 }
 
 const DEFAULT_CHAT_PLUGINS: Record<string, boolean> = {
@@ -53,6 +55,7 @@ export const createAISlice: StateCreator<SettingsState, [], [], AiSlice> = (set,
   systemPrompt: "",
   temperature: 0.7,
   maxTokens: 4096,
+  providerParams: {},
   reasoningEnabled: false,
   reasoningEffort: "medium",
   streamingEnabled: true,
@@ -90,12 +93,27 @@ export const createAISlice: StateCreator<SettingsState, [], [], AiSlice> = (set,
   },
 
   toggleChatPlugin: (pluginId: string) => {
-    const { chatPlugins } = get();
+    const { chatPlugins = DEFAULT_CHAT_PLUGINS } = get();
+    const currentPlugins = chatPlugins || DEFAULT_CHAT_PLUGINS;
     set({
       chatPlugins: {
-        ...chatPlugins,
-        [pluginId]: !chatPlugins[pluginId],
+        ...currentPlugins,
+        [pluginId]: !currentPlugins[pluginId],
       },
+    });
+  },
+
+  updateProviderParams: (provider: string, params: any) => {
+    const { providerParams = {} } = get();
+    const currentParams = providerParams || {};
+    set({
+      providerParams: {
+        ...currentParams,
+        [provider]: {
+          ...(currentParams[provider] || {}),
+          ...params
+        }
+      }
     });
   },
 });

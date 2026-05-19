@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  Key, Shield, Check, AlertCircle,
-  Trash2, Plus, ExternalLink, Info,
-  Loader2, RefreshCw, Eye, EyeOff,
+  Shield, 
+  Trash2, Plus, ExternalLink,
+   RefreshCw, Eye, EyeOff,
   BrainCircuit, Hexagon, MessageSquare, Zap, Cpu, Save,
   Sparkles, Activity, Search, Brain, Network, Layers, 
   Database, Monitor, Globe, ChevronLeft
@@ -117,7 +117,7 @@ export function ProviderSettingsContent({ onKeyChange }: { onKeyChange?: () => v
     return "configured";
   };
 
-  const validateKey = async (keyId: string) => {
+  const validateKey = async (_keyId: string) => {
     toast.success("Connection validated");
   };
 
@@ -160,9 +160,9 @@ export function ProviderSettingsContent({ onKeyChange }: { onKeyChange?: () => v
     }
   };
 
-  const handleDefaultChange = async (provider: string, keyId: string) => {
+  const handleDefaultChange = async (provider: string, _keyId: string) => {
     // Mock default change
-    const newDefaults = { ...defaultKeys, [provider]: keyId };
+    const newDefaults = { ...defaultKeys, [provider]: _keyId };
     setDefaultKeys(newDefaults);
     toast.success(`Set as default for ${provider}`);
   };
@@ -359,7 +359,7 @@ export function ProviderSettingsContent({ onKeyChange }: { onKeyChange?: () => v
       <div className="px-5 py-4 border-t border-border/20 bg-muted/5 flex items-center justify-between mt-auto -mx-6 md:-mx-10">
         <div className="flex items-center gap-3 ml-6 md:ml-10">
           <div className="flex -space-x-1.5">
-            {keys.slice(0, 4).map((k, i) => (
+            {keys.slice(0, 4).map((k) => (
               <div key={k.id} className="h-6 w-6 rounded-full border border-background bg-background shadow-sm flex items-center justify-center overflow-hidden">
                 <Icon icon={PROVIDERS.find(p => p.id === k.provider)?.iconify || "lucide:key"} className="h-3 w-3 text-foreground/70" />
               </div>
@@ -508,23 +508,4 @@ export function ProviderSettingsContent({ onKeyChange }: { onKeyChange?: () => v
   );
 }
 
-function MousePointer2(props: any) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="m16.07 16.07 1.34 4.54a1 1 0 0 0 1.63.35l2.61-2.61a1 1 0 0 0-.35-1.63l-4.54-1.34" />
-      <path d="m3.3 3.3 4.29 13.9a1 1 0 0 0 1.83.15l2.43-3.64a1 1 0 0 1 .52-.41l4.03-1.01a1 1 0 0 0 .15-1.83L4.35 4.35a1 1 0 0 0-1.05 1.05Z" />
-    </svg>
-  );
-}
 

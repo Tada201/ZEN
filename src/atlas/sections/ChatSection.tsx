@@ -2,12 +2,13 @@
    ChatSection — Full AI Chat Interface
    Sessions · Markdown · Code blocks · Tool calls · Artifact panel
    Image attachments · API key management · SQLite persistence
-═══════════════════════════════════════════════════════════════ */
-import { useState, useMemo, useCallback, useEffect } from "react";
+ ═══════════════════════════════════════════════════════════════ */
+import { useState, useCallback, useEffect, useTransition } from "react";
 import { PanelLeftOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useChat } from "@/atlas/hooks/useChat";
 import { motion, AnimatePresence } from "framer-motion";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 
 // Modular Components
 import { 
@@ -17,17 +18,22 @@ import { SessionSidebar } from "../components/chat/SessionSidebar";
 import { MessageList } from "../components/chat/MessageList";
 import { ArtifactPanel } from "../components/chat/ArtifactPanel";
 import { PremiumChatInput } from "../components/PremiumChatInput";
-import { SettingsModal } from "../components/SettingsModal";
+import { SettingsModal, type TabId } from "../components/SettingsModal";
+import { VoiceModeOverlay } from "../components/voice";
+import { useUIStore } from "@/lib/stores/useUIStore";
 
-export function ChatApp({ fullScreen }: { fullScreen?: boolean }) {
+export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
+  const [, startTransition] = useTransition();
   const {
-    sessions, currentSessionId, setCurrentSessionId,
-    messages, setMessages, search, setSearch,
+    sessions, archivedSessions, folders, currentSessionId, setCurrentSessionId,
+    messages, setMessages, search, setSearch, searchResults,
     models, modelsLoading, selectedModelId, setSelectedModelId,
     selectedProvider, setSelectedProvider, isStreaming,
     fetchModels, handleCreateSession, handleDeleteSession,
-    handleRenameSession, handlePinSession, handleExportSession,
-    handleClearTests, handleDeleteAll, handleSendMessage, abortStream
+    handleRenameSession, handlePinSession, handleArchiveSession,
+    handleUnarchiveSession, handleExportSession,
+    handleDeleteAll, handleCreateFolder, handleMoveToFolder,
+    handleSendMessage, abortStream
   } = useChat();
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -35,11 +41,13 @@ export function ChatApp({ fullScreen }: { fullScreen?: boolean }) {
   
   // Settings UI State
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"general" | "ai-config" | "providers" | "capabilities" | "system">("general");
+  const [settingsTab, setSettingsTab] = useState<TabId>("general");
 
   // Options UI State
-  const [webSearch, setWebSearch] = useState(false);
+  const [webSearch] = useState(false);
   const [generativeUI, setGenerativeUI] = useState(false);
+  const voiceModeOpen = useUIStore(s => s.voiceModeOpen);
+  const toggleVoiceMode = useUIStore(s => s.toggleVoiceMode);
 
   const handleSendMessageInternal = useCallback(async (data: {
     message: string;
@@ -93,7 +101,7 @@ export function ChatApp({ fullScreen }: { fullScreen?: boolean }) {
     });
   }, [messages, setMessages, handleSendMessage, selectedModelId, selectedProvider, webSearch, generativeUI]);
 
-  const onOpenSettings = useCallback((tab: "general" | "ai-config" | "providers" | "capabilities" | "system") => {
+  const onOpenSettings = useCallback((tab: TabId) => {
     setSettingsTab(tab);
     setShowSettingsModal(true);
   }, []);
@@ -137,18 +145,24 @@ export function ChatApp({ fullScreen }: { fullScreen?: boolean }) {
           >
             <SessionSidebar
               sessions={sessions}
+              archivedSessions={archivedSessions}
+              folders={folders}
               currentId={currentSessionId}
-              onSelect={setCurrentSessionId}
+              onSelect={(id) => startTransition(() => setCurrentSessionId(id))}
               onCreate={handleCreateSession}
               onDelete={handleDeleteSession}
               onRename={handleRenameSession}
               onPin={handlePinSession}
+              onArchive={handleArchiveSession}
+              onUnarchive={handleUnarchiveSession}
               onExport={handleExportSession}
-              search={search}
-              onSearchChange={setSearch}
-              onClearAll={handleClearTests}
               onDeleteAll={handleDeleteAll}
-              setSettingsTab={setSettingsTab}
+              onCreateFolder={handleCreateFolder}
+              onMoveToFolder={handleMoveToFolder}
+              search={search}
+              searchResults={searchResults}
+              onSearchChange={setSearch}
+              setSettingsTab={onOpenSettings}
               setShowSettingsModal={setShowSettingsModal}
               onToggleSidebar={onToggleSidebar}
             />
@@ -169,57 +183,128 @@ export function ChatApp({ fullScreen }: { fullScreen?: boolean }) {
         )}
       </AnimatePresence>
 
-      {/* Main Chat Area */}
-      <motion.main 
-        layout
-        className="relative flex flex-1 flex-col min-w-0 bg-transparent overflow-hidden"
-      >
-        {!isSidebarOpen && (
-          <div className="absolute left-4 top-4 z-20">
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-9 w-9 rounded-xl bg-background/50 backdrop-blur-md border border-border shadow-sm hover:bg-muted/80"
-              onClick={() => setIsSidebarOpen(true)}
-            >
-              <PanelLeftOpen className="h-5 w-5" />
-            </Button>
-          </div>
+      <AnimatePresence>
+        {voiceModeOpen && (
+          <VoiceModeOverlay
+            isOpen={voiceModeOpen}
+            onClose={() => toggleVoiceMode()}
+            messages={messages}
+            activeModel={selectedModelId}
+            onTranscript={(text) => {
+              handleSendMessageInternal({
+                message: text,
+                model: selectedModelId,
+                provider: selectedProvider
+              });
+            }}
+          />
         )}
+      </AnimatePresence>
 
-        <MessageList
-          messages={messages}
-          onOpenArtifact={setActiveArtifact}
-          isStreaming={isStreaming}
-          onRetry={handleRetry}
-          onOpenSettings={onOpenSettings}
-        />
+      {/* Resizable Layout Area */}
+      <div className="flex-grow h-full w-full relative z-10">
+        {!activeArtifact ? (
+          /* Main Chat Area */
+          <motion.main 
+            layout
+            className="relative flex flex-1 flex-col min-w-0 h-full bg-transparent overflow-hidden"
+          >
+            {!isSidebarOpen && (
+              <div className="absolute left-4 top-4 z-20">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-9 w-9 rounded-xl bg-background/50 backdrop-blur-md border border-border shadow-sm hover:bg-muted/80"
+                  onClick={() => setIsSidebarOpen(true)}
+                >
+                  <PanelLeftOpen className="h-5 w-5" />
+                </Button>
+              </div>
+            )}
 
-        <div className="absolute bottom-0 left-0 right-0 p-4 pb-8 bg-gradient-to-t from-background via-background/80 to-transparent pointer-events-none">
-          <div className="mx-auto max-w-[700px] w-full pointer-events-auto">
-            <PremiumChatInput
-              onSend={handleSendMessageInternal}
-              onAbort={abortStream}
-              isLoading={isStreaming}
-              models={models}
-              selectedModelId={selectedModelId}
-              selectedProvider={selectedProvider}
-              onSelectModel={onSelectModel}
-              generativeUI={generativeUI}
-              onGenerativeUIChange={setGenerativeUI}
+            <MessageList
+              messages={messages}
+              onOpenArtifact={setActiveArtifact}
+              isStreaming={isStreaming}
+              onRetry={handleRetry}
+              onOpenSettings={onOpenSettings}
             />
-          </div>
-        </div>
-      </motion.main>
 
-      {/* Artifact Panel Overlay */}
-      {activeArtifact && (
-        <ArtifactPanel
-          artifact={activeArtifact}
-          onClose={() => setActiveArtifact(null)}
-          isStreaming={isStreaming}
-        />
-      )}
+            <div className="absolute bottom-0 left-0 right-0 p-4 pb-8 bg-gradient-to-t from-background via-background/80 to-transparent pointer-events-none">
+              <div className="mx-auto max-w-[700px] w-full pointer-events-auto">
+                <PremiumChatInput
+                  onSend={handleSendMessageInternal}
+                  onAbort={abortStream}
+                  isLoading={isStreaming}
+                  models={models}
+                  selectedModelId={selectedModelId}
+                  selectedProvider={selectedProvider}
+                  onSelectModel={onSelectModel}
+                  generativeUI={generativeUI}
+                  onGenerativeUIChange={setGenerativeUI}
+                />
+              </div>
+            </div>
+          </motion.main>
+        ) : (
+          <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
+            <ResizablePanel defaultSize={60} minSize={30} className="h-full flex flex-col relative">
+              {/* Main Chat Area */}
+              <motion.main 
+                layout
+                className="relative flex flex-1 flex-col min-w-0 h-full bg-transparent overflow-hidden"
+              >
+                {!isSidebarOpen && (
+                  <div className="absolute left-4 top-4 z-20">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-9 w-9 rounded-xl bg-background/50 backdrop-blur-md border border-border shadow-sm hover:bg-muted/80"
+                      onClick={() => setIsSidebarOpen(true)}
+                    >
+                      <PanelLeftOpen className="h-5 w-5" />
+                    </Button>
+                  </div>
+                )}
+
+                <MessageList
+                  messages={messages}
+                  onOpenArtifact={setActiveArtifact}
+                  isStreaming={isStreaming}
+                  onRetry={handleRetry}
+                  onOpenSettings={onOpenSettings}
+                />
+
+                <div className="absolute bottom-0 left-0 right-0 p-4 pb-8 bg-gradient-to-t from-background via-background/80 to-transparent pointer-events-none">
+                  <div className="mx-auto max-w-[700px] w-full pointer-events-auto">
+                    <PremiumChatInput
+                      onSend={handleSendMessageInternal}
+                      onAbort={abortStream}
+                      isLoading={isStreaming}
+                      models={models}
+                      selectedModelId={selectedModelId}
+                      selectedProvider={selectedProvider}
+                      onSelectModel={onSelectModel}
+                      generativeUI={generativeUI}
+                      onGenerativeUIChange={setGenerativeUI}
+                    />
+                  </div>
+                </div>
+              </motion.main>
+            </ResizablePanel>
+
+            <ResizableHandle withHandle />
+            <ResizablePanel defaultSize={40} minSize={20} collapsible className="h-full bg-background border-l border-border shadow-2xl flex flex-col relative z-40">
+              <ArtifactPanel
+                artifact={activeArtifact}
+                onClose={() => setActiveArtifact(null)}
+                isStreaming={isStreaming}
+                embedded
+              />
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        )}
+      </div>
 
       {/* Settings Modal */}
       <SettingsModal 

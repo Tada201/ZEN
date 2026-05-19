@@ -1,62 +1,57 @@
-import { useState, memo, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
+import { SettingsState } from '@/lib/stores/settings/types';
 import { WorkbenchInput } from '@/components/settings/ui/WorkbenchInput';
 import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
+import { PROVIDER_KEY_MAP } from '@/lib/types/provider';
 
 interface ApiKeyConfigProps {
     providerKey: string;
     displayName: string;
 }
 
-export const ApiKeyConfig = memo(({ providerKey, displayName }: ApiKeyConfigProps) => {
+export const ApiKeyConfig = React.memo(({ providerKey, displayName }: ApiKeyConfigProps) => {
     const [showKey, setShowKey] = useState(false);
+    
+    // Select specific API key based on provider
+    const apiKey = useSettingsStore(s => {
+        const target = PROVIDER_KEY_MAP[providerKey];
+        return target ? (s[target as keyof SettingsState] as string) : '';
+    });
 
-    const apiKeyMap: Record<string, string> = {
-        openai: 'openaiApiKey',
-        anthropic: 'anthropicApiKey',
-        openrouter: 'openrouterApiKey',
-        deepseek: 'deepseekApiKey',
-        groq: 'groqApiKey',
-        google: 'geminiApiKey',
-        gemini: 'geminiApiKey',
-        qwen: 'qwenApiKey',
-        mistral: 'mistralApiKey',
-        xai: 'xaiApiKey',
-        kilocode: 'kilocodeApiKey',
-    };
-
-    const apiKeyTarget = apiKeyMap[providerKey] || 'openaiApiKey';
-    const apiKey = useSettingsStore(s => (s as unknown as Record<string, unknown>)[apiKeyTarget] as string ?? '');
     const updateSetting = useSettingsStore(s => s.updateSetting);
+    const fetchModels = useSettingsStore(s => s.fetchModels);
 
     const handleUpdate = useCallback((text: string) => {
-        if (apiKeyTarget) {
-            updateSetting({ [apiKeyTarget]: text } as any);
+        const target = PROVIDER_KEY_MAP[providerKey];
+        if (target) {
+            updateSetting({ [target]: text } as any);
         }
-    }, [apiKeyTarget, updateSetting]);
+    }, [providerKey, updateSetting]);
 
     return (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2.5">
             <div className="flex flex-col">
-                <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1">API Key</label>
-                <span className="text-[10px] text-white/30 mb-2">Required for authentication to {displayName} services.</span>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">API Key</label>
+                <span className="text-[11px] text-muted-foreground/60">Required for authentication to {displayName}.</span>
             </div>
-            <div className="relative max-w-md group">
+            <div className="relative max-w-lg">
                 <WorkbenchInput
                     type={showKey ? "text" : "password"}
                     value={apiKey}
-                    placeholder="Enter your secure API key..."
+                    placeholder="Enter secure API key..."
                     onChangeText={handleUpdate}
-                    className="w-full h-11 pr-12 font-mono text-xs bg-white/[0.02] border-white/[0.08] focus:border-blue-500/40 transition-all rounded-xl"
+                    onBlur={() => fetchModels(providerKey)}
+                    className="w-full h-9 pr-10 font-mono text-xs bg-muted/20 border-border/60 focus:border-primary/40 transition-all rounded-lg"
                 />
                 <WorkbenchButton
                     variant="ghost"
                     size="icon"
                     onClick={() => setShowKey(!showKey)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 text-white/20 hover:text-white/60"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground/40 hover:text-foreground"
                 >
-                    <WorkbenchIcon name={showKey ? "lucide:eye-off" : "lucide:eye"} size={14} />
+                    <WorkbenchIcon name={showKey ? "lucide:eye-off" : "lucide:eye"} size={13} />
                 </WorkbenchButton>
             </div>
         </div>

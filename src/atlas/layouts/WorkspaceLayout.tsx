@@ -1,83 +1,145 @@
-import React from "react";
-import { 
-  Group as PanelGroup, 
-  Panel, 
-  Separator as PanelResizeHandle 
-} from "react-resizable-panels";
-import { ActivityBar } from "@/components/Zen/ActivityBar";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { SecondaryActivityBar } from "@/components/Zen/SecondaryActivityBar";
 import { StatusBar } from "@/components/Zen/StatusBar";
 import { useUIStore } from "@/lib/stores/useUIStore";
-import { cn } from "@/lib/utils";
 import { 
-  ACTIVITY_BAR_WIDTH, 
   SIDEBAR_COLLAPSED_WIDTH, 
   SIDEBAR_EXPANDED_WIDTH 
 } from "@/lib/constants/design";
+import { GripVertical } from "lucide-react";
 
 interface WorkspaceLayoutProps {
   sidebar?: React.ReactNode;
   main: React.ReactNode;
   rightPanel?: React.ReactNode;
-  showActivityBar?: boolean;
   showStatusBar?: boolean;
 }
 
 /**
  * Unified Workspace Layout for Zen Workbench.
- * Supports Activity Bar, Left Sidebar, Main Content Area, and Right System Panel.
+ * Supports Left Sidebar, Main Content Area, and Right System Panel.
  * Synchronized with UI store for panel visibility.
+ * 
+ * NOTE: The primary (left) Activity Bar has been intentionally removed per design 
+ * requirements to prevent redundancy with the Session Sidebar. 
+ * PLEASE DO NOT RE-ADD A LEFT-SIDE ACTIVITY RAIL.
  */
 export function WorkspaceLayout({ 
   sidebar, 
   main, 
   rightPanel,
-  showActivityBar = true,
   showStatusBar = true
 }: WorkspaceLayoutProps) {
   const { sidebarOpen, rightPanelOpen } = useUIStore();
+  
+  // Custom right panel resizer state
+  const [rightPanelWidth, setRightPanelWidth] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("zen_right_panel_width");
+      return saved ? parseInt(saved, 10) : 320;
+    }
+    return 320;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Sync saved width to localStorage
+  useEffect(() => {
+    localStorage.setItem("zen_right_panel_width", String(rightPanelWidth));
+  }, [rightPanelWidth]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // Secondary activity bar is exactly 48px wide
+      const secondaryBarWidth = 48;
+      
+      // Calculate new width relative to the viewport edge
+      const newWidth = window.innerWidth - e.clientX - secondaryBarWidth;
+      
+      // Boundary constraints: Min 240px, Max 60% of window width
+      const minWidth = 240;
+      const maxWidth = window.innerWidth * 0.6;
+      
+      if (newWidth >= minWidth && newWidth <= maxWidth) {
+        setRightPanelWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing]);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#050506] text-foreground font-sans">
+    <div className="flex flex-col h-screen w-screen overflow-hidden text-foreground font-sans" ref={containerRef}>
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Activity Bar Rail - Optional */}
-        {showActivityBar && (
-          <aside className="w-[var(--activity-bar-width)] border-r border-white/5 bg-[#050506] flex flex-col py-4 z-50 shrink-0">
-            <ActivityBar />
-          </aside>
-        )}
+        {/* 
+          DANGER: DO NOT ADD A LEFT ACTIVITY BAR HERE. 
+          The Session Sidebar handles all primary left-side navigation.
+        */}
 
         {/* Sidebar Area: Rail or Expanded */}
         {sidebar && (
           <aside 
-            className="h-full border-r border-white/5 bg-[#050506] shrink-0 overflow-hidden z-50 transition-all duration-300 ease-in-out"
+            className="h-full glass-panel shrink-0 overflow-hidden z-50"
             style={{ width: sidebarOpen ? `${SIDEBAR_EXPANDED_WIDTH}px` : `${SIDEBAR_COLLAPSED_WIDTH}px` }}
           >
             {React.cloneElement(sidebar as React.ReactElement<any>, { isCollapsed: !sidebarOpen })}
           </aside>
         )}
 
-        {/* Main Content Area */}
-        <main className="flex-1 h-full overflow-hidden bg-background relative z-10 flex flex-col min-w-0">
+        {/* Main Content Area: Stays permanently mounted to preserve DOM state/scrolls */}
+        <div className="flex-1 flex flex-col min-w-0 h-full relative overflow-hidden">
           {main}
-        </main>
+        </div>
 
-        {/* Right Panel Area */}
-        {rightPanel && rightPanelOpen && (
-          <aside className="w-[350px] h-full border-l border-white/5 bg-[#050506] shrink-0 overflow-hidden z-40">
-            {rightPanel}
-          </aside>
+        {/* Resizer Handle */}
+        {rightPanelOpen && rightPanel && (
+          <div 
+            onMouseDown={handleMouseDown}
+            className={`w-1 cursor-col-resize bg-transparent hover:bg-white/10 transition-colors duration-200 z-50 relative flex items-center justify-center select-none group ${isResizing ? "bg-white/15" : ""}`}
+            style={{ touchAction: "none" }}
+          >
+            <div className="z-10 flex h-4 w-3 items-center justify-center rounded-sm border border-white/10 bg-[#0d0d11]/85 backdrop-blur-sm text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+              <GripVertical className="h-2.5 w-2.5" />
+            </div>
+          </div>
         )}
 
+        {/* Right Sidebar Panel: Stays permanently mounted but scales width */}
+        <div 
+          style={{ width: rightPanelOpen && rightPanel ? `${rightPanelWidth}px` : "0px" }}
+          className={`h-full relative overflow-hidden shrink-0 ${isResizing ? "transition-none" : "transition-[width] duration-300 ease-in-out"}`}
+        >
+          <div className="h-full" style={{ width: `${rightPanelWidth}px` }}>
+            {rightPanel}
+          </div>
+        </div>
+
         {/* Secondary Activity Bar Rail (Far Right) */}
-        <aside className="w-[var(--activity-bar-width)] border-l border-white/5 bg-[#050506] flex flex-col py-4 z-50 shrink-0">
+        <aside className="w-[var(--activity-bar-width)] glass-panel-activity flex flex-col py-4 z-50 shrink-0">
           <SecondaryActivityBar />
         </aside>
       </div>
 
       {/* Status Bar Footer */}
       {showStatusBar && (
-        <footer className="h-7 border-t border-white/5 bg-[#050506] shrink-0 z-50">
+        <footer className="h-7 glass-panel-strong shrink-0 z-50">
           <StatusBar />
         </footer>
       )}

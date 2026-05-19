@@ -10,6 +10,12 @@ use crate::db::models::{ChatMessage, ChatResponse, ModelInfo};
 use crate::error::{ZenError, ZenResult};
 use crate::llm::LlmProvider;
 
+#[cfg(test)]
+use wiremock::{
+    Mock, MockServer, ResponseTemplate,
+    matchers::{method, path},
+};
+
 /// Ollama HTTP API client.
 pub struct OllamaProvider {
     client: Client,
@@ -35,6 +41,16 @@ struct OllamaOptions {
     temperature: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     num_predict: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_p: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_k: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repeat_penalty: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    seed: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stop: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     reasoning_effort: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -230,6 +246,11 @@ impl LlmProvider for OllamaProvider {
             options: Some(OllamaOptions {
                 temperature: config.temperature,
                 num_predict: config.max_tokens,
+                top_p: config.top_p,
+                top_k: config.top_k,
+                repeat_penalty: config.repeat_penalty,
+                seed: config.seed,
+                stop: config.stop,
                 reasoning_effort: config.reasoning_effort,
                 thinking_budget: config.thinking_budget,
             }),
@@ -384,5 +405,136 @@ impl LlmProvider for OllamaProvider {
             }
             Err(_) => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::{method, path}};
+
+    /// Helper to create an OllamaProvider pointed at a mock server.
+    async fn mock_provider() -> (OllamaProvider, MockServer) {
+        let server = MockServer::start().await;
+        let provider = OllamaProvider::new(&server.uri());
+        (provider, server)
+    }
+
+    const OLLAMA_TAGS_JSON: &str = r#"{
+        "models": [
+            {"name": "llama3.3:70b", "size": 40443546592, "modified_at": "2025-01-15T10:30:00Z"},
+            {"name": "mistral:7b", "size": 4102557331, "modified_at": "2025-02-01T08:00:00Z"},
+            {"name": "nomic-embed-text:v1.5", "size": 273857231, "modified_at": "2025-01-20T12:00:00Z"},
+            {"name": "llama3.2-vision:11b", "size": 6953775847, "modified_at": null}
+        ]
+    }"#;
+
+    #[tokio::test]
+    async fn test_ollama_list_models_parses_all_fields() {
+        let (provider, server) = mock_provider().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/tags"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                OLLAMA_TAGS_JSON.as_bytes().to_vec(),
+                "application/json",
+            ))
+            .mount(&server)
+            .await;
+
+        let models = provider.list_models().await.unwrap();
+
+        assert_eq!(models.len(), 4);
+
+        // First model: llama3.3:70b
+        assert_eq!(models[0].id, "llama3.3:70b");
+        assert_eq!(models[0].name, "llama3.3:70b");
+        assert_eq!(models[0].size, Some(40443546592));
+        assert_eq!(models[0].modified_at.as_deref(), Some("2025-01-15T10:30:00Z"));
+        assert_eq!(models[0].provider.as_deref(), Some("ollama"));
+        assert!(models[0].supports_vision.is_none());
+        assert!(models[0].supports_tools.is_none());
+
+        // Last model: llama3.2-vision:11b with null modified_at
+        assert_eq!(models[3].id, "llama3.2-vision:11b");
+        assert_eq!(models[3].size, Some(6953775847));
+        assert!(models[3].modified_at.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_ollama_list_models_empty_response() {
+        let (provider, server) = mock_provider().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/tags"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"models": []})))
+            .mount(&server)
+            .await;
+
+        let models = provider.list_models().await.unwrap();
+        assert!(models.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_ollama_list_models_returns_error_on_non_success() {
+        let (provider, server) = mock_provider().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/tags"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&server)
+            .await;
+
+        let result = provider.list_models().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_ollama_list_models_returns_error_on_connection_refused() {
+        // Point at a port where nothing is listening
+        let provider = OllamaProvider::new("http://127.0.0.1:1");
+        let result = provider.list_models().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_ollama_list_models_missing_models_field() {
+        let (provider, server) = mock_provider().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/tags"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+            .mount(&server)
+            .await;
+
+        // Missing "models" field — should fail deserialization
+        let result = provider.list_models().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_ollama_health_check_ok() {
+        let (provider, server) = mock_provider().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/tags"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+
+        assert!(provider.health_check().await);
+    }
+
+    #[tokio::test]
+    async fn test_ollama_health_check_fails() {
+        let (provider, server) = mock_provider().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/tags"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&server)
+            .await;
+
+        assert!(!provider.health_check().await);
     }
 }

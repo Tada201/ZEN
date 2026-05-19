@@ -1,81 +1,174 @@
+import { useEffect, useMemo, useState, useCallback } from "react";
+import {
+  Command,
+  MessageSquarePlus,
+  Search,
+  Mic,
+  Settings,
+  PanelLeft,
+  PanelRight,
+  Info,
+  Sun,
+  Moon,
+  MessageSquare,
+  User,
+  Headphones,
+  Bot,
+  Sparkles,
+  Layers,
+} from "lucide-react";
+import { useUIStore } from "@/lib/stores/useUIStore";
+import { useChatStore } from "@/lib/stores/useChatStore";
+import type { TabId } from "@/components/settings/types";
 
-import { useEffect, useMemo, useState } from "react";
-import { Command, Layers, Moon, Palette, Search, Sun } from "lucide-react";
-import { useZen } from "./atlasContext";
-import { THEME_PRESETS } from "./theme";
+type ItemGroup = "Actions" | "Settings" | "Navigate";
 
-type Item = {
+interface PaletteItem {
   id: string;
   label: string;
   hint: string;
-  group: "Components" | "Themes" | "Actions";
-  run: () => void;
+  group: ItemGroup;
   icon: React.ComponentType<{ className?: string }>;
-};
+  run: () => void;
+}
 
-const COMPONENT_LINKS = [
-  { id: "foundations", label: "Foundations", hint: "Colors, type, spacing" },
-  { id: "typography", label: "Typography", hint: "Kinetic text, type scale" },
-  { id: "buttons", label: "Buttons", hint: "Variants, sizes, states" },
-  { id: "inputs", label: "Inputs & Forms", hint: "Fields & validation" },
-  { id: "cards", label: "Cards", hint: "Containers & patterns" },
-  { id: "data-display", label: "Data Display", hint: "Tables, stats, trees" },
-  { id: "navigation", label: "Navigation", hint: "Tabs, breadcrumbs, steps" },
-  { id: "feedback", label: "Feedback", hint: "Alerts, dialogs, toasts" },
-  { id: "surfaces", label: "Surfaces", hint: "Accordions, grids, layouts" },
-  { id: "media", label: "Media", hint: "Video, images, audio" },
-  { id: "data-viz", label: "Data Viz", hint: "Charts & graphs" },
-  { id: "themes", label: "Theme Gallery", hint: "Presets & live preview" },
-  { id: "combos", label: "Combos", hint: "Pre-built patterns" },
-  { id: "lab-3d", label: "3D Lab", hint: "Interactive 3D scenes" },
+const SETTINGS_TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: "providers" as TabId, label: "Providers", icon: Bot },
+  { id: "models" as TabId, label: "Models", icon: Sparkles },
+  { id: "chat" as TabId, label: "Chat", icon: MessageSquare },
+  { id: "audio" as TabId, label: "Audio", icon: Headphones },
+  { id: "appearance" as TabId, label: "Appearance", icon: Sun },
+  { id: "intelligence" as TabId, label: "Intelligence", icon: Layers },
+  { id: "system" as TabId, label: "System", icon: Info },
+  { id: "terminal" as TabId, label: "Terminal", icon: User },
+  { id: "workspace" as TabId, label: "Workspace", icon: Layers },
+  { id: "agents" as TabId, label: "Agents", icon: Bot },
 ];
 
 export function CommandPalette() {
-  const { paletteOpen, setPaletteOpen, applyPreset, mode, setMode } = useZen();
+  const {
+    isCommandPaletteOpen: open,
+    setCommandPaletteOpen: setOpen,
+    toggleVoiceMode,
+    toggleSettings,
+    setActiveSettingsTab,
+    toggleSidebar,
+    toggleRightPanel,
+    toggleAboutModal,
+    theme,
+    setTheme,
+  } = useUIStore();
+
+  const { toggleSearch } = useChatStore();
+
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
 
   useEffect(() => {
-    if (!paletteOpen) {
+    if (!open) {
       setQuery("");
       setActive(0);
     }
-  }, [paletteOpen]);
+  }, [open]);
 
-  const items: Item[] = useMemo(() => {
-    const out: Item[] = [];
-    COMPONENT_LINKS.forEach((c) =>
-      out.push({
-        id: `c-${c.id}`,
-        label: c.label,
-        hint: c.hint,
-        group: "Components",
-        icon: Layers,
-        run: () => {
-          document.getElementById(c.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-        },
-      })
-    );
-    THEME_PRESETS.forEach((t) =>
-      out.push({
-        id: `t-${t.id}`,
-        label: `Apply theme: ${t.name}`,
-        hint: t.mode === "dark" ? "Dark" : "Light",
-        group: "Themes",
-        icon: Palette,
-        run: () => applyPreset(t.id),
-      })
-    );
+  const items: PaletteItem[] = useMemo(() => {
+    const out: PaletteItem[] = [];
+
+    // ✅ Actions group
     out.push({
-      id: "a-toggle",
-      label: mode === "dark" ? "Switch to light mode" : "Switch to dark mode",
-      hint: "Toggle theme",
+      id: "a-new-chat",
+      label: "New chat",
+      hint: "Start a fresh conversation",
       group: "Actions",
-      icon: mode === "dark" ? Sun : Moon,
-      run: () => setMode(mode === "dark" ? "light" : "dark"),
+      icon: MessageSquarePlus,
+      run: () => {
+        // Reset active session to trigger new chat
+        useChatStore.getState().setActiveSession(null);
+      },
     });
+
+    out.push({
+      id: "a-search",
+      label: "Search sessions",
+      hint: "Find past conversations",
+      group: "Actions",
+      icon: Search,
+      run: () => toggleSearch(),
+    });
+
+    out.push({
+      id: "a-voice",
+      label: "Toggle voice mode",
+      hint: "Push-to-talk or VAD",
+      group: "Actions",
+      icon: Mic,
+      run: () => toggleVoiceMode(),
+    });
+
+    out.push({
+      id: "a-sidebar",
+      label: "Toggle sidebar",
+      hint: "Show / hide session list",
+      group: "Actions",
+      icon: PanelLeft,
+      run: () => toggleSidebar(),
+    });
+
+    out.push({
+      id: "a-right-panel",
+      label: "Toggle right panel",
+      hint: "Show / hide tools & widgets",
+      group: "Actions",
+      icon: PanelRight,
+      run: () => toggleRightPanel(),
+    });
+
+    out.push({
+      id: "a-theme",
+      label: theme === "dark" ? "Switch to light theme" : "Switch to dark theme",
+      hint: "Toggle appearance",
+      group: "Actions",
+      icon: theme === "dark" ? Sun : Moon,
+      run: () => setTheme(theme === "dark" ? "light" : "dark"),
+    });
+
+    out.push({
+      id: "a-about",
+      label: "About Zen",
+      hint: "Version & credits",
+      group: "Actions",
+      icon: Info,
+      run: () => toggleAboutModal(),
+    });
+
+    // ⚙️ Settings group
+    SETTINGS_TABS.forEach((tab) => {
+      const TabIcon = tab.icon;
+      out.push({
+        id: `s-${tab.id}`,
+        label: `Settings: ${tab.label}`,
+        hint: `Open ${tab.label} settings`,
+        group: "Settings",
+        icon: TabIcon,
+        run: () => {
+          setActiveSettingsTab(tab.id);
+          toggleSettings();
+        },
+      });
+    });
+
+    // 🧭 General settings (default)
+    out.push({
+      id: "s-general",
+      label: "Open settings",
+      hint: "All settings",
+      group: "Settings",
+      icon: Settings,
+      run: () => toggleSettings(),
+    });
+
     return out;
-  }, [applyPreset, mode, setMode]);
+  }, [theme, toggleVoiceMode, toggleSettings, setActiveSettingsTab, toggleSidebar, toggleRightPanel, toggleAboutModal, setTheme, toggleSearch]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -85,12 +178,36 @@ export function CommandPalette() {
 
   useEffect(() => setActive(0), [query]);
 
-  if (!paletteOpen) return null;
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActive((a) => Math.min(filtered.length - 1, a + 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActive((a) => Math.max(0, a - 1));
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (filtered[active]) {
+          filtered[active].run();
+          setOpen(false);
+        }
+      } else if (e.key === "Escape") {
+        setOpen(false);
+      }
+    },
+    [filtered, active, setOpen],
+  );
 
-  const run = (i: Item) => {
-    i.run();
-    setPaletteOpen(false);
-  };
+  const runItem = useCallback(
+    (item: PaletteItem) => {
+      item.run();
+      setOpen(false);
+    },
+    [setOpen],
+  );
+
+  if (!open) return null;
 
   let lastGroup = "";
 
@@ -100,64 +217,75 @@ export function CommandPalette() {
       role="dialog"
       aria-modal="true"
       aria-label="Command palette"
-      onClick={() => setPaletteOpen(false)}
+      onClick={() => setOpen(false)}
     >
-      <div className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" />
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+
+      {/* Palette Card */}
       <div
-        className="relative w-full max-w-xl overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground"
-        style={{ boxShadow: "var(--shadow-lg)" }}
+        className="relative w-full max-w-xl overflow-hidden rounded-xl border border-white/[0.06] bg-[#0a0a0b] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2 border-b border-border px-4">
-          <Search className="h-4 w-4 text-muted-foreground" />
+        {/* Search Input */}
+        <div className="flex items-center gap-2 border-b border-white/[0.06] px-4">
+          <Search className="h-4 w-4 text-zinc-500" />
           <input
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(filtered.length - 1, a + 1)); }
-              else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
-              else if (e.key === "Enter") { e.preventDefault(); filtered[active] && run(filtered[active]); }
-              else if (e.key === "Escape") setPaletteOpen(false);
-            }}
-            placeholder="Search components, themes, actions…"
-            className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            onKeyDown={handleKeyDown}
+            placeholder="Search actions, settings…"
+            className="h-12 w-full bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
           />
-          <kbd className="hidden items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline-flex">ESC</kbd>
+          <kbd className="hidden items-center gap-1 rounded border border-white/[0.06] bg-zinc-800 px-1.5 py-0.5 font-mono text-[10px] text-zinc-500 sm:inline-flex">
+            ESC
+          </kbd>
         </div>
+
+        {/* Results */}
         <ul className="max-h-[50vh] overflow-y-auto py-1.5">
           {filtered.length === 0 && (
-            <li className="px-4 py-6 text-center text-sm text-muted-foreground">No results.</li>
+            <li className="px-4 py-6 text-center text-sm text-zinc-500">No results.</li>
           )}
-          {filtered.map((i, idx) => {
-            const showHeader = i.group !== lastGroup;
-            lastGroup = i.group;
-            const Icon = i.icon;
+          {filtered.map((item, idx) => {
+            const showHeader = item.group !== lastGroup;
+            lastGroup = item.group;
+            const Icon = item.icon;
             return (
-              <div key={i.id}>
+              <div key={item.id}>
                 {showHeader && (
-                  <div className="px-3 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{i.group}</div>
+                  <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                    {item.group}
+                  </div>
                 )}
                 <li
                   onMouseEnter={() => setActive(idx)}
-                  onClick={() => run(i)}
-                  className={`mx-1.5 flex cursor-pointer items-center gap-3 rounded-md px-2.5 py-2 text-sm ${idx === active ? "bg-muted text-foreground" : "text-foreground/90"}`}
+                  onClick={() => runItem(item)}
+                  className={`mx-1.5 flex cursor-pointer items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors ${
+                    idx === active
+                      ? "bg-zinc-800 text-zinc-100"
+                      : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300"
+                  }`}
                 >
-                  <Icon className="h-4 w-4 text-muted-foreground" />
-                  <span className="flex-1 truncate">{i.label}</span>
-                  <span className="text-xs text-muted-foreground">{i.hint}</span>
+                  <Icon className="h-4 w-4 shrink-0 text-zinc-500" />
+                  <span className="flex-1 truncate">{item.label}</span>
+                  <span className="shrink-0 text-xs text-zinc-600">{item.hint}</span>
                 </li>
               </div>
             );
           })}
         </ul>
-        <footer className="flex items-center justify-between border-t border-border px-3 py-2 text-[10px] text-muted-foreground">
-          <div className="flex items-center gap-1"><Command className="h-3 w-3" /> Press ↑↓ to navigate, ↵ to select</div>
-          <div>UI Zen</div>
+
+        {/* Footer */}
+        <footer className="flex items-center justify-between border-t border-white/[0.06] px-3 py-2 text-[10px] text-zinc-600">
+          <div className="flex items-center gap-1">
+            <Command className="h-3 w-3" />
+            {" "}Press ↑↓ to navigate, ↵ to select
+          </div>
+          <div>Zen Workbench</div>
         </footer>
       </div>
     </div>
   );
 }
-
-

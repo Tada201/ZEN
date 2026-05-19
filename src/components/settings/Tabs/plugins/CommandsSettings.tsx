@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, memo } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -61,12 +60,8 @@ export const CommandsSettings = memo(({ embedded }: { embedded?: boolean }) => {
     const loadCommands = useCallback(async () => {
         setLoading(true);
         try {
-            const cmdList = await invoke<ZenCommand[]>('list_commands');
-            if (cmdList?.length) {
-                setCmdDetails(cmdList);
-            }
-        } catch (err) {
-            console.warn('[CommandsSettings] Tauri backend unavailable, using fallback commands');
+            // Backend list_commands not yet implemented — use fallback
+            setCmdDetails(FALLBACK_COMMANDS);
         } finally {
             setLoading(false);
         }

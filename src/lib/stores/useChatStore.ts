@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ArtifactData, Session, ChatFolder } from '../../components/chat/types';
+import { ArtifactData, Session, ChatFolder } from '../../atlas/components/chat/types';
 
 interface ChatState {
   // Sessions
@@ -168,7 +168,7 @@ export const useChatStore = create<ChatState>()(
         const lower = query.toLowerCase();
         const results = get().sessions.filter(s =>
           s.title.toLowerCase().includes(lower) ||
-          s.systemPrompt.toLowerCase().includes(lower)
+          (s.systemPrompt?.toLowerCase().includes(lower) ?? false)
         );
         set({ searchResults: results });
       },

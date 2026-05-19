@@ -215,7 +215,8 @@ impl AgentTool for GraphSessionTool {
             ));
         }
 
-        let session = sessions.get_mut(&session_id).unwrap();
+        let session = sessions.get_mut(&session_id)
+            .ok_or_else(|| anyhow::anyhow!("Graph session {} not found", session_id))?;
 
         // Handle capture_vision separately - it doesn't modify state
         let action_str = input.get("action").and_then(|v| v.as_str()).unwrap_or("");

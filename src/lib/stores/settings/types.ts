@@ -27,15 +27,25 @@ export const DEFAULT_WIDGET_SETTINGS: WidgetSettings = {
 
 // ─── Provider Configs ─────────────────────────────────────────────────────
 
-export interface CustomProviderConfig {
-  id: string;
-  name: string;
-  baseUrl: string;
-  apiKey: string;
-  models: string[];
-  enabled: boolean;
-  headers?: Record<string, string>;
-}
+export const DIRECT_PROVIDER_URLS: Record<string, string> = {
+    openai: 'https://api.openai.com/v1',
+    anthropic: 'https://api.anthropic.com/v1',
+    openrouter: 'https://openrouter.ai/api/v1',
+    deepseek: 'https://api.deepseek.com',
+    groq: 'https://api.groq.com/openai/v1',
+    google: 'https://generativelanguage.googleapis.com/v1beta',
+    gemini: 'https://generativelanguage.googleapis.com/v1beta',
+    mistral: 'https://api.mistral.ai/v1',
+    xai: 'https://api.x.ai/v1',
+    kilocode: 'https://api.kilo.ai/api/gateway',
+    together: 'https://api.together.xyz/v1',
+    perplexity: 'https://api.perplexity.ai',
+    qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    nine_router: 'http://localhost:20128/v1',
+    aihubmix: 'https://aihubmix.com/v1',
+};
+
+import { ModelInfo, CustomProviderConfig } from '../../types/provider';
 
 // ─── Slice Interfaces ─────────────────────────────────────────────────────
 
@@ -77,6 +87,9 @@ export interface InterfaceSlice {
   customCssEnabled: boolean;
   sidebarPosition: "left" | "right";
   activityBarStyle: "icons" | "icons-text";
+  backgroundImageUrl: string;
+  backgroundOpacity: number;
+  backgroundBlur: number;
 
   setAnimationsEnabled: (enabled: boolean) => void;
   setLowResourceMode: (enabled: boolean) => void;
@@ -84,11 +97,14 @@ export interface InterfaceSlice {
   handleWidgetToggle: (widgetId: string) => void;
   handleWidgetReorder: (widgetId: string, direction: "up" | "down") => void;
   handleWidgetReset: () => void;
+  setBackgroundImageUrl: (url: string) => void;
+  setBackgroundOpacity: (opacity: number) => void;
+  setBackgroundBlur: (blur: number) => void;
 }
 
 export interface AudioSlice {
   ttsEnabled: boolean;
-  ttsEngine: "piper" | "web" | "system";
+  ttsEngine: "piper" | "web" | "system" | "nine_router";
   sttEnabled: boolean;
   sttEngine: "whisper" | "web";
   sttWhisperModel: string;
@@ -117,12 +133,27 @@ export interface AudioSlice {
   setForceTtsWeb: (val: boolean) => void;
 }
 
+export interface ProviderParams {
+  temperature?: number;
+  topP?: number;
+  topK?: number;
+  maxTokens?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  repeatPenalty?: number;
+  minP?: number;
+  seed?: number;
+  stop?: string[];
+  [key: string]: any;
+}
+
 export interface AiSlice {
   activeProvider: string;
   activeModel: string;
   systemPrompt: string;
-  temperature: number;
-  maxTokens: number;
+  temperature: number; // Keep as global default
+  maxTokens: number;  // Keep as global default
+  providerParams: Record<string, ProviderParams>;
   reasoningEnabled: boolean;
   reasoningEffort: "low" | "medium" | "high";
   streamingEnabled: boolean;
@@ -155,6 +186,7 @@ export interface AiSlice {
 
   switchModel: (provider: string, model?: string) => Promise<void>;
   toggleChatPlugin: (pluginId: string) => void;
+  updateProviderParams: (provider: string, params: Partial<ProviderParams>) => void;
 }
 
 export interface ProviderConnectionStatus {
@@ -179,6 +211,9 @@ export interface ProviderSlice {
   qwenApiKey: string;
   xaiApiKey: string;
   kilocodeApiKey: string;
+  nineRouterApiKey: string;
+  aihubmixApiKey: string;
+  nineRouterBaseUrl: string;
   // Local providers
   ollamaBaseUrl: string;
   lmstudioBaseUrl: string;
@@ -189,20 +224,24 @@ export interface ProviderSlice {
   // Tool settings
   toolSettings: Record<string, boolean>;
   toolAutoApprove: string[];
-  // Model discovery
-  availableModels: Array<{ id: string; name: string; provider: string; contextWindow?: number }>;
-  availableModelsByProvider: Record<string, string[]>;
+  
+  // Dynamic Catalog
+  availableModels: ModelInfo[];
+  availableModelsByProvider: Record<string, ModelInfo[]>;
   fetchingModels: boolean;
-  connectionStatuses: Record<string, ProviderConnectionStatus>;
+  connectionStatuses: Record<string, 'idle' | 'success' | 'error'>;
+  testingConnections: Record<string, boolean>;
 
-  fetchModels: () => Promise<void>;
-  testProviderConnection: (provider: string, baseUrl?: string, apiKey?: string) => Promise<boolean>;
-  addCustomProvider: (config: CustomProviderConfig) => void;
+  fetchModels: (providerOverride?: string) => Promise<string[]>;
+  testProviderConnection: (providerOverride?: string) => Promise<void>;
+  addCustomProvider: (config: Omit<CustomProviderConfig, 'id' | 'enabled'>) => void;
   removeCustomProvider: (id: string) => void;
   toggleCustomProvider: (id: string) => void;
-  updateCustomProvider: (id: string, config: Partial<CustomProviderConfig>) => void;
-  setConnectionStatus: (provider: string, status: { status: string; latency?: number; error?: string }) => void;
-  setAvailableModels: (models: Array<{ id: string; name: string; provider: string; contextWindow?: number }>) => void;
+  updateCustomProvider: (id: string, updates: Partial<CustomProviderConfig>) => void;
+  
+  syncModelCatalog: () => Promise<void>;
+  setDiscoveryMode: (enabled: boolean) => void;
+  setProviderError: (error: string | null) => void;
 }
 
 export interface SystemSlice {

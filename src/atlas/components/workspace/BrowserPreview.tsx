@@ -1,7 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  ArrowLeft, 
-  ArrowRight, 
+import { useState, useEffect } from 'react';
+import {
   RotateCw, 
   Home, 
   ExternalLink,

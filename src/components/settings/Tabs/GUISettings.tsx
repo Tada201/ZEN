@@ -149,6 +149,65 @@ export function GUISettings({ settings, onUpdate }: GUISettingsProps) {
         />
       </SettingsSection>
 
+      <SettingsSection title="Workspace Wallpaper" icon={Palette} description="Custom wallpaper aesthetics settings">
+        <SettingsRow
+          label="Custom Wallpaper URL"
+          description="Remote HTTP URL or local filesystem path"
+          control={
+            <input
+              type="text"
+              placeholder="e.g., https://example.com/wallpaper.jpg"
+              value={settings["ui.background-image"] || ""}
+              onChange={e => onUpdate("ui.background-image", e.target.value)}
+              className="w-[180px] h-8 px-2 text-xs bg-black/40 border border-white/10 rounded-lg text-foreground focus:outline-none focus:border-primary/40 transition-all font-mono"
+            />
+          }
+          icon={Palette}
+        />
+
+        <SettingsRow
+          label="Wallpaper Opacity"
+          description="Adjust visibility from translucent to vivid"
+          control={
+            <div className="flex items-center gap-2 w-[180px]">
+              <span className="text-[10px] text-muted-foreground w-8 text-right font-mono">
+                {Math.round(parseFloat(settings["ui.background-opacity"] || "0.15") * 100)}%
+              </span>
+              <Slider
+                value={[parseFloat(settings["ui.background-opacity"] || "0.15")]}
+                onValueChange={([v]) => onUpdate("ui.background-opacity", String(v))}
+                min={0}
+                max={1}
+                step={0.01}
+                className="flex-1"
+              />
+            </div>
+          }
+          icon={Palette}
+        />
+
+        <SettingsRow
+          label="Wallpaper Blur"
+          description="Soften details to maximize text contrast"
+          control={
+            <div className="flex items-center gap-2 w-[180px]">
+              <span className="text-[10px] text-muted-foreground w-8 text-right font-mono">
+                {parseInt(settings["ui.background-blur"] || "0")}px
+              </span>
+              <Slider
+                value={[parseInt(settings["ui.background-blur"] || "0")]}
+                onValueChange={([v]) => onUpdate("ui.background-blur", String(v))}
+                min={0}
+                max={40}
+                step={1}
+                className="flex-1"
+              />
+            </div>
+          }
+          icon={Palette}
+        />
+      </SettingsSection>
+
       <SettingsSection title="Interface" icon={Eye} description="Visibility and behavior preferences">
         <SettingsRow
           label="Interface Animations"

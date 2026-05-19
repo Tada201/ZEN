@@ -194,6 +194,27 @@ pub struct ToolPermissions {
     pub cache: RegexCache,
 }
 
+impl ToolPermissions {
+    /// Check if a tool should appear in `tool_list` based on current permission settings.
+    /// YOLO mode shows all tools regardless of defaults.
+    /// Otherwise, tools with `AlwaysDeny` at the global or per-tool level are hidden.
+    pub fn is_visible_in_list(&self, tool_id: &str) -> bool {
+        if self.yolo_mode {
+            return true;
+        }
+
+        // Check per-tool override first (takes precedence over global)
+        if let Some(rules) = self.tool_overrides.get(tool_id) {
+            if let Some(default) = &rules.default {
+                return matches!(default, PermissionDefault::AlwaysAllow | PermissionDefault::Confirm);
+            }
+        }
+
+        // Fall back to global default
+        !matches!(self.global_default, PermissionDefault::AlwaysDeny)
+    }
+}
+
 impl Default for ToolPermissions {
     fn default() -> Self {
         Self {

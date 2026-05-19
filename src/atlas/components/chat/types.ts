@@ -1,4 +1,4 @@
-import { Globe, Terminal, FileText, Code2, Zap } from "lucide-react";
+import { Globe, Terminal, FileText, Code2 } from "lucide-react";
 
 /* ── Types ─────────────────────────────────────────────────── */
 
@@ -110,6 +110,18 @@ export type Session = {
   tags?: string[];
   tokenCount?: number;
   lastModel?: string | null;
+  folderId?: string | null;
+  archived?: boolean;
+};
+
+export type ChatFolder = {
+  id: string;
+  name: string;
+  color?: string | null;
+  icon?: string | null;
+  createdAt: number;
+  updatedAt: number;
+  sessionCount?: number;
 };
 
 export type Attachment = {
@@ -139,11 +151,25 @@ export type ToolCall = {
 };
 
 export type ArtifactData = {
-  type: "code" | "markdown" | "svg" | "html" | "openui";
+  id?: string;
+  type: "code" | "markdown" | "svg" | "html" | "openui" | "diagram";
   title: string;
   language?: string;
   content: string;
+  version?: number;
+  chatId?: string;
+  messageId?: string;
+  createdAt?: number;
+  updatedAt?: number;
 };
+export interface ToolInvocation {
+  state: 'call' | 'result';
+  toolCallId: string;
+  toolName: string;
+  args: any;
+  result?: any;
+  step?: number;
+}
 
 export type Step = { 
   type: "text" | "tool-call" | "reasoning"; 
@@ -159,27 +185,71 @@ export type ThinkingConfig = {
 
 export type Message = {
   id: string;
-  sessionId: string;
+  sessionId?: string;
   role: "user" | "assistant" | "system" | "tool";
   content: string;
   reasoning?: string;
-  attachments: Attachment[];
-  toolCalls: ToolCall[];
+  attachments?: Attachment[];
+  toolCalls?: ToolCall[];
   steps?: Step[];
-  artifact: ArtifactData | null;
-  createdAt: number;
+  artifact?: ArtifactData | null;
+  createdAt?: number;
   model?: string;
   provider?: string;
   webSearch?: boolean;
   thinking?: ThinkingConfig;
   deepResearch?: boolean;
-  status?: "sending" | "sent" | "failed";
+  status?: "sending" | "sent" | "failed" | "cancelled";
   error?: string;
   isThinking?: boolean;
   generativeUI?: number;
   kind?: MessageKind;
   metadata?: ActionMeta;
+  toolInvocations?: ToolInvocation[];
 };
+
+export function normalizeVercelMessage(msg: any): Message {
+  if (!msg) return msg;
+
+  const normalized = {
+    ...msg,
+    sessionId: msg.sessionId || "",
+    attachments: msg.attachments || [],
+    toolCalls: msg.toolCalls || [],
+    artifact: msg.artifact || null,
+    createdAt: msg.createdAt || Date.now(),
+  };
+
+  // If toolInvocations is present, populate toolCalls and steps
+  if (msg.toolInvocations && Array.isArray(msg.toolInvocations)) {
+    const toolCalls: ToolCall[] = msg.toolInvocations.map((ti: any) => {
+      const isCompleted = ti.state === 'result';
+      return {
+        id: ti.toolCallId,
+        name: ti.toolName,
+        status: isCompleted ? 'completed' : 'running',
+        input: ti.args,
+        output: isCompleted ? (typeof ti.result === 'string' ? ti.result : JSON.stringify(ti.result, null, 2)) : '',
+      };
+    });
+
+    normalized.toolCalls = [...normalized.toolCalls, ...toolCalls];
+
+    // If steps is empty, reconstruct steps from content and toolCalls
+    if (!normalized.steps || normalized.steps.length === 0) {
+      const steps: Step[] = [];
+      if (normalized.content) {
+        steps.push({ type: 'text', content: normalized.content });
+      }
+      toolCalls.forEach((tc) => {
+        steps.push({ type: 'tool-call', toolCall: tc });
+      });
+      normalized.steps = steps;
+    }
+  }
+
+  return normalized as Message;
+}
 
 export type ApiKey = {
   id: string;

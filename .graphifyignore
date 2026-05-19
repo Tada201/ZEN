@@ -1,0 +1,13 @@
+# Ignore example and reference codebases
+EXAMPLE_NO_EDITS/
+
+# Ignore static assets and images
+public/
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.ico
+*.gif
+*.webp
+src-tauri/icons/

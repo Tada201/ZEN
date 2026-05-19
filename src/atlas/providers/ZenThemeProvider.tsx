@@ -1,6 +1,6 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ACCENT_SWATCHES, RADIUS_PRESETS, THEME_PRESETS, type RadiusPreset, type StyleMode, type ThemePreset } from "../theme";
+import { ACCENT_SWATCHES, RADIUS_PRESETS, THEME_PRESETS, type RadiusPreset, type StyleMode } from "../theme";
 
 export type Density = "compact" | "cozy";
 

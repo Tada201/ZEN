@@ -8,14 +8,15 @@ import { Renderer, type RendererProps } from "@openuidev/react-lang";
 import { 
   AlertCircle, 
   Terminal,
-  Loader2, 
-  AlertTriangle 
+  Loader2 
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { extendedLibrary } from "./genui";
 export { extendedLibrary };
 import { SourceEditor } from "./SourceEditor";
+
+import { invoke } from "@tauri-apps/api/core";
 
 import "@openuidev/react-ui/components.css";
 import "@openuidev/react-ui/styles/index.css";
@@ -24,7 +25,7 @@ import "@openuidev/react-ui/styles/index.css";
 
 /**
  * Creates a function-map toolProvider that proxies tool calls
- * to the backend API. Each tool call hits the Express endpoint.
+ * to the backend API via Tauri IPC.
  */
 function createToolProvider(): Record<
   string,
@@ -34,24 +35,16 @@ function createToolProvider(): Record<
     {} as Record<string, (args: Record<string, unknown>) => Promise<unknown>>,
     {
       get(_target, toolName: string) {
-        // Return a function that calls the backend tool endpoint
         return async (args: Record<string, unknown>) => {
           try {
-            const res = await fetch("/chat-api/tools/execute", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ toolName, args }),
+            const result = await invoke<unknown>("run_tool_command", {
+              toolName,
+              args,
             });
-            if (!res.ok) {
-              const err = await res.json().catch(() => ({}));
-              throw new Error(
-                (err as { error?: string }).error ?? `Tool call failed: HTTP ${res.status}`
-              );
-            }
-            return await res.json();
-          } catch (err) {
-            console.error(`[OpenUI] Tool "${toolName}" failed:`, err);
-            throw err;
+            return result;
+          } catch (err: any) {
+            console.error(`[OpenUI] Tauri Tool "${toolName}" failed:`, err);
+            throw new Error(err?.toString() || `Tauri Tool execution failed`);
           }
         };
       },
@@ -142,7 +135,7 @@ export function OpenUIRenderer({
       // Handle array: Component([a, b], ...) -> Component(children=[a, b], ...)
       // We stop at the first ']' followed by a comma or closing parenthesis to avoid overshooting
       const positionalArrayRegex = new RegExp(`(${name})\\s*\\(\\s*(\\[[^\\]]*\\])\\s*(,|\\)|\\s+[a-zA-Z_]\\w*\\s*=)`, 'g');
-      extractedCode = extractedCode.replace(positionalArrayRegex, (match, n, array, next) => {
+      extractedCode = extractedCode.replace(positionalArrayRegex, (_match, n, array, next) => {
         // If the component is a chart, use 'labels' instead of 'children' for the first array arg
         const propName = n.toLowerCase().includes('chart') ? 'labels' : 'children';
         return `${n}(${propName}=${array}${next}`;

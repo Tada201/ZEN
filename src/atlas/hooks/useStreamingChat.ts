@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
+import { useQueryClient } from "@tanstack/react-query";
 import { Message, ToolCall } from "../components/chat/types";
 
 export function useStreamingChat(
@@ -8,6 +10,7 @@ export function useStreamingChat(
 ) {
   const [isStreaming, setIsStreaming] = useState(false);
   const unlistenRefs = useRef<UnlistenFn[]>([]);
+  const queryClient = useQueryClient();
 
   const cleanup = useCallback(() => {
     unlistenRefs.current.forEach(u => u());
@@ -20,9 +23,15 @@ export function useStreamingChat(
     const setupListeners = async () => {
       cleanup();
 
+      console.log(`[useStreamingChat] Registering Tauri event listeners for chatId: ${chatId}`);
+
       // Listen for text chunks
       const unlistenChunk = await listen<any>("chat:chunk", (event) => {
-        if (event.payload.chat_id !== chatId) return;
+        console.log("[useStreamingChat] Received 'chat:chunk' event:", event);
+        if (event.payload.chat_id !== chatId) {
+          console.warn(`[useStreamingChat] Chat ID mismatch on chunk. Event chatId: ${event.payload.chat_id}, Hook chatId: ${chatId}`);
+          return;
+        }
         setIsStreaming(true);
 
         setMessages(prev => {
@@ -49,6 +58,7 @@ export function useStreamingChat(
 
       // Listen for tool starts
       const unlistenToolStart = await listen<any>("tool:start", (event) => {
+        console.log("[useStreamingChat] Received 'tool:start' event:", event);
         if (event.payload.chat_id !== chatId) return;
         
         setMessages(prev => {
@@ -78,6 +88,7 @@ export function useStreamingChat(
 
       // Listen for tool completions
       const unlistenToolComplete = await listen<any>("tool:complete", (event) => {
+        console.log("[useStreamingChat] Received 'tool:complete' event:", event);
         if (event.payload.chat_id !== chatId) return;
 
         setMessages(prev => {
@@ -85,7 +96,7 @@ export function useStreamingChat(
           if (!last || last.role !== "assistant") return prev;
 
           const updated = { ...last };
-          updated.toolCalls = updated.toolCalls.map(tc => 
+          updated.toolCalls = (updated.toolCalls || []).map(tc => 
             tc.id === event.payload.tool_call_id 
               ? { ...tc, status: event.payload.status === "ok" ? "completed" : "error" as any } 
               : tc
@@ -107,21 +118,36 @@ export function useStreamingChat(
 
       // Listen for completion
       const unlistenDone = await listen<any>("chat:done", (event) => {
+        console.log("[useStreamingChat] Received 'chat:done' event:", event);
         if (event.payload.chat_id !== chatId) return;
         setIsStreaming(false);
-        
+
+        const reason: string = event.payload.reason || "complete";
+        const isCancelled = reason === "cancelled";
+
         setMessages(prev => {
           const last = prev[prev.length - 1];
           if (!last || last.role !== "assistant") return prev;
-          
+
           const next = [...prev];
-          next[next.length - 1] = { ...last, status: "sent" };
+          next[next.length - 1] = { 
+            ...last, 
+            status: isCancelled ? "cancelled" : "sent",
+            // If cancelled, keep the partial content instead of reverting
+            content: isCancelled && event.payload.content 
+              ? last.content 
+              : (event.payload.content || last.content),
+          };
           return next;
         });
+
+        // Invalidate messages query to sync with DB
+        queryClient.invalidateQueries({ queryKey: ["messages", chatId] });
       });
 
       // Listen for errors
       const unlistenError = await listen<any>("chat:error", (event) => {
+        console.error("[useStreamingChat] Received 'chat:error' event:", event);
         if (event.payload.chat_id !== chatId) return;
         setIsStreaming(false);
         
@@ -176,14 +202,29 @@ export function useStreamingChat(
         });
       });
 
+      const unlistenArtifactComplete = await listen<any>("artifact:complete", (event) => {
+        if (event.payload.chat_id !== chatId) return;
+
+        setMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (!last || last.role !== "assistant" || !last.artifact) return prev;
+
+          const next = [...prev];
+          next[next.length - 1] = { ...last };
+          // Potentially flag artifact as complete if UI needs it (e.g., adding `completed: true` to artifact state)
+          return next;
+        });
+      });
+
       unlistenRefs.current.push(
-        unlistenChunk, 
-        unlistenToolStart, 
-        unlistenToolComplete, 
-        unlistenDone, 
+        unlistenChunk,
+        unlistenToolStart,
+        unlistenToolComplete,
+        unlistenDone,
         unlistenError,
         unlistenArtifactStart,
-        unlistenArtifactDelta
+        unlistenArtifactDelta,
+        unlistenArtifactComplete
       );
     };
 
@@ -193,8 +234,13 @@ export function useStreamingChat(
   }, [chatId, setMessages, cleanup]);
 
   const abortStream = useCallback(async () => {
-    // In a real app, you'd send an IPC command to cancel the token
-    // await invoke("cancel_chat", { chatId });
+    try {
+      if (chatId) {
+        await invoke("abort_chat", { chatId });
+      }
+    } catch (e) {
+      console.warn("Failed to abort chat:", e);
+    }
     setIsStreaming(false);
   }, [chatId]);
 

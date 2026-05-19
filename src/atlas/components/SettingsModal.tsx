@@ -1,10 +1,9 @@
-import { useState, useMemo, useCallback, useEffect, type ComponentType } from "react";
-import {
-  Settings2, Key, BrainCircuit,
+import { useState, useMemo, useCallback, useEffect, type ComponentType } from "react";import { Settings2, Key, BrainCircuit, Shield,
   Save, Loader2,
   Sparkles, MessageSquare,
   Monitor,
-  Eye, Headphones, Bot, Terminal, FolderOpen, Search
+  Eye, Headphones, Bot, Terminal, FolderOpen, Search,
+  Cpu, Download, Zap, Link2, RefreshCw, Code, BookOpen, Map
 } from "lucide-react";
 import {
   Dialog, DialogContent,
@@ -40,8 +39,17 @@ import { SystemSettings } from "@/components/settings/Tabs/SystemSettings";
 import { TerminalSettings } from "@/components/settings/Tabs/TerminalSettings";
 import { WorkspaceSettings } from "@/components/settings/Tabs/WorkspaceSettings";
 import { AgentsSettings } from "@/components/settings/Tabs/AgentsSettings";
+import { RawSettings } from "@/components/settings/Tabs/system/RawSettings";
+import { ToolsSettings } from "@/components/settings/Tabs/ToolsSettings";
+import { MCPSettings } from "@/components/settings/Tabs/plugins/MCPSettings";
+import { EmbeddingModelDownloader } from "@/components/settings/Tabs/intelligence/EmbeddingModelDownloader";
+import { CommandsSettings } from "@/components/settings/Tabs/plugins/CommandsSettings";
+import { HooksSettings } from "@/components/settings/Tabs/plugins/HooksSettings";
+import { UpdatesSettings } from "@/components/settings/Tabs/system/UpdatesSettings";
+import { SkillRegistry } from "@/components/settings/Tabs/skills/SkillRegistry";
+import { MapConfiguration } from "@/components/GTSM/MapConfiguration";
 
-export type TabId = "general" | "appearance" | "chat" | "ai-config" | "providers" | "capabilities" | "intelligence" | "agents" | "audio" | "terminal" | "workspace" | "system";
+export type TabId = "general" | "appearance" | "chat" | "ai-config" | "providers" | "capabilities" | "intelligence" | "agents" | "skills" | "audio" | "terminal" | "workspace" | "tools" | "system" | "raw" | "mcp" | "embedding-models" | "commands" | "hooks" | "updates" | "map-config";
 
 interface SettingsTabGroup {
   label: string;
@@ -72,6 +80,10 @@ const TAB_GROUPS: SettingsTabGroup[] = [
       { id: "capabilities", label: "Capabilities", icon: Sparkles, description: "Agent skills" },
       { id: "intelligence", label: "Intelligence", icon: Search, description: "RAG & memory" },
       { id: "agents", label: "Agents", icon: Bot, description: "Sub-agent config" },
+      { id: "commands", label: "Commands", icon: Zap, description: "Slash commands" },
+      { id: "hooks", label: "Hooks", icon: Link2, description: "Event hooks" },
+      { id: "mcp", label: "MCP", icon: Cpu, description: "MCP servers" },
+      { id: "embedding-models", label: "Embedding Models", icon: Download, description: "Download embedding models" },
     ],
   },
   {
@@ -80,12 +92,17 @@ const TAB_GROUPS: SettingsTabGroup[] = [
       { id: "audio", label: "Audio", icon: Headphones, description: "Sound & voice" },
       { id: "terminal", label: "Terminal", icon: Terminal, description: "Shell & safety" },
       { id: "workspace", label: "Workspace", icon: FolderOpen, description: "Directories & Git" },
+      { id: "skills", label: "Skills", icon: BookOpen, description: "Tactical modules" },
+      { id: "map-config", label: "Map Config", icon: Map, description: "GTSM operational layers" },
     ],
   },
   {
     label: "System",
     tabs: [
+      { id: "tools", label: "Tools", icon: Shield, description: "Tool permissions & safety" },
       { id: "system", label: "System", icon: Monitor, description: "Performance & maintenance" },
+      { id: "raw", label: "Raw Config", icon: Code, description: "Raw settings editor" },
+      { id: "updates", label: "Updates", icon: RefreshCw, description: "Update & version info" },
     ],
   },
 ];
@@ -94,11 +111,6 @@ export function SettingsModal({
   open,
   onOpenChange,
   initialTab = "general",
-  models = [],
-  selectedModelId = "",
-  onSelectModel = () => {},
-  fetchModels = () => {},
-  modelsLoading = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -111,7 +123,7 @@ export function SettingsModal({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl p-0 gap-0 overflow-hidden bg-[#050506] border-white/[0.06] shadow-2xl flex flex-col md:flex-row h-full max-h-[88vh] md:h-[620px] w-[95vw]">
+      <DialogContent className="max-w-4xl p-0 gap-0 overflow-hidden bg-background border-border/60 shadow-2xl flex flex-col md:flex-row h-full max-h-[85vh] md:h-[580px] w-[92vw] focus:outline-none focus-visible:outline-none">
         <DialogTitle className="sr-only">Settings</DialogTitle>
         <DialogDescription className="sr-only">Configure application preferences.</DialogDescription>
         <SettingsContent
@@ -139,20 +151,18 @@ export function SettingsContent({
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // ── Zustand store ───────────────────────────────────────────────
-
-  const store = useSettingsStore();
-  const isHydrated = store.isHydrated;
-  const isDirty = store.isDirty;
-  const isSyncing = store.isSyncing;
+  const isHydrated = useSettingsStore(s => s.isHydrated);
+  const isSyncing = useSettingsStore(s => s.isSyncing);
+  const store = useSettingsStore(); // Still needed for actions, but we'll use it sparingly
 
   // Derive the flat Record<string, string> from the typed store state
+  // Using useMemo with a more granular dependency to avoid recalculating on every store update
+  const reducedMotion = useSettingsStore(s => s.reducedMotion);
   const settings = useMemo(() => {
     const record = storeToSettingsRecord(store);
-    // Override: ui.animations is inverted from reducedMotion
-    // (reducedMotion=true means animations are DISABLED)
-    record["ui.animations"] = store.reducedMotion ? "false" : "true";
+    record["ui.animations"] = reducedMotion ? "false" : "true";
     return record;
-  }, [store]);
+  }, [store.isDirty, reducedMotion, store.isSyncing]); // Recalculate on dirty status or motion change
 
   // ── Theme context ────────────────────────────────────────────────
 
@@ -222,7 +232,7 @@ export function SettingsContent({
 
   if (!isHydrated) {
     return (
-      <div className="flex-1 flex items-center justify-center p-12 bg-[#050506]">
+      <div className="flex-1 flex items-center justify-center p-12 bg-background">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
       </div>
     );
@@ -231,7 +241,7 @@ export function SettingsContent({
   // ── Render ──────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col md:flex-row h-full w-full overflow-hidden bg-[#050506]">
+    <div className="flex flex-col md:flex-row h-full w-full overflow-hidden bg-background">
       {/* Sidebar */}
       <div className="w-full md:w-56 bg-[#050506] border-b md:border-b-0 md:border-r border-white/[0.06] flex flex-col shrink-0">
         <div className="p-4 border-b border-white/[0.06] flex items-center justify-between">
@@ -251,23 +261,24 @@ export function SettingsContent({
               </div>
               <div className="flex md:flex-col gap-0.5 px-2">
                 {group.tabs.map((tab) => {
-                  const Icon = tab.icon;
-                  const isActive = activeTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={cn(
-                        "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all text-left",
-                        isActive
-                          ? "bg-primary/10 text-primary font-bold shadow-none"
-                          : "hover:bg-white/[0.03] text-zinc-500 hover:text-zinc-200"
-                      )}
-                    >
-                      <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "opacity-60")} />
-                      <span className="text-[13px] truncate">{tab.label}</span>
-                    </button>
-                  );
+                    const Icon = tab.icon;
+                    const isActive = activeTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={cn(
+                          "relative w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-all text-left group",
+                          isActive
+                            ? "bg-muted text-primary font-bold"
+                            : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        {isActive && <div className="nav-rail-indicator" />}
+                        <Icon className={cn("h-3.5 w-3.5 shrink-0", isActive ? "text-primary" : "opacity-40 group-hover:opacity-100")} />
+                        <span className="text-[12.5px] tracking-tight truncate">{tab.label}</span>
+                      </button>
+                    );
                 })}
               </div>
             </div>
@@ -284,9 +295,9 @@ export function SettingsContent({
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#050506]">
+      <div className="flex-1 flex flex-col h-full overflow-hidden bg-background">
         <ScrollArea className="flex-1">
-          <div className="max-w-2xl mx-auto p-6 md:p-10 space-y-8">
+          <div className="max-w-2xl mx-auto p-6 md:p-8 space-y-6">
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeTab}
@@ -371,7 +382,7 @@ export function SettingsContent({
                 )}
 
                 {activeTab === "providers" && (
-                  <ProvidersSettings settings={settings} onUpdate={handleUpdate} />
+                  <ProvidersSettings />
                 )}
 
                 {activeTab === "capabilities" && (
@@ -421,8 +432,42 @@ export function SettingsContent({
                   <WorkspaceSettings settings={settings} onUpdate={handleUpdate} />
                 )}
 
+                {activeTab === "tools" && (
+                  <ToolsSettings settings={settings} onUpdate={handleUpdate} />
+                )}
+
                 {activeTab === "system" && (
                   <SystemSettings settings={settings} onUpdate={handleUpdate} />
+                )}
+
+                {activeTab === "raw" && (
+                  <RawSettings />
+                )}
+
+                {activeTab === "mcp" && (
+                  <MCPSettings />
+                )}
+
+                {activeTab === "embedding-models" && (
+                  <EmbeddingModelDownloader provider="ollama" />
+                )}
+
+                {activeTab === "commands" && (
+                  <CommandsSettings />
+                )}
+
+                {activeTab === "hooks" && (
+                  <HooksSettings />
+                )}
+
+                {activeTab === "updates" && (
+                  <UpdatesSettings />
+                )}
+                {activeTab === "map-config" && (
+                  <MapConfiguration />
+                )}
+                {activeTab === "skills" && (
+                  <SkillRegistry skills={[]} loading={false} onToggle={() => {}} />
                 )}
               </motion.div>
             </AnimatePresence>
@@ -430,11 +475,11 @@ export function SettingsContent({
         </ScrollArea>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t border-white/[0.06] flex justify-end gap-2 bg-[#050506]">
-          <Button variant="ghost" className="h-8 text-[12px] px-4 text-zinc-400 hover:text-zinc-200" onClick={handleCancel}>
+        <div className="p-3 border-t border-border/40 flex justify-end gap-2 bg-background/50 backdrop-blur-sm">
+          <Button variant="ghost" className="h-8 text-[11px] px-3 text-muted-foreground hover:text-foreground" onClick={handleCancel}>
             Cancel
           </Button>
-          <Button className="h-8 text-[12px] px-6 font-bold shadow-md shadow-primary/10" onClick={handleSave} disabled={saving || !isDirty}>
+          <Button className="h-8 text-[11px] px-5 font-bold shadow-md shadow-primary/10" onClick={handleSave} disabled={saving}>
             {saving ? (
               <>
                 <Loader2 className="h-3 w-3 animate-spin mr-1" />

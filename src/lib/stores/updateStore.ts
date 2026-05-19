@@ -65,6 +65,7 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
             // Dynamic import with fallback for non-Tauri environments
             let check: any;
             try {
+                // @ts-ignore
                 const module = await import('@tauri-apps/plugin-updater');
                 check = module.check;
             } catch {
@@ -72,7 +73,6 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
                 set({ isChecking: false, error: null });
                 return;
             }
-            const { invoke } = await import('@tauri-apps/api/core');
 
             const update = await check();
             set({
@@ -84,13 +84,8 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
             });
 
             if (update) {
-                // Get release notes via Rust backend
-                try {
-                    const notes = await invoke<string | null>('get_release_notes', { version: update.version });
-                    if (notes) set({ releaseNotes: notes });
-                } catch {
-                    set({ releaseNotes: update.body ?? null });
-                }
+                // Backend get_release_notes not yet implemented — rely on update.body
+                set({ releaseNotes: update.body ?? null });
             }
         } catch (error) {
             set({

@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   Key, Shield, Check, AlertCircle,
-  Trash2, Plus, ExternalLink, Info,
-  Loader2, RefreshCw, Eye, EyeOff, X,
+  Trash2, Plus, ExternalLink,
+  Loader2, RefreshCw, Eye, EyeOff,
   BrainCircuit, Hexagon, MessageSquare, Zap, Cpu
 } from "lucide-react";
 import {
@@ -21,7 +21,6 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
 
 interface Provider {
   id: string;

@@ -1,5 +1,6 @@
+import { useTransition } from 'react';
 import { 
-  Activity, Cpu, Globe, Box, Terminal, Layers, Map as MapIcon, Zap 
+  Activity, Cpu, Box, Terminal, Map as MapIcon, Paintbrush 
 } from 'lucide-react';
 import { useUIStore } from '../../lib/stores/useUIStore';
 import { cn } from '../../lib/utils/style';
@@ -9,6 +10,7 @@ import { cn } from '../../lib/utils/style';
  * Symmetrical to the primary Activity Bar.
  */
 export function SecondaryActivityBar() {
+  const [isPending, startTransition] = useTransition();
   const { 
     activeRightTab, 
     setActiveRightTab, 
@@ -18,11 +20,8 @@ export function SecondaryActivityBar() {
 
   const navItems = [
     { id: 'metrics', icon: Activity, label: 'System Metrics' },
-    { id: 'analytics', icon: Activity, label: 'Agent Analytics' },
     { id: 'agents', icon: Cpu, label: 'Agent Tasks' },
-    { id: 'workflows', icon: Zap, label: 'Workflow Engine' },
-    { id: 'space', icon: Globe, label: 'Space Observatory' },
-    { id: 'drawing', icon: Layers, label: 'Tactical Widgets' },
+    { id: 'drawing', icon: Paintbrush, label: 'Tactical Widgets' },
     { id: 'artifacts', icon: Box, label: 'Artifacts & Math' },
     { id: 'terminal', icon: Terminal, label: 'Nexus Terminal' },
     { id: 'map', icon: MapIcon, label: 'Operational Map' },
@@ -30,10 +29,14 @@ export function SecondaryActivityBar() {
 
   const handleTabClick = (id: any) => {
     if (activeRightTab === id && rightPanelOpen) {
-      setRightPanelOpen(false);
+      startTransition(() => {
+        setRightPanelOpen(false);
+      });
     } else {
-      setActiveRightTab(id);
-      if (!rightPanelOpen) setRightPanelOpen(true);
+      startTransition(() => {
+        setActiveRightTab(id);
+        if (!rightPanelOpen) setRightPanelOpen(true);
+      });
     }
   };
 
@@ -49,7 +52,8 @@ export function SecondaryActivityBar() {
               "relative group p-2 rounded-xl transition-all duration-200",
               (activeRightTab === item.id && rightPanelOpen)
                 ? "bg-primary/10 text-primary shadow-sm" 
-                : "text-muted-foreground/40 hover:text-foreground hover:bg-muted"
+                : "text-muted-foreground/40 hover:text-foreground hover:bg-muted",
+              isPending && activeRightTab === item.id && "animate-pulse opacity-60"
             )}
             title={item.label}
           >

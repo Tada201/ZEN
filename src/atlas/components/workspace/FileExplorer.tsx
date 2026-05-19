@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { Folder, File, ChevronRight, ChevronDown, FolderOpen, RefreshCcw } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Folder, File, ChevronRight, FolderOpen, RefreshCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { invoke } from "@tauri-apps/api/core";
 
 interface FileNode {
   name: string;
@@ -18,13 +19,11 @@ export function FileExplorer({ onFileClick }: { onFileClick: (path: string) => v
 
   const fetchFolder = useCallback(async (path: string = ""): Promise<FileNode[]> => {
     try {
-      const resp = await fetch(`/chat-api/browse-folder?path=${encodeURIComponent(path)}`);
-      if (!resp.ok) return [];
-      const data = await resp.json();
+      const data = await invoke<{ entries: Array<{ name: string; type: string; path: string }> }>("browseFolder", { path: path || null });
       if (!data.entries) return [];
-      return data.entries.map((e: any) => ({
+      return data.entries.map((e) => ({
         name: e.name,
-        type: e.type,
+        type: e.type as "dir" | "file",
         path: e.path,
         isOpen: false,
         children: e.type === "dir" ? [] : undefined

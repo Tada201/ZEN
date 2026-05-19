@@ -1,18 +1,12 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import {
-  Search, Check, Zap, Brain, Sparkles,
-  MessageSquare, Code, Eye, Clock,
-  ChevronRight, Info, Loader2, Key,
-  Copy, RefreshCw, AlertCircle, Plus, Trash2, Shield,
-  ExternalLink, Globe
+  Search, Check, Brain,
+  RefreshCw
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { motion } from "framer-motion";
-import { toast } from "sonner";
 
 export type Model = {
   id: string;

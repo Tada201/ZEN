@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, memo } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -74,16 +73,9 @@ export const HooksSettings = memo(({ embedded }: { embedded?: boolean }) => {
     const [hookDetails, setHookDetails] = useState<Hook[]>(FALLBACK_HOOKS);
 
     const loadHooks = useCallback(async () => {
-        try {
-            const hookList = await invoke<Hook[]>('list_hooks');
-            if (hookList?.length) {
-                setHookDetails(hookList);
-            }
-        } catch (err) {
-            console.warn('[HooksSettings] Tauri backend unavailable, using fallback hooks');
-        } finally {
-            setLoading(false);
-        }
+        // Backend list_hooks not yet implemented — use fallback
+        setHookDetails(FALLBACK_HOOKS);
+        setLoading(false);
     }, []);
 
     useEffect(() => {
@@ -93,12 +85,8 @@ export const HooksSettings = memo(({ embedded }: { embedded?: boolean }) => {
     useEffect(() => {
         if (!showLogs) return;
         const fetchLogs = async () => {
-            try {
-                const logEntries = await invoke<HookLogEntry[]>('get_hook_logs');
-                setLogs(logEntries?.slice(0, 50) || []);
-            } catch {
-                setLogs([]);
-            }
+            // Backend get_hook_logs not yet implemented
+            setLogs([]);
         };
         fetchLogs();
         const interval = setInterval(fetchLogs, 5000);

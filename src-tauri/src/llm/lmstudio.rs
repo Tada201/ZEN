@@ -8,6 +8,12 @@ use crate::db::models::{ChatMessage, ChatResponse, ModelInfo};
 use crate::error::{ZenError, ZenResult};
 use crate::llm::LlmProvider;
 
+#[cfg(test)]
+use wiremock::{
+    Mock, MockServer, ResponseTemplate,
+    matchers::{method, path},
+};
+
 /// Dedicated LM Studio provider.
 /// Uses `/api/v0/models` for rich model metadata (type, arch, quantization, state)
 /// and `/v1/chat/completions` for OpenAI-compatible inference.
@@ -96,6 +102,16 @@ struct OpenAiChatRequest {
     temperature: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_p: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    presence_penalty: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    frequency_penalty: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    seed: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stop: Option<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -371,6 +387,11 @@ impl LlmProvider for LmStudioProvider {
             tools: oai_tools,
             temperature: config.temperature,
             max_tokens: config.max_tokens,
+            top_p: config.top_p,
+            presence_penalty: config.presence_penalty,
+            frequency_penalty: config.frequency_penalty,
+            seed: config.seed,
+            stop: config.stop,
         };
 
         info!(model = model, "LM Studio chat stream starting");
@@ -391,7 +412,13 @@ impl LlmProvider for LmStudioProvider {
         let mut stream = resp.bytes_stream();
         let mut buffer = String::new();
 
-        while let Some(chunk_result) = stream.next().await {
+        while let Some(chunk_result) = tokio::select! {
+            res = stream.next() => res,
+            _ = token.cancelled() => {
+                debug!("LM Studio stream cancelled by client via select!");
+                None
+            }
+        } {
             if token.is_cancelled() {
                 debug!("LM Studio stream cancelled by client");
                 break;
@@ -643,5 +670,243 @@ impl LmStudioProvider {
                 supports_tools: None,
             })
             .collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::{method, path}};
+
+    async fn mock_provider() -> (LmStudioProvider, MockServer) {
+        let server = MockServer::start().await;
+        let provider = LmStudioProvider::new(&server.uri());
+        (provider, server)
+    }
+
+    // ─── v1 API tests ───
+
+    const LMSTUDIO_V1_RESPONSE: &str = r#"{
+        "data": [
+            {
+                "key": "llama-3.3-70b-instruct",
+                "publisher": "Meta",
+                "displayName": "Llama 3.3 70B",
+                "modelType": "llm",
+                "quantization": { "name": "Q4_K_M", "sizeBytes": 40443546592 },
+                "loadedInstances": [{ "contextLength": 8192 }]
+            },
+            {
+                "key": "qwen2.5-vl-7b",
+                "publisher": "Qwen",
+                "displayName": "Qwen2.5 VL 7B",
+                "modelType": "vlm",
+                "quantization": { "name": "Q4_K_M", "sizeBytes": 4200000000 },
+                "loadedInstances": []
+            },
+            {
+                "key": "nomic-embed-text-v1.5",
+                "publisher": "Nomic",
+                "displayName": null,
+                "modelType": "embed",
+                "quantization": null,
+                "loadedInstances": [{ "contextLength": 2048 }]
+            }
+        ]
+    }"#;
+
+    #[tokio::test]
+    async fn test_lmstudio_list_models_v1_api() -> ZenResult<()> {
+        let (provider, server) = mock_provider().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/v1/models"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                LMSTUDIO_V1_RESPONSE.as_bytes().to_vec(),
+                "application/json",
+            ))
+            .mount(&server)
+            .await;
+
+        let models = provider.list_models().await?;
+
+        assert_eq!(models.len(), 3);
+
+        // Loaded model with quantization + context length
+        assert_eq!(models[0].id, "llama-3.3-70b-instruct");
+        assert_eq!(models[0].name, "llama-3.3-70b-instruct");
+        assert_eq!(models[0].display_name.as_deref(), Some("Llama 3.3 70B"));
+        assert_eq!(models[0].provider.as_deref(), Some("Meta"));
+        assert_eq!(models[0].model_type.as_deref(), Some("llm"));
+        assert_eq!(models[0].size, Some(40443546592));
+        assert_eq!(models[0].quantization.as_deref(), Some("Q4_K_M"));
+        assert_eq!(models[0].max_context_length, Some(8192));
+        assert_eq!(models[0].state.as_deref(), Some("loaded"));
+
+        // VL model (not loaded)
+        assert_eq!(models[1].id, "qwen2.5-vl-7b");
+        assert_eq!(models[1].model_type.as_deref(), Some("vlm"));
+        assert!(models[1].state.is_none());
+
+        // Embed model with no display name
+        assert_eq!(models[2].id, "nomic-embed-text-v1.5");
+        assert!(models[2].display_name.is_none());
+        assert_eq!(models[2].max_context_length, Some(2048));
+    }
+
+    #[tokio::test]
+    async fn test_lmstudio_list_models_v1_empty_falls_to_v0() -> ZenResult<()> {
+        let (provider, server) = mock_provider().await;
+
+        // v1 returns empty -> should go to v0
+        Mock::given(method("GET"))
+            .and(path("/api/v1/models"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"data": []})))
+            .mount(&server)
+            .await;
+
+        // v0 returns models
+        Mock::given(method("GET"))
+            .and(path("/api/v0/models"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": [
+                    {
+                        "id": "mistral-7b",
+                        "type": "llm",
+                        "publisher": "Mistral",
+                        "arch": "mistral",
+                        "state": "loaded",
+                        "quantization": "Q4_0",
+                        "max_context_length": 4096
+                    }
+                ]
+            })))
+            .mount(&server)
+            .await;
+
+        let models = provider.list_models().await?;
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].id, "mistral-7b");
+        assert_eq!(models[0].arch.as_deref(), Some("mistral"));
+        assert_eq!(models[0].state.as_deref(), Some("loaded"));
+        // v0 model with known arch -> supports_tools should be true
+        assert_eq!(models[0].supports_tools, Some(true));
+    }
+
+    #[tokio::test]
+    async fn test_lmstudio_list_models_v0_api() -> ZenResult<()> {
+        let (provider, server) = mock_provider().await;
+
+        // v1 returns error
+        Mock::given(method("GET"))
+            .and(path("/api/v1/models"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+
+        // v0 succeeds
+        Mock::given(method("GET"))
+            .and(path("/api/v0/models"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": [
+                    {
+                        "id": "llama3.2-11b-vlm",
+                        "type": "vlm",
+                        "publisher": "Meta",
+                        "arch": "llama",
+                        "quantization": "Q4_K_M",
+                        "max_context_length": 4096
+                    },
+                    {
+                        "id": "granite-20b",
+                        "type": "llm",
+                        "publisher": "IBM",
+                        "arch": "granite",
+                        "state": "loaded",
+                        "quantization": "Q4_0"
+                    }
+                ]
+            })))
+            .mount(&server)
+            .await;
+
+        let models = provider.list_models().await?;
+        assert_eq!(models.len(), 2);
+
+        // vlm type -> supports_vision = true
+        assert_eq!(models[0].id, "llama3.2-11b-vlm");
+        assert_eq!(models[0].supports_vision, Some(true));
+        // v0 sorts loaded models first — granite is loaded
+        assert_eq!(models[0].state, None);
+        assert_eq!(models[1].id, "granite-20b");
+        assert_eq!(models[1].state.as_deref(), Some("loaded"));
+        // granite arch -> supports_tools = true
+        assert_eq!(models[1].supports_tools, Some(true));
+    }
+
+    #[tokio::test]
+    async fn test_lmstudio_list_models_fallback_to_openai_compat() -> ZenResult<()> {
+        let (provider, server) = mock_provider().await;
+
+        // v1 fails
+        Mock::given(method("GET"))
+            .and(path("/api/v1/models"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+
+        // v0 also fails
+        Mock::given(method("GET"))
+            .and(path("/api/v0/models"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&server)
+            .await;
+
+        // Fallback: /v1/models (OpenAI-compat)
+        Mock::given(method("GET"))
+            .and(path("/v1/models"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": [
+                    {"id": "gpt-4o-mini"},
+                    {"id": "text-embedding-3-small"}
+                ]
+            })))
+            .mount(&server)
+            .await;
+
+        let models = provider.list_models().await?;
+        assert_eq!(models.len(), 2);
+        assert_eq!(models[0].id, "gpt-4o-mini");
+        assert_eq!(models[0].provider.as_deref(), Some("lmstudio"));
+        assert!(models[0].supports_vision.is_none());
+        assert!(models[0].supports_tools.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_lmstudio_list_models_all_endpoints_fail() -> ZenResult<()> {
+        let (provider, server) = mock_provider().await;
+
+        // All endpoints fail
+        Mock::given(method("GET"))
+            .and(path("/api/v1/models"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/v0/models"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/models"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&server)
+            .await;
+
+        let result = provider.list_models().await;
+        assert!(result.is_err());
+        Ok(())
     }
 }

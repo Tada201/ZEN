@@ -1,3 +1,1 @@
-pub mod space_agent;
-
-pub use space_agent::create_space_agent;
+// Agents module - no agents currently registered
