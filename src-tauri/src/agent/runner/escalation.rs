@@ -27,6 +27,7 @@ impl Runner {
         app: &AppHandle,
         chat_id: &str,
         assistant_message_id: &mut Option<String>,
+        _stream_channel: Option<tauri::ipc::Channel<ChatChunkPayload>>,
     ) -> Result<crate::db::models::ChatResponse, anyhow::Error> {
         match self.call_llm_with_callback(
             provider, model, messages.clone(), tools.clone(),

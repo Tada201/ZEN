@@ -183,7 +183,7 @@ pub async fn execute_single_tool(
                         if s.len() > 200 * 1024 {
                             tracing::warn!("Tool output too large ({} bytes), truncating to 200KB", s.len());
                             let suffix = format!("... [TRUNCATED DUE TO SIZE ({} bytes)]", s.len());
-                            let max_bytes = 200 * 1024;
+                            let max_bytes: usize = 200 * 1024;
                             let max_content_bytes = max_bytes.saturating_sub(suffix.len());
                             let mut truncated = String::new();
                             let mut byte_count = 0;

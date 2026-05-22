@@ -46,6 +46,10 @@ impl Tool for VectorSearchTool {
         RiskLevel::Low
     }
 
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     async fn execute(
         &self,
         app: AppHandle,
@@ -120,6 +124,10 @@ impl Tool for ListDocumentsTool {
         RiskLevel::Low
     }
 
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     async fn execute(
         &self,
         app: AppHandle,
@@ -181,6 +189,10 @@ impl Tool for ReadDocumentTool {
 
     fn risk_level(&self) -> RiskLevel {
         RiskLevel::Medium
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 
     async fn execute(
@@ -283,6 +295,10 @@ impl Tool for GrepDocumentsTool {
 
     fn risk_level(&self) -> RiskLevel {
         RiskLevel::Low
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 
     async fn execute(

@@ -2,6 +2,9 @@ pub mod ollama;
 pub mod openai_compat;
 pub mod anthropic;
 pub mod lmstudio;
+pub mod registry;
+
+pub use registry::ProviderRegistry;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};

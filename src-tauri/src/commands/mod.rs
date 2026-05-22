@@ -17,7 +17,7 @@ use sqlx::SqlitePool;
 use std::path::PathBuf;
 
 use crate::services::{HardwareService, TerminalService, DocumentService, SettingsService, SpeechService, TtsService, process_manager::ProcessManager};
-use crate::llm::LlmProvider;
+use crate::llm::{LlmProvider, ProviderRegistry};
 use crate::error::{ZenResult, ZenError};
 use crate::agent::types::AgentRegistry;
 use crate::agent::hooks::HookRegistry;
@@ -133,6 +133,7 @@ pub struct AppState {
     /// Populated in background after each LLM response; consumed on the NEXT message's iteration-1.
     pub recall_cache: Arc<tokio::sync::Mutex<HashMap<String, (String, String)>>>,
     pub provider_cache: Arc<tokio::sync::Mutex<HashMap<String, (Arc<dyn LlmProvider>, std::time::Instant)>>>,
+    pub provider_registry: Arc<ProviderRegistry>,
 }
 
 impl AppState {
@@ -159,6 +160,7 @@ impl AppState {
         let shared_session_memory = Arc::new(crate::rag::session_memory::SessionMemoryManager::new(default_workspace.clone()));
         let process_manager = Arc::new(ProcessManager::new());
         let event_bus = Arc::new(EventBus::default());
+        let settings_manager = Arc::new(SettingsService::new());
 
         Self {
             db: InitState::new(),
@@ -174,7 +176,7 @@ impl AppState {
             documents: Arc::new(DocumentService::new()),
             speech: Arc::new(tokio::sync::RwLock::new(None)),
             tts: Arc::new(tokio::sync::RwLock::new(None)),
-            settings_manager: Arc::new(SettingsService::new()),
+            settings_manager: settings_manager.clone(),
             chat_cancellation_tokens: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             rag: InitState::new(),
             conversation_store: InitState::new(),
@@ -211,6 +213,7 @@ impl AppState {
             gtsm_cache: Arc::new(crate::services::gtsm::cache::GtsmCache::new()),
             recall_cache: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             provider_cache: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            provider_registry: Arc::new(ProviderRegistry::new(settings_manager)),
         }
     }
 

@@ -87,6 +87,9 @@ pub trait Tool: Send + Sync {
         RiskLevel::Low
     }
 
+    /// For downcasting to concrete types (e.g., AgentToolAdapter)
+    fn as_any(&self) -> &dyn std::any::Any;
+
     /// Execute the tool
     async fn execute(
         &self,

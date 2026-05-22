@@ -32,6 +32,9 @@ pub enum AgentEvent {
 
     #[serde(rename = "chat:chunk")]
     ChatChunk(ChatChunkPayload),
+
+    #[serde(rename = "chat:chunk:first")]
+    ChatChunkFirst(ChatChunkFirstPayload),
     
     #[serde(rename = "chat:message")]
     ChatMessage(ChatMessagePayload),
@@ -161,6 +164,12 @@ pub struct ChatChunkPayload {
     #[serde(rename = "type")]
     pub r#type: String,
     pub done: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatChunkFirstPayload {
+    pub chat_id: String,
+    pub delta: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -523,6 +532,7 @@ impl AgentEvent {
             AgentEvent::OrchestratorStart(_) => "orchestrator:start",
             AgentEvent::OrchestratorProgress(_) => "orchestrator:progress",
             AgentEvent::ChatChunk(_) => "chat:chunk",
+            AgentEvent::ChatChunkFirst(_) => "chat:chunk:first",
             AgentEvent::ChatMessage(_) => "chat:message",
             AgentEvent::ChatStatus(_) => "chat:status",
             AgentEvent::ChatError(_) => "chat:error",

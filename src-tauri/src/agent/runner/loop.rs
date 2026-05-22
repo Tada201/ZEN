@@ -28,6 +28,7 @@ use super::helpers::{
     parse_text_tool_calls, try_parse_tool_json,
 };
 use super::actions::{persist_and_emit_action, emit_action_only};
+use crate::agent::middleware::{EnrichmentContext, MiddlewareChain};
 
 /// Maximum recursion depth for sub-agent spawning (prevents infinite loops)
 pub const MAX_SPAWN_DEPTH: u32 = 3;
@@ -445,116 +446,27 @@ impl Runner {
                 Vec::new()
             };
 
-            // ── Build system prompt (P1: inject tool text when unsupported) ──
-            let mut system_content = current_agent.instructions.clone();
+            // ── Build system prompt via middleware chain (D3.2) ──
+            let app_inner = self.app.clone();
 
-            // Inject current time directly so LLM doesn't need to call get_current_time tool
-            let now = chrono::Local::now();
-            let time_block = format!(
-                "\n\n## Current Date & Time\n{}\nTimezone: {:?}\nUnix timestamp: {}",
-                now.format("%Y-%m-%d %H:%M:%S %z"),
-                now.timezone(),
-                now.timestamp()
+            let mut enrich_ctx = EnrichmentContext {
+                system_content: current_agent.instructions.clone(),
+                conversation: conversation.clone(),
+                extra_system_messages: Vec::new(),
+                chat_id: chat_id.clone(),
+                recall_block: cached_recall_context.clone(),
+                authorized_tool_ids: authorized_tool_ids.clone(),
+                tools_supported,
+                tools_enabled: run_config.tools_enabled,
+            };
+
+            let chain = MiddlewareChain::default_chain(
+                app_inner.clone(),
+                self.db_pool.clone(),
             );
-            system_content.push_str(&time_block);
+            chain.enrich_all(&mut enrich_ctx).await?;
 
-            // Inject UI Rendering & Formatting Rules
-            system_content.push_str("\n\n## UI Rendering & Formatting Rules\n");
-            system_content.push_str("1. When generating SVGs or visual assets, ALWAYS wrap the raw `<svg>` code inside a markdown code block with the `svg` language identifier (e.g. ```svg\n<svg>...</svg>\n```). Do NOT output raw SVG tags directly in the text body.\n");
-            system_content.push_str("2. Structure your responses with clear markdown headings and bullet points.\n");
-            // Inject canvas context if draw tool is available
-            if authorized_tool_ids.iter().any(|t| t == "draw") {
-                system_content.push_str("\n\n## Drawing Canvas\n");
-                system_content.push_str("You have access to a drawing canvas (800x600 pixels).\n");
-                system_content.push_str("Use the 'draw' tool to create diagrams, flowcharts, or visual content.\n");
-                system_content.push_str("IMPORTANT: Before drawing complex scenes, ask for the current canvas state to avoid overlaps.\n");
-                system_content.push_str("Canvas context is automatically provided with each iteration if there are existing objects.\n");
-            }
-
-            // Inject graph_session context if available
-            if authorized_tool_ids.iter().any(|t| t == "graph_session") {
-                system_content.push_str("\n\n## Interactive Math Graphs\n");
-                system_content.push_str("You have access to an interactive graphing engine for mathematical expressions.\n");
-                system_content.push_str("Use the 'graph_session' tool to:\n");
-                system_content.push_str("- Add expressions: {\"action\": \"add_expression\", \"expr\": \"sin(x)\", \"color\": \"#00FF9F\"}\n");
-                system_content.push_str("- Update expressions: {\"action\": \"update_expression\", \"id\": \"f1\", \"expr\": \"a * sin(x)\"}\n");
-                system_content.push_str("- Set variables: {\"action\": \"set_variable\", \"name\": \"a\", \"value\": 2.5}\n");
-                system_content.push_str("- Adjust viewport: {\"action\": \"set_viewport\", \"x_min\": -5, \"x_max\": 5, \"y_min\": -3, \"y_max\": 3}\n");
-                system_content.push_str("- Delete expressions: {\"action\": \"delete_expression\", \"id\": \"f1\"}\n");
-                system_content.push_str("When you use this tool, the UI automatically switches to math plot mode.\n");
-                system_content.push_str("Iteratively refine expressions based on validation feedback (undefined variables, parse errors, etc.).\n");
-                system_content.push_str("Supported: sin, cos, tan, sqrt, abs, ln, log10, exp, floor, ceil, and named variables.\n");
-                
-                // Inject current session state if available
-                use crate::commands::AppState;
-                let session_id = format!("chat_{}", chat_id);
-                if let Some(state) = self.app.try_state::<AppState>() {
-                    let sessions = state.graph_sessions.try_lock();
-                    if let Ok(sessions_guard) = sessions {
-                        if let Some(session) = sessions_guard.get(&session_id) {
-                            system_content.push_str(&format!(
-                                "\n\n### Current Graph State (Session: {})\n\
-                                 Expressions: {}\n\
-                                 Variables: {:?}\n\
-                                 Viewport: [{},{}] x [{},{}]\n\
-                                 Issues: {}\n\
-                                 Version: {}\n\n",
-                                session_id,
-                                session.expressions.len(),
-                                session.variables,
-                                session.viewport.x_min, session.viewport.x_max,
-                                session.viewport.y_min, session.viewport.y_max,
-                                session.issues.len(),
-                                session.current_version
-                            ));
-                            
-                            // Add expression details
-                            if !session.expressions.is_empty() {
-                                system_content.push_str("### Expressions:\n");
-                                for expr in &session.expressions {
-                                    let status = if expr.visible { "VISIBLE" } else { "HIDDEN" };
-                                    let error = expr.error.as_deref().unwrap_or("OK");
-                                    system_content.push_str(&format!(
-                                        "- {} [{}]: {} (error: {})\n",
-                                        expr.id, status, expr.expr, error
-                                    ));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            if !tools_supported && !meta_tools.is_empty() {
-                system_content.push_str("\n\n## Tool System (Deferred Discovery)\n");
-                system_content.push_str("You have access to a library of tools. Instead of loading all schemas upfront, you use 3 meta-tools to discover and invoke them dynamically:\n\n");
-                system_content.push_str("1. **tool_list** - Lists all available tools with 1-line descriptions. Call this first to discover what you can do.\n");
-                system_content.push_str("2. **tool_info** - Gets the full JSON schema, parameters, and usage details for a specific tool.\n");
-                system_content.push_str("3. **tool_exec** - Executes a tool by name with the given arguments.\n\n");
-                system_content.push_str("### Workflow\n");
-                system_content.push_str("1. Call `tool_list({})` to see available tools.\n");
-                system_content.push_str("2. Call `tool_info({\"tool_id\": \"tool_name\"})` to learn a tool's parameters.\n");
-                system_content.push_str("3. Call `tool_exec({\"tool_id\": \"tool_name\", \"arguments\": {\"param\": \"value\"}})` to execute it.\n\n");
-                system_content.push_str("### Rules\n");
-                system_content.push_str("- Output EXACTLY one JSON block per tool call: ```json\n{\"tool\": \"TOOL_NAME\", \"args\": {\"...\"}}\n```\n");
-                system_content.push_str("- After receiving a tool result, incorporate the data into your response.\n");
-                system_content.push_str("- Do NOT ask the user which tool to use - you have full autonomy.\n");
-            }
-
-            // ── Fix #1: Inject cached recall from previous turn (instant – no embedding) ──
-            // The background task spawned after LLM responds will refresh this for the NEXT message.
-            if semantic_recall_enabled {
-                if let Some(ref recalled) = cached_recall_context {
-                    if !recalled.is_empty() {
-                        system_content.push_str(recalled);
-                    }
-                }
-            }
-            // Suppress old M2 memoization variables (kept to avoid unused-var warnings
-            // from the background-task closure below that still references them).
-            let _ = &cached_recall_user_msg;
-            let _ = &context_tracker;
-
+            let system_content = enrich_ctx.system_content;
 
             let mut full_context = vec![ChatMessage {
                 role: "system".to_string(),
@@ -563,6 +475,17 @@ impl Runner {
                 tool_calls: None,
                 tool_call_id: None,
             }];
+
+            // Inject extra system messages from middleware (e.g. summaries)
+            for msg in enrich_ctx.extra_system_messages {
+                full_context.push(ChatMessage {
+                    role: "system".to_string(),
+                    content: msg,
+                    images: None,
+                    tool_calls: None,
+                    tool_call_id: None,
+                });
+            }
 
             if let Some(ref db) = self.db_pool {
                 // Cold: previous session summaries
@@ -594,7 +517,6 @@ impl Runner {
 
             // ── Call LLM with auto-escalation (Phase 3.5) ──
             let chat_id_inner = chat_id.clone();
-            let app_inner = self.app.clone();
 
             // P1: Only pass structured tools if provider supports them
             let tools_arg = if tools_supported && !meta_tools.is_empty() {
@@ -614,6 +536,7 @@ impl Runner {
                 &app_inner,
                 &chat_id_inner,
                 &mut assistant_message_id,
+                None,
             ).await {
                 Ok(resp) => resp,
                 Err(e) => {

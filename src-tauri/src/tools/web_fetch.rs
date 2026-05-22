@@ -142,6 +142,10 @@ impl Tool for WebFetchTool {
         "Fetches the text content of a given HTTP/HTTPS URL. Use this to read web pages or APIs."
     }
 
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn parameters_schema(&self) -> serde_json::Value {
         json!({
             "type": "object",

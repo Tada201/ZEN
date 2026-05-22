@@ -67,15 +67,42 @@ export function OpenUICanvas({ selectedModelId, selectedProvider }: OpenUICanvas
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
+        let firstChunkDelta: string | null = null;
 
-        // Register window listeners matching activeSessionId
-        const unlistenChunk = await listen<any>("chat:chunk", (event) => {
-          if (event.payload.chat_id === activeSessionId) {
+        // Listen for the immediate first chunk (bypasses the 40ms buffer)
+        const unlistenChunkFirst = await listen<any>("chat:chunk:first", (event) => {
+          if (event.payload.chat_id === activeSessionId && event.payload.delta) {
+            firstChunkDelta = event.payload.delta;
             const sseData = {
               choices: [
                 {
                   delta: {
-                    content: event.payload.delta
+                    content: firstChunkDelta
+                  }
+                }
+              ]
+            };
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(sseData)}\n\n`));
+          }
+        });
+
+        // Register window listeners matching activeSessionId
+        const unlistenChunk = await listen<any>("chat:chunk", (event) => {
+          if (event.payload.chat_id === activeSessionId) {
+            let delta = event.payload.delta || "";
+
+            // Strip the already-handled first-chunk prefix
+            if (firstChunkDelta && delta.startsWith(firstChunkDelta)) {
+              delta = delta.slice(firstChunkDelta.length);
+              firstChunkDelta = null;
+            }
+            if (!delta) return;
+
+            const sseData = {
+              choices: [
+                {
+                  delta: {
+                    content: delta
                   }
                 }
               ]
@@ -100,6 +127,7 @@ export function OpenUICanvas({ selectedModelId, selectedProvider }: OpenUICanvas
         });
 
         function cleanup() {
+          unlistenChunkFirst();
           unlistenChunk();
           unlistenDone();
           unlistenError();

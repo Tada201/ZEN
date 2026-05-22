@@ -15,6 +15,8 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
   const unlistenRefs = useRef<UnlistenFn[]>([]);
   const chunkBuffersRef = useRef<Record<string, string>>({});
   const chunkRafRef = useRef<number | null>(null);
+  const firstChunkDeltas = useRef<Record<string, string>>({});
+  const firstChunkSent = useRef<Set<string>>(new Set());
 
   const flushAllChunkBuffers = useCallback(() => {
     const buffers = chunkBuffersRef.current;
@@ -26,8 +28,21 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
     const { setSessionMessages } = useChatStore.getState();
 
     for (const chatId of chatIds) {
-      const delta = buffers[chatId];
+      let delta = buffers[chatId];
       if (!delta) continue;
+
+      // Strip the already-handled first-chunk prefix so the delta
+      // is not rendered twice when chat:chunk:first already flushed it.
+      const prefix = firstChunkDeltas.current[chatId];
+      if (prefix && delta.startsWith(prefix)) {
+        delta = delta.slice(prefix.length);
+        delete firstChunkDeltas.current[chatId];
+      }
+      if (!delta) {
+        delete buffers[chatId];
+        continue;
+      }
+
       delete buffers[chatId];
 
       setSessionMessages(chatId, (prev: Message[]) => {
@@ -39,7 +54,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         const lastStep = prevSteps[lastStepIdx];
         const steps = lastStep && lastStep.type === "text"
           ? prevSteps.map((s, i) => i === lastStepIdx ? { ...s, content: (s.content || "") + delta } : s)
-          : [...prevSteps, { type: "text", content: delta }];
+          : [...prevSteps, { type: "text" as const, content: delta }];
 
         const next = [...prev];
         next[next.length - 1] = { ...last, content: last.content + delta, steps };
@@ -53,6 +68,50 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
       unlistenRefs.current.forEach(u => u());
       unlistenRefs.current = [];
 
+      const unlistenChunkFirst = await listen<any>("chat:chunk:first", (event) => {
+        const chatId = event.payload.chat_id;
+        if (!chatId) return;
+
+        const delta = event.payload.delta;
+        if (!delta) return;
+
+        // Guard: if the first chat:chunk already flushed before this event
+        // arrived (Tauri events across names are unordered), skip merging
+        // to avoid double-rendering the first delta.
+        if (firstChunkSent.current.has(chatId)) {
+          firstChunkDeltas.current[chatId] = delta;
+          return;
+        }
+        firstChunkSent.current.add(chatId);
+
+        useChatStore.getState().setStreamingForChat(chatId, true);
+        resetHeartbeatTimeout(chatId);
+
+        firstChunkDeltas.current[chatId] = delta;
+
+        // Immediately merge the first delta into chat state — no buffering
+        useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
+          const last = prev[prev.length - 1];
+          if (!last || last.role !== "assistant") return prev;
+
+          const prevSteps = last.steps || [];
+          const lastStepIdx = prevSteps.length - 1;
+          const lastStep = prevSteps[lastStepIdx];
+          const steps = lastStep && lastStep.type === "text"
+            ? prevSteps.map((s, i) => i === lastStepIdx ? { ...s, content: (s.content || "") + delta } : s)
+            : [...prevSteps, { type: "text" as const, content: delta }];
+
+          const next = [...prev];
+          next[next.length - 1] = { ...last, content: last.content + delta, steps };
+          return next;
+        });
+
+        ttftMark(chatId, 'firstChunk');
+        requestAnimationFrame(() => {
+          ttftMark(chatId, 'firstRender');
+        });
+      });
+
       const unlistenChunk = await listen<any>("chat:chunk", (event) => {
         const chatId = event.payload.chat_id;
         if (!chatId) return;
@@ -64,6 +123,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         chunkBuffersRef.current[chatId] = (chunkBuffersRef.current[chatId] || "") + event.payload.delta;
         
         if (isFirstChunk) {
+          firstChunkSent.current.add(chatId);
           ttftMark(chatId, 'firstChunk');
           flushAllChunkBuffers();
           
@@ -81,10 +141,19 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
 
         clearHeartbeatTimeout(chatId);
 
-        if (chunkBuffersRef.current[chatId]) {
-          const delta = chunkBuffersRef.current[chatId];
-          delete chunkBuffersRef.current[chatId];
+        let finalDelta = chunkBuffersRef.current[chatId];
+        if (!finalDelta) finalDelta = "";
 
+        // Strip the already-handled first-chunk prefix if present
+        const prefix = firstChunkDeltas.current[chatId];
+        if (prefix && finalDelta.startsWith(prefix)) {
+          finalDelta = finalDelta.slice(prefix.length);
+        }
+        delete chunkBuffersRef.current[chatId];
+        delete firstChunkDeltas.current[chatId];
+        firstChunkSent.current.delete(chatId);
+
+        if (finalDelta) {
           useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
             const last = prev[prev.length - 1];
             if (!last || last.role !== "assistant") return prev;
@@ -93,11 +162,11 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
             const lastStepIdx = prevSteps.length - 1;
             const lastStep = prevSteps[lastStepIdx];
             const steps = lastStep && lastStep.type === "text"
-              ? prevSteps.map((s, i) => i === lastStepIdx ? { ...s, content: (s.content || "") + delta } : s)
-              : [...prevSteps, { type: "text", content: delta }];
+              ? prevSteps.map((s, i) => i === lastStepIdx ? { ...s, content: (s.content || "") + finalDelta } : s)
+              : [...prevSteps, { type: "text" as const, content: finalDelta }];
 
             const next = [...prev];
-            next[next.length - 1] = { ...last, content: last.content + delta, steps };
+            next[next.length - 1] = { ...last, content: last.content + finalDelta, steps };
             return next;
           });
         }
@@ -146,6 +215,8 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         if (!chatId) return;
 
         delete chunkBuffersRef.current[chatId];
+        delete firstChunkDeltas.current[chatId];
+        firstChunkSent.current.delete(chatId);
         clearHeartbeatTimeout(chatId);
         useChatStore.getState().setStreamingForChat(chatId, false);
       });
@@ -173,7 +244,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         });
       });
 
-      unlistenRefs.current.push(unlistenChunk, unlistenDone, unlistenError, unlistenStreamReset, unlistenResearchStep);
+      unlistenRefs.current.push(unlistenChunkFirst, unlistenChunk, unlistenDone, unlistenError, unlistenStreamReset, unlistenResearchStep);
     };
 
     setupListeners();

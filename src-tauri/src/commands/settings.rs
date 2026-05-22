@@ -19,6 +19,7 @@ pub async fn set_setting(state: State<'_, AppState>, key: String, value: String)
     if key.ends_with("_base_url") || key.ends_with("_api_key") || key == "active_provider" {
         let mut cache = state.provider_cache.lock().await;
         cache.clear();
+        state.provider_registry.invalidate_all().await;
     }
     
     Ok(())

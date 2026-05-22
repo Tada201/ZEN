@@ -177,6 +177,7 @@ impl super::LmStudioProvider {
             let mut tcs = Vec::new();
             for acc in results_tool_calls {
                 if !acc.name.is_empty() {
+                    let tool_name = acc.name.clone();
                     tcs.push(crate::db::models::ToolCall {
                         id: if acc.id.is_empty() { format!("call_{}", uuid::Uuid::new_v4()) } else { acc.id },
                         name: acc.name,
@@ -184,7 +185,7 @@ impl super::LmStudioProvider {
                             Ok(args) => args,
                             Err(e) => {
                                 tracing::warn!(
-                                    tool = %acc.name,
+                                    tool = %tool_name,
                                     raw_args = %acc.arguments,
                                     error = %e,
                                     "Malformed tool call arguments, falling back to empty JSON"

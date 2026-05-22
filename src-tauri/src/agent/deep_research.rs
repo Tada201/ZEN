@@ -4,6 +4,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, error};
 use serde_json::json;
 
+use crate::agent::event_bus::{AgentEvent, ChatDonePayload};
 use crate::db::models::Message;
 use crate::db::queries;
 use crate::llm::{LlmProvider, ChatRequestConfig};
@@ -95,7 +96,9 @@ pub async fn run_deep_research(
         let fetch_tool = WebFetchTool;
         for url in urls_to_fetch {
             if token.is_cancelled() {
-                break;
+                emit_step("Research cancelled by user.", "completed", &message_id);
+                emit_chat_done(&app, &chat_id, "cancelled");
+                return;
             }
             match fetch_tool.execute(app.clone(), chat_id.clone(), json!({"url": url})).await {
                 Ok(output) => {
@@ -163,6 +166,7 @@ pub async fn run_deep_research(
         Err(e) => {
             error!("Failed to start LLM synthesis stream: {}", e);
             emit_step("Synthesizing final research report...", "error", &message_id);
+            emit_chat_done(&app, &chat_id, "error");
             return;
         }
     };
@@ -205,4 +209,18 @@ pub async fn run_deep_research(
     }));
 
     info!("Deep Research orchestrator completed");
+
+    emit_chat_done(&app, &chat_id, "complete");
+}
+
+fn emit_chat_done(app: &AppHandle, chat_id: &str, reason: &str) {
+    let event = AgentEvent::ChatDone(ChatDonePayload {
+        chat_id: chat_id.to_string(),
+        content: None,
+        tokens_in: 0,
+        tokens_out: 0,
+        reason: reason.to_string(),
+        done: reason == "complete",
+    });
+    event.emit_via(app, &None);
 }

@@ -327,6 +327,10 @@ impl Tool for WebSearchTool {
         "Search the web for current information. Uses DuckDuckGo (no API key required). Returns up to 10 results."
     }
 
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn parameters_schema(&self) -> Value {
         json!({
             "type": "object",

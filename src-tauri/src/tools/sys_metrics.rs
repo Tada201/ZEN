@@ -27,6 +27,10 @@ impl Tool for SystemMetricsTool {
         })
     }
 
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn risk_level(&self) -> RiskLevel {
         RiskLevel::Low
     }

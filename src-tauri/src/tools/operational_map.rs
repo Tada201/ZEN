@@ -26,6 +26,10 @@ impl Tool for ActivateOperationalMapTool {
          Can pinpoint a specific location via name or coordinates."
     }
 
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn parameters_schema(&self) -> serde_json::Value {
         json!({
             "type": "object",

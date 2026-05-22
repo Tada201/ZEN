@@ -151,14 +151,27 @@ pub async fn send_message(
         resolved_provider_name = %resolved_provider_name,
         "Resolving active LLM provider instance"
     );
-    let llm_provider = state.provider_by_name(&resolved_provider_name, &db).await?;
     let active_model = model.ok_or_else(|| crate::error::ZenError::Custom(
         "No model selected. Open Settings → Models to choose a model.".to_string()
     ))?;
+
     info!(
+        chat_id = %chat_id,
+        resolved_provider_name = %resolved_provider_name,
         active_model = %active_model,
+        "Fetching provider, history, and settings in parallel"
+    );
+    let (llm_provider, history, tools_enabled_str, custom_prompt_setting) = tokio::try_join!(
+        state.provider_registry.create(&resolved_provider_name),
+        queries::get_messages(&db, &chat_id),
+        state.settings_manager.get("toolsEnabled"),
+        async { queries::get_setting(&db, "systemPrompt").await },
+    )?;
+    info!(
+        chat_id = %chat_id,
+        history_count = %history.len(),
         resolved_provider = %resolved_provider_name,
-        "Resolved active LLM provider and model"
+        "Retrieved provider, chat history, and settings in parallel"
     );
 
     // 3. Prepare config
@@ -189,10 +202,7 @@ pub async fn send_message(
         tokens.insert(chat_id.clone(), token.clone());
     }
 
-    // 4. Fetch history for context
-    info!(chat_id = %chat_id, "Fetching chat history for LLM context");
-    let history = queries::get_messages(&db, &chat_id).await?;
-    info!(chat_id = %chat_id, history_count = %history.len(), "Retrieved chat history context");
+    // 4. Convert history to ChatMessage format (already fetched in parallel)
     let chat_messages: Vec<ChatMessage> = history.into_iter().map(|m| ChatMessage {
         role: m.role,
         content: m.content,
@@ -211,8 +221,7 @@ pub async fn send_message(
     if let Some(requested_tools) = tools {
         tool_ids.extend(requested_tools);
     } else {
-        let tools_enabled = state.settings_manager.get("toolsEnabled").await
-            .unwrap_or_default()
+        let tools_enabled = tools_enabled_str
             .map(|s| s.trim() == "true")
             .unwrap_or(true);
 
@@ -225,10 +234,7 @@ pub async fn send_message(
         }
     }
 
-    // Retrieve custom system prompt from SQLite settings table (key: "systemPrompt")
-    let custom_prompt_setting = crate::db::queries::get_setting(&db, "systemPrompt")
-        .await
-        .unwrap_or_default();
+    // (custom_prompt_setting was already fetched in parallel above)
     
     let default_instructions = "You are Zen, a powerful agentic AI assistant. Keep responses direct, short, and highly concise. Avoid redundant conversational fluff.
 
