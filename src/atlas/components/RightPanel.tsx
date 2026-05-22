@@ -4,7 +4,7 @@ import { useGTSMStore } from "@/lib/stores/useGTSMStore";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Activity, Cpu, Box, Terminal as TerminalIcon, Map as MapIcon, Zap, X, Paintbrush
+  Activity, Cpu, Box, Terminal as TerminalIcon, Map as MapIcon, Zap, X, Paintbrush, Database
 } from 'lucide-react';
 // Lazy load heavy components to prevent main thread blocking and high INP
 const SystemDiagnostics = React.lazy(() => import("@/components/shared/SystemDiagnostics").then(m => ({ default: m.SystemDiagnostics })));
@@ -14,6 +14,7 @@ const ArtifactPanel = React.lazy(() => import("@/components/shared/ArtifactPanel
 const AgentOrchestratorPanel = React.lazy(() => import("@/components/widgets/AgentOrchestratorPanel").then(m => ({ default: m.AgentOrchestratorPanel })));
 const MathPlotInterface = React.lazy(() => import("@/components/widgets/MathPlotInterface").then(m => ({ default: m.MathPlotInterface })));
 const InteractiveDrawingCanvas = React.lazy(() => import("@/components/widgets/InteractiveDrawingCanvas"));
+const MemoryStatsWidget = React.lazy(() => import("@/components/widgets/MemoryStatsWidget").then(m => ({ default: m.MemoryStatsWidget })));
 
 const LoadingFallback = () => (
   <div className="flex flex-col items-center justify-center h-full py-32 text-zinc-500 italic opacity-60">
@@ -74,6 +75,8 @@ export function RightPanel() {
         );
       case 'map':
         return null;
+      case 'memory':
+        return <MemoryStatsWidget />;
       default:
         return (
           <div className="flex flex-col items-center justify-center h-full py-32 text-slate-500 italic opacity-40">
@@ -96,7 +99,8 @@ export function RightPanel() {
       artifacts: 'Artifacts',
       terminal: 'Terminal',
       map: 'Operational Map',
-      drawing: 'Canvas Workspace'
+      drawing: 'Canvas Workspace',
+      memory: 'Memory Stats'
     };
     return titles[activeRightTab] || 'Utility';
   };
@@ -108,7 +112,8 @@ export function RightPanel() {
       artifacts: Box,
       terminal: TerminalIcon,
       map: MapIcon,
-      drawing: Paintbrush
+      drawing: Paintbrush,
+      memory: Database
     };
     const IconComp = icons[activeRightTab] || Activity;
     return <IconComp size={16} className="text-primary" />;
@@ -177,8 +182,8 @@ export function RightPanel() {
             <span className="truncate max-w-[180px]">Target: {operationalParams?.label || "Active Search"}</span>
           </div>
         </div>
-      ) : activeRightTab === 'drawing' || activeRightTab === 'agents' || activeRightTab === 'terminal' || activeRightTab === 'artifacts' ? (
-        <div className="flex-1 relative overflow-hidden bg-black flex flex-col">
+      ) : activeRightTab === 'drawing' || activeRightTab === 'agents' || activeRightTab === 'terminal' || activeRightTab === 'artifacts' || activeRightTab === 'memory' ? (
+        <div className="flex-grow flex-1 relative overflow-hidden bg-black flex flex-col">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeRightTab}

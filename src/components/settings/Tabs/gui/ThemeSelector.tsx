@@ -59,7 +59,7 @@ export const ThemeSelector = memo(() => {
                                 )}
                             </div>
 
-                            <div className="h-10 w-full rounded-lg border border-white/5 relative overflow-hidden bg-slate-950/50 backdrop-blur-sm">
+                            <div className="h-10 w-full rounded-lg border border-white/5 relative overflow-hidden bg-zinc-950/50 backdrop-blur-sm">
                                 <div
                                     className="absolute inset-0 opacity-10"
                                     style={{ background: `linear-gradient(to top, ${accent}, transparent)` }}
@@ -89,7 +89,7 @@ export const ThemeSelector = memo(() => {
                         </span>
                         {themeId === CUSTOM_THEME_ID && <WorkbenchIcon name="codicon:check" size={12} className="text-blue-400" />}
                     </div>
-                    <div className="h-10 w-full rounded-lg border border-dashed border-white/10 bg-slate-950/50 flex items-center justify-center backdrop-blur-sm">
+                    <div className="h-10 w-full rounded-lg border border-dashed border-white/10 bg-zinc-950/50 flex items-center justify-center backdrop-blur-sm">
                         <WorkbenchIcon name="codicon:sparkle" size={12} className="text-white/20" />
                     </div>
                 </WorkbenchButton>
@@ -103,7 +103,7 @@ export const ThemeSelector = memo(() => {
                         exit={{ opacity: 0, height: 0 }}
                         className="overflow-hidden"
                     >
-                        <div className="p-4 bg-slate-900/30 rounded-xl border border-white/5 space-y-4">
+                        <div className="p-4 bg-zinc-900/30 rounded-xl border border-white/5 space-y-4">
                             <div className="flex items-center gap-2">
                                 <WorkbenchIcon name="codicon:code" size={14} className="text-blue-400" />
                                 <span className="text-[10px] font-bold uppercase tracking-widest text-white/50">
@@ -113,7 +113,7 @@ export const ThemeSelector = memo(() => {
                             <WorkbenchTextArea
                                 value={customThemeSource}
                                 onChangeText={(text) => updateSetting({ customThemeSource: text })}
-                                className="min-h-[160px] font-mono text-[11px] bg-slate-950/50 rounded-lg border border-white/5 p-3 focus:border-blue-500/30 transition-colors"
+                                className="min-h-[160px] font-mono text-[11px] bg-zinc-950/50 rounded-lg border border-white/5 p-3 focus:border-blue-500/30 transition-colors"
                                 placeholder='{ "name": "My Theme", "colors": { "r": 130, "g": 181, "b": 238 } }'
                             />
                         </div>

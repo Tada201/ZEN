@@ -6,7 +6,8 @@ use std::path::PathBuf;
 
 #[tauri::command]
 pub async fn ingest_document(state: State<'_, AppState>, path: String) -> AppResult<Document> {
-    state.documents.ingest(PathBuf::from(path)).await
+    let validated_path = crate::utils::validate_path(&path)?;
+    state.documents.ingest(validated_path).await
 }
 
 #[tauri::command]

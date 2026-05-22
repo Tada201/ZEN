@@ -199,15 +199,14 @@ export interface ProviderSlice {
   // API Keys
   openaiApiKey: string;
   anthropicApiKey: string;
-  googleApiKey: string;
+  geminiApiKey: string;
   groqApiKey: string;
   mistralApiKey: string;
   deepseekApiKey: string;
   openrouterApiKey: string;
   togetherApiKey: string;
   perplexityApiKey: string;
-  // Additional API keys
-  geminiApiKey: string;
+  nvidiaApiKey: string;
   qwenApiKey: string;
   xaiApiKey: string;
   kilocodeApiKey: string;
@@ -292,6 +291,15 @@ export interface IntelligenceSlice {
   embeddingModel: string;
   chunkSize: number;
   chunkOverlap: number;
+
+  memoryEnabled: boolean;
+  memoryMaxTurns: number;
+  memorySummarizationEnabled: boolean;
+  memorySummarizationModel: string;
+  memorySemanticRecallEnabled: boolean;
+  memoryMaxRecalledMessages: number;
+  memoryDriftDetectionEnabled: boolean;
+  memoryDriftThreshold: number;
 }
 
 // ─── Combined Settings State ──────────────────────────────────────────────

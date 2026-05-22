@@ -15,22 +15,9 @@ pub async fn get_system_status() -> AppResult<String> {
 }
 
 #[tauri::command]
-pub async fn get_system_stats() -> AppResult<SystemMetrics> {
-    use sysinfo::{System, CpuRefreshKind, MemoryRefreshKind, RefreshKind};
-    let mut sys = System::new_with_specifics(
-        RefreshKind::nothing()
-            .with_cpu(CpuRefreshKind::everything())
-            .with_memory(MemoryRefreshKind::everything())
-    );
-    sys.refresh_all();
-    
-    Ok(SystemMetrics {
-        cpu_load: sys.global_cpu_usage(),
-        mem_used: sys.used_memory(),
-        mem_total: sys.total_memory(),
-        net_up: 0.0,
-        net_down: 0.0,
-    })
+pub async fn get_system_stats(state: State<'_, AppState>) -> AppResult<SystemMetrics> {
+    let mut hardware = state.hardware.lock().await;
+    Ok(hardware.get_metrics())
 }
 
 #[tauri::command]
@@ -64,7 +51,8 @@ pub async fn browse_folder(path: Option<String>) -> AppResult<BrowseFolderResult
             .unwrap_or_else(|_| "/".to_string())
     });
 
-    let dir = std::fs::read_dir(&target).map_err(|e| crate::error::ZenError::Internal(format!("Cannot read directory: {}", e)))?;
+    let validated_path = crate::utils::validate_path(&target)?;
+    let dir = std::fs::read_dir(&validated_path).map_err(|e| crate::error::ZenError::Internal(format!("Cannot read directory: {}", e)))?;
 
     let mut dirs: Vec<FolderEntry> = Vec::new();
     let mut entries: Vec<FolderEntry> = Vec::new();

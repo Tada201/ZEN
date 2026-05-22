@@ -12,6 +12,7 @@ pub mod commands;
 pub mod mcp;
 pub mod canvas;
 pub mod terminal;
+pub mod utils;
 pub mod workspace;
 pub mod search;
 
@@ -109,7 +110,7 @@ pub fn run() {
 
                 let lance_store = Arc::new(
                     crate::rag::lancedb_store::LanceDbStore::new(
-                        rag_uri,
+                        rag_uri.clone(),
                         collection_name,
                         dimension,
                     )
@@ -120,8 +121,23 @@ pub fn run() {
                     eprintln!("Warning: Failed to initialize LanceDB vector store: {}", e);
                 } else {
                     // Store the vector store in app state
-                state.rag.set(lance_store.clone() as Arc<dyn crate::rag::VectorStore>).await;
-                eprintln!("LanceDB vector store initialized at: {}", rag_dir.display());
+                    state.rag.set(lance_store.clone() as Arc<dyn crate::rag::VectorStore>).await;
+                    eprintln!("LanceDB vector store initialized at: {}", rag_dir.display());
+
+                    // Initialize and store Conversation Store
+                    let conversation_store = Arc::new(
+                        crate::rag::conversation_store::ConversationStore::new(
+                            rag_uri.clone(),
+                            "conversation_vectors".to_string(),
+                            dimension,
+                        )
+                    );
+                    if let Err(e) = conversation_store.init().await {
+                        eprintln!("Warning: Failed to initialize LanceDB conversation vector store: {}", e);
+                    } else {
+                        state.conversation_store.set(conversation_store).await;
+                        eprintln!("LanceDB conversation vector store initialized.");
+                    }
 
                     // Try to initialize Ollama embeddings
                     match crate::rag::embedding::create_default_ollama_embedding().await {
@@ -206,6 +222,7 @@ pub fn run() {
             commands::agent::swarm_scale_agents,
             commands::agent::orchestrator_get_status,
             commands::agent::run_tool_command,
+            commands::agent::resolve_tool_approval,
             commands::voice::download_whisper_model,
             commands::voice::transcribe_audio,
             commands::voice::transcribe_stream,
@@ -251,6 +268,9 @@ pub fn run() {
             commands::spatial::list_markers_db,
             commands::spatial::save_marker_db,
             commands::spatial::delete_marker_db,
+            commands::memory::get_conversation_memories,
+            commands::memory::clear_conversation_memories,
+            commands::memory::get_memory_stats,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

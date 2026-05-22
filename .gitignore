@@ -54,4 +54,17 @@ public/audio/
 *.sln
 *.sw?
 
+# OpenClaude overrides
+.openclaude/
+
+# Codegraph / Cursor
+.codegraph/
+.cursor/
+
+# Issue tracker
+ISSUE.md
+
+# Backup files
+*.bak
+
 EXAMPLE_NO_EDITS/

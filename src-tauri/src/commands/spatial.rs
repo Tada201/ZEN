@@ -213,7 +213,7 @@ pub async fn compute_navigation_route(
     profile: String,
 ) -> Result<NavigationRoute, ZenError> {
     let prof = match profile.to_lowercase().as_str() {
-        "pedestrian" | "walking" | "pedestrian" => RoutingProfile::Pedestrian,
+        "pedestrian" | "walking" => RoutingProfile::Pedestrian,
         "car" | "driving" => RoutingProfile::Car,
         "truck" | "heavy" => RoutingProfile::Truck,
         _ => RoutingProfile::Car,

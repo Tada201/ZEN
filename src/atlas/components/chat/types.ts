@@ -8,13 +8,17 @@ export type MessageKind =
   | 'tool_result'
   | 'agent_handoff'
   | 'agent_spawn'
+  | 'error'
+  | 'system'
   | 'approval_request'
-  | 'clarification_request';
+  | 'clarification_request'
+  | 'deep_research';
 
 export interface ToolCallMeta {
   toolName: string;
   args: Record<string, unknown>;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'running' | 'completed' | 'error';
+  durationMs?: number;
 }
 
 export interface FileChange {
@@ -75,10 +79,10 @@ export interface ClarificationRequestMeta {
 }
 
 export interface ActionMeta {
-  agentId: string;
-  agentName: string;
-  iteration: number;
-  depth: number;
+  agentId?: string;
+  agentName?: string;
+  iteration?: number;
+  depth?: number;
   progressPercent?: number;
   toolCall?: ToolCallMeta;
   toolResult?: ToolResultMeta;
@@ -86,6 +90,8 @@ export interface ActionMeta {
   spawn?: SpawnMeta;
   approvalRequest?: ApprovalRequestMeta;
   clarificationRequest?: ClarificationRequestMeta;
+  researchSteps?: Array<{ text: string; status: 'pending' | 'running' | 'completed' | 'error' }>;
+  status?: 'running' | 'completed' | 'error';
 }
 
 export interface ActiveTool {

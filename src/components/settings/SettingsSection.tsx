@@ -22,10 +22,10 @@ export function SettingsSection({
 }: SettingsSectionProps) {
   return (
     <section className={cn(
-      "rounded-2xl border border-white/5 bg-slate-950/40 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.18)] backdrop-blur-md",
+      "space-y-4",
       className
     )}>
-      <div className="flex items-start gap-3 mb-5">
+      <div className="flex items-start gap-3 mb-4">
         {icon && (
           <div className="h-9 w-9 rounded-xl bg-white/[0.03] border border-white/5 flex items-center justify-center shrink-0">
             {typeof icon === "string" ? (

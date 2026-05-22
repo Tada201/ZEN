@@ -465,6 +465,7 @@ mod tests {
         let task1_id = task1.id.clone();
 
         let task2 = Task::new("Task 2", TaskType::ToolCall).with_dependency(&task1_id);
+        let task2_id = task2.id.clone();
 
         queue.push(QueuedTask::from_task(task1));
         queue.push(QueuedTask::from_task(task2));
@@ -478,7 +479,7 @@ mod tests {
 
         // Now Task 2 should be ready
         let next2 = queue.pop_next().unwrap();
-        assert_eq!(next2.task.id, task2.id);
+        assert_eq!(next2.task.id, task2_id);
     }
 
     #[test]
@@ -514,7 +515,7 @@ mod tests {
         assert_eq!(queue.progress_percentage(), 0.0);
 
         // Complete 5 tasks
-        for i in 0..5 {
+        for _i in 0..5 {
             let task = queue.pop_next().unwrap();
             queue.mark_completed(&task.task.id, Some(100));
         }

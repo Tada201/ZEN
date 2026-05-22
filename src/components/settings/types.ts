@@ -66,4 +66,11 @@ export interface IntelligenceConfig {
   topK: number;
   searchStrategy: 'vector' | 'hybrid' | 'semantic';
   strictGrounding: boolean;
+  // Memory systems
+  summarizationEnabled: boolean;
+  summarizationModel: string;
+  semanticRecallEnabled: boolean;
+  maxRecalledMessages: number;
+  driftDetectionEnabled: boolean;
+  driftThreshold: number;
 }

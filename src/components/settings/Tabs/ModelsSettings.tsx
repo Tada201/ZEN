@@ -27,8 +27,8 @@ const PROVIDER_COLORS: Record<string, string> = {
   openrouter: "bg-purple-500/10 text-purple-500 border-purple-500/20",
   together:   "bg-blue-400/10 text-blue-400 border-blue-400/20",
   perplexity: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20",
-  ollama:     "bg-slate-400/10 text-slate-400 border-slate-400/20",
-  lmstudio:   "bg-slate-600/10 text-slate-600 border-slate-600/20",
+  ollama:     "bg-zinc-400/10 text-zinc-400 border-zinc-400/20",
+  lmstudio:   "bg-zinc-600/10 text-zinc-600 border-zinc-600/20",
 };
 
 /* ── Provider Icon ─────────────────────────────────────────────── */

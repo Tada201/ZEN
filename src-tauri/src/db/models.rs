@@ -85,6 +85,7 @@ pub struct Message {
     pub attachments: Option<String>,
     pub kind: Option<String>,
     pub metadata: Option<String>,
+    pub is_compacted: Option<i32>,
     pub created_at: String,
 }
 
@@ -290,7 +291,7 @@ pub struct ChatResponse {
 
 // ─── Model Info ───
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelInfo {
     pub id: String,
@@ -412,5 +413,18 @@ pub struct ZenCommand {
     pub instructions: String,
     pub variables: String, // JSON array
     pub enabled: bool,
+}
+
+// ─── Conversation Summary (Phase 1) ───
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationSummary {
+    pub id: String,
+    pub chat_id: String,
+    pub summary: String,
+    pub message_count: Option<i32>,
+    pub token_count: Option<i32>,
+    pub created_at: String,
 }
 

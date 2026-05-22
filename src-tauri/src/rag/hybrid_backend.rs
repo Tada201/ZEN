@@ -412,7 +412,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_hybrid_backend_store_and_search() {
-        let temp_dir = TempDir::new().unwrap();
+        let _temp_dir = TempDir::new().unwrap();
         let sqlite_pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
 
         let config = EmbeddingConfig {

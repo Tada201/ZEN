@@ -11,6 +11,12 @@ const DEFAULT_INTELLIGENCE_CONFIG: IntelligenceConfig = {
   topK: 5,
   searchStrategy: "vector",
   strictGrounding: false,
+  summarizationEnabled: true,
+  summarizationModel: "llama3.2:1b",
+  semanticRecallEnabled: true,
+  maxRecalledMessages: 5,
+  driftDetectionEnabled: true,
+  driftThreshold: 0.3,
 };
 
 /**
@@ -31,6 +37,15 @@ export interface IntelligenceSlice {
   embeddingModel: string;
   chunkSize: number;
   chunkOverlap: number;
+
+  memoryEnabled: boolean;
+  memoryMaxTurns: number;
+  memorySummarizationEnabled: boolean;
+  memorySummarizationModel: string;
+  memorySemanticRecallEnabled: boolean;
+  memoryMaxRecalledMessages: number;
+  memoryDriftDetectionEnabled: boolean;
+  memoryDriftThreshold: number;
 
   updateIntelligenceConfig: (config: Partial<IntelligenceConfig>) => void;
   setEmbeddingModel: (model: string) => void;
@@ -53,11 +68,38 @@ export const createIntelligenceSlice: StateCreator<
   chunkSize: 512,
   chunkOverlap: 64,
 
+  memoryEnabled: true,
+  memoryMaxTurns: 20,
+  memorySummarizationEnabled: DEFAULT_INTELLIGENCE_CONFIG.summarizationEnabled,
+  memorySummarizationModel: DEFAULT_INTELLIGENCE_CONFIG.summarizationModel,
+  memorySemanticRecallEnabled: DEFAULT_INTELLIGENCE_CONFIG.semanticRecallEnabled,
+  memoryMaxRecalledMessages: DEFAULT_INTELLIGENCE_CONFIG.maxRecalledMessages,
+  memoryDriftDetectionEnabled: DEFAULT_INTELLIGENCE_CONFIG.driftDetectionEnabled,
+  memoryDriftThreshold: DEFAULT_INTELLIGENCE_CONFIG.driftThreshold,
+
   // ─── Actions ──────────────────────────────────────────────────────────
   updateIntelligenceConfig: (config) =>
-    set((state) => ({
-      intelligenceConfig: { ...state.intelligenceConfig, ...config },
-    })),
+    set((state) => {
+      const newConfig = { ...state.intelligenceConfig, ...config };
+      const result: Record<string, any> = { intelligenceConfig: newConfig };
+
+      const memoryKeyMap: Record<string, string> = {
+        summarizationEnabled: "memorySummarizationEnabled",
+        summarizationModel: "memorySummarizationModel",
+        semanticRecallEnabled: "memorySemanticRecallEnabled",
+        maxRecalledMessages: "memoryMaxRecalledMessages",
+        driftDetectionEnabled: "memoryDriftDetectionEnabled",
+        driftThreshold: "memoryDriftThreshold",
+      };
+
+      for (const key of Object.keys(memoryKeyMap)) {
+        if (key in config) {
+          result[memoryKeyMap[key]] = (newConfig as any)[key];
+        }
+      }
+
+      return result;
+    }),
 
   setEmbeddingModel: (embeddingModel) => set({ embeddingModel }),
 

@@ -15,6 +15,7 @@ use tauri::AppHandle;
 use tokio_util::sync::CancellationToken;
 use tokio::time::timeout;
 use tracing::{info, warn, error, instrument};
+use futures::stream::{FuturesUnordered, StreamExt};
 
 use crate::agent::event_bus::{
     AgentEvent, ChatChunkPayload, ChatDonePayload, ChatErrorPayload,
@@ -449,94 +450,122 @@ Be specific in task descriptions. Include all necessary context for the assigned
 
         let mut task_results: Vec<(String, String)> = Vec::new(); // (task_id, result)
         let mut all_messages = messages.clone();
+        let mut running_tasks = FuturesUnordered::new();
 
-        while !queue.is_empty() && !token.is_cancelled() {
-            // Get next ready task
-            let Some(queued_task) = queue.pop_next() else {
-                // No tasks ready - check if we're stuck
-                if queue.all_resolved() {
-                    break; // All tasks done
-                }
-                // Might be stuck in dependency cycle - break out
-                warn!("Task queue appears stuck - breaking out");
-                break;
-            };
-
-            let task_id = queued_task.task.id.clone();
-            let task_desc = queued_task.task.description.clone();
-
-            info!("Executing task: {} - {}", task_id, task_desc);
-
-            // Emit progress update
-            let progress = 20.0 + (queue.completed_count() as f64 / (queue.total_count() as f64).max(1.0)) * 60.0;
-            self.emit_progress(
-                chat_id,
-                OrchestratorPhase::Executing,
-                progress,
-                &format!("Executing: {}", task_desc),
-            )?;
-
-            if let Some(ref pool) = self.db_pool {
-                let _ = queries::update_orchestration_task_status(pool, &task_id, "running", None).await;
+        // Helper logic to spawn all currently ready tasks
+        let spawn_ready = |queue: &mut TaskQueue, running_tasks: &mut FuturesUnordered<_>, all_messages: &[ChatMessage]| {
+            for next_ready in queue.pop_all_ready() {
+                let task_id = next_ready.task.id.clone();
+                let task_desc = next_ready.task.description.clone();
+                
+                let agent_id = breakdown.agent_assignments.iter()
+                    .find(|(tid, _)| tid == &task_id)
+                    .map(|(_, aid)| aid.clone())
+                    .unwrap_or_else(|| "generalist".to_string());
+                
+                info!("Spawning task: {} - {}", task_id, task_desc);
+                
+                let provider_clone = provider.clone();
+                let model_clone = model.to_string();
+                let chat_id_clone = chat_id.to_string();
+                let messages_clone = all_messages.to_vec();
+                let config_clone = config.clone();
+                let token_clone = token.clone();
+                
+                running_tasks.push(async move {
+                    let result = timeout(std::time::Duration::from_secs(120), self.execute_task_with_agent(
+                        &*provider_clone,
+                        &model_clone,
+                        &next_ready.task,
+                        &agent_id,
+                        &chat_id_clone,
+                        &messages_clone,
+                        config_clone,
+                        token_clone,
+                    )).await;
+                    
+                    (task_id, agent_id, result, next_ready)
+                });
             }
+        };
 
-            // Find assigned agent for this task
-            let agent_id = breakdown.agent_assignments.iter()
-                .find(|(tid, _)| tid == &task_id)
-                .map(|(_, aid)| aid.as_str())
-                .unwrap_or("generalist");
+        // Initial spawn of ready tasks
+        spawn_ready(&mut queue, &mut running_tasks, &all_messages);
 
-            // Execute task with assigned agent with a 120s timeout
-            let result = match timeout(std::time::Duration::from_secs(120), self.execute_task_with_agent(
-                &*provider,
-                model,
-                &queued_task.task,
-                agent_id,
-                chat_id,
-                &all_messages,
-                config.clone(),
-                token.clone(),
-            )).await {
-                Ok(res) => res,
-                Err(_) => Err(anyhow::anyhow!("Task execution timed out after 120s")),
-            };
+        while (!queue.is_empty() || !running_tasks.is_empty()) && !token.is_cancelled() {
+            tokio::select! {
+                Some((task_id, agent_id, result, queued_task)) = running_tasks.next() => {
+                    match result {
+                        Ok(Ok(response)) => {
+                            let result_content = response.content.unwrap_or_else(|| "Task completed".to_string());
+                            info!("Task {} completed successfully", task_id);
 
-            match result {
-                Ok(response) => {
-                    let result_content = response.content.unwrap_or_else(|| "Task completed".to_string());
-                    info!("Task {} completed successfully", task_id);
+                            queue.mark_completed(&task_id, Some(100));
+                            task_results.push((task_id.clone(), result_content.clone()));
 
-                    queue.mark_completed(&task_id, Some(100));
-                    task_results.push((task_id.clone(), result_content.clone()));
+                            if let Some(ref pool) = self.db_pool {
+                                let _ = queries::update_orchestration_task_status(pool, &task_id, "completed", Some(&result_content)).await;
+                            }
 
-                    if let Some(ref pool) = self.db_pool {
-                        let _ = queries::update_orchestration_task_status(pool, &task_id, "completed", Some(&result_content)).await;
+                            all_messages.push(ChatMessage {
+                                role: "assistant".to_string(),
+                                content: format!("[Task {} complete] {}", agent_id, result_content),
+                                images: None,
+                                tool_calls: None,
+                                tool_call_id: None,
+                            });
+                        }
+                        Ok(Err(e)) => {
+                            let error_msg = e.to_string();
+                            warn!("Task {} failed: {}", task_id, error_msg);
+                            queue.mark_failed(&task_id, &error_msg, Some(100));
+                            
+                            if queued_task.retry_count < 3 {
+                                let plan_b = self.generate_alternative_approach(&queued_task.task, &error_msg);
+                                let retry_task = queued_task.retry_with_plan_b(plan_b);
+                                queue.push(retry_task);
+                                info!("Queued task {} for retry with Plan B", task_id);
+                            } else {
+                                task_results.push((task_id.clone(), format!("Failed after 3 attempts: {}", error_msg)));
+                                if let Some(ref pool) = self.db_pool {
+                                    let _ = queries::update_orchestration_task_status(pool, &task_id, "failed", Some(&format!("Failed after 3 attempts: {}", error_msg))).await;
+                                }
+                            }
+                        }
+                        Err(_) => {
+                            let error_msg = "Task execution timed out after 120s".to_string();
+                            warn!("Task {} failed: {}", task_id, error_msg);
+                            queue.mark_failed(&task_id, &error_msg, Some(100));
+                            task_results.push((task_id.clone(), format!("Timed out: {}", error_msg)));
+                        }
                     }
 
-                    all_messages.push(ChatMessage {
-                        role: "assistant".to_string(),
-                        content: format!("[Task {} complete] {}", agent_id, result_content),
-                        images: None,
-                        tool_calls: None,
-                        tool_call_id: None,
-                    });
+                    // Emit progress update
+                    let progress = 20.0 + (queue.completed_count() as f64 / (queue.total_count() as f64).max(1.0)) * 60.0;
+                    self.emit_progress(
+                        chat_id,
+                        OrchestratorPhase::Executing,
+                        progress,
+                        "Executing subtasks...",
+                    )?;
+
+                    // Try to spawn any newly ready tasks
+                    spawn_ready(&mut queue, &mut running_tasks, &all_messages);
                 }
-                Err(e) => {
-                    warn!("Task {} failed: {}", task_id, e);
-
-                    queue.mark_failed(&task_id, &e.to_string(), Some(100));
-
-                    if queued_task.retry_count < 3 {
-                        let plan_b = self.generate_alternative_approach(&queued_task.task, &e.to_string());
-                        let retry_task = queued_task.retry_with_plan_b(plan_b);
-                        queue.push(retry_task);
-                        info!("Retrying task {} with Plan B", task_id);
-                    } else {
-                        task_results.push((task_id.clone(), format!("Failed after 3 attempts: {}", e)));
-                        
-                        if let Some(ref pool) = self.db_pool {
-                            let _ = queries::update_orchestration_task_status(pool, &task_id, "failed", Some(&format!("Failed after 3 attempts: {}", e))).await;
+                _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {
+                    if running_tasks.is_empty() && queue.is_empty() {
+                        break;
+                    }
+                    // Fallback to check if any tasks became ready that we missed
+                    spawn_ready(&mut queue, &mut running_tasks, &all_messages);
+                    
+                    if running_tasks.is_empty() && !queue.is_empty() {
+                        // All remaining tasks are blocked or resolved
+                        if queue.all_resolved() {
+                            break;
                         }
+                        warn!("Task queue stuck in parallel execution - breaking out");
+                        break;
                     }
                 }
             }

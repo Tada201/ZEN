@@ -62,6 +62,14 @@ export const SettingsSchema = z.object({
   maxMessagesInMemory: z.number().min(1).max(500).default(100),
   messageRetentionThreshold: z.number().min(1).max(365).default(30),
   pinLimit: z.number().min(0).max(50).default(10),
+  memoryEnabled: z.boolean().default(true),
+  memoryMaxTurns: z.number().default(20),
+  memorySummarizationEnabled: z.boolean().default(true),
+  memorySummarizationModel: z.string().default("llama3.2:1b"),
+  memorySemanticRecallEnabled: z.boolean().default(true),
+  memoryMaxRecalledMessages: z.number().default(5),
+  memoryDriftDetectionEnabled: z.boolean().default(true),
+  memoryDriftThreshold: z.number().default(0.3),
 
   // ─── Performance ─────────────────────────────────────────────────────────
   performanceProfile: z.enum(["max", "balanced", "powersaver"]).default("balanced"),
@@ -103,7 +111,6 @@ export const SettingsSchema = z.object({
   // API Keys (stored as empty strings when not configured)
   openaiApiKey: z.string().default(""),
   anthropicApiKey: z.string().default(""),
-  googleApiKey: z.string().default(""),
   geminiApiKey: z.string().default(""),
   qwenApiKey: z.string().default(""),
   xaiApiKey: z.string().default(""),
@@ -114,6 +121,7 @@ export const SettingsSchema = z.object({
   openrouterApiKey: z.string().default(""),
   togetherApiKey: z.string().default(""),
   perplexityApiKey: z.string().default(""),
+  nvidiaApiKey: z.string().default(""),
   nineRouterBaseUrl: z.string().default("http://localhost:20128/v1"),
   nineRouterApiKey: z.string().default(""),
   aihubmixApiKey: z.string().default(""),

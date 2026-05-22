@@ -13,7 +13,15 @@ pub async fn get_setting(state: State<'_, AppState>, key: String) -> AppResult<O
 
 #[tauri::command]
 pub async fn set_setting(state: State<'_, AppState>, key: String, value: String) -> AppResult<()> {
-    state.settings_manager.set(key, value).await
+    state.settings_manager.set(key.clone(), value).await?;
+    
+    // Invalidate provider cache if a provider config setting changes
+    if key.ends_with("_base_url") || key.ends_with("_api_key") || key == "active_provider" {
+        let mut cache = state.provider_cache.lock().await;
+        cache.clear();
+    }
+    
+    Ok(())
 }
 
 #[tauri::command]
@@ -57,7 +65,7 @@ pub async fn get_all_available_models(
     if let Some(p_name) = provider {
         // Fetch from specific provider
         let db = state.db.get().await?;
-        let provider_instance = crate::llm::create_provider(&db, &p_name).await;
+        let provider_instance = crate::llm::create_provider(&db, &p_name).await?;
         provider_instance.list_models().await
     } else {
         // Fetch from ALL local/configured providers
@@ -68,12 +76,13 @@ pub async fn get_all_available_models(
         let providers_to_check = vec!["ollama", "lmstudio"];
         
         for p_name in providers_to_check {
-            let provider_instance = crate::llm::create_provider(&db, p_name).await;
-            match provider_instance.list_models().await {
-                Ok(models) => all_models.extend(models),
-                Err(e) => {
-                    // Log error but don't fail the whole command
-                    eprintln!("Failed to fetch models from {}: {}", p_name, e);
+            if let Ok(provider_instance) = crate::llm::create_provider(&db, p_name).await {
+                match provider_instance.list_models().await {
+                    Ok(models) => all_models.extend(models),
+                    Err(e) => {
+                        // Log error but don't fail the whole command
+                        eprintln!("Failed to fetch models from {}: {}", p_name, e);
+                    }
                 }
             }
         }

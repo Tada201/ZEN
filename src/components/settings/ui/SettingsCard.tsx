@@ -13,8 +13,8 @@ interface SettingsCardProps {
 
 export const SettingsCard = memo(({ title, subtitle, description, icon, children, className }: SettingsCardProps) => {
     return (
-        <section className={cn("rounded-2xl border border-white/5 bg-slate-950/40 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.18)]", className)}>
-            <div className="flex items-start gap-3 mb-5">
+        <section className={cn("space-y-4", className)}>
+            <div className="flex items-start gap-3 mb-4">
                 {icon && (
                     <div className="h-9 w-9 rounded-xl bg-white/[0.03] border border-white/5 flex items-center justify-center shrink-0">
                         <WorkbenchIcon name={icon} size={16} className="text-brand-purple" />
@@ -23,10 +23,12 @@ export const SettingsCard = memo(({ title, subtitle, description, icon, children
                 <div className="flex flex-col gap-1 min-w-0">
                     {subtitle && <span className="text-[10px] font-black uppercase tracking-[0.18em] text-brand-purple/80">{subtitle}</span>}
                     <h3 className="text-[13px] font-bold text-white uppercase tracking-tight">{title}</h3>
-                    {description && <p className="text-[11px] text-slate-500 leading-relaxed max-w-3xl">{description}</p>}
+                    {description && <p className="text-[11px] text-zinc-500 leading-relaxed max-w-3xl">{description}</p>}
                 </div>
             </div>
-            {children}
+            <div className="space-y-2">
+                {children}
+            </div>
         </section>
     );
 });

@@ -8,7 +8,6 @@ export { WorkspaceSettings } from "./WorkspaceSettings";
 export { AgentsSettings } from "./AgentsSettings";
 export { ProvidersSettings } from "./ProvidersSettings";
 export { ModelsSettings } from "./ModelsSettings";
-export { RawSettings } from "./system/RawSettings";
 export { MCPSettings } from "./plugins/MCPSettings";
 export { EmbeddingModelDownloader } from "./intelligence/EmbeddingModelDownloader";
 export { CommandsSettings } from "./plugins/CommandsSettings";

@@ -99,6 +99,7 @@ pub fn default_base_url(provider: &str) -> String {
         "together" => "https://api.together.xyz/v1".to_string(),
         "mistral" => "https://api.mistral.ai/v1".to_string(),
         "perplexity" => "https://api.perplexity.ai".to_string(),
+        "nvidia" => "https://integrate.api.nvidia.com/v1".to_string(),
         "lmstudio" => "http://localhost:1234".to_string(),
         "nine_router" => "http://localhost:20128/v1".to_string(),
         "aihubmix" => "https://aihubmix.com/v1".to_string(),
@@ -161,35 +162,31 @@ pub fn make_provider(config: &ProviderConfig) -> Arc<dyn LlmProvider> {
 }
 
 /// Create a provider by looking up settings in the database.
-pub async fn create_provider(db_pool: &SqlitePool, provider_name: &str) -> Arc<dyn LlmProvider> {
+pub async fn create_provider(db_pool: &SqlitePool, provider_name: &str) -> ZenResult<Arc<dyn LlmProvider>> {
     let p_type = provider_name.to_lowercase();
     
-    match p_type.as_str() {
+    let provider = match p_type.as_str() {
         "ollama" => {
             let url = crate::db::queries::get_setting(db_pool, "ollama_base_url")
-                .await
-                .unwrap_or_default()
+                .await?
                 .unwrap_or_else(|| default_base_url("ollama"));
-            Arc::new(OllamaProvider::new(&url))
+            Arc::new(OllamaProvider::new(&url)) as Arc<dyn LlmProvider>
         }
         "anthropic" => {
             let api_key = crate::db::queries::get_setting(db_pool, "anthropic_api_key")
-                .await
-                .unwrap_or_default()
+                .await?
                 .unwrap_or_default();
-            Arc::new(AnthropicProvider::new(&api_key))
+            Arc::new(AnthropicProvider::new(&api_key)) as Arc<dyn LlmProvider>
         }
         "lmstudio" => {
             let url = crate::db::queries::get_setting(db_pool, "lmstudio_base_url")
-                .await
-                .unwrap_or_default()
+                .await?
                 .unwrap_or_else(|| default_base_url("lmstudio"));
-            Arc::new(LmStudioProvider::new(&url))
+            Arc::new(LmStudioProvider::new(&url)) as Arc<dyn LlmProvider>
         }
         _ => {
             let base_url = crate::db::queries::get_setting(db_pool, &format!("{}_base_url", p_type))
-                .await
-                .unwrap_or_default()
+                .await?
                 .unwrap_or_else(|| default_base_url(&p_type));
 
             let api_key_setting = if p_type == "google" || p_type == "gemini" {
@@ -199,8 +196,7 @@ pub async fn create_provider(db_pool: &SqlitePool, provider_name: &str) -> Arc<d
             };
 
             let api_key = crate::db::queries::get_setting(db_pool, &api_key_setting)
-                .await
-                .unwrap_or_default()
+                .await?
                 .unwrap_or_default();
 
             make_provider(&ProviderConfig {
@@ -211,5 +207,6 @@ pub async fn create_provider(db_pool: &SqlitePool, provider_name: &str) -> Arc<d
                 headers: None,
             })
         }
-    }
+    };
+    Ok(provider)
 }

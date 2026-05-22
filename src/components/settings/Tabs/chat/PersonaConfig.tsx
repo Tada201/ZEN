@@ -39,7 +39,7 @@ export const PersonaConfig = memo(() => {
                     }
                 />
 
-                <div className="flex flex-col gap-2 p-4 bg-slate-900/20 border border-white/[0.03] rounded-lg">
+                <div className="flex flex-col gap-2 p-4 bg-zinc-900/20 border border-white/[0.03] rounded-lg">
                     <div className="flex items-center gap-2">
                         <WorkbenchIcon name="codicon:terminal" size={14} className="text-zinc-400" />
                         <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
@@ -57,7 +57,7 @@ export const PersonaConfig = memo(() => {
                     </p>
                 </div>
 
-                <div className="flex flex-col gap-2 p-4 bg-slate-900/20 border border-white/[0.03] rounded-lg">
+                <div className="flex flex-col gap-2 p-4 bg-zinc-900/20 border border-white/[0.03] rounded-lg">
                     <div className="flex items-center gap-2">
                         <WorkbenchIcon name="codicon:pulse" size={14} className="text-zinc-400" />
                         <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">

@@ -176,6 +176,110 @@ export function IntelligenceSettings({ settings, onUpdate }: IntelligenceSetting
           }
           icon="lucide:layers"
         />
+
+        <SettingsRow
+          label="Summarize History"
+          description="Compress older messages in background using an LLM"
+          control={
+            <WorkbenchSwitch
+              checked={settings["memory.summarization_enabled"] !== "false"}
+              onCheckedChange={v => onUpdate("memory.summarization_enabled", String(v))}
+            />
+          }
+          icon="lucide:compress"
+        />
+
+        {settings["memory.summarization_enabled"] !== "false" && (
+          <SettingsRow
+            label="Summarization Model"
+            description="Lighter model to generate conversation summaries"
+            control={
+              <WorkbenchSelect
+                value={settings["memory.summarization_model"] || "llama3.2:1b"}
+                onValueChange={v => onUpdate("memory.summarization_model", v)}
+                options={[
+                  { value: "llama3.2:1b", label: "Llama 3.2 1B (Recommended)" },
+                  { value: "llama3.2:3b", label: "Llama 3.2 3B" },
+                  { value: "llama3:8b", label: "Llama 3 8B" },
+                  { value: "phi3:3.8b", label: "Phi 3 3.8B" },
+                  { value: "gemma2:2b", label: "Gemma 2 2B" },
+                ]}
+                width={200}
+              />
+            }
+            icon="lucide:cpu"
+          />
+        )}
+
+        <SettingsRow
+          label="Semantic Recall"
+          description="Retrieve relevant context from previous chats using vector memory"
+          control={
+            <WorkbenchSwitch
+              checked={settings["memory.semantic_recall_enabled"] !== "false"}
+              onCheckedChange={v => onUpdate("memory.semantic_recall_enabled", String(v))}
+            />
+          }
+          icon="lucide:brain"
+        />
+
+        {settings["memory.semantic_recall_enabled"] !== "false" && (
+          <SettingsRow
+            label="Max Recalled Messages"
+            description="Maximum number of historical matching messages to recall"
+            control={
+              <div className="flex items-center gap-2 w-[140px]">
+                <WorkbenchSlider
+                  value={[parseInt(settings["memory.max_recalled_messages"] || "5")]}
+                  onValueChange={([v]) => onUpdate("memory.max_recalled_messages", String(v))}
+                  min={1}
+                  max={10}
+                  step={1}
+                  className="flex-1"
+                />
+                <span className="text-[11px] font-mono text-muted-foreground w-6 text-right">
+                  {settings["memory.max_recalled_messages"] || "5"}
+                </span>
+              </div>
+            }
+            icon="lucide:layers"
+          />
+        )}
+
+        <SettingsRow
+          label="Drift Detection"
+          description="Detect and notify when conversation shifts from the original topic"
+          control={
+            <WorkbenchSwitch
+              checked={settings["memory.drift_detection_enabled"] !== "false"}
+              onCheckedChange={v => onUpdate("memory.drift_detection_enabled", String(v))}
+            />
+          }
+          icon="lucide:compass"
+        />
+
+        {settings["memory.drift_detection_enabled"] !== "false" && (
+          <SettingsRow
+            label="Drift Threshold"
+            description="Similarity score lower bound before triggering drift alert"
+            control={
+              <div className="flex items-center gap-2 w-[140px]">
+                <WorkbenchSlider
+                  value={[parseFloat(settings["memory.drift_threshold"] || "0.3")]}
+                  onValueChange={([v]) => onUpdate("memory.drift_threshold", String(v))}
+                  min={0.1}
+                  max={0.8}
+                  step={0.05}
+                  className="flex-1"
+                />
+                <span className="text-[11px] font-mono text-muted-foreground w-8 text-right">
+                  {parseFloat(settings["memory.drift_threshold"] || "0.3").toFixed(2)}
+                </span>
+              </div>
+            }
+            icon="lucide:alert-circle"
+          />
+        )}
       </SettingsSection>
     </div>
   );

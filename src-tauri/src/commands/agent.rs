@@ -205,4 +205,42 @@ pub async fn run_tool_command(
     }
 }
 
+/// Resolve a pending tool approval request from the frontend.
+///
+/// The frontend calls this when the user clicks Approve or Deny on an inline
+/// approval card.  We look up the `oneshot::Sender<bool>` that the runner
+/// parked in `pending_tool_approvals`, remove it so it can only be resolved
+/// once, then send the user's decision.
+#[tauri::command]
+pub async fn resolve_tool_approval(
+    state: State<'_, AppState>,
+    tool_call_id: String,
+    approved: bool,
+) -> ZenResult<()> {
+    let sender = {
+        let mut map = state.pending_tool_approvals.lock().await;
+        map.remove(&tool_call_id)
+    };
 
+    match sender {
+        Some(tx) => {
+            // It is OK if the receiving end was already dropped (runner cancelled).
+            let _ = tx.send(approved);
+            tracing::info!(
+                tool_call_id = %tool_call_id,
+                approved = %approved,
+                "Tool approval resolved"
+            );
+            Ok(())
+        }
+        None => {
+            tracing::warn!(
+                tool_call_id = %tool_call_id,
+                "resolve_tool_approval: no pending approval found (already resolved or expired)"
+            );
+            // Return Ok rather than an error – the runner may have already timed out
+            // or the user double-clicked; either way there is nothing harmful to do.
+            Ok(())
+        }
+    }
+}

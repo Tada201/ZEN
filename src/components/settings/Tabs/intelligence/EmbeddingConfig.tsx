@@ -32,7 +32,7 @@ export const EmbeddingConfig = memo(() => {
                     }
                 />
 
-                <div className="p-4 bg-slate-900/30 border border-white/5 rounded-lg">
+                <div className="p-4 bg-zinc-900/30 border border-white/[0.04] rounded-lg">
                     <div className="flex items-center gap-2 mb-3">
                         <WorkbenchIcon name="codicon:info" size={14} className="text-emerald-400" />
                         <span className="text-[10px] font-bold uppercase text-emerald-400 tracking-wider">

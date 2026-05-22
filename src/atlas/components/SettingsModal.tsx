@@ -19,6 +19,7 @@ import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import {
   storeToSettingsRecord,
   coerceBridgeValue,
+  dotKeyToStoreField,
 } from "@/lib/stores/settings/settingsBridge";
 import { ProvidersSettings } from "@/components/settings/Tabs/ProvidersSettings";
 import { ModelsSettings } from "@/components/settings/Tabs/ModelsSettings";
@@ -33,18 +34,17 @@ import { SystemSettings } from "@/components/settings/Tabs/SystemSettings";
 import { TerminalSettings } from "@/components/settings/Tabs/TerminalSettings";
 import { WorkspaceSettings } from "@/components/settings/Tabs/WorkspaceSettings";
 import { AgentsSettings } from "@/components/settings/Tabs/AgentsSettings";
-import { RawSettings } from "@/components/settings/Tabs/system/RawSettings";
+import { UpdatesSettings } from "@/components/settings/Tabs/system/UpdatesSettings";
+import { SkillRegistry } from "@/components/settings/Tabs/skills/SkillRegistry";
+import { MapConfiguration } from "@/components/GTSM/MapConfiguration";
+import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 import { ToolsSettings } from "@/components/settings/Tabs/ToolsSettings";
 import { MCPSettings } from "@/components/settings/Tabs/plugins/MCPSettings";
 import { EmbeddingModelDownloader } from "@/components/settings/Tabs/intelligence/EmbeddingModelDownloader";
 import { CommandsSettings } from "@/components/settings/Tabs/plugins/CommandsSettings";
 import { HooksSettings } from "@/components/settings/Tabs/plugins/HooksSettings";
-import { UpdatesSettings } from "@/components/settings/Tabs/system/UpdatesSettings";
-import { SkillRegistry } from "@/components/settings/Tabs/skills/SkillRegistry";
-import { MapConfiguration } from "@/components/GTSM/MapConfiguration";
-import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 
-export type TabId = "general" | "appearance" | "chat" | "ai-config" | "providers" | "capabilities" | "intelligence" | "agents" | "skills" | "audio" | "terminal" | "workspace" | "tools" | "system" | "raw" | "mcp" | "embedding-models" | "commands" | "hooks" | "updates" | "map-config";
+export type TabId = "general" | "appearance" | "chat" | "ai-config" | "providers" | "capabilities" | "intelligence" | "agents" | "skills" | "audio" | "terminal" | "workspace" | "tools" | "system" | "mcp" | "embedding-models" | "commands" | "hooks" | "updates" | "map-config";
 
 interface SettingsTabGroup {
   label: string;
@@ -96,7 +96,6 @@ const TAB_GROUPS: SettingsTabGroup[] = [
     tabs: [
       { id: "tools", label: "Tools", icon: "lucide:shield", description: "Tool permissions & safety" },
       { id: "system", label: "System", icon: "lucide:monitor", description: "Performance & maintenance" },
-      { id: "raw", label: "Raw Config", icon: "lucide:code", description: "Raw settings editor" },
       { id: "updates", label: "Updates", icon: "lucide:refresh-cw", description: "Update & version info" },
     ],
   },
@@ -118,7 +117,7 @@ export function SettingsModal({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl p-0 gap-0 overflow-hidden bg-background border-border/60 shadow-2xl flex flex-col md:flex-row h-full max-h-[85vh] md:h-[580px] w-[92vw] focus:outline-none focus-visible:outline-none">
+      <DialogContent className="max-w-4xl p-0 gap-0 overflow-hidden bg-background border-border/[0.06] shadow-2xl flex flex-col md:flex-row h-full max-h-[85vh] md:h-[580px] w-[92vw] focus:outline-none focus-visible:outline-none">
         <DialogTitle className="sr-only">Settings</DialogTitle>
         <DialogDescription className="sr-only">Configure application preferences.</DialogDescription>
         <SettingsContent
@@ -149,21 +148,17 @@ export function SettingsContent({
   const isHydrated = useSettingsStore(s => s.isHydrated);
   const isSyncing = useSettingsStore(s => s.isSyncing);
   const store = useSettingsStore(); // Still needed for actions, but we'll use it sparingly
-
-  // Derive the flat Record<string, string> from the typed store state
-  // Using useMemo with a more granular dependency to avoid recalculating on every store update
   const reducedMotion = useSettingsStore(s => s.reducedMotion);
+
   const settings = useMemo(() => {
     const record = storeToSettingsRecord(store);
     record["ui.animations"] = reducedMotion ? "false" : "true";
     return record;
-  }, [store.isDirty, reducedMotion, store.isSyncing]); // Recalculate on dirty status or motion change
+  }, [store, reducedMotion]); // Recalculate on any store update or motion change
 
   // ── Theme context ────────────────────────────────────────────────
 
   const theme = useZenTheme();
-
-  // ── Update handler ──────────────────────────────────────────────
 
   const handleUpdate = useCallback(
     (key: string, value: string) => {
@@ -174,8 +169,9 @@ export function SettingsContent({
         theme.setMotionEnabled(enabled);
         return;
       }
+      const storeField = dotKeyToStoreField(key);
       const coerced = coerceBridgeValue(key, value);
-      store.updateSetting(key as keyof typeof store, coerced as never);
+      store.updateSetting(storeField as keyof typeof store, coerced as never);
     },
     [store, theme]
   );
@@ -185,8 +181,9 @@ export function SettingsContent({
   const setStoreSettings = useCallback(
     (newSettings: Record<string, string>) => {
       for (const [key, value] of Object.entries(newSettings)) {
+        const storeField = dotKeyToStoreField(key);
         const coerced = coerceBridgeValue(key, value);
-        store.updateSetting(key as keyof typeof store, coerced as never);
+        store.updateSetting(storeField as keyof typeof store, coerced as never);
       }
     },
     [store]
@@ -209,14 +206,13 @@ export function SettingsContent({
       } else {
         toast.success("Settings saved", { id: toastId });
       }
-      onClose();
     } catch (e) {
       console.error(e);
       toast.error("Failed to save settings", { id: toastId });
     } finally {
       setSaving(false);
     }
-  }, [store, onClose]);
+  }, [store]);
 
   const handleCancel = useCallback(() => {
     store.discardChanges();
@@ -227,7 +223,7 @@ export function SettingsContent({
 
   if (!isHydrated) {
     return (
-      <div className="flex-1 flex items-center justify-center p-12 bg-background">
+      <div className="flex-1 flex items-center justify-center p-12 bg-[#050506]">
         <WorkbenchIcon name="lucide:loader-2" className="h-6 w-6 animate-spin text-primary" />
       </div>
     );
@@ -236,7 +232,7 @@ export function SettingsContent({
   // ── Render ──────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col md:flex-row h-full w-full overflow-hidden bg-background">
+    <div className="flex flex-col md:flex-row h-full w-full overflow-hidden bg-[#050506]">
       {/* Sidebar */}
       <div className="w-full md:w-56 bg-[#050506] border-b md:border-b-0 md:border-r border-white/[0.06] flex flex-col shrink-0">
         <div className="p-4 border-b border-white/[0.06] flex items-center justify-between">
@@ -289,7 +285,7 @@ export function SettingsContent({
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden bg-background">
+      <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#050506]">
         <ScrollArea className="flex-1">
           <div className="max-w-2xl mx-auto p-6 md:p-8 space-y-6">
             <AnimatePresence mode="wait">
@@ -434,9 +430,7 @@ export function SettingsContent({
                   <SystemSettings settings={settings} onUpdate={handleUpdate} />
                 )}
 
-                {activeTab === "raw" && (
-                  <RawSettings />
-                )}
+
 
                 {activeTab === "mcp" && (
                   <MCPSettings />
@@ -469,7 +463,7 @@ export function SettingsContent({
         </ScrollArea>
 
         {/* Footer Actions */}
-        <div className="p-3 border-t border-border/40 flex justify-end gap-2 bg-background/50 backdrop-blur-sm">
+        <div className="p-3 border-t border-white/[0.06] flex justify-end gap-2 bg-[#050506]/50 backdrop-blur-sm">
           <Button variant="ghost" className="h-8 text-[11px] px-3 text-muted-foreground hover:text-foreground" onClick={handleCancel}>
             Cancel
           </Button>

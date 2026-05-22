@@ -38,7 +38,7 @@ export const ResponseToolsConfig = memo(() => {
                             exit={{ opacity: 0, height: 0 }}
                             className="overflow-hidden"
                         >
-                            <div className="ml-6 p-4 bg-slate-900/30 border-l-2 border-emerald-500/30 rounded-r-lg">
+                            <div className="ml-6 p-4 bg-zinc-900/30 border-l-2 border-emerald-500/30 rounded-r-lg">
                                 <WorkbenchSettingRow
                                     label="Output Format"
                                     description="Primary data structure for response verification"

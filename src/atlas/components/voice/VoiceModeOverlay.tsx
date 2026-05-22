@@ -1,121 +1,14 @@
-import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useUIStore, useSystemStore, useSettingsStore } from '@/atlas/lib/store';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { VoiceOscilloscope } from './VoiceOscilloscope';
 import { motion, AnimatePresence } from 'framer-motion';
-import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
 import { cn } from "@/lib/utils";
+import { Mic, X, Terminal, Cpu, Sparkles, Volume2 } from 'lucide-react';
+import { stopSpeech } from '@/atlas/lib/webSpeech';
 
-// ── Memoized Dashboard Panels ──
-
-const StatusPill = React.memo(({ state }: { state: string }) => (
-    <div className={`vm-status-pill vm-status-pill--${state}`}>
-        {state.toUpperCase()}
-    </div>
-));
-
-const DiagnosticPanel = React.memo(({ amplitude, tokensPerSec, activeModel, sttEngine, micStatus, memoryUsage }: any) => (
-    <aside className="vm-panel vm-diagnostics">
-        <div className="vm-panel-header">
-            <div className="flex items-center gap-2"><WorkbenchIcon name="solar:cpu-bold" size={12} /> DIAGNOSTICS</div>
-            <WorkbenchIcon name="solar:pulse-bold" size={12} />
-        </div>
-        <div className="vm-panel-content">
-            <div className="vm-kb-stat">
-                <label>SIGNAL_STRENGTH</label>
-                <div className="vm-kb-progress"><div className="vm-kb-fill" style={{ width: `${Math.min(100, amplitude * 250)}%` }} /></div>
-            </div>
-            <div className="vm-kb-stat">
-                <label>Cognitive_LATENCY (ms)</label>
-                <div className="font-mono text-xs">{(tokensPerSec ? (1000 / tokensPerSec).toFixed(0) : '24')}ms</div>
-            </div>
-            <div className="vm-kb-stat">
-                <label>CONTEXT_MEMORY</label>
-                <div className="vm-kb-progress"><div className="vm-kb-fill" style={{ width: `${memoryUsage ? Math.min(100, parseFloat(memoryUsage) * 10) : 0}%` }} /></div>
-            </div>
-            <div className="mt-6 p-4 border border-[#00FF9F]/10 bg-white/5 rounded text-[10px] flex flex-col gap-3">
-                <div className="flex justify-between"><span>MIC STATUS</span><span className={micStatus === 'live' ? 'text-[#00FF9F]' : 'text-red-500'}>{String(micStatus).toUpperCase()}</span></div>
-                <div className="flex justify-between"><span>STT_ENGINE</span><span>{String(sttEngine).toUpperCase()}</span></div>
-                <div className="flex justify-between"><span>ACTIVE_MODEL</span><span className="truncate max-w-[120px]">{activeModel || 'NONE'}</span></div>
-            </div>
-        </div>
-    </aside>
-));
-
-const RetrievalPanel = React.memo(({ sources }: { sources: any[] }) => (
-    <aside className="vm-panel vm-retrieval">
-        <div className="vm-panel-header">
-            <div className="flex items-center gap-2"><WorkbenchIcon name="solar:global-bold" size={12} /> ARCHIVE_RETRIEVAL</div>
-            <WorkbenchIcon name="solar:magnifer-bold" size={12} />
-        </div>
-        <div className="vm-panel-content">
-            {sources && sources.length > 0 ? sources.map((s, i) => (
-                <div key={i} className="vm-source-card">
-                    <div className="vm-source-type text-[8px] opacity-60 mb-1">SCORE: {(s.score * 100).toFixed(1)}%</div>
-                    <div className="vm-source-type">SOURCE: {s.chunk.source.split(/[\\/]/).pop()}</div>
-                    <div className="vm-source-content">{s.chunk.text}</div>
-                </div>
-            )) : (
-                <div className="text-[10px] opacity-30 italic text-center mt-10">No active knowledge context...</div>
-            )}
-        </div>
-    </aside>
-));
-
-const LogPanel = React.memo(({ lines }: { lines: string[] }) => (
-    <aside className="vm-panel vm-console-logs">
-        <div className="vm-panel-header">
-            <div className="flex items-center gap-2"><WorkbenchIcon name="solar:terminal-bold" size={12} /> SYSTEM_LOGS</div>
-        </div>
-        <div className="vm-panel-content">
-            <div className="vm-log-list">
-                {lines.map((line, i) => (
-                    <div key={i} className={`vm-log-entry ${i === lines.length - 1 ? 'vm-log-entry--active' : ''}`}>
-                        {line}
-                    </div>
-                ))}
-            </div>
-        </div>
-    </aside>
-));
-
-const ActionPanel = React.memo(({ toolAction, micStatus }: any) => (
-    <aside className="vm-panel vm-console-actions">
-        <div className="vm-panel-header">
-            <div className="flex items-center gap-2"><WorkbenchIcon name="solar:bolt-bold" size={12} /> Cognitive_ACTIONS</div>
-            <WorkbenchIcon name="solar:shield-bold" size={12} />
-        </div>
-        <div className="vm-panel-content flex flex-col justify-center items-center gap-8">
-            <AnimatePresence mode="wait">
-                {toolAction ? (
-                    <motion.div key={toolAction} initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} className="flex flex-col items-center gap-4 text-center">
-                        <WorkbenchIcon name="solar:pulse-bold" className="text-orange-500" size={32} />
-                        <div className="text-[10px] font-bold tracking-[0.2em]">{toolAction}</div>
-                    </motion.div>
-                ) : (
-                    <motion.div key="none" initial={{ opacity: 0 }} animate={{ opacity: 0.2 }} exit={{ opacity: 0 }} className="flex flex-col items-center gap-4 text-center">
-                        <WorkbenchIcon name="solar:bolt-bold" size={32} />
-                        <div className="text-[9px] tracking-widest uppercase">Awaiting instruction...</div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-            <div className="mt-4 w-full px-2">
-                <div className="flex justify-between text-[9px] opacity-60 mb-1">
-                    <span>SIGNAL_LOCK</span>
-                    <span>{micStatus === 'live' ? '88%' : '0%'}</span>
-                </div>
-                <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-[#00FF9F]" style={{ width: micStatus === 'live' ? '88%' : '0%', transition: 'width 2s ease' }}></div>
-                </div>
-            </div>
-        </div>
-    </aside>
-));
-
-// ── Utils ──
-
+// Utility helper to strip markdown for clean subtitles
 function stripMarkdown(text: string) {
     if (!text) return '';
     const codeBlocks: string[] = [];
@@ -141,16 +34,18 @@ type VoiceState = 'initializing' | 'listening' | 'processing' | 'speaking' | 'id
 const SILENCE_THRESHOLD = 0.015;
 const SILENCE_DURATION_MS = 2000;
 
-export function VoiceModeOverlay({ 
-    isOpen, 
-    onClose, 
+export function VoiceModeOverlay({
+    isOpen,
+    onClose,
     onTranscript,
+    onAbort,
     messages = [],
     activeModel = ''
-}: { 
-    isOpen: boolean, 
-    onClose: () => void, 
+}: {
+    isOpen: boolean,
+    onClose: () => void,
     onTranscript: (text: string) => void,
+    onAbort?: () => void,
     messages?: any[],
     activeModel?: string
 }) {
@@ -168,16 +63,19 @@ export function VoiceModeOverlay({
     const tokensPerSec = metrics?.throughput || 0;
     const memoryUsage = metrics?.memory || 0;
 
+    // Redesigned Telemetry and caption states
     const [voiceState, setVoiceState] = useState<VoiceState>('initializing');
     const [logLines, setLogLines] = useState<string[]>([]);
     const [micStatus, setMicStatus] = useState<'inactive' | 'live' | 'error'>('inactive');
-    const [transcript] = useState('');
-    const [partialTranscript] = useState('');
     const [toolAction, setToolAction] = useState<string | null>(null);
-    const [mapPreview, setMapPreview] = useState<{ lat: number, lon: number, altitude: number, label?: string } | null>(null);
-    const [showDrawingPreview, setShowDrawingPreview] = useState(false);
-    const [pttHeld, setPttHeld] = useState(false);
-    const [amplitude] = useState(0);
+    const [, setPttHeld] = useState(false);
+    const [amplitude, setAmplitude] = useState(0);
+    const [showDiagnostics, setShowDiagnostics] = useState(false);
+
+    // YT Closed Caption Subtitle states
+    const [subtitleSpeaker, setSubtitleSpeaker] = useState<'user' | 'agent' | 'system'>('system');
+    const [userSpeechText, setUserSpeechText] = useState('');
+    const [aiSpeechText, setAiSpeechText] = useState('');
 
     const amplitudeRef = useRef(0);
     const audioCtxRef = useRef<AudioContext | null>(null);
@@ -189,12 +87,12 @@ export function VoiceModeOverlay({
     const gainNodeRef = useRef<GainNode | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
 
-    const aiTranscriptDomRef = useRef<HTMLDivElement>(null);
     const recordingChunksRef = useRef<Float32Array[]>([]);
     const isRecordingRef = useRef(false);
     const heardSpeechRef = useRef(false);
     const silenceStartRef = useRef<number | null>(null);
-    
+    const lastBargeInRef = useRef<number>(0);
+
     const aiSpeakingRef = useRef(aiSpeaking);
     useEffect(() => { aiSpeakingRef.current = aiSpeaking; }, [aiSpeaking]);
 
@@ -247,6 +145,9 @@ export function VoiceModeOverlay({
         try {
             const result = await invoke<{ status: string, text?: string }>('transcribe_audio', { audio: pcmBytesArray });
             if (result.status === 'Transcript' && result.text?.trim()) {
+                setUserSpeechText(result.text.trim());
+                setAiSpeechText('');
+                setSubtitleSpeaker('user');
                 onTranscript(result.text.trim());
             }
         } catch (err) { appendLog(`VAD ERR: ${err}`, 'ERR'); }
@@ -288,11 +189,17 @@ export function VoiceModeOverlay({
                 analyser.connect(worklet);
 
                 worklet.port.onmessage = (e) => {
-                    if (e.data.type === 'AMPLITUDE') amplitudeRef.current = e.data.value;
+                    if (e.data.type === 'AMPLITUDE') {
+                        amplitudeRef.current = e.data.value;
+                        setAmplitude(e.data.value);
+                    }
                     if (e.data.type === 'SPEECH_START') {
                         heardSpeechRef.current = true;
                         recordingChunksRef.current = [];
                         setVoiceState('listening');
+                        setSubtitleSpeaker('user');
+                        setUserSpeechText('User is speaking...');
+                        setAiSpeechText('');
                         appendLog('VAD: Speech detected.');
                     }
                     if (e.data.type === 'SPEECH_END') {
@@ -315,7 +222,9 @@ export function VoiceModeOverlay({
                     if (isRecordingRef.current) recordingChunksRef.current.push(new Float32Array(input));
                     let sumSq = 0;
                     for (let i = 0; i < input.length; i++) sumSq += input[i] * input[i];
-                    amplitudeRef.current = Math.min(1, Math.sqrt(sumSq / input.length) * 4);
+                    const val = Math.min(1, Math.sqrt(sumSq / input.length) * 4);
+                    amplitudeRef.current = val;
+                    setAmplitude(val);
                 };
                 analyser.connect(processor);
                 processor.connect(ctx.destination);
@@ -323,6 +232,7 @@ export function VoiceModeOverlay({
 
             setMicStatus('live');
             setVoiceState('listening');
+            setSubtitleSpeaker('system');
             if (!voiceInputMode) setRecordingState(true);
             appendLog('Cognitive link established.');
         } catch (err) {
@@ -365,6 +275,9 @@ export function VoiceModeOverlay({
                 pttActiveRef.current = true;
                 setRecordingState(true);
                 setPttHeld(true);
+                setUserSpeechText('Recording...');
+                setAiSpeechText('');
+                setSubtitleSpeaker('user');
                 if (gainNodeRef.current && audioCtxRef.current) {
                     gainNodeRef.current.gain.setTargetAtTime(1, audioCtxRef.current.currentTime, 0.05);
                 }
@@ -399,7 +312,12 @@ export function VoiceModeOverlay({
     }, [toggleVoiceMode, sttEngine, flushVadUtterance, appendLog, setRecordingState]);
 
     useEffect(() => {
-        if (voiceModeOpen) { setLogLines([]); initMic(); }
+        if (voiceModeOpen) { 
+            setLogLines([]); 
+            setAiSpeechText('');
+            setUserSpeechText('');
+            initMic(); 
+        }
         else { cleanupAudio(); }
         return () => cleanupAudio();
     }, [voiceModeOpen, initMic, cleanupAudio]);
@@ -410,9 +328,14 @@ export function VoiceModeOverlay({
             const amp = amplitudeRef.current;
             const currentAiSpeaking = aiSpeakingRef.current;
             if (currentAiSpeaking && amp > SILENCE_THRESHOLD && !pttActiveRef.current) {
-                invoke('stop_speech').catch(() => { });
-                setAiSpeaking(false);
-                appendLog('Transmission break detected.');
+                const now = performance.now();
+                if (now - lastBargeInRef.current > 400) {
+                    stopSpeech();
+                    onAbort?.();
+                    setAiSpeaking(false);
+                    appendLog('Transmission break detected.');
+                    lastBargeInRef.current = now;
+                }
             }
             if (!currentAiSpeaking && !pttActiveRef.current) {
                 if (amp > SILENCE_THRESHOLD) {
@@ -439,104 +362,192 @@ export function VoiceModeOverlay({
         let unlistens: any[] = [];
         const setup = async () => {
             try {
-                unlistens.push(await listen<any>('globe:navigate', (e) => { setMapPreview(e.payload); setShowDrawingPreview(false); }));
-                unlistens.push(await listen<any>('drawing:ops', () => { setShowDrawingPreview(true); setMapPreview(null); }));
+                unlistens.push(await listen<any>('globe:navigate', () => {}));
+                unlistens.push(await listen<any>('drawing:ops', () => {}));
                 unlistens.push(await listen<any>('chat:status', (e) => {
                     const m = e.payload.message;
                     if (m.startsWith('Executing:')) setToolAction(m.replace('Executing: ', '').toUpperCase());
                 }));
                 unlistens.push(await listen('chat:done', () => setToolAction(null)));
-                unlistens.push(await listen<any>('tts:start', () => setAiSpeaking(true)));
-                unlistens.push(await listen('tts:stop', () => setAiSpeaking(false)));
+                
+                unlistens.push(await listen<any>('tts:start', () => {
+                    setAiSpeaking(true);
+                    setSubtitleSpeaker('agent');
+                    setUserSpeechText('');
+                }));
+                
+                unlistens.push(await listen('tts:stop', () => {
+                    setAiSpeaking(false);
+                }));
+
                 unlistens.push(await listen<any>('chat:partial', () => {
-                    if (voiceModeOpen && !aiSpeaking) {
+                    if (voiceModeOpen) {
                         const lastMsg = messages[messages.length - 1];
                         if (lastMsg?.role === 'assistant') {
                             fullAiResponseRef.current = stripMarkdown(lastMsg.content);
+                            setAiSpeechText(fullAiResponseRef.current);
+                            setSubtitleSpeaker('agent');
+                            setUserSpeechText('');
                         }
-                        if (aiTranscriptDomRef.current) aiTranscriptDomRef.current.textContent = fullAiResponseRef.current;
                     }
                 }));
             } catch (err) { console.error(err); }
         };
         setup();
         return () => unlistens.forEach(fn => fn());
-    }, [messages, voiceModeOpen, aiSpeaking, setAiSpeaking]);
-
-    const retrievalSources = useMemo(() => {
-        const lastMsg = messages[messages.length - 1];
-        return (lastMsg?.role === 'assistant' && lastMsg.context) ? lastMsg.context : [];
-    }, [messages]);
+    }, [messages, voiceModeOpen, setAiSpeaking]);
 
     if (!voiceModeOpen) return null;
 
+    // UI Status definitions
+    const stateColors = {
+        initializing: 'text-amber-400 bg-amber-400/10 border-amber-500/20',
+        listening: 'text-purple-400 bg-purple-400/10 border-purple-500/20',
+        processing: 'text-blue-400 bg-blue-400/10 border-blue-500/20',
+        speaking: 'text-emerald-400 bg-emerald-400/10 border-emerald-500/20',
+        idle: 'text-zinc-400 bg-zinc-400/10 border-zinc-500/20',
+    };
+
     return (
-        <div className="vm-overlay">
-            <div className="vm-backdrop" onClick={toggleVoiceMode} />
-            <div className="vm-dashboard">
-                <header className="vm-header">
-                    <div className="vm-logo-group">
-                        <div className="flex items-center gap-3">
-                            <WorkbenchIcon name="solar:bolt-bold" className="w-5 h-5 text-[#00FF9F]" />
-                            <span className="font-bold tracking-[0.2em] text-[11px] opacity-80">VOICE MODE v2.0</span>
-                        </div>
-                        <div className="vm-system-status">
-                            <span>MODE: {voiceInputMode ? 'PTT' : 'VAD'}</span>
-                            <span>MEM: {memoryUsage || '---'}</span>
-                            <span>UPTIME: {Math.floor(appUptimeSecs / 60)}M</span>
-                            {voiceInputMode && (
-                                <span className={cn(pttHeld ? 'text-[#00FF9F] font-bold animate-pulse' : 'text-zinc-600')}>
-                                    {pttHeld ? '● TRANSMITTING' : '○ HOLD SPACE'}
-                                </span>
-                            )}
-                        </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-2xl transition-all duration-300">
+            {/* Ambient Background Glow Orb */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-gradient-to-tr from-purple-500/10 to-cyan-500/10 blur-[80px] pointer-events-none animate-pulse duration-[8000ms]" />
+            
+            {/* Main Floating Glass Capsule Card */}
+            <div className="relative w-full max-w-lg bg-white/[0.02] dark:bg-black/35 backdrop-blur-xl border border-white/10 dark:border-white/5 rounded-3xl p-8 shadow-[0_24px_80px_rgba(0,0,0,0.5)] flex flex-col items-center gap-8 overflow-hidden transition-all duration-300">
+                
+                {/* Header Top Bar */}
+                <header className="w-full flex items-center justify-between z-10 border-b border-white/5 pb-4">
+                    <div className="flex items-center gap-3">
+                        <Mic className="w-4 h-4 text-[#00FF9F]" />
+                        <span className="font-mono font-bold tracking-[0.25em] text-[10px] text-zinc-400 uppercase">Voice Mode v2.0</span>
                     </div>
-                    <div className="flex items-center gap-6">
-                        <StatusPill state={voiceState} />
-                        <WorkbenchButton onClick={toggleVoiceMode} className="flex items-center gap-2 px-4 py-2 border border-[#00FF9F]/20 text-[10px] tracking-widest hover:border-red-500/50 hover:text-red-500 transition-all">
-                            [ CLOSE ]
-                        </WorkbenchButton>
+
+                    <div className="flex items-center gap-3">
+                        {/* Dynamic Status Pill */}
+                        <div className={cn("text-[9px] font-bold tracking-widest px-2.5 py-0.5 rounded border uppercase transition-colors duration-200", stateColors[voiceState])}>
+                            {voiceState}
+                        </div>
+
+                        {/* Collapsible Diagnostics Toggle */}
+                        <button 
+                            onClick={() => setShowDiagnostics(!showDiagnostics)}
+                            className="p-1 rounded bg-white/5 border border-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
+                            title="Diagnostics Console"
+                        >
+                            <Terminal size={13} />
+                        </button>
+
+                        {/* Custom Rounded Close Button */}
+                        <button 
+                            onClick={toggleVoiceMode}
+                            className="p-1 rounded-full bg-white/5 border border-white/10 hover:bg-red-500/20 hover:border-red-500/30 text-zinc-400 hover:text-red-400 transition-all"
+                            title="Close Overlay"
+                        >
+                            <X size={14} />
+                        </button>
                     </div>
                 </header>
 
-                <DiagnosticPanel
-                    amplitude={amplitude}
-                    tokensPerSec={tokensPerSec}
-                    activeModel={activeModel}
-                    sttEngine={sttEngine}
-                    micStatus={micStatus}
-                    memoryUsage={memoryUsage}
-                />
+                {/* Minimal Telemetry Ribbon */}
+                <div className="w-full flex justify-between items-center px-2 py-1 text-[9px] font-mono text-zinc-500 z-10">
+                    <span>MODE: {voiceInputMode ? 'PUSH-TO-TALK' : 'VAD'}</span>
+                    <span className="truncate max-w-[150px]">SYS: {activeModel || 'Zen Core'}</span>
+                    <span>MEM: {memoryUsage ? `${Number(memoryUsage).toFixed(1)}GB` : '---'}</span>
+                </div>
 
-                <main className="vm-visual-display">
-                    <div className="vm-placeholder-text">Waiting for visual data...</div>
-                    <div className="vm-preview-overlay">
-                        {mapPreview && <div className="vm-map-mini">Map Preview: {mapPreview.label}</div>}
-                        {showDrawingPreview && <div className="vm-canvas-mini">Drawing Preview</div>}
-                    </div>
-                </main>
+                {/* Visualizer Core Area */}
+                <div className="relative w-full h-32 flex items-center justify-center my-4 overflow-visible z-10">
+                    <div className="absolute inset-0 bg-radial-gradient from-[#06b6d4]/5 to-transparent blur-md pointer-events-none" />
+                    <VoiceOscilloscope analyserRef={analyserRef} isAiSpeaking={aiSpeaking} isActive={voiceModeOpen} />
+                </div>
 
-                <RetrievalPanel sources={retrievalSources} />
-                <LogPanel lines={logLines} />
+                {/* Cognitive Actions HUD overlay inside capsule */}
+                <AnimatePresence mode="wait">
+                    {toolAction && (
+                        <motion.div 
+                            initial={{ opacity: 0, y: -4 }} 
+                            animate={{ opacity: 1, y: 0 }} 
+                            exit={{ opacity: 0, y: -4 }} 
+                            className="flex items-center gap-2 px-3 py-1 rounded bg-orange-500/10 border border-orange-500/20 text-orange-400 font-mono text-[9px] tracking-wider uppercase animate-pulse"
+                        >
+                            <Sparkles size={10} />
+                            <span>AGENT ACTION: {toolAction}</span>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
-                <section className="vm-console-input">
-                    <div className="vm-oscilloscope-container">
-                        <VoiceOscilloscope analyserRef={analyserRef} isAiSpeaking={aiSpeaking} isActive={voiceModeOpen} />
-                    </div>
-                    <div className="vm-transcripts">
-                        <div ref={aiTranscriptDomRef} className="vm-ai-response" />
-                        {(transcript || partialTranscript) && (
-                            <div className="vm-user-transcript">{transcript || partialTranscript}</div>
-                        )}
-                        {!aiSpeaking && !transcript && !partialTranscript && (
-                            <div className="text-[11px] opacity-40 italic tracking-widest">
-                                {voiceInputMode ? '[ HOLD SPACE TO TRANSMIT ]' : '[ MONITORING VOICE LINK ]'}
+                {/* Double Panel details (Visible when diagnostics is toggled) */}
+                <AnimatePresence>
+                    {showDiagnostics && (
+                        <motion.div 
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="w-full bg-[#05060b]/80 border border-white/5 rounded-xl p-4 overflow-hidden text-[9px] font-mono text-zinc-400 flex flex-col gap-3 z-10"
+                        >
+                            <div className="flex justify-between items-center text-zinc-500 border-b border-white/5 pb-1">
+                                <span className="flex items-center gap-1.5"><Cpu size={10} /> TELEMETRY DIAGNOSTICS</span>
+                                <span>UPTIME: {Math.floor(appUptimeSecs / 60)}M {appUptimeSecs % 60}S</span>
                             </div>
-                        )}
-                    </div>
-                </section>
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                                <div className="flex justify-between"><span>STT_ENGINE</span><span className="text-white">{sttEngine.toUpperCase()}</span></div>
+                                <div className="flex justify-between"><span>LINK STATUS</span><span className={micStatus === 'live' ? 'text-emerald-400 font-bold' : 'text-red-400'}>{micStatus.toUpperCase()}</span></div>
+                                <div className="flex justify-between"><span>AMP SIGNAL</span><span className="text-white">{Math.min(100, Math.floor(amplitude * 250))}%</span></div>
+                                <div className="flex justify-between"><span>LATENCY</span><span className="text-white">{tokensPerSec ? `${(1000 / tokensPerSec).toFixed(0)}ms` : '24ms'}</span></div>
+                            </div>
+                            <div className="h-px bg-white/5 my-1" />
+                            <div className="flex flex-col gap-1 max-h-16 overflow-y-auto pr-1">
+                                {logLines.slice(-3).map((l, i) => <div key={i} className="truncate text-zinc-500">{l}</div>)}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
-                <ActionPanel toolAction={toolAction} micStatus={micStatus} />
+                {/* VAD / PTT Toggle Control */}
+                <div className="w-full flex items-center justify-between border-t border-white/5 pt-4 text-[10px] text-zinc-500 z-10">
+                    <span className="flex items-center gap-1"><Volume2 size={12} /> Master Link Volume</span>
+                    <span className="font-mono text-zinc-300">80%</span>
+                </div>
+            </div>
+
+            {/* YouTube-style Closed Captioning Subtitle Box */}
+            <div className="absolute bottom-16 left-1/2 -translate-x-1/2 w-full max-w-xl px-6 z-40 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                <div className="bg-[#0c0d14]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl flex items-start gap-3.5 transition-all duration-200">
+                    
+                    {/* Color-Coded Speaker Pill Tag */}
+                    {subtitleSpeaker === 'user' && (
+                        <span className="shrink-0 text-[9px] font-extrabold tracking-widest px-2.5 py-0.5 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 select-none uppercase">
+                            YOU
+                        </span>
+                    )}
+                    {subtitleSpeaker === 'agent' && (
+                        <span className="shrink-0 text-[9px] font-extrabold tracking-widest px-2.5 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 select-none uppercase">
+                            ZEN
+                        </span>
+                    )}
+                    {subtitleSpeaker === 'system' && (
+                        <span className="shrink-0 text-[9px] font-extrabold tracking-widest px-2.5 py-0.5 rounded border border-zinc-500/30 bg-zinc-500/10 text-zinc-400 select-none uppercase">
+                            SYS
+                        </span>
+                    )}
+
+                    {/* Subtitle speech text */}
+                    <p className={cn(
+                        "text-[13px] font-semibold leading-relaxed flex-1 text-left select-none transition-colors duration-200",
+                        subtitleSpeaker === 'user' 
+                            ? "text-purple-100/90" 
+                            : subtitleSpeaker === 'agent' 
+                                ? "text-emerald-100/90" 
+                                : "text-zinc-500 italic"
+                    )}>
+                        {subtitleSpeaker === 'user' 
+                            ? (userSpeechText || 'Listening for speech...') 
+                            : subtitleSpeaker === 'agent' 
+                                ? (aiSpeechText || 'Responding...') 
+                                : 'Voice link established. Monitoring channel...'}
+                    </p>
+                </div>
             </div>
         </div>
     );

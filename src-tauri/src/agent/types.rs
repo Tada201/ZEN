@@ -131,6 +131,8 @@ pub struct ToolResult {
     pub tool_call_id: String,
     pub content: Value,
     pub is_error: bool,
+    #[serde(default)]
+    pub duration_ms: u64,
 }
 
 // ─── Action Timeline Types (for Claude Code-style UI) ───

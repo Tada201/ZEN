@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import mermaid from "mermaid";
 import { useTheme } from "next-themes";
+import { CodeBlock } from "./CodeBlock";
 
 export function MermaidDiagram({ code, isStreaming }: { code: string; isStreaming?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string>("");
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { resolvedTheme } = useTheme();
 
   useEffect(() => {
     if (isStreaming) {
       setSvg("");
-      setError(false);
+      setError(null);
       return;
     }
 
@@ -30,11 +31,11 @@ export function MermaidDiagram({ code, isStreaming }: { code: string; isStreamin
         
         if (isMounted) {
           setSvg(renderedSvg);
-          setError(false);
+          setError(null);
         }
       } catch (err) {
         if (isMounted) {
-          setError(true);
+          setError(err instanceof Error ? err.message : "Unknown syntax or parser error");
         }
       }
     };
@@ -48,18 +49,28 @@ export function MermaidDiagram({ code, isStreaming }: { code: string; isStreamin
 
   if (isStreaming) {
     return (
-      <div className="my-6 flex flex-col justify-center items-center h-32 bg-card/30 rounded-xl border border-border/40 shadow-sm animate-pulse">
-        <div className="text-muted-foreground text-sm font-mono opacity-70">Drawing diagram...</div>
+      <div className="space-y-2 my-6">
+        <div className="flex items-center gap-2 text-sm text-amber-500 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20">
+          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+          <span>Rendering Mermaid Diagram...</span>
+        </div>
+        <CodeBlock code={code} language="mermaid" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="my-6 p-4 bg-rose-500/10 text-rose-500 border border-rose-500/20 rounded-xl font-mono text-xs overflow-auto">
-        <pre>{code}</pre>
-        <div className="mt-2 text-[10px] uppercase font-bold tracking-wider opacity-70">
-          Invalid Mermaid Syntax
+      <div className="space-y-2 my-6">
+        <div className="flex flex-col gap-1 text-sm text-red-500 bg-red-500/10 px-3 py-2 rounded-lg border border-red-500/20">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="w-2 h-2 rounded-full bg-red-500" />
+            <span>Mermaid Syntax / Parser Error</span>
+          </div>
+          <p className="text-xs opacity-80">{error}</p>
+        </div>
+        <div className="opacity-80">
+          <CodeBlock code={code} language="mermaid" />
         </div>
       </div>
     );
@@ -76,8 +87,9 @@ export function MermaidDiagram({ code, isStreaming }: { code: string; isStreamin
   return (
     <div 
       ref={containerRef}
-      className="my-6 overflow-auto flex justify-center bg-card/30 p-6 rounded-xl border border-border/40 shadow-sm"
+      className="my-6 overflow-hidden flex justify-center bg-card/30 p-6 rounded-xl border border-border/40 shadow-sm min-h-[128px] transition-[height,opacity] duration-300 ease-in-out"
       dangerouslySetInnerHTML={{ __html: svg }} 
     />
   );
 }
+

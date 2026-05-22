@@ -24,7 +24,7 @@ export function SettingsRow({
     <div
       id={id}
       className={cn(
-        "flex items-center justify-between gap-4 rounded-xl border border-white/5 bg-slate-900/35 px-4 py-3 hover:bg-slate-900/50 transition-colors group",
+        "flex items-center justify-between gap-4 rounded-xl border border-white/[0.04] bg-zinc-900/15 px-4 py-3 hover:bg-white/[0.04] transition-colors group",
         className
       )}
     >

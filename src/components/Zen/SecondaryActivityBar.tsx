@@ -1,6 +1,6 @@
 import { useTransition } from 'react';
 import { 
-  Activity, Cpu, Box, Terminal, Map as MapIcon, Paintbrush 
+  Activity, Cpu, Box, Terminal, Map as MapIcon, Paintbrush, Database
 } from 'lucide-react';
 import { useUIStore } from '../../lib/stores/useUIStore';
 import { cn } from '../../lib/utils/style';
@@ -23,6 +23,7 @@ export function SecondaryActivityBar() {
     { id: 'agents', icon: Cpu, label: 'Agent Tasks' },
     { id: 'drawing', icon: Paintbrush, label: 'Tactical Widgets' },
     { id: 'artifacts', icon: Box, label: 'Artifacts & Math' },
+    { id: 'memory', icon: Database, label: 'Memory Stats' },
     { id: 'terminal', icon: Terminal, label: 'Nexus Terminal' },
     { id: 'map', icon: MapIcon, label: 'Operational Map' },
   ];

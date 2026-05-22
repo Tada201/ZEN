@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useDeferredValue } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -36,6 +36,8 @@ export function SmoothMarkdown({
   const currentPosRef = useRef(0);
   const rafRef = useRef<number | null>(null);
   const lastTickTimeRef = useRef(0);
+
+  const deferredContent = useDeferredValue(displayedContent);
 
   // Performance Fix #4: Memoize plugin arrays so ReactMarkdown doesn't
   // re-create its processing pipeline on every render tick.
@@ -124,12 +126,14 @@ export function SmoothMarkdown({
   }, [content, isStreaming, baseSpeed, tickMs, onComplete]);
 
   return (
-    <ReactMarkdown 
-      remarkPlugins={remarkPlugins} 
-      rehypePlugins={rehypePlugins}
-      components={components}
-    >
-      {displayedContent}
-    </ReactMarkdown>
+    <div className="smooth-markdown text-sm leading-relaxed prose prose-invert max-w-none">
+      <ReactMarkdown 
+        remarkPlugins={remarkPlugins} 
+        rehypePlugins={rehypePlugins}
+        components={components}
+      >
+        {deferredContent}
+      </ReactMarkdown>
+    </div>
   );
 }

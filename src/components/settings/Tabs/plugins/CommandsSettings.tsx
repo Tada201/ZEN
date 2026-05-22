@@ -5,6 +5,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { SettingsCard } from '@/components/settings/ui/SettingsCard';
 import { WorkbenchSwitch } from '@/components/settings/ui/WorkbenchSwitch';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
+import { UnderConstructionBanner } from '@/components/settings/ui/UnderConstructionBanner';
 import { cn } from '@/lib/utils';
 
 interface ZenCommand {
@@ -80,6 +81,10 @@ export const CommandsSettings = memo(({ embedded }: { embedded?: boolean }) => {
 
     return (
         <div className={cn("flex flex-col gap-6", embedded ? "" : "")}>
+            <UnderConstructionBanner
+                featureName="Slash Commands Registry"
+                description="The Slash Commands Registry is a visual prototype. The underlying Tauri event bus hooks and runtime execution registry are under active development."
+            />
             <SettingsCard
                 title="Command Registry"
                 subtitle="Slash Commands"
@@ -87,14 +92,14 @@ export const CommandsSettings = memo(({ embedded }: { embedded?: boolean }) => {
             >
                 <div className="flex flex-col gap-3">
                     {loading ? (
-                        <div className="py-8 text-center text-[11px] text-slate-500">
+                        <div className="py-8 text-center text-[11px] text-zinc-500">
                             Loading command registry...
                         </div>
                     ) : cmdDetails.length === 0 ? (
-                        <div className="py-12 text-center border border-dashed border-white/10 rounded-xl bg-slate-950/20">
-                            <WorkbenchIcon name="codicon:terminal" size={32} className="text-slate-600 mx-auto mb-3" />
-                            <p className="text-[11px] text-slate-500 mb-2">No commands registered</p>
-                            <p className="text-[10px] text-slate-600">
+                        <div className="py-12 text-center border border-dashed border-white/10 rounded-xl bg-zinc-950/20">
+                            <WorkbenchIcon name="codicon:terminal" size={32} className="text-zinc-600 mx-auto mb-3" />
+                            <p className="text-[11px] text-zinc-500 mb-2">No commands registered</p>
+                            <p className="text-[10px] text-zinc-600">
                                 Commands are registered by agents at runtime.
                             </p>
                         </div>
@@ -107,8 +112,8 @@ export const CommandsSettings = memo(({ embedded }: { embedded?: boolean }) => {
                                     className={cn(
                                         "rounded-xl border transition-colors",
                                         expandedId === cmd.id
-                                            ? "bg-slate-800/50 border-white/10"
-                                            : "bg-slate-900/50 border-white/5 hover:border-white/10"
+                                            ? "bg-zinc-800/50 border-white/10"
+                                            : "bg-zinc-900/50 border-white/5 hover:border-white/10"
                                     )}
                                 >
                                     <div
@@ -118,12 +123,12 @@ export const CommandsSettings = memo(({ embedded }: { embedded?: boolean }) => {
                                         <WorkbenchIcon
                                             name="codicon:symbol-property"
                                             size={16}
-                                            className={cmd.enabled ? 'text-emerald-400' : 'text-slate-500'}
+                                            className={cmd.enabled ? 'text-emerald-400' : 'text-zinc-500'}
                                         />
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-[12px] font-mono font-bold text-white">{cmd.name}</span>
-                                                <span className="text-[10px] text-slate-500 truncate">{cmd.description}</span>
+                                                <span className="text-[10px] text-zinc-500 truncate">{cmd.description}</span>
                                             </div>
                                         </div>
                                         <div onClick={(event) => event.stopPropagation()}>
@@ -135,7 +140,7 @@ export const CommandsSettings = memo(({ embedded }: { embedded?: boolean }) => {
                                         <WorkbenchIcon
                                             name={expandedId === cmd.id ? 'codicon:chevron-up' : 'codicon:chevron-down'}
                                             size={14}
-                                            className="text-slate-500"
+                                            className="text-zinc-500"
                                         />
                                     </div>
 
@@ -149,19 +154,19 @@ export const CommandsSettings = memo(({ embedded }: { embedded?: boolean }) => {
                                             >
                                                 <div className="px-4 pb-4 pt-2 border-t border-white/5 space-y-3">
                                                     <div>
-                                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Variables</label>
+                                                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Variables</label>
                                                         <div className="flex gap-2 mt-1.5 flex-wrap">
                                                             {cmd.variables.length > 0 ? cmd.variables.map(v => (
-                                                                <span key={v} className="text-[10px] font-mono px-2 py-1 rounded bg-slate-950 border border-white/10 text-slate-400">
+                                                                <span key={v} className="text-[10px] font-mono px-2 py-1 rounded bg-zinc-950 border border-white/10 text-zinc-400">
                                                                     {v}
                                                                 </span>
                                                             )) : (
-                                                                <span className="text-[10px] text-slate-600">None</span>
+                                                                <span className="text-[10px] text-zinc-600">None</span>
                                                             )}
                                                         </div>
                                                     </div>
                                                     <div>
-                                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Allowed Tools</label>
+                                                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Allowed Tools</label>
                                                         <div className="flex gap-2 mt-1.5 flex-wrap">
                                                             {cmd.allowed_tools.map(tool => (
                                                                 <span key={tool} className="text-[10px] px-2 py-1 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400">
@@ -171,8 +176,8 @@ export const CommandsSettings = memo(({ embedded }: { embedded?: boolean }) => {
                                                         </div>
                                                     </div>
                                                     <div>
-                                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Instructions</label>
-                                                        <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">{cmd.instructions}</p>
+                                                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Instructions</label>
+                                                        <p className="text-[11px] text-zinc-400 mt-1.5 leading-relaxed">{cmd.instructions}</p>
                                                     </div>
                                                 </div>
                                             </motion.div>

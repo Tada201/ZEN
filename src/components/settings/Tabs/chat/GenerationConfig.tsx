@@ -17,7 +17,7 @@ export const GenerationConfig = memo(() => {
             description="Fine-tune token generation and randomness."
         >
             <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-3 p-4 bg-slate-900/20 border border-white/[0.03] rounded-lg">
+                <div className="flex flex-col gap-3 p-4 bg-zinc-900/20 border border-white/[0.03] rounded-lg">
                     <div className="flex justify-between items-center">
                         <div className="flex flex-col">
                             <span className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider">
@@ -27,7 +27,7 @@ export const GenerationConfig = memo(() => {
                                 Randomness coefficient for token selection
                             </p>
                         </div>
-                        <span className="text-[11px] font-mono font-bold text-zinc-200 bg-slate-800/50 px-2 py-0.5 rounded border border-white/[0.05]">
+                        <span className="text-[11px] font-mono font-bold text-zinc-200 bg-zinc-800/50 px-2 py-0.5 rounded border border-white/[0.05]">
                             {temperature.toFixed(2)}
                         </span>
                     </div>

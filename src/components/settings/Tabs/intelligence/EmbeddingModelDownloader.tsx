@@ -129,7 +129,7 @@ export const EmbeddingModelDownloader = memo(({
                     <div className="flex items-center justify-between">
                         <div className="flex flex-col gap-1">
                             <span className="text-[12px] font-bold text-white">{serviceName} Service</span>
-                            <span className="text-[11px] text-slate-500">Local inference engine status</span>
+                            <span className="text-[11px] text-zinc-500">Local inference engine status</span>
                         </div>
                         <WorkbenchButton
                             variant="secondary"
@@ -169,10 +169,10 @@ export const EmbeddingModelDownloader = memo(({
                                     "flex items-center gap-2 px-3 py-1 rounded border",
                                     ollamaStatus?.has_embedding_model
                                         ? "bg-brand-purple/10 border-brand-purple/20"
-                                        : "bg-slate-800 border-white/5"
+                                        : "bg-zinc-800/60 border-white/[0.04]"
                                 )}>
-                                    <WorkbenchIcon name="codicon:pulse" size={12} className={cn(ollamaStatus?.has_embedding_model ? "text-brand-purple" : "text-slate-400")} />
-                                    <span className={cn("text-[10px] font-bold uppercase tracking-wider", ollamaStatus?.has_embedding_model ? "text-brand-purple" : "text-slate-400")}>
+                                    <WorkbenchIcon name="codicon:pulse" size={12} className={cn(ollamaStatus?.has_embedding_model ? "text-brand-purple" : "text-zinc-400")} />
+                                    <span className={cn("text-[10px] font-bold uppercase tracking-wider", ollamaStatus?.has_embedding_model ? "text-brand-purple" : "text-zinc-400")}>
                                         {ollamaStatus?.has_embedding_model ? 'Ready' : 'Pending'}
                                     </span>
                                 </div>
@@ -181,10 +181,10 @@ export const EmbeddingModelDownloader = memo(({
                     </div>
 
                     {!ollamaStatus?.installed && (
-                        <div className="p-4 bg-slate-900 border border-white/5 rounded-xl flex flex-col gap-3">
+                        <div className="p-4 bg-zinc-900/30 border border-white/[0.04] rounded-xl flex flex-col gap-3">
                             <div className="flex gap-3 items-center">
                                 <WorkbenchIcon name="codicon:warning" size={16} className="text-red-500" />
-                                <p className="text-[11px] text-slate-400 flex-1 leading-relaxed">
+                                <p className="text-[11px] text-zinc-400 flex-1 leading-relaxed">
                                     {serviceName} binary not found. Handshake unavailable.
                                 </p>
                             </div>
@@ -204,7 +204,7 @@ export const EmbeddingModelDownloader = memo(({
                 <div className="flex flex-col gap-3">
                     <div className="flex flex-col gap-0.5">
                         <span className="text-[11px] font-bold text-white uppercase tracking-tight">Curated Model Catalog</span>
-                        <span className="text-[10px] text-slate-500">Verified models for knowledge retrieval</span>
+                        <span className="text-[10px] text-zinc-500">Verified models for knowledge retrieval</span>
                     </div>
 
                     {RECOMMENDED_MODELS.map((model, idx) => {
@@ -222,15 +222,15 @@ export const EmbeddingModelDownloader = memo(({
                                                 {model.category}
                                             </span>
                                         </div>
-                                        <p className="text-[11px] text-slate-400 leading-tight m-0">{model.description}</p>
+                                        <p className="text-[11px] text-zinc-400 leading-tight m-0">{model.description}</p>
                                         <div className="flex gap-4 mt-1 items-center opacity-70">
                                             <div className="flex items-center gap-1.5">
-                                                <WorkbenchIcon name="codicon:package" size={10} className="text-slate-400" />
-                                                <span className="text-[10px] font-mono text-slate-400 font-semibold uppercase">{model.size}</span>
+                                                <WorkbenchIcon name="codicon:package" size={10} className="text-zinc-400" />
+                                                <span className="text-[10px] font-mono text-zinc-400 font-semibold uppercase">{model.size}</span>
                                             </div>
                                             <div className="flex items-center gap-1.5">
-                                                <WorkbenchIcon name="codicon:pulse" size={10} className="text-slate-400" />
-                                                <span className="text-[10px] font-mono text-slate-400 font-semibold uppercase">{model.dimensions}D</span>
+                                                <WorkbenchIcon name="codicon:pulse" size={10} className="text-zinc-400" />
+                                                <span className="text-[10px] font-mono text-zinc-400 font-semibold uppercase">{model.dimensions}D</span>
                                             </div>
                                         </div>
                                     </div>
@@ -289,7 +289,7 @@ export const EmbeddingModelDownloader = memo(({
                                     </span>
                                 </div>
 
-                                <div className="h-2 bg-slate-800 rounded-full overflow-hidden border border-white/5">
+                                <div className="h-2 bg-zinc-800 rounded-full overflow-hidden border border-white/[0.04]">
                                     <motion.div
                                         className="h-full bg-brand-purple shadow-[0_0_10px_rgba(147,51,234,0.3)]"
                                         initial={{ width: 0 }}
@@ -300,9 +300,9 @@ export const EmbeddingModelDownloader = memo(({
 
                                 <div className="flex justify-between items-center">
                                     <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-mono font-bold text-slate-400">{formatBytes(downloadProgress.downloaded_bytes)}</span>
-                                        <span className="text-[10px] text-slate-700">/</span>
-                                        <span className="text-[10px] font-mono font-bold text-slate-400">{formatBytes(downloadProgress.total_bytes)}</span>
+                                        <span className="text-[10px] font-mono font-bold text-zinc-400">{formatBytes(downloadProgress.downloaded_bytes)}</span>
+                                        <span className="text-[10px] text-zinc-700">/</span>
+                                        <span className="text-[10px] font-mono font-bold text-zinc-400">{formatBytes(downloadProgress.total_bytes)}</span>
                                     </div>
                                     <span className="text-[10px] font-black text-brand-purple/60 bg-brand-purple/10 px-2 py-0.5 rounded border border-brand-purple/10">OLLAMA-API-v1</span>
                                 </div>
@@ -321,11 +321,11 @@ export const EmbeddingModelDownloader = memo(({
                             <WorkbenchIcon name="codicon:check" size={14} className="text-white" />
                         </div>
                         <div className="flex-1 flex flex-col gap-0.5 text-left">
-                            <span className="text-[12px] font-bold text-slate-100 uppercase">Model Successfully Installed</span>
-                            <p className="text-[10px] text-slate-400 leading-tight m-0">The selected model is now available for local document indexing.</p>
+                            <span className="text-[12px] font-bold text-zinc-100 uppercase">Model Successfully Installed</span>
+                            <p className="text-[10px] text-zinc-400 leading-tight m-0">The selected model is now available for local document indexing.</p>
                         </div>
                         <WorkbenchButton variant="ghost" size="icon" onClick={() => setDownloadComplete(false)} className="h-8 w-8 !p-0 hover:bg-emerald-500/20">
-                            <WorkbenchIcon name="codicon:close" size={14} className="text-slate-400" />
+                            <WorkbenchIcon name="codicon:close" size={14} className="text-zinc-400" />
                         </WorkbenchButton>
                     </motion.div>
                 )}
@@ -365,10 +365,10 @@ export const EmbeddingModelDownloader = memo(({
                             'Refresh this view to confirm connection'
                         ].map((step, i) => (
                             <div key={i} className="flex gap-4 items-start text-left">
-                                <div className="w-5 h-5 rounded bg-slate-800 border border-white/5 flex items-center justify-center shrink-0 mt-0.5 shadow-inner">
+                                <div className="w-5 h-5 rounded bg-zinc-800 border border-white/[0.04] flex items-center justify-center shrink-0 mt-0.5 shadow-inner">
                                     <span className="text-[9px] font-black text-brand-purple font-mono">{i + 1}</span>
                                 </div>
-                                <p className="text-[12px] text-slate-400 flex-1 leading-relaxed font-medium m-0">{step}</p>
+                                <p className="text-[12px] text-zinc-400 flex-1 leading-relaxed font-medium m-0">{step}</p>
                             </div>
                         ))}
                     </div>

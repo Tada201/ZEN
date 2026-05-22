@@ -142,7 +142,7 @@ impl ToolManager {
     /// If allowed_ids is empty, all tools are returned (no agent-based filtering).
     /// Permission filtering is always applied: tools with `AlwaysDeny` default are excluded
     /// unless YOLO mode is enabled.
-    pub fn list_allowed(&self, allowed_ids: &[String]) -> Vec<ToolDescriptor> {
+    pub async fn list_allowed(&self, allowed_ids: &[String]) -> Vec<ToolDescriptor> {
         let allowed: std::collections::HashSet<String> = allowed_ids.iter().cloned().collect();
         let mut seen = std::collections::HashSet::new();
         let mut descriptors = Vec::new();
@@ -164,7 +164,7 @@ impl ToolManager {
 
         // V2 tools
         {
-            let v2_guard = self.v2.blocking_read();
+            let v2_guard = self.v2.read().await;
             let v2_tools = v2_guard.list();
             // Drop lock immediately — we only needed it for the snapshot
             drop(v2_guard);
@@ -189,7 +189,7 @@ impl ToolManager {
     }
 
     /// Get full schema and info for a specific tool (from whichever registry has it).
-    pub fn get_info(&self, id: &str) -> Option<ToolSchema> {
+    pub async fn get_info(&self, id: &str) -> Option<ToolSchema> {
         // Try v1 first
         if let Ok(v1_guard) = self.v1.try_read() {
             if let Some(tool) = v1_guard.get(id) {
@@ -205,7 +205,7 @@ impl ToolManager {
 
         // Try v2
         {
-            let v2_guard = self.v2.blocking_read();
+            let v2_guard = self.v2.read().await;
             let def = v2_guard.list_definitions().into_iter()
                 .find(|t| t.name == id);
             drop(v2_guard);
@@ -225,22 +225,22 @@ impl ToolManager {
     }
 
     /// Check if a tool exists in either registry
-    pub fn exists(&self, id: &str) -> bool {
+    pub async fn exists(&self, id: &str) -> bool {
         if let Ok(v1_guard) = self.v1.try_read() {
             if v1_guard.get(id).is_some() {
                 return true;
             }
         }
-        let v2_guard = self.v2.blocking_read();
+        let v2_guard = self.v2.read().await;
         v2_guard.get(id).is_some()
     }
 
     /// Resolve a `tool_exec` call: extract the real tool ID and arguments,
     /// validate the tool exists, and return the resolved (name, args) pair.
     /// Returns None if the tool doesn't exist or args are malformed.
-    pub fn resolve_tool_exec(&self, args: &serde_json::Value) -> Option<(String, serde_json::Value)> {
+    pub async fn resolve_tool_exec(&self, args: &serde_json::Value) -> Option<(String, serde_json::Value)> {
         let tool_id = args.get("tool_id")?.as_str()?;
-        if !self.exists(tool_id) {
+        if !self.exists(tool_id).await {
             return None;
         }
         let real_args = args.get("arguments").cloned().unwrap_or(serde_json::json!({}));

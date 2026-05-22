@@ -5,6 +5,7 @@ import { SettingsCard } from '@/components/settings/ui/SettingsCard';
 import { WorkbenchSwitch } from '@/components/settings/ui/WorkbenchSwitch';
 import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
+import { UnderConstructionBanner } from '@/components/settings/ui/UnderConstructionBanner';
 
 export const UpdatesSettings = memo(() => {
   // Use settings store as primary, with fallback for standalone usage
@@ -30,6 +31,10 @@ export const UpdatesSettings = memo(() => {
 
   return (
     <div className="flex flex-col gap-8">
+      <UnderConstructionBanner
+        featureName="System Updates"
+        description="The System Updates panel is currently simulated. Full OTA package verification, binary payload diffing, and Tauri native background installer integration are under active development."
+      />
       <SettingsCard
         title="Update Channels"
         subtitle="Update Settings"
@@ -40,7 +45,7 @@ export const UpdatesSettings = memo(() => {
           <div className="flex items-center justify-between">
             <div className="flex flex-col gap-1">
               <span className="text-[12px] font-bold text-white">Automatic Updates</span>
-              <span className="text-[11px] text-slate-500">Check for stable release updates automatically</span>
+              <span className="text-[11px] text-zinc-500">Check for stable release updates automatically</span>
             </div>
             <WorkbenchSwitch
               checked={autoCheckEnabled}
@@ -51,7 +56,7 @@ export const UpdatesSettings = memo(() => {
           <div className="flex items-center justify-between">
             <div className="flex flex-col gap-1">
               <span className="text-[12px] font-bold text-white">Beta Channel</span>
-              <span className="text-[11px] text-slate-500">Opt-in for early access to experimental features</span>
+              <span className="text-[11px] text-zinc-500">Opt-in for early access to experimental features</span>
             </div>
             <WorkbenchSwitch
               checked={checkBeta}
@@ -69,20 +74,20 @@ export const UpdatesSettings = memo(() => {
           icon="codicon:history"
         >
           <div className="flex gap-4">
-            <div className="flex-1 p-4 bg-slate-900 border border-white/5 rounded-xl flex flex-col gap-2">
+            <div className="flex-1 p-4 bg-zinc-900 border border-white/5 rounded-xl flex flex-col gap-2">
               <div className="flex items-center gap-2">
-                <WorkbenchIcon name="codicon:archive" size={14} className="text-slate-400" />
-                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Version</span>
+                <WorkbenchIcon name="codicon:archive" size={14} className="text-zinc-400" />
+                <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest">Version</span>
               </div>
               <span className="text-2xl font-bold text-brand-purple font-mono">v{currentVersion}</span>
             </div>
 
-            <div className="flex-1 p-4 bg-slate-900 border border-white/5 rounded-xl flex flex-col gap-2">
+            <div className="flex-1 p-4 bg-zinc-900 border border-white/5 rounded-xl flex flex-col gap-2">
               <div className="flex items-center gap-2">
-                <WorkbenchIcon name="codicon:history" size={14} className="text-slate-400" />
-                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Last Check</span>
+                <WorkbenchIcon name="codicon:history" size={14} className="text-zinc-400" />
+                <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest">Last Check</span>
               </div>
-              <span className="text-sm font-bold text-slate-200">{formatDate(lastCheck)}</span>
+              <span className="text-sm font-bold text-zinc-200">{formatDate(lastCheck)}</span>
             </div>
           </div>
         </SettingsCard>
@@ -133,7 +138,7 @@ export const UpdatesSettings = memo(() => {
                 </WorkbenchButton>
 
                 {isDownloading && (
-                  <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
                     <motion.div
                       className="h-full bg-brand-purple"
                       initial={{ width: 0 }}

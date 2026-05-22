@@ -20,6 +20,7 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
   qwenApiKey: "",
   xaiApiKey: "",
   kilocodeApiKey: "",
+  nvidiaApiKey: "",
   nineRouterBaseUrl: "http://localhost:20128/v1",
   nineRouterApiKey: "",
   aihubmixApiKey: "",

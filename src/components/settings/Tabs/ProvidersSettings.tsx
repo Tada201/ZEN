@@ -541,7 +541,7 @@ export const ProvidersSettings = memo(() => {
                 <div className="flex items-center gap-4">
                     <div className="flex -space-x-2">
                         {providerOrder.slice(0, 3).map(p => (
-                            <div key={p.key} className="h-7 w-7 rounded-full border-2 border-slate-950 bg-slate-900 flex items-center justify-center">
+                            <div key={p.key} className="h-7 w-7 rounded-full border-2 border-zinc-950 bg-zinc-900 flex items-center justify-center">
                                 {PROVIDER_ICONS[p.key] || <WorkbenchIcon name={p.icon || "lucide:cpu"} size={12} className="text-white/40" />}
                             </div>
                         ))}

@@ -26,7 +26,7 @@ interface UIState {
   styleMode: 'glass' | 'flat' | 'bordered';
   density: 'normal' | 'compact';
   rightPanelOpen: boolean;
-  activeRightTab: 'metrics' | 'analytics' | 'agents' | 'workflows' | 'space' | 'drawing' | 'artifacts' | 'terminal' | 'map';
+  activeRightTab: 'metrics' | 'analytics' | 'agents' | 'workflows' | 'space' | 'drawing' | 'artifacts' | 'terminal' | 'map' | 'memory';
   
   // Actions
   setSidebarOpen: (open: boolean) => void;
@@ -53,7 +53,7 @@ interface UIState {
   setStyleMode: (mode: 'glass' | 'flat' | 'bordered') => void;
   setDensity: (density: 'normal' | 'compact') => void;
   setRightPanelOpen: (open: boolean) => void;
-  setActiveRightTab: (tab: 'metrics' | 'analytics' | 'agents' | 'workflows' | 'space' | 'drawing' | 'artifacts' | 'terminal' | 'map') => void;
+  setActiveRightTab: (tab: 'metrics' | 'analytics' | 'agents' | 'workflows' | 'space' | 'drawing' | 'artifacts' | 'terminal' | 'map' | 'memory') => void;
   toggleSidebar: () => void;
   toggleRightPanel: () => void;
 }

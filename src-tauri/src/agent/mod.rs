@@ -16,6 +16,7 @@ pub mod workflow;
 pub mod booster;
 pub mod task_queue;
 pub mod orchestrator;
+pub mod deep_research;
 pub mod config;
 pub mod rate_limiter;
 pub mod clarification;

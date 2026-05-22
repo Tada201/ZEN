@@ -10,12 +10,6 @@ use crate::db::models::{ChatMessage, ChatResponse, ModelInfo};
 use crate::error::{ZenError, ZenResult};
 use crate::llm::LlmProvider;
 
-#[cfg(test)]
-use wiremock::{
-    Mock, MockServer, ResponseTemplate,
-    matchers::{method, path},
-};
-
 /// Ollama HTTP API client.
 pub struct OllamaProvider {
     client: Client,

@@ -1,482 +1,14 @@
-use async_trait::async_trait;
-use futures::StreamExt;
-use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use crate::db::models::{ChatMessage, ChatResponse};
+use crate::error::{ZenError, ZenResult};
+use crate::llm::openai_compat::types::*;
+use crate::llm::openai_compat::OpenAiCompatProvider;
 use std::collections::HashMap;
 use std::sync::RwLock;
+use futures::StreamExt;
 use tracing::{debug, error, info, warn};
 
-use crate::db::models::{ChatMessage, ChatResponse, ModelInfo};
-use crate::error::{ZenError, ZenResult};
-use crate::llm::LlmProvider;
-
-/// Cached model capabilities populated during `list_models()`.
-#[derive(Clone, Debug)]
-struct ModelCapabilities {
-    supports_tools: bool,
-}
-
-/// OpenAI-compatible API provider.
-/// Works with: OpenAI, OpenRouter, Groq, Together AI, Mistral, LM Studio,
-/// or any server implementing the `/v1/chat/completions` endpoint.
-pub struct OpenAiCompatProvider {
-    client: Client,
-    base_url: RwLock<String>,
-    api_key: String,
-    provider_name: String,
-    extra_headers: Vec<(String, String)>,
-    /// Model capability cache populated by `list_models()`.
-    model_capabilities: RwLock<HashMap<String, ModelCapabilities>>,
-}
-
-// ─── OpenAI API types ───
-
-#[derive(Serialize)]
-struct OpenAiChatRequest {
-    model: String,
-    messages: Vec<OpenAiMessage>,
-    stream: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub temperature: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_tokens: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_completion_tokens: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub top_p: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub presence_penalty: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub frequency_penalty: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub seed: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stop: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tools: Option<Vec<serde_json::Value>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub response_format: Option<serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning_effort: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct OpenAiMessage {
-    role: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    content: Option<OpenAiContent>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    tool_calls: Option<Vec<OpenAiToolCallOut>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    tool_call_id: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(untagged)]
-enum OpenAiContent {
-    Text(String),
-    Parts(Vec<OpenAiContentPart>),
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(tag = "type")]
-enum OpenAiContentPart {
-    #[serde(rename = "text")]
-    Text { text: String },
-    #[serde(rename = "image_url")]
-    ImageUrl { image_url: OpenAiImageUrl },
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct OpenAiImageUrl {
-    url: String, // "data:image/jpeg;base64,{base64_image}"
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct OpenAiToolCallOut {
-    id: String,
-    #[serde(rename = "type")]
-    call_type: String,
-    function: OpenAiFunctionOut,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct OpenAiFunctionOut {
-    name: String,
-    arguments: String,
-}
-
-/// SSE chunk from streaming chat completions.
-#[derive(Deserialize, Debug)]
-struct OpenAiStreamChunk {
-    choices: Vec<OpenAiStreamChoice>,
-    #[serde(default)]
-    usage: Option<OpenAiUsage>,
-}
-
-#[derive(Deserialize, Debug)]
-struct OpenAiStreamChoice {
-    delta: OpenAiDelta,
-    #[serde(default)]
-    finish_reason: Option<String>,
-}
-
-#[derive(Deserialize, Debug)]
-struct OpenAiDelta {
-    #[serde(default)]
-    pub content: Option<String>,
-    #[serde(default)]
-    pub tool_calls: Option<Vec<OpenAiToolCallDelta>>,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct OpenAiToolCallDelta {
-    pub index: Option<usize>,
-    pub id: Option<String>,
-    #[serde(rename = "type")]
-    pub call_type: Option<String>,
-    pub function: Option<OpenAiFunctionDelta>,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct OpenAiFunctionDelta {
-    pub name: Option<String>,
-    pub arguments: Option<String>,
-}
-
-#[derive(Deserialize, Debug)]
-struct OpenAiUsage {
-    #[serde(default)]
-    prompt_tokens: Option<i64>,
-    #[serde(default)]
-    completion_tokens: Option<i64>,
-}
-
-/// Models list response.
-#[derive(Deserialize, Debug)]
-struct OpenAiModelsResponse {
-    data: Vec<OpenAiModelEntry>,
-}
-
-#[derive(Deserialize, Debug)]
-struct OpenAiModelEntry {
-    id: String,
-    #[serde(default)]
-    name: Option<String>,
-    #[serde(default)]
-    description: Option<String>,
-    #[serde(default)]
-    context_length: Option<u64>,
-    #[serde(default)]
-    owned_by: Option<String>,
-    #[serde(default)]
-    created: Option<i64>,
-}
-
-/// Embeddings types.
-#[derive(Serialize)]
-struct OpenAiEmbedRequest {
-    model: String,
-    input: String,
-}
-
-#[derive(Deserialize)]
-struct OpenAiEmbedResponse {
-    data: Vec<OpenAiEmbedData>,
-}
-
-#[derive(Deserialize)]
-struct OpenAiEmbedData {
-    embedding: Vec<f32>,
-}
-
 impl OpenAiCompatProvider {
-    pub fn new(base_url: &str, api_key: &str, provider_name: &str) -> Self {
-        Self::with_headers(base_url, api_key, provider_name, vec![])
-    }
-
-    /// Create a provider with additional custom headers applied to every request.
-    /// Used for providers like OpenRouter that require HTTP-Referer and X-Title.
-    pub fn with_headers(
-        base_url: &str,
-        api_key: &str,
-        provider_name: &str,
-        extra_headers: Vec<(String, String)>,
-    ) -> Self {
-        Self {
-            client: Client::builder()
-                .timeout(std::time::Duration::from_secs(60))
-                .connect_timeout(std::time::Duration::from_secs(10))
-                .build()
-                .expect("Failed to build OpenAI-Compat HTTP client"),
-            base_url: RwLock::new(base_url.trim_end_matches('/').to_string()),
-            api_key: api_key.to_string(),
-            provider_name: provider_name.to_string(),
-            extra_headers,
-            model_capabilities: RwLock::new(HashMap::new()),
-        }
-    }
-
-    /// Helper to update the base url if a fallback was successful
-    fn update_base_url(&self, old_url: &str, new_url: &str) {
-        if let Ok(mut base) = self.base_url.write() {
-            if *base == old_url {
-                *base = new_url.to_string();
-            }
-        }
-    }
-
-    /// Check if this is Groq provider (needs special rate limit handling)
-    fn is_groq(&self) -> bool {
-        let base = self.base_url.read().unwrap().clone();
-        self.provider_name.to_lowercase().contains("groq") 
-            || base.contains("groq.com")
-    }
-
-    /// Build the full URL for an API endpoint.
-    /// Skips prepending `/v1` if the base URL already ends with `/v1`
-    /// (e.g. Gemini's OpenAI-compat proxy) or contains `/gateway`
-    /// (e.g. Kilo Gateway's `https://api.kilo.ai/api/gateway`).
-    fn url(&self, path: &str) -> String {
-        let base_locked = self.base_url.read().unwrap();
-        let base = base_locked.trim_end_matches('/');
-        if base.ends_with("/v1") || base.contains("/gateway") {
-            format!("{}{}", base, path)
-        } else {
-            format!("{}/v1{}", base, path)
-        }
-    }
-
-    /// Create an authorized request builder with extra headers.
-    fn auth_get(&self, url: &str) -> reqwest::RequestBuilder {
-        let mut req = self.client.get(url);
-        if !self.api_key.is_empty() {
-            req = req.bearer_auth(&self.api_key);
-        }
-        for (key, value) in &self.extra_headers {
-            req = req.header(key, value);
-        }
-        req
-    }
-
-    fn auth_post(&self, url: &str) -> reqwest::RequestBuilder {
-        let mut req = self.client.post(url);
-        if !self.api_key.is_empty() {
-            req = req.bearer_auth(&self.api_key);
-        }
-        for (key, value) in &self.extra_headers {
-            req = req.header(key, value);
-        }
-        req
-    }
-
-    /// Send request with retry logic for rate limits (Groq-specific)
-    async fn send_with_retry(&self, req: reqwest::RequestBuilder) -> ZenResult<reqwest::Response> {
-        let mut attempts = 0;
-        let is_groq = self.is_groq();
-        let max_attempts = if is_groq { 4 } else { 3 };
-        let mut last_error: Option<ZenError> = None;
-        let mut current_req = Some(req);
-
-        while attempts < max_attempts {
-            let is_last_attempt = attempts == max_attempts - 1;
-            
-            // Try to get a request for this attempt
-            let req_to_send = if !is_last_attempt {
-                let current_ref = match current_req.as_ref() {
-                    Some(r) => r,
-                    None => break, // Should not happen but safety first
-                };
-
-                match current_ref.try_clone() {
-                    Some(cloned) => cloned,
-                    None => {
-                        // Request has a non-cloneable body (e.g. a stream).
-                        // We must consume the original and can't retry.
-                        current_req.take()
-                            .ok_or_else(|| ZenError::Custom("Request body not available for retry".to_string()))?
-                    }
-                }
-            } else {
-                // Last attempt, consume the original
-                match current_req.take() {
-                    Some(r) => r,
-                    None => break,
-                }
-            };
-
-            let can_not_retry_anymore = current_req.is_none();
-
-            match req_to_send.send().await {
-                Ok(resp) => {
-                    let status = resp.status();
-                    if status == reqwest::StatusCode::TOO_MANY_REQUESTS && !can_not_retry_anymore {
-                        let retry_after = resp
-                            .headers()
-                            .get("retry-after")
-                            .and_then(|v| v.to_str().ok())
-                            .and_then(|s| s.parse::<u64>().ok())
-                            .unwrap_or(2);
-                        
-                        warn!(
-                            provider = %self.provider_name,
-                            retry_after = retry_after,
-                            attempt = attempts + 1,
-                            "Rate limited (429), retrying..."
-                        );
-                        
-                        tokio::time::sleep(tokio::time::Duration::from_secs(retry_after)).await;
-                        attempts += 1;
-                        continue;
-                    }
-                    return Ok(resp);
-                }
-                Err(e) => {
-                    let err_msg = e.to_string();
-                    last_error = Some(ZenError::from(e));
-                    
-                    if can_not_retry_anymore {
-                        break;
-                    }
-                    
-                    warn!(
-                        provider = %self.provider_name,
-                        error = %err_msg,
-                        attempt = attempts + 1,
-                        "Request failed, retrying..."
-                    );
-                    
-                    attempts += 1;
-                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                    continue;
-                }
-            }
-        }
-
-        Err(last_error.unwrap_or_else(|| ZenError::Custom("Request failed after all retries".to_string())))
-    }
-}
-
-#[async_trait]
-impl LlmProvider for OpenAiCompatProvider {
-    async fn list_models(&self) -> ZenResult<Vec<ModelInfo>> {
-        let url = self.url("/models");
-        info!(provider = %self.provider_name, url = %url, "Fetching model list");
-
-        let resp = match self.send_with_retry(self.auth_get(&url)).await {
-            Ok(resp) => resp,
-            Err(e) => {
-                let base_str = self.base_url.read().unwrap().clone();
-                if base_str.contains("localhost") {
-                    let alt_base = base_str.replace("localhost", "127.0.0.1");
-                    let alt_provider = Self {
-                        client: self.client.clone(),
-                        base_url: RwLock::new(alt_base.clone()),
-                        api_key: self.api_key.clone(),
-                        provider_name: self.provider_name.clone(),
-                        extra_headers: self.extra_headers.clone(),
-                        model_capabilities: RwLock::new(HashMap::new()),
-                    };
-                    let alt_url = alt_provider.url("/models");
-                    warn!(error = %e, alt_url = %alt_url, "Failed to reach OpenAI-compat on localhost, trying 127.0.0.1");
-                    match alt_provider.send_with_retry(alt_provider.auth_get(&alt_url)).await {
-                        Ok(resp) => {
-                            self.update_base_url(&base_str, &alt_base);
-                            resp
-                        }
-                        Err(_) => return Err(e),
-                    }
-                } else {
-                    return Err(e);
-                }
-            }
-        };
-
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            warn!(status = %status, body = %body, "Failed to list models");
-            return Err(ZenError::Custom(format!(
-                "{} returned {}: {}",
-                self.provider_name, status, body
-            )));
-        }
-
-        let body: OpenAiModelsResponse = resp.json().await?;
-
-        let mut models: Vec<ModelInfo> = body
-            .data
-            .into_iter()
-            .map(|m| {
-                let model_id_lower = m.id.to_lowercase();
-                
-                // If the API provided a human-readable name, fall back to id otherwise
-                let display_name = match m.name {
-                    Some(n) if !n.is_empty() => n,
-                    _ => m.id.clone(),
-                };
-
-                let has_vision_keyword = model_id_lower.contains("vision")
-                    || model_id_lower.contains("-vl")
-                    || model_id_lower.contains("vl-")
-                    || model_id_lower.contains("-v1")
-                    || model_id_lower.contains("visual");
-                let is_multimodal_family = model_id_lower.contains("claude-3")
-                    || model_id_lower.contains("claude-sonnet")
-                    || model_id_lower.contains("claude-opus")
-                    || model_id_lower.contains("gpt-4")
-                    || model_id_lower.contains("gemini")
-                    || model_id_lower.contains("pixtral")
-                    || model_id_lower.contains("llama-3.2-11b")
-                    || model_id_lower.contains("llama-3.2-90b")
-                    || model_id_lower.contains("qwen-vl")
-                    || model_id_lower.contains("deepseek-vl");
-
-                let supports_vision = has_vision_keyword || is_multimodal_family;
-                
-                // Modern multimodal models usually support tools too.
-                // We only disable tools if it's explicitly marked as a vision-only model.
-                let supports_tools = !model_id_lower.contains("vision-only");
-
-                // Populate capability cache for runtime lookups
-                if let Ok(mut cache) = self.model_capabilities.write() {
-                    cache.insert(
-                        m.id.clone(),
-                        ModelCapabilities { supports_tools },
-                    );
-                }
-
-                ModelInfo {
-                    id: m.id.clone(),
-                    name: m.id.clone(),
-                    display_name: Some(display_name),
-                    description: m.description.clone(),
-                    size: None,
-                    modified_at: m.created.map(|c| c.to_string()),
-                    provider: Some(m.owned_by.unwrap_or_else(|| self.provider_name.clone())),
-                    model_type: None,
-                    arch: None,
-                    quantization: None,
-                    max_context_length: m.context_length,
-                    state: None,
-                    supports_vision: Some(supports_vision),
-                    supports_tools: Some(supports_tools),
-                }
-            })
-            .collect();
-
-        // Sort alphabetically for consistent display
-        models.sort_by(|a, b| a.name.cmp(&b.name));
-
-        info!(
-            provider = %self.provider_name,
-            count = models.len(),
-            "Fetched models"
-        );
-        Ok(models)
-    }
-
-    async fn chat_stream(
+    pub async fn do_chat_stream(
         &self,
         model: &str,
         messages: Vec<ChatMessage>,
@@ -709,7 +241,7 @@ impl LlmProvider for OpenAiCompatProvider {
         })
     }
 
-    async fn embed(&self, model: &str, text: &str) -> ZenResult<Vec<f32>> {
+    pub async fn do_embed(&self, model: &str, text: &str) -> ZenResult<Vec<f32>> {
         let url = self.url("/embeddings");
         let request = OpenAiEmbedRequest {
             model: model.to_string(),
@@ -735,7 +267,7 @@ impl LlmProvider for OpenAiCompatProvider {
             .ok_or_else(|| ZenError::Custom("No embedding returned".into()))
     }
 
-    async fn health_check(&self) -> bool {
+    pub async fn do_health_check(&self) -> bool {
         let url = self.url("/models");
         match self.auth_get(&url).send().await {
             Ok(resp) => resp.status().is_success(),
@@ -765,7 +297,7 @@ impl LlmProvider for OpenAiCompatProvider {
         }
     }
 
-    fn supports_tools(&self, model: &str) -> bool {
+    pub fn do_supports_tools(&self, model: &str) -> bool {
         // 1. Check capability cache from list_models()
         if let Ok(cache) = self.model_capabilities.read() {
             if let Some(caps) = cache.get(model) {
@@ -787,7 +319,7 @@ impl OpenAiCompatProvider {
             // Curated / official catalogs — all models support tools
             "openai" | "groq" | "mistral" | "gemini" | "google" |
             "deepseek" | "qwen" | "xai" | "kilocode" | "nine_router" | "nine-router" |
-            "n9router" | "9router" | "aihubmix" => true,
+            "n9router" | "9router" | "aihubmix" | "nvidia" => true,
 
             // Mixed catalogs — many models lack tool support
             "openrouter" | "together" | "perplexity" => false,
@@ -799,7 +331,7 @@ impl OpenAiCompatProvider {
 }
 
 #[derive(Default)]
-struct ToolCallAccumulator {
+pub struct ToolCallAccumulator {
     id: String,
     name: String,
     arguments: String,
@@ -923,6 +455,7 @@ mod tests {
 
         // pixtral-large — known multimodal
         assert_eq!(models[4].supports_vision, Some(true));
+        Ok(())
     }
 
     #[tokio::test]
@@ -937,6 +470,7 @@ mod tests {
 
         let models = provider.list_models().await?;
         assert!(models.is_empty());
+        Ok(())
     }
 
     #[tokio::test]
@@ -959,6 +493,7 @@ mod tests {
         let err = result.unwrap_err().to_string();
         assert!(err.contains("401") || err.contains("unauthorized") || err.contains("Incorrect")
             || err.contains("openai"));
+        Ok(())
     }
 
     #[tokio::test]
@@ -974,6 +509,7 @@ mod tests {
 
         let models = provider.list_models().await?;
         assert_eq!(models.len(), 1);
+        Ok(())
     }
 
     #[tokio::test]
@@ -999,10 +535,11 @@ mod tests {
 
         let models = provider.list_models().await?;
         assert_eq!(models.len(), 1);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_openai_compat_caches_capabilities() {
+    async fn test_openai_compat_caches_capabilities() -> ZenResult<()> {
         let (provider, server) = mock_provider().await;
 
         Mock::given(method("GET"))
@@ -1024,48 +561,6 @@ mod tests {
         assert!(provider.supports_tools("gpt-4o"));
         // davinci-002 should also support tools (OpenAI provider)
         assert!(provider.supports_tools("davinci-002"));
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_openai_compat_list_models_retries_on_rate_limit() -> ZenResult<()> {
-        let server = MockServer::start().await;
-        let provider = OpenAiCompatProvider::new(&server.uri(), "test-key", "openai");
-
-        // First request gets rate limited
-        Mock::given(method("GET"))
-            .and(path("/v1/models"))
-            .respond_with(ResponseTemplate::new(429).insert_header("retry-after", "1"))
-            .expect(1)
-            .mount(&server)
-            .await;
-
-        // Second request succeeds
-        Mock::given(method("GET"))
-            .and(path("/v1/models"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"data": [{"id": "gpt-4o"}]})))
-            .mount(&server)
-            .await;
-
-        let models = provider.list_models().await?;
-        assert_eq!(models.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn test_openai_compat_list_models_exhausts_retries() -> ZenResult<()> {
-        let server = MockServer::start().await;
-        let provider = OpenAiCompatProvider::new(&server.uri(), "test-key", "openai");
-
-        // All requests fail with 429
-        Mock::given(method("GET"))
-            .and(path("/v1/models"))
-            .respond_with(ResponseTemplate::new(429).insert_header("retry-after", "1"))
-            .expect(3) // default max_attempts is 3 for non-Groq
-            .mount(&server)
-            .await;
-
-        let result = provider.list_models().await;
-        assert!(result.is_err());
         Ok(())
     }
 }

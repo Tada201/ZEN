@@ -55,49 +55,6 @@ export function ChatSettings({ settings, onUpdate }: ChatSettingsProps) {
 
       <SettingsSection title="Generation" icon="lucide:sparkles" description="Response generation parameters">
         <SettingsRow
-          label="Temperature"
-          description="Controls randomness: lower is more precise, higher is more creative"
-          control={
-            <div className="flex items-center gap-2 w-[160px]">
-              <span className="text-[10px] text-muted-foreground">Precise</span>
-              <WorkbenchSlider
-                value={[parseFloat(settings["chat.temperature"] || "0.7")]}
-                onValueChange={([v]) => onUpdate("chat.temperature", v.toFixed(1))}
-                min={0}
-                max={2}
-                step={0.1}
-                className="flex-1"
-              />
-              <span className="text-[10px] text-muted-foreground">Creative</span>
-              <span className="text-[11px] font-mono text-muted-foreground w-6 text-right">
-                {settings["chat.temperature"] || "0.7"}
-              </span>
-            </div>
-          }
-          icon="lucide:gauge"
-        />
-
-        <SettingsRow
-          label="Max Output Tokens"
-          description="Maximum length of generated responses"
-          control={
-            <WorkbenchSelect
-              value={settings["chat.max-tokens"] || "4096"}
-              onValueChange={v => onUpdate("chat.max-tokens", v)}
-              options={[
-                { value: "1024", label: "1,024" },
-                { value: "2048", label: "2,048" },
-                { value: "4096", label: "4,096" },
-                { value: "8192", label: "8,192" },
-                { value: "16384", label: "16,384" },
-              ]}
-              width={120}
-            />
-          }
-          icon="lucide:zap"
-        />
-
-        <SettingsRow
           label="Streaming Speed"
           description="How tokens appear in the UI"
           control={

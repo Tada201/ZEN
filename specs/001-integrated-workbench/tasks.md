@@ -100,17 +100,17 @@
 
 **Goal**: Integrate the Cesium 3D Globe as the spatial anchor.
 
-- [ ] T039 [US2] Create `CesiumCanvas` component in `src/components/workbench/MapContainer.tsx`
-- [ ] T040 [US2] Integrate `CesiumCanvas` as a background layer in `src/components/workbench/MainArea.tsx`
-- [ ] T041 [US2] Handle map viewport resizing on sidebar toggle
+- [x] T039 [US2] Create `CesiumCanvas` component in `src/components/workbench/MapContainer.tsx`
+- [x] T040 [US2] Integrate `CesiumCanvas` as a background layer in `src/components/workbench/MainArea.tsx`
+- [x] T041 [US2] Handle map viewport resizing on sidebar toggle
 
 ---
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T042 [P] Implement `CommandPalette` (Cmd+K) in `src/components/atlas/CommandPalette.tsx`
-- [ ] T043 [P] Apply final glassmorphism effects and vignetted dot grid in `src/styles/index.css`
-- [ ] T044 [P] Add `onRetry` and `onOpenSettings` wiring through the full message → chat → settings call stack
+- [x] T042 [P] Implement `CommandPalette` (Cmd+K) in `src/components/atlas/CommandPalette.tsx`
+- [x] T043 [P] Apply final glassmorphism effects and vignetted dot grid in `src/styles/index.css`
+- [x] T044 [P] Add `onRetry` and `onOpenSettings` wiring through the full message → chat → settings call stack
 
 ---
 

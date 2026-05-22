@@ -7,6 +7,7 @@ pub mod agent;
 pub mod voice;
 pub mod canvas;
 pub mod spatial;
+pub mod memory;
 
 use std::sync::Arc;
 use tokio::sync::{RwLock, Mutex};
@@ -109,6 +110,7 @@ pub struct AppState {
     pub settings_manager: Arc<SettingsService>,
     pub chat_cancellation_tokens: Arc<tokio::sync::Mutex<HashMap<String, CancellationToken>>>,
     pub rag: InitState<Arc<dyn crate::rag::VectorStore>>,
+    pub conversation_store: InitState<Arc<crate::rag::conversation_store::ConversationStore>>,
     pub workspace_folder: Arc<RwLock<PathBuf>>,
     pub graph_sessions: Arc<tokio::sync::Mutex<HashMap<String, crate::canvas::session::GraphSession>>>,
     pub session_memory: Arc<RwLock<Arc<crate::rag::session_memory::SessionMemoryManager>>>,
@@ -126,6 +128,11 @@ pub struct AppState {
     pub memory_backend: Arc<UnifiedMemoryBackend>,
     pub geofence_engine: Arc<crate::services::gtsm::geofence::GeofenceEngine>,
     pub gtsm_cache: Arc<crate::services::gtsm::cache::GtsmCache>,
+    /// Per-chat cached recall context from the previous turn.
+    /// Keyed by chat_id; value is (recall_block, last_user_msg_text).
+    /// Populated in background after each LLM response; consumed on the NEXT message's iteration-1.
+    pub recall_cache: Arc<tokio::sync::Mutex<HashMap<String, (String, String)>>>,
+    pub provider_cache: Arc<tokio::sync::Mutex<HashMap<String, (Arc<dyn LlmProvider>, std::time::Instant)>>>,
 }
 
 impl AppState {
@@ -170,6 +177,7 @@ impl AppState {
             settings_manager: Arc::new(SettingsService::new()),
             chat_cancellation_tokens: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             rag: InitState::new(),
+            conversation_store: InitState::new(),
             workspace_folder: Arc::new(RwLock::new(default_workspace.clone())),
             graph_sessions: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             session_memory: Arc::new(RwLock::new(shared_session_memory)),
@@ -201,6 +209,8 @@ impl AppState {
             },
             geofence_engine: Arc::new(crate::services::gtsm::geofence::GeofenceEngine::new()),
             gtsm_cache: Arc::new(crate::services::gtsm::cache::GtsmCache::new()),
+            recall_cache: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            provider_cache: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         }
     }
 
@@ -218,8 +228,49 @@ impl AppState {
             .await
             .unwrap_or_default()
             .unwrap_or_else(|| "ollama".to_string());
-        Ok(crate::llm::create_provider(&db, &active_provider).await)
+            
+        // Check cache first (60s TTL)
+        {
+            let mut cache = self.provider_cache.lock().await;
+            if let Some((provider, timestamp)) = cache.get(&active_provider) {
+                if timestamp.elapsed().as_secs() < 60 {
+                    return Ok(provider.clone());
+                }
+            }
+        }
         
+        let provider = crate::llm::create_provider(&db, &active_provider).await?;
+        
+        // Update cache
+        {
+            let mut cache = self.provider_cache.lock().await;
+            cache.insert(active_provider.clone(), (provider.clone(), std::time::Instant::now()));
+        }
+        
+        Ok(provider)
+    }
+
+    pub async fn provider_by_name(&self, name: &str, db: &SqlitePool) -> ZenResult<Arc<dyn LlmProvider>> {
+        let name_str = name.to_string();
+        // Check cache first (60s TTL)
+        {
+            let mut cache = self.provider_cache.lock().await;
+            if let Some((provider, timestamp)) = cache.get(&name_str) {
+                if timestamp.elapsed().as_secs() < 60 {
+                    return Ok(provider.clone());
+                }
+            }
+        }
+        
+        let provider = crate::llm::create_provider(db, &name_str).await?;
+        
+        // Update cache
+        {
+            let mut cache = self.provider_cache.lock().await;
+            cache.insert(name_str, (provider.clone(), std::time::Instant::now()));
+        }
+        
+        Ok(provider)
     }
 
     pub async fn get_provider(&self) -> ZenResult<Arc<dyn LlmProvider>> {

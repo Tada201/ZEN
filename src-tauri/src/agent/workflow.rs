@@ -833,8 +833,6 @@ pub enum WorkflowError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::swarm::SwarmCoordinator;
-    use crate::agent::event_bus::EventBus;
 
     fn test_task(id: &str, deps: Vec<&str>) -> Task {
         let mut task = Task::new(format!("Task {}", id), TaskType::Custom(id.to_string()));
@@ -854,7 +852,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_circular_dependency_detection() {
-        let mut task_a = test_task("a", vec!["c"]);
+        let task_a = test_task("a", vec!["c"]);
         let task_b = test_task("b", vec!["a"]);
         let task_c = test_task("c", vec!["b"]);
 

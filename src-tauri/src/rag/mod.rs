@@ -6,6 +6,7 @@ pub mod ingestion;
 pub mod session_memory;
 pub mod embedding;
 pub mod hybrid_backend;
+pub mod conversation_store;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentChunk {

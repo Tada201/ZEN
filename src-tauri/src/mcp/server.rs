@@ -11,6 +11,7 @@ use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast};
 use serde_json::{json, Value};
 use tracing::{info, debug, error};
+use uuid::Uuid;
 
 use crate::mcp::types::*;
 use crate::tools::ToolRegistry;
@@ -71,7 +72,11 @@ pub enum McpEvent {
 
 impl McpServer {
     /// Create a new MCP server instance
-    pub fn new(config: McpServerConfig, tool_registry: Arc<RwLock<ToolRegistry>>, app_handle: Option<tauri::AppHandle>) -> Self {
+    pub fn new(
+        config: McpServerConfig, 
+        tool_registry: Arc<RwLock<ToolRegistry>>, 
+        app_handle: Option<tauri::AppHandle>
+    ) -> Self {
         let (event_tx, _) = broadcast::channel(256);
         
         Self {
@@ -294,10 +299,10 @@ impl McpServer {
         };
 
         let tool_name = params.name.clone();
-        let tool_registry = self.tool_registry.read().await;
+        let tool_registry_guard = self.tool_registry.read().await;
 
         // Find the tool
-        let tool = tool_registry.get(&tool_name);
+        let tool = tool_registry_guard.get(&tool_name);
 
         if tool.is_none() {
             return JsonRpcResponse::failure(
@@ -307,6 +312,40 @@ impl McpServer {
         }
 
         let tool = tool.unwrap();
+
+        // Check permissions via the v2 registry
+        let tool_call = crate::tools::ToolCall {
+            id: Uuid::new_v4().to_string(),
+            name: tool_name.clone(),
+            arguments: params.arguments.clone(),
+        };
+
+        match tool_registry_guard.check_permission(&tool_call, None) {
+            Ok(crate::tools::permission::PermissionDecision::Allow) => {
+                // Authorized, proceed to execution
+            }
+            Ok(crate::tools::permission::PermissionDecision::Deny { reason }) => {
+                return JsonRpcResponse::failure(
+                    JsonRpcError::internal_error(format!("Permission denied: {}", reason)),
+                    id,
+                );
+            }
+            Ok(crate::tools::permission::PermissionDecision::Confirm { .. }) => {
+                return JsonRpcResponse::failure(
+                    JsonRpcError::internal_error("User confirmation required for this tool call. Please authorize in the ZEN application.".to_string()),
+                    id,
+                );
+            }
+            Err(e) => {
+                return JsonRpcResponse::failure(
+                    JsonRpcError::internal_error(format!("Security check failed: {}", e)),
+                    id,
+                );
+            }
+        }
+        
+        // We must drop the read guard before calling tool.execute as it might need to acquire a lock
+        drop(tool_registry_guard);
 
         let (output_text, is_error) = if let Some(app) = &self.app_handle {
             match tool.execute(app.clone(), "mcp-call".to_string(), params.arguments.clone()).await {

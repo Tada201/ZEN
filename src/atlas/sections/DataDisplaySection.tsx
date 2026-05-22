@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   ChevronDown, ChevronRight, ChevronLeft, ArrowUpDown, MoreHorizontal,
   Folder, FileText, Inbox, Plus, ArrowUp, ArrowDown, MessageSquare, Reply, Heart,
@@ -137,23 +137,50 @@ const STAT_META = [
 ];
 
 function SparkCard({ label, color, format, range }: { label: string; color: string; format: (v: number) => string; range: SparkRange }) {
-  const data = SPARK_DATA[label][range];
+  // Simulate live data movement
+  const [jitter, setJitter] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setJitter(prev => prev + (Math.random() - 0.5) * 2);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const baseData = SPARK_DATA[label][range];
+  const data = useMemo(() => {
+    return baseData.map((v, i) => i === baseData.length - 1 ? v + jitter : v);
+  }, [baseData, jitter]);
+
   const latest = data[data.length - 1];
   const prev = data[data.length - 2];
   const delta = latest - prev;
   const pts = data.map((v, i) => `${(i / (data.length - 1)) * 120},${30 - (v / Math.max(...data)) * 28}`).join(" ");
   return (
-    <div className="rounded-lg border border-border bg-card p-3">
+    <div className="rounded-lg border border-border bg-card p-3 shadow-sm hover:shadow-md transition-shadow duration-300">
       <div className="flex items-start justify-between gap-2">
         <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</div>
-        <div className={`flex items-center gap-0.5 text-[10px] font-semibold ${delta >= 0 ? "text-[hsl(var(--success))]" : "text-destructive"}`}>
+        <div className={`flex items-center gap-0.5 text-[10px] font-semibold transition-colors duration-500 ${delta >= 0 ? "text-[hsl(var(--success))]" : "text-destructive"}`}>
           {delta >= 0 ? <ArrowUp className="h-2.5 w-2.5" /> : <ArrowDown className="h-2.5 w-2.5" />}
-          {Math.abs(delta)}
+          {Math.abs(delta).toFixed(1)}
         </div>
       </div>
-      <div className="mt-1 text-xl font-bold tabular-nums">{format(latest)}</div>
-      <svg viewBox="0 0 120 30" className="mt-2 h-8 w-full">
-        <polyline fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" points={pts} />
+      <div className="mt-1 text-xl font-bold tabular-nums tracking-tight">{format(Math.round(latest))}</div>
+      <svg viewBox="0 0 120 30" className="mt-2 h-8 w-full overflow-visible">
+        <defs>
+          <linearGradient id={`grad-${label}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.2" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <polyline 
+          fill="none" 
+          stroke={color} 
+          strokeWidth="2" 
+          strokeLinecap="round" 
+          strokeLinejoin="round" 
+          points={pts} 
+          className="transition-all duration-1000 ease-in-out"
+        />
       </svg>
     </div>
   );

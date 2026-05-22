@@ -45,6 +45,12 @@ pub enum ZenError {
 
     #[error("{0}")]
     Custom(String),
+
+    #[error("Deadline exceeded: {0}")]
+    Timeout(String),
+
+    #[error("Cache miss: {0}")]
+    CacheMiss(String),
 }
 
 impl From<crate::agent::swarm::SwarmError> for ZenError {

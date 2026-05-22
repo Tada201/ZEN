@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ArtifactData, Session, ChatFolder } from '../../atlas/components/chat/types';
+import { ArtifactData, Session, ChatFolder, Message } from '../../atlas/components/chat/types';
+
+const EMPTY_ARRAY: Message[] = [];
 
 interface ChatState {
   // Sessions
@@ -18,6 +20,28 @@ interface ChatState {
   artifacts: ArtifactData[];
   activeArtifactId: string | null;
   globalArtifacts: ArtifactData[];
+
+  // Per-session streaming state (replaces global isStreaming)
+  streamingChats: Record<string, boolean>;
+
+  // Per-session message buffers (replaces global messages)
+  sessionMessages: Record<string, Message[]>;
+
+  // ── Derived getters (backward compat) ──
+  /** Returns true if the ACTIVE session is streaming */
+  isStreaming: boolean;
+  /** Returns messages for the ACTIVE session */
+  messages: Message[];
+
+  // Actions — Per-session streaming
+  setStreamingForChat: (chatId: string, streaming: boolean) => void;
+  getSessionMessages: (chatId: string) => Message[];
+  setSessionMessages: (chatId: string, messages: Message[] | ((prev: Message[]) => Message[])) => void;
+  clearSessionMessages: (chatId: string) => void;
+
+  // Actions — Backward-compatible setters that delegate to per-session
+  setMessages: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
+  setIsStreaming: (isStreaming: boolean) => void;
 
   // Actions — Sessions
   setSessions: (sessions: Session[]) => void;
@@ -71,6 +95,86 @@ export const useChatStore = create<ChatState>()(
       activeArtifactId: null,
       globalArtifacts: [],
 
+      // Per-session state (replaces global singletons)
+      streamingChats: {},
+      sessionMessages: {},
+
+      // ── Derived getters ──
+      // These are computed via Zustand's get() — they read from per-session maps
+      // using the activeSessionId as the key. This maintains backward compatibility
+      // with all existing components that read `isStreaming` and `messages`.
+      get isStreaming() {
+        const state = get();
+        return state.streamingChats[state.activeSessionId ?? ''] ?? false;
+      },
+      get messages() {
+        const state = get();
+        return state.sessionMessages[state.activeSessionId ?? ''] ?? EMPTY_ARRAY;
+      },
+
+      // ── Per-session streaming actions ──
+      setStreamingForChat: (chatId, streaming) => set((state) => ({
+        streamingChats: { ...state.streamingChats, [chatId]: streaming }
+      })),
+
+      getSessionMessages: (chatId) => {
+        return get().sessionMessages[chatId] ?? EMPTY_ARRAY;
+      },
+
+      setSessionMessages: (chatId, messages) => {
+        if (typeof messages === 'function') {
+          set((state) => ({
+            sessionMessages: {
+              ...state.sessionMessages,
+              [chatId]: messages(state.sessionMessages[chatId] ?? EMPTY_ARRAY)
+            }
+          }));
+        } else {
+          set((state) => ({
+            sessionMessages: {
+              ...state.sessionMessages,
+              [chatId]: messages
+            }
+          }));
+        }
+      },
+
+      clearSessionMessages: (chatId) => set((state) => {
+        const next = { ...state.sessionMessages };
+        delete next[chatId];
+        return { sessionMessages: next };
+      }),
+
+      // ── Backward-compatible message/streaming actions ──
+      // These delegate to the per-session versions using activeSessionId
+      setMessages: (messages) => {
+        const { activeSessionId } = get();
+        if (!activeSessionId) return;
+        if (typeof messages === 'function') {
+          set((state) => ({
+            sessionMessages: {
+              ...state.sessionMessages,
+              [activeSessionId]: messages(state.sessionMessages[activeSessionId] ?? EMPTY_ARRAY)
+            }
+          }));
+        } else {
+          set((state) => ({
+            sessionMessages: {
+              ...state.sessionMessages,
+              [activeSessionId]: messages
+            }
+          }));
+        }
+      },
+
+      setIsStreaming: (isStreaming) => {
+        const { activeSessionId } = get();
+        if (!activeSessionId) return;
+        set((state) => ({
+          streamingChats: { ...state.streamingChats, [activeSessionId]: isStreaming }
+        }));
+      },
+
       // ── Session Actions ──
       setSessions: (sessions) => set({ sessions }),
 
@@ -80,10 +184,18 @@ export const useChatStore = create<ChatState>()(
         sessions: [session, ...state.sessions]
       })),
 
-      deleteSession: (id) => set((state) => ({
-        sessions: state.sessions.filter(s => s.id !== id),
-        activeSessionId: state.activeSessionId === id ? null : state.activeSessionId
-      })),
+      deleteSession: (id) => set((state) => {
+        const next: Partial<ChatState> = {
+          sessions: state.sessions.filter(s => s.id !== id),
+          activeSessionId: state.activeSessionId === id ? null : state.activeSessionId,
+        };
+        // Clean up per-session data
+        const sm = { ...state.sessionMessages };
+        delete sm[id];
+        const sc = { ...state.streamingChats };
+        delete sc[id];
+        return { ...next, sessionMessages: sm, streamingChats: sc } as Partial<ChatState>;
+      }),
 
       updateSession: (id, data) => set((state) => ({
         sessions: state.sessions.map(s => s.id === id ? { ...s, ...data, updatedAt: Date.now() } : s)
@@ -201,6 +313,22 @@ export const useChatStore = create<ChatState>()(
     }),
     {
       name: 'zen-chat-storage',
+      partialize: (state) => ({
+        // Persist only durable state — exclude ephemeral streaming data
+        sessions: state.sessions,
+        archivedSessions: state.archivedSessions,
+        folders: state.folders,
+        activeSessionId: state.activeSessionId,
+        isSearchOpen: state.isSearchOpen,
+        searchQuery: state.searchQuery,
+        searchResults: state.searchResults,
+        artifacts: state.artifacts,
+        activeArtifactId: state.activeArtifactId,
+        globalArtifacts: state.globalArtifacts,
+        // NOTE: sessionMessages and streamingChats are NOT persisted.
+        // On reload, messages are re-fetched from SQLite via React Query.
+        // This prevents localStorage bloat and stale streaming state.
+      }),
     }
   )
 );

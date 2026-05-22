@@ -31,7 +31,7 @@ export const StreamingSpeedConfig = memo(() => {
                     }
                 />
 
-                <div className="ml-2 mt-1 px-4 py-3 bg-slate-900/30 border-l-2 border-zinc-700/40 rounded-r-lg">
+                <div className="ml-2 mt-1 px-4 py-3 bg-zinc-900/30 border-l-2 border-zinc-700/40 rounded-r-lg">
                     {streamingSpeed === 'instant' ? (
                         <p className="text-[10px] text-zinc-500 leading-relaxed">
                             <span className="text-zinc-300 font-semibold">Instant</span> — tokens appear as they

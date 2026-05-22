@@ -36,7 +36,40 @@ pub async fn get_messages(state: State<'_, AppState>, chat_id: String) -> ZenRes
 #[tauri::command]
 pub async fn delete_chat(state: State<'_, AppState>, chat_id: String) -> ZenResult<()> {
     let db = state.db().await?;
-    queries::delete_chat(&db, &chat_id).await
+    // 1. Remove SQLite rows first (primary source of truth)
+    queries::delete_chat(&db, &chat_id).await?;
+    // 2. Best-effort: remove conversation vectors from LanceDB so deleted
+    //    content cannot resurface via semantic recall.
+    if let Ok(store) = state.conversation_store.get().await {
+        if let Err(e) = store.delete_by_chat_id(&chat_id).await {
+            tracing::warn!(
+                chat_id = %chat_id,
+                error = %e,
+                "delete_chat: failed to remove conversation vectors from LanceDB (stale vectors may remain)"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn bulk_delete_chats(state: State<'_, AppState>, chat_ids: Vec<String>) -> ZenResult<()> {
+    let db = state.db().await?;
+    // 1. Remove SQLite rows first
+    queries::bulk_delete_chats(&db, &chat_ids).await?;
+    // 2. Best-effort vector cleanup — same lifecycle as single delete
+    if let Ok(store) = state.conversation_store.get().await {
+        for chat_id in &chat_ids {
+            if let Err(e) = store.delete_by_chat_id(chat_id).await {
+                tracing::warn!(
+                    chat_id = %chat_id,
+                    error = %e,
+                    "bulk_delete_chats: failed to remove conversation vectors from LanceDB"
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -55,6 +88,7 @@ pub async fn send_message(
     model: Option<String>,
     provider: Option<String>,
     web_search: Option<bool>,
+    deep_research: Option<bool>,
     temperature: Option<f64>,
     max_tokens: Option<i64>,
     top_p: Option<f64>,
@@ -76,6 +110,7 @@ pub async fn send_message(
         model = ?model,
         provider = ?provider,
         web_search = ?web_search,
+        deep_research = ?deep_research,
         "Received send_message command"
     );
     let db = state.db().await?;
@@ -116,7 +151,7 @@ pub async fn send_message(
         resolved_provider_name = %resolved_provider_name,
         "Resolving active LLM provider instance"
     );
-    let llm_provider = crate::llm::create_provider(&db, &resolved_provider_name).await;
+    let llm_provider = state.provider_by_name(&resolved_provider_name, &db).await?;
     let active_model = model.ok_or_else(|| crate::error::ZenError::Custom(
         "No model selected. Open Settings → Models to choose a model.".to_string()
     ))?;
@@ -172,11 +207,22 @@ pub async fn send_message(
         tool_ids.push("web_search".to_string());
     }
     
-    // If specific tools were requested, use them. Otherwise default to a few core tools.
+    // If specific tools were requested, use them. Otherwise default to a few core tools if enabled and supported.
     if let Some(requested_tools) = tools {
         tool_ids.extend(requested_tools);
     } else {
-        tool_ids.extend(vec!["read_file".to_string(), "list_dir".to_string(), "run_command".to_string()]);
+        let tools_enabled = state.settings_manager.get("toolsEnabled").await
+            .unwrap_or_default()
+            .map(|s| s.trim() == "true")
+            .unwrap_or(true);
+
+        if tools_enabled && llm_provider.supports_tools(&active_model) {
+            tool_ids.extend(vec![
+                "read_file".to_string(),
+                "list_dir".to_string(),
+                "run_command".to_string(),
+            ]);
+        }
     }
 
     // Retrieve custom system prompt from SQLite settings table (key: "systemPrompt")
@@ -194,8 +240,11 @@ Always use these specialized code blocks for visual scenarios:
 4. 🧪 CANVAS (openui): Use ```openui containing layout primitive tags to render live interactive canvas widgets (when Gen UI is enabled).
 5. 📢 ALERTS: Wrap callouts in standard blockquotes with headers (> [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION]).
 
-## 🚫 Critical Limitations
-- Do not render raw HTML/React tags directly in plain text. All designs must be enclosed in the structural markdown blocks listed above.".to_string();
+## 🚫 Critical Limitations & Strict Syntax Constraints
+- Do not render raw HTML/React tags directly in plain text. All designs must be enclosed in the structural markdown blocks listed above.
+- **CHART BLOCKS**: The content of ```chart MUST be RAW, VALID, PARSABLE JSON ONLY. Do NOT write markdown fences like ` ``` ` or the word `chart` INSIDE the block itself. Never double-escape characters or introduce control characters (like raw newlines, tabs, or backslashes inside string properties) that violate JSON standards.
+- **MERMAID BLOCKS**: The content of ```mermaid MUST be strictly valid Mermaid syntax. Double check all bracket matchups, parentheses, arrow combinations, and diagram definitions (e.g. use standard flowcharts, sequence diagrams). Do NOT invent invalid keywords like `graph0]}}` or bad punctuation inside node definitions.
+- **NEVER** write prefix markdown or metadata tags inside the code blocks. The code block opening tag (e.g. ```chart) must be immediately followed by the content (JSON/Mermaid code) and nothing else.".to_string();
 
     let mut instructions = match system_prompt {
         Some(p) if !p.trim().is_empty() => p,
@@ -225,8 +274,36 @@ Always use these specialized code blocks for visual scenarios:
 
     let chat_id_clone = chat_id.clone();
     
+    // Deep Research branch
+    if deep_research.unwrap_or(false) {
+        let chat_id_inner = chat_id.clone();
+        let active_model_inner = active_model.clone();
+        let content_inner = content.clone();
+        let provider_clone = llm_provider.clone();
+        let cancel_tokens_clone = cancel_tokens.clone();
+        let db_clone = db.clone();
+        
+        info!(chat_id = %chat_id, "Routing request to Deep Research Orchestrator");
+        tokio::spawn(async move {
+            crate::agent::deep_research::run_deep_research(
+                app.clone(),
+                db_clone,
+                &*provider_clone,
+                chat_id_inner.clone(),
+                active_model_inner,
+                content_inner,
+                config,
+                token,
+            ).await;
+            
+            let mut tokens = cancel_tokens_clone.lock().await;
+            tokens.remove(&chat_id_inner);
+        });
+        return Ok(());
+    }
+
     // 6. Check if we should use Orchestrator (Phase 3)
-    let use_orchestrator = web_search.unwrap_or(false) || content.len() > 500; // Heuristic
+    let use_orchestrator = web_search.unwrap_or(false) || (content.len() > 3000 && has_complexity_markers(&content));
 
     if use_orchestrator {
         match state.orchestrator.get().await {
@@ -334,11 +411,6 @@ pub async fn search_chats(state: State<'_, AppState>, query: String, limit: Opti
     queries::search_chats(&db, &query, limit).await
 }
 
-#[tauri::command]
-pub async fn bulk_delete_chats(state: State<'_, AppState>, chat_ids: Vec<String>) -> ZenResult<()> {
-    let db = state.db().await?;
-    queries::bulk_delete_chats(&db, &chat_ids).await
-}
 
 // --- Folders ---
 
@@ -438,7 +510,8 @@ pub async fn import_chat(
     source_path: String,
 ) -> ZenResult<Chat> {
     let db = state.db().await?;
-    let content = std::fs::read_to_string(&source_path).map_err(|e| crate::error::ZenError::Custom(format!("Failed to read export file: {}", e)))?;
+    let validated_path = crate::utils::validate_path(&source_path)?;
+    let content = std::fs::read_to_string(&validated_path).map_err(|e| crate::error::ZenError::Custom(format!("Failed to read export file: {}", e)))?;
     let export: ChatExport = serde_json::from_str(&content).map_err(|e| crate::error::ZenError::Custom(format!("Invalid export format: {}", e)))?;
     
     let new_chat = queries::create_chat(&db, &format!("{} (Imported)", export.chat.title), export.chat.model.as_deref()).await?;
@@ -464,4 +537,27 @@ pub async fn import_chat(
     }
     
     Ok(new_chat)
+}
+
+fn has_complexity_markers(content: &str) -> bool {
+    // 1. Check for 3 or more code blocks
+    let code_block_count = content.matches("```").count() / 2;
+    if code_block_count >= 3 {
+        return true;
+    }
+
+    // 2. Check for complex semantic keywords
+    let complex_keywords = [
+        "refactor", "architect", "database schema", "system design", 
+        "class diagram", "design pattern", "multi-agent", "orchestrate", 
+        "performance optimization", "memory leak", "race condition"
+    ];
+    let lower_content = content.to_lowercase();
+    for keyword in complex_keywords.iter() {
+        if lower_content.contains(keyword) {
+            return true;
+        }
+    }
+
+    false
 }

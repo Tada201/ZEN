@@ -226,6 +226,7 @@ pub struct ToolCompletePayload {
     pub duration_ms: u64,
     pub status: String,
     pub iteration: usize,
+    pub output: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

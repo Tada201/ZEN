@@ -133,6 +133,8 @@ impl TerminalManager {
         let child = pair.slave
             .spawn_command(cmd)
             .map_err(|e| anyhow::anyhow!("Failed to spawn command: {}", e))?;
+        
+        let pid = child.process_id().unwrap_or(0);
 
         // Clone reader and writer from master BEFORE dropping master
         let mut reader = pair.master
@@ -202,8 +204,7 @@ impl TerminalManager {
             let pm_clone = pm.clone();
             let sid = session_id.clone();
             tokio::spawn(async move {
-                // We don't have the actual child PID from portable_pty, so we track by session ID
-                pm_clone.register(&sid, "pty-session", 0).await;
+                pm_clone.register(&sid, "pty-session", pid).await;
             });
         }
         

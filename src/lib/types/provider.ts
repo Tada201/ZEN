@@ -48,6 +48,7 @@ export const PROVIDER_KEY_MAP: Record<string, string> = {
     kilocode: 'kilocodeApiKey',
     together: 'togetherApiKey',
     perplexity: 'perplexityApiKey',
+    nvidia: 'nvidiaApiKey',
     ollama: 'ollamaBaseUrl',
     lmstudio: 'lmstudioBaseUrl',
     nine_router: 'nineRouterApiKey',
@@ -192,6 +193,17 @@ export const providerOrder: ProviderInfo[] = [
         category: 'cloud',
         apiKeyLink: 'https://www.perplexity.ai/settings/api',
         icon: 'simple-icons:perplexity'
+    },
+    {
+        key: 'nvidia',
+        name: 'NVIDIA NIM',
+        description: 'NVIDIA-hosted inference for open-source models.',
+        isLocal: false,
+        requiresKey: true,
+        baseUrl: 'https://integrate.api.nvidia.com/v1',
+        category: 'cloud',
+        apiKeyLink: 'https://build.nvidia.com/explore/reasoning',
+        icon: 'simple-icons:nvidia'
     },
     {
         key: 'qwen',

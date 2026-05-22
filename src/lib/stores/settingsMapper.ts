@@ -15,6 +15,14 @@ const camelToSnake = (str: string): string =>
 
 const SNAKE_OVERRIDES: Record<string, string> = {
   // If frontend key doesn't match the SQLite column name, add override here
+  memoryEnabled: "memory.enabled",
+  memoryMaxTurns: "memory.max-turns",
+  memorySummarizationEnabled: "memory.summarization_enabled",
+  memorySummarizationModel: "memory.summarization_model",
+  memorySemanticRecallEnabled: "memory.semantic_recall_enabled",
+  memoryMaxRecalledMessages: "memory.max_recalled_messages",
+  memoryDriftDetectionEnabled: "memory.drift_detection_enabled",
+  memoryDriftThreshold: "memory.drift_threshold",
 };
 
 const FIELD_TYPES: Record<string, "string" | "boolean" | "number" | "json"> = {};

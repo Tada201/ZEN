@@ -61,7 +61,7 @@ export const CSSInjection = memo(() => {
                                 readOnly
                                 placeholder="Awaiting file selection..."
                                 value={customCssPath}
-                                className="flex-1 text-[11px] font-mono bg-slate-950/50 rounded-lg border border-white/5"
+                                className="flex-1 text-[11px] font-mono bg-zinc-950/50 rounded-lg border border-white/5"
                             />
                             <WorkbenchButton
                                 onClick={handlePickCssFile}

@@ -695,6 +695,32 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
     .execute(pool)
     .await?;
 
+    // ── Hierarchical Memory Migrations ──
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS conversation_summaries (
+            id            TEXT PRIMARY KEY,
+            chat_id       TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+            summary       TEXT NOT NULL,
+            message_count INTEGER,
+            token_count   INTEGER,
+            created_at    TEXT DEFAULT (datetime('now'))
+        );
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    let _ = sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_conversation_summaries_chat ON conversation_summaries(chat_id);"
+    )
+    .execute(pool)
+    .await;
+
+    let _ = sqlx::query("ALTER TABLE messages ADD COLUMN is_compacted INTEGER DEFAULT 0;")
+        .execute(pool)
+        .await;
+
     info!("Database migrations complete");
     Ok(())
 }

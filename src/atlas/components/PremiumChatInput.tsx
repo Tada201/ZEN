@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect, useMemo, memo } from 'react';
 import { 
-  ArrowUp
+  ArrowUp,
+  Mic
 } from 'lucide-react';
 import { cn } from '@/lib/utils/style';
 import type { Model } from './ModelSelector';
 import { Attachment } from './chat/types';
+import { useUIStore } from '@/lib/stores/useUIStore';
 
 // Decomposed Components
 import { ActionPills } from './chat/input/ActionPills';
@@ -406,21 +408,31 @@ export const PremiumChatInput = memo(({
             />
           </div>
 
-          <button 
-            onClick={handleSend}
-            className={cn(
-              "p-1.5 rounded-full transition-all duration-300",
-              (message.trim() || selectedFiles.length > 0 || isLoading)
-                ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-sm hover:scale-105 active:scale-95" 
-                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-300 dark:text-zinc-600 cursor-not-allowed"
-            )}
-          >
-            {isLoading ? (
-              <div className="w-4 h-4 bg-current rounded-[2px]" />
-            ) : (
-              <ArrowUp className="w-4 h-4 stroke-[3px]" />
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => useUIStore.getState().toggleVoiceMode()}
+              type="button"
+              className="p-1.5 rounded-full text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all duration-200 flex items-center justify-center"
+              title="Open Voice Mode"
+            >
+              <Mic className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={handleSend}
+              className={cn(
+                "p-1.5 rounded-full transition-all duration-300",
+                (message.trim() || selectedFiles.length > 0 || isLoading)
+                  ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-sm hover:scale-105 active:scale-95" 
+                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-300 dark:text-zinc-600 cursor-not-allowed"
+              )}
+            >
+              {isLoading ? (
+                <div className="w-4 h-4 bg-current rounded-[2px]" />
+              ) : (
+                <ArrowUp className="w-4 h-4 stroke-[3px]" />
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

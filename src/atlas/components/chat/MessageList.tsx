@@ -13,7 +13,6 @@ const MemoizedMessageItem = memo(MessageItem, (prev, next) => {
     && prev.message.status === next.message.status
     && prev.message.steps?.length === next.message.steps?.length
     && prev.message.error === next.message.error
-    && prev.isStreaming === next.isStreaming
     && prev.compact === next.compact;
 });
 
@@ -38,7 +37,7 @@ export const MessageList = memo(function MessageList({
   const lastScrollTime = useRef(0);
 
   // Get the actual scrollable element from Radix ScrollArea
-  const getViewport = () => scrollRef.current?.querySelector("[data-radix-scroll-area-viewport]") as HTMLElement;
+  const getViewport = useCallback(() => scrollRef.current?.querySelector("[data-radix-scroll-area-viewport]") as HTMLElement, []);
 
   // Fix #8: Dynamic estimateSize — track measured sizes for better scroll bar accuracy
   const sizeCache = useRef(new Map<number, number>());
@@ -75,7 +74,7 @@ export const MessageList = memo(function MessageList({
 
     viewport.addEventListener("scroll", onScroll);
     return () => viewport.removeEventListener("scroll", onScroll);
-  }, []);
+  }, [getViewport]);
 
   // Fix #1 & #3: Auto-scroll using virtualizer API with throttle.
   // Removed content.length dependency — virtualizer handles size changes via measureElement.
@@ -90,7 +89,7 @@ export const MessageList = memo(function MessageList({
       align: 'end',
       behavior: isStreaming ? 'auto' : 'smooth',
     });
-  }, [messages.length, messages[messages.length - 1]?.content.length, isStreaming, rowVirtualizer]);
+  }, [messages.length, isStreaming, rowVirtualizer]);
 
   const virtualItems = rowVirtualizer.getVirtualItems();
 
@@ -134,7 +133,6 @@ export const MessageList = memo(function MessageList({
                   onOpenArtifact={onOpenArtifact}
                   onRetry={onRetry}
                   onOpenSettings={onOpenSettings}
-                  isStreaming={isStreaming}
                   compact={compact}
                 />
               </div>

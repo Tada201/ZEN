@@ -16,6 +16,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import { CodeBlock } from './CodeBlock';
 
 interface ChartBlockProps {
   content: string;
@@ -37,31 +38,17 @@ export function ChartBlock({ content, isStreaming }: ChartBlockProps) {
   const chartData = useMemo<ChartData | null>(() => {
     if (isStreaming) return null;
     try {
-      return JSON.parse(content);
+      let cleaned = content.trim();
+      // Remove any redundant leading/trailing backticks or markdown JSON formatting artifacts
+      cleaned = cleaned.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```$/, '').trim();
+      return JSON.parse(cleaned);
     } catch (e) {
-      console.error('Failed to parse chart data:', e);
       return null;
     }
   }, [content, isStreaming]);
 
-  if (isStreaming) {
-    return (
-      <div className="my-6 flex flex-col justify-center items-center h-[300px] bg-card/30 rounded-xl border border-border/40 shadow-sm animate-pulse">
-        <div className="text-muted-foreground text-sm font-mono opacity-70">Generating data visualization...</div>
-      </div>
-    );
-  }
-
-  if (!chartData || !chartData.data || !Array.isArray(chartData.data) || !chartData.keys || !Array.isArray(chartData.keys) || chartData.keys.length === 0) {
-    return (
-      <div className="my-6 p-4 bg-rose-500/10 text-rose-500 border border-rose-500/20 rounded-xl font-mono text-xs">
-        <div className="font-bold uppercase mb-2 text-[10px] tracking-wider opacity-70">Chart Error</div>
-        <pre className="whitespace-pre-wrap">{content}</pre>
-        <div className="mt-2 text-[10px] opacity-70 italic">
-          Ensure content is valid JSON with "type", "data", and a non-empty "keys" array.
-        </div>
-      </div>
-    );
+  if (isStreaming || !chartData || !chartData.data || !Array.isArray(chartData.data) || !chartData.keys || !Array.isArray(chartData.keys) || chartData.keys.length === 0) {
+    return <CodeBlock code={content} language="json" />;
   }
 
   const { type, data, keys, xAxis, colors = DEFAULT_COLORS, title } = chartData;
