@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { useDrawingStore } from '../../lib/stores/drawingStore';
-import type { DrawOp, DrawingToolType } from '../../types/drawing';
+import { useDrawingStore } from '@/lib/stores/drawingStore';
+import type { DrawOp, DrawingToolType } from '@/types/drawing';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
 import { motion, AnimatePresence } from 'framer-motion';
 import { WorkbenchButton } from '@/components/ui/WorkbenchButton';

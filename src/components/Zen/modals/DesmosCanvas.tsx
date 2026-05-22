@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { AlertTriangle, RefreshCcw, Power } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils/style';
+import { useSessionStore } from '../../../lib/stores/sessionStore';
 
 declare global {
     interface Window {
@@ -59,6 +60,17 @@ export function DesmosCanvas({ config = {}, className = '' }: DesmosCanvasProps)
     const [error, setError] = useState<string | null>(null);
     const [isReady, setIsReady] = useState(false);
     const retryCount = useRef(0);
+    const { state } = useSessionStore();
+
+    const invertColor = (hex: string) => {
+        if (hex.indexOf('#') === 0) hex = hex.slice(1);
+        if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+        if (hex.length !== 6) return '#000000';
+        const r = (255 - parseInt(hex.slice(0, 2), 16)).toString(16).padStart(2, '0');
+        const g = (255 - parseInt(hex.slice(2, 4), 16)).toString(16).padStart(2, '0');
+        const b = (255 - parseInt(hex.slice(4, 6), 16)).toString(16).padStart(2, '0');
+        return `#${r}${g}${b}`;
+    };
 
     const initCalculator = useCallback(() => {
         if (!containerRef.current || calculatorRef.current) return;
@@ -117,6 +129,76 @@ export function DesmosCanvas({ config = {}, className = '' }: DesmosCanvasProps)
             }
         };
     }, []);
+
+    // Sync state to Desmos calculator
+    useEffect(() => {
+        if (!calculatorRef.current || !state) return;
+
+        // 1. Sync Expressions
+        const desmosExpressions = state.expressions.map(expr => {
+            const isTable = expr.expr.trim().startsWith('table ');
+            if (isTable) {
+                try {
+                    const tokens = expr.expr.trim().split(/\s+/);
+                    const numCols = parseInt(tokens[1], 10);
+                    if (isNaN(numCols) || numCols <= 0) {
+                        return { id: expr.id, latex: '', hidden: true };
+                    }
+                    const colNames = tokens.slice(2, 2 + numCols);
+                    const rawVals = tokens.slice(2 + numCols);
+                    
+                    const columns = colNames.map((name, colIdx) => {
+                        const values: string[] = [];
+                        for (let i = colIdx; i < rawVals.length; i += numCols) {
+                            if (rawVals[i] !== undefined && rawVals[i] !== '') {
+                                values.push(rawVals[i]);
+                            }
+                        }
+                        return { latex: name, values };
+                    });
+
+                    return {
+                        id: expr.id,
+                        type: 'table',
+                        columns,
+                        hidden: !expr.visible
+                    };
+                } catch (e) {
+                    console.error('Error parsing table in modal:', e);
+                    return { id: expr.id, latex: '', hidden: true };
+                }
+            }
+
+            return {
+                id: expr.id,
+                latex: expr.expr,
+                color: config.invertedColors ? invertColor(expr.color || '#00FF9F') : (expr.color || '#00FF9F'),
+                lineOpacity: expr.opacity || 1.0,
+                lineWidth: expr.thickness || 2,
+                lineStyle: expr.style === 'dashed' ? 'DASHED' : 'SOLID',
+                hidden: !expr.visible
+            };
+        });
+
+        // 2. Sync Variables
+        const desmosVariables = Object.entries(state.variables).map(([name, value]) => ({
+            id: `var_${name}`,
+            latex: `${name}=${value}`,
+            sliderBounds: { min: -10, max: 10, step: 0.1 }
+        }));
+
+        // 3. Sync Viewport
+        if (state.viewport) {
+            calculatorRef.current.setMathBounds({
+                left: state.viewport.x_min,
+                right: state.viewport.x_max,
+                bottom: state.viewport.y_min,
+                top: state.viewport.y_max
+            });
+        }
+
+        calculatorRef.current.setExpressions([...desmosExpressions, ...desmosVariables]);
+    }, [state, config.invertedColors]);
 
     const isDark = config.invertedColors ?? true;
 

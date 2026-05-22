@@ -170,25 +170,28 @@ export const PremiumChatInput = memo(({
 
   const selectedModelInfo = models.find(m => m.id === selectedModelId && m.provider === selectedProvider) 
     || models.find(m => m.id === selectedModelId) 
-    || models[0] 
-    || { id: 'default', name: selectedModelId || 'No Model', provider: selectedProvider || 'default', capabilities: [] as string[] };
+    || null;
+
+  const modelProvider = selectedModelInfo?.provider?.toLowerCase() ?? '';
+  const modelId = (selectedModelInfo?.id ?? '').toLowerCase();
 
   const supportsReasoning = useMemo(() => {
-    const provider = selectedModelInfo.provider.toLowerCase();
+    if (!selectedModelInfo) return false;
+    const provider = modelProvider;
     const isReasoningProvider = ['openai', 'anthropic', 'google', 'deepseek', 'ollama', 'lmstudio'].includes(provider);
     const hasReasoningCapability = selectedModelInfo.capabilities?.includes('reasoning') || selectedModelInfo.id.includes('thinking');
     
     return hasReasoningCapability || isReasoningProvider;
-  }, [selectedModelInfo]);
+  }, [selectedModelInfo, modelProvider]);
 
   const supportsImageGen = useMemo(() => {
+    if (!selectedModelInfo) return false;
     return selectedModelInfo.capabilities?.includes('image-gen') || selectedModelInfo.id?.toLowerCase().includes('imagen');
   }, [selectedModelInfo]);
 
   const reasoningConfigType = useMemo(() => {
-    if (!supportsReasoning) return 'none';
-    const provider = selectedModelInfo.provider.toLowerCase();
-    const modelId = (selectedModelInfo.id || "").toLowerCase();
+    if (!supportsReasoning || !selectedModelInfo) return 'none';
+    const provider = modelProvider;
     
     // Anthropic and specific Claude 3.7 models use budget
     if (provider === 'anthropic' || modelId.includes('anthropic/claude-3-7') || modelId.includes('claude-3-7')) return 'budget';
@@ -208,7 +211,7 @@ export const PremiumChatInput = memo(({
     ) return 'effort';
     
     return 'none';
-  }, [selectedModelInfo, supportsReasoning]);
+  }, [selectedModelInfo, supportsReasoning, modelProvider, modelId]);
 
   useEffect(() => {
     if (!supportsReasoning && isThinking) {
@@ -222,6 +225,7 @@ export const PremiumChatInput = memo(({
       return;
     }
     if (!message.trim() && selectedFiles.length === 0) return;
+    if (!selectedModelInfo) return;
     
     const attachments = await Promise.all(selectedFiles.map(async (file) => {
       return new Promise((resolve, reject) => {

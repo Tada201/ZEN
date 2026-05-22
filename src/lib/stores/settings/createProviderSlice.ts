@@ -80,16 +80,17 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
             if (!groupedModels[p]) groupedModels[p] = [];
             groupedModels[p].push(m);
         });
-        
-        const filtered = groupedModels[provider] || [];
+
+        // Provider-specific filtered view (for per-provider settings tabs)
+        const perProvider = groupedModels[provider] || [];
         
         set({ 
-            availableModels: filtered, 
+            availableModels: allModels,
             availableModelsByProvider: groupedModels,
             fetchingModels: false 
         });
 
-        return filtered.map(m => m.id);
+        return perProvider.map(m => m.id);
     } catch (err) {
         // Only log if it's not a common/expected error like 401 during setup
         const errMsg = String(err);

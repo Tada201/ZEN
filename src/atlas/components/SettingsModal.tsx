@@ -109,11 +109,6 @@ export function SettingsModal({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialTab?: TabId;
-  models?: any[];
-  selectedModelId?: string;
-  onSelectModel?: (id: string, provider: string) => void;
-  fetchModels?: () => void;
-  modelsLoading?: boolean;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

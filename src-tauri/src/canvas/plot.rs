@@ -276,8 +276,8 @@ pub fn validate_expression_safety(expr: &str) -> Result<()> {
         }
     }
 
-    // Allowlist chars: letters, digits, operators, parens, dot, comma, space, underscore
-    let allowed: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-*/^().,= _πθ";
+    // Allowlist chars: letters, digits, operators, parens, dot, comma, space, underscore, tilde
+    let allowed: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-*/^().,= _πθ~";
     for ch in expr.chars() {
         if !allowed.contains(ch) {
             bail!("Expression contains disallowed character: '{}'", ch);

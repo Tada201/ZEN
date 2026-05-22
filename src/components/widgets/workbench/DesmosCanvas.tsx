@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, forwardRef, useImperativeHandle, useCallback } from 'react';
-import { useSessionStore } from '../../lib/stores/sessionStore';
+import { useSessionStore } from '@/lib/stores/sessionStore';
+import { Expression } from '@/types/session';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
 import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
 
@@ -235,15 +236,51 @@ export const DesmosCanvas = forwardRef<DesmosCanvasRef, { config: DesmosConfig }
     if (!calculatorRef.current || !state) return;
 
     // 1. Sync Expressions
-    const desmosExpressions = state.expressions.map(expr => ({
-      id: expr.id,
-      latex: expr.expr,
-      color: config.invertedColors ? invertColor(expr.color || '#00FF9F') : (expr.color || '#00FF9F'),
-      lineOpacity: expr.opacity || 1.0,
-      lineWidth: expr.thickness || 2,
-      lineStyle: expr.style === 'dashed' ? 'DASHED' : 'SOLID',
-      hidden: !expr.visible
-    }));
+    const desmosExpressions = state.expressions.map((expr: Expression) => {
+      const isTable = expr.expr.trim().startsWith('table ');
+      if (isTable) {
+        try {
+          const tokens = expr.expr.trim().split(/\s+/);
+          const numCols = parseInt(tokens[1], 10);
+          if (isNaN(numCols) || numCols <= 0) {
+            return { id: expr.id, latex: '', hidden: true };
+          }
+          const colNames = tokens.slice(2, 2 + numCols);
+          const rawVals = tokens.slice(2 + numCols);
+          
+          const columns = colNames.map((name: string, colIdx: number) => {
+            const values: string[] = [];
+            for (let i = colIdx; i < rawVals.length; i += numCols) {
+              if (rawVals[i] !== undefined && rawVals[i] !== '') {
+                values.push(rawVals[i]);
+              }
+            }
+            return { latex: name, values };
+          });
+
+          return {
+            id: expr.id,
+            type: 'table',
+            columns,
+            hidden: !expr.visible
+          };
+        } catch (e) {
+          console.error('Error parsing table:', e);
+          return { id: expr.id, latex: '', hidden: true };
+        }
+      }
+
+      // Normal expression or regression
+      return {
+        id: expr.id,
+        latex: expr.expr,
+        color: config.invertedColors ? invertColor(expr.color || '#00FF9F') : (expr.color || '#00FF9F'),
+        lineOpacity: expr.opacity || 1.0,
+        lineWidth: expr.thickness || 2,
+        lineStyle: expr.style === 'dashed' ? 'DASHED' : 'SOLID',
+        hidden: !expr.visible
+      };
+    });
 
     // 2. Sync Variables
     const desmosVariables = Object.entries(state.variables).map(([name, value]) => ({
@@ -296,7 +333,7 @@ export const DesmosCanvas = forwardRef<DesmosCanvasRef, { config: DesmosConfig }
   if (error) {
     const canRetry = retryCountRef.current < MAX_RETRIES;
     return (
-      <div className="relative w-full h-full bg-[#050505] flex flex-col items-center justify-center border border-[#FF0055]/30 rounded-md shadow-[0_0_30px_rgba(255,0,85,0.05)] text-[#FF0055] font-mono gap-4 text-center p-6">
+      <div className="relative w-full h-full bg-[#050505] flex flex-col items-center justify-center border border-[#FF0055]/30 rounded-none text-[#FF0055] font-mono gap-4 text-center p-4">
         <WorkbenchIcon name="codicon:warning" size={32} />
 
         <div>
@@ -326,7 +363,7 @@ export const DesmosCanvas = forwardRef<DesmosCanvasRef, { config: DesmosConfig }
   }
 
   return (
-    <div className="relative w-full h-full bg-[#050505] overflow-hidden border border-[#00FF9F]/20 rounded-md shadow-[0_0_30px_rgba(0,255,159,0.05)]">
+    <div className="relative w-full h-full bg-[#050505] overflow-hidden border border-white/5 rounded-none">
       <div
         ref={containerRef}
         className="w-full h-full"

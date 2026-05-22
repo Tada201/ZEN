@@ -13,7 +13,7 @@ use std::sync::Arc;
 use sqlx::SqlitePool;
 
 use crate::db::models::{ChatMessage, ChatResponse, ModelInfo, ProviderConfig};
-use crate::error::ZenResult;
+use crate::error::{ZenResult, ZenError};
 use crate::llm::ollama::OllamaProvider;
 use crate::llm::openai_compat::OpenAiCompatProvider;
 use crate::llm::anthropic::AnthropicProvider;
@@ -104,7 +104,7 @@ pub fn default_base_url(provider: &str) -> String {
         "perplexity" => "https://api.perplexity.ai".to_string(),
         "nvidia" => "https://integrate.api.nvidia.com/v1".to_string(),
         "lmstudio" => "http://localhost:1234".to_string(),
-        "nine_router" => "http://localhost:20128/v1".to_string(),
+        "nine_router" | "vx" => "http://localhost:20128/v1".to_string(),
         "aihubmix" => "https://aihubmix.com/v1".to_string(),
         "google" | "gemini" => "https://generativelanguage.googleapis.com/v1beta/openai".to_string(),
         "deepseek" => "https://api.deepseek.com".to_string(),
@@ -191,6 +191,12 @@ pub async fn create_provider(db_pool: &SqlitePool, provider_name: &str) -> ZenRe
             let base_url = crate::db::queries::get_setting(db_pool, &format!("{}_base_url", p_type))
                 .await?
                 .unwrap_or_else(|| default_base_url(&p_type));
+
+            if base_url.is_empty() || (!base_url.starts_with("http://") && !base_url.starts_with("https://")) {
+                return Err(ZenError::Custom(
+                    format!("Unknown provider '{}': no base URL configured. Add a '{provider_name}_base_url' setting or check the provider name.", provider_name)
+                ));
+            }
 
             let api_key_setting = if p_type == "google" || p_type == "gemini" {
                 "gemini_api_key".to_string()

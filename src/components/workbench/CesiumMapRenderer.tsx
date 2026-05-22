@@ -5,7 +5,7 @@ import { EntityService } from '../../services/EntityService';
 
 // Custom styles
 import "cesium/Build/Cesium/Widgets/widgets.css";
-import '../widgets/operational-map.css';
+import '../widgets/workbench/operational-map.css';
 
 // SVGs for Icons Base64
 const issSvg = `<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">

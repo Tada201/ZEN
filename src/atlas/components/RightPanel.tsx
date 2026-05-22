@@ -11,10 +11,10 @@ const SystemDiagnostics = React.lazy(() => import("@/components/shared/SystemDia
 const XTermPanel = React.lazy(() => import("@/components/Zen/XTermPanel").then(m => ({ default: m.XTermPanel })));
 const CesiumCanvas = React.lazy(() => import("@/components/workbench/MapContainer").then(m => ({ default: m.CesiumCanvas })));
 const ArtifactPanel = React.lazy(() => import("@/components/shared/ArtifactPanel").then(m => ({ default: m.ArtifactPanel })));
-const AgentOrchestratorPanel = React.lazy(() => import("@/components/widgets/AgentOrchestratorPanel").then(m => ({ default: m.AgentOrchestratorPanel })));
-const MathPlotInterface = React.lazy(() => import("@/components/widgets/MathPlotInterface").then(m => ({ default: m.MathPlotInterface })));
-const InteractiveDrawingCanvas = React.lazy(() => import("@/components/widgets/InteractiveDrawingCanvas"));
-const MemoryStatsWidget = React.lazy(() => import("@/components/widgets/MemoryStatsWidget").then(m => ({ default: m.MemoryStatsWidget })));
+const AgentOrchestratorPanel = React.lazy(() => import("@/components/widgets/orchestrator/AgentOrchestratorPanel").then(m => ({ default: m.AgentOrchestratorPanel })));
+const MathPlotInterface = React.lazy(() => import("@/components/widgets/workbench/MathPlotInterface").then(m => ({ default: m.MathPlotInterface })));
+const InteractiveDrawingCanvas = React.lazy(() => import("@/components/widgets/workbench/InteractiveDrawingCanvas"));
+const MemoryStatsWidget = React.lazy(() => import("@/components/widgets/memory/MemoryStatsWidget").then(m => ({ default: m.MemoryStatsWidget })));
 
 const LoadingFallback = () => (
   <div className="flex flex-col items-center justify-center h-full py-32 text-zinc-500 italic opacity-60">

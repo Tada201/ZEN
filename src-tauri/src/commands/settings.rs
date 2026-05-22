@@ -63,26 +63,47 @@ pub async fn get_all_available_models(
     state: State<'_, AppState>,
     provider: Option<String>,
 ) -> ZenResult<Vec<ModelInfo>> {
+    let db = state.db.get().await?;
+    
     if let Some(p_name) = provider {
         // Fetch from specific provider
-        let db = state.db.get().await?;
         let provider_instance = crate::llm::create_provider(&db, &p_name).await?;
         provider_instance.list_models().await
     } else {
-        // Fetch from ALL local/configured providers
-        let db = state.db.get().await?;
+        // Enumerate all configured providers — canonical names match providerOrder
+        // and the crate::llm::create_provider / ProviderRegistry naming contract.
         let mut all_models = Vec::new();
-        
-        // List of providers to check for auto-discovery
-        let providers_to_check = vec!["ollama", "lmstudio"];
-        
-        for p_name in providers_to_check {
-            if let Ok(provider_instance) = crate::llm::create_provider(&db, p_name).await {
-                match provider_instance.list_models().await {
-                    Ok(models) => all_models.extend(models),
-                    Err(e) => {
-                        // Log error but don't fail the whole command
-                        eprintln!("Failed to fetch models from {}: {}", p_name, e);
+        let all_settings = state.settings_manager.get_all().await?;
+
+        let known_providers: Vec<&str> = vec![
+            "ollama", "lmstudio", "nine_router",
+            "openai", "anthropic", "google",
+            "groq", "mistral", "deepseek", "openrouter",
+            "together", "perplexity", "qwen", "xai",
+            "kilocode", "nvidia", "aihubmix",
+        ];
+
+        for p_name in known_providers {
+            // Settings keys use snake_case (frontend camelCase is mapped via
+            // settingsMapper.ts → mapStateToSqlite before persist).
+            let api_key_key: String = match p_name {
+                "google" | "gemini" => "gemini_api_key".to_string(),
+                other => format!("{}_api_key", other),
+            };
+            let base_url_key = format!("{}_base_url", p_name);
+
+            let has_key = all_settings.get(&api_key_key).map(|v| !v.is_empty()).unwrap_or(false);
+            let has_url = all_settings.get(&base_url_key).map(|v| !v.is_empty()).unwrap_or(false);
+            let is_local = p_name == "ollama" || p_name == "lmstudio";
+            let is_active = all_settings.get("active_provider").map(|v| v == p_name).unwrap_or(false);
+
+            if is_local || is_active || has_key || has_url {
+                if let Ok(provider_instance) = crate::llm::create_provider(&db, p_name).await {
+                    match provider_instance.list_models().await {
+                        Ok(models) => all_models.extend(models),
+                        Err(e) => {
+                            eprintln!("Failed to fetch models from {}: {}", p_name, e);
+                        }
                     }
                 }
             }

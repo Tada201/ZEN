@@ -101,7 +101,7 @@ impl OpenAiCompatProvider {
                     description: m.description.clone(),
                     size: None,
                     modified_at: m.created.map(|c| c.to_string()),
-                    provider: Some(m.owned_by.unwrap_or_else(|| self.provider_name.clone())),
+                    provider: Some(self.provider_name.clone()),
                     model_type: None,
                     arch: None,
                     quantization: None,

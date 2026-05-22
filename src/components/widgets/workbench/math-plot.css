@@ -1,0 +1,855 @@
+/* ═══════════════════════════════════════════════════════════
+   Math Plot Interface — VS Code Tactical Redesign
+   Flat, space-saving, high-density, function-over-form style
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  --math-bg: #1e1e24;
+  --math-sidebar-bg: #18181c;
+  --math-input-bg: #131316;
+  --math-border: rgba(255, 255, 255, 0.08);
+  --math-border-dim: rgba(255, 255, 255, 0.04);
+  --math-fg: #d4d4d4;
+  --math-accent: #00ff9f;
+  --math-accent-dim: rgba(0, 255, 159, 0.15);
+  --math-font: var(--font_mono), monospace;
+}
+
+.math-plot {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  background: var(--math-bg);
+  font-family: var(--math-font);
+  font-size: 11px;
+  color: var(--math-fg);
+  overflow: hidden;
+}
+
+/* ─── Sidebar ─── */
+.math-plot__sidebar {
+  width: 270px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  gap: 14px;
+  background: var(--math-sidebar-bg);
+  border-right: 1px solid var(--math-border);
+  box-shadow: none;
+  z-index: 10;
+  overflow-y: auto;
+}
+
+.math-plot__sidebar::-webkit-scrollbar {
+  width: 5px;
+}
+.math-plot__sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.math-plot__sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 0;
+}
+.math-plot__sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ─── Headers ─── */
+.math-plot__section-title {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.math-plot__section-title-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--math-accent);
+}
+
+/* ─── Expressions List ─── */
+.math-plot__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.math-plot__list::-webkit-scrollbar { width: 4px; }
+.math-plot__list::-webkit-scrollbar-track { background: transparent; }
+.math-plot__list::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); }
+
+.math-plot__item {
+  position: relative;
+  background: var(--math-bg);
+  border: 1px solid var(--math-border);
+  border-radius: 2px;
+  padding: 6px 8px;
+  transition: background-color 0.1s ease;
+}
+
+.math-plot__item:hover {
+  background: #2a2d2e;
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: none;
+}
+
+.math-plot__item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.math-plot__item-visibility {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  cursor: pointer;
+  box-shadow: none;
+  transition: opacity 0.1s ease;
+}
+.math-plot__item-visibility:hover {
+  transform: none;
+  opacity: 0.8;
+}
+
+.math-plot__item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.math-plot__item-id {
+  font-size: 8px;
+  color: rgba(255, 255, 255, 0.3);
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.math-plot__input {
+  width: 100%;
+  background: var(--math-input-bg);
+  border: 1px solid var(--math-border-dim);
+  border-radius: 2px;
+  outline: none;
+  font-size: 11px;
+  font-family: inherit;
+  color: #fff;
+  padding: 3px 6px;
+  margin-top: 2px;
+}
+.math-plot__input:focus {
+  border-color: var(--math-accent);
+}
+
+.math-plot__error {
+  font-size: 9px;
+  color: #f48771;
+  margin-top: 4px;
+}
+
+.math-plot__item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.math-plot__item:hover .math-plot__item-actions {
+  opacity: 1;
+}
+
+.math-plot__action-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.math-plot__action-btn:hover {
+  color: #fff;
+  transform: none;
+}
+.math-plot__action-btn--danger:hover {
+  color: #f48771;
+}
+
+/* ─── Options Panel ─── */
+.math-plot__options {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: var(--math-input-bg);
+  border: 1px solid var(--math-border);
+  border-radius: 2px;
+  font-size: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.math-plot__option-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.math-plot__option-label {
+  width: 50px;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.math-plot__color-picker {
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.math-plot__slider {
+  flex: 1;
+  accent-color: var(--math-accent);
+  height: 1px;
+  background: var(--math-border);
+  appearance: none;
+  outline: none;
+}
+.math-plot__slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 0;
+  background: var(--math-accent);
+  cursor: pointer;
+}
+
+.math-plot__select {
+  background: var(--math-bg);
+  border: 1px solid var(--math-border);
+  border-radius: 2px;
+  color: var(--math-fg);
+  padding: 2px 4px;
+  outline: none;
+  font-family: inherit;
+  font-size: 10px;
+  flex: 1;
+}
+
+/* ─── Add Row ─── */
+.math-plot__add-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.math-plot__add-input {
+  flex: 1;
+  background: var(--math-input-bg);
+  border: 1px solid var(--math-border);
+  border-radius: 2px;
+  padding: 4px 6px;
+  font-size: 11px;
+  color: #fff;
+  outline: none;
+  font-family: inherit;
+}
+.math-plot__add-input:focus {
+  border-color: var(--math-accent);
+}
+
+.math-plot__btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--math-border);
+  border-radius: 2px;
+  color: var(--math-fg);
+  padding: 4px 8px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.math-plot__btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.math-plot__btn--danger:hover {
+  background: rgba(244, 135, 113, 0.1);
+  border-color: #f48771;
+  color: #f48771;
+}
+
+/* ─── Variables Section ─── */
+.math-plot__vars-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.math-plot__var-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.math-plot__var-name {
+  width: 18px;
+  text-align: right;
+  font-weight: bold;
+  color: #c586c0; /* VS Code pink/purple */
+  flex-shrink: 0;
+}
+
+.math-plot__var-range {
+  flex: 1;
+  accent-color: #c586c0;
+  height: 1px;
+  background: var(--math-border);
+  appearance: none;
+  outline: none;
+}
+.math-plot__var-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 0;
+  background: #c586c0;
+  cursor: pointer;
+}
+
+.math-plot__var-val {
+  width: 24px;
+  text-align: right;
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.math-plot__var-minmax {
+  width: 24px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--math-border);
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 9px;
+  text-align: center;
+  outline: none;
+  padding: 1px;
+}
+.math-plot__var-minmax:focus {
+  border-color: var(--math-accent);
+  color: #fff;
+}
+
+/* ─── Annotations Section ─── */
+.math-plot__annotation-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--math-border-dim);
+  padding: 4px 6px;
+  border-radius: 2px;
+}
+
+.math-plot__annotation-text {
+  flex: 1;
+  text-align: left;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ─── Main Content ─── */
+.math-plot__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  min-width: 0;
+}
+
+/* ─── Toolbar ─── */
+.math-plot__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--math-border);
+  background: var(--math-sidebar-bg);
+  flex-shrink: 0;
+  height: 36px;
+}
+
+.math-plot__toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.math-plot__toolbar-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.8);
+  text-transform: uppercase;
+}
+
+.math-plot__toolbar-status {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.math-plot__loading {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--math-accent);
+  border-radius: 50%;
+  animation: math-plot-spin 1s linear infinite;
+}
+
+@keyframes math-plot-spin {
+  to { transform: rotate(360deg); }
+}
+
+.math-plot__toolbar-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.1s ease, color 0.1s ease;
+}
+.math-plot__toolbar-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+.math-plot__toolbar-btn:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.math-plot__divider-v {
+  width: 1px;
+  height: 14px;
+  background: var(--math-border);
+  margin: 0 2px;
+}
+
+/* ─── Content Area / Empty State ─── */
+.math-plot__content {
+  flex: 1;
+  position: relative;
+  background: var(--math-bg);
+  padding: 0; /* Flat edge-to-edge canvas container */
+}
+
+.math-plot__canvas-container {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  overflow: hidden;
+  box-shadow: none;
+  position: relative;
+}
+
+.math-plot__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.math-plot__empty-icon {
+  color: rgba(255, 255, 255, 0.1);
+  width: 32px;
+  height: 32px;
+}
+
+.math-plot__empty-title {
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.math-plot__empty-hint {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.2);
+}
+
+/* ─── Settings Panel ─── */
+.math-plot__settings-panel {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 180px;
+  background: var(--math-sidebar-bg);
+  border: 1px solid var(--math-border);
+  border-radius: 2px;
+  padding: 8px 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  z-index: 50;
+  backdrop-filter: none;
+  animation: math-plot-fade-in 100ms ease;
+}
+
+@keyframes math-plot-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.math-plot__settings-title {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--math-border);
+}
+
+.math-plot__settings-list {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.math-plot__settings-list::-webkit-scrollbar { width: 3px; }
+.math-plot__settings-list::-webkit-scrollbar-track { background: transparent; }
+.math-plot__settings-list::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); }
+
+.math-plot__settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+
+.math-plot__settings-label {
+  font-size: 8px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.math-plot__settings-toggle {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.math-plot__settings-toggle--active {
+  background: var(--math-accent-dim);
+  color: var(--math-accent);
+}
+
+/* ─── Floating Issues ─── */
+.math-plot__issues {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  width: 90%;
+  max-width: 400px;
+}
+
+.math-plot__issue {
+  pointer-events: auto;
+  background: var(--math-sidebar-bg);
+  border: 1px solid rgba(244, 135, 113, 0.3);
+  color: #f48771;
+  padding: 6px 10px;
+  border-radius: 2px;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.math-plot__issue-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+}
+
+.math-plot__issue-suggestion {
+  font-size: 9px;
+  color: rgba(244, 135, 113, 0.7);
+  padding-left: 14px;
+}
+
+/* ─── Interactive Spreadsheet Editor ─── */
+.math-plot__spreadsheet {
+  margin-top: 6px;
+  width: 100%;
+  border: 1px solid var(--math-border);
+  background: var(--math-input-bg);
+  font-family: var(--math-font);
+  font-size: 10px;
+}
+
+.math-plot__spreadsheet-header {
+  display: flex;
+  border-bottom: 1px solid var(--math-border);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.math-plot__spreadsheet-col {
+  flex: 1;
+  padding: 3px 4px;
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+  font-weight: bold;
+  min-width: 0;
+  border-right: 1px solid var(--math-border-dim);
+}
+.math-plot__spreadsheet-col:last-child {
+  border-right: none;
+}
+
+.math-plot__spreadsheet-col-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--math-accent);
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: bold;
+  text-align: center;
+  outline: none;
+  padding: 1px 0;
+}
+.math-plot__spreadsheet-col-input:focus {
+  background: rgba(0, 255, 159, 0.05);
+}
+
+.math-plot__spreadsheet-body {
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.math-plot__spreadsheet-row {
+  display: flex;
+  border-bottom: 1px solid var(--math-border-dim);
+  align-items: center;
+}
+.math-plot__spreadsheet-row:last-child {
+  border-bottom: none;
+}
+
+.math-plot__spreadsheet-cell {
+  flex: 1;
+  padding: 1px 2px;
+  min-width: 0;
+  border-right: 1px solid var(--math-border-dim);
+}
+.math-plot__spreadsheet-cell:last-child {
+  border-right: none;
+}
+
+.math-plot__spreadsheet-cell-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-family: inherit;
+  font-size: 10px;
+  text-align: center;
+  outline: none;
+  padding: 2px 0;
+}
+.math-plot__spreadsheet-cell-input:focus {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.math-plot__spreadsheet-actions {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--math-border);
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.math-plot__spreadsheet-row-del {
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.1s ease;
+}
+.math-plot__spreadsheet-row-del:hover {
+  color: #f48771;
+}
+
+/* ─── Animated Variables Controls ─── */
+.math-plot__var-play-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  transition: color 0.1s ease;
+}
+.math-plot__var-play-btn:hover {
+  color: var(--math-accent);
+}
+.math-plot__var-play-btn--active {
+  color: var(--math-accent) !important;
+}
+
+/* ─── Collapsible Sidebar Folder Panels ─── */
+.math-plot__folder {
+  border: 1px solid var(--math-border);
+  background: rgba(255, 255, 255, 0.01);
+  border-radius: 2px;
+  margin-top: 4px;
+}
+
+.math-plot__folder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  background: var(--math-sidebar-bg);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.1s ease;
+}
+.math-plot__folder-header:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.math-plot__folder-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 8.5px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.math-plot__folder-content {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--math-border);
+  background: var(--math-bg);
+}
+
+/* ─── Viewport Limits Grid ─── */
+.math-plot__viewport-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.math-plot__viewport-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.math-plot__viewport-label {
+  font-size: 8px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.math-plot__viewport-input {
+  background: var(--math-input-bg);
+  border: 1px solid var(--math-border);
+  border-radius: 2px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 10px;
+  padding: 2px 4px;
+  outline: none;
+}
+.math-plot__viewport-input:focus {
+  border-color: var(--math-accent);
+}
+
+/* ─── Quick Presets Dropdown ─── */
+.math-plot__preset-select {
+  background: var(--math-input-bg);
+  border: 1px solid var(--math-border);
+  border-radius: 2px;
+  color: var(--math-fg);
+  padding: 3px 6px;
+  outline: none;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: bold;
+  text-transform: uppercase;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  transition: border-color 0.1s ease;
+  max-width: 140px;
+}
+.math-plot__preset-select:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.math-plot__preset-select:focus {
+  border-color: var(--math-accent);
+}
+

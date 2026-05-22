@@ -1,0 +1,273 @@
+/* VS Code / Tactical Function-over-Form Styles for Agent Orchestrator */
+
+.agent-orchestrator {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: #1e1e24;
+    overflow: hidden;
+    position: relative;
+    font-family: var(--font_mono), monospace;
+}
+
+/* ─── Birds Eye View ─── */
+.agent-birds-eye {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 0; /* Tight, compact padding */
+}
+
+.agent-birds-eye__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    height: 36px;
+    background: #18181c;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 10px;
+}
+
+.agent-birds-eye__title {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+}
+
+.agent-birds-eye__grid {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    margin: 0;
+}
+
+/* VS Code Flat List Card */
+.agent-card {
+    background: #1e1e24;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: background 0.1s ease;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.agent-card:hover {
+    background: #2a2d2e;
+}
+
+.agent-card--active {
+    background: #252526;
+    border-left: 3px solid #00ff9f;
+}
+
+.agent-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.agent-card__identity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.agent-card__icon {
+    width: 20px;
+    height: 20px;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #00ff9f;
+}
+
+.agent-card__name {
+    font-size: 11px;
+    font-weight: 600;
+    color: #e1e1e1;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.agent-card__id {
+    font-size: 8px;
+    color: rgba(255, 255, 255, 0.2);
+}
+
+.agent-card__task {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.5);
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap; /* Crisp inline status */
+    height: 16px;
+    font-style: normal;
+}
+
+.agent-card__stats {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.agent-card__progress-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 1px;
+    background: #00ff9f;
+}
+
+/* ─── Detail View (Workspace) ─── */
+.agent-workspace {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: #1e1e24;
+}
+
+.agent-workspace__header {
+    padding: 6px 12px;
+    height: 36px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: #18181c;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.back-button {
+    background: transparent;
+    border: none;
+    border-radius: 2px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.5);
+    transition: background 0.1s ease;
+}
+
+.back-button:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #e1e1e1;
+}
+
+.agent-workspace__content {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.agent-workspace__task-info {
+    padding: 10px 14px;
+    background: #1e1e24;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.agent-workspace__telemetry {
+    flex-grow: 1;
+    overflow-y: auto;
+    background: #1e1e1e; /* Pure terminal background */
+}
+
+.telemetry-header {
+    position: sticky;
+    top: 0;
+    background: #18181c;
+    z-index: 10;
+    padding: 6px 14px;
+    height: 28px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.agent-workspace__logs {
+    padding: 8px 14px;
+}
+
+.agent-workspace__footer {
+    padding: 12px 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: #18181c;
+}
+
+/* VS Code Flat Telemetry Outputs */
+.log-entry {
+    font-family: var(--font_mono), monospace;
+    font-size: 10.5px;
+    line-height: 1.5;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 4px 0;
+    border-bottom: none; /* VS Code outputs don't have lines between lines */
+}
+
+.log-entry__time { 
+    color: #858585; 
+    font-size: 10px;
+}
+
+.log-entry__type { 
+    color: #569cd6; /* VS Code light blue */
+    font-weight: 500; 
+    width: 76px; 
+    text-transform: uppercase; 
+}
+
+.log-entry__content { 
+    color: #cccccc; 
+    flex-grow: 1; 
+}
+
+.log-entry--error .log-entry__content { color: #f48771; } /* VS Code red-salmon error color */
+.log-entry--tool_call .log-entry__type { color: #c586c0; } /* VS Code purple */
+
+/* Flat Log bubble */
+.chat-bubble-style {
+    background: #1e1e1e;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 2px;
+    padding: 8px 10px;
+    position: relative;
+    max-width: 100%;
+    box-shadow: none;
+}
+
+.log-entry--status .chat-bubble-style {
+    border-left: 2px solid #00ff9f;
+}
+
+.log-entry--commentary .chat-bubble-style {
+    border-left: 2px solid #a78bfa;
+}
+
+.log-entry--bubble .log-entry__content {
+    color: #d4d4d4;
+}
+
+.log-entry--bubble .md-content {
+    font-size: 11px;
+}
+
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 0; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }

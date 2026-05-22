@@ -11,6 +11,8 @@ interface EndpointConfigProps {
 
 export const EndpointConfig = React.memo(({ providerKey, displayName }: EndpointConfigProps) => {
     const updateSetting = useSettingsStore(s => s.updateSetting);
+    const applyChanges = useSettingsStore(s => s.applyChanges);
+    const fetchModels = useSettingsStore(s => s.fetchModels);
     const value = useSettingsStore(s => {
         const target = PROVIDER_BASE_URL_MAP[providerKey];
         return target ? (s[target as keyof SettingsState] as string) : '';
@@ -29,6 +31,10 @@ export const EndpointConfig = React.memo(({ providerKey, displayName }: Endpoint
                     if (target) {
                         updateSetting({ [target]: text } as any);
                     }
+                }}
+                onBlur={async () => {
+                    await applyChanges();
+                    fetchModels(providerKey);
                 }}
                 className="max-w-lg h-9 font-mono text-xs bg-muted/20 border-border/60 rounded-lg"
             />

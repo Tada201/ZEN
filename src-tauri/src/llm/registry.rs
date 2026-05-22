@@ -4,7 +4,7 @@ use std::time::Instant;
 use tokio::sync::Mutex;
 
 use crate::db::models::ProviderConfig;
-use crate::error::ZenResult;
+use crate::error::{ZenResult, ZenError};
 use crate::llm::{default_base_url, make_provider, LlmProvider};
 use crate::services::SettingsService;
 
@@ -58,6 +58,12 @@ impl ProviderRegistry {
             .get(&base_url_key)
             .await?
             .unwrap_or_else(|| default_base_url(&p_type));
+
+        if base_url.is_empty() || (!base_url.starts_with("http://") && !base_url.starts_with("https://")) {
+            return Err(ZenError::Custom(
+                format!("Unknown provider '{}': no base URL configured. Configure '{base_url_key}' in Settings → Providers, or check the provider name.", provider_name)
+            ));
+        }
 
         let api_key = self
             .settings

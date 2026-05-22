@@ -3,6 +3,15 @@ use crate::models::SystemMetrics;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DiskInfo {
+    pub name: String,
+    pub mount_point: String,
+    pub total_space: u64,
+    pub available_space: u64,
+    pub is_removable: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct HardwareInfo {
     pub cpu: String,
     pub cores: usize,
@@ -11,6 +20,7 @@ pub struct HardwareInfo {
     pub os: String,
     pub hostname: String,
     pub has_cuda: bool,
+    pub disks: Vec<DiskInfo>,
 }
 
 pub struct HardwareService {
@@ -34,6 +44,15 @@ impl HardwareService {
     }
 
     pub fn get_info(&self) -> HardwareInfo {
+        let disks_list = sysinfo::Disks::new_with_refreshed_list();
+        let disks = disks_list.iter().map(|d| DiskInfo {
+            name: d.name().to_string_lossy().to_string(),
+            mount_point: d.mount_point().to_string_lossy().to_string(),
+            total_space: d.total_space(),
+            available_space: d.available_space(),
+            is_removable: d.is_removable(),
+        }).collect();
+
         HardwareInfo {
             cpu: self.sys.cpus().first().map(|c| c.brand().to_string()).unwrap_or_else(|| "Unknown".to_string()),
             cores: self.sys.physical_core_count().unwrap_or(0),
@@ -42,6 +61,7 @@ impl HardwareService {
             os: System::long_os_version().unwrap_or_else(|| "Unknown".to_string()),
             hostname: System::host_name().unwrap_or_else(|| "Unknown".to_string()),
             has_cuda: self.has_cuda,
+            disks,
         }
     }
 

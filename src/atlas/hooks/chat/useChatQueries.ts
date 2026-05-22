@@ -168,7 +168,7 @@ export function useChatQueries() {
           targetProvider = "ollama";
         }
 
-        store.fetchModels(targetProvider);
+        store.fetchModels();
       }
     }
   }, [rawStoreModels.length, modelsLoading]);

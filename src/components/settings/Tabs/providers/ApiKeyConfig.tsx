@@ -21,6 +21,7 @@ export const ApiKeyConfig = React.memo(({ providerKey, displayName }: ApiKeyConf
     });
 
     const updateSetting = useSettingsStore(s => s.updateSetting);
+    const applyChanges = useSettingsStore(s => s.applyChanges);
     const fetchModels = useSettingsStore(s => s.fetchModels);
 
     const handleUpdate = useCallback((text: string) => {
@@ -29,6 +30,11 @@ export const ApiKeyConfig = React.memo(({ providerKey, displayName }: ApiKeyConf
             updateSetting({ [target]: text } as any);
         }
     }, [providerKey, updateSetting]);
+
+    const handleBlur = useCallback(async () => {
+        await applyChanges();
+        fetchModels(providerKey);
+    }, [providerKey, applyChanges, fetchModels]);
 
     return (
         <div className="flex flex-col gap-2.5">
@@ -42,7 +48,7 @@ export const ApiKeyConfig = React.memo(({ providerKey, displayName }: ApiKeyConf
                     value={apiKey}
                     placeholder="Enter secure API key..."
                     onChangeText={handleUpdate}
-                    onBlur={() => fetchModels(providerKey)}
+                    onBlur={handleBlur}
                     className="w-full h-9 pr-10 font-mono text-xs bg-muted/20 border-border/60 focus:border-primary/40 transition-all rounded-lg"
                 />
                 <WorkbenchButton

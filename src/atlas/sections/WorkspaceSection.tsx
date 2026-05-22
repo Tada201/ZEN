@@ -24,9 +24,9 @@ export function WorkspaceApp() {
   const {
     sessions, archivedSessions, folders, currentSessionId, setCurrentSessionId,
     messages, search, setSearch, searchResults,
-    models, modelsLoading, selectedModelId, setSelectedModelId,
+    models, selectedModelId, setSelectedModelId,
     selectedProvider, setSelectedProvider, isStreaming,
-    fetchModels, handleCreateSession, handleDeleteSession,
+    handleCreateSession, handleDeleteSession,
     handleRenameSession, handlePinSession, handleArchiveSession,
     handleUnarchiveSession, handleExportSession,
     handleDeleteAll, handleCreateFolder, handleMoveToFolder,
@@ -233,14 +233,6 @@ export function WorkspaceApp() {
         open={settingsOpen} 
         onOpenChange={setSettingsOpen} 
         initialTab={activeSettingsTab as TabId}
-        models={models}
-        selectedModelId={selectedModelId}
-        onSelectModel={(id: string, provider: string) => {
-          setSelectedModelId(id);
-          setSelectedProvider(provider);
-        }}
-        fetchModels={fetchModels}
-        modelsLoading={modelsLoading}
       />
 
       <CommandPalette />

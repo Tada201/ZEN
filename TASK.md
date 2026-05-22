@@ -51,7 +51,7 @@ Generated: May 21, 2026
 |---|------|---------|----------|--------|---------|
 | **D3.1** | **Provider registry** | `llm/registry.rs` | **High** | ✅ Done | `ProviderRegistry` added to `AppState` as `provider_registry`. `commands/chat.rs` `send_message` uses `state.provider_registry.create()`. Old `provider_cache` retained for backward compat. `pub mod registry` + `pub use` added to `llm/mod.rs`. |
 | **D3.2** | **Middleware chain** | `agent/middleware.rs` | **High** | ✅ Done | `MiddlewareChain` wired into `runner/loop.rs`. `SystemPromptMiddleware` and `RecallMiddleware` replace ~100 lines of inline system prompt building. `SummaryMiddleware` and `CompactionMiddleware` are placeholders — inline logic handles DB queries. `pub mod middleware` added to `agent/mod.rs`. |
-| **D3.3** | **Tool auto-registration** | `tools/mod.rs`, 8 tool files | **Medium** | 🔀 Merged into D4.5 | MCP-based discovery replaces macro approach. When MCP servers connect, tools auto-register via `tools/list`. No more `init_tool_registry()` hardcoding needed once MCP is in place. |
+| **D3.3** | **Tool auto-registration** | `tools/mod.rs`, 8 tool files | **Medium** | ❌ Not started | No `register_v2_tool!` macro, no `collect_v2_tools()`, no `tools/registry.rs`. All tools still registered manually via hardcoded `init_tool_registry()` with 8 individual `register()` calls. |
 | **D3.4** | **ChatService extraction** | `chat/service.rs` | **Medium** | ⚠️ Partial | `ChatService` struct fully written with `send_message()` method. **BUT**: `commands/chat.rs` was never updated to delegate — improvements applied inline instead (D3.1 + D1.3b). `ChatService` remains dead code. |
 
 ## Part B — Standards Compliance
@@ -65,7 +65,7 @@ Generated: May 21, 2026
 
 | # | Task | Priority | Status | Details |
 |---|------|----------|--------|---------|
-| C1 | ~~Plugin/extension system for tools~~ → **Merged into D4.5** | — | 🔀 Merged | MCP-based tool loading replaces custom plugin system |
+| C1 | Plugin/extension system for tools | **Low** | ❌ Not started | Dynamic tool loading via `Tool` trait + registry |
 | C2 | Provider plugin architecture | **Low** | ❌ Not started | `ProviderFactory` trait + `inventory`-based auto-discovery |
 | C3 | Message pipeline middleware | **Low** | ❌ Not started | Formalized middleware chain with priority ordering |
 
@@ -76,66 +76,9 @@ Generated: May 21, 2026
 | D4.1 | Replace Tauri `app.emit` streaming with `Channel<T>` | **Low** | ❌ Not started | Current path: EventBus → broadcast → bridge_to_tauri → app.emit → listen() → rAF flush → React. Atomic Chat uses `invoke("stream_local_http", { onChunk: channel })` directly to ReadableStream. Reduces 3 layers of serialization indirection to 1 typed channel. |
 | D4.2 | Merge v1/v2 tool registries into unified `ToolRegistry` | **Low** | ❌ Not started | `agent::tools::ToolRegistry` (v1, AgentTool trait) and `tools::ToolRegistry` (v2, Tool trait) overlap. Runner uses v1 for execution, ToolManager bridges for permissions — sync is one-directional. Unify so one registry owns execution + permissions + discovery. |
 | D4.3 | Remove React Query from live message state path | **Low** | ❌ Not started | Messages stored in both `useChatStore.sessionMessages` (Zustand) and `["messages", chatId]` (React Query) with fragile merge logic in `useChatQueries`. Keep React Query for cached queries (model lists, settings); use Zustand-only for ephemeral streaming state. |
-| ~~D4.4~~ | ~~Expose HTTP SSE endpoint mirroring Tauri events~~ | — | ✂️ Removed | Per user decision — keep streaming Tauri-only. |
-| **D4.5** | **MCP protocol for unified tool loading** (was C1 + D3.3) | **Medium** | ❌ Not started | See detailed design below. |
-
-## MCP Integration Design (D4.5 — replaces D3.3 + C1)
-
-### Research: How major chatbots treat MCP tools
-
-| App | Pattern |
-|-----|---------|
-| **Claude Code** | Built-in tools (View, Edit, LS) + MCP tools in same flat list. `/mcp` panel shows both. `tools/list` → `tools/call` RPC. |
-| **Vercel AI SDK** | Static `tool()` for built-in, `dynamicTool()` wrapper for MCP. Both go into same `tools` object passed to model. |
-| **Atomic Chat** | `get_tools` collects from all MCP servers → `ToolWithServer`. `call_tool` routes by name. Frontend assembles into AI SDK `Tool` format. No distinction at model level. |
-| **Continue.dev** | MCP tools via `@continuedev/mcp` appear alongside built-in tools in same tool list. |
-
-**Consensus**: MCP tools are first-class tools. The model sees one flat `tools` array. Built-in vs MCP is an execution detail, not a model concern.
-
-### Zen MCP design
-
-```
-┌────────────────────────────────────────────────────┐
-│                  Unified ToolRegistry              │
-│                                                    │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────┐ │
-│  │ Native Tools  │  │ MCP Wrappers │  │  Future   │ │
-│  │ (Rust impls)  │  │ (rmcp client)│  │  plugins  │ │
-│  │              │  │              │  │           │ │
-│  │ read_file    │  │ filesystem   │  │           │ │
-│  │ web_search   │  │ postgres     │  │           │ │
-│  │ run_command  │  │ github       │  │           │ │
-│  │ vector_search│  │ sentry       │  │           │ │
-│  │ browser      │  │ ...any MCP   │  │           │ │
-│  │ ...          │  │ server       │  │           │ │
-│  └──────────────┘  └──────────────┘  └──────────┘ │
-│                                                    │
-│  All implement Tool trait:                         │
-│    name() → &str                                   │
-│    description() → &str                            │
-│    parameters_schema() → Value                     │
-│    risk_level() → RiskLevel                        │
-│    execute(app, chat_id, args) → ToolOutput        │
-└────────────────────────────────────────────────────┘
-```
-
-**Key points:**
-1. MCP servers discovered via `rmcp` crate (already a dependency in Atomic Chat)
-2. Each MCP server's tools wrapped in `McpToolAdapter` implementing our `Tool` trait
-3. `McpToolAdapter::execute()` calls MCP `tools/call` RPC
-4. MCP `tools/list` → auto-populate registry (no more `init_tool_registry()` hardcoding)
-5. Native tools remain Rust-side for performance; MCP tools for user extensibility
-6. `mcp_config.json` in app data dir defines which servers to connect to
-
-### Implementation order:
-1. Add `rmcp` dependency to Cargo.toml
-2. Create `tools/mcp.rs` — `McpToolAdapter` struct implementing `Tool`
-3. Create MCP server manager (start/stop/health-check servers, `mcp_config.json` persistence)
-4. Wire into `init_tool_registry()` — native tools + auto-discovered MCP tools
-5. Tauri commands: `get_mcp_tools`, `configure_mcp_server`, `remove_mcp_server`
-6. Frontend: MCP config UI in Settings, tool list includes MCP tools
-
-## Part E — Rust-side TTFT Timing
+| D4.4 | Expose HTTP SSE endpoint mirroring Tauri events | **Low** | ❌ Not started | Atomic Chat exposes `localhost:1337/v1` for third-party tools (OpenCode, Cursor). Zen streaming is Tauri-only. Adding an SSE endpoint would let external clients use the same inference backend. |
+| D4.5 | Add MCP protocol support for dynamic tool loading | **Low** | ❌ Not started | Atomic Chat supports any MCP-compatible server (filesystem, DB, browser) via `rmcp`. Zen requires Rust code for new tools. MCP would allow user-installed tools without recompilation. Relates to C1. |
+| D4.6 | Instrument Rust-side TTFT timing hops | **Low** | ❌ Not started | Zen has frontend `ttft.ts` but no Rust-side markers. Emit timing stamps (ε IPC invoke, ζ provider connect, η first token) alongside `chat:chunk:first` to diagnose latency at each hop. |
 
 ---
 
@@ -153,12 +96,9 @@ Generated: May 21, 2026
 
 **Phase 2 — Remaining work:**
 ```
-1. D3.4 → Wire ChatService to commands/chat.rs (or remove dead ~370 lines)
-2. B7 → Add tests for orchestrator
-3. D4.6 → Rust-side TTFT timing hops (low effort, high debugging value)
-4. D4.1 → Channel<T> streaming (reduces 3 serialization hops to 1)
-5. D4.5 → MCP unified tool system (was D3.3 + C1, detailed design above)
-6. D4.2 → Merge v1/v2 tool registries (easier after MCP unifies discovery)
-7. D4.3 → Remove React Query from live messages (Zustand-only streaming)
-8. C2 → Provider plugin architecture
+1. D3.3 → Tool auto-registration with register_v2_tool! macro
+2. D3.4 → Wire ChatService to commands/chat.rs (or remove dead code)
+3. B7 → Add tests for orchestrator
+4. C1-C3 → Plugin/extension system (low priority)
+5. D4.1-D4.6 → Architecture learnings (low priority)
 ```

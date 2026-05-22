@@ -521,6 +521,11 @@ impl GraphSession {
                 continue;
             }
 
+            // Skip native plotting for tables and regressions as they are Desmos-only
+            if expr.expr.starts_with("table ") || expr.expr.contains('~') {
+                continue;
+            }
+
             // Create cache key from expression + variables + viewport
             let mut hasher = DefaultHasher::new();
             expr.expr.hash(&mut hasher);
@@ -662,6 +667,11 @@ impl GraphSession {
         let mut issues = Vec::new();
 
         for expr in &mut self.expressions {
+            // Skip validation for tables and regressions
+            if expr.expr.starts_with("table ") || expr.expr.contains('~') {
+                continue;
+            }
+
             // Check undefined variables
             for dep in &expr.dependencies {
                 if !self.variables.contains_key(dep.as_str()) {

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -26,8 +25,15 @@ export function useChat() {
     modelsLoading,
   } = useChatQueries();
 
-  const [selectedModelId, setSelectedModelId] = useState<string>("No Model");
-  const [selectedProvider, setSelectedProvider] = useState<string>("openai");
+  const storeActiveProvider = useSettingsStore(s => s.activeProvider);
+  const storeActiveModel = useSettingsStore(s => s.activeModel);
+  const switchModel = useSettingsStore(s => s.switchModel);
+
+  const setSelectedModelId = (id: string) => switchModel(storeActiveProvider, id);
+  const setSelectedProvider = (provider: string) => switchModel(provider);
+
+  const selectedModelId = storeActiveModel || "No Model";
+  const selectedProvider = storeActiveProvider || "ollama";
 
   const { isStreaming, abortStream } = useStreamingChat(currentSessionId);
 

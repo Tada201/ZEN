@@ -1,14 +1,9 @@
 import { useState, useEffect } from "react";
 import { 
-  X, Copy, Check, Download, MoreHorizontal, Code2, PanelRight, Eye 
+  X, Copy, Check, Download, Code2, PanelRight, Eye 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuTrigger, DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { ArtifactData } from "./types";
 import { MarkdownContent } from "./MarkdownContent";
@@ -31,15 +26,26 @@ export function ArtifactPanel({
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview");
 
   const content = artifact.content || "";
-  const isHtml = artifact.type === "html" || 
-                 (artifact.type === "code" && artifact.language === "html") ||
-                 content.trim().toLowerCase().startsWith("<!doctype html") ||
-                 content.trim().toLowerCase().startsWith("<html");
+  const trimmedContent = content.trim().toLowerCase();
 
-  const isPreviewable = ["markdown", "svg", "openui"].includes(artifact.type) || isHtml;
+  const isHtml = artifact.type === "html" || 
+                 (artifact.type === "code" && artifact.language?.toLowerCase() === "html") ||
+                 trimmedContent.startsWith("<!doctype html") ||
+                 trimmedContent.startsWith("<html");
+
+  const isSvg = artifact.type === "svg" ||
+                (artifact.type === "code" && artifact.language?.toLowerCase() === "svg") ||
+                trimmedContent.startsWith("<svg") ||
+                (trimmedContent.startsWith("<?xml") && trimmedContent.includes("<svg"));
+
+  const isPreviewable = ["markdown", "svg", "openui"].includes(artifact.type) || isHtml || isSvg;
   
   useEffect(() => {
-    if (!isPreviewable) setViewMode("code");
+    if (!isPreviewable) {
+      setViewMode("code");
+    } else {
+      setViewMode("preview");
+    }
   }, [artifact.type, isPreviewable]);
 
   const download = () => {
@@ -72,34 +78,29 @@ export function ArtifactPanel({
 
   return (
     <div className={cn(
-      "flex flex-col bg-background/80 backdrop-blur-sm sm:relative sm:inset-auto sm:z-fixed sm:h-full sm:shrink-0 sm:border-l border-border bg-card shadow-2xl animate-in slide-in-from-right duration-300",
-      embedded ? "w-full h-full border-l-0 shadow-none relative inset-auto z-auto" : "fixed inset-0 z-[100] sm:w-[420px] md:w-[480px] lg:w-[540px] xl:w-[600px]"
+      "flex flex-col bg-[#1e1e24] sm:relative sm:inset-auto sm:z-fixed sm:h-full sm:shrink-0 sm:border-l border-border/80 shadow-none animate-in slide-in-from-right duration-200",
+      embedded ? "w-full h-full border-l-0 shadow-none relative inset-auto z-auto" : "fixed inset-y-0 right-0 z-[100] sm:w-[320px] md:w-[360px] lg:w-[400px] xl:w-[450px]"
     )}>
       {/* Header */}
-      <div className="flex h-16 items-center gap-3 border-b border-border/60 bg-muted/20 px-4 backdrop-blur-md">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/20 bg-primary/5 shadow-inner">
-          {artifact.type === "code" ? <Code2 className="h-5 w-5 text-primary" /> : <PanelRight className="h-5 w-5 text-primary" />}
-        </div>
+      <div className="flex h-11 items-center gap-2 border-b border-border/80 bg-[#18181c] px-3 select-none">
+        {artifact.type === "code" ? (
+          <Code2 className="h-4 w-4 text-[#3b82f6] shrink-0" />
+        ) : (
+          <PanelRight className="h-4 w-4 text-[#10b981] shrink-0" />
+        )}
         
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-bold tracking-tight text-foreground">{artifact.title}</div>
-          <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
-            <span>{artifact.type}</span>
-            {artifact.language && (
-              <>
-                <span className="h-1 w-1 rounded-full bg-current opacity-30" />
-                <span>{artifact.language}</span>
-              </>
-            )}
+          <div className="truncate text-xs font-semibold text-zinc-300 font-sans tracking-wide">
+            {artifact.title}
           </div>
         </div>
         
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1">
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl hover:bg-muted/60"
+              <Button size="icon" variant="ghost" className="h-7 w-7 rounded-sm hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
                 onClick={() => copy(artifact.content)}>
-                {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
               </Button>
             </TooltipTrigger>
             <TooltipContent>Copy Code</TooltipContent>
@@ -107,86 +108,67 @@ export function ArtifactPanel({
           
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl hover:bg-muted/60"
+              <Button size="icon" variant="ghost" className="h-7 w-7 rounded-sm hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
                 onClick={download}>
-                <Download className="h-4 w-4" />
+                <Download className="h-3.5 w-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>Download</TooltipContent>
           </Tooltip>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => setViewMode(viewMode === "preview" ? "code" : "preview")}>
-                {viewMode === "preview" ? <Code2 className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
-                Switch to {viewMode === "preview" ? "Code" : "Preview"}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={onClose} className="text-destructive">
-                <X className="mr-2 h-4 w-4" />
-                Close Panel
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <div className="mx-1 h-6 w-px bg-border/60" />
+          <div className="mx-0.5 h-4 w-px bg-zinc-800" />
           
-          <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground"
+          <Button size="icon" variant="ghost" className="h-7 w-7 rounded-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
             onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* View Toggle */}
+      {/* Editor Tabs Bar */}
       {isPreviewable && (
-        <div className="flex items-center justify-between border-b border-border/40 px-4 py-2 bg-muted/5">
-          <div className="flex items-center rounded-xl border border-border/60 bg-muted/30 p-1 shadow-inner">
-            <button
-              className={cn(
-                "px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider rounded-lg transition-all",
-                viewMode === "preview" ? "bg-background text-primary shadow-sm ring-1 ring-border/20" : "text-muted-foreground hover:text-foreground"
-              )}
-              onClick={() => setViewMode("preview")}
-            >
-              Preview
-            </button>
-            <button
-              className={cn(
-                "px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider rounded-lg transition-all",
-                viewMode === "code" ? "bg-background text-primary shadow-sm ring-1 ring-border/20" : "text-muted-foreground hover:text-foreground"
-              )}
-              onClick={() => setViewMode("code")}
-            >
-              Code
-            </button>
-          </div>
+        <div className="flex h-9 border-b border-border bg-[#18181c] select-none text-[11px] font-sans font-medium tracking-wide">
+          <button
+            className={cn(
+              "px-4 flex items-center gap-1.5 border-r border-border/80 h-full transition-colors font-medium",
+              viewMode === "preview" 
+                ? "bg-[#1e1e24] text-foreground border-b-2 border-b-primary" 
+                : "bg-[#131316] text-muted-foreground hover:bg-[#18181c]/60 hover:text-foreground"
+            )}
+            onClick={() => setViewMode("preview")}
+          >
+            <Eye className="h-3.5 w-3.5" /> PREVIEW
+          </button>
+          <button
+            className={cn(
+              "px-4 flex items-center gap-1.5 border-r border-border/80 h-full transition-colors font-medium",
+              viewMode === "code" 
+                ? "bg-[#1e1e24] text-foreground border-b-2 border-b-primary" 
+                : "bg-[#131316] text-muted-foreground hover:bg-[#18181c]/60 hover:text-foreground"
+            )}
+            onClick={() => setViewMode("code")}
+          >
+            <Code2 className="h-3.5 w-3.5" /> SOURCE
+          </button>
           
-          {viewMode === "code" && artifact.language && (
-            <Badge variant="outline" className="h-6 rounded-lg bg-muted/20 px-2 font-mono text-[10px] tracking-tight">
-              {artifact.language}
-            </Badge>
-          )}
+          <div className="flex-1 flex items-center justify-end px-3 font-mono text-[9px] uppercase tracking-widest text-zinc-500/80">
+            {artifact.language || artifact.type}
+          </div>
         </div>
       )}
       
       {/* Content */}
-      <div className="flex-1 overflow-auto bg-card selection:bg-primary/20 relative">
+      <div className="flex-1 overflow-auto bg-[#1e1e24] selection:bg-primary/20 relative">
         {viewMode === "code" ? (
-          <div className="h-full bg-[#0d1117] font-mono">
-            <pre className="p-6 text-[13px] leading-relaxed text-[#e6edf3] whitespace-pre-wrap">
+          <div className="h-full bg-[#1e1e1e] font-mono overflow-auto">
+            <pre className="p-4 text-[12px] leading-relaxed text-[#d4d4d4] whitespace-pre-wrap select-text font-mono">
               <code>{artifact.content}</code>
             </pre>
           </div>
         ) : (
-          <div className="h-full animate-fade-in">
+          <div className="h-full animate-fade-in bg-[#1e1e24]">
             {artifact.type === "markdown" ? (
-              <div className="p-8 text-sm max-w-none prose prose-slate dark:prose-invert">
+              <div className="p-5 text-xs max-w-none prose prose-slate dark:prose-invert">
                 <MarkdownContent content={artifact.content} />
               </div>
             ) : isHtml ? (
@@ -194,16 +176,16 @@ export function ArtifactPanel({
                 <SandboxedIframe content={artifact.content} title={artifact.title} />
               </div>
             ) : artifact.type === "openui" ? (
-<div className="h-full p-0">
-                 <OpenUIRenderer content={artifact.content} isStreaming={isStreaming} />
-               </div>
-            ) : artifact.type === "svg" ? (
-              <div className="flex h-full items-center justify-center bg-muted/5 p-12">
+              <div className="h-full p-0">
+                <OpenUIRenderer content={artifact.content} isStreaming={isStreaming} />
+              </div>
+            ) : isSvg ? (
+              <div className="flex h-full items-center justify-center p-4 bg-[#1e1e24]">
                 <SandboxedIframe content={artifact.content} title={artifact.title} />
               </div>
             ) : (
-              <div className="p-8 bg-[#0d1117] text-[#e6edf3]">
-                <pre className="text-[13px] leading-relaxed"><code>{artifact.content}</code></pre>
+              <div className="p-5 bg-[#1e1e1e] text-[#d4d4d4] font-mono">
+                <pre className="text-[12px] leading-relaxed"><code>{artifact.content}</code></pre>
               </div>
             )}
           </div>

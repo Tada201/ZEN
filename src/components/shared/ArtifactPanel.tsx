@@ -167,7 +167,13 @@ export function ArtifactPanel({ isEmbedded = false }: { isEmbedded?: boolean }) 
             );
         }
 
-        if (activeArtifact.type === 'svg' || activeArtifact.language === 'svg') {
+        const contentLower = activeArtifact.content.trim().toLowerCase();
+        const isSvg = activeArtifact.type === 'svg' || 
+                      activeArtifact.language?.toLowerCase() === 'svg' ||
+                      contentLower.startsWith('<svg') ||
+                      (contentLower.startsWith('<?xml') && contentLower.includes('<svg'));
+
+        if (isSvg) {
           return (
             <div className="flex-1 flex items-center justify-center p-8 bg-[#020617]">
               <SandboxedIframe 

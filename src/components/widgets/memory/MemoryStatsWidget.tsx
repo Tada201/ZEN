@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { useChatStore } from '../../lib/stores/useChatStore';
+import { useChatStore } from '@/lib/stores/useChatStore';
 import { 
   Database, RefreshCw, Trash2, Search, Brain, Calendar, Info, ShieldAlert, Cpu
 } from 'lucide-react';
