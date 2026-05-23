@@ -1,1 +1,1 @@
-export { ToolCallCard } from "@/atlas/components/ToolCallCard";
+export { ToolCallCard } from "@/atlas/components/chat/ToolCallCard";

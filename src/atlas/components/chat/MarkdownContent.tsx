@@ -91,11 +91,13 @@ const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
   isStreaming,
   components,
   onOpenArtifact,
+  chatId,
 }: {
   block: MarkdownBlock;
   isStreaming: boolean;
   components: Components;
   onOpenArtifact?: (a: ArtifactData) => void;
+  chatId?: string;
 }) {
   // Code blocks: render with specialized support outside ReactMarkdown
   if (block.type === 'code') {
@@ -109,7 +111,7 @@ const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
     if (lang === 'openui') {
       return (
         <div className="my-6 overflow-visible">
-          <OpenUIRenderer content={codeStr} isStreaming={isStreaming} />
+          <OpenUIRenderer content={codeStr} isStreaming={isStreaming} chatId={chatId} />
         </div>
       );
     }
@@ -154,12 +156,14 @@ export function MarkdownContent({
   isThinking,
   isStreaming,
   onOpenArtifact,
+  chatId,
 }: {
   content: string;
   reasoning?: string;
   isThinking?: boolean;
   isStreaming?: boolean;
   onOpenArtifact?: (a: ArtifactData) => void;
+  chatId?: string;
 }) {
   // 1. Extract thought blocks (handles both reasoning prop and <thought> tags)
   let thought: string | null = isThinking ? content : (reasoning || null);
@@ -195,7 +199,7 @@ export function MarkdownContent({
         if (lang === "openui") {
           return (
             <div className="my-6 overflow-visible">
-              <OpenUIRenderer content={codeStr} isStreaming={isStreaming} />
+              <OpenUIRenderer content={codeStr} isStreaming={isStreaming} chatId={chatId} />
             </div>
           );
         }
@@ -293,7 +297,7 @@ export function MarkdownContent({
     td: ({ children }) => <TableCell>{children}</TableCell>,
     strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
     hr: () => <hr className="my-8 border-border/20" />,
-  }), [onOpenArtifact]);
+  }), [onOpenArtifact, chatId]);
 
   return (
     <div className="space-y-6">
@@ -309,6 +313,7 @@ export function MarkdownContent({
               isStreaming={Boolean(isStreaming && block.id.endsWith('streaming'))}
               components={components}
               onOpenArtifact={onOpenArtifact}
+              chatId={chatId}
             />
           ))}
         </div>

@@ -28,7 +28,6 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
   lmstudioBaseUrl: "http://localhost:1234",
   customProviders: [],
   agentConfigs: [],
-  toolSettings: {},
   toolAutoApprove: [],
   
   availableModels: [],
@@ -59,7 +58,7 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
           })).map(m => ({ ...m, source: m.source || 'local' }));
         
         const customModels: ModelInfo[] = [];
-        get().customProviders.forEach(cp => {
+        (get().customProviders || []).forEach(cp => {
             if (cp.enabled) {
                 cp.customModels.forEach(m => {
                     customModels.push({
@@ -120,7 +119,7 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
     let displayName = provider.charAt(0).toUpperCase() + provider.slice(1);
     let headers: Record<string, string> | undefined = undefined;
 
-    const customProvider = state.customProviders.find(cp => cp.id === provider);
+    const customProvider = (state.customProviders || []).find(cp => cp.id === provider);
     if (customProvider) {
         baseUrl = customProvider.baseUrl;
         apiKey = customProvider.apiKey;

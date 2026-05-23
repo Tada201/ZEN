@@ -78,7 +78,7 @@ async fn nine_router_search_fallback(app: &AppHandle, query: &str) -> Result<Vec
     let mut has_explicit_search_model = false;
 
     // Load custom searchModel from settings if present
-    if let Some(params_str) = crate::db::queries::get_setting(&db_pool, "providerParams")
+    if let Some(params_str) = crate::db::queries::get_setting(&db_pool, "provider_params")
         .await
         .unwrap_or_default()
     {

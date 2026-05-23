@@ -220,8 +220,7 @@ export interface ProviderSlice {
   customProviders: CustomProviderConfig[];
   // Agent configs
   agentConfigs: AgentConfig[];
-  // Tool settings
-  toolSettings: Record<string, boolean>;
+  // Per-tool auto-approve IDs (transient runtime list, not persisted)
   toolAutoApprove: string[];
   
   // Dynamic Catalog
@@ -278,6 +277,26 @@ export interface SystemSlice {
     gpu?: string;
     vendor?: string;
   } | null;
+  // Workspace security
+  workspaceConfirmWrites: boolean;
+  workspaceAllowExternalPaths: boolean;
+  workspaceMaxFileSize: number;
+  workspaceAutoStage: boolean;
+  workspaceCommitConfirmation: boolean;
+  // Terminal extended
+  terminalWorkingDir: string;
+  terminalScrollback: number;
+  terminalConfirmCommands: boolean;
+  terminalAutoExecute: boolean;
+  terminalShellIntegration: boolean;
+  terminalEnvVars: boolean;
+  // System performance extended
+  systemMaxCpuThreads: number;
+  // Tool permissions (global)
+  toolYoloMode: boolean;
+  toolAutoApproveLowRisk: boolean;
+  toolGlobalDefault: "confirm" | "always_allow" | "always_deny";
+  toolSettings: Record<string, any>;
 
   setPerformanceProfile: (profile: PerformanceProfile) => void;
   fetchHardwareInfo: () => Promise<void>;

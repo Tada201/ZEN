@@ -7,14 +7,13 @@ import { SettingsModal, type TabId } from "../components/SettingsModal";
 import { ArtifactData } from "../components/chat/types";
 import { ArtifactPanel } from "../components/chat/ArtifactPanel";
 import { SessionSidebar } from "../components/chat/SessionSidebar";
-import { MessageSquare, Settings } from "lucide-react";
+import { MessageSquare, Settings, Hammer } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { VoiceModeOverlay } from "../components/voice/VoiceModeOverlay";
 
 import { RightPanel } from "../components/RightPanel";
 import { CommandPalette } from "@/atlas/CommandPalette";
-import { OpenUICanvas } from "../components/OpenUICanvas";
 import { MainArea } from "@/components/workbench/MainArea";
 
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
@@ -32,6 +31,10 @@ export function WorkspaceApp() {
     handleDeleteAll, handleCreateFolder, handleMoveToFolder,
     handleSendMessage, abortStream
   } = useChat();
+
+  const chatMessages = useMemo(() => {
+    return messages.filter(m => m.role !== "tool");
+  }, [messages]);
 
   const [activeArtifact, setActiveArtifact] = useState<ArtifactData | null>(null);
   const [generativeUI, setGenerativeUI] = useState(true);
@@ -101,11 +104,16 @@ export function WorkspaceApp() {
         }
         main={
           activeTab === "openui" ? (
-            <div className="flex-1 h-full overflow-hidden bg-background relative">
-              <OpenUICanvas
-                selectedModelId={selectedModelId}
-                selectedProvider={selectedProvider}
-              />
+            <div className="flex-1 h-full flex flex-col items-center justify-center bg-[#09090b] p-6 text-center select-none font-sans">
+              <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-white/5 flex items-center justify-center mb-6">
+                <Hammer className="w-7 h-7 text-zinc-400" />
+              </div>
+              <h3 className="text-sm font-semibold text-zinc-200 mb-2">
+                Canvas Mode Under Construction
+              </h3>
+              <p className="text-xs text-zinc-500 max-w-sm leading-relaxed">
+                This feature is currently undergoing a redesign to bring you an even better visualization and creation experience.
+              </p>
             </div>
           ) : (
             <MainArea className="flex flex-col h-full relative">
@@ -115,8 +123,8 @@ export function WorkspaceApp() {
                   <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
                     <MessageSquare className="w-5 h-5 text-primary" />
                   </div>
-                  <span className="text-sm font-black uppercase tracking-widest text-foreground">
-                    ZEN INVESTIGATION
+                  <span className="text-sm font-semibold tracking-tight text-foreground font-sans">
+                    Zen Investigation
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -137,36 +145,38 @@ export function WorkspaceApp() {
               <div className="flex-1 overflow-hidden relative w-full h-full">
                 {!activeArtifact ? (
                   <div className="flex-1 flex flex-col items-center justify-between overflow-hidden h-full w-full bg-transparent">
-                    <div className="w-full max-w-3xl flex flex-col flex-1 overflow-hidden border-x border-border/5 bg-transparent">
+                    <div className="w-full flex flex-col flex-1 overflow-hidden bg-transparent">
                       <MessageList
-                        messages={messages}
+                        messages={chatMessages}
                         onOpenArtifact={setActiveArtifact}
                         onRetry={() => {}} 
                         onOpenSettings={() => setSettingsOpen(true)}
                       />
-                      <div className="p-6 border-t border-border/15 bg-[#09090b]/85 rounded-t-2xl shrink-0">
-                        <PremiumChatInput
-                          onSend={handleSendMessageInternal}
-                          onAbort={abortStream}
-                          isLoading={isLoading}
-                          models={models}
-                          selectedModelId={selectedModelId}
-                          selectedProvider={selectedProvider}
-                          onSelectModel={(id, prov) => {
-                            setSelectedModelId(id);
-                            setSelectedProvider(prov);
-                          }}
-                          generativeUI={generativeUI}
-                          onGenerativeUIChange={setGenerativeUI}
-                          onOpenModelSelector={() => {
-                            setActiveSettingsTab("providers");
-                            setSettingsOpen(true);
-                          }}
-                          onOpenSettings={() => {
-                            setActiveSettingsTab("general");
-                            setSettingsOpen(true);
-                          }}
-                        />
+                      <div className="w-full border-t border-border/15 bg-[#09090b]/85 rounded-t-2xl shrink-0">
+                        <div className="max-w-3xl mx-auto w-full px-6 py-4">
+                          <PremiumChatInput
+                            onSend={handleSendMessageInternal}
+                            onAbort={abortStream}
+                            isLoading={isLoading}
+                            models={models}
+                            selectedModelId={selectedModelId}
+                            selectedProvider={selectedProvider}
+                            onSelectModel={(id, prov) => {
+                              setSelectedModelId(id);
+                              setSelectedProvider(prov);
+                            }}
+                            generativeUI={generativeUI}
+                            onGenerativeUIChange={setGenerativeUI}
+                            onOpenModelSelector={() => {
+                              setActiveSettingsTab("providers");
+                              setSettingsOpen(true);
+                            }}
+                            onOpenSettings={() => {
+                              setActiveSettingsTab("general");
+                              setSettingsOpen(true);
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -174,36 +184,38 @@ export function WorkspaceApp() {
                   <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
                     <ResizablePanel defaultSize={60} minSize={30} className="flex flex-col h-full relative">
                       <div className="flex-1 flex flex-col items-center justify-between overflow-hidden h-full w-full">
-                        <div className="w-full max-w-3xl flex flex-col flex-1 overflow-hidden border-x border-border/5 bg-transparent">
+                        <div className="w-full flex flex-col flex-1 overflow-hidden bg-transparent">
                           <MessageList
-                            messages={messages}
+                            messages={chatMessages}
                             onOpenArtifact={setActiveArtifact}
                             onRetry={() => {}} 
                             onOpenSettings={() => setSettingsOpen(true)}
                           />
-                          <div className="p-6 border-t border-border/15 bg-[#09090b]/85 rounded-t-2xl shrink-0">
-                            <PremiumChatInput
-                              onSend={handleSendMessageInternal}
-                              onAbort={abortStream}
-                              isLoading={isLoading}
-                              models={models}
-                              selectedModelId={selectedModelId}
-                              selectedProvider={selectedProvider}
-                              onSelectModel={(id, prov) => {
-                                setSelectedModelId(id);
-                                setSelectedProvider(prov);
-                              }}
-                              generativeUI={generativeUI}
-                              onGenerativeUIChange={setGenerativeUI}
-                              onOpenModelSelector={() => {
-                                setActiveSettingsTab("providers");
-                                setSettingsOpen(true);
-                              }}
-                              onOpenSettings={() => {
-                                setActiveSettingsTab("general");
-                                setSettingsOpen(true);
-                              }}
-                            />
+                          <div className="w-full border-t border-border/15 bg-[#09090b]/85 rounded-t-2xl shrink-0">
+                            <div className="max-w-3xl mx-auto w-full px-6 py-4">
+                              <PremiumChatInput
+                                onSend={handleSendMessageInternal}
+                                onAbort={abortStream}
+                                isLoading={isLoading}
+                                models={models}
+                                selectedModelId={selectedModelId}
+                                selectedProvider={selectedProvider}
+                                onSelectModel={(id, prov) => {
+                                  setSelectedModelId(id);
+                                  setSelectedProvider(prov);
+                                }}
+                                generativeUI={generativeUI}
+                                onGenerativeUIChange={setGenerativeUI}
+                                onOpenModelSelector={() => {
+                                  setActiveSettingsTab("providers");
+                                  setSettingsOpen(true);
+                                }}
+                                onOpenSettings={() => {
+                                  setActiveSettingsTab("general");
+                                  setSettingsOpen(true);
+                                }}
+                              />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -243,7 +255,7 @@ export function WorkspaceApp() {
           <VoiceModeOverlay
             isOpen={voiceModeOpen}
             onClose={() => toggleVoiceMode()}
-            messages={messages}
+            messages={chatMessages}
             activeModel={selectedModelId}
             onTranscript={(text: string) => {
               handleSendMessageInternal({

@@ -103,9 +103,11 @@ export function splitMarkdownIntoBlocks(content: string, isStreaming: boolean): 
     }
     if (inThoughtBlock) type = 'thought';
 
-    // For streaming code blocks, auto-close the fence for parser stability
+    // For streaming code blocks, auto-close the fence for parser stability.
+    // Skip OpenUI blocks — their parser handles incomplete streaming code natively
+    // and auto-closing injects corrupting ``` characters into the DSL.
     let blockContent = currentBlock.join('\n');
-    if (inCodeBlock && isStreaming) {
+    if (inCodeBlock && isStreaming && codeLanguage !== 'openui') {
       blockContent += '\n' + codeFence;
     }
     // For streaming thought blocks, auto-close for parser stability

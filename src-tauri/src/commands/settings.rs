@@ -3,8 +3,17 @@ use crate::error::{AppResult, ZenResult};
 use crate::commands::AppState;
 use std::collections::HashMap;
 use crate::db::models::{ModelInfo, ProviderConfig};
-use crate::tools::manager::ToolManager;
+use crate::tools::manager::{ToolManager, ToolMetadata};
 use crate::tools::permission::ToolPermissions;
+
+/// Get the canonical tool list with metadata for the Tools settings tab.
+/// Reads from the live registry so stale manual lists cannot drift.
+#[tauri::command]
+pub async fn list_tool_metadata(
+    state: State<'_, AppState>,
+) -> ZenResult<Vec<ToolMetadata>> {
+    Ok(state.tool_manager.list_metadata().await)
+}
 
 #[tauri::command]
 pub async fn get_setting(state: State<'_, AppState>, key: String) -> AppResult<Option<String>> {

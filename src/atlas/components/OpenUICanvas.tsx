@@ -49,9 +49,10 @@ export function OpenUICanvas({ selectedModelId, selectedProvider }: OpenUICanvas
   }
 
   // Compile the system prompt using the custom catalog registered in extendedLibrary
+  const promptOptions = { ...openuiPromptOptions, editMode: true, inlineMode: true };
   const systemPrompt = (extendedLibrary as any).prompt
-    ? (extendedLibrary as any).prompt(openuiPromptOptions)
-    : openuiLibrary.prompt(openuiPromptOptions);
+    ? (extendedLibrary as any).prompt(promptOptions)
+    : openuiLibrary.prompt(promptOptions);
 
   const processMessage = async ({ messages, abortController }: { messages: any[]; abortController: AbortController }) => {
     // 1. Ensure we have an active chat session to persist history in SQLite

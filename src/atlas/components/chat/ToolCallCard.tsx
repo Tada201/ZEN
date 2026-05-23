@@ -1,29 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, Copy, Code2, Clock, XCircle, RotateCcw, History } from 'lucide-react';
+import { ChevronRight, Copy, Clock, XCircle, RotateCcw, History, Loader2, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { ToolCall, ArtifactData } from './chat/types';
-import { WeatherCard } from './genui/WeatherCard';
-import { SportsCard } from './genui/SportsCard';
-import { RecipeCard } from './genui/RecipeCard';
-import { PremiumCard } from './genui/PremiumCard';
+import { ToolCall, ArtifactData } from './types';
 
-/* ── Specialized Data Interfaces ─────────────────────────── */
+// Import GenUI Components
+import { WeatherCard } from '../genui/WeatherCard';
+import { SportsCard } from '../genui/SportsCard';
+import { RecipeCard } from '../genui/RecipeCard';
+import { PremiumCard } from '../genui/PremiumCard';
+import { MapComponent } from '../genui/Map';
+import { MessageComposer } from '../genui/MessageComposer';
 
-interface SearchResult {
-  url?: string;
-  title?: string;
-  snippet?: string;
-}
-
-
-interface TerminalOutput {
-  exitCode?: number;
-  stdout?: string;
-  stderr?: string;
-  result?: string;
-}
+// Import Modular Tool Components
+import { ToolTimer } from './tool/ToolTimer';
+import { SearchResults, SearchResult } from './tool/SearchResults';
+import { TerminalWidget, TerminalOutput } from './tool/TerminalWidget';
+import { ArtifactPreview } from './tool/ArtifactPreview';
 
 export interface ToolCallCardProps {
   toolCall: ToolCall;
@@ -31,43 +25,10 @@ export interface ToolCallCardProps {
   onViewArtifact?: (artifact: ArtifactData) => void;
   onCancel?: (id: string) => void;
   onRetry?: (id: string) => void;
+  chatId?: string;
 }
 
-/**
- * ToolTimer - Real-time elapsed timer for running tools.
- * Shows [MM:SSs] duration since tool started.
- */
-function ToolTimer({ startTime, durationMs }: { startTime?: number; durationMs?: number }) {
-  const [elapsed, setElapsed] = useState(0);
-
-  useEffect(() => {
-    // If we have a completed duration, just show that
-    if (durationMs !== undefined) {
-      setElapsed(Math.floor(durationMs / 1000));
-      return;
-    }
-    // If we have a start time, run live timer
-    if (!startTime) return;
-    const interval = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startTime) / 1000));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [startTime, durationMs]);
-
-  if (startTime === undefined && durationMs === undefined) return null;
-
-  // If we have durationMs and no startTime, we already set elapsed above
-  // If we have startTime, the interval keeps it updated
-  const mins = Math.floor(elapsed / 60);
-  const secs = elapsed % 60;
-  return (
-    <span className="tabular-nums text-white/30 font-mono text-[10px] ml-2">
-      [{mins.toString().padStart(2, '0')}:{secs.toString().padStart(2, '0')}s]
-    </span>
-  );
-}
-
-export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, onRetry }: ToolCallCardProps) {
+export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, onRetry, chatId }: ToolCallCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const { name, status, input, output, durationMs, retries, attempts, startTime } = toolCall;
@@ -80,6 +41,8 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
   const isRecipe = safeName.includes('recipe') || safeName === 'get_recipe';
   const isTerminal = safeName.includes('bash') || safeName.includes('exec');
   const isArtifact = safeName.includes('artifact');
+  const isMap = safeName.includes('map');
+  const isComposer = safeName.includes('composer');
 
   const getPremiumCardType = (toolName: string): string | null => {
     const n = toolName.toLowerCase();
@@ -142,30 +105,30 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
 
   // ── Summary Text Logic ────────────────────────────────────────
   const getBadgeText = () => {
-    if (status === 'running') return isArtifact ? 'streaming...' : 'fetching...';
-    if (status === 'awaiting_approval') return 'pending';
-    if (status === 'error') return 'error';
+    if (status === 'running') return isArtifact ? 'Streaming' : 'Running';
+    if (status === 'awaiting_approval') return 'Pending Approval';
+    if (status === 'error') return 'Error';
     if (isSearch) {
       const results = (parsedOutput as Record<string, unknown>)?.results as unknown[] | undefined;
-      return `${results?.length || 0} results`;
+      return `${results?.length || 0} Results`;
     }
-    if (isWeather) return '200 OK';
+    if (isWeather) return 'Success';
     if (isTerminal) {
       const terminalOut = parsedOutput as TerminalOutput;
-      return `exit ${terminalOut?.exitCode ?? 0}`;
+      return `Exit Code ${terminalOut?.exitCode ?? 0}`;
     }
-    return 'done';
+    return 'Success';
   };
 
   const getArgText = () => {
-    if (isSearch) return String(safeInput.query || 'searching...');
-    if (isWeather) return String(safeInput.location || 'current area');
-    if (isArtifact) return String(safeInput.title || 'new module');
+    if (isSearch) return String(safeInput.query || '');
+    if (isWeather) return String(safeInput.location || '');
+    if (isArtifact) return String(safeInput.title || '');
     if (isTerminal) return String(safeInput.command || safeInput.script || '').slice(0, 50);
 
     const keys = Object.keys(safeInput);
     if (keys.length > 0) return String(safeInput[keys[0]]).slice(0, 50);
-    return 'executing operation';
+    return '';
   };
 
   const hasRetries = retries && retries > 0 && !!(attempts && attempts.length > 1);
@@ -175,11 +138,6 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
     navigator.clipboard.writeText(typeof text === 'string' ? text : JSON.stringify(text, null, 2));
     toast.success(`${label} copied`);
   };
-
-  const dotColor = status === 'completed' ? "bg-emerald-500" 
-    : status === 'error' ? "bg-rose-500" 
-    : status === 'awaiting_approval' ? "bg-amber-500" 
-    : "bg-amber-500";
 
   return (
     <div className={cn("flex flex-col w-full my-1", className)}>
@@ -194,33 +152,34 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
       >
         {/* Status Dot / Spinner / Awaiting Icon */}
         <div className="flex items-center gap-2 shrink-0">
-          {status === 'awaiting_approval' ? (
+          {status === 'awaiting_approval' && (
             <Clock className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-          ) : (
-            <>
-              <div className={cn(
-                "w-1.5 h-1.5 rounded-full",
-                dotColor,
-                status === 'running' && "animate-premium-pulse-dot"
-              )} />
-              {status === 'running' && (
-                <div className="w-2.5 h-2.5 rounded-full border-[1.5px] border-transparent border-t-amber-500 border-r-amber-500 animate-premium-spin-arc" />
-              )}
-            </>
+          )}
+          {status === 'running' && (
+            <Loader2 className="w-3.5 h-3.5 text-blue-400 animate-spin" />
+          )}
+          {status === 'completed' && (
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+          )}
+          {status === 'error' && (
+            <XCircle className="w-3.5 h-3.5 text-rose-500" />
           )}
         </div>
 
         {/* Tool Name */}
-        <span className="font-mono text-[11px] font-bold text-foreground/70 uppercase tracking-tight">
+        <span className="font-mono text-[11px] font-semibold text-foreground/80 lowercase tracking-tight">
           {name}
         </span>
 
-        <span className="text-white/[0.15] text-[11px]">·</span>
-
-        {/* Tool Argument (Condensed) */}
-        <span className="font-mono text-[11px] text-white/30 truncate max-w-[200px]">
-          {getArgText()}
-        </span>
+        {getArgText() && (
+          <>
+            <span className="text-white/[0.15] text-[11px]">·</span>
+            {/* Tool Argument (Condensed) */}
+            <span className="font-mono text-[11px] text-white/30 truncate max-w-[200px]">
+              {getArgText()}
+            </span>
+          </>
+        )}
 
         {/* Retry indicator */}
         {hasRetries && (
@@ -236,7 +195,7 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
 
         {/* Results Badge */}
         <div className={cn(
-          "ml-auto px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-all",
+          "ml-auto px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-all font-sans",
           status === 'completed' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : 
           status === 'error' ? "bg-rose-500/10 text-rose-400 border-rose-500/20" : 
           status === 'awaiting_approval' ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : 
@@ -316,6 +275,25 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
                     servings={(parsedOutput as any).servings ?? 1}
                   />
                 )}
+                {isMap && parsedOutput && typeof parsedOutput === 'object' && (
+                  <div className="p-4 bg-black/25 flex justify-center">
+                    <MapComponent
+                      latitude={(parsedOutput as any).latitude ?? (parsedOutput as any).lat ?? 0}
+                      longitude={(parsedOutput as any).longitude ?? (parsedOutput as any).lng ?? (parsedOutput as any).long ?? 0}
+                      zoom={(parsedOutput as any).zoom}
+                      label={(parsedOutput as any).label}
+                      className="w-full max-w-sm"
+                    />
+                  </div>
+                )}
+                {isComposer && parsedOutput && typeof parsedOutput === 'object' && (
+                  <div className="p-4 bg-black/25 flex justify-center">
+                    <MessageComposer
+                      topic={(parsedOutput as any).topic ?? "Draft"}
+                      variants={(parsedOutput as any).variants || []}
+                    />
+                  </div>
+                )}
                 {isTerminal && (
                   <TerminalWidget output={typeof parsedOutput === 'object' ? parsedOutput as TerminalOutput : null} command={String(safeInput.command || safeInput.script || '')} />
                 )}
@@ -329,7 +307,8 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
                     onView={() => onViewArtifact?.({
                       type: 'openui',
                       title: String(safeInput.title || 'Artifact'),
-                      content: (safeInput.content || (typeof parsedOutput === 'object' && parsedOutput !== null ? (parsedOutput as Record<string, unknown>).content : null) || output) as string
+                      content: (safeInput.content || (typeof parsedOutput === 'object' && parsedOutput !== null ? (parsedOutput as Record<string, unknown>).content : null) || output) as string,
+                      chatId,
                     })}
                   />
                 )}
@@ -338,11 +317,13 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
                     <PremiumCard type={premiumCardType} data={parsedOutput} />
                   </div>
                 )}
-                {!isWeather && !isSports && !isRecipe && !isTerminal && !isSearch && !isArtifact && !premiumCardType && (
-                  <div className="p-3">
-                    <pre className="text-[12px] font-mono text-white/50 break-words whitespace-pre-wrap leading-relaxed">
-                      {typeof parsedOutput === 'object' ? JSON.stringify(parsedOutput, null, 2) : output}
-                    </pre>
+                {!isWeather && !isSports && !isRecipe && !isTerminal && !isSearch && !isArtifact && !premiumCardType && !isMap && !isComposer && (
+                  <div className="p-3 bg-[#0c0c0e]/50 border-t border-white/[0.04]">
+                    <div className="bg-[#08080a] p-3 rounded-lg border border-zinc-800/80 max-h-[300px] overflow-y-auto">
+                      <pre className="text-[11px] font-mono text-zinc-300 break-words whitespace-pre-wrap leading-relaxed">
+                        {typeof parsedOutput === 'object' ? JSON.stringify(parsedOutput, null, 2) : output}
+                      </pre>
+                    </div>
                   </div>
                 )}
                 
@@ -352,7 +333,7 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
                     {/* Execution Time */}
                     {(durationMs !== undefined || startTime) && (
                       <span className="text-[9px] font-mono text-white/20">
-                        <Clock className="w-2.5 h-2.5 inline mr-1" />
+                        <Clock className="w-2.5 h-2.5 inline mr-1 text-white/40" />
                         <ToolTimer startTime={startTime} durationMs={durationMs} />
                       </span>
                     )}
@@ -366,15 +347,15 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
                   <div className="flex items-center gap-3">
                     <button 
                       onClick={(e) => handleCopy(e, input, "Input Parameters")}
-                      className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-white/40 hover:text-white/80 transition-colors"
+                      className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors font-sans"
                     >
-                      <Copy className="w-2.5 h-2.5" /> Input
+                      <Copy className="w-3.5 h-3.5" /> Copy Input
                     </button>
                     <button 
                       onClick={(e) => handleCopy(e, output, "Raw Output")}
-                      className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-white/40 hover:text-white/80 transition-colors"
+                      className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors font-sans"
                     >
-                      <Copy className="w-2.5 h-2.5" /> Output
+                      <Copy className="w-3.5 h-3.5" /> Copy Output
                     </button>
                   </div>
                 </div>
@@ -434,107 +415,6 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
-  );
-}
-
-// ── Specialized Sub-Components (Maintained but updated styles) ──
-
-interface SearchResult {
-  url?: string;
-  title?: string;
-}
-
-function SearchResults({ results }: { results: SearchResult[] }) {
-  const getHostname = (urlString: string) => {
-    try {
-      if (!urlString) return 'link';
-      return new URL(urlString).hostname;
-    } catch (e) {
-      return 'link';
-    }
-  };
-
-  return (
-    <div className="divide-y divide-white/[0.04]">
-      {results.slice(0, 5).map((res, i) => res && (
-        <a
-          key={i}
-          href={res.url || '#'}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-start gap-3 p-3 hover:bg-white/[0.04] transition-colors group/res"
-        >
-          <div className="text-[11px] font-mono text-white/10 mt-0.5">{i + 1}</div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[13px] font-medium text-white/80 group-hover/res:text-primary transition-colors truncate">
-              {res.title || 'Untitled Result'}
-            </div>
-            <div className="text-[11px] font-mono text-white/20 mt-0.5 truncate italic">
-              {getHostname(res.url || '')}
-            </div>
-          </div>
-        </a>
-      ))}
-    </div>
-  );
-}
-
-
-interface TerminalOutput {
-  stdout?: string;
-  stderr?: string;
-  exitCode?: number;
-}
-
-function TerminalWidget({ output, command }: { output: TerminalOutput | null | undefined, command: string }) {
-  const safeOutput = output || {};
-  return (
-    <div className="bg-black/40 font-mono text-[12.5px] leading-relaxed">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.04] border-b border-white/[0.06]">
-        <div className="flex gap-1.5">
-          <div className="w-2 h-2 rounded-full bg-rose-500/30" />
-          <div className="w-2 h-2 rounded-full bg-amber-500/30" />
-          <div className="w-2 h-2 rounded-full bg-emerald-500/30" />
-        </div>
-        <div className="text-[10px] text-white/20 tracking-widest uppercase">bash — exit {safeOutput.exitCode ?? 0}</div>
-      </div>
-      <div className="p-3 overflow-x-auto">
-        <div className="flex gap-2">
-          <span className="text-white/20">$</span>
-          <span className="text-cyan-400/80">{command}</span>
-        </div>
-        <div className={cn(
-          "mt-1.5",
-          safeOutput.exitCode === 0 ? "text-white/40" : "text-rose-400/60"
-        )}>
-          {safeOutput.stdout || safeOutput.stderr || safeOutput.result || 'Done.'}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ArtifactPreview({ content, title, onView }: { content: string, title: string, onView: () => void }) {
-  return (
-    <div className="p-3">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <div className="p-1 rounded bg-blue-500/10 text-blue-500">
-            <Code2 className="w-3 h-3" />
-          </div>
-          <span className="text-[11px] font-bold uppercase tracking-widest text-white/40">{title || 'Artifact'}</span>
-        </div>
-        <button 
-          onClick={onView}
-          className="flex items-center gap-1 px-2 py-0.5 rounded bg-blue-500/10 text-blue-500 text-[10px] font-bold uppercase tracking-wider hover:bg-blue-500/20 transition-colors"
-        >
-          View Artifact
-        </button>
-      </div>
-      <div className="text-[12px] text-white/40 line-clamp-3 font-mono bg-white/[0.03] p-2 rounded border border-white/[0.06]">
-        {content}
-      </div>
     </div>
   );
 }

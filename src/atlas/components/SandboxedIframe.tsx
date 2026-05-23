@@ -37,7 +37,6 @@ export function SandboxedIframe({ content, className, title = "Artifact Preview"
       align-items: center;
       justify-content: center;
       background-color: #0b0f19;
-      /* Grid / checkered background pattern */
       background-image: 
         linear-gradient(45deg, #05070c 25%, transparent 25%), 
         linear-gradient(-45deg, #05070c 25%, transparent 25%), 
@@ -50,10 +49,6 @@ export function SandboxedIframe({ content, className, title = "Artifact Preview"
       max-width: 90%;
       max-height: 90%;
       filter: drop-shadow(0 10px 25px rgba(0,0,0,0.5));
-      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    svg:hover {
-      transform: scale(1.02);
     }
   </style>
 </head>
@@ -73,13 +68,7 @@ export function SandboxedIframe({ content, className, title = "Artifact Preview"
       ref={iframeRef}
       title={title}
       className={className}
-      // Security measures:
-      // - allow-scripts: Enables interactivity (charts, maps, etc)
-      // - allow-downloads: If the code tries to export data
-      // - allow-modals: For alerts/prompts
-      // - NO allow-same-origin: Prevents the iframe from accessing the main site's cookies/storage
-      // - NO allow-top-navigation: Prevents the iframe from redirecting the main window
-      sandbox="allow-scripts allow-downloads allow-modals"
+      sandbox="allow-scripts"
       style={{
         width: '100%',
         height: '100%',
@@ -89,4 +78,3 @@ export function SandboxedIframe({ content, className, title = "Artifact Preview"
     />
   );
 }
-

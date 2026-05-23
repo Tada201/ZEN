@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { SettingsSection } from "../SettingsSection";
 import { SettingsRow } from "../SettingsRow";
 import { WorkbenchSwitch } from "../ui/WorkbenchSwitch";
@@ -14,7 +15,7 @@ interface ToolsSettingsProps {
   onUpdate: (key: string, value: string) => void;
 }
 
-// ── Known tools with metadata ────────────────────────────────────
+// ── Canonical tool shape from the backend ─────────────────────────
 
 interface ToolMeta {
   id: string;
@@ -24,50 +25,14 @@ interface ToolMeta {
   description: string;
 }
 
-const KNOWN_TOOLS: ToolMeta[] = [
-  // ── Terminal & Execution ──
-  { id: "terminal", name: "Terminal", icon: "lucide:terminal", riskLevel: "Critical", description: "Execute shell commands and scripts" },
-  { id: "run_command", name: "Run Command", icon: "lucide:terminal", riskLevel: "Critical", description: "Execute a single shell command with timeout" },
-
-  // ── File Operations ──
-  { id: "file_write", name: "File Write", icon: "lucide:file-signature", riskLevel: "High", description: "Create, edit, and overwrite files" },
-  { id: "file_read", name: "File Read", icon: "lucide:file-text", riskLevel: "Medium", description: "Read file contents from disk" },
-  { id: "edit_file", name: "Edit File", icon: "lucide:file-signature", riskLevel: "High", description: "Precise patch-based file edits via old/new text" },
-  { id: "list_documents", name: "List Documents", icon: "lucide:file-text", riskLevel: "Low", description: "List ingested documents in the knowledge base" },
-  { id: "read_document_content", name: "Read Document", icon: "lucide:file-text", riskLevel: "Medium", description: "Read raw text content of ingested documents" },
-  { id: "grep_documents", name: "Grep Documents", icon: "lucide:file-search", riskLevel: "Low", description: "Text-based search across all ingested documents" },
-
-  // ── Web & Search ──
-  { id: "web_fetch", name: "Web Fetch", icon: "lucide:globe", riskLevel: "High", description: "Make HTTP requests to external URLs" },
-  { id: "web_search", name: "Web Search", icon: "lucide:search", riskLevel: "Medium", description: "Search the web via DuckDuckGo" },
-  { id: "search", name: "Search", icon: "lucide:search", riskLevel: "Medium", description: "Search local files and codebase" },
-  { id: "vector_search", name: "Vector Search", icon: "lucide:search", riskLevel: "Low", description: "Semantic search over ingested documents" },
-
-  // ── OSINT & Geospatial ──
-  { id: "get_weather", name: "Weather", icon: "lucide:cloud", riskLevel: "Low", description: "Get current weather at a coordinate" },
-  { id: "get_earthquakes", name: "Earthquakes", icon: "lucide:activity", riskLevel: "Low", description: "Fetch recent USGS earthquake data" },
-  { id: "get_military_aircraft", name: "Aircraft Radar", icon: "lucide:radar", riskLevel: "Low", description: "Track military aircraft via ADS-B data" },
-  { id: "activate_3d_globe", name: "3D Globe", icon: "lucide:globe", riskLevel: "Medium", description: "Activate Cesium 3D globe at coordinates" },
-  { id: "activate_2d_operational_map", name: "2D Operational Map", icon: "lucide:map", riskLevel: "Low", description: "Activate 2D operational wireframe map" },
-  { id: "calculate_route", name: "Routing", icon: "lucide:route", riskLevel: "Low", description: "Calculate driving route between two points" },
-  { id: "geocode_search", name: "Geocode Search", icon: "lucide:map-pin", riskLevel: "Low", description: "Convert place names to coordinates" },
-  { id: "reverse_geocode", name: "Reverse Geocode", icon: "lucide:map-pin", riskLevel: "Low", description: "Convert coordinates to place names" },
-  { id: "create_geofence", name: "Geofence", icon: "lucide:map-pin", riskLevel: "Medium", description: "Create circular or polygonal geofence zones" },
-
-  // ── Agent & Orchestration ──
-  { id: "spawn_agent", name: "Spawn Agent", icon: "lucide:bot", riskLevel: "Medium", description: "Spawn sub-agent for parallel task execution" },
-  { id: "delegate_to_agent", name: "Delegate to Agent", icon: "lucide:user-plus", riskLevel: "Medium", description: "Transfer conversation to another specialist agent" },
-  { id: "handoff_to_agent", name: "Handoff", icon: "lucide:user-check", riskLevel: "Low", description: "Hand off conversation to another agent" },
-  { id: "write_to_memory", name: "Write Memory", icon: "lucide:database", riskLevel: "Low", description: "Write findings to session vector memory" },
-  { id: "search_session_memory", name: "Search Memory", icon: "lucide:search", riskLevel: "Low", description: "Search session-scoped vector memory" },
-  { id: "graph_session", name: "Graph Session", icon: "lucide:database", riskLevel: "Low", description: "Manage graph database sessions" },
-
-  // ── Drawing & Visualization ──
-  { id: "draw", name: "Drawing Canvas", icon: "lucide:pen", riskLevel: "Low", description: "Draw shapes and diagrams on a canvas" },
-
-  // ── System ──
-  { id: "system_metrics", name: "System Metrics", icon: "lucide:cpu", riskLevel: "Low", description: "Read CPU, memory, and system stats" },
-];
+/** Shape returned by the `list_tool_metadata` Tauri command. */
+interface BackendToolMeta {
+  id: string;
+  name: string;
+  icon: string;
+  risk_level: string;
+  description: string;
+}
 
 const RISK_COLORS: Record<string, string> = {
   Low: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
@@ -216,6 +181,36 @@ function ToolPermissionCard({
 export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const [showAllTools, setShowAllTools] = useState(false);
+  const [tools, setTools] = useState<ToolMeta[]>([]);
+  const [fetching, setFetching] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setFetching(true);
+    invoke<BackendToolMeta[]>("list_tool_metadata")
+      .then((backendList) => {
+        if (cancelled) return;
+        const mapped: ToolMeta[] = backendList
+          .filter((t) => t.name !== "")
+          .map((t) => ({
+            id: t.id,
+            name: t.name,
+            icon: t.icon,
+            riskLevel: normalizeRiskLevel(t.risk_level),
+            description: t.description,
+          }));
+        setTools(mapped);
+      })
+      .catch((err) => {
+        console.error("[ToolsSettings] Failed to fetch tool metadata:", err);
+      })
+      .finally(() => {
+        if (!cancelled) setFetching(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const toggleToolExpanded = (toolId: string) => {
     setExpandedTools((prev) => {
@@ -234,7 +229,8 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
   const globalDefault = settings["tools.global-default"] || "confirm";
   const toolTimeout = parseInt(settings["tools.timeout-seconds"] || "30");
   const sandboxEnabled = settings["tools.sandbox-enabled"] !== "false";
-  const visibleTools = showAllTools ? KNOWN_TOOLS : KNOWN_TOOLS.slice(0, 3);
+  const visibleTools = showAllTools ? tools : tools.slice(0, 3);
+  const hiddenCount = Math.max(0, tools.length - 3);
 
   return (
     <div className="space-y-8">
@@ -311,6 +307,11 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
             <p className="text-[10px] text-zinc-500">
               Configure tool-specific defaults and regex-based allow/deny/confirm patterns.
             </p>
+            {fetching && (
+              <span className="text-[10px] text-zinc-500 animate-pulse">
+                Loading tool registry...
+              </span>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -324,22 +325,29 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
                 onToggle={() => toggleToolExpanded(tool.id)}
               />
             ))}
+            {!fetching && tools.length === 0 && (
+              <p className="text-[11px] text-zinc-500 py-4 text-center">
+                No tool metadata available. The backend registry may not be initialized yet.
+              </p>
+            )}
           </div>
 
-          <div className="mt-2">
-            <WorkbenchButton
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowAllTools(!showAllTools)}
-              className="w-full h-7 text-[10px] text-muted-foreground hover:text-foreground hover:bg-white/[0.03] border border-dashed border-white/[0.06]"
-            >
-              {showAllTools ? (
-                <>Show fewer tools</>
-              ) : (
-                <>Show all {KNOWN_TOOLS.length} tools ({KNOWN_TOOLS.length - 3} more)</>
-              )}
-            </WorkbenchButton>
-          </div>
+          {!fetching && hiddenCount > 0 && (
+            <div className="mt-2">
+              <WorkbenchButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAllTools(!showAllTools)}
+                className="w-full h-7 text-[10px] text-muted-foreground hover:text-foreground hover:bg-white/[0.03] border border-dashed border-white/[0.06]"
+              >
+                {showAllTools ? (
+                  <>Show fewer tools</>
+                ) : (
+                  <>Show all {tools.length} tools ({hiddenCount} more)</>
+                )}
+              </WorkbenchButton>
+            </div>
+          )}
 
           <div className="mt-3 p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04]">
             <p className="text-[9px] text-zinc-600 leading-relaxed">
@@ -450,4 +458,12 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
       </SettingsSection>
     </div>
   );
+}
+
+function normalizeRiskLevel(raw: string): ToolMeta["riskLevel"] {
+  const level = raw.toLowerCase();
+  if (level === "critical") return "Critical";
+  if (level === "high") return "High";
+  if (level === "medium") return "Medium";
+  return "Low";
 }

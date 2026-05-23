@@ -84,14 +84,36 @@ export const SettingsSchema = z.object({
   telemetryEnabled: z.boolean().default(true),
   logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
   backgroundTasksEnabled: z.boolean().default(true),
+  toolYoloMode: z.boolean().default(false),
+  toolAutoApproveLowRisk: z.boolean().default(false),
+  toolGlobalDefault: z.enum(["confirm", "always_allow", "always_deny"]).default("confirm"),
+  toolSettings: z.record(z.string(), z.any()).default({}),
 
   // ─── Map & Geospatial ────────────────────────────────────────────────────
   mapProvider: z.string().default("cesium"),
   weatherApiKey: z.string().default(""),
 
+  // ─── Workspace Security ──────────────────────────────────────────────────
+  sandboxEnabled: z.boolean().default(true),
+  workspaceConfirmWrites: z.boolean().default(false),
+  workspaceAllowExternalPaths: z.boolean().default(false),
+  workspaceMaxFileSize: z.number().min(1).max(500).default(10),
+  workspaceAutoStage: z.boolean().default(false),
+  workspaceCommitConfirmation: z.boolean().default(true),
+
   // ─── Terminal ────────────────────────────────────────────────────────────
+  defaultShell: z.string().default("powershell"),
   terminalShell: z.string().default(""),
   terminalFontSize: z.number().min(8).max(32).default(14),
+  terminalWorkingDir: z.string().default(""),
+  terminalScrollback: z.number().min(100).max(100000).default(5000),
+  terminalConfirmCommands: z.boolean().default(true),
+  terminalAutoExecute: z.boolean().default(false),
+  terminalShellIntegration: z.boolean().default(true),
+  terminalEnvVars: z.boolean().default(false),
+
+  // ─── System / Performance Extended ───────────────────────────────────────
+  systemMaxCpuThreads: z.number().min(1).max(64).default(8),
 
   // ─── RAG / Knowledge ─────────────────────────────────────────────────────
   ragEnabled: z.boolean().default(false),
@@ -146,10 +168,7 @@ export const SettingsSchema = z.object({
   agentMemoryLimit: z.number().default(512),
   multiAgentEnabled: z.boolean().default(false),
   agentTimeout: z.number().default(120),
-  sandboxEnabled: z.boolean().default(true),
   maxExecutionTime: z.number().default(30),
-  defaultShell: z.string().default("powershell"),
-  shellArgs: z.string().default(""),
   dataDirectory: z.string().default(""),
   autoBackup: z.boolean().default(false),
   maxMemoryAllocation: z.number().default(8192),

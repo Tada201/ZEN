@@ -4,17 +4,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { Message, ArtifactData } from "./types";
 import { MessageItem } from "./MessageItem";
 
-// Fix #9: Custom memo comparator — the message prop is a new object reference
-// on every streaming update (spread in useStreamingChat), so default shallow
-// memo never prevents a re-render. Compare meaningful fields instead.
-const MemoizedMessageItem = memo(MessageItem, (prev, next) => {
-  return prev.message.id === next.message.id
-    && prev.message.content === next.message.content
-    && prev.message.status === next.message.status
-    && prev.message.steps?.length === next.message.steps?.length
-    && prev.message.error === next.message.error
-    && prev.compact === next.compact;
-});
+const MemoizedMessageItem = memo(MessageItem);
 
 export const MessageList = memo(function MessageList({
   messages,

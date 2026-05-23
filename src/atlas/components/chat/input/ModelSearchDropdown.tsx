@@ -85,11 +85,11 @@ export const ModelSearchDropdown = ({
             >
               <div className="px-2 pb-2 mb-1 border-b border-zinc-100 dark:border-zinc-800/50 space-y-2">
                 <div className="flex items-center justify-between px-1">
-                  <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Select AI Model</div>
+                  <div className="text-[10px] font-semibold text-zinc-400 capitalize">Select AI Model</div>
                   {modelSearch && (
                     <button 
                       onClick={() => setModelSearch('')}
-                      className="text-[10px] text-primary hover:underline font-bold uppercase tracking-wider"
+                      className="text-[10px] text-primary hover:underline font-semibold capitalize"
                     >
                       Clear Filter
                     </button>
@@ -112,7 +112,7 @@ export const ModelSearchDropdown = ({
                   <button
                     onClick={() => setModelSearch('')}
                     className={cn(
-                      "px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider whitespace-nowrap transition-all border",
+                      "px-2 py-0.5 rounded text-[10px] font-medium capitalize whitespace-nowrap transition-all border",
                       !modelSearch
                         ? "bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900 border-transparent shadow-sm"
                         : "bg-zinc-50 dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300"
@@ -127,7 +127,7 @@ export const ModelSearchDropdown = ({
                         key={p}
                         onClick={() => setModelSearch(isSelected ? '' : p)}
                         className={cn(
-                          "px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider whitespace-nowrap transition-all border",
+                          "px-2 py-0.5 rounded text-[10px] font-medium capitalize whitespace-nowrap transition-all border",
                           isSelected
                             ? "bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900 border-transparent shadow-sm"
                             : "bg-zinc-50 dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700"
@@ -153,8 +153,8 @@ export const ModelSearchDropdown = ({
                       return acc;
                     }, {} as Record<string, Model[]>)
                   ).map(([provider, providerModels]) => (
-                    <div key={provider} className="mb-2">
-                      <div className="px-3 py-1 text-[9px] font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
+                    <div key={provider} className="mb-2 font-sans text-xs">
+                      <div className="px-3 py-1 text-[10px] font-semibold capitalize text-zinc-500 flex items-center gap-2">
                         {provider}
                         <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800/30" />
                       </div>
@@ -209,7 +209,7 @@ export const ModelSearchDropdown = ({
                  <div className="mt-1 pt-1 border-t border-zinc-100 dark:border-zinc-800/50 px-2">
                    <button 
                      onClick={() => { setIsOpen(false); onOpenModelSelector(); }}
-                     className="w-full flex items-center justify-center gap-2 text-[11px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 py-2.5 font-bold uppercase tracking-wider transition-colors"
+                     className="w-full flex items-center justify-center gap-2 text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 py-2.5 font-medium transition-colors"
                    >
                      <Sliders className="w-3.5 h-3.5" />
                      Manage AI Providers...

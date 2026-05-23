@@ -164,8 +164,8 @@ pub async fn send_message(
     let (llm_provider, history, tools_enabled_str, custom_prompt_setting) = tokio::try_join!(
         state.provider_registry.create(&resolved_provider_name),
         queries::get_messages(&db, &chat_id),
-        state.settings_manager.get("toolsEnabled"),
-        async { queries::get_setting(&db, "systemPrompt").await },
+        state.settings_manager.get("tools_enabled"),
+        async { queries::get_setting(&db, "system_prompt").await },
     )?;
     info!(
         chat_id = %chat_id,
@@ -227,8 +227,8 @@ pub async fn send_message(
 
         if tools_enabled && llm_provider.supports_tools(&active_model) {
             tool_ids.extend(vec![
-                "read_file".to_string(),
-                "list_dir".to_string(),
+                "read_document_content".to_string(),
+                "list_documents".to_string(),
                 "run_command".to_string(),
             ]);
         }

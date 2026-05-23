@@ -353,8 +353,8 @@ export const SessionSidebar = memo(({
       {/* Header */}
       <div className="p-3 pb-2 flex flex-col gap-2">
         <div className="flex items-center justify-between px-1">
-          <span className="text-[10px] font-black tracking-[0.2em] text-zinc-500 uppercase">
-            {showArchived ? "Archived Chats" : "Terminal Console"}
+          <span className="text-[11px] font-semibold text-zinc-400 font-sans tracking-tight">
+            {showArchived ? "Archived Cases" : "Cases & Investigations"}
           </span>
           <div className="flex items-center gap-1">
              <Button 
@@ -401,6 +401,17 @@ export const SessionSidebar = memo(({
                 <Plus size={14} />
               </div>
               <span className="text-xs font-medium text-zinc-300 group-hover:text-white">New chat</span>
+            </div>
+          )}
+
+          {/* Empty State Case Placeholder */}
+          {displaySessions.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-12 px-4 text-center select-none font-sans">
+              <History className="w-8 h-8 text-zinc-500 mb-2 opacity-40" />
+              <span className="text-xs font-medium text-zinc-400">No active cases</span>
+              <span className="text-[10px] text-zinc-500 mt-1 max-w-[180px] leading-relaxed">
+                Create a new session to start your investigation.
+              </span>
             </div>
           )}
 
@@ -459,13 +470,13 @@ export const SessionSidebar = memo(({
         </div>
       </ScrollArea>
 
-      <div className="mt-auto flex flex-col border-t border-white/5 bg-zinc-950 shrink-0">
+      <div className="mt-auto flex flex-col border-t border-white/5 bg-zinc-950 shrink-0 font-sans">
         <div className="h-10 flex items-center justify-between px-2">
           {/* Segmented Mode Controller */}
           <div className="flex items-center gap-0.5 bg-white/5 p-0.5 rounded-lg border border-white/5 ml-1">
             <button
               className={cn(
-                "px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-md transition-all duration-200 select-none",
+                "px-2.5 py-1 text-[11px] font-medium rounded-md transition-all duration-200 select-none",
                 activeTab === "chat" 
                   ? "bg-white/10 text-white shadow-sm" 
                   : "text-zinc-500 hover:text-zinc-300"
@@ -476,7 +487,7 @@ export const SessionSidebar = memo(({
             </button>
             <button
               className={cn(
-                "px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-md transition-all duration-200 select-none",
+                "px-2.5 py-1 text-[11px] font-medium rounded-md transition-all duration-200 select-none",
                 activeTab === "openui" 
                   ? "bg-white/10 text-primary shadow-sm" 
                   : "text-zinc-500 hover:text-zinc-300"
@@ -496,7 +507,7 @@ export const SessionSidebar = memo(({
                   className="h-8 px-2 gap-1.5 text-zinc-500 hover:text-white hover:bg-white/5"
                 >
                   <MessageSquare size={13} />
-                  <span className="text-[10px] font-bold uppercase tracking-widest">CHATS</span>
+                  <span className="text-xs font-semibold text-zinc-400">Chats</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48 bg-zinc-950 border-white/10">
@@ -515,7 +526,7 @@ export const SessionSidebar = memo(({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-
+ 
             <Button 
               variant="ghost" 
               size="sm" 
@@ -526,7 +537,7 @@ export const SessionSidebar = memo(({
               }}
             >
               <Settings2 size={13} />
-              <span className="text-[10px] font-bold uppercase tracking-widest">CONFIG</span>
+              <span className="text-xs font-semibold text-zinc-400">Config</span>
             </Button>
           </div>
         </div>

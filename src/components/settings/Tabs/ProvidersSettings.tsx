@@ -25,7 +25,7 @@ export const ProvidersSettings = memo(() => {
     const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
 
-    const customProviders = useSettingsStore(s => s.customProviders);
+    const customProviders = useSettingsStore(s => s.customProviders || []);
     const connectionStatuses = useSettingsStore(s => s.connectionStatuses);
     const fetchModels = useSettingsStore(s => s.fetchModels);
     const addCustomProvider = useSettingsStore(s => s.addCustomProvider);

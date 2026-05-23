@@ -192,6 +192,7 @@ pub fn run() {
             commands::settings::get_all_available_models,
             commands::settings::test_provider_connection,
             commands::settings::sync_tool_permissions,
+            commands::settings::list_tool_metadata,
             commands::chat::create_chat,
             commands::chat::get_chats,
             commands::chat::get_messages,

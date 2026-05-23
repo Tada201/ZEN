@@ -1,19 +1,20 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { 
   Check, Copy, FileText, Code2, AlertTriangle, ChevronRight, Zap,
-  ThumbsUp, ThumbsDown, ArrowRightLeft, Bot, HelpCircle, ShieldAlert
+  ArrowRightLeft, Bot, HelpCircle, ShieldAlert
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Message, ArtifactData } from "./types";
+import { Message, ArtifactData, ToolCall } from "./types";
 import { MarkdownContent } from "./MarkdownContent";
 import { ReasoningBlock } from "./ReasoningBlock";
-import { ToolCallCard } from "../ToolCallCard";
+import { ToolCallCard } from "./ToolCallCard";
 import { useCopy } from "./CodeBlock";
 import { StreamingSkeleton } from "./StreamingSkeleton";
 import { PremiumCard } from "../genui/PremiumCard";
+import { AnimatePresence, motion } from "framer-motion";
 
 interface ParsedCard {
   type: string;
@@ -123,6 +124,15 @@ export function AssistantMessage({
         last.content = (last.content || "") + (step.content || "");
       } else if (last && last.type === "reasoning" && step.type === "reasoning") {
         last.content = (last.content || "").trim() + "\n" + (step.content || "").trim();
+      } else if (step.type === "tool-call" && step.toolCall) {
+        if (last && last.type === "tool-group") {
+          last.toolCalls.push(step.toolCall);
+        } else {
+          grouped.push({
+            type: "tool-group",
+            toolCalls: [step.toolCall]
+          });
+        }
       } else {
         grouped.push({ ...step });
       }
@@ -158,6 +168,18 @@ export function AssistantMessage({
     });
     return grouped;
   }, [message.toolCalls]);
+
+  const hasActiveTools = useMemo(() => {
+    return message.toolCalls?.some(tc => tc.status === 'running' || tc.status === 'awaiting_approval') ?? false;
+  }, [message.toolCalls]);
+
+  const [isToolsExpanded, setIsToolsExpanded] = useState(hasActiveTools);
+
+  useEffect(() => {
+    if (hasActiveTools) {
+      setIsToolsExpanded(true);
+    }
+  }, [hasActiveTools]);
 
   return (
     <div
@@ -282,6 +304,7 @@ export function AssistantMessage({
                                   isThinking={false}
                                   isStreaming={message.status === "sending"}
                                   onOpenArtifact={onOpenArtifact}
+                                  chatId={message.sessionId}
                                 />
                               )}
                             </div>
@@ -291,11 +314,11 @@ export function AssistantMessage({
                             content={step.content || ""} 
                             isThinking={message.status === "sending" && idx === groupedSteps.length - 1}
                           />
-                        ) : step.toolCall ? (
-                          <ToolCallCard
-                            toolCall={step.toolCall}
-                            className="my-2 w-full"
-                            onViewArtifact={onOpenArtifact}
+                        ) : step.type === "tool-group" && step.toolCalls ? (
+                          <CollapsibleToolGroup 
+                            toolCalls={step.toolCalls}
+                            sessionId={message.sessionId}
+                            onOpenArtifact={onOpenArtifact}
                           />
                         ) : null}
                       </div>
@@ -304,22 +327,45 @@ export function AssistantMessage({
                 ) : (
                   <div className="space-y-6">
                     {groupedToolCalls.length > 0 && (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                          <span className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/20">
-                            Agent Operations
-                          </span>
-                          <div className="h-px flex-1 bg-border/20" />
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                          {groupedToolCalls.map((tc, idx) => (
-                            <ToolCallCard
-                                key={`${tc.id}-${idx}`}
-                                toolCall={tc}
-                                className="my-0 w-full ml-0 pl-0 max-w-full"
-                            />
-                          ))}
-                        </div>
+                      <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/15 overflow-hidden transition-all duration-200">
+                        <button
+                          onClick={() => setIsToolsExpanded(!isToolsExpanded)}
+                          className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/[0.02] active:bg-white/[0.04] transition-colors select-none text-left"
+                        >
+                          <div className="flex items-center gap-2 font-sans">
+                            <span className="text-[11px] font-semibold text-zinc-400 capitalize tracking-tight">
+                              {hasActiveTools ? "Running Operations" : "Executed Operations"}
+                            </span>
+                            <span className="text-[10px] font-medium text-zinc-500 bg-zinc-800/60 px-1.5 py-0.5 rounded-full font-mono">
+                              {groupedToolCalls.length}
+                            </span>
+                          </div>
+                          <ChevronRight className={cn(
+                            "w-3.5 h-3.5 text-zinc-500 transition-transform duration-200",
+                            isToolsExpanded && "rotate-90"
+                          )} />
+                        </button>
+
+                        <AnimatePresence initial={false}>
+                          {isToolsExpanded && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.15, ease: "easeOut" }}
+                              className="overflow-hidden border-t border-zinc-800/50 px-3.5 py-2 flex flex-col gap-1.5 bg-[#08080a]/30"
+                            >
+                              {groupedToolCalls.map((tc, idx) => (
+                                <ToolCallCard
+                                    key={`${tc.id}-${idx}`}
+                                    toolCall={tc}
+                                    className="my-0 w-full ml-0 pl-0 max-w-full"
+                                    chatId={message.sessionId}
+                                />
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     )}
 
@@ -339,6 +385,7 @@ export function AssistantMessage({
                             isThinking={message.isThinking}
                             isStreaming={message.status === "sending"}
                             onOpenArtifact={onOpenArtifact}
+                            chatId={message.sessionId}
                           />
                         )}
                       </div>
@@ -348,13 +395,13 @@ export function AssistantMessage({
               </>
             )}
             
-            {message.error && (
+             {message.error && (
               <div className="flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-4 animate-in fade-in zoom-in-95 duration-200">
                 <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
                 <div className="flex flex-1 flex-col gap-2">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[10px] font-bold text-destructive uppercase tracking-widest">Operation Failed</span>
-                    <p className="text-[12px] text-destructive/80 leading-relaxed font-mono">
+                  <div className="flex flex-col gap-1 font-sans">
+                    <span className="text-xs font-semibold text-destructive">Operation Failed</span>
+                    <p className="text-[12px] text-destructive/80 leading-relaxed font-mono mt-0.5">
                       {message.error}
                     </p>
                   </div>
@@ -363,7 +410,7 @@ export function AssistantMessage({
                     <Button 
                       size="sm" 
                       variant="outline" 
-                      className="w-fit h-8 text-[11px] font-bold uppercase tracking-wider border-destructive/30 text-destructive hover:bg-destructive/10"
+                      className="w-fit h-8 text-xs font-medium border-destructive/30 text-destructive hover:bg-destructive/10"
                       onClick={() => onOpenSettings?.("providers", message.provider)}
                     >
                       Configure {message.provider || "Provider"}
@@ -401,6 +448,7 @@ export function AssistantMessage({
           </div>
             {message.kind === "approval_request" && (() => {
               const toolCallId = message.metadata?.approvalRequest?.tool_call_id as string | undefined;
+              const toolName = message.metadata?.approvalRequest?.tool_name || "Tool";
               const resolveApproval = (approved: boolean) => {
                 if (!toolCallId) return;
                 invoke("resolve_tool_approval", { toolCallId, approved }).catch((e) =>
@@ -408,24 +456,33 @@ export function AssistantMessage({
                 );
               };
               return (
-                <div className="flex items-center gap-2 pt-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-[11px] font-bold uppercase tracking-wider border-destructive/30 text-destructive hover:bg-destructive/10 gap-1.5"
-                    onClick={() => resolveApproval(false)}
-                  >
-                    <ThumbsDown className="h-3.5 w-3.5" />
-                    Deny
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="h-8 text-[11px] font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5"
-                    onClick={() => resolveApproval(true)}
-                  >
-                    <ThumbsUp className="h-3.5 w-3.5" />
-                    Approve
-                  </Button>
+                <div className="mt-4 p-4 rounded-xl border border-zinc-200/10 bg-zinc-900/20 max-w-md animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <ShieldAlert className="h-4 w-4 text-blue-400 shrink-0" />
+                    <span className="text-xs font-semibold text-zinc-200">
+                      Permission Required
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400 leading-relaxed mb-4 font-sans">
+                    The agent is requesting permission to execute <code className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono text-[11px]">{toolName}</code>. Do you want to authorize this operation?
+                  </p>
+                  <div className="flex items-center gap-2.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs font-medium border-zinc-700/80 text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all px-4"
+                      onClick={() => resolveApproval(false)}
+                    >
+                      Deny
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-8 text-xs font-medium bg-zinc-800 text-zinc-100 hover:bg-zinc-700 active:bg-zinc-650 transition-all px-4"
+                      onClick={() => resolveApproval(true)}
+                    >
+                      Approve
+                    </Button>
+                  </div>
                 </div>
               );
             })()}
@@ -453,6 +510,69 @@ export function AssistantMessage({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function CollapsibleToolGroup({
+  toolCalls,
+  sessionId,
+  onOpenArtifact,
+}: {
+  toolCalls: ToolCall[];
+  sessionId?: string;
+  onOpenArtifact: (a: ArtifactData) => void;
+}) {
+  const hasActiveTools = toolCalls.some(tc => tc.status === 'running' || tc.status === 'awaiting_approval');
+  const [isExpanded, setIsExpanded] = useState(hasActiveTools);
+
+  useEffect(() => {
+    if (hasActiveTools) {
+      setIsExpanded(true);
+    }
+  }, [hasActiveTools]);
+
+  return (
+    <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/15 overflow-hidden transition-all duration-200 my-3 font-sans">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/[0.02] active:bg-white/[0.04] transition-colors select-none text-left"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-semibold text-zinc-400 capitalize tracking-tight">
+            {hasActiveTools ? "Running Operations" : "Executed Operations"}
+          </span>
+          <span className="text-[10px] font-medium text-zinc-500 bg-zinc-800/60 px-1.5 py-0.5 rounded-full font-mono">
+            {toolCalls.length}
+          </span>
+        </div>
+        <ChevronRight className={cn(
+          "w-3.5 h-3.5 text-zinc-500 transition-transform duration-200",
+          isExpanded && "rotate-90"
+        )} />
+      </button>
+
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
+            className="overflow-hidden border-t border-zinc-800/50 px-3.5 py-2 flex flex-col gap-1.5 bg-[#08080a]/30"
+          >
+            {toolCalls.map((tc, idx) => (
+              <ToolCallCard
+                  key={`${tc.id}-${idx}`}
+                  toolCall={tc}
+                  className="my-0 w-full ml-0 pl-0 max-w-full"
+                  chatId={sessionId}
+                  onViewArtifact={onOpenArtifact}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

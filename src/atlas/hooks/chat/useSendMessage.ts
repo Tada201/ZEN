@@ -36,8 +36,8 @@ export function useSendMessage(currentSessionId: string | null) {
     const paramsStore = store.providerParams || {};
     const providerParams = paramsStore[activeProvider] || {};
 
-    const temperature = providerParams.temperature ?? store.temperature ?? 0.7;
-    const maxTokens = providerParams.maxTokens ?? store.maxTokens ?? 4096;
+    const temperature = Number(providerParams.temperature ?? store.temperature ?? 0.7);
+    const maxTokens = Number(providerParams.maxTokens ?? store.maxTokens ?? 4096);
 
     console.group(`[useChat] Sending Message to Session: ${currentSessionId}`);
     console.log("Payload:", {
@@ -87,10 +87,11 @@ export function useSendMessage(currentSessionId: string | null) {
     setSessionMessages(currentSessionId, (prev: Message[]) => [...prev, userMsg, assistantMsg]);
 
     try {
+      const promptOptions = { ...openuiPromptOptions, editMode: true, inlineMode: true };
       const systemPrompt = data.generativeUI
         ? ((extendedLibrary as any).prompt
-            ? (extendedLibrary as any).prompt(openuiPromptOptions)
-            : openuiLibrary.prompt(openuiPromptOptions))
+            ? (extendedLibrary as any).prompt(promptOptions)
+            : openuiLibrary.prompt(promptOptions))
         : null;
 
       console.log("[useChat] Invoking 'send_message' backend IPC command with Gen UI prompt status:", !!systemPrompt);
@@ -102,11 +103,11 @@ export function useSendMessage(currentSessionId: string | null) {
         webSearch: data.webSearch,
         temperature,
         maxTokens,
-        topP: providerParams.topP,
-        topK: providerParams.topK,
-        presencePenalty: providerParams.presencePenalty,
-        frequencyPenalty: providerParams.frequencyPenalty,
-        repeatPenalty: providerParams.repeatPenalty,
+        topP: providerParams.topP != null ? Number(providerParams.topP) : undefined,
+        topK: providerParams.topK != null ? Number(providerParams.topK) : undefined,
+        presencePenalty: providerParams.presencePenalty != null ? Number(providerParams.presencePenalty) : undefined,
+        frequencyPenalty: providerParams.frequencyPenalty != null ? Number(providerParams.frequencyPenalty) : undefined,
+        repeatPenalty: providerParams.repeatPenalty != null ? Number(providerParams.repeatPenalty) : undefined,
         seed: null,
         stop: providerParams.stop,
         thinking: data.thinking,

@@ -177,7 +177,7 @@ export function ArtifactPanel({
               </div>
             ) : artifact.type === "openui" ? (
               <div className="h-full p-0">
-                <OpenUIRenderer content={artifact.content} isStreaming={isStreaming} />
+                <OpenUIRenderer content={artifact.content} isStreaming={isStreaming} chatId={artifact.chatId} />
               </div>
             ) : isSvg ? (
               <div className="flex h-full items-center justify-center p-4 bg-[#1e1e24]">

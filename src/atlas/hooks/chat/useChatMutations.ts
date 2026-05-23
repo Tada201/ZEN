@@ -21,7 +21,7 @@ export function useChatMutations({
 
   const createSessionMutation = useMutation({
     mutationFn: (title?: string) => invoke<any>("create_chat", { 
-      title: title || "No Conversation", 
+      title: title || "New Case", 
       model: selectedModelId === "No Model" ? null : selectedModelId 
     }),
     onSuccess: (chat) => {

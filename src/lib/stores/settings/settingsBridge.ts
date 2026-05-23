@@ -27,13 +27,55 @@ const DOT_TO_FIELD: Record<string, BridgeEntry> = {
   "ui.background-image":   { field: "backgroundImageUrl", type: "string" },
   "ui.background-opacity": { field: "backgroundOpacity", type: "number" },
   "ui.background-blur":    { field: "backgroundBlur",    type: "number" },
+  "ui.compact-mode":       { field: "lowResourceMode",  type: "boolean" },
 
   // Workspace
-  "workspace.root":  { field: "workspacePath",  type: "string" },
+  "workspace.root":              { field: "workspacePath",            type: "string" },
+  "workspace.data-dir":          { field: "dataDirectory",            type: "string" },
+  "workspace.sandbox":           { field: "sandboxEnabled",           type: "boolean" },
+  "workspace.confirm-writes":    { field: "workspaceConfirmWrites",   type: "boolean" },
+  "workspace.allow-external-paths": { field: "workspaceAllowExternalPaths", type: "boolean" },
+  "workspace.max-file-size":     { field: "workspaceMaxFileSize",     type: "number" },
+  "workspace.auto-stage":        { field: "workspaceAutoStage",       type: "boolean" },
+  "workspace.commit-confirmation": { field: "workspaceCommitConfirmation", type: "boolean" },
 
   // Chat / AI
-  "chat.temperature":   { field: "temperature",        type: "number" },
-  "chat.streaming":     { field: "streamingEnabled",    type: "boolean" },
+  "chat.temperature":       { field: "temperature",         type: "number" },
+  "chat.streaming":         { field: "streamingEnabled",     type: "boolean" },
+  "chat.response-style":    { field: "personalityPreset",    type: "string" },
+  "chat.system-instructions": { field: "systemPrompt",       type: "string" },
+  "chat.streaming-speed":   { field: "streamingSpeed",       type: "string" },
+  "chat.external-tools":    { field: "toolsEnabled",         type: "boolean" },
+  "chat.chain-of-thought":  { field: "thinkingMode",         type: "boolean" },
+  "chat.reasoning-budget":  { field: "thinkingBudget",       type: "number" },
+  "chat.reasoning-effort":  { field: "reasoningEffort",      type: "string" },
+  "chat.prompt-caching":    { field: "promptCaching",        type: "boolean" },
+  "chat.hardware-accel":    { field: "gpuAcceleration",      type: "boolean" },
+
+  // Terminal
+  "terminal.shell":              { field: "defaultShell",          type: "string" },
+  "terminal.working-dir":        { field: "terminalWorkingDir",    type: "string" },
+  "terminal.scrollback":         { field: "terminalScrollback",    type: "number" },
+  "terminal.confirm-commands":   { field: "terminalConfirmCommands", type: "boolean" },
+  "terminal.auto-execute":       { field: "terminalAutoExecute",   type: "boolean" },
+  "terminal.timeout":            { field: "agentTimeout",          type: "number" },
+  "terminal.shell-integration":  { field: "terminalShellIntegration", type: "boolean" },
+  "terminal.env-vars":           { field: "terminalEnvVars",       type: "boolean" },
+
+  // System / Performance
+  "system.low-resource-mode": { field: "lowResourceMode",    type: "boolean" },
+  "system.max-cpu-threads":   { field: "systemMaxCpuThreads", type: "number" },
+  "system.gpu-offloading":    { field: "gpuAcceleration",     type: "boolean" },
+  "system.max-memory":        { field: "maxMemoryAllocation", type: "number" },
+  "system.auto-cleanup":      { field: "backgroundTasksEnabled", type: "boolean" },
+
+  // Tools / Permissions (global)
+  "tools.yolo-mode":              { field: "toolYoloMode",          type: "boolean" },
+  "tools.auto-approve-low-risk":  { field: "toolAutoApproveLowRisk", type: "boolean" },
+  "tools.global-default":         { field: "toolGlobalDefault",     type: "string" },
+  "tools.timeout-seconds":        { field: "maxExecutionTime",      type: "number" },
+  "tools.sandbox-enabled":        { field: "sandboxEnabled",        type: "boolean" },
+  "tools.logging-enabled":        { field: "agentLoggingEnabled",   type: "boolean" },
 
   // Audio
   "audio.microphone":   { field: "micDeviceId",          type: "string" },
@@ -135,7 +177,17 @@ export function storeToSettingsRecord(state: SettingsState): Record<string, stri
     }
   }
 
-  // 2. Direct camelCase fields (provider keys, model fields, etc.)
+  // 2. Dynamic tool permission keys from toolSettings
+  const ts = (state as any).toolSettings;
+  if (ts && typeof ts === "object") {
+    for (const [key, value] of Object.entries(ts)) {
+      if (key.startsWith("tools.permission.")) {
+        record[key] = String(value ?? "");
+      }
+    }
+  }
+
+  // 3. Direct camelCase fields (provider keys, model fields, etc.)
   for (const [key, value] of Object.entries(state)) {
     if (
       !TRANSIENT_FIELDS.has(key) &&
@@ -146,7 +198,7 @@ export function storeToSettingsRecord(state: SettingsState): Record<string, stri
     }
   }
 
-  // 3. Staged changes on top (override with any pending edits)
+  // 4. Staged changes on top (override with any pending edits)
   for (const [key, value] of Object.entries(state.activeSettings)) {
     const dotKey = FIELD_TO_DOT[key] || key;
     record[dotKey] = String(value);
@@ -156,15 +208,40 @@ export function storeToSettingsRecord(state: SettingsState): Record<string, stri
 }
 
 /**
+ * Get the store field name for a dot-notation key.
+ * - Dynamic tool permission keys ("tools.permission.*") route to toolSettings.
+ * - All other keys must be in DOT_TO_FIELD; falls back to the raw key
+ *   (but callers should verify the key is known to avoid unmapped fallthrough).
+ */
+export function dotKeyToStoreField(key: keyof SettingsState | string): keyof SettingsState {
+  const bridge = DOT_TO_FIELD[key];
+  if (bridge) return bridge.field;
+  // Dynamic tool permission keys stored in toolSettings
+  if (key.startsWith("tools.permission.")) return "toolSettings" as keyof SettingsState;
+  console.warn(`[SettingsBridge] Unmapped dot-notation key: "${key}" — will be lost on persistence`);
+  return key as keyof SettingsState;
+}
+
+/**
  * Convert a string value from a tab component into the correct typed value
  * for `updateSetting()`. Uses the bridge mapping if it exists, otherwise
  * returns the string as-is.
  */
 export function coerceBridgeValue(key: string, value: string): unknown {
   const bridge = DOT_TO_FIELD[key];
-  if (!bridge) return value; // passthrough as string
+  if (bridge) {
+    return coerceByType(value, bridge.type);
+  }
+  // Dynamic tool permission keys → store raw value in toolSettings
+  if (key.startsWith("tools.permission.")) return value;
+  console.warn(`[SettingsBridge] Unmapped dot-notation key: "${key}" — value stored as raw string`);
+  return value;
+}
 
-  switch (bridge.type) {
+/* ── Internal helpers ───────────────────────────────────────────── */
+
+function coerceByType(value: string, type: FieldType): unknown {
+  switch (type) {
     case "number": {
       const n = parseFloat(value);
       return isNaN(n) ? 0 : n;
@@ -181,17 +258,6 @@ export function coerceBridgeValue(key: string, value: string): unknown {
       return value;
   }
 }
-
-/**
- * Get the store field name for a dot-notation key.
- * Falls back to the raw key when no mapping exists (direct camelCase).
- */
-export function dotKeyToStoreField(key: string): keyof SettingsState {
-  const bridge = DOT_TO_FIELD[key];
-  return bridge ? bridge.field : (key as keyof SettingsState);
-}
-
-/* ── Internal helpers ───────────────────────────────────────────── */
 
 function serializeBridgeValue(value: unknown, type: FieldType): string {
   switch (type) {

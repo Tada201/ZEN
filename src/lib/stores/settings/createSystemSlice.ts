@@ -38,6 +38,26 @@ export interface SystemSlice {
     gpu?: string;
     vendor?: string;
   } | null;
+  // Workspace security
+  workspaceConfirmWrites: boolean;
+  workspaceAllowExternalPaths: boolean;
+  workspaceMaxFileSize: number;
+  workspaceAutoStage: boolean;
+  workspaceCommitConfirmation: boolean;
+  // Terminal extended
+  terminalWorkingDir: string;
+  terminalScrollback: number;
+  terminalConfirmCommands: boolean;
+  terminalAutoExecute: boolean;
+  terminalShellIntegration: boolean;
+  terminalEnvVars: boolean;
+  // System performance extended
+  systemMaxCpuThreads: number;
+  // Tool permissions (global)
+  toolYoloMode: boolean;
+  toolAutoApproveLowRisk: boolean;
+  toolGlobalDefault: "confirm" | "always_allow" | "always_deny";
+  toolSettings: Record<string, any>;
 
   setPerformanceProfile: (profile: PerformanceProfile) => void;
   fetchHardwareInfo: () => Promise<void>;
@@ -81,6 +101,22 @@ export const createSystemSlice: StateCreator<SettingsState, [], [], SystemSlice>
   availableNetworkInterfaces: [],
   backgroundTasksEnabled: true,
   hardwareInfo: null,
+  workspaceConfirmWrites: false,
+  workspaceAllowExternalPaths: false,
+  workspaceMaxFileSize: 10,
+  workspaceAutoStage: false,
+  workspaceCommitConfirmation: true,
+  terminalWorkingDir: "",
+  terminalScrollback: 5000,
+  terminalConfirmCommands: true,
+  terminalAutoExecute: false,
+  terminalShellIntegration: true,
+  terminalEnvVars: false,
+  systemMaxCpuThreads: 8,
+  toolYoloMode: false,
+  toolAutoApproveLowRisk: false,
+  toolGlobalDefault: "confirm",
+  toolSettings: {},
 
   setPerformanceProfile: (profile: PerformanceProfile) => {
     get().updateSetting("performanceProfile", profile);

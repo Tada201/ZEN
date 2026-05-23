@@ -76,6 +76,8 @@ interface OpenUIRendererProps {
   toolProvider?: RendererProps["toolProvider"];
   /** Callback when a component triggers an action */
   onAction?: RendererProps["onAction"];
+  /** The unique session id for this chat thread */
+  chatId?: string;
 }
 
 export function OpenUIRenderer({
@@ -120,40 +122,8 @@ export function OpenUIRenderer({
     // We avoid lookbehind for maximum browser compatibility.
     extractedCode = extractedCode.replace(/([\)|\]|}|"|'])\s+([a-zA-Z_]\w*\s*=)/g, '$1\n$2');
 
-    // 4. Resiliency: Convert positional arguments to keyword arguments.
-    // AI often generates `Stack([a, b])` instead of `Stack(children=[a, b])`.
-    // And `Text("Hello")` instead of `Text(content="Hello")`.
-    const containers = [
-      'Stack', 'VStack', 'HStack', 'Card', 'Grid', 'Row', 'Col',
-      'stack', 'vstack', 'hstack', 'card', 'grid', 'row', 'col',
-      'Text', 'text', 'TextContent',
-      'BarChart', 'LineChart', 'PieChart', 'AreaChart',
-      'Root', 'root',
-      'Tag', 'tag',
-    ];
-    containers.forEach(name => {
-      // Handle array: Component([a, b], ...) -> Component(children=[a, b], ...)
-      // We stop at the first ']' followed by a comma or closing parenthesis to avoid overshooting
-      const positionalArrayRegex = new RegExp(`(${name})\\s*\\(\\s*(\\[[^\\]]*\\])\\s*(,|\\)|\\s+[a-zA-Z_]\\w*\\s*=)`, 'g');
-      extractedCode = extractedCode.replace(positionalArrayRegex, (_match, n, array, next) => {
-        // If the component is a chart, use 'labels' instead of 'children' for the first array arg
-        const propName = n.toLowerCase().includes('chart') ? 'labels' : 'children';
-        return `${n}(${propName}=${array}${next}`;
-      });
-    });
-
-    // Handle string: Component("Hello", ...) -> Component(content="Hello", ...)
-    // Specialized Text normalization for variant positional arg: Text("Hello", "variant") -> Text(content="Hello", variant="variant")
-    extractedCode = extractedCode.replace(/Text\s*\(\s*("[^"]*"|'[^']*')\s*,\s*("[^"]*"|'[^']*')\s*\)/g, 'Text(content=$1, variant=$2)');
-    
-    containers.forEach(name => {
-      // General positional string fix - restricted to avoid capturing across component boundaries
-      const positionalStringRegex = new RegExp(`(${name})\\s*\\(\\s*("[^"]*"|'[^']*')\s*(,|\\)|\\s+[a-zA-Z_]\\w*\\s*=)`, 'g');
-      extractedCode = extractedCode.replace(positionalStringRegex, '$1(content=$2$3');
-    });
-
-    // Handle Series positional arguments: Series("Name", [1, 2, 3]) -> Series(name=$1, data=$2)
-    extractedCode = extractedCode.replace(/Series\s*\(\s*("[^"]*"|'[^']*')\s*,\s*(\[[^\]]*\])\s*\)/g, 'Series(name=$1, data=$2)');
+    // 4. Resiliency: The parser is strictly positional and does not support keyword/named arguments.
+    // The LLM generates valid positional arguments naturally. We ensure no broken keyword conversions are performed.
 
     // 5. Root assignment fallback - Smarter heuristic to avoid comments/strings
     // Only matches assignments that look like UI components (Capital Letter + '(')
@@ -171,7 +141,7 @@ export function OpenUIRenderer({
     }
     
     if (!hasRoot && assignedVars.length > 0) {
-      extractedCode += `\nroot = Stack(children=[${assignedVars.join(', ')}], gap=4)`;
+      extractedCode += `\nroot = Stack([${assignedVars.join(', ')}], 4)`;
     }
 
     console.log("[OpenUI] Extracted Code:", extractedCode);

@@ -52,15 +52,17 @@ export const TagDef = defineComponent({
   )
 });
 
+const getStackProps = () => z.object({
+  children: z.any().describe("The components to stack"),
+  gap: z.coerce.number().optional().default(4),
+  direction: z.enum(["row", "column"]).optional().default("column"),
+  className: z.string().optional()
+}) as any;
+
 export const StackDef = defineComponent({
   name: "Stack",
   description: "A layout container that stacks children vertically or horizontally.",
-  props: z.object({
-    children: z.any().describe("The components to stack"),
-    gap: z.coerce.number().optional().default(4),
-    direction: z.enum(["row", "column"]).optional().default("column"),
-    className: z.string().optional()
-  }) as any,
+  props: getStackProps(),
   component: ({ props, renderNode }: any) => (
     <Stack gap={props.gap} direction={props.direction} className={props.className}>
       {renderNode(props.children)}
@@ -82,39 +84,49 @@ export const CardDef = defineComponent({
   )
 });
 
+const getTextProps = () => z.object({
+  content: z.string(),
+  variant: z.enum(["body", "heading", "label"]).optional().default("body"),
+  className: z.string().optional()
+}) as any;
+
 export const TextDef = defineComponent({
   name: "Text",
   description: "Renders formatted text content.",
-  props: z.object({
-    content: z.string(),
-    variant: z.enum(["body", "heading", "label"]).optional().default("body"),
-    className: z.string().optional()
-  }) as any,
+  props: getTextProps(),
   component: ({ props }: any) => <TextContent {...props} />
 });
 
 // Alias for TextContent
-export const TextContentDef = { ...TextDef, name: "TextContent" };
+export const TextContentDef = defineComponent({
+  name: "TextContent",
+  description: "Renders formatted text content.",
+  props: getTextProps(),
+  component: ({ props }: any) => <TextContent {...props} />
+});
 
-export const VStackDef = {
-  ...StackDef,
+export const VStackDef = defineComponent({
   name: "VStack",
+  description: "A layout container that stacks children vertically.",
+  props: getStackProps(),
   component: ({ props, renderNode }: any) => (
     <Stack gap={props.gap} direction="column" className={props.className}>
       {renderNode(props.children)}
     </Stack>
   )
-};
+});
 
-export const HStackDef = {
-  ...StackDef,
+export const HStackDef = defineComponent({
   name: "HStack",
+  description: "A layout container that stacks children horizontally.",
+  props: getStackProps(),
   component: ({ props, renderNode }: any) => (
     <Stack gap={props.gap} direction="row" className={props.className}>
       {renderNode(props.children)}
     </Stack>
   )
-};
+});
+
 
 /* ── Library Initialization ────────────────────────────────── */
 

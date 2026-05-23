@@ -101,6 +101,7 @@ function deserializeState(rawState: Record<string, unknown>): Partial<SettingsSt
     if ((result as any).providerParams === null) delete (result as any).providerParams;
     if ((result as any).chatPlugins === null) delete (result as any).chatPlugins;
     if ((result as any).toolSettings === null) delete (result as any).toolSettings;
+    if ((result as any).customProviders === null) delete (result as any).customProviders;
   }
 
   return result;

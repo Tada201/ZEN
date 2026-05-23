@@ -155,6 +155,16 @@ export function SettingsContent({
 
   const theme = useZenTheme();
 
+/**
+ * Parse a "tools.permission.toolId.subKey" dot-key and
+ * return the toolId and subKey (or null if not a permission key).
+ */
+function parseToolPermissionKey(key: string): { toolId: string; subKey: string } | null {
+  const match = key.match(/^tools\.permission\.([^.]+)\.(.+)$/);
+  if (!match) return null;
+  return { toolId: match[1], subKey: match[2] };
+}
+
   const handleUpdate = useCallback(
     (key: string, value: string) => {
       // Special case: ui.animations maps to reducedMotion (inverted)
@@ -164,6 +174,18 @@ export function SettingsContent({
         theme.setMotionEnabled(enabled);
         return;
       }
+
+      // Dynamic tool permission keys → store in toolSettings
+      const toolPerm = parseToolPermissionKey(key);
+      if (toolPerm) {
+        const current = (store as any).toolSettings || {};
+        store.updateSetting("toolSettings" as any, {
+          ...current,
+          [key]: value,
+        } as never);
+        return;
+      }
+
       const storeField = dotKeyToStoreField(key);
       const coerced = coerceBridgeValue(key, value);
       store.updateSetting(storeField as keyof typeof store, coerced as never);

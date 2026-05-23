@@ -1,4 +1,4 @@
-use tauri::State;
+use tauri::{Emitter, State};
 use crate::commands::AppState;
 use crate::error::ZenResult;
 use crate::agent::swarm::SwarmState;
@@ -184,23 +184,96 @@ pub async fn orchestrator_get_status(state: State<'_, AppState>) -> ZenResult<se
     }))
 }
 
+/// Execute a tool call initiated from the OpenUI canvas.
+///
+/// Routes through the full v2 tool permission pipeline (check_permission +
+/// approval flow) with the real chat session id. Rejects calls that cannot
+/// be tied back to a real active session.
 #[tauri::command]
 pub async fn run_tool_command(
     state: tauri::State<'_, AppState>,
     app: tauri::AppHandle,
     tool_name: String,
     args: serde_json::Value,
+    chat_id: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    let mut registry = state.tools.write().await;
-    let chat_id = "canvas-dynamic-execution".to_string();
+    let chat_id = chat_id
+        .filter(|id| !id.is_empty() && id != "canvas-dynamic-execution")
+        .ok_or_else(|| "run_tool_command requires a valid chat_id (no active session)".to_string())?;
+
+    let tool_call_id = format!("openui-{}", uuid::Uuid::new_v4());
     let tool_call = crate::tools::ToolCall {
-        id: format!("dynamic-{}", uuid::Uuid::new_v4()),
+        id: tool_call_id.clone(),
         name: tool_name.clone(),
-        arguments: args,
+        arguments: args.clone(),
     };
-    
-    match registry.execute_authorized(app, chat_id, tool_call).await {
+
+    let permission_result = {
+        let mut registry = state.tools.write().await;
+        registry.execute_with_permission(app.clone(), chat_id.clone(), tool_call).await
+    };
+
+    match permission_result {
         Ok(output) => Ok(output.content),
+        Err(crate::tools::ToolError::AwaitingConfirmation { context }) => {
+            let (tx, rx) = tokio::sync::oneshot::channel::<bool>();
+
+            {
+                let mut approvals = state.pending_tool_approvals.lock().await;
+                approvals.insert(tool_call_id.clone(), tx);
+            }
+
+            let _ = app.emit("chat:message", serde_json::json!({
+                "chat_id": chat_id,
+                "id": uuid::Uuid::new_v4().to_string(),
+                "timestamp": chrono::Utc::now().to_rfc3339(),
+                "role": "assistant",
+                "content": "",
+                "kind": "approval_request",
+                "metadata": {
+                    "kind": "approval_request",
+                    "approval_request": {
+                        "tool_call_id": tool_call_id,
+                        "tool_name": tool_name,
+                        "arguments": args,
+                        "chat_id": chat_id,
+                        "context": context
+                    }
+                }
+            }));
+
+            let approved = match tokio::time::timeout(
+                tokio::time::Duration::from_secs(120),
+                rx,
+            ).await {
+                Ok(Ok(approved)) => approved,
+                Ok(Err(_)) => {
+                    let mut approvals = state.pending_tool_approvals.lock().await;
+                    approvals.remove(&tool_call_id);
+                    false
+                }
+                Err(_) => {
+                    let mut approvals = state.pending_tool_approvals.lock().await;
+                    approvals.remove(&tool_call_id);
+                    false
+                }
+            };
+
+            if approved {
+                let confirmed_call = crate::tools::ToolCall {
+                    id: tool_call_id,
+                    name: tool_name,
+                    arguments: args,
+                };
+                let mut registry = state.tools.write().await;
+                match registry.execute_authorized(app, chat_id, confirmed_call).await {
+                    Ok(output) => Ok(output.content),
+                    Err(e) => Err(e.to_string()),
+                }
+            } else {
+                Err("Tool execution denied by user".to_string())
+            }
+        }
         Err(e) => Err(e.to_string()),
     }
 }
