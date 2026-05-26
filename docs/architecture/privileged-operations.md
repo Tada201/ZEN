@@ -30,11 +30,14 @@ Status: mostly routed.
 - MCP, deep research, agent execution, and OpenUI tool commands are expected to
   route through `ToolService`.
 - Quality gates check for direct registry execution and direct tool execution.
+- `src-tauri/tool-coverage.json` records coverage or Phase 3.5 exemptions for
+  every medium/high/critical tool id in `default_tool_risk`; `quality:fast`
+  fails if a privileged tool is added without a coverage entry.
 
 Remaining work:
 
 - Keep collapsing legacy `agent::tools` wrappers into v2 tools when touched.
-- Add tests or exemptions for every production tool that remains privileged.
+- Replace Phase 3.5 legacy exemptions with v2 tool tests as tools are migrated.
 
 ### Terminal Processes
 

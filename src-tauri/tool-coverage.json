@@ -1,0 +1,121 @@
+[
+  {
+    "id": "run_command",
+    "risk": "Critical",
+    "owner": "backend/terminal",
+    "status": "phase35-legacy-exemption",
+    "evidence": "Routes through ToolService::execute_agent_tool and terminal permission policy; legacy agent::tools wrapper retained until v2 migration."
+  },
+  {
+    "id": "terminal",
+    "risk": "Critical",
+    "owner": "backend/terminal",
+    "status": "phase35-legacy-exemption",
+    "evidence": "Interactive terminal commands route through TerminalService and SecurityService; legacy tool id remains for compatibility."
+  },
+  {
+    "id": "web_fetch",
+    "risk": "High",
+    "owner": "backend/tools",
+    "status": "lightweight-policy-gate",
+    "evidence": "policy-tests cover localhost/SSRF hardcoded denial; tool implementation validates public URLs and bounded response bodies."
+  },
+  {
+    "id": "write_file",
+    "risk": "High",
+    "owner": "backend/filesystem",
+    "status": "phase35-legacy-exemption",
+    "evidence": "Legacy agent::tools filesystem surface retained; must route through ToolService permission checks until v2 migration."
+  },
+  {
+    "id": "edit_file",
+    "risk": "High",
+    "owner": "backend/filesystem",
+    "status": "phase35-legacy-exemption",
+    "evidence": "Legacy agent::tools filesystem surface retained; must route through ToolService permission checks until v2 migration."
+  },
+  {
+    "id": "spawn_agent",
+    "risk": "High",
+    "owner": "backend/agent",
+    "status": "phase35-legacy-exemption",
+    "evidence": "Legacy agent spawning tool retained for compatibility; execution must stay behind ToolService permission checks."
+  },
+  {
+    "id": "delegate_to_agent",
+    "risk": "High",
+    "owner": "backend/agent",
+    "status": "phase35-legacy-exemption",
+    "evidence": "Delegation compatibility tool retained; execution must stay behind ToolService permission checks."
+  },
+  {
+    "id": "file_write",
+    "risk": "High",
+    "owner": "backend/filesystem",
+    "status": "phase35-legacy-exemption",
+    "evidence": "Compatibility alias for write-capable filesystem behavior; must stay covered by ToolService policy."
+  },
+  {
+    "id": "web_search",
+    "risk": "Medium",
+    "owner": "backend/search",
+    "status": "documented-service-owned",
+    "evidence": "Network search is service-owned; credentials read through SecretService for provider-backed paths."
+  },
+  {
+    "id": "read_document_content",
+    "risk": "Medium",
+    "owner": "backend/filesystem",
+    "status": "documented-service-owned",
+    "evidence": "Document reads are workspace/user-selected bounded paths; retained as medium risk due file read capability."
+  },
+  {
+    "id": "geocode_search",
+    "risk": "Medium",
+    "owner": "backend/gtsm",
+    "status": "documented-service-owned",
+    "evidence": "GTSM/geocoding network calls are service-owned and tracked in privileged-operations.md."
+  },
+  {
+    "id": "reverse_geocode",
+    "risk": "Medium",
+    "owner": "backend/gtsm",
+    "status": "documented-service-owned",
+    "evidence": "GTSM/geocoding network calls are service-owned and tracked in privileged-operations.md."
+  },
+  {
+    "id": "create_geofence",
+    "risk": "Medium",
+    "owner": "backend/gtsm",
+    "status": "documented-service-owned",
+    "evidence": "Geofence operations are service-owned; retained as medium risk due operational-map side effects."
+  },
+  {
+    "id": "calculate_route",
+    "risk": "Medium",
+    "owner": "backend/gtsm",
+    "status": "documented-service-owned",
+    "evidence": "Routing network calls are service-owned and tracked in privileged-operations.md."
+  },
+  {
+    "id": "draw",
+    "risk": "Medium",
+    "owner": "backend/canvas",
+    "status": "documented-service-owned",
+    "evidence": "Canvas mutations are bounded to app graph sessions; retained as medium due generated UI side effects."
+  },
+  {
+    "id": "activate_3d_globe",
+    "risk": "Medium",
+    "owner": "backend/gtsm",
+    "status": "documented-service-owned",
+    "evidence": "Operational-map activation changes app state but does not perform direct host I/O."
+  },
+  {
+    "id": "handoff_to_agent",
+    "risk": "Medium",
+    "owner": "backend/agent",
+    "status": "phase35-legacy-exemption",
+    "evidence": "Agent handoff compatibility tool retained; execution must stay behind ToolService permission checks."
+  }
+]

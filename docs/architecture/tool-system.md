@@ -51,6 +51,8 @@ Required:
 - execution through `ToolService`
 - allowed and denied audit behavior
 - tests or documented exemption
+- coverage entry in `src-tauri/tool-coverage.json` if risk is medium, high,
+  or critical
 
 Recommended sequence:
 
@@ -116,4 +118,5 @@ Before merging a tool change, verify:
 - the tool appears in `ToolManager` discovery if user-facing
 - risk level is conservative by default
 - privileged actions have allow and deny tests
+- medium/high/critical tools are listed in `src-tauri/tool-coverage.json`
 - audit event content excludes secrets and large payloads

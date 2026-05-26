@@ -65,6 +65,57 @@ Assert-NoMatches `
     "Backend command reads secret-like keys through SettingsService" `
     "rg 'settings_manager\.get\([^`n]*(api_key|token|secret|credential|password)' src-tauri/src/commands src-tauri/src/agent src-tauri/src/tools src-tauri/src/search -n"
 
+$coveragePath = "src-tauri/tool-coverage.json"
+if (-not (Test-Path $coveragePath)) {
+    Fail "Privileged tool coverage manifest missing: $coveragePath"
+}
+
+$coverage = Get-Content $coveragePath -Raw | ConvertFrom-Json
+$coverageById = @{}
+foreach ($entry in @($coverage)) {
+    foreach ($field in @("id", "risk", "owner", "status", "evidence")) {
+        if (-not $entry.$field) {
+            Fail "Privileged tool coverage entry is missing '$field'"
+        }
+    }
+    if ($coverageById.ContainsKey($entry.id)) {
+        Fail "Duplicate privileged tool coverage entry '$($entry.id)'"
+    }
+    if ($entry.risk -notin @("Medium", "High", "Critical")) {
+        Fail "Privileged tool coverage entry '$($entry.id)' has invalid risk '$($entry.risk)'"
+    }
+    $coverageById[$entry.id] = $entry
+}
+
+$toolsMod = Get-Content "src-tauri/src/tools/mod.rs" -Raw
+$defaultRiskStart = $toolsMod.IndexOf("pub fn default_tool_risk")
+if ($defaultRiskStart -lt 0) {
+    Fail "default_tool_risk not found"
+}
+$defaultRiskEnd = $toolsMod.IndexOf("pub fn init_tool_registry", $defaultRiskStart)
+if ($defaultRiskEnd -lt 0) {
+    Fail "init_tool_registry not found after default_tool_risk"
+}
+$defaultRiskBody = $toolsMod.Substring($defaultRiskStart, $defaultRiskEnd - $defaultRiskStart)
+
+$riskMatches = [regex]::Matches(
+    $defaultRiskBody,
+    '(?s)(?<ids>(?:"[^"]+"\s*\|?\s*)+)=>\s*RiskLevel::(?<risk>Medium|High|Critical)'
+)
+foreach ($match in $riskMatches) {
+    $risk = $match.Groups["risk"].Value
+    $ids = [regex]::Matches($match.Groups["ids"].Value, '"([^"]+)"') |
+        ForEach-Object { $_.Groups[1].Value }
+    foreach ($id in $ids) {
+        if (-not $coverageById.ContainsKey($id)) {
+            Fail "Privileged tool '$id' with risk '$risk' is missing from $coveragePath"
+        }
+        if ($coverageById[$id].risk -ne $risk) {
+            Fail "Privileged tool '$id' has coverage risk '$($coverageById[$id].risk)' but default_tool_risk says '$risk'"
+        }
+    }
+}
+
 $settingsCommands = Get-Content "src-tauri/src/commands/settings.rs" -Raw
 $getAllStart = $settingsCommands.IndexOf("pub async fn get_all_settings")
 if ($getAllStart -ge 0) {
