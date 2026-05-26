@@ -38,10 +38,13 @@ Remaining work:
 
 ### Terminal Processes
 
-Status: partially centralized.
+Status: mostly centralized.
 
 - `src-tauri/src/terminal/mod.rs` uses `ProcessManager` for session cleanup.
-- `src-tauri/src/services/terminal.rs` still owns PTY session behavior.
+- `src-tauri/src/services/terminal.rs` owns command-facing spawn/write/kill/resize
+  workflow, workspace validation, security evaluation, and audit logging.
+- `src-tauri/src/commands/terminal.rs` is now a thin Tauri adapter over
+  `TerminalService`.
 
 Remaining work:
 
