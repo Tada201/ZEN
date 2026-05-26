@@ -20,6 +20,7 @@ mod memory_bootstrap;
 mod tool_actions;
 mod tool_dispatch;
 mod tool_pipeline;
+mod turn_persistence;
 
 // ── Public re-exports ────────────────────────────────────────────────────────
 

@@ -6,7 +6,7 @@ use super::tool_pipeline::{
 use super::Runner;
 use crate::agent::event_bus::{AgentEvent, ChatStatusPayload, ToolStartPayload};
 use crate::agent::hooks::HookDecision;
-use crate::agent::types::{ToolCall, ToolResult};
+use crate::agent::types::{Agent, ToolCall, ToolResult};
 use crate::tools::permission::PermissionDecision;
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -14,6 +14,31 @@ use tauri::Manager;
 use tokio_util::sync::CancellationToken;
 
 impl Runner {
+    pub(super) async fn authorized_tools_for_agent(
+        &self,
+        current_agent: &Agent,
+        tools_enabled: bool,
+    ) -> (Vec<String>, Vec<crate::tools::ToolInfo>) {
+        if !tools_enabled {
+            return (Vec::new(), Vec::new());
+        }
+
+        let authorized_tool_ids = self
+            .tool_registry
+            .read()
+            .await
+            .list()
+            .into_iter()
+            .filter(|t| current_agent.tool_ids.contains(&t.id().to_string()))
+            .map(|t| t.id().to_string())
+            .collect();
+
+        (
+            authorized_tool_ids,
+            crate::tools::manager::meta_tool_definitions(),
+        )
+    }
+
     /// Execute tool calls with P3 lifecycle hooks (pre/post).
     /// For high-risk tools like `run_command`, emits an authorization request
     /// and waits for user approval before executing.

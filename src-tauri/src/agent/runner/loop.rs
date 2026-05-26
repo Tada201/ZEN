@@ -1,12 +1,11 @@
 use super::actions::{emit_action_only, persist_and_emit_action};
 use super::config::RunConfig;
-use super::helpers::{
-    compact_conversation, compact_conversation_token_aware, estimate_conversation_tokens,
-    generate_handoff_summary, parse_file_changes, parse_text_tool_calls,
-};
+use super::helpers::{generate_handoff_summary, parse_file_changes, parse_text_tool_calls};
 use super::memory_bootstrap::{
-    cached_recall_context, load_initial_conversation, load_memory_run_settings,
+    cached_recall_context, compact_context_if_needed, load_initial_conversation,
+    load_memory_run_settings,
 };
+use super::turn_persistence::{save_assistant_message, AssistantMessageSave};
 use crate::agent::cache::ToolCache;
 use crate::agent::event_bus::{
     AgentEvent, ChatChunkPayload, ChatDonePayload, ChatErrorPayload, ChatStatusPayload,
@@ -197,7 +196,6 @@ impl Runner {
 
                 // Save partial content to database if available
                 if let Some(ref db) = self.db_pool {
-                    // Try to find the most recent content from conversation or response
                     let partial_text = if !accumulated_commentary.is_empty() {
                         accumulated_commentary.clone()
                     } else {
@@ -208,50 +206,19 @@ impl Runner {
                             .unwrap_or_else(|| "Agent run cancelled.".to_string())
                     };
 
-                    let save_res = if let Some(ref msg_id) = assistant_message_id {
-                        queries::update_message(
-                            db,
-                            msg_id,
-                            &chat_id,
-                            &partial_text,
-                            false, // is_complete = false
-                            Some(total_tokens_in),
-                            Some(total_tokens_out),
-                            None,
-                        )
-                        .await
-                    } else {
-                        queries::add_message(
-                            db,
-                            &chat_id,
-                            None,
-                            "assistant",
-                            &partial_text,
-                            Some(&model),
-                            false, // is_complete = false
-                            None,
-                            None,
-                            None,
-                            None,
-                            Some(total_tokens_in),
-                            Some(total_tokens_out),
-                            None,
-                            None,
-                        )
-                        .await
-                        .map(|msg| {
-                            assistant_message_id = Some(msg.id);
-                        })
-                    };
-
-                    if let Err(e) = save_res {
-                        tracing::error!(
-                            "Failed to save partial assistant message to SQLite: {:?}",
-                            e
-                        );
-                    } else {
-                        message_persisted = true;
-                    }
+                    message_persisted |= save_assistant_message(AssistantMessageSave {
+                        db,
+                        chat_id: &chat_id,
+                        model: &model,
+                        message_id: &mut assistant_message_id,
+                        content: &partial_text,
+                        is_complete: false,
+                        tokens_in: Some(total_tokens_in),
+                        tokens_out: Some(total_tokens_out),
+                        tool_calls: None,
+                        error_context: "Failed to save partial assistant message to SQLite",
+                    })
+                    .await;
                 }
 
                 self.trigger_background_embedding(&chat_id);
@@ -301,50 +268,19 @@ impl Runner {
 
                 // Save max iterations reached assistant response to SQLite database
                 if let Some(ref db) = self.db_pool {
-                    let save_res = if let Some(ref msg_id) = assistant_message_id {
-                        queries::update_message(
-                            db,
-                            msg_id,
-                            &chat_id,
-                            &accumulated_commentary,
-                            true, // is_complete = true
-                            Some(total_tokens_in),
-                            Some(total_tokens_out),
-                            None,
-                        )
-                        .await
-                    } else {
-                        queries::add_message(
-                            db,
-                            &chat_id,
-                            None,
-                            "assistant",
-                            &accumulated_commentary,
-                            Some(&model),
-                            true, // is_complete = true
-                            None,
-                            None,
-                            None,
-                            None,
-                            Some(total_tokens_in),
-                            Some(total_tokens_out),
-                            None,
-                            None,
-                        )
-                        .await
-                        .map(|msg| {
-                            assistant_message_id = Some(msg.id);
-                        })
-                    };
-
-                    if let Err(e) = save_res {
-                        tracing::error!(
-                            "Failed to save max iterations assistant message to SQLite: {:?}",
-                            e
-                        );
-                    } else {
-                        message_persisted = true;
-                    }
+                    message_persisted |= save_assistant_message(AssistantMessageSave {
+                        db,
+                        chat_id: &chat_id,
+                        model: &model,
+                        message_id: &mut assistant_message_id,
+                        content: &accumulated_commentary,
+                        is_complete: true,
+                        tokens_in: Some(total_tokens_in),
+                        tokens_out: Some(total_tokens_out),
+                        tool_calls: None,
+                        error_context: "Failed to save max iterations assistant message to SQLite",
+                    })
+                    .await;
                 }
 
                 // Emit completion event to unlock the chat UI
@@ -383,50 +319,12 @@ impl Runner {
             }));
 
             // ── Context compaction (token-aware, fixes #23) ──
-            let current_tokens = estimate_conversation_tokens(&conversation);
-            if current_tokens > run_config.max_context_tokens {
-                // Aggressive compaction when approaching hard limit
-                tracing::warn!(
-                    "Context at {} tokens – aggressive compaction",
-                    current_tokens
-                );
-                compact_conversation_token_aware(
-                    &mut conversation,
-                    8,
-                    run_config.max_context_tokens / 2,
-                );
-            } else if summarization_enabled
-                && (current_tokens > run_config.compaction_token_threshold
-                    || conversation.len() > run_config.compaction_threshold)
-            {
-                // Gentle compaction
-                compact_conversation(&mut conversation, 10);
-            }
+            compact_context_if_needed(&mut conversation, &run_config, summarization_enabled);
 
             // ── Build authorized tools for current agent ──
-            // If tools are globally disabled, present an empty tool list so the LLM
-            // receives no tool definitions and cannot call any tools.
-            // With the meta-tool pattern, we inject only 3 meta-tools (tool_list,
-            // tool_info, tool_exec) instead of all individual tool schemas.
-            // The LLM discovers tools dynamically via tool_list / tool_info.
-            let authorized_tool_ids: Vec<String> = if run_config.tools_enabled {
-                self.tool_registry
-                    .read()
-                    .await
-                    .list()
-                    .into_iter()
-                    .filter(|t| current_agent.tool_ids.contains(&t.id().to_string()))
-                    .map(|t| t.id().to_string())
-                    .collect()
-            } else {
-                Vec::new()
-            };
-
-            let meta_tools: Vec<crate::tools::ToolInfo> = if run_config.tools_enabled {
-                crate::tools::manager::meta_tool_definitions()
-            } else {
-                Vec::new()
-            };
+            let (authorized_tool_ids, meta_tools) = self
+                .authorized_tools_for_agent(&current_agent, run_config.tools_enabled)
+                .await;
 
             // ── Build system prompt via middleware chain (D3.2) ──
             let app_inner = self.app.clone();
@@ -652,49 +550,19 @@ impl Runner {
 
                 // Save final completed assistant response to SQLite database
                 if let Some(ref db) = self.db_pool {
-                    let save_res = if let Some(ref msg_id) = assistant_message_id {
-                        queries::update_message(
-                            db,
-                            msg_id,
-                            &chat_id,
-                            &accumulated_commentary,
-                            true, // is_complete = true
-                            Some(total_tokens_in),
-                            Some(total_tokens_out),
-                            None,
-                        )
-                        .await
-                    } else {
-                        queries::add_message(
-                            db,
-                            &chat_id,
-                            None,
-                            "assistant",
-                            &accumulated_commentary,
-                            Some(&model),
-                            true, // is_complete = true
-                            None,
-                            None,
-                            None,
-                            None,
-                            Some(total_tokens_in),
-                            Some(total_tokens_out),
-                            None,
-                            None,
-                        )
-                        .await
-                        .map(|msg| {
-                            assistant_message_id = Some(msg.id);
-                        })
-                    };
-                    if let Err(e) = save_res {
-                        tracing::error!(
-                            "Failed to save final assistant message to SQLite: {:?}",
-                            e
-                        );
-                    } else {
-                        message_persisted = true;
-                    }
+                    message_persisted |= save_assistant_message(AssistantMessageSave {
+                        db,
+                        chat_id: &chat_id,
+                        model: &model,
+                        message_id: &mut assistant_message_id,
+                        content: &accumulated_commentary,
+                        is_complete: true,
+                        tokens_in: Some(total_tokens_in),
+                        tokens_out: Some(total_tokens_out),
+                        tool_calls: None,
+                        error_context: "Failed to save final assistant message to SQLite",
+                    })
+                    .await;
                 }
 
                 // Emit completion event to unlock the chat UI
@@ -764,45 +632,19 @@ impl Runner {
 
             // Save intermediate commentary & tool calls to DB (fixes #22)
             if let Some(ref db) = self.db_pool {
-                // Use is_complete = false for intermediate turn commentary
-                let save_res = if let Some(ref msg_id) = assistant_message_id {
-                    queries::update_message(
-                        db,
-                        msg_id,
-                        &chat_id,
-                        &accumulated_commentary,
-                        false, // is_complete = false
-                        None,
-                        None,
-                        serialized_tool_calls.as_deref(),
-                    )
-                    .await
-                } else {
-                    queries::add_message(
-                        db,
-                        &chat_id,
-                        None,
-                        "assistant",
-                        &accumulated_commentary,
-                        Some(&model),
-                        false, // is_complete = false
-                        serialized_tool_calls.as_deref(),
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None, // kind
-                        None, // metadata
-                    )
-                    .await
-                    .map(|msg| {
-                        assistant_message_id = Some(msg.id);
-                    })
-                };
-                if save_res.is_ok() {
-                    message_persisted = true;
-                }
+                message_persisted |= save_assistant_message(AssistantMessageSave {
+                    db,
+                    chat_id: &chat_id,
+                    model: &model,
+                    message_id: &mut assistant_message_id,
+                    content: &accumulated_commentary,
+                    is_complete: false,
+                    tokens_in: None,
+                    tokens_out: None,
+                    tool_calls: serialized_tool_calls.as_deref(),
+                    error_context: "Failed to save intermediate assistant message to SQLite",
+                })
+                .await;
             }
 
             conversation.push(ChatMessage {

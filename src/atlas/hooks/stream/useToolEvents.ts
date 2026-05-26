@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
-import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import type { UnlistenFn } from "@tauri-apps/api/event";
+import { listenAppEvent } from "@/api/events";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { Message, ToolCall } from "../../components/chat/types";
 
@@ -15,7 +16,7 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
       unlistenRefs.current.forEach(u => u());
       unlistenRefs.current = [];
 
-      const unlistenToolStart = await listen<any>("tool:start", (event) => {
+      const unlistenToolStart = await listenAppEvent("tool:start", (event) => {
         const chatId = event.payload.chat_id;
         if (!chatId) return;
 
@@ -77,7 +78,7 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
         });
       });
 
-      const unlistenToolComplete = await listen<any>("tool:complete", (event) => {
+      const unlistenToolComplete = await listenAppEvent("tool:complete", (event) => {
         const chatId = event.payload.chat_id;
         if (!chatId) return;
 
@@ -94,17 +95,18 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
           const target = prev[targetIdx];
 
           const updated = { ...target };
+          const toolStatus: ToolCall["status"] = event.payload.status === "success" ? "completed" : "error";
           updated.toolCalls = (updated.toolCalls || []).map(tc =>
             tc.id === event.payload.tool_call_id
               ? {
                   ...tc,
-                  status: event.payload.status === "success" ? "completed" : "error" as any,
+                  status: toolStatus,
                   output: event.payload.output,
                   durationMs: event.payload.duration_ms,
                   attempts: [
                     ...(tc.attempts || []),
                     {
-                      status: event.payload.status === "success" ? "completed" : "error" as any,
+                      status: toolStatus,
                       durationMs: event.payload.duration_ms,
                       timestamp: Date.now(),
                     },
@@ -120,13 +122,13 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
                     ...s,
                     toolCall: {
                       ...s.toolCall!,
-                      status: event.payload.status === "success" ? "completed" : "error" as any,
+                      status: toolStatus,
                       output: event.payload.output,
                       durationMs: event.payload.duration_ms,
                       attempts: [
                         ...(s.toolCall!.attempts || []),
                         {
-                          status: event.payload.status === "success" ? "completed" : "error" as any,
+                          status: toolStatus,
                           durationMs: event.payload.duration_ms,
                           timestamp: Date.now(),
                         },

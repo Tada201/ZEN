@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
-import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import type { UnlistenFn } from "@tauri-apps/api/event";
+import { listenAppEvent } from "@/api/events";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { Message } from "../../components/chat/types";
 
@@ -15,7 +16,7 @@ export function useArtifactEvents({ resetHeartbeatTimeout }: UseArtifactEventsPr
       unlistenRefs.current.forEach(u => u());
       unlistenRefs.current = [];
 
-      const unlistenArtifactStart = await listen<any>("artifact:start", (event) => {
+      const unlistenArtifactStart = await listenAppEvent("artifact:start", (event) => {
         const chatId = event.payload.chat_id;
         if (!chatId) return;
 
@@ -26,7 +27,7 @@ export function useArtifactEvents({ resetHeartbeatTimeout }: UseArtifactEventsPr
 
           const updated = { ...last };
           updated.artifact = {
-            type: event.payload.artifact_type as any,
+            type: event.payload.artifact_type,
             title: event.payload.title,
             language: event.payload.language,
             content: ""
@@ -38,7 +39,7 @@ export function useArtifactEvents({ resetHeartbeatTimeout }: UseArtifactEventsPr
         });
       });
 
-      const unlistenArtifactDelta = await listen<any>("artifact:delta", (event) => {
+      const unlistenArtifactDelta = await listenAppEvent("artifact:delta", (event) => {
         const chatId = event.payload.chat_id;
         if (!chatId) return;
 
@@ -59,7 +60,7 @@ export function useArtifactEvents({ resetHeartbeatTimeout }: UseArtifactEventsPr
         });
       });
 
-      const unlistenArtifactComplete = await listen<any>("artifact:complete", (event) => {
+      const unlistenArtifactComplete = await listenAppEvent("artifact:complete", (event) => {
         const chatId = event.payload.chat_id;
         if (!chatId) return;
 

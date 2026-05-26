@@ -1,4 +1,7 @@
 use super::config::RunConfig;
+use super::helpers::{
+    compact_conversation, compact_conversation_token_aware, estimate_conversation_tokens,
+};
 use crate::db::models::ChatMessage;
 use crate::db::queries;
 use sqlx::SqlitePool;
@@ -114,4 +117,24 @@ pub(super) async fn cached_recall_context(
     let state = app.try_state::<crate::commands::AppState>()?;
     let guard = state.recall_cache.lock().await;
     guard.get(chat_id).map(|(block, _)| block.clone())
+}
+
+pub(super) fn compact_context_if_needed(
+    conversation: &mut Vec<ChatMessage>,
+    run_config: &RunConfig,
+    summarization_enabled: bool,
+) {
+    let current_tokens = estimate_conversation_tokens(conversation);
+    if current_tokens > run_config.max_context_tokens {
+        tracing::warn!(
+            "Context at {} tokens - aggressive compaction",
+            current_tokens
+        );
+        compact_conversation_token_aware(conversation, 8, run_config.max_context_tokens / 2);
+    } else if summarization_enabled
+        && (current_tokens > run_config.compaction_token_threshold
+            || conversation.len() > run_config.compaction_threshold)
+    {
+        compact_conversation(conversation, 10);
+    }
 }
