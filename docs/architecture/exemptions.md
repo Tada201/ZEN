@@ -31,13 +31,6 @@ Reason: Agent run loop still owns orchestration, memory loading, compaction, per
 Split or Fix Plan: Extract memory_bootstrap.rs, turn_persistence.rs, stream_accounting.rs, and loop_state.rs.
 Expires: Phase 5
 
-File: src-tauri/src/agent/tools/progressive.rs
-Owner: backend/tools
-Rule Exempted: Rust hard file-size limit
-Reason: Progressive tools include several unrelated tool implementations and metadata in one registry module.
-Split or Fix Plan: Split by domain into map, graph, research, memory, and UI activation tool modules.
-Expires: Phase 3.5
-
 File: src-tauri/src/agent/workflow.rs
 Owner: backend/agent
 Rule Exempted: Rust hard file-size limit
