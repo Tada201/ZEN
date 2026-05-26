@@ -18,7 +18,8 @@ use crate::agent::event_bus::{AgentEvent, EventBus};
 use crate::agent::instance::{AgentHealth, AgentInstance, AgentMetrics, AgentRole, AgentStatus};
 use crate::agent::task::{Task, TaskPriority, TaskStatus};
 use crate::agent::types::{Agent, ModelTier};
-use crate::tools::GlobalToolRegistry;
+use crate::services::ToolService;
+use crate::tools::ToolCall;
 use tauri::AppHandle;
 
 // ─── Topology Types ───
@@ -192,8 +193,8 @@ pub struct SwarmCoordinator {
     event_bus: Arc<EventBus>,
     /// Swarm event broadcast channel
     swarm_tx: broadcast::Sender<SwarmEvent>,
-    /// Tool registry for executing tools
-    tool_registry: GlobalToolRegistry,
+    /// Canonical tool service for policy-checked tool execution
+    tool_service: Arc<ToolService>,
 }
 
 impl SwarmCoordinator {
@@ -201,7 +202,7 @@ impl SwarmCoordinator {
     pub fn new(
         topology: SwarmTopology,
         event_bus: Arc<EventBus>,
-        tool_registry: GlobalToolRegistry,
+        tool_service: Arc<ToolService>,
     ) -> Self {
         let (swarm_tx, _) = broadcast::channel(256);
         Self {
@@ -209,7 +210,7 @@ impl SwarmCoordinator {
             agents: RwLock::new(HashMap::new()),
             event_bus,
             swarm_tx,
-            tool_registry,
+            tool_service,
         }
     }
 
@@ -378,13 +379,13 @@ impl SwarmCoordinator {
             .distribute_tasks(task_map.values().cloned().collect())
             .await;
 
-        let tool_registry = self.tool_registry.clone();
+        let tool_service = self.tool_service.clone();
         let mut handles = Vec::new();
 
         for assignment in assignments {
             let task_id = assignment.task_id.clone();
             let task = task_map.get(&task_id).cloned();
-            let tool_registry_clone = tool_registry.clone();
+            let tool_service_clone = tool_service.clone();
             let app_clone = app.clone();
             let chat_id_inner = chat_id.clone();
 
@@ -408,37 +409,42 @@ impl SwarmCoordinator {
                     if let (Some(tool_name), Some(tool_args), Some(_call_id)) =
                         (tool_name, tool_args, tool_call_id)
                     {
-                        // Execute tool via registry
-                        let registry = tool_registry_clone.read().await;
-                        if let Some(tool) = registry.get(&tool_name) {
-                            let tool_args_value = tool_args;
-                            let chat_id_for_tool = chat_id_inner.clone();
-                            match tool
-                                .execute(app_clone, chat_id_for_tool, tool_args_value)
-                                .await
-                            {
-                                Ok(result) => {
-                                    let duration_ms = start_time.elapsed().as_millis() as u64;
-                                    return TaskResult {
-                                        task_id,
-                                        agent_id: assignment.assigned_to,
-                                        success: true,
-                                        output: result.content.to_string(),
-                                        duration_ms,
-                                        error: None,
-                                    };
-                                }
-                                Err(e) => {
-                                    let duration_ms = start_time.elapsed().as_millis() as u64;
-                                    return TaskResult {
-                                        task_id,
-                                        agent_id: assignment.assigned_to,
-                                        success: false,
-                                        output: format!("Tool execution failed: {}", e),
-                                        duration_ms,
-                                        error: Some(e.to_string()),
-                                    };
-                                }
+                        let tool_call = ToolCall {
+                            id: format!("swarm-{}", uuid::Uuid::new_v4()),
+                            name: tool_name,
+                            arguments: tool_args,
+                        };
+
+                        match tool_service_clone
+                            .execute_non_interactive(
+                                app_clone,
+                                "swarm",
+                                chat_id_inner.clone(),
+                                tool_call,
+                            )
+                            .await
+                        {
+                            Ok(result) => {
+                                let duration_ms = start_time.elapsed().as_millis() as u64;
+                                return TaskResult {
+                                    task_id,
+                                    agent_id: assignment.assigned_to,
+                                    success: true,
+                                    output: result.to_string(),
+                                    duration_ms,
+                                    error: None,
+                                };
+                            }
+                            Err(e) => {
+                                let duration_ms = start_time.elapsed().as_millis() as u64;
+                                return TaskResult {
+                                    task_id,
+                                    agent_id: assignment.assigned_to,
+                                    success: false,
+                                    output: format!("Tool execution failed: {}", e),
+                                    duration_ms,
+                                    error: Some(e),
+                                };
                             }
                         }
                     }
@@ -822,6 +828,8 @@ mod tests {
     use super::*;
     use crate::agent::event_bus::EventBus;
     use crate::agent::task::TaskType;
+    use crate::services::SecurityService;
+    use crate::tools::ToolRegistry;
 
     fn test_agent() -> Agent {
         Agent {
@@ -836,11 +844,19 @@ mod tests {
         }
     }
 
+    fn test_tool_service() -> Arc<ToolService> {
+        Arc::new(ToolService::new(
+            Arc::new(RwLock::new(ToolRegistry::new())),
+            Arc::new(SecurityService::new()),
+            Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+        ))
+    }
+
     #[tokio::test]
     async fn test_spawn_agent() {
         let event_bus = Arc::new(EventBus::new(256));
-        let tool_registry = Arc::new(RwLock::new(crate::tools::ToolRegistry::new()));
-        let coordinator = SwarmCoordinator::new(SwarmTopology::default(), event_bus, tool_registry);
+        let coordinator =
+            SwarmCoordinator::new(SwarmTopology::default(), event_bus, test_tool_service());
 
         let result = coordinator.spawn_agent(test_agent()).await;
         assert!(result.is_ok());
@@ -852,8 +868,8 @@ mod tests {
     #[tokio::test]
     async fn test_terminate_agent() {
         let event_bus = Arc::new(EventBus::new(256));
-        let tool_registry = Arc::new(RwLock::new(crate::tools::ToolRegistry::new()));
-        let coordinator = SwarmCoordinator::new(SwarmTopology::default(), event_bus, tool_registry);
+        let coordinator =
+            SwarmCoordinator::new(SwarmTopology::default(), event_bus, test_tool_service());
 
         let agent = coordinator.spawn_agent(test_agent()).await.unwrap();
         let result = coordinator.terminate_agent(&agent.config.id).await;
@@ -866,8 +882,8 @@ mod tests {
     #[tokio::test]
     async fn test_task_distribution() {
         let event_bus = Arc::new(EventBus::new(256));
-        let tool_registry = Arc::new(RwLock::new(crate::tools::ToolRegistry::new()));
-        let coordinator = SwarmCoordinator::new(SwarmTopology::default(), event_bus, tool_registry);
+        let coordinator =
+            SwarmCoordinator::new(SwarmTopology::default(), event_bus, test_tool_service());
 
         // Spawn an agent
         let _ = coordinator.spawn_agent(test_agent()).await;
@@ -884,8 +900,8 @@ mod tests {
     #[tokio::test]
     async fn test_consensus_voting() {
         let event_bus = Arc::new(EventBus::new(256));
-        let tool_registry = Arc::new(RwLock::new(crate::tools::ToolRegistry::new()));
-        let coordinator = SwarmCoordinator::new(SwarmTopology::default(), event_bus, tool_registry);
+        let coordinator =
+            SwarmCoordinator::new(SwarmTopology::default(), event_bus, test_tool_service());
 
         // Spawn multiple agents
         let _ = coordinator.spawn_agent(test_agent()).await;

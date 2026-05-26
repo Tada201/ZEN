@@ -264,11 +264,11 @@ impl AppState {
                 tool_registry_v1.clone(),
                 tool_registry_v2.clone(),
             )),
-            tool_service,
+            tool_service: tool_service.clone(),
             swarm: Arc::new(SwarmCoordinator::new(
                 crate::agent::swarm::SwarmTopology::default(),
                 event_bus.clone(),
-                tool_registry_v2.clone(),
+                tool_service.clone(),
             )),
             orchestrator: InitState::new(),
             memory_backend: {

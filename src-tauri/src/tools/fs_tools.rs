@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::json;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
 use super::{permission::RiskLevel, Tool, ToolError, ToolOutput};
@@ -229,12 +230,13 @@ impl Tool for ReadDocumentTool {
             })?;
 
         let state = app.state::<AppState>();
+        let workspace = state.workspace_folder.read().await.clone();
         let pool = state.db().await.map_err(|e| ToolError::ExecutionFailed {
             message: format!("DB error: {}", e),
         })?;
 
         // 1. First try as direct absolute path
-        let mut target_path = std::path::PathBuf::from(&parsed_args.file_path);
+        let mut target_path = PathBuf::from(&parsed_args.file_path);
 
         // 2. If it doesn't exist, check if it's a known ingested document by filename or ID
         if !target_path.exists() {
@@ -244,16 +246,17 @@ impl Tool for ReadDocumentTool {
                     .find(|d| d.filename == parsed_args.file_path || d.id == parsed_args.file_path)
                 {
                     if let Some(doc_path) = doc.file_path {
-                        target_path = std::path::PathBuf::from(doc_path);
+                        target_path = PathBuf::from(doc_path);
                     }
                 }
             }
         }
 
-        // 3. If STILL not found, let's try assuming it's relative to the current working directory of the app
+        // 3. If STILL not found, try it relative to the active workspace.
         if !target_path.exists() {
-            if let Ok(cwd) = std::env::current_dir() {
-                let relative_path = cwd.join(&parsed_args.file_path);
+            if let Ok(relative_path) =
+                crate::workspace::resolve_workspace_path(&workspace, &parsed_args.file_path)
+            {
                 if relative_path.exists() {
                     target_path = relative_path;
                 }
@@ -268,6 +271,11 @@ impl Tool for ReadDocumentTool {
                 ),
             });
         }
+
+        let target_path = crate::workspace::validate_workspace_path(&workspace, &target_path)
+            .map_err(|e| ToolError::ExecutionFailed {
+                message: format!("Workspace violation: {}", e),
+            })?;
 
         let content = tokio::fs::read_to_string(&target_path).await.map_err(|e| {
             ToolError::ExecutionFailed {
@@ -353,6 +361,7 @@ impl Tool for GrepDocumentsTool {
             })?;
 
         let state = app.state::<AppState>();
+        let workspace = state.workspace_folder.read().await.clone();
         let pool = state.db().await.map_err(|e| ToolError::ExecutionFailed {
             message: format!("DB error: {}", e),
         })?;
@@ -371,9 +380,14 @@ impl Tool for GrepDocumentsTool {
 
         for doc in docs {
             if let Some(path_str) = doc.file_path {
-                let path = std::path::Path::new(&path_str);
+                let path = Path::new(&path_str);
                 if path.exists() {
-                    if let Ok(content) = tokio::fs::read_to_string(path).await {
+                    let Ok(path) = crate::workspace::validate_workspace_path(&workspace, path)
+                    else {
+                        continue;
+                    };
+
+                    if let Ok(content) = tokio::fs::read_to_string(&path).await {
                         let search_content = if parsed_args.case_sensitive.unwrap_or(false) {
                             content.clone()
                         } else {

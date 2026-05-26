@@ -1,14 +1,13 @@
 use serde_json::json;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::agent::event_bus::{AgentEvent, ChatDonePayload};
+use crate::commands::AppState;
 use crate::db::queries;
 use crate::llm::{ChatRequestConfig, LlmProvider};
-use crate::search::tool::WebSearchTool;
-use crate::tools::web_fetch::WebFetchTool;
-use crate::tools::Tool;
+use crate::tools::ToolCall;
 
 pub async fn run_deep_research(
     app: AppHandle,
@@ -75,13 +74,22 @@ pub async fn run_deep_research(
         &message_id,
     );
 
-    let search_tool = WebSearchTool;
-    let search_args = json!({"query": query});
-    let search_result = match search_tool
-        .execute(app.clone(), chat_id.clone(), search_args)
+    let state = app.state::<AppState>();
+    let search_result = match state
+        .tool_service
+        .execute_interactive(
+            app.clone(),
+            "deep_research",
+            chat_id.clone(),
+            ToolCall {
+                id: format!("deep-research-search-{}", uuid::Uuid::new_v4()),
+                name: "web_search".to_string(),
+                arguments: json!({"query": query.clone()}),
+            },
+        )
         .await
     {
-        Ok(output) => output,
+        Ok(content) => content,
         Err(e) => {
             error!("WebSearchTool execution failed: {}", e);
             emit_step(
@@ -101,11 +109,7 @@ pub async fn run_deep_research(
 
     // Extract URLs from search results
     let mut urls_to_fetch = Vec::new();
-    if let Some(results) = search_result
-        .content
-        .get("results")
-        .and_then(|r| r.as_array())
-    {
+    if let Some(results) = search_result.get("results").and_then(|r| r.as_array()) {
         for res in results.iter().take(3) {
             if let Some(url) = res.get("url").and_then(|u| u.as_str()) {
                 urls_to_fetch.push(url.to_string());
@@ -122,19 +126,28 @@ pub async fn run_deep_research(
             &message_id,
         );
 
-        let fetch_tool = WebFetchTool;
         for url in urls_to_fetch {
             if token.is_cancelled() {
                 emit_step("Research cancelled by user.", "completed", &message_id);
                 emit_chat_done(&app, &chat_id, "cancelled");
                 return;
             }
-            match fetch_tool
-                .execute(app.clone(), chat_id.clone(), json!({"url": url}))
+            match state
+                .tool_service
+                .execute_interactive(
+                    app.clone(),
+                    "deep_research",
+                    chat_id.clone(),
+                    ToolCall {
+                        id: format!("deep-research-fetch-{}", uuid::Uuid::new_v4()),
+                        name: "web_fetch".to_string(),
+                        arguments: json!({"url": url}),
+                    },
+                )
                 .await
             {
                 Ok(output) => {
-                    if let Some(content) = output.content.get("content").and_then(|c| c.as_str()) {
+                    if let Some(content) = output.get("content").and_then(|c| c.as_str()) {
                         fetched_contents
                             .push(format!("Source URL: {}\nContent:\n{}\n", url, content));
                     }
@@ -161,7 +174,7 @@ pub async fn run_deep_research(
     let user_prompt = format!(
         "User Query: {}\n\nSearch Summary:\n{}\n\nFetched Source Content:\n{}",
         query,
-        serde_json::to_string_pretty(&search_result.content).unwrap_or_default(),
+        serde_json::to_string_pretty(&search_result).unwrap_or_default(),
         fetched_contents.join("\n\n---\n\n")
     );
 
