@@ -1,20 +1,9 @@
 import { useEffect, useRef } from "react";
-import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import { type UnlistenFn } from "@tauri-apps/api/event";
+import { listenAppEvent, type AgentActionEventPayload } from "@/api/events";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { ActionMeta, Message, MessageKind, Step } from "../../components/chat/types";
 import { toast } from "@/lib/hooks/use-toast";
-
-type AgentActionPayload = {
-  chat_id?: string;
-  chatId?: string;
-  id?: string;
-  timestamp?: string;
-  role?: "user" | "assistant" | "system" | "tool";
-  kind?: string;
-  content?: string;
-  metadata?: any;
-  [key: string]: any;
-};
 
 const INLINE_ACTION_KINDS = new Set([
   "agent_handoff",
@@ -34,16 +23,17 @@ const INLINE_ACTION_KINDS = new Set([
   "task_failed",
 ]);
 
-function getNestedValue(obj: any, path: string[]): string | undefined {
-  let cur = obj;
+function getNestedValue(obj: Record<string, unknown> | undefined, path: string[]): string | undefined {
+  let cur: unknown = obj;
   for (const key of path) {
-    cur = cur?.[key];
+    if (!cur || typeof cur !== "object") return undefined;
+    cur = (cur as Record<string, unknown>)[key];
     if (cur === undefined || cur === null) return undefined;
   }
   return typeof cur === "string" && cur.trim() ? cur : undefined;
 }
 
-function getActionEventId(payload: AgentActionPayload, kind: string): string {
+function getActionEventId(payload: AgentActionEventPayload, kind: string): string {
   const metadata = payload.metadata || {};
   const toolName =
     metadata.toolCall?.toolName ||
@@ -104,7 +94,7 @@ function getActiveAssistantIndex(messages: Message[], preferredMessageId?: strin
   return -1;
 }
 
-function summarizeAction(payload: AgentActionPayload, kind: string): string {
+function summarizeAction(payload: AgentActionEventPayload, kind: string): string {
   if (payload.content) return payload.content;
   if (kind === "chat_status") return payload.message || "Agent status updated";
   if (kind === "orchestrator_progress") return payload.message || payload.phase || payload.status || "Orchestrator progress";
@@ -116,7 +106,7 @@ function summarizeAction(payload: AgentActionPayload, kind: string): string {
   return kind.replace(/_/g, " ");
 }
 
-function inferStatus(kind: string, payload: AgentActionPayload): Step["status"] {
+function inferStatus(kind: string, payload: AgentActionEventPayload): Step["status"] {
   const explicit = payload.metadata?.status || payload.status;
   const toolResultStatus = payload.metadata?.toolResult?.status || payload.metadata?.tool_result?.status;
   if (explicit === "error" || explicit === "failed") return "error";
@@ -128,8 +118,17 @@ function inferStatus(kind: string, payload: AgentActionPayload): Step["status"] 
   return "running";
 }
 
-function normalizeMetadata(kind: string, payload: AgentActionPayload): ActionMeta {
-  const metadata = { ...(payload.metadata || {}) };
+function normalizeMetadata(kind: string, payload: AgentActionEventPayload): ActionMeta {
+  const metadata = { ...(payload.metadata || {}) } as Record<string, unknown> & {
+    approvalRequest?: unknown;
+    approval_request?: unknown;
+    spawn?: unknown;
+    status?: unknown;
+    toolCall?: unknown;
+    tool_call?: unknown;
+    toolResult?: unknown;
+    tool_result?: unknown;
+  };
   if (metadata.approval_request && !metadata.approvalRequest) {
     metadata.approvalRequest = metadata.approval_request;
   }
@@ -170,10 +169,10 @@ function normalizeMetadata(kind: string, payload: AgentActionPayload): ActionMet
     metadata.progressPercent = payload.progressPercent ?? payload.progress_percent ?? payload.progress;
   }
   metadata.status = inferStatus(kind, payload) === "error" ? "error" : inferStatus(kind, payload) === "completed" ? "completed" : "running";
-  return metadata;
+  return metadata as ActionMeta;
 }
 
-function appendActionStep(chatId: string, payload: AgentActionPayload, kind: string) {
+function appendActionStep(chatId: string, payload: AgentActionEventPayload, kind: string) {
   if (!chatId) return;
   useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
     const eventId = getActionEventId(payload, kind);
@@ -240,16 +239,8 @@ export function useAgentEvents() {
       unlistenRefs.current.forEach(u => u());
       unlistenRefs.current = [];
 
-      const unlistenChatMessage = await listen<any>("chat:message", (event) => {
-        const payload = event.payload as {
-          chat_id: string;
-          id: string;
-          timestamp: string;
-          role: "user" | "assistant" | "system" | "tool";
-          kind?: string;
-          content: string;
-          metadata?: any;
-        };
+      const unlistenChatMessage = await listenAppEvent("chat:message", (event) => {
+        const payload = event.payload;
         const chatId = payload.chat_id;
         if (!chatId) return;
         const kind = payload.kind || "system";
@@ -269,81 +260,81 @@ export function useAgentEvents() {
             sessionId: chatId,
             role: payload.role,
             content: payload.content || "",
-            kind: payload.kind as any,
+            kind: payload.kind as MessageKind,
             status: "sent",
             createdAt: payload.timestamp ? new Date(payload.timestamp).getTime() : Date.now(),
-            metadata: payload.metadata,
+            metadata: payload.metadata as ActionMeta | undefined,
           };
 
           return [...prev, newMessage];
         });
       });
 
-      const unlistenOrchestratorProgress = await listen<any>("orchestrator:progress", (event) => {
-        const payload = event.payload as AgentActionPayload;
+      const unlistenOrchestratorProgress = await listenAppEvent("orchestrator:progress", (event) => {
+        const payload = event.payload;
         const chatId = payload.chat_id || payload.chatId;
         if (!chatId) return;
         appendActionStep(chatId, payload, "orchestrator_progress");
       });
 
-      const unlistenAgentSpawn = await listen<any>("agent:spawn", (event) => {
-        const payload = event.payload as AgentActionPayload;
+      const unlistenAgentSpawn = await listenAppEvent("agent:spawn", (event) => {
+        const payload = event.payload;
         const chatId = payload.chat_id || payload.chatId;
         if (!chatId) return;
         appendActionStep(chatId, payload, "agent_spawn");
       });
 
-      const unlistenAgentComplete = await listen<any>("agent:complete", (event) => {
-        const payload = event.payload as AgentActionPayload;
+      const unlistenAgentComplete = await listenAppEvent("agent:complete", (event) => {
+        const payload = event.payload;
         const chatId = payload.chat_id || payload.chatId;
         if (!chatId) return;
         appendActionStep(chatId, payload, "agent_complete");
       });
 
-      const unlistenAgentHandoff = await listen<any>("agent:handoff", (event) => {
-        const payload = event.payload as AgentActionPayload;
+      const unlistenAgentHandoff = await listenAppEvent("agent:handoff", (event) => {
+        const payload = event.payload;
         const chatId = payload.chat_id || payload.chatId;
         if (!chatId) return;
         appendActionStep(chatId, payload, "agent_handoff");
       });
 
-      const unlistenWorkflowStarted = await listen<any>("workflow:started", (event) => {
-        const payload = event.payload as AgentActionPayload;
+      const unlistenWorkflowStarted = await listenAppEvent("workflow:started", (event) => {
+        const payload = event.payload;
         const chatId = payload.chat_id || payload.chatId;
         if (chatId) appendActionStep(chatId, payload, "workflow_started");
       });
 
-      const unlistenWorkflowCompleted = await listen<any>("workflow:completed", (event) => {
-        const payload = event.payload as AgentActionPayload;
+      const unlistenWorkflowCompleted = await listenAppEvent("workflow:completed", (event) => {
+        const payload = event.payload;
         const chatId = payload.chat_id || payload.chatId;
         if (chatId) appendActionStep(chatId, payload, "workflow_completed");
       });
 
-      const unlistenWorkflowFailed = await listen<any>("workflow:failed", (event) => {
-        const payload = event.payload as AgentActionPayload;
+      const unlistenWorkflowFailed = await listenAppEvent("workflow:failed", (event) => {
+        const payload = event.payload;
         const chatId = payload.chat_id || payload.chatId;
         if (chatId) appendActionStep(chatId, payload, "workflow_failed");
       });
 
-      const unlistenTaskStarted = await listen<any>("task:started", (event) => {
-        const payload = event.payload as AgentActionPayload;
+      const unlistenTaskStarted = await listenAppEvent("task:started", (event) => {
+        const payload = event.payload;
         const chatId = payload.chat_id || payload.chatId;
         if (chatId) appendActionStep(chatId, payload, "task_started");
       });
 
-      const unlistenTaskCompleted = await listen<any>("task:completed", (event) => {
-        const payload = event.payload as AgentActionPayload;
+      const unlistenTaskCompleted = await listenAppEvent("task:completed", (event) => {
+        const payload = event.payload;
         const chatId = payload.chat_id || payload.chatId;
         if (chatId) appendActionStep(chatId, payload, "task_completed");
       });
 
-      const unlistenTaskFailed = await listen<any>("task:failed", (event) => {
-        const payload = event.payload as AgentActionPayload;
+      const unlistenTaskFailed = await listenAppEvent("task:failed", (event) => {
+        const payload = event.payload;
         const chatId = payload.chat_id || payload.chatId;
         if (chatId) appendActionStep(chatId, payload, "task_failed");
       });
 
-      const unlistenContextDrift = await listen<any>("chat:context-drift", (event) => {
+      const unlistenContextDrift = await listenAppEvent("chat:context-drift", (event) => {
         const chatId = event.payload.chat_id;
         const activeChatId = useChatStore.getState().activeSessionId;
         if (chatId === activeChatId) {
@@ -354,13 +345,8 @@ export function useAgentEvents() {
         }
       });
 
-      const unlistenResearchStep = await listen<any>("chat:research-step", (event) => {
-        const payload = event.payload as {
-          chat_id: string;
-          message_id: string;
-          text: string;
-          status: "pending" | "running" | "completed" | "error";
-        };
+      const unlistenResearchStep = await listenAppEvent("chat:research-step", (event) => {
+        const payload = event.payload;
         const chatId = payload.chat_id;
         if (!chatId) return;
 
@@ -379,7 +365,7 @@ export function useAgentEvents() {
             const meta = msg.metadata || {};
             const prevSteps = meta.researchSteps || [];
             
-            const existingIdx = prevSteps.findIndex((s: any) => s.text === payload.text);
+            const existingIdx = prevSteps.findIndex((s) => s.text === payload.text);
             const steps = existingIdx !== -1
               ? prevSteps.map((s, i) => i === existingIdx ? { ...s, status: payload.status } : s)
               : [...prevSteps, { text: payload.text, status: payload.status }];

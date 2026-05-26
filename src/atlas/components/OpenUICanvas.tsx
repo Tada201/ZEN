@@ -3,7 +3,7 @@ import { openAIReadableStreamAdapter } from "@openuidev/react-headless";
 import { extendedLibrary } from "./genui";
 import { openuiLibrary, openuiPromptOptions } from "@openuidev/react-ui/genui-lib";
 import { useUIStore } from "@/lib/stores/useUIStore";
-import { listen } from "@tauri-apps/api/event";
+import { listenAppEvent } from "@/api/events";
 import { chatApi } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "lucide-react";
@@ -71,7 +71,7 @@ export function OpenUICanvas({ selectedModelId, selectedProvider }: OpenUICanvas
         let firstChunkDelta: string | null = null;
 
         // Listen for the immediate first chunk (bypasses the 40ms buffer)
-        const unlistenChunkFirst = await listen<any>("chat:chunk:first", (event) => {
+        const unlistenChunkFirst = await listenAppEvent("chat:chunk:first", (event) => {
           if (event.payload.chat_id === activeSessionId && event.payload.delta) {
             firstChunkDelta = event.payload.delta;
             const sseData = {
@@ -88,7 +88,7 @@ export function OpenUICanvas({ selectedModelId, selectedProvider }: OpenUICanvas
         });
 
         // Register window listeners matching activeSessionId
-        const unlistenChunk = await listen<any>("chat:chunk", (event) => {
+        const unlistenChunk = await listenAppEvent("chat:chunk", (event) => {
           if (event.payload.chat_id === activeSessionId) {
             let delta = event.payload.delta || "";
 
@@ -112,7 +112,7 @@ export function OpenUICanvas({ selectedModelId, selectedProvider }: OpenUICanvas
           }
         });
 
-        const unlistenDone = await listen<any>("chat:done", (event) => {
+        const unlistenDone = await listenAppEvent("chat:done", (event) => {
           if (event.payload.chat_id === activeSessionId) {
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
             cleanup();
@@ -120,7 +120,7 @@ export function OpenUICanvas({ selectedModelId, selectedProvider }: OpenUICanvas
           }
         });
 
-        const unlistenError = await listen<any>("chat:error", (event) => {
+        const unlistenError = await listenAppEvent("chat:error", (event) => {
           if (event.payload.chat_id === activeSessionId) {
             controller.error(new Error(event.payload.error));
             cleanup();
