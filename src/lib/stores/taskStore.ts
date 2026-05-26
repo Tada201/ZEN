@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { listen } from '@tauri-apps/api/event';
+import { listenAppEvent, type TaskEventPayload } from '@/api/events';
 
 // ─── Types ───
 
@@ -40,29 +40,46 @@ export interface TaskState {
   getTotalProgress: () => number;
 }
 
+function normalizeTask(payload: TaskEventPayload): Task {
+  return {
+    id: payload.id || payload.taskId || payload.task_id || '',
+    description: payload.description || '',
+    assignedTo: payload.assignedTo || payload.assigned_to || 'ZEN',
+    status: (payload.status as Task['status']) || 'pending',
+    progress: payload.progress || 0,
+    error: payload.error,
+    chatId: payload.chatId || payload.chat_id || '',
+    createdAt: payload.createdAt || payload.created_at || Date.now(),
+    updatedAt: payload.updatedAt || payload.updated_at || Date.now(),
+  };
+}
+
 // ─── Store ───
 
 export const useTaskStore = create<TaskState>((set, get) => {
   // Initialize event listeners
   if (typeof window !== 'undefined') {
     // Listen for task creation
-    listen('task:created', (event: any) => {
-      const task = event.payload as Task;
-      task.createdAt = Date.now();
-      task.updatedAt = Date.now();
+    listenAppEvent('task:created', (event) => {
+      const task = normalizeTask(event.payload);
+      if (!task.id) return;
       get().addTask(task);
     });
 
     // Listen for task updates
-    listen('task:updated', (event: any) => {
+    listenAppEvent('task:updated', (event) => {
       const { taskId, updates } = event.payload;
-      get().updateTask(taskId, updates);
+      const id = taskId || event.payload.task_id || event.payload.id;
+      if (!id) return;
+      get().updateTask(id, updates as Partial<Task>);
     });
 
     // Listen for task completion
-    listen('task:completed', (event: any) => {
+    listenAppEvent('task:completed', (event) => {
       const { taskId, result } = event.payload;
-      get().updateTask(taskId, {
+      const id = taskId || event.payload.task_id || event.payload.id;
+      if (!id) return;
+      get().updateTask(id, {
         status: result?.is_error ? 'failed' : 'completed',
         progress: 100,
         error: result?.is_error ? result.content : undefined,
@@ -70,8 +87,8 @@ export const useTaskStore = create<TaskState>((set, get) => {
       });
     });
 
-    listen('task:list_updated', (event: any) => {
-      const { chat_id, tasks } = event.payload as { chat_id: string; tasks: Task[] };
+    listenAppEvent('task:list_updated', (event) => {
+      const { chat_id, tasks } = event.payload;
       if (!chat_id || !Array.isArray(tasks)) return;
 
       set((state) => {
@@ -82,9 +99,11 @@ export const useTaskStore = create<TaskState>((set, get) => {
           }
         }
         for (const task of tasks) {
-          newTasks.set(task.id, {
-            ...task,
-            createdAt: task.createdAt || Date.now(),
+          const normalizedTask = normalizeTask(task);
+          if (!normalizedTask.id) continue;
+          newTasks.set(normalizedTask.id, {
+            ...normalizedTask,
+            createdAt: normalizedTask.createdAt || Date.now(),
             updatedAt: Date.now(),
           });
         }
@@ -93,16 +112,16 @@ export const useTaskStore = create<TaskState>((set, get) => {
     });
 
     // Listen for orchestrator start - show task board
-    listen('orchestrator:start', () => {
+    listenAppEvent('orchestrator:start', () => {
       get().setVisibility(true);
     });
 
     // Listen for complexity analysis
-    listen('task:complexity_analyzed', (event: any) => {
+    listenAppEvent('task:complexity_analyzed', (event) => {
       const { chat_id, tier, battle_plan } = event.payload;
 
       // For Tier 3 tasks, create initial planning tasks
-      if (tier === 'Tier3' && battle_plan) {
+      if (tier === 'Tier3' && chat_id && battle_plan) {
         const steps = battle_plan.steps || [];
         steps.forEach((step: string, index: number) => {
           const task: Task = {

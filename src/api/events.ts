@@ -148,6 +148,56 @@ export interface ChatContextDriftEventPayload {
   similarity: number;
 }
 
+export interface ChatStatusEventPayload {
+  message?: string;
+  chat_id?: string | null;
+}
+
+export type EmptyEventPayload = Record<string, never>;
+export type UnknownRecordEventPayload = Record<string, unknown>;
+
+export interface TaskEventPayload extends AgentActionEventPayload {
+  id?: string;
+  taskId?: string;
+  task_id?: string;
+  description?: string;
+  assignedTo?: string;
+  assigned_to?: string;
+  status?: string;
+  progress?: number;
+  error?: string;
+  chatId?: string | null;
+  chat_id?: string | null;
+  createdAt?: number;
+  created_at?: number;
+  updatedAt?: number;
+  updated_at?: number;
+  updates?: Partial<TaskEventPayload>;
+}
+
+export interface TaskCompletedEventPayload extends TaskEventPayload {
+  result?: {
+    is_error?: boolean;
+    content?: string;
+    [key: string]: unknown;
+  };
+}
+
+export interface TaskListUpdatedEventPayload {
+  chat_id?: string | null;
+  tasks?: TaskEventPayload[];
+}
+
+export interface TaskComplexityAnalyzedEventPayload {
+  chat_id?: string | null;
+  tier?: string;
+  battle_plan?: {
+    steps?: string[];
+    agents_needed?: string[];
+    [key: string]: unknown;
+  };
+}
+
 export interface AppEventPayloadMap {
   "tool:start": ToolStartEventPayload;
   "tool:complete": ToolCompleteEventPayload;
@@ -162,7 +212,14 @@ export interface AppEventPayloadMap {
   "chat:research-step": ChatResearchStepEventPayload;
   "chat:message": ChatMessageEventPayload;
   "chat:context-drift": ChatContextDriftEventPayload;
+  "chat:status": ChatStatusEventPayload;
+  "chat:partial": UnknownRecordEventPayload;
+  "globe:navigate": UnknownRecordEventPayload;
+  "drawing:ops": UnknownRecordEventPayload;
+  "tts:start": EmptyEventPayload;
+  "tts:stop": EmptyEventPayload;
   "orchestrator:progress": AgentActionEventPayload;
+  "orchestrator:start": EmptyEventPayload;
   "agent:spawn": AgentActionEventPayload;
   "agent:complete": AgentActionEventPayload;
   "agent:handoff": AgentActionEventPayload;
@@ -170,8 +227,12 @@ export interface AppEventPayloadMap {
   "workflow:completed": AgentActionEventPayload;
   "workflow:failed": AgentActionEventPayload;
   "task:started": AgentActionEventPayload;
-  "task:completed": AgentActionEventPayload;
+  "task:created": TaskEventPayload;
+  "task:updated": TaskEventPayload;
+  "task:completed": TaskCompletedEventPayload;
   "task:failed": AgentActionEventPayload;
+  "task:list_updated": TaskListUpdatedEventPayload;
+  "task:complexity_analyzed": TaskComplexityAnalyzedEventPayload;
 }
 
 export type AppEventName = keyof AppEventPayloadMap;

@@ -1,12 +1,13 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useUIStore, useSystemStore, useSettingsStore } from '@/atlas/lib/store';
-import { listen } from '@tauri-apps/api/event';
+import { type UnlistenFn } from '@tauri-apps/api/event';
 import { VoiceOscilloscope } from './VoiceOscilloscope';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from "@/lib/utils";
 import { Mic, X, Terminal, Cpu, Sparkles, Volume2 } from 'lucide-react';
 import { stopSpeech } from '@/atlas/lib/webSpeech';
 import { voiceApi } from '@/api';
+import { listenAppEvent } from '@/api/events';
 
 // Utility helper to strip markdown for clean subtitles
 function stripMarkdown(text: string) {
@@ -359,28 +360,28 @@ export function VoiceModeOverlay({
     }, [voiceModeOpen, voiceInputMode, sttEngine, flushVadUtterance, appendLog, setAiSpeaking]);
 
     useEffect(() => {
-        let unlistens: any[] = [];
+        let unlistens: UnlistenFn[] = [];
         const setup = async () => {
             try {
-                unlistens.push(await listen<any>('globe:navigate', () => {}));
-                unlistens.push(await listen<any>('drawing:ops', () => {}));
-                unlistens.push(await listen<any>('chat:status', (e) => {
+                unlistens.push(await listenAppEvent('globe:navigate', () => {}));
+                unlistens.push(await listenAppEvent('drawing:ops', () => {}));
+                unlistens.push(await listenAppEvent('chat:status', (e) => {
                     const m = e.payload.message;
-                    if (m.startsWith('Executing:')) setToolAction(m.replace('Executing: ', '').toUpperCase());
+                    if (m?.startsWith('Executing:')) setToolAction(m.replace('Executing: ', '').toUpperCase());
                 }));
-                unlistens.push(await listen('chat:done', () => setToolAction(null)));
+                unlistens.push(await listenAppEvent('chat:done', () => setToolAction(null)));
                 
-                unlistens.push(await listen<any>('tts:start', () => {
+                unlistens.push(await listenAppEvent('tts:start', () => {
                     setAiSpeaking(true);
                     setSubtitleSpeaker('agent');
                     setUserSpeechText('');
                 }));
                 
-                unlistens.push(await listen('tts:stop', () => {
+                unlistens.push(await listenAppEvent('tts:stop', () => {
                     setAiSpeaking(false);
                 }));
 
-                unlistens.push(await listen<any>('chat:partial', () => {
+                unlistens.push(await listenAppEvent('chat:partial', () => {
                     if (voiceModeOpen) {
                         const lastMsg = messages[messages.length - 1];
                         if (lastMsg?.role === 'assistant') {
