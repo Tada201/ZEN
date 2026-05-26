@@ -5,11 +5,12 @@ stabilization, not a rewrite.
 
 ## Current Position
 
-Zen is currently in **Phase 3.5: backend consolidation with Phase 4 started**.
+Zen is currently ready to move into **Phase 5: oversized module splitting**.
 
-Phases 0-3 are no longer greenfield work. They are mostly implemented, with
-specific backend cleanup still required while Phase 4 typed frontend boundaries
-begin in parallel.
+Phases 0-4 are no longer the active rebuild bottleneck. Phase 3 keeps a
+documented legacy tool compatibility boundary, and Phase 4 keeps incremental
+message/catch-block cleanup, but the core security, tool, typed IPC, and
+frontend state-ownership contracts are in place.
 
 ## Phase 0: Architecture Contract
 
@@ -70,7 +71,7 @@ Remaining:
 
 ## Phase 3: Canonical Tool System
 
-Status: mostly complete, not fully collapsed.
+Status: complete with documented compatibility boundary.
 
 Completed:
 
@@ -84,7 +85,7 @@ Completed:
 - Remaining v1/v2 tool surfaces are explicitly documented as a Phase 3.5
   compatibility boundary.
 
-Remaining:
+Follow-up:
 
 - Ensure every production tool has metadata, risk level, permission policy, and
   tests or an exemption.
@@ -93,7 +94,7 @@ Remaining:
 
 ## Phase 3.5: Backend Consolidation
 
-Status: active.
+Status: complete for Phase 5 entry.
 
 Goals:
 
@@ -102,15 +103,14 @@ Goals:
   backend modules.
 - Keep CI fast enough to run often.
 
-Current work items:
+Completed:
 
-- Continue shrinking `src-tauri/src/agent/runner/loop.rs` below the Rust warning
-  threshold after it was brought below the hard limit.
-- Start Phase 4 through typed frontend event wrappers before broader state
-  ownership refactors.
-- Continue splitting oversized backend modules with named ownership.
-- Keep `npm run quality:fast`, `npm run test:backend`, and
-  `npm run secret:artifacts` passing.
+- `src-tauri/src/agent/runner/loop.rs` was brought below the Rust hard limit.
+- Tool ownership, runtime resources, terminal execution, speech/TTS resource
+  setup, and privileged-operation documentation are in place.
+- Lightweight backend tests cover security/tool policy and runtime resources.
+- `npm run quality:fast`, `npm run test:backend`, and
+  `npm run secret:artifacts` are the active fast gates.
 
 Exit criteria:
 
@@ -127,7 +127,7 @@ Exit criteria:
 
 ## Phase 4: Typed IPC And Frontend State
 
-Status: started, not complete.
+Status: complete for Phase 5 entry.
 
 Goals:
 
@@ -166,7 +166,7 @@ Completed:
   `toString()` handling.
 - Frontend architecture rules are documented.
 
-Remaining:
+Follow-up:
 
 - Consolidate React Query versus Zustand ownership for messages where legacy
   compatibility fields still exist.
@@ -181,6 +181,16 @@ Exit criteria:
 - Components use typed event wrappers instead of raw `listen<any>`.
 - One store owns each state domain.
 - IPC errors have typed shapes and UI handling.
+
+Phase 5 entry evidence:
+
+- `rg -n "invoke\(" src -g "*.ts" -g "*.tsx"` returns no component-level raw
+  invoke hits.
+- `rg -n "listen<any>|event: any|listen\(" src -g "*.ts" -g "*.tsx"` returns no
+  direct untyped listener hits.
+- `useChatStore` no longer owns server session, folder, archived-session, or
+  search-result collections.
+- `src/api/tauriClient.ts` normalizes command failures into `IpcCommandError`.
 
 ## Phase 5: Split Oversized Modules
 
