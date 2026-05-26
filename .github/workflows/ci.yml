@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+      - main
+      - "codex/**"
+      - "*integrated*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  frontend:
+    name: Frontend build
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Secret artifact guard
+        shell: pwsh
+        run: npm run secret:artifacts
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Verify build output has no secret artifacts
+        shell: pwsh
+        run: npm run secret:artifacts
+
+  backend:
+    name: Backend gates
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Secret artifact guard
+        shell: pwsh
+        run: npm run secret:artifacts
+
+      - name: Cargo check
+        working-directory: src-tauri
+        run: cargo check --all-targets
+
+      - name: Backend policy tests
+        shell: pwsh
+        run: npm run test:backend -- -NoKillStaleBuilds
+
+      - name: Quality gates
+        shell: pwsh
+        run: npm run quality:fast
+
+  tauri-build-smoke:
+    name: Tauri build smoke
+    runs-on: windows-latest
+    needs:
+      - frontend
+      - backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Secret artifact guard
+        shell: pwsh
+        run: npm run secret:artifacts
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build Tauri app without bundling
+        run: npx tauri build --no-bundle
+
+      - name: Verify package-sensitive outputs have no secret artifacts
+        shell: pwsh
+        run: npm run secret:artifacts

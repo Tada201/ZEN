@@ -10,6 +10,8 @@ Start here:
    `docs/architecture/example-codebase-lessons.md`.
 6. For backend test expectations, read
    `docs/architecture/backend-test-gate.md`.
+7. For CI/CD and release artifact rules, read
+   `docs/architecture/ci-cd.md`.
 
 This directory should hold architecture decisions, not loose notes. If a new
 pattern is introduced, document the owner, the allowed path, and what not to do.

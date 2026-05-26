@@ -43,12 +43,30 @@ node_modules/
 dist/
 dist-ssr/
 *.local
+.env
+.env.*
+!.env.example
 *.db
 *.db-journal
 *.sqlite
+*.sqlite3
+*.sqlite-journal
 pnpm-lock.yaml
 src-tauri/nul
 public/audio/
+
+# Runtime data and secret-bearing local artifacts must never be packaged.
+src-tauri/resources/**/*.db
+src-tauri/resources/**/*.sqlite
+src-tauri/resources/**/*.sqlite3
+src-tauri/resources/**/.env
+src-tauri/resources/**/.env.*
+src-tauri/resources/**/secrets/
+src-tauri/resources/**/credentials/
+src-tauri/resources/**/test-data/
+src-tauri/**/app-data/
+src-tauri/**/runtime-data/
+src-tauri/**/user-data/
 
 # Editor directories and files
 .vscode/

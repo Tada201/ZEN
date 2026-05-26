@@ -32,7 +32,11 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "resources/**/*"
+      "resources/VISUALIZATION_GUIDE.md",
+      "resources/agents/*.json",
+      "resources/binaries/piper/*.dll",
+      "resources/binaries/piper/espeak-ng-data/**/*",
+      "resources/binaries/whisper/*.dll"
     ],
     "externalBin": [
       "resources/binaries/whisper/whisper-server",
