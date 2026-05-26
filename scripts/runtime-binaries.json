@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "platforms": {
+    "windows-x64": {
+      "archives": [
+        {
+          "id": "piper",
+          "version": "2023.11.14-2",
+          "url": "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip",
+          "sha256": "F3C58906402B24F3A96D92145F58ACBA6D86C9B5DB896D207F78DC80811EFCEA",
+          "files": [
+            {
+              "from": "piper/piper.exe",
+              "to": "src-tauri/resources/binaries/piper/piper-x86_64-pc-windows-msvc.exe"
+            },
+            {
+              "from": "piper/espeak-ng.dll",
+              "to": "src-tauri/resources/binaries/piper/espeak-ng.dll"
+            },
+            {
+              "from": "piper/onnxruntime.dll",
+              "to": "src-tauri/resources/binaries/piper/onnxruntime.dll"
+            },
+            {
+              "from": "piper/onnxruntime_providers_shared.dll",
+              "to": "src-tauri/resources/binaries/piper/onnxruntime_providers_shared.dll"
+            },
+            {
+              "from": "piper/piper_phonemize.dll",
+              "to": "src-tauri/resources/binaries/piper/piper_phonemize.dll"
+            },
+            {
+              "from": "piper/libtashkeel_model.ort",
+              "to": "src-tauri/resources/binaries/piper/libtashkeel_model.ort"
+            },
+            {
+              "from": "piper/espeak-ng-data",
+              "to": "src-tauri/resources/binaries/piper/espeak-ng-data"
+            }
+          ]
+        },
+        {
+          "id": "whisper",
+          "version": "v1.8.4",
+          "url": "https://github.com/ggml-org/whisper.cpp/releases/download/v1.8.4/whisper-bin-x64.zip",
+          "sha256": "74F973345CB52EF5BA3EC9E7E7AF8E48CC8C71722D1528603B80588A11F82E3E",
+          "files": [
+            {
+              "from": "Release/whisper-server.exe",
+              "to": "src-tauri/resources/binaries/whisper/whisper-server-x86_64-pc-windows-msvc.exe"
+            },
+            {
+              "from": "Release/ggml-base.dll",
+              "to": "src-tauri/resources/binaries/whisper/ggml-base.dll"
+            },
+            {
+              "from": "Release/ggml-cpu.dll",
+              "to": "src-tauri/resources/binaries/whisper/ggml-cpu.dll"
+            },
+            {
+              "from": "Release/ggml.dll",
+              "to": "src-tauri/resources/binaries/whisper/ggml.dll"
+            },
+            {
+              "from": "Release/whisper.dll",
+              "to": "src-tauri/resources/binaries/whisper/whisper.dll"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

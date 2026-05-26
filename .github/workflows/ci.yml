@@ -75,12 +75,9 @@ jobs:
         shell: pwsh
         run: npm run quality:fast
 
-  tauri-build-smoke:
-    name: Tauri build smoke
+  runtime-binaries:
+    name: Runtime binary manifest
     runs-on: windows-latest
-    needs:
-      - frontend
-      - backend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -91,14 +88,6 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
-
       - name: Install dependencies
         run: npm ci
 
@@ -106,12 +95,17 @@ jobs:
         shell: pwsh
         run: npm run secret:artifacts
 
+      - name: Fetch runtime binaries
+        shell: pwsh
+        run: npm run runtime:fetch -- -Clean
+
       - name: Build frontend
         run: npm run build
 
-      - name: Build Tauri app without bundling
-        run: npx tauri build --no-bundle
+      - name: Check runtime binaries
+        shell: pwsh
+        run: npm run runtime:check
 
-      - name: Verify package-sensitive outputs have no secret artifacts
+      - name: Verify fetched runtime binaries have no secret artifacts
         shell: pwsh
         run: npm run secret:artifacts

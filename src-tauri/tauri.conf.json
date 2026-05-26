@@ -35,6 +35,7 @@
       "resources/VISUALIZATION_GUIDE.md",
       "resources/agents/*.json",
       "resources/binaries/piper/*.dll",
+      "resources/binaries/piper/*.ort",
       "resources/binaries/piper/espeak-ng-data/**/*",
       "resources/binaries/whisper/*.dll"
     ],

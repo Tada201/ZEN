@@ -14,10 +14,12 @@ Required gates:
 - `cargo check --all-targets`
 - `npm run test:backend -- -NoKillStaleBuilds`
 - `npm run quality:fast`
-- `npx tauri build --no-bundle`
+- `npm run runtime:fetch -- -Clean`
+- `npm run runtime:check`
 
-The Tauri smoke build compiles the app without producing installer artifacts.
-Installer packaging remains a release concern.
+Default CI intentionally does not run `npx tauri build --no-bundle`. That check
+is too slow for normal feedback on this codebase and currently belongs in the
+release workflow or an explicit manual verification run.
 
 ## Release
 
@@ -28,6 +30,11 @@ Tauri bundle artifacts.
 
 The workflow does not upload local databases, `.env` files, or secret-looking
 runtime artifacts. `npm run secret:artifacts` runs before and after packaging.
+
+Runtime binaries are not committed to Git. The release workflow downloads pinned
+archives from `scripts/runtime-binaries.json`, verifies SHA256 checksums, copies
+only the required files into `src-tauri/resources/binaries`, and then packages
+the app.
 
 ## Secret Artifact Policy
 
