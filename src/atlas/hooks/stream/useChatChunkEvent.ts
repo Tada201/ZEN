@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
-import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import type { UnlistenFn } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
+import { listenAppEvent } from "@/api/events";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { Message, Step } from "../../components/chat/types";
 import { ttftMark } from "@/lib/ttft";
@@ -140,7 +141,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
       unlistenRefs.current.forEach(u => u());
       unlistenRefs.current = [];
 
-      const unlistenChunkFirst = await listen<any>("chat:chunk:first", (event) => {
+      const unlistenChunkFirst = await listenAppEvent("chat:chunk:first", (event) => {
         const chatId = event.payload.chat_id;
         if (!chatId) return;
 
@@ -177,7 +178,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         });
       });
 
-      const unlistenChunk = await listen<any>("chat:chunk", (event) => {
+      const unlistenChunk = await listenAppEvent("chat:chunk", (event) => {
         const chatId = event.payload.chat_id;
         if (!chatId) return;
 
@@ -222,7 +223,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         }
       });
 
-      const unlistenDone = await listen<any>("chat:done", (event) => {
+      const unlistenDone = await listenAppEvent("chat:done", (event) => {
         const chatId = event.payload.chat_id;
         if (!chatId) return;
 
@@ -283,7 +284,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         queryClient.invalidateQueries({ queryKey: ["messages", chatId] });
       });
 
-      const unlistenError = await listen<any>("chat:error", (event) => {
+      const unlistenError = await listenAppEvent("chat:error", (event) => {
         const chatId = event.payload.chat_id;
         if (!chatId) return;
 
@@ -299,7 +300,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         });
       });
 
-      const unlistenStreamReset = await listen<any>("chat:stream-reset", (event) => {
+      const unlistenStreamReset = await listenAppEvent("chat:stream-reset", (event) => {
         const chatId = event.payload.chat_id;
         if (!chatId) return;
 
@@ -311,7 +312,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         useChatStore.getState().setStreamingForChat(chatId, false);
       });
 
-      const unlistenResearchStep = await listen<any>("chat:research-step", (event) => {
+      const unlistenResearchStep = await listenAppEvent("chat:research-step", (event) => {
         const chatId = event.payload.chat_id;
         if (!chatId) return;
 

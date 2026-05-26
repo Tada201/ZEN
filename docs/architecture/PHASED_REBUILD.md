@@ -5,12 +5,11 @@ stabilization, not a rewrite.
 
 ## Current Position
 
-Zen is currently in **Phase 3.5: backend consolidation before frontend
-restructure**.
+Zen is currently in **Phase 3.5: backend consolidation with Phase 4 started**.
 
 Phases 0-3 are no longer greenfield work. They are mostly implemented, with
-specific backend cleanup still required before moving heavily into frontend state
-and UI structure.
+specific backend cleanup still required while Phase 4 typed frontend boundaries
+begin in parallel.
 
 ## Phase 0: Architecture Contract
 
@@ -20,9 +19,11 @@ Completed:
 
 - `RULES.md` defines the architecture contract.
 - `AGENTS.md` tells agents to read `RULES.md` first.
+- `AGENTS.md` tells agents to read the frontend contract before frontend work.
 - Architecture docs live under `docs/architecture/`.
 - CodeGraph usage is documented for agents.
 - CI, backend test, runtime binary, and secret-artifact docs exist.
+- Frontend architecture rules exist in `docs/architecture/frontend-rules.md`.
 
 Remaining:
 
@@ -103,9 +104,10 @@ Goals:
 
 Current work items:
 
-- Add tests for runtime resource path resolution and atomic writes.
-- Split the highest-risk oversized backend module:
-  `src-tauri/src/agent/runner/loop.rs`.
+- Continue shrinking `src-tauri/src/agent/runner/loop.rs` below the Rust warning
+  threshold after it was brought below the hard limit.
+- Start Phase 4 through typed frontend event wrappers before broader state
+  ownership refactors.
 - Continue splitting oversized backend modules with named ownership.
 - Keep `npm run quality:fast`, `npm run test:backend`, and
   `npm run secret:artifacts` passing.
@@ -114,24 +116,44 @@ Exit criteria:
 
 - Tool-system ownership is documented.
 - Runtime resource helper exists and is used by Speech/TTS process setup.
+- Runtime resource path resolution and atomic write tests exist.
 - Remaining direct privileged operations are either routed or explicitly
   documented in `docs/architecture/privileged-operations.md`.
-- Top backend oversized files have named split plans.
+- Top backend oversized files have named split plans, and no active backend file
+  exceeds the Rust hard limit without a current exemption.
 - No new backend phase work increases architecture debt.
 
 ## Phase 4: Typed IPC And Frontend State
 
-Status: not started as a main phase.
+Status: started, not complete.
 
 Goals:
 
 - Remove raw `invoke` from components.
+- Replace direct untyped Tauri event listeners with typed event wrappers.
 - Consolidate duplicated frontend state ownership.
 - Make backend contracts discoverable.
+
+Completed:
+
+- Raw frontend `invoke` calls are centralized through `src/api/tauriClient.ts`.
+- `src/api/events.ts` provides the first typed event wrapper.
+- Artifact and tool stream hooks use typed event payloads.
+- Frontend architecture rules are documented.
+
+Remaining:
+
+- Type `chat:*`, `agent:*`, terminal, voice, task, and embedding event listeners.
+- Remove duplicate chat stream listeners from `OpenUICanvas`.
+- Consolidate React Query versus Zustand ownership for sessions, folders,
+  messages, provider model discovery, and settings-derived audio state.
+- Move secret-shaped frontend fields such as map/provider keys to presence
+  metadata and backend secret APIs.
 
 Exit criteria:
 
 - Components use typed API wrappers.
+- Components use typed event wrappers instead of raw `listen<any>`.
 - One store owns each state domain.
 - IPC errors have typed shapes and UI handling.
 
@@ -142,11 +164,15 @@ Status: started only as exemptions and quality gates.
 Priority backend targets:
 
 - `src-tauri/src/canvas/session.rs`
-- `src-tauri/src/agent/runner/loop.rs`
 - `src-tauri/src/agent/tools/progressive.rs`
 - `src-tauri/src/agent/workflow.rs`
 - `src-tauri/src/agent/swarm.rs`
 - `src-tauri/src/db/mod.rs`
+
+Completed hard-limit target:
+
+- `src-tauri/src/agent/runner/loop.rs` was reduced below the Rust hard limit by
+  extracting memory bootstrap, turn persistence, and tool authorization helpers.
 
 Exit criteria:
 

@@ -24,13 +24,6 @@ Reason: Canvas session owns persistence, protocol handling, validation, and plot
 Split or Fix Plan: Split into session_store.rs, session_commands.rs, element_ops.rs, and export/import helpers.
 Expires: Phase 5
 
-File: src-tauri/src/agent/runner/loop.rs
-Owner: backend/agent
-Rule Exempted: Rust hard file-size limit
-Reason: Agent run loop still owns orchestration, memory loading, compaction, persistence, streaming, and tool result handling.
-Split or Fix Plan: Extract memory_bootstrap.rs, turn_persistence.rs, stream_accounting.rs, and loop_state.rs.
-Expires: Phase 5
-
 File: src-tauri/src/agent/workflow.rs
 Owner: backend/agent
 Rule Exempted: Rust hard file-size limit

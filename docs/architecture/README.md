@@ -16,6 +16,8 @@ Start here:
    `docs/architecture/tool-system.md`.
 9. For privileged backend operation ownership, read
    `docs/architecture/privileged-operations.md`.
+10. For frontend product, security, performance, and state rules, read
+   `docs/architecture/frontend-rules.md`.
 
 This directory should hold architecture decisions, not loose notes. If a new
 pattern is introduced, document the owner, the allowed path, and what not to do.

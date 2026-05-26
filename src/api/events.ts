@@ -1,5 +1,7 @@
 import { listen, type Event, type UnlistenFn } from "@tauri-apps/api/event";
-import type { ArtifactData, ToolCall } from "@/atlas/components/chat/types";
+import type { ActionMeta, ArtifactData, ToolCall } from "@/atlas/components/chat/types";
+
+type ResearchStep = NonNullable<ActionMeta["researchSteps"]>[number];
 
 export interface ToolStartEventPayload {
   chat_id?: string | null;
@@ -32,12 +34,46 @@ export interface ArtifactCompleteEventPayload {
   chat_id?: string | null;
 }
 
+export interface ChatChunkEventPayload {
+  chat_id?: string | null;
+  delta?: string;
+  type?: string;
+}
+
+export interface ChatDoneEventPayload {
+  chat_id?: string | null;
+  content?: string;
+  reason?: string;
+}
+
+export interface ChatErrorEventPayload {
+  chat_id?: string | null;
+  error?: string;
+}
+
+export interface ChatStreamResetEventPayload {
+  chat_id?: string | null;
+}
+
+export interface ChatResearchStepEventPayload {
+  chat_id?: string | null;
+  message_id?: string;
+  text: string;
+  status: ResearchStep["status"];
+}
+
 export interface AppEventPayloadMap {
   "tool:start": ToolStartEventPayload;
   "tool:complete": ToolCompleteEventPayload;
   "artifact:start": ArtifactStartEventPayload;
   "artifact:delta": ArtifactDeltaEventPayload;
   "artifact:complete": ArtifactCompleteEventPayload;
+  "chat:chunk:first": ChatChunkEventPayload;
+  "chat:chunk": ChatChunkEventPayload;
+  "chat:done": ChatDoneEventPayload;
+  "chat:error": ChatErrorEventPayload;
+  "chat:stream-reset": ChatStreamResetEventPayload;
+  "chat:research-step": ChatResearchStepEventPayload;
 }
 
 export type AppEventName = keyof AppEventPayloadMap;
