@@ -152,13 +152,16 @@ Completed:
 - Audio preferences now have one owner: `useSettingsStore`. The unused
   `useAudioStore` mirror was removed instead of keeping a second persisted
   audio preference path.
+- Chat model selection now reads provider model discovery through a React Query
+  catalog call instead of depending on `useSettingsStore.availableModels` or
+  `fetchingModels`. Settings screens still own provider configuration and
+  provider-settings catalog sync.
 - Frontend architecture rules are documented.
 
 Remaining:
 
-- Consolidate React Query versus Zustand ownership for sessions, folders,
-  messages and provider model discovery where legacy compatibility fields still
-  exist.
+- Consolidate React Query versus Zustand ownership for sessions, folders, and
+  messages where legacy compatibility fields still exist.
 - Remove duplicate or compatibility-only store actions once all consumers use
   query hooks directly.
 - Audit IPC error shapes and make UI handling consistent.

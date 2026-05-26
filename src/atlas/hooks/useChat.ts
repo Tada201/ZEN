@@ -23,6 +23,7 @@ export function useChat() {
     searchResults,
     models,
     modelsLoading,
+    refetchModels,
   } = useChatQueries();
 
   const storeActiveProvider = useSettingsStore(s => s.activeProvider);
@@ -75,10 +76,7 @@ export function useChat() {
   };
 
   const fetchModels = () => {
-    const store = useSettingsStore.getState() as any;
-    if (typeof store.fetchModels === "function") {
-      store.fetchModels();
-    }
+    void refetchModels();
   };
 
   return {

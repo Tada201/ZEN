@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { chatApi, type BackendChat, type BackendFolder, type BackendMessage } from "@/api";
+import { chatApi, providersApi, type BackendChat, type BackendFolder, type BackendMessage } from "@/api";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import { useShallow } from "zustand/react/shallow";
-import { providerOrder, PROVIDER_KEY_MAP } from "@/lib/types/provider";
+import type { ModelInfo } from "@/lib/types/provider";
 import { Session, Message, ChatFolder, ToolCall, Step } from "../../components/chat/types";
 import { type Model } from "../../components/ModelSettingsContent";
 
@@ -275,6 +275,19 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
 
 const EMPTY_ARRAY: Message[] = [];
 
+function modelInfoToModel(model: ModelInfo): Model {
+  return {
+    id: model.id,
+    name: model.displayName || model.name || model.id,
+    provider: model.provider || "unknown",
+    description: model.description || "",
+    category: "Balanced",
+    capabilities: model.capabilities || ["text"],
+    available: model.state !== "missing",
+    contextWindow: model.contextWindow,
+  };
+}
+
 function isMessageSemanticallyEqual(a: Message, b: Message): boolean {
   if (a.id !== b.id) return false;
   if (a.role !== b.role) return false;
@@ -353,63 +366,39 @@ export function useChatQueries() {
     },
   });
 
-  const rawStoreModels = useSettingsStore(useShallow((s) => s.availableModels));
-  const modelsLoading = useSettingsStore((s) => s.fetchingModels);
-  const hasAttemptedFetch = useRef(false);
-
-  useEffect(() => {
-    if (!rawStoreModels.length && !modelsLoading && !hasAttemptedFetch.current) {
-      hasAttemptedFetch.current = true;
-      const store = useSettingsStore.getState() as any;
-      if (typeof store.fetchModels === "function") {
-        const activeProvider = store.activeProvider || "";
-        let targetProvider = "";
-        const activeInfo = providerOrder.find(p => p.key === activeProvider);
-        
-        if (activeInfo?.requiresKey) {
-          const configKey = PROVIDER_KEY_MAP[activeProvider];
-          if (configKey && store[configKey]) {
-            targetProvider = activeProvider;
-          }
-        }
-
-        if (!targetProvider) {
-          for (const p of providerOrder) {
-            if (p.requiresKey) {
-              const configKey = PROVIDER_KEY_MAP[p.key];
-              if (configKey && store[configKey]) {
-                targetProvider = p.key;
-                break;
-              }
-            }
-          }
-        }
-
-        if (!targetProvider && activeProvider) {
-          targetProvider = activeProvider;
-        }
-
-        if (!targetProvider) {
-          targetProvider = "ollama";
-        }
-
-        store.fetchModels();
-      }
-    }
-  }, [rawStoreModels.length, modelsLoading]);
+  const customProviders = useSettingsStore(useShallow((s) => s.customProviders));
+  const {
+    data: discoveredModels = [],
+    isFetching: modelsLoading,
+    refetch: refetchModels,
+  } = useQuery({
+    queryKey: ["provider-model-catalog"],
+    queryFn: async () => providersApi.getAllAvailableModels(null),
+    staleTime: 60_000,
+  });
 
   const models: Model[] = useMemo(() => {
-    return rawStoreModels.map((m: any) => ({
-      id: m.id,
-      name: m.name || m.id,
-      provider: m.provider || "openai",
-      description: m.description || "",
-      category: (m.category || "Balanced") as "Smart" | "Fast" | "Balanced",
-      capabilities: m.capabilities || ["text"],
-      available: m.available !== false,
-      contextWindow: m.contextWindow,
-    }));
-  }, [rawStoreModels]);
+    const customModels = customProviders
+      .filter((provider) => provider.enabled)
+      .flatMap((provider) =>
+        provider.customModels.map((model) => ({
+          ...model,
+          provider: provider.id,
+          source: model.source || "direct",
+          state: model.state || "unloaded",
+        } satisfies ModelInfo))
+      );
+
+    const seen = new Set<string>();
+    return [...discoveredModels, ...customModels]
+      .filter((model) => {
+        const key = `${model.provider || "unknown"}:${model.id}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map(modelInfoToModel);
+  }, [discoveredModels, customProviders]);
 
   const { data: fetchedMessages, isFetching: isMessagesFetching } = useQuery({
     queryKey: ["messages", currentSessionId],
@@ -500,5 +489,6 @@ export function useChatQueries() {
     searchResults,
     models,
     modelsLoading,
+    refetchModels,
   };
 }
