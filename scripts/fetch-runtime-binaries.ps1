@@ -20,7 +20,7 @@ function Resolve-RepoPath {
 }
 
 if ($Clean) {
-    foreach ($relativePath in @("src-tauri/resources/binaries/piper", "src-tauri/resources/binaries/whisper")) {
+    foreach ($relativePath in @("src-tauri/resources/binaries/piper", "src-tauri/resources/binaries/whisper", "src-tauri/resources/models")) {
         $path = Resolve-RepoPath $relativePath
         if (Test-Path $path) {
             Remove-Item -LiteralPath $path -Recurse -Force
@@ -50,7 +50,11 @@ foreach ($archive in $platformConfig.archives) {
         Remove-Item -LiteralPath $extractDir -Recurse -Force
     }
     New-Item -ItemType Directory -Force $extractDir | Out-Null
-    Expand-Archive -LiteralPath $archiveFile -DestinationPath $extractDir -Force
+    if ($archiveFile -match '\.zip$') {
+        Expand-Archive -LiteralPath $archiveFile -DestinationPath $extractDir -Force
+    } else {
+        Copy-Item -LiteralPath $archiveFile -Destination (Join-Path $extractDir ([IO.Path]::GetFileName($archiveFile))) -Force
+    }
 
     foreach ($file in $archive.files) {
         $source = Join-Path $extractDir ($file.from -replace '/', [IO.Path]::DirectorySeparatorChar)

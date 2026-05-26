@@ -11,7 +11,7 @@
           "files": [
             {
               "from": "piper/piper.exe",
-              "to": "src-tauri/resources/binaries/piper/piper-x86_64-pc-windows-msvc.exe"
+              "to": "src-tauri/resources/binaries/piper/piper.exe"
             },
             {
               "from": "piper/espeak-ng.dll",
@@ -47,7 +47,7 @@
           "files": [
             {
               "from": "Release/whisper-server.exe",
-              "to": "src-tauri/resources/binaries/whisper/whisper-server-x86_64-pc-windows-msvc.exe"
+              "to": "src-tauri/resources/binaries/whisper/whisper-server.exe"
             },
             {
               "from": "Release/ggml-base.dll",
@@ -64,6 +64,42 @@
             {
               "from": "Release/whisper.dll",
               "to": "src-tauri/resources/binaries/whisper/whisper.dll"
+            }
+          ]
+        },
+        {
+          "id": "whisper-model-base-en",
+          "version": "ggml-base.en.bin",
+          "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin",
+          "sha256": "A03779C86DF3323075F5E796CB2CE5029F00EC8869EEE3FDFB897AFE36C6D002",
+          "files": [
+            {
+              "from": "ggml-base.en.bin",
+              "to": "src-tauri/resources/models/ggml-base.en.bin"
+            }
+          ]
+        },
+        {
+          "id": "piper-model-glados-medium",
+          "version": "glados_piper_medium",
+          "url": "https://huggingface.co/DavesArmoury/GLaDOS_TTS/resolve/main/glados_piper_medium.onnx",
+          "sha256": "B35A07FA6FC788EC4AD637EC98B74D66F06E664BBB4366B4035D1DEAAC3308D3",
+          "files": [
+            {
+              "from": "glados_piper_medium.onnx",
+              "to": "src-tauri/resources/models/glados_piper_medium.onnx"
+            }
+          ]
+        },
+        {
+          "id": "piper-model-glados-medium-config",
+          "version": "glados_piper_medium",
+          "url": "https://huggingface.co/DavesArmoury/GLaDOS_TTS/resolve/main/glados_piper_medium.onnx.json",
+          "sha256": "77A103377C971E87BFAC6A839BEB0DE95433F38ACF1FB92C201DCDC72862F422",
+          "files": [
+            {
+              "from": "glados_piper_medium.onnx.json",
+              "to": "src-tauri/resources/models/glados_piper_medium.onnx.json"
             }
           ]
         }

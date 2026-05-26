@@ -36,6 +36,15 @@ archives from `scripts/runtime-binaries.json`, verifies SHA256 checksums, copies
 only the required files into `src-tauri/resources/binaries`, and then packages
 the app.
 
+Runtime voice models are handled by the same manifest. Installed builds should
+contain:
+
+- `resources/models/ggml-base.en.bin`
+- `resources/models/glados_piper_medium.onnx`
+- `resources/models/glados_piper_medium.onnx.json`
+- `resources/binaries/whisper/whisper-server.exe`
+- `resources/binaries/piper/piper.exe`
+
 ## Secret Artifact Policy
 
 Local runtime data must stay outside Git and outside Tauri bundle resources.
