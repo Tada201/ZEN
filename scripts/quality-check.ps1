@@ -103,8 +103,8 @@ $exemptions = @{}
 if (Test-Path $exemptionsPath) {
     Get-Content $exemptionsPath | ForEach-Object {
         $line = $_.Trim()
-        if ($line -match '^(src|src-tauri)/.+\.(rs|ts|tsx)$') {
-            $exemptions[$line.Replace("/", "\")] = $true
+        if ($line -match '^(?:File:\s*)?((src|src-tauri)/.+\.(rs|ts|tsx))$') {
+            $exemptions[$matches[1].Replace("/", "\")] = $true
         }
     }
 }

@@ -1,187 +1,194 @@
 # Zen Phased Rebuild Plan
 
-This plan turns the audit findings into an ordered stabilization program. The
-goal is to make future feature work faster by removing ambiguity first.
+This plan reflects the current rebuild state. The goal is still incremental
+stabilization, not a rewrite.
+
+## Current Position
+
+Zen is currently in **Phase 3.5: backend consolidation before frontend
+restructure**.
+
+Phases 0-3 are no longer greenfield work. They are mostly implemented, with
+specific backend cleanup still required before moving heavily into frontend state
+and UI structure.
 
 ## Phase 0: Architecture Contract
 
-Status: started.
+Status: mostly complete.
 
-Goals:
+Completed:
 
-- Publish hard architecture rules in `RULES.md`.
-- Make future agents read the rules first.
-- Establish current build and audit baseline.
-- Define the target layering before more feature work lands.
+- `RULES.md` defines the architecture contract.
+- `AGENTS.md` tells agents to read `RULES.md` first.
+- Architecture docs live under `docs/architecture/`.
+- CodeGraph usage is documented for agents.
+- CI, backend test, runtime binary, and secret-artifact docs exist.
 
-Exit criteria:
+Remaining:
 
-- `RULES.md` exists and is linked from `AGENTS.md`.
-- Architecture docs directory exists.
-- Current critical risks are listed in a maintained report.
-- Build/check commands are documented.
+- Keep this plan current after each backend phase.
+- Add architecture decision docs when new patterns are introduced.
 
 ## Phase 1: Security Boundary
 
-Goals:
+Status: mostly complete, still needs coverage expansion.
 
-- Introduce a central `SecurityService`.
-- Route shell, file, network, MCP, and secret access through it.
-- Add audit events for privileged actions.
-- Replace informal per-tool permission checks with one policy gateway.
+Completed:
 
-Work items:
+- `SecurityService` exists.
+- Privileged tool execution is routed through policy checks.
+- URL fetch has SSRF validation, DNS/IP checks, redirect validation, and body
+  limits.
+- Terminal execution has auditing and workspace-aware defaults.
+- MCP HTTP is localhost-only for this phase.
+- Document/file ingestion paths are workspace-bound.
 
-- Define `SecurityService` API.
-- Add `PermissionRequest`, `PermissionDecision`, and `AuditEvent` types.
-- Move SSRF validation out of ad hoc regex-only checks.
-- Require MCP auth before remote access.
-- Add command execution policy modes: deny, ask, trusted workspace.
+Remaining:
 
-Exit criteria:
-
-- No privileged operation bypasses `SecurityService`.
-- MCP is localhost-only unless explicitly configured otherwise.
-- Privileged paths have denial tests.
+- Review direct process/filesystem/network use in voice, RAG, terminal, and
+  runtime resource code.
+- Decide which direct uses become shared helpers versus documented exemptions.
+- Expand denial/audit tests for non-tool privileged paths.
 
 ## Phase 2: Settings And Secrets
 
-Goals:
+Status: mostly complete.
 
-- Split non-secret settings from credential storage.
-- Remove API keys from localStorage and plain SQLite persistence.
-- Store only secret presence metadata in normal settings.
+Completed:
 
-Work items:
+- `SecretService` stores credentials in OS keyring using service `zen`.
+- Normal settings expose only public settings and secret presence metadata.
+- Plain settings secret migration exists.
+- Public settings APIs redact secret-like keys.
+- Secret writes/deletes are audited.
 
-- Add `SecretService`.
-- Pick backend: Stronghold, OS keychain, or encrypted credential store.
-- Migrate provider keys out of settings.
-- Split custom provider public config from `apiKey`.
-- Update provider execution to resolve secrets at runtime.
+Remaining:
 
-Exit criteria:
-
-- No persisted API keys in frontend localStorage.
-- No provider keys in plain settings rows.
-- UI can display `hasKey` without loading raw key values.
+- Continue targeted reviews for new provider/GTSM/custom-token settings.
+- Add platform-level manual validation for OS keyring behavior before release.
 
 ## Phase 3: Canonical Tool System
 
+Status: mostly complete, not fully collapsed.
+
+Completed:
+
+- `ToolService` is the canonical policy/execution boundary.
+- Deep research, MCP, agent tool execution, and web fetch route through policy.
+- Direct tool execution quality gates exist.
+- Unknown agent tool ids are blocked by quality checks.
+- Placeholder/no-op tool registrations were reduced.
+
+Remaining:
+
+- Collapse or explicitly document the two remaining tool surfaces:
+  `src-tauri/src/tools/*` and `src-tauri/src/agent/tools/*`.
+- Write the "how to add a backend tool" architecture doc.
+- Ensure every production tool has metadata, risk level, permission policy, and
+  tests or an exemption.
+
+## Phase 3.5: Backend Consolidation
+
+Status: active.
+
 Goals:
 
-- Make one tool trait, one registry, one execution path.
-- Remove direct tool construction from features.
-- Make MCP, agent, and UI tool calls share the same policy.
+- Finish backend-only cleanup before frontend restructure.
+- Reduce ambiguous ownership around tools, runtime resources, voice, and large
+  backend modules.
+- Keep CI fast enough to run often.
 
-Work items:
+Current work items:
 
-- Choose the canonical `Tool` trait.
-- Mark old tool system deprecated.
-- Add a migration table for each tool.
-- Route deep research and MCP through `ToolService`.
-- Remove no-op registered tools or mark them `preview`.
+- Document canonical tool ownership and migration rules.
+- Add a runtime resource/process helper for local binaries and models.
+- Split at least one oversized backend module.
+- Keep `npm run quality:fast`, `npm run test:backend`, and
+  `npm run secret:artifacts` passing.
 
 Exit criteria:
 
-- There is one documented path for adding a tool.
-- Every registered tool has metadata, permission policy, and tests or exemption.
-- No feature calls `.execute()` on a tool directly.
+- Tool-system ownership is documented.
+- Remaining direct privileged operations are either routed or explicitly
+  exempted.
+- Top backend oversized files have named split plans.
+- No new backend phase work increases architecture debt.
 
 ## Phase 4: Typed IPC And Frontend State
+
+Status: not started as a main phase.
 
 Goals:
 
 - Remove raw `invoke` from components.
 - Consolidate duplicated frontend state ownership.
-- Make backend contracts discoverable by new developers and agents.
-
-Work items:
-
-- Create `src/api/*Api.ts` wrappers.
-- Define request/response types for each command.
-- Move command names out of components.
-- Audit duplicate ownership of model/provider/theme/settings fields.
-- Remove silent catches from user-visible flows.
+- Make backend contracts discoverable.
 
 Exit criteria:
 
-- Components use API wrappers, not raw command strings.
+- Components use typed API wrappers.
 - One store owns each state domain.
 - IPC errors have typed shapes and UI handling.
 
 ## Phase 5: Split Oversized Modules
 
-Goals:
+Status: started only as exemptions and quality gates.
 
-- Reduce hidden coupling in large files.
-- Make ownership obvious by filename and module boundary.
+Priority backend targets:
 
-Priority targets:
-
-- `src-tauri/src/agent/runner/loop.rs`
-- `src-tauri/src/agent/runner/tool_dispatch.rs`
-- `src/components/workbench/CesiumMapRenderer.tsx`
-- `src/atlas/components/chat/AssistantMessage.tsx`
 - `src-tauri/src/canvas/session.rs`
+- `src-tauri/src/agent/runner/loop.rs`
+- `src-tauri/src/agent/tools/progressive.rs`
+- `src-tauri/src/agent/workflow.rs`
+- `src-tauri/src/agent/swarm.rs`
+- `src-tauri/src/db/mod.rs`
 
 Exit criteria:
 
 - No non-exempt Rust file over 900 lines.
 - No non-exempt TS/TSX app file over 500 lines.
-- Exemptions are documented with expiration milestones.
+- Exemptions have owners, reasons, split plans, and expiration milestones.
 
 ## Phase 6: Performance Budgets
+
+Status: not started.
 
 Goals:
 
 - Reduce startup bundle and runtime overhead.
-- Make performance regressions visible in CI.
+- Make performance regressions visible.
 
-Work items:
+Known issues:
 
-- Lazy-load Mermaid, math, syntax highlighting, charts, maps, and editors.
-- Add Rollup manual chunks for heavy dependencies.
-- Add bundle budget checks.
-- Share HTTP clients in Rust instead of creating per-request clients.
-- Add pagination or caps to all list queries.
-
-Exit criteria:
-
-- Initial JS gzip target: 700 KB.
-- Initial JS gzip hard ceiling: 1 MB.
-- Large dependency additions require justification.
+- Frontend production build emits large chunk warnings.
+- Some backend paths still create per-request HTTP clients.
+- List query caps/pagination need a focused audit.
 
 ## Phase 7: CI Ratchet
 
-Goals:
+Status: started.
 
-- Convert quality from opinion into enforcement.
-- Ratchet warnings without blocking the rebuild on day one.
+Completed:
 
-Work items:
+- GitHub Actions CI and release workflows exist.
+- Secret artifact guard exists.
+- Runtime binary fetch/check scripts exist.
+- Backend lightweight test gate exists.
+- File-size gate exists with exemptions.
+- Architecture gates for raw invoke, raw SQL, and direct tool execution exist.
 
-- Fix `cargo test --all-targets` runtime failure.
-- Make `cargo clippy --all-targets` pass without `-D warnings`.
-- Add selected deny lints.
-- Add file-size checker.
-- Add dependency audit.
-- Add rule checks for raw `invoke`, raw SQL, and unsafe HTML injection.
+Remaining:
 
-Exit criteria:
-
-- CI blocks new violations.
-- Existing debt is tracked by explicit exemptions.
-- New code cannot silently increase architecture debt.
+- Full `cargo test --all-targets` still has a known Windows loader issue.
+- `cargo clippy --all-targets` is not yet enforced.
+- Dependency audit and bundle budget checks are not yet enforced.
+- Full Tauri release build remains manual/deferred because compile time is high.
 
 ## Human Decisions Required
 
-These cannot be solved by agents alone:
-
-- Which secret backend should be used?
-- Should MCP remote access exist at all?
-- What command execution modes are acceptable?
-- Which tool system is canonical?
 - Which preview features should be hidden versus finished?
-- What bundle budget is acceptable for the first production release?
-- Which features are truly production-critical?
+- What bundle budget is acceptable for first release?
+- Which local voice models should ship by default?
+- Should remote MCP ever be supported, and with what authentication?
+- Which backend oversized module should be split first if feature work competes
+  for time?

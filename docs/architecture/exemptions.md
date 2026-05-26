@@ -14,29 +14,136 @@ Split or Fix Plan:
 Expires:
 ```
 
-## Current Exemptions To Triage
-
-These files are known architecture hotspots and need owners before the hard file
-size gate is enabled:
+## Backend Exemptions
 
 ```txt
-src/components/workbench/CesiumMapRenderer.tsx
-src/atlas/sections/MediaSection.tsx
-src-tauri/src/agent/runner/loop.rs
-src-tauri/src/canvas/session.rs
-src-tauri/src/agent/tools/progressive.rs
-src-tauri/src/agent/workflow.rs
-src-tauri/src/agent/swarm.rs
-src/atlas/components/chat/AssistantMessage.tsx
-src-tauri/src/agent/runner/tool_dispatch.rs
-src/atlas/components/chat/SessionSidebar.tsx
-src/atlas/components/voice/VoiceModeOverlay.tsx
-src/atlas/sections/CombosSection.tsx
-src/atlas/sections/DataDisplaySection.tsx
-src/atlas/sections/InputsSection.tsx
-src/atlas/sections/Lab3DSection.tsx
-src/components/settings/Tabs/ProvidersSettings.tsx
-src/components/ui/sidebar.tsx
-src/components/widgets/workbench/InteractiveDrawingCanvas.tsx
-src/components/Zen/XTermPanel.tsx
+File: src-tauri/src/canvas/session.rs
+Owner: backend/canvas
+Rule Exempted: Rust hard file-size limit
+Reason: Canvas session owns persistence, protocol handling, validation, and plotting in one module.
+Split or Fix Plan: Split into session_store.rs, session_commands.rs, element_ops.rs, and export/import helpers.
+Expires: Phase 5
+
+File: src-tauri/src/agent/runner/loop.rs
+Owner: backend/agent
+Rule Exempted: Rust hard file-size limit
+Reason: Agent run loop still owns orchestration, memory loading, compaction, persistence, streaming, and tool result handling.
+Split or Fix Plan: Extract memory_bootstrap.rs, turn_persistence.rs, stream_accounting.rs, and loop_state.rs.
+Expires: Phase 5
+
+File: src-tauri/src/agent/tools/progressive.rs
+Owner: backend/tools
+Rule Exempted: Rust hard file-size limit
+Reason: Progressive tools include several unrelated tool implementations and metadata in one registry module.
+Split or Fix Plan: Split by domain into map, graph, research, memory, and UI activation tool modules.
+Expires: Phase 3.5
+
+File: src-tauri/src/agent/workflow.rs
+Owner: backend/agent
+Rule Exempted: Rust hard file-size limit
+Reason: Workflow definitions, execution helpers, and orchestration behavior are colocated.
+Split or Fix Plan: Split workflow model types, execution engine, persistence adapter, and tests.
+Expires: Phase 5
+
+File: src-tauri/src/agent/swarm.rs
+Owner: backend/agent
+Rule Exempted: Rust hard file-size limit
+Reason: Swarm coordination, task assignment, and result synthesis are still in one module.
+Split or Fix Plan: Extract swarm_plan.rs, worker_pool.rs, task_assignment.rs, and synthesis.rs.
+Expires: Phase 5
+```
+
+## Frontend Exemptions
+
+```txt
+File: src/components/workbench/CesiumMapRenderer.tsx
+Owner: frontend/map
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Map rendering, layers, entity conversion, and interactions are colocated.
+Split or Fix Plan: Split renderer setup, layers, entity adapters, and interactions.
+Expires: Phase 4/5
+
+File: src/atlas/sections/MediaSection.tsx
+Owner: frontend/atlas
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Atlas demo content is dense and not yet production-structured.
+Split or Fix Plan: Split media demos by component category.
+Expires: Phase 4/5
+
+File: src/atlas/components/chat/AssistantMessage.tsx
+Owner: frontend/chat
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Message rendering still owns markdown, tool display, reasoning, and artifact handling.
+Split or Fix Plan: Extract message parts and rendering adapters.
+Expires: Phase 4/5
+
+File: src/atlas/components/chat/SessionSidebar.tsx
+Owner: frontend/chat
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Session navigation, filtering, folder UI, and actions are colocated.
+Split or Fix Plan: Split search/filter, folder tree, row item, and actions menu.
+Expires: Phase 4/5
+
+File: src/atlas/components/voice/VoiceModeOverlay.tsx
+Owner: frontend/voice
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Voice UX, visualization, state display, and controls are colocated.
+Split or Fix Plan: Split visualizer, controls, status panels, and interaction state.
+Expires: Phase 4/5
+
+File: src/atlas/sections/CombosSection.tsx
+Owner: frontend/atlas
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Atlas combo demos are grouped in one section file.
+Split or Fix Plan: Split examples into focused components.
+Expires: Phase 4/5
+
+File: src/atlas/sections/DataDisplaySection.tsx
+Owner: frontend/atlas
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Atlas display demos are grouped in one section file.
+Split or Fix Plan: Split examples into focused components.
+Expires: Phase 4/5
+
+File: src/atlas/sections/InputsSection.tsx
+Owner: frontend/atlas
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Atlas input demos are grouped in one section file.
+Split or Fix Plan: Split examples into focused components.
+Expires: Phase 4/5
+
+File: src/atlas/sections/Lab3DSection.tsx
+Owner: frontend/atlas
+Rule Exempted: TS/TSX hard file-size limit
+Reason: 3D lab demo code is grouped in one section file.
+Split or Fix Plan: Split scene setup, controls, and examples.
+Expires: Phase 4/5
+
+File: src/components/settings/Tabs/ProvidersSettings.tsx
+Owner: frontend/settings
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Provider settings still owns provider list, editing, validation, and key state.
+Split or Fix Plan: Split provider list, provider editor, key status, and connection tests.
+Expires: Phase 4
+
+File: src/components/ui/sidebar.tsx
+Owner: frontend/ui
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Generated UI primitive has many variants and subcomponents.
+Split or Fix Plan: Leave until UI primitive review; avoid adding new behavior here.
+Expires: Phase 5
+
+File: src/components/widgets/workbench/InteractiveDrawingCanvas.tsx
+Owner: frontend/workbench
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Drawing state, rendering, tools, and interactions are colocated.
+Split or Fix Plan: Split tool state, canvas renderer, selection, and export helpers.
+Expires: Phase 4/5
+
+File: src/components/Zen/XTermPanel.tsx
+Owner: frontend/terminal
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Terminal rendering, process lifecycle UI, and input handling are colocated.
+Split or Fix Plan: Split terminal session hook, toolbar, panel, and event handling.
+Expires: Phase 4
 ```
