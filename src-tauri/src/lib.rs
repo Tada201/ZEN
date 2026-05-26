@@ -108,13 +108,23 @@ pub fn run() {
                 // Initialize Speech service
                 let resource_dir = app_handle.path().resource_dir().unwrap_or_default();
                 let hardware_info = state.hardware.lock().await.get_info().clone();
-                let speech_service = crate::services::SpeechService::new(&app_dir, &resource_dir, hardware_info);
+                let speech_service = crate::services::SpeechService::with_process_manager(
+                    &app_dir,
+                    &resource_dir,
+                    hardware_info,
+                    state.process_manager.clone(),
+                );
                 let mut speech_write = state.speech.write().await;
                 *speech_write = Some(speech_service);
                 drop(speech_write);
 
                 // Initialize TTS service
-                let tts_service = crate::services::TtsService::new(&app_dir, &resource_dir).unwrap_or_else(|e| {
+                let tts_service = crate::services::TtsService::with_process_manager(
+                    &app_dir,
+                    &resource_dir,
+                    state.process_manager.clone(),
+                )
+                .unwrap_or_else(|e| {
                     tracing::warn!(error = %e, "Failed to initialize TTS service");
                     eprintln!("Warning: Failed to initialize TTS service: {}", e);
                     crate::services::TtsService::new_dummy()

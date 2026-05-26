@@ -50,44 +50,43 @@ Remaining work:
 
 ### Speech / Whisper Runtime
 
-Status: needs cleanup.
+Status: partially centralized.
 
 Findings:
 
-- `src-tauri/src/services/speech_service/mod.rs` resolves Whisper binaries,
-  downloads models, writes temp WAV files, spawns `whisper-server`, runs a
-  watchdog, restarts the process, and kills stale Windows processes.
-- Some process tracking uses `ProcessManager`, but watchdog restart and `Drop`
-  cleanup still duplicate process-kill behavior.
-- Model path resolution is local to the service and duplicated with release
-  resource layout assumptions.
+- `src-tauri/src/services/runtime_resource.rs` owns bundled/app-data model paths,
+  Whisper binary resolution, atomic model writes, command setup, and synchronous
+  PID cleanup.
+- `src-tauri/src/services/speech_service/mod.rs` still owns Whisper-specific
+  model validation, manual model download, watchdog health checks, and
+  transcription.
+- App startup injects `ProcessManager` into `SpeechService` so the
+  `whisper-server` process is tracked for cleanup.
 
-Required next code step:
+Remaining work:
 
-- Extract a runtime resource/process helper that owns:
-  - bundled resource lookup
-  - app-data fallback lookup
-  - model directory creation
-  - atomic model write/finalize
-  - local binary spawn with Windows no-window flags
-  - process registration and cleanup
-  - stale process kill by tracked id
+- Add explicit tests around model path resolution and atomic write behavior.
+- Consider replacing the forever-running watchdog loop with a cancellable task
+  tied to service shutdown.
 
 ### TTS / Piper Runtime
 
-Status: needs cleanup.
+Status: partially centralized.
 
 Findings:
 
-- `src-tauri/src/services/tts_service/mod.rs` spawns the Piper binary directly.
-- It owns command construction, stdin/stdout piping, and thread-based IO.
-- It should share the same runtime helper as Whisper for binary path resolution
-  and process cleanup.
+- `src-tauri/src/services/runtime_resource.rs` owns Piper binary and default
+  model path resolution plus command setup.
+- `src-tauri/src/services/tts_service/mod.rs` still owns synthesis-specific
+  stdin/stdout handling and audio playback.
+- App startup injects `ProcessManager` into `TtsService` so spawned Piper
+  processes are tracked while active.
 
-Required next code step:
+Remaining work:
 
-- Reuse the runtime helper for binary lookup and process lifecycle.
-- Keep synthesis-specific stdin/stdout handling in TTS service.
+- Keep synthesis-specific piping in TTS, but do not add new local binary lookup
+  logic there.
+- Add a small test seam for config-file resolution if custom voices expand.
 
 ### RAG Filesystem And Network
 
@@ -132,7 +131,7 @@ Remaining work:
 
 - Tool ownership doc is complete.
 - Runtime process/resource helper exists.
-- Speech and TTS use the helper for process/resource lifecycle.
+- Speech and TTS use the helper for resource lookup and process command setup.
 - Remaining direct privileged operations are either routed or listed here with a
   clear owner and fix plan.
 - `npm run quality:fast`, `npm run test:backend`, and

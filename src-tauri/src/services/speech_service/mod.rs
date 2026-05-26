@@ -1,14 +1,13 @@
 use crate::services::hardware::HardwareInfo;
+use crate::services::runtime_resource::{
+    configure_tokio_command_for_binary, kill_pid_sync, RuntimeResources,
+};
 use serde::Serialize;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::process::Command;
 use tracing::{info, warn};
 use uuid::Uuid;
-
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 use reqwest::multipart;
 
@@ -26,15 +25,14 @@ pub struct ModelFileStatus {
 
 /// Manages the Whisper model lifecycle and transcription.
 pub struct SpeechService {
-    app_data_dir: PathBuf,
-    resource_dir: PathBuf,
+    runtime: RuntimeResources,
     model_path: std::sync::Arc<tokio::sync::RwLock<PathBuf>>,
     model_name: std::sync::Arc<tokio::sync::RwLock<String>>,
     hardware: HardwareInfo,
     server_process: std::sync::Arc<tokio::sync::Mutex<Option<tokio::process::Child>>>,
     watchdog_running: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// Optional reference to process manager for cleanup tracking
-    process_manager: Option<std::sync::Arc<crate::services::process_manager::ProcessManager>>,
+    process_manager: Option<Arc<crate::services::process_manager::ProcessManager>>,
 }
 
 impl SpeechService {
@@ -44,29 +42,7 @@ impl SpeechService {
         resource_dir: &std::path::Path,
         hardware: HardwareInfo,
     ) -> Self {
-        // Priority: model in resources, then app_data_dir
-        let model_name = "ggml-base.en.bin".to_string();
-        let bundled_model = resource_dir
-            .join("resources")
-            .join("models")
-            .join(&model_name);
-
-        let model_path = if bundled_model.exists() {
-            bundled_model
-        } else {
-            app_data_dir.join("models").join(&model_name)
-        };
-
-        Self {
-            app_data_dir: app_data_dir.to_path_buf(),
-            resource_dir: resource_dir.to_path_buf(),
-            model_path: std::sync::Arc::new(tokio::sync::RwLock::new(model_path)),
-            model_name: std::sync::Arc::new(tokio::sync::RwLock::new(model_name)),
-            hardware,
-            server_process: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
-            watchdog_running: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            process_manager: None,
-        }
+        Self::build(app_data_dir, resource_dir, hardware, None)
     }
 
     /// Create a new SpeechService with process manager integration
@@ -74,29 +50,29 @@ impl SpeechService {
         app_data_dir: &std::path::Path,
         resource_dir: &std::path::Path,
         hardware: HardwareInfo,
-        process_manager: std::sync::Arc<crate::services::process_manager::ProcessManager>,
+        process_manager: Arc<crate::services::process_manager::ProcessManager>,
     ) -> Self {
-        let model_name = "ggml-base.en.bin".to_string();
-        let bundled_model = resource_dir
-            .join("resources")
-            .join("models")
-            .join(&model_name);
+        Self::build(app_data_dir, resource_dir, hardware, Some(process_manager))
+    }
 
-        let model_path = if bundled_model.exists() {
-            bundled_model
-        } else {
-            app_data_dir.join("models").join(&model_name)
-        };
+    fn build(
+        app_data_dir: &std::path::Path,
+        resource_dir: &std::path::Path,
+        hardware: HardwareInfo,
+        process_manager: Option<Arc<crate::services::process_manager::ProcessManager>>,
+    ) -> Self {
+        let runtime = RuntimeResources::new(app_data_dir, resource_dir);
+        let model_name = "ggml-base.en.bin".to_string();
+        let model_path = runtime.whisper_model_path(&model_name);
 
         Self {
-            app_data_dir: app_data_dir.to_path_buf(),
-            resource_dir: resource_dir.to_path_buf(),
+            runtime,
             model_path: std::sync::Arc::new(tokio::sync::RwLock::new(model_path)),
             model_name: std::sync::Arc::new(tokio::sync::RwLock::new(model_name)),
             hardware,
             server_process: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
             watchdog_running: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            process_manager: Some(process_manager),
+            process_manager,
         }
     }
 
@@ -129,12 +105,8 @@ impl SpeechService {
 
     /// Check if a specific model file exists and is valid (not truncated).
     pub fn check_model_file(&self, model_name: &str) -> ModelFileStatus {
-        let bundled = self
-            .resource_dir
-            .join("resources")
-            .join("models")
-            .join(model_name);
-        let downloaded = self.app_data_dir.join("models").join(model_name);
+        let bundled = self.runtime.bundled_model_path(model_name);
+        let downloaded = self.runtime.downloaded_model_path(model_name);
 
         let (path, source) = if bundled.exists() {
             (bundled, "bundled")
@@ -189,11 +161,10 @@ impl SpeechService {
 
     /// Download a specific whisper model by name, with validation.
     pub async fn download_model(&self, model_name: &str) -> Result<ModelFileStatus, String> {
-        let target_path = self.app_data_dir.join("models").join(model_name);
+        let target_path = self.runtime.downloaded_model_path(model_name);
 
-        // Create models directory
-        let models_dir = self.app_data_dir.join("models");
-        std::fs::create_dir_all(&models_dir)
+        self.runtime
+            .ensure_models_dir()
             .map_err(|e| format!("Failed to create models dir: {e}"))?;
 
         // Remove any existing partial/corrupt file
@@ -250,15 +221,7 @@ impl SpeechService {
             ));
         }
 
-        // Write to a temp file first, then rename for atomicity
-        let temp_path = target_path.with_extension("bin.part");
-        std::fs::write(&temp_path, &bytes)
-            .map_err(|e| format!("Failed to write model file: {e}"))?;
-
-        std::fs::rename(&temp_path, &target_path).map_err(|e| {
-            std::fs::remove_file(&temp_path).ok();
-            format!("Failed to finalize model file: {e}")
-        })?;
+        self.runtime.atomic_write(&target_path, &bytes)?;
 
         info!(
             size_mb = bytes.len() / (1024 * 1024),
@@ -292,64 +255,19 @@ impl SpeechService {
             self.ensure_model().await?;
         }
 
-        let mut whisper_bin = self
-            .resource_dir
-            .join("resources")
-            .join("binaries")
-            .join("whisper")
-            .join("whisper-server.exe");
-
-        // INTELLIGENT BINARY SELECTION
-        if self.hardware.has_cuda {
-            let cublas_bin = self
-                .resource_dir
-                .join("resources")
-                .join("binaries")
-                .join("whisper")
-                .join("whisper-cublas")
-                .join("whisper-server.exe");
-            if cublas_bin.exists() {
-                info!("CUDA detected and whisper-cublas found. Using GPU acceleration.");
-                whisper_bin = cublas_bin;
-            } else {
-                warn!("CUDA detected but whisper-cublas binary missing. Falling back to standard binary.");
-            }
-        } else {
-            info!("No CUDA detected or forced CPU mode. Using standard binary.");
-        }
-
-        info!(path = %whisper_bin.display(), exists = whisper_bin.exists(), "Resolved whisper-server path");
-
-        let bin_to_execute = if whisper_bin.exists() {
-            whisper_bin.to_str().unwrap().to_string()
-        } else {
-            // Fallback for dev or unusual setups
-            let dev_bin = self.app_data_dir.join("whisper-server.exe");
-            info!(path = %dev_bin.display(), exists = dev_bin.exists(), "Checking dev fallback path");
-            if dev_bin.exists() {
-                dev_bin.to_str().unwrap().to_string()
-            } else {
-                "whisper-server".to_string()
-            }
-        };
+        let resolved_binary = self.runtime.whisper_server_binary(self.hardware.has_cuda);
+        info!(
+            path = %resolved_binary.path.display(),
+            source = ?resolved_binary.source,
+            exists = resolved_binary.path.exists(),
+            "Resolved whisper-server path"
+        );
 
         let path_str = self.model_path.read().await.to_str().unwrap().to_string();
         info!(path = %path_str, "Starting whisper-server with model");
 
-        // whisper-server.exe -m models/ggml-base.bin --port 8080
-        let bin_path = std::path::Path::new(&bin_to_execute);
-        let mut command = Command::new(&bin_to_execute);
-
-        // Setting current_dir is CRITICAL on Windows for finding DLLs in the same folder
-        if let Some(parent) = bin_path.parent() {
-            if parent.exists() {
-                command.current_dir(parent);
-                info!(dir = %parent.display(), "Set working directory for whisper-server");
-            }
-        }
-
-        #[cfg(target_os = "windows")]
-        command.creation_flags(CREATE_NO_WINDOW);
+        let mut command = Command::new(&resolved_binary.path);
+        configure_tokio_command_for_binary(&mut command, &resolved_binary.path);
 
         let child = command
             .args([
@@ -366,7 +284,8 @@ impl SpeechService {
             .map_err(|e| {
                 format!(
                     "Failed to start whisper-server: {}. Path attempted: {}",
-                    e, bin_to_execute
+                    e,
+                    resolved_binary.path.display()
                 )
             })?;
 
@@ -415,8 +334,10 @@ impl SpeechService {
             .swap(true, std::sync::atomic::Ordering::SeqCst)
         {
             let process_mtx = self.server_process.clone();
-            let resource_dir = self.resource_dir.clone();
+            let runtime = self.runtime.clone();
             let model_path = self.model_path.clone();
+            let process_manager = self.process_manager.clone();
+            let has_cuda = self.hardware.has_cuda;
 
             tokio::spawn(async move {
                 let mut fail_count = 0;
@@ -442,45 +363,17 @@ impl SpeechService {
                             if let Some(mut child) = guard.take() {
                                 let _ = child.kill().await;
                                 if let Some(id) = child.id() {
-                                    #[allow(unused_mut)]
-                                    let mut cmd = std::process::Command::new("taskkill");
-                                    #[cfg(target_os = "windows")]
-                                    cmd.creation_flags(CREATE_NO_WINDOW);
-                                    let _ = cmd.args(["/F", "/PID", &id.to_string()]).status();
+                                    kill_pid_sync(id, "whisper-server");
+                                }
+                                if let Some(ref pm) = process_manager {
+                                    pm.unregister("whisper-server").await;
                                 }
                             }
 
                             // Respawn - use same binary resolution as start_server()
-                            let mut whisper_bin = resource_dir
-                                .join("resources")
-                                .join("binaries")
-                                .join("whisper")
-                                .join("whisper-server.exe");
-                            let cublas_bin = resource_dir
-                                .join("resources")
-                                .join("binaries")
-                                .join("whisper")
-                                .join("whisper-cublas")
-                                .join("whisper-server.exe");
-                            if cublas_bin.exists() {
-                                whisper_bin = cublas_bin;
-                            }
-                            let bin_to_execute = if whisper_bin.exists() {
-                                whisper_bin.to_str().unwrap().to_string()
-                            } else {
-                                "whisper-server".to_string()
-                            };
-
-                            let mut command = tokio::process::Command::new(&bin_to_execute);
-                            let bin_path = std::path::Path::new(&bin_to_execute);
-                            if let Some(parent) = bin_path.parent() {
-                                if parent.exists() {
-                                    command.current_dir(parent);
-                                }
-                            }
-
-                            #[cfg(target_os = "windows")]
-                            command.creation_flags(CREATE_NO_WINDOW);
+                            let resolved_binary = runtime.whisper_server_binary(has_cuda);
+                            let mut command = tokio::process::Command::new(&resolved_binary.path);
+                            configure_tokio_command_for_binary(&mut command, &resolved_binary.path);
 
                             if let Ok(new_child) = command
                                 .args([
@@ -495,6 +388,11 @@ impl SpeechService {
                                 .stderr(std::process::Stdio::null())
                                 .spawn()
                             {
+                                if let Some(ref pm) = process_manager {
+                                    if let Some(pid) = new_child.id() {
+                                        pm.register("whisper-server", "whisper-server", pid).await;
+                                    }
+                                }
                                 *guard = Some(new_child);
                                 fail_count = 0;
                                 tracing::info!(
@@ -523,17 +421,7 @@ impl SpeechService {
 
             *current_model = requested_model.to_string();
             let mut current_path = self.model_path.write().await;
-
-            let bundled_model = self
-                .resource_dir
-                .join("resources")
-                .join("models")
-                .join(requested_model);
-            *current_path = if bundled_model.exists() {
-                bundled_model
-            } else {
-                self.app_data_dir.join("models").join(requested_model)
-            };
+            *current_path = self.runtime.whisper_model_path(requested_model);
         }
         drop(current_model);
 
@@ -548,8 +436,8 @@ impl SpeechService {
 
         // Generate a temporary WAV file path
         let temp_wav_path = self
-            .app_data_dir
-            .join(format!("temp_{}.wav", Uuid::new_v4()));
+            .runtime
+            .temp_file_path(&format!("temp_{}.wav", Uuid::new_v4()));
 
         // Write WAV using hound
         {
@@ -666,12 +554,7 @@ impl Drop for SpeechService {
                         });
                     }
 
-                    // Force kill on Windows via taskkill since we can't await child.kill() in Drop
-                    #[allow(unused_mut)]
-                    let mut cmd = std::process::Command::new("taskkill");
-                    #[cfg(target_os = "windows")]
-                    cmd.creation_flags(CREATE_NO_WINDOW);
-                    let _ = cmd.args(["/F", "/PID", &id.to_string()]).status();
+                    kill_pid_sync(id, "whisper-server");
                 }
             }
         }

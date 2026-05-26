@@ -1,7 +1,5 @@
 use rodio::{buffer::SamplesBuffer, OutputStream, OutputStreamHandle, Sink};
 use std::io::Write;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
@@ -9,8 +7,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::{Mutex, RwLock};
 use tracing::{error, info};
 
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x08000000;
+use crate::services::runtime_resource::{configure_std_command_for_binary, RuntimeResources};
 
 struct AudioHandle(OutputStream, OutputStreamHandle, Sink);
 
@@ -47,17 +44,12 @@ impl TtsService {
         let sink =
             Sink::try_new(&stream_handle).map_err(|e| format!("Failed to create sink: {}", e))?;
 
-        let piper_path = resource_dir
-            .join("resources")
-            .join("binaries")
-            .join("piper")
-            .join("piper.exe");
+        let runtime = RuntimeResources::new(_app_data_dir, resource_dir);
+        let piper_binary = runtime.piper_binary();
+        let piper_path = piper_binary.path.clone();
 
         // Check if there's a custom model saved in settings; otherwise use default
-        let model_path = resource_dir
-            .join("resources")
-            .join("models")
-            .join("glados_piper_medium.onnx");
+        let model_path = runtime.default_piper_model_path();
 
         if !piper_path.exists() {
             error!(
@@ -85,15 +77,10 @@ impl TtsService {
         let sink =
             Sink::try_new(&stream_handle).map_err(|e| format!("Failed to create sink: {}", e))?;
 
-        let piper_path = resource_dir
-            .join("resources")
-            .join("binaries")
-            .join("piper")
-            .join("piper.exe");
-        let model_path = resource_dir
-            .join("resources")
-            .join("models")
-            .join("glados_piper_medium.onnx");
+        let runtime = RuntimeResources::new(_app_data_dir, resource_dir);
+        let piper_binary = runtime.piper_binary();
+        let piper_path = piper_binary.path.clone();
+        let model_path = runtime.default_piper_model_path();
 
         if !piper_path.exists() {
             error!(
@@ -137,13 +124,7 @@ impl TtsService {
             let model_path = model_path_clone.to_string_lossy().into_owned();
 
             let mut command = Command::new(&piper_exe);
-
-            // Set current_dir to the directory where piper.exe lives so it can find its DLLs
-            if let Some(parent) = piper_path_clone.parent() {
-                if parent.exists() {
-                    command.current_dir(parent);
-                }
-            }
+            configure_std_command_for_binary(&mut command, &piper_path_clone);
 
             // Find config file: try {model}.json and {model_without_onnx}.json
             let model_p = std::path::PathBuf::from(&model_path);
@@ -170,9 +151,6 @@ impl TtsService {
             if let Some(cp) = config_path {
                 command.arg("--config").arg(cp);
             }
-
-            #[cfg(target_os = "windows")]
-            command.creation_flags(CREATE_NO_WINDOW);
 
             let mut child = match command
                 .stdin(Stdio::piped())
