@@ -5,8 +5,8 @@ use tauri::State;
 
 #[tauri::command]
 pub async fn ingest_document(state: State<'_, AppState>, path: String) -> AppResult<Document> {
-    let validated_path = crate::utils::validate_path(&path)?;
-    state.documents.ingest(validated_path).await
+    let workspace = state.workspace_folder.read().await.clone();
+    state.documents.ingest(path, workspace).await
 }
 
 #[tauri::command]

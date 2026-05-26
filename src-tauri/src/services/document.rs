@@ -1,5 +1,5 @@
 use sqlx::SqlitePool;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -38,7 +38,7 @@ impl DocumentService {
         *model_lock = Some(model);
     }
 
-    fn guess_mime_type(path: &PathBuf) -> String {
+    fn guess_mime_type(path: &Path) -> String {
         match path
             .extension()
             .and_then(|s| s.to_str())
@@ -64,7 +64,7 @@ impl DocumentService {
         }
     }
 
-    fn guess_doc_type(path: &PathBuf) -> &'static str {
+    fn guess_doc_type(path: &Path) -> &'static str {
         match path
             .extension()
             .and_then(|s| s.to_str())
@@ -79,7 +79,10 @@ impl DocumentService {
         }
     }
 
-    pub async fn ingest(&self, path: PathBuf) -> AppResult<Document> {
+    pub async fn ingest(&self, path: String, workspace: PathBuf) -> AppResult<Document> {
+        let path = crate::workspace::resolve_workspace_path(&workspace, &path)
+            .map_err(|e| AppError::Custom(format!("Workspace violation: {}", e)))?;
+
         // 1. Read file metadata
         let metadata = tokio::fs::metadata(&path).await.map_err(|e| {
             AppError::Custom(format!("Cannot read file '{}': {}", path.display(), e))
