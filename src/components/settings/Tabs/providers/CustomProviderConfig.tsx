@@ -5,6 +5,7 @@ import { WorkbenchInput } from '@/components/settings/ui/WorkbenchInput';
 import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
 import { cn } from '@/lib/utils/style';
+import { isSecretPresentValue } from '@/api';
 
 interface CustomProviderConfigProps {
     providerId: string;
@@ -22,7 +23,9 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
     // Local state to allow typing without immediate store validation interference
     const [localName, setLocalName] = useState(displayName);
     const [localUrl, setLocalUrl] = useState(baseUrl);
-    const [localKey, setLocalKey] = useState(apiKey || '');
+    const [localKey, setLocalKey] = useState(isSecretPresentValue(apiKey) ? '' : apiKey || '');
+    const [keyDirty, setKeyDirty] = useState(false);
+    const keyPlaceholder = isSecretPresentValue(apiKey) ? 'Saved key present. Enter a new key to replace it.' : 'Optional secure key...';
 
     const isEnabled = useSettingsStore(s => s.customProviders.find(cp => cp.id === providerId)?.enabled ?? true);
     // @ts-ignore
@@ -92,9 +95,16 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                     <WorkbenchInput
                         type={showKey ? "text" : "password"}
                         value={localKey}
-                        placeholder="Optional secure key..."
-                        onChangeText={setLocalKey}
-                        onBlur={() => updateCustomProvider(providerId, { apiKey: localKey } as any)}
+                        placeholder={keyPlaceholder}
+                        onChangeText={(value) => {
+                            setLocalKey(value);
+                            setKeyDirty(true);
+                        }}
+                        onBlur={() => {
+                            if (!keyDirty) return;
+                            updateCustomProvider(providerId, { apiKey: localKey } as any);
+                            setKeyDirty(false);
+                        }}
                         className="w-full h-9 pr-10 font-mono text-xs bg-muted/20 border-border/60 rounded-lg"
                     />
                     <WorkbenchButton

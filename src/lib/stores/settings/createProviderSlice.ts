@@ -1,10 +1,30 @@
 import type { StateCreator } from "zustand";
-import { isSecretPresentValue, providersApi } from "@/api";
+import { isSecretPresentValue, providersApi, SECRET_PRESENT_VALUE, settingsApi } from "@/api";
 import type { SettingsState, ProviderSlice } from "./types";
 import { DIRECT_PROVIDER_URLS } from "./types";
 import { ModelInfo, CustomProviderConfig, PROVIDER_KEY_MAP, PROVIDER_BASE_URL_MAP, providerOrder } from "../../types/provider";
 
 const isLocalUrl = (url: string) => url.includes('localhost') || url.includes('127.0.0.1');
+
+const customProviderApiKeySetting = (id: string) => `${id}_api_key`;
+const customProviderBaseUrlSetting = (id: string) => `${id}_base_url`;
+
+function metadataApiKey(value: string | undefined): string {
+    return value && value.trim() ? SECRET_PRESENT_VALUE : "";
+}
+
+function syncCustomProviderBackendSettings(id: string, baseUrl?: string, apiKey?: string) {
+    const settings: Record<string, string> = {};
+    if (baseUrl !== undefined) settings[customProviderBaseUrlSetting(id)] = baseUrl;
+    if (apiKey !== undefined && !isSecretPresentValue(apiKey)) {
+        settings[customProviderApiKeySetting(id)] = apiKey;
+    }
+    if (Object.keys(settings).length === 0) return;
+
+    settingsApi.setSettings(settings).catch((err) => {
+        console.warn(`[SettingsStore] Failed to sync custom provider ${id}:`, err);
+    });
+}
 
 export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSlice> = (set, get) => ({
   openaiApiKey: "",
@@ -199,9 +219,11 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
 
   addCustomProvider: (config) => {
     const id = `custom-${Date.now()}`;
+    syncCustomProviderBackendSettings(id, config.baseUrl, config.apiKey);
     const newProvider: CustomProviderConfig = {
         ...config,
         id,
+        apiKey: metadataApiKey(config.apiKey),
         enabled: true,
         customModels: config.customModels || []
     };
@@ -212,6 +234,7 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
   removeCustomProvider: (id) => {
     const state = get();
     const current = state.customProviders;
+    syncCustomProviderBackendSettings(id, "", "");
     
     if (state.activeProvider === id) {
         const fallback = providerOrder.find(p => {
@@ -257,8 +280,17 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
 
   updateCustomProvider: (id, updates) => {
     const current = get().customProviders;
+    if (updates.baseUrl !== undefined || updates.apiKey !== undefined) {
+        syncCustomProviderBackendSettings(id, updates.baseUrl, updates.apiKey);
+    }
+    const publicUpdates = {
+        ...updates,
+        ...(updates.apiKey !== undefined
+            ? { apiKey: isSecretPresentValue(updates.apiKey) ? SECRET_PRESENT_VALUE : metadataApiKey(updates.apiKey) }
+            : {}),
+    };
     get().updateSetting({ 
-        customProviders: current.map(cp => cp.id === id ? { ...cp, ...updates } : cp) 
+        customProviders: current.map(cp => cp.id === id ? { ...cp, ...publicUpdates } : cp)
     } as any);
   },
 
