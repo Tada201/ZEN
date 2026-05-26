@@ -99,9 +99,6 @@ jobs:
         shell: pwsh
         run: npm run runtime:fetch -- -Clean
 
-      - name: Build frontend
-        run: npm run build
-
       - name: Check runtime binaries
         shell: pwsh
         run: npm run runtime:check
