@@ -118,6 +118,22 @@ impl McpServer {
         if self.state == McpServerState::Running {
             return Err(McpError::AlreadyRunning);
         }
+        if self.app_handle.is_none() {
+            return Err(McpError::Transport(
+                "MCP server requires a live AppHandle before startup".to_string(),
+            ));
+        }
+        if self.tool_service.is_none() {
+            return Err(McpError::Transport(
+                "MCP server requires ToolService before startup".to_string(),
+            ));
+        }
+        if self.config.http_enabled && !is_loopback_host(&self.config.http_bind_host) {
+            return Err(McpError::Transport(format!(
+                "MCP HTTP remote bind '{}' is disabled; use localhost, 127.0.0.1, or ::1",
+                self.config.http_bind_host
+            )));
+        }
 
         info!(
             "Starting MCP server v{} on {}:{}",
@@ -432,6 +448,27 @@ impl McpServer {
         });
 
         JsonRpcResponse::success(serde_json::to_value(result).unwrap(), id)
+    }
+}
+
+fn is_loopback_host(host: &str) -> bool {
+    matches!(
+        host.trim().to_ascii_lowercase().as_str(),
+        "localhost" | "127.0.0.1" | "::1"
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_loopback_host;
+
+    #[test]
+    fn loopback_host_policy_allows_only_local_addresses() {
+        assert!(is_loopback_host("localhost"));
+        assert!(is_loopback_host("127.0.0.1"));
+        assert!(is_loopback_host("::1"));
+        assert!(!is_loopback_host("0.0.0.0"));
+        assert!(!is_loopback_host("192.168.1.10"));
     }
 }
 

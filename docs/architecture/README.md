@@ -8,6 +8,8 @@ Start here:
 4. Use the codegraph before planning cross-module changes.
 5. For architecture calibration, read
    `docs/architecture/example-codebase-lessons.md`.
+6. For backend test expectations, read
+   `docs/architecture/backend-test-gate.md`.
 
 This directory should hold architecture decisions, not loose notes. If a new
 pattern is introduced, document the owner, the allowed path, and what not to do.

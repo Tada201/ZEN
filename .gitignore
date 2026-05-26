@@ -1,6 +1,7 @@
 # Tauri
 src-tauri/target/
 src-tauri/target-test/
+src-tauri/policy-tests/target/
 src-tauri/gen/
 src-tauri/bin/
 src-tauri/resources/binaries/

@@ -53,6 +53,23 @@ Assert-NoMatches `
     "Direct registry execution found outside ToolService" `
     "rg 'execute_authorized|execute_with_permission' src-tauri/src -n -g '!src-tauri/src/services/tool.rs' -g '!src-tauri/src/tools/mod.rs'"
 
+Assert-NoMatches `
+    "Backend command reads secret-like keys through SettingsService" `
+    "rg 'settings_manager\.get\([^`n]*(api_key|token|secret|credential|password)' src-tauri/src/commands src-tauri/src/agent src-tauri/src/tools src-tauri/src/search -n"
+
+$settingsCommands = Get-Content "src-tauri/src/commands/settings.rs" -Raw
+$getAllStart = $settingsCommands.IndexOf("pub async fn get_all_settings")
+if ($getAllStart -ge 0) {
+    $nextCommand = $settingsCommands.IndexOf("#[tauri::command]", $getAllStart + 1)
+    if ($nextCommand -lt 0) {
+        $nextCommand = $settingsCommands.Length
+    }
+    $getAllBody = $settingsCommands.Substring($getAllStart, $nextCommand - $getAllStart)
+    if ($getAllBody -match "settings_manager\.get_all\(\)") {
+        Fail "Public get_all_settings command must use get_all_public, not get_all"
+    }
+}
+
 $rustLimit = 900
 $tsLimit = 500
 $violations = @()

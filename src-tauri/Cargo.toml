@@ -73,6 +73,7 @@ text-splitter = { version = "0.16", features = ["tiktoken-rs"] }
 ab_glyph = "0.2"
 pdf-inspector = { git = "https://github.com/firecrawl/pdf-inspector" }
 meval = "0.2"
+keyring = { version = "3", features = ["windows-native"] }
 
 [dev-dependencies]
 wiremock = "0.6"

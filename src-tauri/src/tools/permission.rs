@@ -41,6 +41,7 @@ impl RiskLevel {
 // ========== PERMISSION DECISION ==========
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 #[serde(tag = "type", content = "data")]
 pub enum PermissionDecision {
     /// Tool execution is approved
@@ -371,6 +372,11 @@ impl HardcodedSecurityRules {
         }
 
         // Check terminal-specific patterns against full args string
+        if let Some(command) = command_from_args(args_str) {
+            if let Some(reason) = self.check_terminal_command(&command) {
+                return Some(reason);
+            }
+        }
         self.check_terminal_command(args_str)
     }
 
@@ -387,6 +393,18 @@ impl HardcodedSecurityRules {
     }
 }
 
+fn command_from_args(args_str: &str) -> Option<String> {
+    serde_json::from_str::<serde_json::Value>(args_str)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("command")
+                .or_else(|| value.get("cmd"))
+                .and_then(|command| command.as_str())
+                .map(ToString::to_string)
+        })
+}
+
 pub static HARDCODED_SECURITY_RULES: LazyLock<HardcodedSecurityRules> = LazyLock::new(|| {
     let flags = r"(?:-[a-zA-Z]+\s+)*";
     let trailing_flags = r"(?:\s+-[a-zA-Z]+)*\s*";
@@ -394,20 +412,20 @@ pub static HARDCODED_SECURITY_RULES: LazyLock<HardcodedSecurityRules> = LazyLock
     let terminal_deny = vec![
         // rm -rf / or rm -rf /*
         CompiledRegex::new(
-            &format!(r"\brm\s+{}(?:--\s+)?/\*?{}", flags, trailing_flags),
+            &format!(r"\brm\s+{}(?:--\s+)?/\*?{}$", flags, trailing_flags),
             false,
         )
         .expect("Hardcoded regex should compile"),
         // rm -rf ~ or rm -rf ~/
         CompiledRegex::new(
-            &format!(r"\brm\s+{}(?:--\s+)?~/?\*?{}", flags, trailing_flags),
+            &format!(r"\brm\s+{}(?:--\s+)?~/?\*?{}$", flags, trailing_flags),
             false,
         )
         .expect("Hardcoded regex should compile"),
         // rm -rf $HOME or rm -rf ${HOME}
         CompiledRegex::new(
             &format!(
-                r"\brm\s+{}(?:--\s+)?(?:\$HOME|\$\{{HOME\}})/?\*?{}",
+                r"\brm\s+{}(?:--\s+)?(?:\$HOME|\$\{{HOME\}})/?\*?{}$",
                 flags, trailing_flags
             ),
             false,
@@ -415,13 +433,16 @@ pub static HARDCODED_SECURITY_RULES: LazyLock<HardcodedSecurityRules> = LazyLock
         .expect("Hardcoded regex should compile"),
         // rm -rf . or rm -rf ./
         CompiledRegex::new(
-            &format!(r"\brm\s+{}(?:--\s+)?\./?(\*)?{}", flags, trailing_flags),
+            &format!(r"\brm\s+{}(?:--\s+)?\.(?:/?\*)?{}$", flags, trailing_flags),
             false,
         )
         .expect("Hardcoded regex should compile"),
         // rm -rf .. or rm -rf ../
         CompiledRegex::new(
-            &format!(r"\brm\s+{}(?:--\s+)?\.\./?(\*)?{}", flags, trailing_flags),
+            &format!(
+                r"\brm\s+{}(?:--\s+)?\.\.(?:/?\*)?{}$",
+                flags, trailing_flags
+            ),
             false,
         )
         .expect("Hardcoded regex should compile"),
@@ -676,7 +697,7 @@ mod tests {
             "file_read".to_string(),
             ToolPermissionRules {
                 always_deny: vec![r"\.env".to_string()],
-                always_allow: vec![r"\.txt$".to_string()],
+                always_allow: vec![r"\.txt".to_string()],
                 ..Default::default()
             },
         );

@@ -1,5 +1,5 @@
 use crate::error::AppResult;
-use crate::services::secret::{is_secret_placeholder_write, redact_if_secret};
+use crate::services::{is_secret_placeholder_write, redact_if_secret, SECRET_PRESENT_SENTINEL};
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -53,6 +53,14 @@ impl SettingsService {
             return Ok(());
         }
 
+        self.set_raw(key, value).await
+    }
+
+    pub async fn set_secret_presence_metadata(&self, key: String) -> AppResult<()> {
+        self.set_raw(key, SECRET_PRESENT_SENTINEL.to_string()).await
+    }
+
+    async fn set_raw(&self, key: String, value: String) -> AppResult<()> {
         // Always update the in-memory cache
         {
             let mut cache = self.cache.write().await;

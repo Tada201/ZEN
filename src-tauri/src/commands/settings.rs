@@ -1,7 +1,7 @@
 use crate::commands::AppState;
 use crate::db::models::{ModelInfo, ProviderConfig};
 use crate::error::{AppResult, ZenResult};
-use crate::services::secret::is_secret_key;
+use crate::services::is_secret_key;
 use crate::tools::manager::{ToolManager, ToolMetadata};
 use std::collections::HashMap;
 use tauri::State;
@@ -130,9 +130,10 @@ pub async fn get_all_available_models(
             };
             let base_url_key = format!("{}_base_url", p_name);
 
-            let has_key = all_settings
-                .get(&api_key_key)
-                .map(|v| !v.is_empty())
+            let has_key = state
+                .secret_manager
+                .has_secret(&api_key_key)
+                .await
                 .unwrap_or(false);
             let has_url = all_settings
                 .get(&base_url_key)

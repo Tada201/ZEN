@@ -79,6 +79,16 @@ pub fn run() {
                     tracing::warn!(error = %e, "Failed to load settings from database");
                     eprintln!("Warning: Failed to load settings from database: {}", e);
                 }
+                match state.secret_manager.migrate_plaintext_settings_to_keyring().await {
+                    Ok(count) if count > 0 => {
+                        tracing::info!(count, "Migrated plaintext secrets to OS keyring");
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        tracing::warn!(error = %e, "Secret migration failed");
+                        eprintln!("Warning: Secret migration failed: {}", e);
+                    }
+                }
 
                 // Auto-sync tool permissions from loaded settings into ToolManager
                 {
