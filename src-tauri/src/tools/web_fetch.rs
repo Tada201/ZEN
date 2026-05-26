@@ -1,8 +1,14 @@
 use async_trait::async_trait;
+use futures_util::StreamExt;
 use serde::Deserialize;
 use serde_json::json;
 use tauri::AppHandle;
+use url::Url;
 
+use super::url_safety::{
+    resolve_redirect_url, validate_public_http_url, validate_public_ip, MAX_DIRECT_RESPONSE_BYTES,
+    MAX_OUTPUT_CHARS, MAX_REDIRECTS, REQUEST_TIMEOUT_SECS,
+};
 use super::{permission::RiskLevel, Tool, ToolError, ToolOutput};
 
 pub struct WebFetchTool;
@@ -10,6 +16,101 @@ pub struct WebFetchTool;
 #[derive(Deserialize)]
 struct WebFetchArgs {
     url: String,
+}
+
+async fn validate_resolved_ips(url: &Url) -> Result<(), String> {
+    let host = url
+        .host_str()
+        .ok_or_else(|| "URL must include a host".to_string())?;
+    let port = url
+        .port_or_known_default()
+        .ok_or_else(|| "URL must include a valid port".to_string())?;
+
+    let addrs = tokio::net::lookup_host((host, port))
+        .await
+        .map_err(|e| format!("DNS resolution failed: {}", e))?;
+
+    let mut resolved_any = false;
+    for addr in addrs {
+        resolved_any = true;
+        validate_public_ip(addr.ip())?;
+    }
+
+    if !resolved_any {
+        return Err("DNS resolution returned no addresses".to_string());
+    }
+
+    Ok(())
+}
+
+async fn read_capped_text(response: reqwest::Response) -> Result<String, String> {
+    if let Some(content_length) = response.content_length() {
+        if content_length > MAX_DIRECT_RESPONSE_BYTES as u64 {
+            return Err(format!(
+                "Response too large: {} bytes exceeds {} byte limit",
+                content_length, MAX_DIRECT_RESPONSE_BYTES
+            ));
+        }
+    }
+
+    let mut stream = response.bytes_stream();
+    let mut bytes = Vec::new();
+
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("Failed to read response body: {}", e))?;
+        if bytes.len() + chunk.len() > MAX_DIRECT_RESPONSE_BYTES {
+            return Err(format!(
+                "Response too large: exceeded {} byte limit",
+                MAX_DIRECT_RESPONSE_BYTES
+            ));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+
+    String::from_utf8(bytes).map_err(|e| format!("Response body is not valid UTF-8: {}", e))
+}
+
+async fn fetch_public_url(client: &reqwest::Client, start_url: Url) -> Result<String, String> {
+    let mut current_url = start_url;
+
+    for redirect_count in 0..=MAX_REDIRECTS {
+        validate_resolved_ips(&current_url).await?;
+
+        let response = client
+            .get(current_url.clone())
+            .send()
+            .await
+            .map_err(|e| format!("Fetch failed: {}", e))?;
+
+        if response.status().is_redirection() {
+            if redirect_count == MAX_REDIRECTS {
+                return Err(format!("Too many redirects, max is {}", MAX_REDIRECTS));
+            }
+
+            let location = response
+                .headers()
+                .get(reqwest::header::LOCATION)
+                .and_then(|value| value.to_str().ok())
+                .ok_or_else(|| "Redirect response missing Location header".to_string())?;
+            current_url = resolve_redirect_url(&current_url, location)?;
+            continue;
+        }
+
+        if !response.status().is_success() {
+            return Err(format!(
+                "Direct fetch returned status: {}",
+                response.status()
+            ));
+        }
+
+        return read_capped_text(response).await;
+    }
+
+    Err(format!("Too many redirects, max is {}", MAX_REDIRECTS))
+}
+
+fn truncate_chars(text: &str, max_chars: usize) -> String {
+    text.chars().take(max_chars).collect()
 }
 
 async fn nine_router_fetch_fallback(app: &AppHandle, url: &str) -> Result<String, String> {
@@ -205,44 +306,20 @@ impl Tool for WebFetchTool {
             })?;
 
         let url = parsed_args.url.trim();
-
-        if !url.starts_with("http://") && !url.starts_with("https://") {
-            return Err(ToolError::InvalidArguments {
-                details: "URL must start with http:// or https://".into(),
-            });
-        }
+        let validated_url = validate_public_http_url(url)
+            .map_err(|e| ToolError::InvalidArguments { details: e })?;
 
         // We try reqwest first for direct fetch.
         let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(REQUEST_TIMEOUT_SECS))
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|e| ToolError::ExecutionFailed {
                 message: format!("Failed to build HTTP client: {}", e),
             })?;
 
-        let fetch_result = client.get(url).send().await;
-
-        let text = match fetch_result {
-            Ok(response) => {
-                let status = response.status();
-                if status.is_success() {
-                    response
-                        .text()
-                        .await
-                        .map_err(|e| ToolError::ExecutionFailed {
-                            message: format!("Failed to read response body: {}", e),
-                        })?
-                } else {
-                    nine_router_fetch_fallback(&app, url).await.map_err(|e| {
-                        ToolError::ExecutionFailed {
-                            message: format!(
-                                "Direct fetch failed with status: {}. Fallback fetch failed: {}",
-                                status, e
-                            ),
-                        }
-                    })?
-                }
-            }
+        let text = match fetch_public_url(&client, validated_url).await {
+            Ok(text) => text,
             Err(err) => nine_router_fetch_fallback(&app, url).await.map_err(|e| {
                 ToolError::ExecutionFailed {
                     message: format!("Direct fetch failed: {}. Fallback fetch failed: {}", err, e),
@@ -251,11 +328,10 @@ impl Tool for WebFetchTool {
         };
 
         // Truncate to avoid exploding context window (e.g. max 16KB of text)
-        let max_len = 16 * 1024;
-        let final_text = if text.len() > max_len {
+        let final_text = if text.len() > MAX_OUTPUT_CHARS {
             format!(
                 "{}... [TRUNCATED - Content exceeded 16KB]",
-                &text[..max_len]
+                truncate_chars(&text, MAX_OUTPUT_CHARS)
             )
         } else {
             text
@@ -268,5 +344,42 @@ impl Tool for WebFetchTool {
             }),
             metadata: None,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_localhost_hostname() {
+        assert!(validate_public_http_url("http://localhost:8080").is_err());
+    }
+
+    #[test]
+    fn rejects_private_ipv4() {
+        assert!(validate_public_http_url("http://192.168.1.10/").is_err());
+        assert!(validate_public_http_url("http://10.0.0.1/").is_err());
+        assert!(validate_public_http_url("http://172.16.0.1/").is_err());
+    }
+
+    #[test]
+    fn rejects_link_local_metadata_ipv4() {
+        assert!(validate_public_http_url("http://169.254.169.254/latest").is_err());
+    }
+
+    #[test]
+    fn rejects_loopback_ipv6() {
+        assert!(validate_public_http_url("http://[::1]/").is_err());
+    }
+
+    #[test]
+    fn accepts_public_https_url() {
+        assert!(validate_public_http_url("https://example.com/path").is_ok());
+    }
+
+    #[test]
+    fn rejects_non_http_scheme() {
+        assert!(validate_public_http_url("file:///etc/passwd").is_err());
     }
 }

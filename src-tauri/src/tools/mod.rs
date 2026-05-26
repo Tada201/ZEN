@@ -3,6 +3,7 @@ pub mod manager;
 pub mod operational_map;
 pub mod permission;
 pub mod sys_metrics;
+pub mod url_safety;
 pub mod web_fetch;
 
 use async_trait::async_trait;
