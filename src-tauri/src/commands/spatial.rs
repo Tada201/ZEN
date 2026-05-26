@@ -1,22 +1,20 @@
-use tauri::State;
-use crate::error::ZenError;
 use super::AppState;
+use crate::error::ZenError;
+use tauri::State;
 
 // GTSM Types
-use crate::services::gtsm::{
-    Satellite, Flight, Earthquake, WeatherPoint, WeatherGridPoint, MilitaryAircraft,
-    Route, GeocodingResult, GeofenceZone, FusionEvent
-};
-use crate::services::gtsm::types::{RoutingProfile, NavigationRoute};
-use crate::services::gtsm::history::{TelemetrySnapshot, TrackPoint};
 use crate::db::models::{GtsmGeofence, GtsmMarker};
+use crate::services::gtsm::history::{TelemetrySnapshot, TrackPoint};
+use crate::services::gtsm::types::{NavigationRoute, RoutingProfile};
+use crate::services::gtsm::{
+    Earthquake, Flight, FusionEvent, GeocodingResult, GeofenceZone, MilitaryAircraft, Route,
+    Satellite, WeatherGridPoint, WeatherPoint,
+};
 
 // ─── Realtime Telemetry Cache & API Commands ───
 
 #[tauri::command]
-pub async fn get_satellites(
-    state: State<'_, AppState>,
-) -> Result<Vec<Satellite>, ZenError> {
+pub async fn get_satellites(state: State<'_, AppState>) -> Result<Vec<Satellite>, ZenError> {
     if let Some(cached) = state.gtsm_cache.get_satellites().await {
         return Ok(cached);
     }
@@ -29,9 +27,7 @@ pub async fn get_satellites(
 }
 
 #[tauri::command]
-pub async fn get_flights(
-    state: State<'_, AppState>,
-) -> Result<Vec<Flight>, ZenError> {
+pub async fn get_flights(state: State<'_, AppState>) -> Result<Vec<Flight>, ZenError> {
     if let Some(cached) = state.gtsm_cache.get_flights().await {
         return Ok(cached);
     }
@@ -54,7 +50,9 @@ pub async fn get_earthquakes(
     let quakes = crate::services::gtsm::earthquakes::fetch_earthquakes(
         min_magnitude.unwrap_or(2.5),
         hours.unwrap_or(24),
-    ).await.map_err(|e| ZenError::Internal(e.to_string()))?;
+    )
+    .await
+    .map_err(|e| ZenError::Internal(e.to_string()))?;
     state.gtsm_cache.set_earthquakes(quakes.clone(), 300).await;
     Ok(quakes)
 }
@@ -84,7 +82,7 @@ pub async fn get_weather_grid(
     step: f64,
 ) -> Result<Vec<WeatherGridPoint>, ZenError> {
     let grid = crate::services::gtsm::weather::fetch_weather_grid(
-        lat_min, lat_max, lon_min, lon_max, step
+        lat_min, lat_max, lon_min, lon_max, step,
     )
     .await
     .map_err(|e| ZenError::Internal(e.to_string()))?;
@@ -113,13 +111,17 @@ pub async fn calculate_route(
     end_lat: f64,
     end_lon: f64,
 ) -> Result<Route, ZenError> {
-    let key = format!("{:.4},{:.4}->{:.4},{:.4}", start_lat, start_lon, end_lat, end_lon);
+    let key = format!(
+        "{:.4},{:.4}->{:.4},{:.4}",
+        start_lat, start_lon, end_lat, end_lon
+    );
     if let Some(cached) = state.gtsm_cache.get_route(&key).await {
         return Ok(cached);
     }
-    let route = crate::services::gtsm::routing::calculate_route(start_lat, start_lon, end_lat, end_lon)
-        .await
-        .map_err(|e| ZenError::Internal(e.to_string()))?;
+    let route =
+        crate::services::gtsm::routing::calculate_route(start_lat, start_lon, end_lat, end_lon)
+            .await
+            .map_err(|e| ZenError::Internal(e.to_string()))?;
     state.gtsm_cache.set_route(&key, route.clone(), 3600).await;
     Ok(route)
 }
@@ -136,7 +138,10 @@ pub async fn geocode_search(
     let results = crate::services::gtsm::geocoding::search(&query, limit.unwrap_or(5))
         .await
         .map_err(|e| ZenError::Internal(e.to_string()))?;
-    state.gtsm_cache.set_geocoding(&query, results.clone(), 86400).await;
+    state
+        .gtsm_cache
+        .set_geocoding(&query, results.clone(), 86400)
+        .await;
     Ok(results)
 }
 
@@ -163,17 +168,12 @@ pub async fn create_geofence(
 }
 
 #[tauri::command]
-pub async fn list_geofences(
-    state: State<'_, AppState>,
-) -> Result<Vec<GeofenceZone>, ZenError> {
+pub async fn list_geofences(state: State<'_, AppState>) -> Result<Vec<GeofenceZone>, ZenError> {
     Ok(state.geofence_engine.list_zones().await)
 }
 
 #[tauri::command]
-pub async fn remove_geofence(
-    state: State<'_, AppState>,
-    zone_id: String,
-) -> Result<(), ZenError> {
+pub async fn remove_geofence(state: State<'_, AppState>, zone_id: String) -> Result<(), ZenError> {
     state.geofence_engine.remove_zone(&zone_id).await;
     Ok(())
 }
@@ -193,11 +193,21 @@ pub async fn get_fusion_events(
     let military = state.gtsm_cache.get_military().await.unwrap_or_default();
     let flights = state.gtsm_cache.get_flights().await.unwrap_or_default();
 
-    events.extend(crate::services::gtsm::fusion::correlate_satellites_earthquakes(&sats, &quakes, radius));
-    events.extend(crate::services::gtsm::fusion::correlate_military_earthquakes(&military, &quakes, radius));
-    events.extend(crate::services::gtsm::fusion::correlate_flights_military(&flights, &military, radius));
+    events.extend(
+        crate::services::gtsm::fusion::correlate_satellites_earthquakes(&sats, &quakes, radius),
+    );
+    events.extend(
+        crate::services::gtsm::fusion::correlate_military_earthquakes(&military, &quakes, radius),
+    );
+    events.extend(crate::services::gtsm::fusion::correlate_flights_military(
+        &flights, &military, radius,
+    ));
 
-    events.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal));
+    events.sort_by(|a, b| {
+        b.confidence
+            .partial_cmp(&a.confidence)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     Ok(events)
 }
 
@@ -219,14 +229,21 @@ pub async fn compute_navigation_route(
         _ => RoutingProfile::Car,
     };
 
-    let pool = state.db().await.map_err(|e| ZenError::Internal(e.to_string()))?;
+    let pool = state
+        .db()
+        .await
+        .map_err(|e| ZenError::Internal(e.to_string()))?;
 
-    // Fetch API keys from settings using queries
-    let here_key = crate::db::queries::get_setting(&pool, "here_api_key")
+    // Fetch API keys through SecretService; settings reads must not expose credentials.
+    let here_key = state
+        .secret_manager
+        .get_secret("here_api_key")
         .await
         .map_err(|e| ZenError::Internal(e.to_string()))?
         .unwrap_or_default();
-    let google_key = crate::db::queries::get_setting(&pool, "google_maps_api_key")
+    let google_key = state
+        .secret_manager
+        .get_secret("google_maps_api_key")
         .await
         .map_err(|e| ZenError::Internal(e.to_string()))?
         .unwrap_or_default();
@@ -238,8 +255,16 @@ pub async fn compute_navigation_route(
         start_coords,
         end_coords,
         prof,
-        if here_key.is_empty() { None } else { Some(here_key) },
-        if google_key.is_empty() { None } else { Some(google_key) },
+        if here_key.is_empty() {
+            None
+        } else {
+            Some(here_key)
+        },
+        if google_key.is_empty() {
+            None
+        } else {
+            Some(google_key)
+        },
         Some(&pool),
     )
     .await
@@ -266,9 +291,14 @@ pub async fn get_entity_track(
     start_time: i64,
     end_time: i64,
 ) -> Result<Vec<TrackPoint>, ZenError> {
-    crate::services::gtsm::history::query_entity_track(&state.db().await?, &entity_id, start_time, end_time)
-        .await
-        .map_err(|e| ZenError::Internal(e.to_string()))
+    crate::services::gtsm::history::query_entity_track(
+        &state.db().await?,
+        &entity_id,
+        start_time,
+        end_time,
+    )
+    .await
+    .map_err(|e| ZenError::Internal(e.to_string()))
 }
 
 #[tauri::command]
@@ -296,9 +326,7 @@ pub async fn get_telemetry_stats(
 // ─── GTSM SQLite DB Geofences & Markers Persistence Commands ───
 
 #[tauri::command]
-pub async fn list_geofences_db(
-    state: State<'_, AppState>
-) -> Result<Vec<GtsmGeofence>, ZenError> {
+pub async fn list_geofences_db(state: State<'_, AppState>) -> Result<Vec<GtsmGeofence>, ZenError> {
     crate::db::queries::list_geofences(&state.db().await?)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))
@@ -336,26 +364,21 @@ pub async fn save_geofence_db(
         created_at: String::new(),
         updated_at: String::new(),
     };
-    
+
     crate::db::queries::save_geofence(&state.db().await?, &geofence)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))
 }
 
 #[tauri::command]
-pub async fn delete_geofence_db(
-    state: State<'_, AppState>,
-    id: String
-) -> Result<(), ZenError> {
+pub async fn delete_geofence_db(state: State<'_, AppState>, id: String) -> Result<(), ZenError> {
     crate::db::queries::delete_geofence(&state.db().await?, &id)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))
 }
 
 #[tauri::command]
-pub async fn list_markers_db(
-    state: State<'_, AppState>
-) -> Result<Vec<GtsmMarker>, ZenError> {
+pub async fn list_markers_db(state: State<'_, AppState>) -> Result<Vec<GtsmMarker>, ZenError> {
     crate::db::queries::list_markers(&state.db().await?)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))
@@ -386,17 +409,14 @@ pub async fn save_marker_db(
         metadata,
         created_at: String::new(),
     };
-    
+
     crate::db::queries::save_marker(&state.db().await?, &marker)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))
 }
 
 #[tauri::command]
-pub async fn delete_marker_db(
-    state: State<'_, AppState>,
-    id: String
-) -> Result<(), ZenError> {
+pub async fn delete_marker_db(state: State<'_, AppState>, id: String) -> Result<(), ZenError> {
     crate::db::queries::delete_marker(&state.db().await?, &id)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))

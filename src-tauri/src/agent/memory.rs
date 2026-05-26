@@ -1,3 +1,5 @@
+use crate::agent::utils::now_ms;
+use crate::agent::workflow::WorkflowExecution;
 /// ISSUE-007: Unified Memory Backend Interface
 ///
 /// Provides a trait-based abstraction (`AgentMemoryBackend`) over the existing
@@ -8,15 +10,12 @@
 ///
 /// The `UnifiedMemoryBackend` struct wraps the existing session memory system
 /// and implements this trait without replacing any existing functionality.
-
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use crate::agent::utils::now_ms;
-use crate::agent::workflow::WorkflowExecution;
 
 // ─── Types ───
 
@@ -138,10 +137,15 @@ pub trait AgentMemoryBackend: Send + Sync {
     async fn clear_session(&self, session_id: &str) -> Result<()>;
 
     /// Store a serialized workflow execution state.
-    async fn store_workflow_state(&self, workflow_id: &str, execution: &WorkflowExecution) -> Result<()>;
+    async fn store_workflow_state(
+        &self,
+        workflow_id: &str,
+        execution: &WorkflowExecution,
+    ) -> Result<()>;
 
     /// Retrieve a serialized workflow execution state.
-    async fn retrieve_workflow_state(&self, workflow_id: &str) -> Result<Option<WorkflowExecution>>;
+    async fn retrieve_workflow_state(&self, workflow_id: &str)
+        -> Result<Option<WorkflowExecution>>;
 
     /// List all saved workflow IDs.
     async fn list_saved_workflows(&self) -> Result<Vec<String>>;
@@ -184,20 +188,29 @@ impl AgentMemoryBackend for InMemoryBackend {
     async fn query(&self, query: MemoryQuery) -> Result<Vec<AgentMemory>> {
         let store = self.memories.read().await;
 
-        let results: Vec<AgentMemory> = store.iter()
+        let results: Vec<AgentMemory> = store
+            .iter()
             .filter(|m| {
                 if let Some(ref agent_id) = query.agent_id {
-                    if m.agent_id != *agent_id { return false; }
+                    if m.agent_id != *agent_id {
+                        return false;
+                    }
                 }
                 if let Some(ref session_id) = query.session_id {
-                    if m.session_id != *session_id { return false; }
+                    if m.session_id != *session_id {
+                        return false;
+                    }
                 }
                 if let Some(ref mt) = query.memory_type {
-                    if m.memory_type != *mt { return false; }
+                    if m.memory_type != *mt {
+                        return false;
+                    }
                 }
                 if let Some(ref text) = query.text_query {
                     let lower = text.to_lowercase();
-                    if !m.content.to_lowercase().contains(&lower) { return false; }
+                    if !m.content.to_lowercase().contains(&lower) {
+                        return false;
+                    }
                 }
                 true
             })
@@ -229,27 +242,30 @@ impl AgentMemoryBackend for InMemoryBackend {
         Ok(())
     }
 
-    async fn store_workflow_state(&self, workflow_id: &str, execution: &WorkflowExecution) -> Result<()> {
+    async fn store_workflow_state(
+        &self,
+        workflow_id: &str,
+        execution: &WorkflowExecution,
+    ) -> Result<()> {
         let json = serde_json::to_string(execution)?;
-        let memory = AgentMemory::new(
-            "workflow-system",
-            "workflows",
-            json,
-            MemoryType::Context,
-        ).with_metadata("workflow_id".to_string(), serde_json::json!(workflow_id));
-        
+        let memory = AgentMemory::new("workflow-system", "workflows", json, MemoryType::Context)
+            .with_metadata("workflow_id".to_string(), serde_json::json!(workflow_id));
+
         let mut store = self.memories.write().await;
         store.retain(|m| m.metadata.get("workflow_id") != Some(&serde_json::json!(workflow_id)));
         store.push(memory);
         Ok(())
     }
 
-    async fn retrieve_workflow_state(&self, workflow_id: &str) -> Result<Option<WorkflowExecution>> {
+    async fn retrieve_workflow_state(
+        &self,
+        workflow_id: &str,
+    ) -> Result<Option<WorkflowExecution>> {
         let store = self.memories.read().await;
-        let found = store.iter().find(|m| {
-            m.metadata.get("workflow_id") == Some(&serde_json::json!(workflow_id))
-        });
-        
+        let found = store
+            .iter()
+            .find(|m| m.metadata.get("workflow_id") == Some(&serde_json::json!(workflow_id)));
+
         if let Some(memory) = found {
             let execution: WorkflowExecution = serde_json::from_str(&memory.content)?;
             Ok(Some(execution))
@@ -260,9 +276,14 @@ impl AgentMemoryBackend for InMemoryBackend {
 
     async fn list_saved_workflows(&self) -> Result<Vec<String>> {
         let store = self.memories.read().await;
-        let ids: Vec<String> = store.iter()
+        let ids: Vec<String> = store
+            .iter()
             .filter(|m| m.metadata.get("workflow_id").is_some())
-            .filter_map(|m| m.metadata.get("workflow_id").and_then(|v| v.as_str().map(String::from)))
+            .filter_map(|m| {
+                m.metadata
+                    .get("workflow_id")
+                    .and_then(|v| v.as_str().map(String::from))
+            })
             .collect();
         Ok(ids)
     }
@@ -303,7 +324,8 @@ impl UnifiedMemoryBackend {
             "agent_id": memory.agent_id,
             "memory_type": memory.memory_type,
             "metadata": memory.metadata,
-        })).ok();
+        }))
+        .ok();
 
         crate::rag::session_memory::MemoryEntry {
             id: memory.id.clone(),
@@ -320,12 +342,15 @@ impl UnifiedMemoryBackend {
 impl AgentMemoryBackend for UnifiedMemoryBackend {
     async fn store(&self, memory: AgentMemory) -> Result<AgentMemory> {
         let entry = Self::to_memory_entry(&memory);
-        self.session_memory.write_memory(&memory.session_id, entry).await?;
+        self.session_memory
+            .write_memory(&memory.session_id, entry)
+            .await?;
 
         // Update local indices
         {
             let mut index = self.agent_index.write().await;
-            index.entry(memory.agent_id.clone())
+            index
+                .entry(memory.agent_id.clone())
                 .or_insert_with(Vec::new)
                 .push(memory.id.clone());
         }
@@ -345,20 +370,29 @@ impl AgentMemoryBackend for UnifiedMemoryBackend {
     async fn query(&self, query: MemoryQuery) -> Result<Vec<AgentMemory>> {
         let cache = self.memory_cache.read().await;
 
-        let results: Vec<AgentMemory> = cache.values()
+        let results: Vec<AgentMemory> = cache
+            .values()
             .filter(|m| {
                 if let Some(ref agent_id) = query.agent_id {
-                    if m.agent_id != *agent_id { return false; }
+                    if m.agent_id != *agent_id {
+                        return false;
+                    }
                 }
                 if let Some(ref session_id) = query.session_id {
-                    if m.session_id != *session_id { return false; }
+                    if m.session_id != *session_id {
+                        return false;
+                    }
                 }
                 if let Some(ref mt) = query.memory_type {
-                    if m.memory_type != *mt { return false; }
+                    if m.memory_type != *mt {
+                        return false;
+                    }
                 }
                 if let Some(ref text) = query.text_query {
                     let lower = text.to_lowercase();
-                    if !m.content.to_lowercase().contains(&lower) { return false; }
+                    if !m.content.to_lowercase().contains(&lower) {
+                        return false;
+                    }
                 }
                 true
             })
@@ -394,13 +428,16 @@ impl AgentMemoryBackend for UnifiedMemoryBackend {
     }
 
     async fn clear_session(&self, session_id: &str) -> Result<()> {
-        self.session_memory.delete_session_memory(session_id).await?;
+        self.session_memory
+            .delete_session_memory(session_id)
+            .await?;
 
         // Clean local caches
         let mut cache = self.memory_cache.write().await;
         let mut index = self.agent_index.write().await;
 
-        let ids_to_remove: Vec<String> = cache.values()
+        let ids_to_remove: Vec<String> = cache
+            .values()
             .filter(|m| m.session_id == session_id)
             .map(|m| m.id.clone())
             .collect();
@@ -416,27 +453,32 @@ impl AgentMemoryBackend for UnifiedMemoryBackend {
         Ok(())
     }
 
-    async fn store_workflow_state(&self, workflow_id: &str, execution: &WorkflowExecution) -> Result<()> {
+    async fn store_workflow_state(
+        &self,
+        workflow_id: &str,
+        execution: &WorkflowExecution,
+    ) -> Result<()> {
         let json = serde_json::to_string(execution)?;
-        let memory = AgentMemory::new(
-            "workflow-system",
-            "workflows",
-            json,
-            MemoryType::Context,
-        ).with_metadata("workflow_id".to_string(), serde_json::json!(workflow_id));
+        let memory = AgentMemory::new("workflow-system", "workflows", json, MemoryType::Context)
+            .with_metadata("workflow_id".to_string(), serde_json::json!(workflow_id));
 
         self.store(memory).await?;
         Ok(())
     }
 
-    async fn retrieve_workflow_state(&self, workflow_id: &str) -> Result<Option<WorkflowExecution>> {
-        let results = self.query(MemoryQuery {
-            agent_id: Some("workflow-system".to_string()),
-            session_id: Some("workflows".to_string()),
-            memory_type: Some(MemoryType::Context),
-            text_query: Some(workflow_id.to_string()),
-            limit: 1,
-        }).await?;
+    async fn retrieve_workflow_state(
+        &self,
+        workflow_id: &str,
+    ) -> Result<Option<WorkflowExecution>> {
+        let results = self
+            .query(MemoryQuery {
+                agent_id: Some("workflow-system".to_string()),
+                session_id: Some("workflows".to_string()),
+                memory_type: Some(MemoryType::Context),
+                text_query: Some(workflow_id.to_string()),
+                limit: 1,
+            })
+            .await?;
 
         for memory in results {
             if memory.metadata.get("workflow_id") == Some(&serde_json::json!(workflow_id)) {
@@ -449,28 +491,37 @@ impl AgentMemoryBackend for UnifiedMemoryBackend {
     }
 
     async fn list_saved_workflows(&self) -> Result<Vec<String>> {
-        let results = self.query(MemoryQuery {
-            agent_id: Some("workflow-system".to_string()),
-            session_id: Some("workflows".to_string()),
-            memory_type: Some(MemoryType::Context),
-            limit: 100,
-            ..Default::default()
-        }).await?;
+        let results = self
+            .query(MemoryQuery {
+                agent_id: Some("workflow-system".to_string()),
+                session_id: Some("workflows".to_string()),
+                memory_type: Some(MemoryType::Context),
+                limit: 100,
+                ..Default::default()
+            })
+            .await?;
 
-        let ids: Vec<String> = results.iter()
-            .filter_map(|m| m.metadata.get("workflow_id").and_then(|v| v.as_str().map(String::from)))
+        let ids: Vec<String> = results
+            .iter()
+            .filter_map(|m| {
+                m.metadata
+                    .get("workflow_id")
+                    .and_then(|v| v.as_str().map(String::from))
+            })
             .collect();
         Ok(ids)
     }
 
     async fn delete_workflow_state(&self, workflow_id: &str) -> Result<()> {
-        let results = self.query(MemoryQuery {
-            agent_id: Some("workflow-system".to_string()),
-            session_id: Some("workflows".to_string()),
-            memory_type: Some(MemoryType::Context),
-            text_query: Some(workflow_id.to_string()),
-            limit: 10,
-        }).await?;
+        let results = self
+            .query(MemoryQuery {
+                agent_id: Some("workflow-system".to_string()),
+                session_id: Some("workflows".to_string()),
+                memory_type: Some(MemoryType::Context),
+                text_query: Some(workflow_id.to_string()),
+                limit: 10,
+            })
+            .await?;
 
         let mut cache = self.memory_cache.write().await;
         for memory in results {
@@ -508,15 +559,37 @@ mod tests {
     async fn test_query_by_agent() {
         let backend = InMemoryBackend::new();
 
-        backend.store(AgentMemory::new("zen", "s1", "Content A", MemoryType::Fact)).await.unwrap();
-        backend.store(AgentMemory::new("zen-docs", "s1", "Content B", MemoryType::Result)).await.unwrap();
-        backend.store(AgentMemory::new("zen", "s1", "Content C", MemoryType::Pattern)).await.unwrap();
+        backend
+            .store(AgentMemory::new("zen", "s1", "Content A", MemoryType::Fact))
+            .await
+            .unwrap();
+        backend
+            .store(AgentMemory::new(
+                "zen-docs",
+                "s1",
+                "Content B",
+                MemoryType::Result,
+            ))
+            .await
+            .unwrap();
+        backend
+            .store(AgentMemory::new(
+                "zen",
+                "s1",
+                "Content C",
+                MemoryType::Pattern,
+            ))
+            .await
+            .unwrap();
 
-        let results = backend.query(MemoryQuery {
-            agent_id: Some("zen".to_string()),
-            limit: 10,
-            ..Default::default()
-        }).await.unwrap();
+        let results = backend
+            .query(MemoryQuery {
+                agent_id: Some("zen".to_string()),
+                limit: 10,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
 
         assert_eq!(results.len(), 2);
     }
@@ -525,14 +598,28 @@ mod tests {
     async fn test_query_by_type() {
         let backend = InMemoryBackend::new();
 
-        backend.store(AgentMemory::new("zen", "s1", "Fact 1", MemoryType::Fact)).await.unwrap();
-        backend.store(AgentMemory::new("zen", "s1", "Pattern 1", MemoryType::Pattern)).await.unwrap();
+        backend
+            .store(AgentMemory::new("zen", "s1", "Fact 1", MemoryType::Fact))
+            .await
+            .unwrap();
+        backend
+            .store(AgentMemory::new(
+                "zen",
+                "s1",
+                "Pattern 1",
+                MemoryType::Pattern,
+            ))
+            .await
+            .unwrap();
 
-        let results = backend.query(MemoryQuery {
-            memory_type: Some(MemoryType::Pattern),
-            limit: 10,
-            ..Default::default()
-        }).await.unwrap();
+        let results = backend
+            .query(MemoryQuery {
+                memory_type: Some(MemoryType::Pattern),
+                limit: 10,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].content, "Pattern 1");
@@ -542,14 +629,33 @@ mod tests {
     async fn test_text_search() {
         let backend = InMemoryBackend::new();
 
-        backend.store(AgentMemory::new("zen", "s1", "Rust is fast", MemoryType::Fact)).await.unwrap();
-        backend.store(AgentMemory::new("zen", "s1", "Python is easy", MemoryType::Fact)).await.unwrap();
+        backend
+            .store(AgentMemory::new(
+                "zen",
+                "s1",
+                "Rust is fast",
+                MemoryType::Fact,
+            ))
+            .await
+            .unwrap();
+        backend
+            .store(AgentMemory::new(
+                "zen",
+                "s1",
+                "Python is easy",
+                MemoryType::Fact,
+            ))
+            .await
+            .unwrap();
 
-        let results = backend.query(MemoryQuery {
-            text_query: Some("rust".to_string()),
-            limit: 10,
-            ..Default::default()
-        }).await.unwrap();
+        let results = backend
+            .query(MemoryQuery {
+                text_query: Some("rust".to_string()),
+                limit: 10,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].content, "Rust is fast");
@@ -559,12 +665,24 @@ mod tests {
     async fn test_clear_agent() {
         let backend = InMemoryBackend::new();
 
-        backend.store(AgentMemory::new("zen", "s1", "A", MemoryType::Fact)).await.unwrap();
-        backend.store(AgentMemory::new("zen-docs", "s1", "B", MemoryType::Fact)).await.unwrap();
+        backend
+            .store(AgentMemory::new("zen", "s1", "A", MemoryType::Fact))
+            .await
+            .unwrap();
+        backend
+            .store(AgentMemory::new("zen-docs", "s1", "B", MemoryType::Fact))
+            .await
+            .unwrap();
 
         backend.clear_agent("zen").await.unwrap();
 
-        let all = backend.query(MemoryQuery { limit: 10, ..Default::default() }).await.unwrap();
+        let all = backend
+            .query(MemoryQuery {
+                limit: 10,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
         assert_eq!(all.len(), 1);
         assert_eq!(all[0].agent_id, "zen-docs");
     }
@@ -573,12 +691,24 @@ mod tests {
     async fn test_clear_session() {
         let backend = InMemoryBackend::new();
 
-        backend.store(AgentMemory::new("zen", "s1", "A", MemoryType::Fact)).await.unwrap();
-        backend.store(AgentMemory::new("zen", "s2", "B", MemoryType::Fact)).await.unwrap();
+        backend
+            .store(AgentMemory::new("zen", "s1", "A", MemoryType::Fact))
+            .await
+            .unwrap();
+        backend
+            .store(AgentMemory::new("zen", "s2", "B", MemoryType::Fact))
+            .await
+            .unwrap();
 
         backend.clear_session("s1").await.unwrap();
 
-        let all = backend.query(MemoryQuery { limit: 10, ..Default::default() }).await.unwrap();
+        let all = backend
+            .query(MemoryQuery {
+                limit: 10,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
         assert_eq!(all.len(), 1);
         assert_eq!(all[0].session_id, "s2");
     }
@@ -588,17 +718,26 @@ mod tests {
         let backend = InMemoryBackend::new();
 
         // Agent A stores findings
-        backend.store(
-            AgentMemory::new("zen-docs", "s1", "Found 5 related papers", MemoryType::Result)
-        ).await.unwrap();
+        backend
+            .store(AgentMemory::new(
+                "zen-docs",
+                "s1",
+                "Found 5 related papers",
+                MemoryType::Result,
+            ))
+            .await
+            .unwrap();
 
         // Agent B can search Agent A's findings
-        let results = backend.query(MemoryQuery {
-            agent_id: Some("zen-docs".to_string()),
-            text_query: Some("papers".to_string()),
-            limit: 10,
-            ..Default::default()
-        }).await.unwrap();
+        let results = backend
+            .query(MemoryQuery {
+                agent_id: Some("zen-docs".to_string()),
+                text_query: Some("papers".to_string()),
+                limit: 10,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].agent_id, "zen-docs");

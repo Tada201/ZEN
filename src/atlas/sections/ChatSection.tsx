@@ -243,6 +243,7 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
           <div className="absolute bottom-0 left-0 right-0 p-4 pb-8 bg-gradient-to-t from-background via-background/80 to-transparent pointer-events-none">
             <div className="mx-auto max-w-[700px] w-full pointer-events-auto">
               <PremiumChatInput
+                activeChatId={currentSessionId}
                 onSend={handleSendMessageInternal}
                 onAbort={abortStream}
                 isLoading={isStreaming}

@@ -85,7 +85,7 @@ export const SettingsSchema = z.object({
   logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
   backgroundTasksEnabled: z.boolean().default(true),
   toolYoloMode: z.boolean().default(false),
-  toolAutoApproveLowRisk: z.boolean().default(false),
+  toolAutoApproveLowRisk: z.boolean().default(true),
   toolGlobalDefault: z.enum(["confirm", "always_allow", "always_deny"]).default("confirm"),
   toolSettings: z.record(z.string(), z.any()).default({}),
 

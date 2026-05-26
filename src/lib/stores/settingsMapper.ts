@@ -46,7 +46,12 @@ const inferZodType = (schema: z.ZodTypeAny): "string" | "boolean" | "number" | "
   if (schema instanceof z.ZodNumber) return "number";
   if (schema instanceof z.ZodBoolean) return "boolean";
   if (schema instanceof z.ZodEnum) return "string";
-  if (schema instanceof z.ZodObject || schema instanceof z.ZodArray) return "json";
+  if (
+    schema instanceof z.ZodObject ||
+    schema instanceof z.ZodArray ||
+    schema instanceof z.ZodRecord
+  )
+    return "json";
   return "string";
 };
 

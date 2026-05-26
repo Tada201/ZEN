@@ -1,11 +1,11 @@
-use std::path::PathBuf;
+use crate::services::hardware::HardwareInfo;
 use serde::Serialize;
-use tokio::process::Command;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
+use std::path::PathBuf;
+use tokio::process::Command;
 use tracing::{info, warn};
 use uuid::Uuid;
-use crate::services::hardware::HardwareInfo;
 
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -39,10 +39,17 @@ pub struct SpeechService {
 
 impl SpeechService {
     /// Create a new SpeechService pointing to the app data directory.
-    pub fn new(app_data_dir: &std::path::Path, resource_dir: &std::path::Path, hardware: HardwareInfo) -> Self {
+    pub fn new(
+        app_data_dir: &std::path::Path,
+        resource_dir: &std::path::Path,
+        hardware: HardwareInfo,
+    ) -> Self {
         // Priority: model in resources, then app_data_dir
         let model_name = "ggml-base.en.bin".to_string();
-        let bundled_model = resource_dir.join("resources").join("models").join(&model_name);
+        let bundled_model = resource_dir
+            .join("resources")
+            .join("models")
+            .join(&model_name);
 
         let model_path = if bundled_model.exists() {
             bundled_model
@@ -70,7 +77,10 @@ impl SpeechService {
         process_manager: std::sync::Arc<crate::services::process_manager::ProcessManager>,
     ) -> Self {
         let model_name = "ggml-base.en.bin".to_string();
-        let bundled_model = resource_dir.join("resources").join("models").join(&model_name);
+        let bundled_model = resource_dir
+            .join("resources")
+            .join("models")
+            .join(&model_name);
 
         let model_path = if bundled_model.exists() {
             bundled_model
@@ -93,11 +103,11 @@ impl SpeechService {
     /// Known minimum file sizes (in bytes) for each model to detect truncated downloads.
     fn expected_min_size(model_name: &str) -> u64 {
         match model_name {
-            n if n.contains("tiny") => 30_000_000,   // ~39MB
-            n if n.contains("base") => 60_000_000,   // ~74MB
+            n if n.contains("tiny") => 30_000_000,    // ~39MB
+            n if n.contains("base") => 60_000_000,    // ~74MB
             n if n.contains("small") => 200_000_000,  // ~240MB
-            n if n.contains("medium") => 700_000_000,  // ~760MB
-            _ => 1_000_000, // at least 1MB for anything valid
+            n if n.contains("medium") => 700_000_000, // ~760MB
+            _ => 1_000_000,                           // at least 1MB for anything valid
         }
     }
 
@@ -111,7 +121,7 @@ impl SpeechService {
         self.model_name.read().await.clone()
     }
 
-    /// Subprocess model - no active memory holding needed. 
+    /// Subprocess model - no active memory holding needed.
     /// Always ready if model file exists.
     pub async fn is_loaded(&self) -> bool {
         self.model_exists().await
@@ -119,7 +129,11 @@ impl SpeechService {
 
     /// Check if a specific model file exists and is valid (not truncated).
     pub fn check_model_file(&self, model_name: &str) -> ModelFileStatus {
-        let bundled = self.resource_dir.join("resources").join("models").join(model_name);
+        let bundled = self
+            .resource_dir
+            .join("resources")
+            .join("models")
+            .join(model_name);
         let downloaded = self.app_data_dir.join("models").join(model_name);
 
         let (path, source) = if bundled.exists() {
@@ -161,7 +175,9 @@ impl SpeechService {
             size_bytes: size,
             path: path.display().to_string(),
             source: source.to_string(),
-            error: if valid { None } else {
+            error: if valid {
+                None
+            } else {
                 Some(format!(
                     "File appears truncated: {}MB < expected minimum {}MB",
                     size / (1024 * 1024),
@@ -220,7 +236,8 @@ impl SpeechService {
             }
         }
 
-        let bytes = response.bytes()
+        let bytes = response
+            .bytes()
             .await
             .map_err(|e| format!("Failed to read response body: {e}"))?;
 
@@ -238,11 +255,10 @@ impl SpeechService {
         std::fs::write(&temp_path, &bytes)
             .map_err(|e| format!("Failed to write model file: {e}"))?;
 
-        std::fs::rename(&temp_path, &target_path)
-            .map_err(|e| {
-                std::fs::remove_file(&temp_path).ok();
-                format!("Failed to finalize model file: {e}")
-            })?;
+        std::fs::rename(&temp_path, &target_path).map_err(|e| {
+            std::fs::remove_file(&temp_path).ok();
+            format!("Failed to finalize model file: {e}")
+        })?;
 
         info!(
             size_mb = bytes.len() / (1024 * 1024),
@@ -276,11 +292,22 @@ impl SpeechService {
             self.ensure_model().await?;
         }
 
-        let mut whisper_bin = self.resource_dir.join("resources").join("binaries").join("whisper").join("whisper-server.exe");
-        
+        let mut whisper_bin = self
+            .resource_dir
+            .join("resources")
+            .join("binaries")
+            .join("whisper")
+            .join("whisper-server.exe");
+
         // INTELLIGENT BINARY SELECTION
         if self.hardware.has_cuda {
-            let cublas_bin = self.resource_dir.join("resources").join("binaries").join("whisper").join("whisper-cublas").join("whisper-server.exe");
+            let cublas_bin = self
+                .resource_dir
+                .join("resources")
+                .join("binaries")
+                .join("whisper")
+                .join("whisper-cublas")
+                .join("whisper-server.exe");
             if cublas_bin.exists() {
                 info!("CUDA detected and whisper-cublas found. Using GPU acceleration.");
                 whisper_bin = cublas_bin;
@@ -292,7 +319,7 @@ impl SpeechService {
         }
 
         info!(path = %whisper_bin.display(), exists = whisper_bin.exists(), "Resolved whisper-server path");
-        
+
         let bin_to_execute = if whisper_bin.exists() {
             whisper_bin.to_str().unwrap().to_string()
         } else {
@@ -302,17 +329,17 @@ impl SpeechService {
             if dev_bin.exists() {
                 dev_bin.to_str().unwrap().to_string()
             } else {
-                "whisper-server".to_string() 
+                "whisper-server".to_string()
             }
         };
 
         let path_str = self.model_path.read().await.to_str().unwrap().to_string();
         info!(path = %path_str, "Starting whisper-server with model");
-        
+
         // whisper-server.exe -m models/ggml-base.bin --port 8080
         let bin_path = std::path::Path::new(&bin_to_execute);
         let mut command = Command::new(&bin_to_execute);
-        
+
         // Setting current_dir is CRITICAL on Windows for finding DLLs in the same folder
         if let Some(parent) = bin_path.parent() {
             if parent.exists() {
@@ -326,21 +353,31 @@ impl SpeechService {
 
         let child = command
             .args([
-                "-m", &path_str,
-                "--port", &WHISPER_PORT.to_string(),
-                "--host", "127.0.0.1"
+                "-m",
+                &path_str,
+                "--port",
+                &WHISPER_PORT.to_string(),
+                "--host",
+                "127.0.0.1",
             ])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .spawn()
-            .map_err(|e| format!("Failed to start whisper-server: {}. Path attempted: {}", e, bin_to_execute))?;
+            .map_err(|e| {
+                format!(
+                    "Failed to start whisper-server: {}. Path attempted: {}",
+                    e, bin_to_execute
+                )
+            })?;
 
         // Register with process manager if available
         if let Some(ref pm) = self.process_manager {
             if let Some(pid) = child.id() {
                 let pm_clone = pm.clone();
                 tokio::spawn(async move {
-                    pm_clone.register("whisper-server", "whisper-server", pid).await;
+                    pm_clone
+                        .register("whisper-server", "whisper-server", pid)
+                        .await;
                 });
             }
         }
@@ -349,25 +386,34 @@ impl SpeechService {
 
         // Give the server a moment to bind and load the model into VRAM
         let mut ready = false;
-        for _ in 0..60 { // wait up to 30s
+        for _ in 0..60 {
+            // wait up to 30s
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-            if tokio::net::TcpStream::connect(format!("127.0.0.1:{WHISPER_PORT}")).await.is_ok() {
+            if tokio::net::TcpStream::connect(format!("127.0.0.1:{WHISPER_PORT}"))
+                .await
+                .is_ok()
+            {
                 ready = true;
                 break;
             }
         }
-        
+
         if !ready {
             // Clean up the dead child if it failed to bind
             if let Some(mut c) = process_guard.take() {
                 let _ = c.kill().await;
             }
-            return Err(format!("whisper-server failed to bind to port {WHISPER_PORT} in time"));
+            return Err(format!(
+                "whisper-server failed to bind to port {WHISPER_PORT} in time"
+            ));
         }
         info!("whisper-server initialized");
 
         // Spawn watchdog if not already running
-        if !self.watchdog_running.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        if !self
+            .watchdog_running
+            .swap(true, std::sync::atomic::Ordering::SeqCst)
+        {
             let process_mtx = self.server_process.clone();
             let resource_dir = self.resource_dir.clone();
             let model_path = self.model_path.clone();
@@ -378,14 +424,19 @@ impl SpeechService {
                     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
                     // Ping TCP
-                    let is_healthy = tokio::net::TcpStream::connect(format!("127.0.0.1:{WHISPER_PORT}")).await.is_ok();
+                    let is_healthy =
+                        tokio::net::TcpStream::connect(format!("127.0.0.1:{WHISPER_PORT}"))
+                            .await
+                            .is_ok();
 
                     if is_healthy {
                         fail_count = 0;
                     } else {
                         fail_count += 1;
                         if fail_count >= 3 {
-                            tracing::warn!("Whisper watchdog threshold reached! Restarting server...");
+                            tracing::warn!(
+                                "Whisper watchdog threshold reached! Restarting server..."
+                            );
                             let mut guard = process_mtx.lock().await;
 
                             if let Some(mut child) = guard.take() {
@@ -395,18 +446,30 @@ impl SpeechService {
                                     let mut cmd = std::process::Command::new("taskkill");
                                     #[cfg(target_os = "windows")]
                                     cmd.creation_flags(CREATE_NO_WINDOW);
-                                    let _ = cmd.args(["/F", "/PID", &id.to_string()])
-                                        .status();
+                                    let _ = cmd.args(["/F", "/PID", &id.to_string()]).status();
                                 }
                             }
 
                             // Respawn - use same binary resolution as start_server()
-                            let mut whisper_bin = resource_dir.join("resources").join("binaries").join("whisper").join("whisper-server.exe");
-                            let cublas_bin = resource_dir.join("resources").join("binaries").join("whisper").join("whisper-cublas").join("whisper-server.exe");
+                            let mut whisper_bin = resource_dir
+                                .join("resources")
+                                .join("binaries")
+                                .join("whisper")
+                                .join("whisper-server.exe");
+                            let cublas_bin = resource_dir
+                                .join("resources")
+                                .join("binaries")
+                                .join("whisper")
+                                .join("whisper-cublas")
+                                .join("whisper-server.exe");
                             if cublas_bin.exists() {
                                 whisper_bin = cublas_bin;
                             }
-                            let bin_to_execute = if whisper_bin.exists() { whisper_bin.to_str().unwrap().to_string() } else { "whisper-server".to_string() };
+                            let bin_to_execute = if whisper_bin.exists() {
+                                whisper_bin.to_str().unwrap().to_string()
+                            } else {
+                                "whisper-server".to_string()
+                            };
 
                             let mut command = tokio::process::Command::new(&bin_to_execute);
                             let bin_path = std::path::Path::new(&bin_to_execute);
@@ -421,17 +484,22 @@ impl SpeechService {
 
                             if let Ok(new_child) = command
                                 .args([
-                                    "-m", model_path.read().await.to_str().unwrap(),
-                                    "--port", &WHISPER_PORT.to_string(),
-                                    "--host", "127.0.0.1"
+                                    "-m",
+                                    model_path.read().await.to_str().unwrap(),
+                                    "--port",
+                                    &WHISPER_PORT.to_string(),
+                                    "--host",
+                                    "127.0.0.1",
                                 ])
                                 .stdout(std::process::Stdio::null())
                                 .stderr(std::process::Stdio::null())
-                                .spawn() 
+                                .spawn()
                             {
                                 *guard = Some(new_child);
                                 fail_count = 0;
-                                tracing::info!("Whisper server successfully resurrected by watchdog");
+                                tracing::info!(
+                                    "Whisper server successfully resurrected by watchdog"
+                                );
                             }
                         }
                     }
@@ -443,16 +511,24 @@ impl SpeechService {
     }
 
     /// Transcribe 16kHz mono f32 audio samples (range -1.0 to 1.0).
-    pub async fn transcribe(&self, samples: Vec<f32>, requested_model: &str) -> Result<String, String> {
+    pub async fn transcribe(
+        &self,
+        samples: Vec<f32>,
+        requested_model: &str,
+    ) -> Result<String, String> {
         // Check if model needs changing
         let mut current_model = self.model_name.write().await;
         if *current_model != requested_model {
             self.stop_server().await;
-            
+
             *current_model = requested_model.to_string();
             let mut current_path = self.model_path.write().await;
-            
-            let bundled_model = self.resource_dir.join("resources").join("models").join(requested_model);
+
+            let bundled_model = self
+                .resource_dir
+                .join("resources")
+                .join("models")
+                .join(requested_model);
             *current_path = if bundled_model.exists() {
                 bundled_model
             } else {
@@ -471,7 +547,9 @@ impl SpeechService {
         }
 
         // Generate a temporary WAV file path
-        let temp_wav_path = self.app_data_dir.join(format!("temp_{}.wav", Uuid::new_v4()));
+        let temp_wav_path = self
+            .app_data_dir
+            .join(format!("temp_{}.wav", Uuid::new_v4()));
 
         // Write WAV using hound
         {
@@ -481,26 +559,28 @@ impl SpeechService {
                 bits_per_sample: 16,
                 sample_format: hound::SampleFormat::Int,
             };
-            
+
             let mut writer = hound::WavWriter::create(&temp_wav_path, spec)
                 .map_err(|e| format!("Failed to create WAV writer: {e}"))?;
-                
+
             for &sample in &samples {
                 let amplitude = sample * i16::MAX as f32;
-                writer.write_sample(amplitude as i16)
+                writer
+                    .write_sample(amplitude as i16)
                     .map_err(|e| format!("Failed to write sample: {e}"))?;
             }
-            writer.finalize().map_err(|e| format!("Failed to finalize WAV: {e}"))?;
+            writer
+                .finalize()
+                .map_err(|e| format!("Failed to finalize WAV: {e}"))?;
         }
-        
+
         info!(path = %temp_wav_path.display(), "Saved temp audio, sending to whisper-server");
 
         // Read the WAV file contents
-        let audio_data = std::fs::read(&temp_wav_path)
-            .map_err(|e| {
-                std::fs::remove_file(&temp_wav_path).ok();
-                format!("Failed to read temp WAV: {}", e)
-            })?;
+        let audio_data = std::fs::read(&temp_wav_path).map_err(|e| {
+            std::fs::remove_file(&temp_wav_path).ok();
+            format!("Failed to read temp WAV: {}", e)
+        })?;
 
         // Clean up file immediately after reading
         std::fs::remove_file(&temp_wav_path).ok();
@@ -510,7 +590,7 @@ impl SpeechService {
             .file_name("audio.wav")
             .mime_str("audio/wav")
             .unwrap();
-            
+
         let form = multipart::Form::new()
             .text("language", "en")
             .text("response_format", "json")
@@ -519,30 +599,36 @@ impl SpeechService {
 
         // Send request to local whisper-server
         let client = reqwest::Client::new();
-        let res = client.post(format!("http://127.0.0.1:{WHISPER_PORT}/inference"))
+        let res = client
+            .post(format!("http://127.0.0.1:{WHISPER_PORT}/inference"))
             .multipart(form)
             .send()
             .await
             .map_err(|e| format!("Failed to send request to whisper-server: {}", e))?;
 
         if !res.status().is_success() {
-            return Err(format!("whisper-server returned error status: {}", res.status()));
+            return Err(format!(
+                "whisper-server returned error status: {}",
+                res.status()
+            ));
         }
 
-        let body: serde_json::Value = res.json().await
+        let body: serde_json::Value = res
+            .json()
+            .await
             .map_err(|e| format!("Failed to parse whisper-server JSON: {}", e))?;
 
         // The exact structure of whisper-server JSON
         // Usually: { "text": " transcript here" }
         if let Some(text) = body.get("text").and_then(|v| v.as_str()) {
             let transcript = text.trim().to_string();
-            
+
             if transcript.is_empty() {
                 warn!("Whisper returned empty transcript");
             } else {
                 info!(transcript = %transcript, "Transcription complete");
             }
-            
+
             Ok(transcript)
         } else {
             Err("Failed to find 'text' field in whisper-server response".to_string())
@@ -554,12 +640,12 @@ impl SpeechService {
         let mut process_guard = self.server_process.lock().await;
         if let Some(mut child) = process_guard.take() {
             info!("Stopping background whisper-server...");
-            
+
             // Unregister from process manager
             if let Some(ref pm) = self.process_manager {
                 pm.unregister("whisper-server").await;
             }
-            
+
             let _ = child.kill().await;
         }
     }
@@ -579,14 +665,13 @@ impl Drop for SpeechService {
                             pm_clone.unregister("whisper-server").await;
                         });
                     }
-                    
+
                     // Force kill on Windows via taskkill since we can't await child.kill() in Drop
                     #[allow(unused_mut)]
                     let mut cmd = std::process::Command::new("taskkill");
                     #[cfg(target_os = "windows")]
                     cmd.creation_flags(CREATE_NO_WINDOW);
-                    let _ = cmd.args(["/F", "/PID", &id.to_string()])
-                        .status();
+                    let _ = cmd.args(["/F", "/PID", &id.to_string()]).status();
                 }
             }
         }

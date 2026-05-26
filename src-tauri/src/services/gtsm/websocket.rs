@@ -1,21 +1,22 @@
-use std::sync::Arc;
-use tokio::sync::broadcast;
+use super::cache::GtsmCache;
+use super::types::GtsmStreamMessage;
 use axum::{
-    Router,
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
     extract::State,
     response::IntoResponse,
     routing::get,
+    Router,
 };
+use std::sync::Arc;
+use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
-use super::types::GtsmStreamMessage;
-use super::cache::GtsmCache;
 
 /// Shared state for the WebSocket server
 pub struct WsState {
     pub tx: broadcast::Sender<String>,
     pub cache: Arc<GtsmCache>,
     pub db_pool: Option<sqlx::SqlitePool>,
+    pub secret_manager: Option<Arc<crate::services::SecretService>>,
 }
 
 /// Create and return the axum Router for WebSocket connections
@@ -26,10 +27,7 @@ pub fn create_ws_router(state: Arc<WsState>) -> Router {
         .with_state(state)
 }
 
-async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<Arc<WsState>>,
-) -> impl IntoResponse {
+async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<WsState>>) -> impl IntoResponse {
     tracing::debug!("WebSocket upgrade request received");
     ws.on_upgrade(move |socket| handle_socket(socket, state))
 }
@@ -143,7 +141,7 @@ async fn is_gtsm_adsb_enabled(db_pool: &Option<sqlx::SqlitePool>) -> bool {
     if let Some(pool) = db_pool {
         match crate::db::queries::get_setting(pool, "gtsm_adsb_enabled").await {
             Ok(Some(val)) => val == "true", // Default to disabled unless explicitly set to "true"
-            _ => false, // No setting = disabled
+            _ => false,                     // No setting = disabled
         }
     } else {
         false
@@ -157,6 +155,7 @@ pub async fn run_stream_loop(
     cache: Arc<GtsmCache>,
     tx: broadcast::Sender<String>,
     db_pool: Option<sqlx::SqlitePool>,
+    secret_manager: Option<Arc<crate::services::SecretService>>,
 ) {
     // Per-data-type intervals aligned with cache TTL
     let mut sat_interval = tokio::time::interval(std::time::Duration::from_secs(120));
@@ -196,9 +195,9 @@ pub async fn run_stream_loop(
         let c4 = cache.clone();
         let t4 = tx.clone();
         let p4 = db_pool.clone();
-        tokio::spawn(async move { 
+        tokio::spawn(async move {
             if is_gtsm_adsb_enabled(&p4).await {
-                fetch_and_broadcast_military(&c4, &t4).await 
+                fetch_and_broadcast_military(&c4, &t4).await
             }
         });
 
@@ -211,17 +210,18 @@ pub async fn run_stream_loop(
 
     // Launch outbound AIS WebSocket if API key is configured AND API calls are enabled
     if api_enabled {
-        if let Some(pool) = &db_pool {
-            let pool_clone = pool.clone();
+        if let Some(secret_manager) = secret_manager.clone() {
             let tx_clone = tx.clone();
             let cache_clone = cache.clone();
             tokio::spawn(async move {
-                match crate::db::queries::get_setting(&pool_clone, "gtsm_ais_api_key").await {
+                match secret_manager.get_secret("gtsm_ais_api_key").await {
                     Ok(Some(key)) if !key.is_empty() => {
                         super::vessels::spawn_ais_stream(key, tx_clone, cache_clone);
                     }
                     Ok(_) => {
-                        tracing::info!("No 'gtsm_ais_api_key' in settings. Skipping AIS vessel tracking.");
+                        tracing::info!(
+                            "No 'gtsm_ais_api_key' in settings. Skipping AIS vessel tracking."
+                        );
                     }
                     Err(e) => {
                         tracing::error!("Error reading AIS setting: {}", e);
@@ -355,13 +355,7 @@ async fn record_snapshots(cache: &GtsmCache, pool: &sqlx::SqlitePool) {
                     "heading": m.track,
                 })
                 .to_string();
-                (
-                    m.hex.clone(),
-                    m.lat,
-                    m.lon,
-                    m.alt_baro,
-                    Some(meta),
-                )
+                (m.hex.clone(), m.lat, m.lon, m.alt_baro, Some(meta))
             })
             .collect();
         if let Err(e) = super::history::record_snapshot(pool, "military", entities).await {
@@ -380,13 +374,7 @@ async fn record_snapshots(cache: &GtsmCache, pool: &sqlx::SqlitePool) {
                     "time": q.time,
                 })
                 .to_string();
-                (
-                    q.id.clone(),
-                    q.lat,
-                    q.lon,
-                    q.depth,
-                    Some(meta),
-                )
+                (q.id.clone(), q.lat, q.lon, q.depth, Some(meta))
             })
             .collect();
         if let Err(e) = super::history::record_snapshot(pool, "earthquake", entities).await {

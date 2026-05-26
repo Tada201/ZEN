@@ -206,7 +206,10 @@ impl ToolPermissions {
         // Check per-tool override first (takes precedence over global)
         if let Some(rules) = self.tool_overrides.get(tool_id) {
             if let Some(default) = &rules.default {
-                return matches!(default, PermissionDefault::AlwaysAllow | PermissionDefault::Confirm);
+                return matches!(
+                    default,
+                    PermissionDefault::AlwaysAllow | PermissionDefault::Confirm
+                );
             }
         }
 
@@ -440,14 +443,20 @@ pub static HARDCODED_SECURITY_RULES: LazyLock<HardcodedSecurityRules> = LazyLock
         CompiledRegex::new(r"https?://10\.\d+\.\d+\.\d+(?::\d+)?(?:/|$)", true)
             .expect("Hardcoded regex should compile"),
         // ✅ FIX: Block RFC 1918 private ranges (172.16.0.0/12)
-        CompiledRegex::new(r"https?://172\.(1[6-9]|2\d|3[01])\.\d+\.\d+(?::\d+)?(?:/|$)", true)
-            .expect("Hardcoded regex should compile"),
+        CompiledRegex::new(
+            r"https?://172\.(1[6-9]|2\d|3[01])\.\d+\.\d+(?::\d+)?(?:/|$)",
+            true,
+        )
+        .expect("Hardcoded regex should compile"),
         // ✅ FIX: Block RFC 1918 private ranges (192.168.0.0/16)
         CompiledRegex::new(r"https?://192\.168\.\d+\.\d+(?::\d+)?(?:/|$)", true)
             .expect("Hardcoded regex should compile"),
         // ✅ FIX: Block IPv6 private ranges (fc00::/7)
-        CompiledRegex::new(r"https?://\[?[fF][cCdDeEfF][0-9a-fA-F:]+\]?(?::\d+)?(?:/|$)", true)
-            .expect("Hardcoded regex should compile"),
+        CompiledRegex::new(
+            r"https?://\[?[fF][cCdDeEfF][0-9a-fA-F:]+\]?(?::\d+)?(?:/|$)",
+            true,
+        )
+        .expect("Hardcoded regex should compile"),
         // ✅ FIX: Block 0.0.0.0 (current network)
         CompiledRegex::new(r"https?://0\.0\.0\.0(?::\d+)?(?:/|$)", true)
             .expect("Hardcoded regex should compile"),

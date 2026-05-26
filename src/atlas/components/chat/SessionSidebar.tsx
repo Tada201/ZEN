@@ -20,9 +20,49 @@ interface SearchResult {
   chatId: string;
   chatTitle: string;
   messageId: string;
-  messageContent: string; // contains HTML <mark> tags from backend snippet()
+  messageContent: string;
   role: string;
   timestamp: string;
+}
+
+const ENTITY_MAP: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: "\"",
+  apos: "'",
+  "#39": "'",
+};
+
+function decodeEntities(value: string): string {
+  return value.replace(/&([^;]+);/g, (match, entity) => ENTITY_MAP[entity] ?? match);
+}
+
+function renderSearchSnippet(snippet: string) {
+  const safeSnippet = snippet.replace(/<(?!\/?mark\b)[^>]*>/gi, "");
+  const tokens = safeSnippet.split(/(<mark>|<\/mark>)/gi);
+  let highlighted = false;
+
+  return tokens.map((token, index) => {
+    const lower = token.toLowerCase();
+    if (lower === "<mark>") {
+      highlighted = true;
+      return null;
+    }
+    if (lower === "</mark>") {
+      highlighted = false;
+      return null;
+    }
+
+    const text = decodeEntities(token);
+    return highlighted ? (
+      <mark key={index} className="rounded bg-amber-500/20 px-0.5 text-amber-200">
+        {text}
+      </mark>
+    ) : (
+      <span key={index}>{text}</span>
+    );
+  });
 }
 
 interface SessionSidebarProps {
@@ -228,10 +268,9 @@ export const SessionSidebar = memo(({
         </div>
 
         {isSearchResult && (it as SearchResult).messageContent && (
-          <div 
-            className="text-[10px] text-zinc-500 line-clamp-2 leading-relaxed"
-            dangerouslySetInnerHTML={{ __html: (it as SearchResult).messageContent }}
-          />
+          <div className="text-[10px] text-zinc-500 line-clamp-2 leading-relaxed">
+            {renderSearchSnippet((it as SearchResult).messageContent)}
+          </div>
         )}
       </div>
     );

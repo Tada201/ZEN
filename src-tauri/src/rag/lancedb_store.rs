@@ -1,9 +1,9 @@
-use std::sync::Arc;
 use anyhow::Result;
-use async_trait::async_trait;
 use arrow_array::{RecordBatch, RecordBatchIterator};
-use arrow_schema::{Schema as ArrowSchema, Field as ArrowField, DataType};
+use arrow_schema::{DataType, Field as ArrowField, Schema as ArrowSchema};
+use async_trait::async_trait;
 use lancedb::query::{ExecutableQuery, QueryBase};
+use std::sync::Arc;
 
 use super::{DocumentChunk, SearchResult, VectorStore};
 
@@ -23,7 +23,10 @@ impl LanceDbStore {
     }
 
     async fn get_connection(&self) -> Result<lancedb::connection::Connection> {
-        lancedb::connect(&self.db_uri).execute().await.map_err(anyhow::Error::from)
+        lancedb::connect(&self.db_uri)
+            .execute()
+            .await
+            .map_err(anyhow::Error::from)
     }
 }
 
@@ -31,13 +34,20 @@ impl LanceDbStore {
 impl VectorStore for LanceDbStore {
     async fn init(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let conn = self.get_connection().await?;
-        
+
         let existing_tables = conn.table_names().execute().await?;
         if !existing_tables.contains(&self.collection_name) {
             // Define Arrow Schema for our collection
             let schema = Arc::new(ArrowSchema::new(vec![
                 ArrowField::new("id", DataType::Utf8, false),
-                ArrowField::new("vector", DataType::FixedSizeList(Arc::new(ArrowField::new("item", DataType::Float32, true)), self.dimension as i32), false),
+                ArrowField::new(
+                    "vector",
+                    DataType::FixedSizeList(
+                        Arc::new(ArrowField::new("item", DataType::Float32, true)),
+                        self.dimension as i32,
+                    ),
+                    false,
+                ),
                 ArrowField::new("source", DataType::Utf8, false),
                 ArrowField::new("text", DataType::Utf8, false),
                 ArrowField::new("metadata", DataType::Utf8, false),
@@ -46,16 +56,18 @@ impl VectorStore for LanceDbStore {
             // Create empty table
             let batches = vec![Ok(RecordBatch::new_empty(schema.clone()))];
             let reader = RecordBatchIterator::new(batches, schema.clone());
-            conn.create_table(&self.collection_name, Box::new(reader)).execute().await?;
+            conn.create_table(&self.collection_name, Box::new(reader))
+                .execute()
+                .await?;
         }
 
         Ok(())
     }
 
     async fn add_chunks(
-        &self, 
-        chunks: Vec<DocumentChunk>, 
-        embeddings: Vec<Vec<f32>>
+        &self,
+        chunks: Vec<DocumentChunk>,
+        embeddings: Vec<Vec<f32>>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if chunks.len() != embeddings.len() {
             return Err("Chunks and embeddings length mismatch".into());
@@ -67,7 +79,7 @@ impl VectorStore for LanceDbStore {
         let conn = self.get_connection().await?;
         let table = conn.open_table(&self.collection_name).execute().await?;
 
-        use arrow_array::{StringArray, Float32Array, FixedSizeListArray};
+        use arrow_array::{FixedSizeListArray, Float32Array, StringArray};
 
         let mut ids = Vec::new();
         let mut sources = Vec::new();
@@ -87,7 +99,7 @@ impl VectorStore for LanceDbStore {
         let source_array = Arc::new(StringArray::from(sources)) as Arc<dyn arrow_array::Array>;
         let text_array = Arc::new(StringArray::from(texts)) as Arc<dyn arrow_array::Array>;
         let metadata_array = Arc::new(StringArray::from(metadatas)) as Arc<dyn arrow_array::Array>;
-        
+
         let float_array = Arc::new(Float32Array::from(flat_embeddings));
         let vector_array = Arc::new(FixedSizeListArray::new(
             Arc::new(ArrowField::new("item", DataType::Float32, true)),
@@ -98,7 +110,14 @@ impl VectorStore for LanceDbStore {
 
         let schema = Arc::new(ArrowSchema::new(vec![
             ArrowField::new("id", DataType::Utf8, false),
-            ArrowField::new("vector", DataType::FixedSizeList(Arc::new(ArrowField::new("item", DataType::Float32, true)), self.dimension as i32), false),
+            ArrowField::new(
+                "vector",
+                DataType::FixedSizeList(
+                    Arc::new(ArrowField::new("item", DataType::Float32, true)),
+                    self.dimension as i32,
+                ),
+                false,
+            ),
             ArrowField::new("source", DataType::Utf8, false),
             ArrowField::new("text", DataType::Utf8, false),
             ArrowField::new("metadata", DataType::Utf8, false),
@@ -106,7 +125,13 @@ impl VectorStore for LanceDbStore {
 
         let batch = RecordBatch::try_new(
             schema.clone(),
-            vec![id_array, vector_array, source_array, text_array, metadata_array],
+            vec![
+                id_array,
+                vector_array,
+                source_array,
+                text_array,
+                metadata_array,
+            ],
         )?;
 
         let reader = RecordBatchIterator::new(vec![Ok(batch)], schema.clone());
@@ -116,36 +141,38 @@ impl VectorStore for LanceDbStore {
     }
 
     async fn search(
-        &self, 
-        query_embedding: Vec<f32>, 
-        limit: usize
+        &self,
+        query_embedding: Vec<f32>,
+        limit: usize,
     ) -> Result<Vec<SearchResult>, Box<dyn std::error::Error + Send + Sync>> {
         let conn = self.get_connection().await?;
         let table = conn.open_table(&self.collection_name).execute().await?;
 
         // Perform nearest neighbor search
-        let mut stream = table.query().nearest_to(query_embedding)?
+        let mut stream = table
+            .query()
+            .nearest_to(query_embedding)?
             .limit(limit)
             .execute()
             .await?;
 
         let mut results = Vec::new();
 
-        use futures::StreamExt;
         use arrow_array::cast::AsArray;
         use arrow_array::types::Float32Type;
+        use futures::StreamExt;
 
         while let Some(batch) = stream.next().await {
             let batch = batch?;
-            
+
             // Assuming default lancedb behavior includes _distance
             let distance_col = batch.column_by_name("_distance");
-            
+
             let id_col = batch.column_by_name("id").unwrap().as_string::<i32>();
             let source_col = batch.column_by_name("source").unwrap().as_string::<i32>();
             let text_col = batch.column_by_name("text").unwrap().as_string::<i32>();
             let metadata_col = batch.column_by_name("metadata").unwrap().as_string::<i32>();
-            
+
             for i in 0..batch.num_rows() {
                 let score = if let Some(dist) = distance_col {
                     dist.as_primitive::<Float32Type>().value(i)
@@ -160,10 +187,7 @@ impl VectorStore for LanceDbStore {
                     metadata: metadata_col.value(i).to_string(),
                 };
 
-                results.push(SearchResult {
-                    chunk,
-                    score,
-                });
+                results.push(SearchResult { chunk, score });
             }
         }
 

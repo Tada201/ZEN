@@ -29,8 +29,8 @@ impl Default for RunConfig {
             max_iterations: 30,
             max_duplicate_calls: 3,
             compaction_threshold: 40,
-            compaction_token_threshold: 50000,  // Start compaction at ~50K tokens
-            max_context_tokens: 100000,  // Hard limit at ~100K tokens (safe for 128K models)
+            compaction_token_threshold: 50000, // Start compaction at ~50K tokens
+            max_context_tokens: 100000,        // Hard limit at ~100K tokens (safe for 128K models)
             parallel_tools: true,
             tools_enabled: true,
             summarization_model: None,

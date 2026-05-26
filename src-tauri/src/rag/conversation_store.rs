@@ -1,9 +1,11 @@
-use std::sync::Arc;
-use anyhow::{Result, Context};
-use arrow_array::{RecordBatch, RecordBatchIterator, StringArray, Float32Array, Int64Array, FixedSizeListArray};
-use arrow_schema::{Schema as ArrowSchema, Field as ArrowField, DataType};
+use anyhow::Result;
+use arrow_array::{
+    FixedSizeListArray, Float32Array, Int64Array, RecordBatch, RecordBatchIterator, StringArray,
+};
+use arrow_schema::{DataType, Field as ArrowField, Schema as ArrowSchema};
 use lancedb::query::{ExecutableQuery, QueryBase};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationVector {
@@ -48,7 +50,10 @@ impl ConversationStore {
     }
 
     async fn get_connection(&self) -> Result<lancedb::connection::Connection> {
-        lancedb::connect(&self.db_uri).execute().await.map_err(anyhow::Error::from)
+        lancedb::connect(&self.db_uri)
+            .execute()
+            .await
+            .map_err(anyhow::Error::from)
     }
 
     pub async fn init(&self) -> Result<()> {
@@ -58,7 +63,14 @@ impl ConversationStore {
             // Define Arrow Schema for our conversation collection
             let schema = Arc::new(ArrowSchema::new(vec![
                 ArrowField::new("id", DataType::Utf8, false),
-                ArrowField::new("vector", DataType::FixedSizeList(Arc::new(ArrowField::new("item", DataType::Float32, true)), self.dimension as i32), false),
+                ArrowField::new(
+                    "vector",
+                    DataType::FixedSizeList(
+                        Arc::new(ArrowField::new("item", DataType::Float32, true)),
+                        self.dimension as i32,
+                    ),
+                    false,
+                ),
                 ArrowField::new("chat_id", DataType::Utf8, false),
                 ArrowField::new("message_id", DataType::Utf8, false),
                 ArrowField::new("text", DataType::Utf8, false),
@@ -70,7 +82,9 @@ impl ConversationStore {
             // Create empty table
             let batches = vec![Ok(RecordBatch::new_empty(schema.clone()))];
             let reader = RecordBatchIterator::new(batches, schema.clone());
-            conn.create_table(&self.collection_name, Box::new(reader)).execute().await?;
+            conn.create_table(&self.collection_name, Box::new(reader))
+                .execute()
+                .await?;
         }
 
         Ok(())
@@ -95,7 +109,11 @@ impl ConversationStore {
 
         for entry in entries {
             if entry.vector.len() != self.dimension {
-                tracing::warn!("Embedding dimension mismatch: entry={}, expected={}", entry.vector.len(), self.dimension);
+                tracing::warn!(
+                    "Embedding dimension mismatch: entry={}, expected={}",
+                    entry.vector.len(),
+                    self.dimension
+                );
                 continue;
             }
             ids.push(entry.id);
@@ -114,7 +132,8 @@ impl ConversationStore {
 
         let id_array = Arc::new(StringArray::from(ids)) as Arc<dyn arrow_array::Array>;
         let chat_id_array = Arc::new(StringArray::from(chat_ids)) as Arc<dyn arrow_array::Array>;
-        let message_id_array = Arc::new(StringArray::from(message_ids)) as Arc<dyn arrow_array::Array>;
+        let message_id_array =
+            Arc::new(StringArray::from(message_ids)) as Arc<dyn arrow_array::Array>;
         let text_array = Arc::new(StringArray::from(texts)) as Arc<dyn arrow_array::Array>;
         let role_array = Arc::new(StringArray::from(roles)) as Arc<dyn arrow_array::Array>;
         let timestamp_array = Arc::new(Int64Array::from(timestamps)) as Arc<dyn arrow_array::Array>;
@@ -130,7 +149,14 @@ impl ConversationStore {
 
         let schema = Arc::new(ArrowSchema::new(vec![
             ArrowField::new("id", DataType::Utf8, false),
-            ArrowField::new("vector", DataType::FixedSizeList(Arc::new(ArrowField::new("item", DataType::Float32, true)), self.dimension as i32), false),
+            ArrowField::new(
+                "vector",
+                DataType::FixedSizeList(
+                    Arc::new(ArrowField::new("item", DataType::Float32, true)),
+                    self.dimension as i32,
+                ),
+                false,
+            ),
             ArrowField::new("chat_id", DataType::Utf8, false),
             ArrowField::new("message_id", DataType::Utf8, false),
             ArrowField::new("text", DataType::Utf8, false),
@@ -159,45 +185,58 @@ impl ConversationStore {
         Ok(())
     }
 
-    pub async fn search(&self, query_embedding: Vec<f32>, limit: usize) -> Result<Vec<ConversationSearchResult>> {
+    pub async fn search(
+        &self,
+        query_embedding: Vec<f32>,
+        limit: usize,
+    ) -> Result<Vec<ConversationSearchResult>> {
         let conn = self.get_connection().await?;
         let table = conn.open_table(&self.collection_name).execute().await?;
 
-        let mut stream = table.query().nearest_to(query_embedding)?
+        let mut stream = table
+            .query()
+            .nearest_to(query_embedding)?
             .limit(limit)
             .execute()
             .await?;
 
         let mut results = Vec::new();
 
-        use futures::StreamExt;
         use arrow_array::cast::AsArray;
         use arrow_array::types::Float32Type;
+        use futures::StreamExt;
 
         while let Some(batch) = stream.next().await {
             let batch = batch?;
 
             let distance_col = batch.column_by_name("_distance");
 
-            let id_col = batch.column_by_name("id")
+            let id_col = batch
+                .column_by_name("id")
                 .ok_or_else(|| anyhow::anyhow!("Missing column: id"))?
                 .as_string::<i32>();
-            let chat_id_col = batch.column_by_name("chat_id")
+            let chat_id_col = batch
+                .column_by_name("chat_id")
                 .ok_or_else(|| anyhow::anyhow!("Missing column: chat_id"))?
                 .as_string::<i32>();
-            let message_id_col = batch.column_by_name("message_id")
+            let message_id_col = batch
+                .column_by_name("message_id")
                 .ok_or_else(|| anyhow::anyhow!("Missing column: message_id"))?
                 .as_string::<i32>();
-            let text_col = batch.column_by_name("text")
+            let text_col = batch
+                .column_by_name("text")
                 .ok_or_else(|| anyhow::anyhow!("Missing column: text"))?
                 .as_string::<i32>();
-            let role_col = batch.column_by_name("role")
+            let role_col = batch
+                .column_by_name("role")
                 .ok_or_else(|| anyhow::anyhow!("Missing column: role"))?
                 .as_string::<i32>();
-            let timestamp_col = batch.column_by_name("timestamp")
+            let timestamp_col = batch
+                .column_by_name("timestamp")
                 .ok_or_else(|| anyhow::anyhow!("Missing column: timestamp"))?
                 .as_primitive::<arrow_array::types::Int64Type>();
-            let metadata_col = batch.column_by_name("metadata")
+            let metadata_col = batch
+                .column_by_name("metadata")
                 .ok_or_else(|| anyhow::anyhow!("Missing column: metadata"))?
                 .as_string::<i32>();
 
@@ -219,10 +258,7 @@ impl ConversationStore {
                     metadata: metadata_col.value(i).to_string(),
                 };
 
-                results.push(ConversationSearchResult {
-                    entry,
-                    score,
-                });
+                results.push(ConversationSearchResult { entry, score });
             }
         }
 

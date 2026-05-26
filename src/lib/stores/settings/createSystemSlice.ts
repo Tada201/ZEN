@@ -1,5 +1,6 @@
 import type { StateCreator } from "zustand";
 import type { SettingsState, PerformanceProfile, PowerStatus } from "./types";
+import { systemApi } from "@/api";
 
 export interface SystemSlice {
   performanceProfile: PerformanceProfile;
@@ -124,9 +125,15 @@ export const createSystemSlice: StateCreator<SettingsState, [], [], SystemSlice>
 
   fetchHardwareInfo: async () => {
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      const info = await invoke<{ cpu: string; memory: string; gpu?: string; vendor?: string }>("get_hardware_info");
-      set({ hardwareInfo: info });
+      const info = await systemApi.getHardwareInfo();
+      set({
+        hardwareInfo: {
+          cpu: info.cpu,
+          memory: `${info.memory_gb} GB`,
+          gpu: info.has_cuda ? "CUDA available" : undefined,
+          vendor: info.os,
+        },
+      });
     } catch {
       // Tauri backend not available — skip
     }

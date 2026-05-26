@@ -1,8 +1,6 @@
-use sqlx::SqlitePool;
-use uuid::Uuid;
 use crate::db::models::*;
 use crate::error::ZenResult;
-
+use sqlx::SqlitePool;
 
 // --- Artifacts ---
 
@@ -34,7 +32,7 @@ pub async fn upsert_artifact(pool: &SqlitePool, art: &Artifact) -> ZenResult<()>
 
 pub async fn get_chat_artifacts(pool: &SqlitePool, chat_id: &str) -> ZenResult<Vec<Artifact>> {
     let artifacts = sqlx::query_as::<_, Artifact>(
-        "SELECT * FROM artifacts WHERE chat_id = ? ORDER BY created_at DESC"
+        "SELECT * FROM artifacts WHERE chat_id = ? ORDER BY created_at DESC",
     )
     .bind(chat_id)
     .fetch_all(pool)
@@ -43,25 +41,24 @@ pub async fn get_chat_artifacts(pool: &SqlitePool, chat_id: &str) -> ZenResult<V
 }
 
 pub async fn get_all_artifacts(pool: &SqlitePool) -> ZenResult<Vec<Artifact>> {
-    let artifacts = sqlx::query_as::<_, Artifact>(
-        "SELECT * FROM artifacts ORDER BY created_at DESC"
-    )
-    .fetch_all(pool)
-    .await?;
+    let artifacts =
+        sqlx::query_as::<_, Artifact>("SELECT * FROM artifacts ORDER BY created_at DESC")
+            .fetch_all(pool)
+            .await?;
     Ok(artifacts)
 }
 
 pub async fn delete_artifact(pool: &SqlitePool, id: &str) -> ZenResult<()> {
     sqlx::query("DELETE FROM artifacts WHERE id = ?")
-    .bind(id)
-    .execute(pool)
-    .await?;
+        .bind(id)
+        .execute(pool)
+        .await?;
     Ok(())
 }
 
 pub async fn get_messages(pool: &SqlitePool, chat_id: &str) -> ZenResult<Vec<Message>> {
     let msgs = sqlx::query_as::<_, Message>(
-        "SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC"
+        "SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC",
     )
     .bind(chat_id)
     .fetch_all(pool)
@@ -105,24 +102,35 @@ pub async fn update_message(
     let mut tx = pool.begin().await?;
 
     // 1. Get original message to find previous token counts & tool calls
-    let original = sqlx::query("SELECT tokens_in, tokens_out, tool_calls FROM messages WHERE id = ?")
-        .bind(id)
-        .fetch_optional(&mut *tx)
-        .await?;
+    let original =
+        sqlx::query("SELECT tokens_in, tokens_out, tool_calls FROM messages WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await?;
 
     let mut prev_tokens_in = 0;
     let mut prev_tokens_out = 0;
     let mut merged_tool_calls = tool_calls.map(|s| s.to_string());
 
     if let Some(row) = original {
-        prev_tokens_in = row.try_get::<Option<i64>, _>("tokens_in").unwrap_or(None).unwrap_or(0);
-        prev_tokens_out = row.try_get::<Option<i64>, _>("tokens_out").unwrap_or(None).unwrap_or(0);
+        prev_tokens_in = row
+            .try_get::<Option<i64>, _>("tokens_in")
+            .unwrap_or(None)
+            .unwrap_or(0);
+        prev_tokens_out = row
+            .try_get::<Option<i64>, _>("tokens_out")
+            .unwrap_or(None)
+            .unwrap_or(0);
+        let prev_tool_calls = row
+            .try_get::<Option<String>, _>("tool_calls")
+            .unwrap_or(None);
 
         if let Some(new_tc_str) = tool_calls {
             if let Ok(new_tcs) = serde_json::from_str::<Vec<serde_json::Value>>(new_tc_str) {
-                let prev_tc_str = row.try_get::<Option<String>, _>("tool_calls").unwrap_or(None);
-                if let Some(prev_str) = prev_tc_str {
-                    if let Ok(mut prev_tcs) = serde_json::from_str::<Vec<serde_json::Value>>(&prev_str) {
+                if let Some(prev_str) = prev_tool_calls.as_deref() {
+                    if let Ok(mut prev_tcs) =
+                        serde_json::from_str::<Vec<serde_json::Value>>(&prev_str)
+                    {
                         prev_tcs.extend(new_tcs);
                         if let Ok(merged) = serde_json::to_string(&prev_tcs) {
                             merged_tool_calls = Some(merged);
@@ -130,6 +138,8 @@ pub async fn update_message(
                     }
                 }
             }
+        } else {
+            merged_tool_calls = prev_tool_calls;
         }
     }
 
@@ -156,7 +166,7 @@ pub async fn update_message(
                last_activity = datetime('now'),
                total_tokens_in = total_tokens_in + ?,
                total_tokens_out = total_tokens_out + ?
-           WHERE id = ?"#
+           WHERE id = ?"#,
     )
     .bind(delta_in)
     .bind(delta_out)
@@ -176,16 +186,12 @@ pub async fn update_message_partial(
     content: &str,
     tokens_out: usize,
 ) -> ZenResult<()> {
-    sqlx::query(
-        "UPDATE messages SET content = ?, tokens_out = ? WHERE id = ? AND chat_id = ?"
-    )
-    .bind(content)
-    .bind(tokens_out as i64)
-    .bind(id)
-    .bind(chat_id)
-    .execute(pool)
-    .await?;
+    sqlx::query("UPDATE messages SET content = ?, tokens_out = ? WHERE id = ? AND chat_id = ?")
+        .bind(content)
+        .bind(tokens_out as i64)
+        .bind(id)
+        .bind(chat_id)
+        .execute(pool)
+        .await?;
     Ok(())
 }
-
-

@@ -1,5 +1,5 @@
-use tauri::State;
 use crate::commands::AppState;
+use tauri::State;
 
 #[tauri::command]
 pub async fn get_conversation_memories(
@@ -8,7 +8,10 @@ pub async fn get_conversation_memories(
     query: Option<String>,
     limit: Option<usize>,
 ) -> Result<Vec<crate::rag::conversation_store::ConversationSearchResult>, String> {
-    let store = state.conversation_store.get().await
+    let store = state
+        .conversation_store
+        .get()
+        .await
         .map_err(|e| format!("ConversationStore not initialized: {}", e))?;
 
     let limit_val = limit.unwrap_or(5).clamp(1, 100);
@@ -16,11 +19,17 @@ pub async fn get_conversation_memories(
 
     if query_str.trim().is_empty() {
         let dummy_vec = vec![0.0f32; store.dimension()];
-        let results = store.search(dummy_vec, limit_val * 3).await
+        let results = store
+            .search(dummy_vec, limit_val * 3)
+            .await
             .map_err(|e| format!("Memory search failed: {}", e))?;
-        
+
         let filtered = if let Some(ref cid) = chat_id {
-            results.into_iter().filter(|r| &r.entry.chat_id == cid).take(limit_val).collect()
+            results
+                .into_iter()
+                .filter(|r| &r.entry.chat_id == cid)
+                .take(limit_val)
+                .collect()
         } else {
             results.into_iter().take(limit_val).collect()
         };
@@ -56,11 +65,17 @@ pub async fn get_conversation_memories(
         None => return Err("Failed to generate embedding for memory search query".to_string()),
     };
 
-    let results = store.search(vec, limit_val * 3).await
+    let results = store
+        .search(vec, limit_val * 3)
+        .await
         .map_err(|e| format!("Memory search failed: {}", e))?;
 
     let filtered = if let Some(ref cid) = chat_id {
-        results.into_iter().filter(|r| &r.entry.chat_id == cid).take(limit_val).collect()
+        results
+            .into_iter()
+            .filter(|r| &r.entry.chat_id == cid)
+            .take(limit_val)
+            .collect()
     } else {
         results.into_iter().take(limit_val).collect()
     };
@@ -73,14 +88,21 @@ pub async fn clear_conversation_memories(
     state: State<'_, AppState>,
     chat_id: Option<String>,
 ) -> Result<(), String> {
-    let store = state.conversation_store.get().await
+    let store = state
+        .conversation_store
+        .get()
+        .await
         .map_err(|e| format!("ConversationStore not initialized: {}", e))?;
 
     if let Some(cid) = chat_id {
-        store.delete_by_chat_id(&cid).await
+        store
+            .delete_by_chat_id(&cid)
+            .await
             .map_err(|e| format!("Failed to delete memories for chat {}: {}", cid, e))?;
     } else {
-        store.clear_all().await
+        store
+            .clear_all()
+            .await
             .map_err(|e| format!("Failed to clear all memories: {}", e))?;
     }
 
@@ -91,9 +113,14 @@ pub async fn clear_conversation_memories(
 pub async fn get_memory_stats(
     state: State<'_, AppState>,
 ) -> Result<crate::rag::conversation_store::ConversationStats, String> {
-    let store = state.conversation_store.get().await
+    let store = state
+        .conversation_store
+        .get()
+        .await
         .map_err(|e| format!("ConversationStore not initialized: {}", e))?;
 
-    store.get_stats().await
+    store
+        .get_stats()
+        .await
         .map_err(|e| format!("Failed to get stats: {}", e))
 }

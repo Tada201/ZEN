@@ -491,7 +491,6 @@ pub struct DynamicPlugin {
     version: String,
     dependencies: Vec<String>,
     extension_points: Vec<ExtensionPoint>,
-    initialized: bool,
 }
 
 impl DynamicPlugin {
@@ -508,7 +507,6 @@ impl DynamicPlugin {
             version: version.into(),
             dependencies,
             extension_points,
-            initialized: false,
         }
     }
 }

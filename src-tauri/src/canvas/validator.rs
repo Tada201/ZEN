@@ -140,10 +140,7 @@ pub struct LayoutConstraints {
 }
 
 /// Attempt to auto-fix layout issues
-pub fn auto_fix_layout(
-    objects: &mut Vec<(String, [f64; 4])>,
-    canvas: [u32; 2],
-) -> Vec<String> {
+pub fn auto_fix_layout(objects: &mut Vec<(String, [f64; 4])>, canvas: [u32; 2]) -> Vec<String> {
     let mut fixes = Vec::new();
     let [cw, ch] = [canvas[0] as f64, canvas[1] as f64];
 

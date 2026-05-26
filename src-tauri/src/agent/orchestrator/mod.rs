@@ -1,3 +1,6 @@
+pub mod execution;
+#[path = "loop.rs"]
+pub mod r#loop;
 /// Agentic Swarm Phase 3: Orchestrator System
 ///
 /// Provides high-level orchestration for complex multi-agent tasks:
@@ -6,23 +9,19 @@
 /// - Task queue management
 /// - Result synthesis
 /// - Progress tracking
-
 pub mod plan;
-#[path = "loop.rs"]
-pub mod r#loop;
-pub mod execution;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::AppHandle;
 
-use crate::agent::types::AgentRegistry;
-use crate::agent::tools::ToolRegistry;
 use crate::agent::hooks::HookRegistry;
 use crate::agent::task::Task;
-use crate::tools::GlobalToolRegistry;
+use crate::agent::tools::ToolRegistry;
+use crate::agent::types::AgentRegistry;
 use crate::tools::manager::ToolManager;
+use crate::tools::GlobalToolRegistry;
 use sqlx::SqlitePool;
 
 /// Orchestrator for managing complex multi-agent workflows
@@ -33,8 +32,6 @@ pub struct Orchestrator {
     hook_registry: Arc<HookRegistry>,
     permissions: GlobalToolRegistry,
     tool_manager: Arc<ToolManager>,
-    event_bus: Arc<crate::agent::event_bus::EventBus>,
-    agent_memory: Arc<crate::agent::memory::UnifiedMemoryBackend>,
     pub(crate) db_pool: Option<SqlitePool>,
     pub(crate) on_event: Option<tauri::ipc::Channel<serde_json::Value>>,
 }
@@ -92,8 +89,6 @@ impl Orchestrator {
         hook_registry: Arc<HookRegistry>,
         permissions: GlobalToolRegistry,
         tool_manager: Arc<ToolManager>,
-        event_bus: Arc<crate::agent::event_bus::EventBus>,
-        agent_memory: Arc<crate::agent::memory::UnifiedMemoryBackend>,
     ) -> Self {
         Self {
             app,
@@ -102,8 +97,6 @@ impl Orchestrator {
             hook_registry,
             permissions,
             tool_manager,
-            event_bus,
-            agent_memory,
             db_pool: None,
             on_event: None,
         }

@@ -1,23 +1,22 @@
-pub mod ollama;
-pub mod openai_compat;
 pub mod anthropic;
 pub mod lmstudio;
+pub mod ollama;
+pub mod openai_compat;
 pub mod registry;
 
 pub use registry::ProviderRegistry;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tokio_util::sync::CancellationToken;
 use std::sync::Arc;
-use sqlx::SqlitePool;
+use tokio_util::sync::CancellationToken;
 
 use crate::db::models::{ChatMessage, ChatResponse, ModelInfo, ProviderConfig};
-use crate::error::{ZenResult, ZenError};
-use crate::llm::ollama::OllamaProvider;
-use crate::llm::openai_compat::OpenAiCompatProvider;
+use crate::error::ZenResult;
 use crate::llm::anthropic::AnthropicProvider;
 use crate::llm::lmstudio::LmStudioProvider;
+use crate::llm::ollama::OllamaProvider;
+use crate::llm::openai_compat::OpenAiCompatProvider;
 
 /// Configuration for advanced LLM requests (o1 reasoning, structured outputs, prompt caching, etc.)
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -106,7 +105,9 @@ pub fn default_base_url(provider: &str) -> String {
         "lmstudio" => "http://localhost:1234".to_string(),
         "nine_router" | "vx" => "http://localhost:20128/v1".to_string(),
         "aihubmix" => "https://aihubmix.com/v1".to_string(),
-        "google" | "gemini" => "https://generativelanguage.googleapis.com/v1beta/openai".to_string(),
+        "google" | "gemini" => {
+            "https://generativelanguage.googleapis.com/v1beta/openai".to_string()
+        }
         "deepseek" => "https://api.deepseek.com".to_string(),
         "qwen" => "https://dashscope.aliyuncs.com/compatible-mode/v1".to_string(),
         "xai" => "https://api.x.ai/v1".to_string(),
@@ -122,7 +123,6 @@ pub fn default_model_for_provider(_provider: &str) -> String {
     // the user to select one rather than silently using an outdated default.
     String::new()
 }
-
 
 /// Create the appropriate LLM provider from a config.
 pub fn make_provider(config: &ProviderConfig) -> Arc<dyn LlmProvider> {
@@ -140,16 +140,19 @@ pub fn make_provider(config: &ProviderConfig) -> Arc<dyn LlmProvider> {
                     ("HTTP-Referer".to_string(), "https://zen.local".to_string()),
                     ("X-Title".to_string(), "Zen AI".to_string()),
                 ]
-            } else if p_type == "kilocode" 
-                || p_type == "kilo" 
+            } else if p_type == "kilocode"
+                || p_type == "kilo"
                 || p_type == "kilo.ai"
-                || config.display_name.to_lowercase().contains("kilocode") 
+                || config.display_name.to_lowercase().contains("kilocode")
                 || config.display_name.to_lowercase().contains("kilo.ai")
             {
                 vec![
                     ("HTTP-Referer".to_string(), "https://kilo.ai".to_string()),
                     ("X-Title".to_string(), "Kilo AI".to_string()),
-                    ("X-KILOCODE-EDITORNAME".to_string(), "Zen Workbench".to_string()),
+                    (
+                        "X-KILOCODE-EDITORNAME".to_string(),
+                        "Zen Workbench".to_string(),
+                    ),
                 ]
             } else {
                 vec![]
@@ -162,60 +165,4 @@ pub fn make_provider(config: &ProviderConfig) -> Arc<dyn LlmProvider> {
             ))
         }
     }
-}
-
-/// Create a provider by looking up settings in the database.
-pub async fn create_provider(db_pool: &SqlitePool, provider_name: &str) -> ZenResult<Arc<dyn LlmProvider>> {
-    let p_type = provider_name.to_lowercase();
-    
-    let provider = match p_type.as_str() {
-        "ollama" => {
-            let url = crate::db::queries::get_setting(db_pool, "ollama_base_url")
-                .await?
-                .unwrap_or_else(|| default_base_url("ollama"));
-            Arc::new(OllamaProvider::new(&url)) as Arc<dyn LlmProvider>
-        }
-        "anthropic" => {
-            let api_key = crate::db::queries::get_setting(db_pool, "anthropic_api_key")
-                .await?
-                .unwrap_or_default();
-            Arc::new(AnthropicProvider::new(&api_key)) as Arc<dyn LlmProvider>
-        }
-        "lmstudio" => {
-            let url = crate::db::queries::get_setting(db_pool, "lmstudio_base_url")
-                .await?
-                .unwrap_or_else(|| default_base_url("lmstudio"));
-            Arc::new(LmStudioProvider::new(&url)) as Arc<dyn LlmProvider>
-        }
-        _ => {
-            let base_url = crate::db::queries::get_setting(db_pool, &format!("{}_base_url", p_type))
-                .await?
-                .unwrap_or_else(|| default_base_url(&p_type));
-
-            if base_url.is_empty() || (!base_url.starts_with("http://") && !base_url.starts_with("https://")) {
-                return Err(ZenError::Custom(
-                    format!("Unknown provider '{}': no base URL configured. Add a '{provider_name}_base_url' setting or check the provider name.", provider_name)
-                ));
-            }
-
-            let api_key_setting = if p_type == "google" || p_type == "gemini" {
-                "gemini_api_key".to_string()
-            } else {
-                format!("{}_api_key", p_type)
-            };
-
-            let api_key = crate::db::queries::get_setting(db_pool, &api_key_setting)
-                .await?
-                .unwrap_or_default();
-
-            make_provider(&ProviderConfig {
-                provider_type: p_type.clone(),
-                base_url,
-                api_key,
-                display_name: provider_name.to_string(),
-                headers: None,
-            })
-        }
-    };
-    Ok(provider)
 }

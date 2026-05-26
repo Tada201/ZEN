@@ -33,10 +33,11 @@ pub async fn compute_route(
             match google_route(origin, dest, &profile, &key).await {
                 Ok(route) => {
                     if let Some(p) = pool {
-                        let _ = crate::db::queries::increment_setting(p, "google_maps_usage_count").await;
+                        let _ = crate::db::queries::increment_setting(p, "google_maps_usage_count")
+                            .await;
                     }
                     return Ok(route);
-                },
+                }
                 Err(e) => tracing::warn!("Google routing failed: {}", e),
             }
         }
@@ -130,10 +131,19 @@ async fn google_route(
     }
 
     let res: GoogleRoutesResponse = response.json().await?;
-    let g_route = res.routes.and_then(|mut r| r.pop()).ok_or_else(|| anyhow!("No Google route found"))?;
+    let g_route = res
+        .routes
+        .and_then(|mut r| r.pop())
+        .ok_or_else(|| anyhow!("No Google route found"))?;
 
-    let dur_s = g_route.duration.trim_end_matches('s').parse::<f64>().unwrap_or(0.0);
-    let static_dur_s = g_route.static_duration.as_ref()
+    let dur_s = g_route
+        .duration
+        .trim_end_matches('s')
+        .parse::<f64>()
+        .unwrap_or(0.0);
+    let static_dur_s = g_route
+        .static_duration
+        .as_ref()
         .map(|s| s.trim_end_matches('s').parse::<f64>().unwrap_or(dur_s))
         .unwrap_or(dur_s);
 
@@ -143,9 +153,16 @@ async fn google_route(
             steps.push(NavigationStep {
                 lat: step.start_location.lat_lng.lat,
                 lon: step.start_location.lat_lng.lng,
-                instruction: step.navigation_instruction.map(|i| i.instructions).unwrap_or_default(),
+                instruction: step
+                    .navigation_instruction
+                    .map(|i| i.instructions)
+                    .unwrap_or_default(),
                 distance_m: step.distance_meters,
-                duration_s: step.static_duration.trim_end_matches('s').parse::<f64>().unwrap_or(0.0),
+                duration_s: step
+                    .static_duration
+                    .trim_end_matches('s')
+                    .parse::<f64>()
+                    .unwrap_or(0.0),
                 action: "move".into(),
             });
         }
@@ -160,7 +177,10 @@ async fn google_route(
         traffic_duration_s: Some(dur_s),
         steps,
         incidents: vec![],
-        summary: format!("Traffic delay: {:.0} min", (dur_s - static_dur_s).max(0.0) / 60.0),
+        summary: format!(
+            "Traffic delay: {:.0} min",
+            (dur_s - static_dur_s).max(0.0) / 60.0
+        ),
     })
 }
 
@@ -175,27 +195,33 @@ struct HereResponse {
 
 #[derive(Debug, Deserialize)]
 struct HereRoute {
-    id: Option<String>,
+    #[serde(rename = "id")]
+    _id: Option<String>,
     sections: Vec<HereSection>,
 }
 
 #[derive(Debug, Deserialize)]
 struct HereSection {
-    departure: HerePlace,
-    arrival: HerePlace,
+    #[serde(rename = "departure")]
+    _departure: HerePlace,
+    #[serde(rename = "arrival")]
+    _arrival: HerePlace,
     summary: HereSummary,
     polyline: String,
-    turnByTurnActions: Option<Vec<HereAction>>,
+    #[serde(rename = "turnByTurnActions")]
+    turn_by_turn_actions: Option<Vec<HereAction>>,
 }
 
 #[derive(Debug, Deserialize)]
 struct HerePlace {
-    place: HereLocation,
+    #[serde(rename = "place")]
+    _place: HereLocation,
 }
 
 #[derive(Debug, Deserialize)]
 struct HereLocation {
-    location: HereLatLng,
+    #[serde(rename = "location")]
+    _location: HereLatLng,
 }
 
 #[derive(Debug, Deserialize)]
@@ -208,7 +234,8 @@ struct HereLatLng {
 struct HereSummary {
     duration: f64,
     length: f64,
-    baseDuration: f64,
+    #[serde(rename = "baseDuration")]
+    base_duration: f64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -217,7 +244,8 @@ struct HereAction {
     duration: f64,
     length: f64,
     instruction: String,
-    offset: usize, // Index in polyline
+    #[serde(rename = "offset")]
+    _offset: usize,
 }
 
 async fn here_route(
@@ -240,7 +268,7 @@ async fn here_route(
 
     let client = Client::builder().timeout(Duration::from_secs(10)).build()?;
     let response = client.get(&url).send().await?;
-    
+
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
@@ -262,11 +290,13 @@ async fn here_route(
 
     let summary = format!(
         "Traffic delay: {} min",
-        ((section.summary.duration - section.summary.baseDuration) / 60.0).max(0.0).round()
+        ((section.summary.duration - section.summary.base_duration) / 60.0)
+            .max(0.0)
+            .round()
     );
 
     let mut steps = Vec::new();
-    if let Some(actions) = section.turnByTurnActions {
+    if let Some(actions) = section.turn_by_turn_actions {
         for action in actions {
             // Approximation: HERE steps don't include lat/lon directly in the action object in summary-only responses.
             // Client side MapLibre handles the flexible polyline decoding to match offsets.
@@ -284,10 +314,10 @@ async fn here_route(
 
     Ok(NavigationRoute {
         provider: "HERE".into(),
-        geometry: vec![], // Not used; polyline passed to MapTiler
+        geometry: vec![],           // Not used; polyline passed to MapTiler
         polyline: section.polyline, // Flexible Polyline format (MapLibre handles decoding or we use a JS flex-polyline decoder)
         distance_m: section.summary.length,
-        duration_s: section.summary.baseDuration,
+        duration_s: section.summary.base_duration,
         traffic_duration_s: Some(section.summary.duration),
         steps,
         incidents: vec![], // Requires Traffic API separately or incident return flags
@@ -335,7 +365,11 @@ struct OsrmManeuver {
     modifier: Option<String>,
 }
 
-async fn osrm_route(start: [f64; 2], end: [f64; 2], profile: &RoutingProfile) -> Result<NavigationRoute> {
+async fn osrm_route(
+    start: [f64; 2],
+    end: [f64; 2],
+    profile: &RoutingProfile,
+) -> Result<NavigationRoute> {
     // OSRM public demo only supports driving ("car"), bike, and foot.
     let transport_mode = match profile {
         RoutingProfile::Car | RoutingProfile::Truck => "driving",
@@ -345,7 +379,11 @@ async fn osrm_route(start: [f64; 2], end: [f64; 2], profile: &RoutingProfile) ->
 
     let url = format!(
         "https://router.project-osrm.org/route/v1/{}/{},{};{},{}?overview=full&steps=true",
-        transport_mode, start[1], start[0], end[1], end[0] // OSRM is lon,lat
+        transport_mode,
+        start[1],
+        start[0],
+        end[1],
+        end[0] // OSRM is lon,lat
     );
 
     let client = Client::builder()
@@ -373,7 +411,10 @@ async fn osrm_route(start: [f64; 2], end: [f64; 2], profile: &RoutingProfile) ->
         }
         for step in &leg.steps {
             let instruction = if let Some(modifier) = &step.maneuver.modifier {
-                format!("{} {} onto {}", step.maneuver.maneuver_type, modifier, step.name)
+                format!(
+                    "{} {} onto {}",
+                    step.maneuver.maneuver_type, modifier, step.name
+                )
             } else {
                 format!("{} on {}", step.maneuver.maneuver_type, step.name)
             };
@@ -398,6 +439,10 @@ async fn osrm_route(start: [f64; 2], end: [f64; 2], profile: &RoutingProfile) ->
         traffic_duration_s: None, // No traffic in free OSRM
         steps,
         incidents: vec![],
-        summary: if summary.is_empty() { "OSRM Route".into() } else { summary },
+        summary: if summary.is_empty() {
+            "OSRM Route".into()
+        } else {
+            summary
+        },
     })
 }

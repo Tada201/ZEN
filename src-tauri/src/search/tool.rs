@@ -1,11 +1,11 @@
+use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::{json, Value};
-use anyhow::Result;
 use tauri::AppHandle;
 
 use crate::agent::tools::AgentTool;
-use crate::tools::{Tool, ToolOutput, ToolError};
 use crate::tools::permission::RiskLevel;
+use crate::tools::{Tool, ToolError, ToolOutput};
 
 /// Real WebSearchTool that searches DuckDuckGo (free, no API key required)
 /// and returns parsed results (title, snippet, URL).
@@ -52,20 +52,30 @@ struct SearchResult {
     url: String,
 }
 
-async fn nine_router_search_fallback(app: &AppHandle, query: &str) -> Result<Vec<SearchResult>, String> {
+async fn nine_router_search_fallback(
+    app: &AppHandle,
+    query: &str,
+) -> Result<Vec<SearchResult>, String> {
     use tauri::Manager;
-    let state = app.try_state::<crate::AppState>()
+    let state = app
+        .try_state::<crate::AppState>()
         .ok_or_else(|| "AppState not found in Tauri manager".to_string())?;
-    
-    let db_pool = state.db().await
+
+    let db_pool = state
+        .db()
+        .await
         .map_err(|e| format!("Failed to get database pool: {}", e))?;
-    
-    let nine_router_base_url = crate::db::queries::get_setting(&db_pool, "nine_router_base_url")
+
+    let nine_router_base_url = state
+        .settings_manager
+        .get("nine_router_base_url")
         .await
         .unwrap_or_default()
         .unwrap_or_else(|| "http://localhost:20128/v1".to_string());
-    
-    let nine_router_api_key = crate::db::queries::get_setting(&db_pool, "nine_router_api_key")
+
+    let nine_router_api_key = state
+        .secret_manager
+        .get_secret("nine_router_api_key")
         .await
         .unwrap_or_default()
         .unwrap_or_default();
@@ -73,7 +83,7 @@ async fn nine_router_search_fallback(app: &AppHandle, query: &str) -> Result<Vec
     // 2. Fetch models to perform dynamic search model discovery
     let client = reqwest::Client::new();
     let models_url = format!("{}/models", nine_router_base_url.trim_end_matches('/'));
-    
+
     let mut selected_model = "kr/claude-sonnet-4.5".to_string(); // Premium fallback model
     let mut has_explicit_search_model = false;
 
@@ -103,9 +113,13 @@ async fn nine_router_search_fallback(app: &AppHandle, query: &str) -> Result<Vec
         if let Ok(resp) = request.send().await {
             if resp.status().is_success() {
                 #[derive(serde::Deserialize)]
-                struct ModelObj { id: String }
+                struct ModelObj {
+                    id: String,
+                }
                 #[derive(serde::Deserialize)]
-                struct ModelsResp { data: Vec<ModelObj> }
+                struct ModelsResp {
+                    data: Vec<ModelObj>,
+                }
 
                 if let Ok(models_data) = resp.json::<ModelsResp>().await {
                     // Find model that matches keywords: sonar, perplexity, search, online
@@ -123,7 +137,10 @@ async fn nine_router_search_fallback(app: &AppHandle, query: &str) -> Result<Vec
     }
 
     // 3. Post to chat completion endpoint
-    let chat_url = format!("{}/chat/completions", nine_router_base_url.trim_end_matches('/'));
+    let chat_url = format!(
+        "{}/chat/completions",
+        nine_router_base_url.trim_end_matches('/')
+    );
     let payload = json!({
         "model": selected_model,
         "messages": [
@@ -144,28 +161,43 @@ async fn nine_router_search_fallback(app: &AppHandle, query: &str) -> Result<Vec
         post_req = post_req.bearer_auth(&nine_router_api_key);
     }
 
-    let resp = post_req.send().await
+    let resp = post_req
+        .send()
+        .await
         .map_err(|e| format!("Failed to reach 9Router chat completion: {}", e))?;
 
     if !resp.status().is_success() {
-        return Err(format!("9Router chat completion returned status: {}", resp.status()));
+        return Err(format!(
+            "9Router chat completion returned status: {}",
+            resp.status()
+        ));
     }
 
-    let text_content = resp.text().await
+    let text_content = resp
+        .text()
+        .await
         .map_err(|e| format!("Failed to read 9Router response text: {}", e))?;
 
     // Parse the chat completions JSON
     #[derive(serde::Deserialize)]
-    struct ChoiceMsg { content: String }
+    struct ChoiceMsg {
+        content: String,
+    }
     #[derive(serde::Deserialize)]
-    struct Choice { message: ChoiceMsg }
+    struct Choice {
+        message: ChoiceMsg,
+    }
     #[derive(serde::Deserialize)]
-    struct ChatCompletion { choices: Vec<Choice> }
+    struct ChatCompletion {
+        choices: Vec<Choice>,
+    }
 
     let completion: ChatCompletion = serde_json::from_str(&text_content)
         .map_err(|e| format!("Failed to parse chat completion structure: {}", e))?;
 
-    let raw_content = completion.choices.first()
+    let raw_content = completion
+        .choices
+        .first()
         .map(|c| c.message.content.trim())
         .ok_or_else(|| "9Router returned an empty choice list".to_string())?;
 
@@ -176,8 +208,12 @@ async fn nine_router_search_fallback(app: &AppHandle, query: &str) -> Result<Vec
         .trim_end_matches("```")
         .trim();
 
-    let results: Vec<SearchResult> = serde_json::from_str(cleaned_json)
-        .map_err(|e| format!("Failed to parse search results JSON from model content: {}", e))?;
+    let results: Vec<SearchResult> = serde_json::from_str(cleaned_json).map_err(|e| {
+        format!(
+            "Failed to parse search results JSON from model content: {}",
+            e
+        )
+    })?;
 
     Ok(results)
 }
@@ -276,7 +312,9 @@ impl AgentTool for WebSearchTool {
         _chat_id: String,
         input: Value,
         _depth: u32,
-        _allowed_tools: Option<std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
+        _allowed_tools: Option<
+            std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>,
+        >,
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         let query = input.get("query").and_then(|v| v.as_str()).unwrap_or("");
@@ -293,7 +331,10 @@ impl AgentTool for WebSearchTool {
                             "results": fallback_results,
                             "result_count": fallback_results.len()
                         })),
-                        Err(_) => Ok(json!(format!("Web search for '{}' returned no results.", query)))
+                        Err(_) => Ok(json!(format!(
+                            "Web search for '{}' returned no results.",
+                            query
+                        ))),
                     }
                 } else {
                     Ok(json!({
@@ -303,16 +344,17 @@ impl AgentTool for WebSearchTool {
                     }))
                 }
             }
-            Err(err) => {
-                match nine_router_search_fallback(&app, query).await {
-                    Ok(fallback_results) => Ok(json!({
-                        "query": query,
-                        "results": fallback_results,
-                        "result_count": fallback_results.len()
-                    })),
-                    Err(fallback_err) => Ok(json!(format!("Web search failed: {}. Fallback search failed: {}", err, fallback_err)))
-                }
-            }
+            Err(err) => match nine_router_search_fallback(&app, query).await {
+                Ok(fallback_results) => Ok(json!({
+                    "query": query,
+                    "results": fallback_results,
+                    "result_count": fallback_results.len()
+                })),
+                Err(fallback_err) => Ok(json!(format!(
+                    "Web search failed: {}. Fallback search failed: {}",
+                    err, fallback_err
+                ))),
+            },
         }
     }
 }
@@ -375,9 +417,12 @@ impl Tool for WebSearchTool {
                             metadata: None,
                         }),
                         Err(_) => Ok(ToolOutput {
-                            content: json!(format!("Web search for '{}' returned no results.", query)),
+                            content: json!(format!(
+                                "Web search for '{}' returned no results.",
+                                query
+                            )),
                             metadata: None,
-                        })
+                        }),
                     }
                 } else {
                     Ok(ToolOutput {
@@ -390,22 +435,23 @@ impl Tool for WebSearchTool {
                     })
                 }
             }
-            Err(err) => {
-                match nine_router_search_fallback(&app, query).await {
-                    Ok(fallback_results) => Ok(ToolOutput {
-                        content: json!({
-                            "query": query,
-                            "results": fallback_results,
-                            "result_count": fallback_results.len()
-                        }),
-                        metadata: None,
+            Err(err) => match nine_router_search_fallback(&app, query).await {
+                Ok(fallback_results) => Ok(ToolOutput {
+                    content: json!({
+                        "query": query,
+                        "results": fallback_results,
+                        "result_count": fallback_results.len()
                     }),
-                    Err(fallback_err) => Ok(ToolOutput {
-                        content: json!(format!("Web search failed: {}. Fallback search failed: {}", err, fallback_err)),
-                        metadata: None,
-                    })
-                }
-            }
+                    metadata: None,
+                }),
+                Err(fallback_err) => Ok(ToolOutput {
+                    content: json!(format!(
+                        "Web search failed: {}. Fallback search failed: {}",
+                        err, fallback_err
+                    )),
+                    metadata: None,
+                }),
+            },
         }
     }
 }

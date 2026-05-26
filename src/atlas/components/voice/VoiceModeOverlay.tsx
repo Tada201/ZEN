@@ -1,12 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useUIStore, useSystemStore, useSettingsStore } from '@/atlas/lib/store';
-import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { VoiceOscilloscope } from './VoiceOscilloscope';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from "@/lib/utils";
 import { Mic, X, Terminal, Cpu, Sparkles, Volume2 } from 'lucide-react';
 import { stopSpeech } from '@/atlas/lib/webSpeech';
+import { voiceApi } from '@/api';
 
 // Utility helper to strip markdown for clean subtitles
 function stripMarkdown(text: string) {
@@ -143,7 +143,7 @@ export function VoiceModeOverlay({
         if (!pcmBytesArray) { setVoiceState('listening'); return; }
 
         try {
-            const result = await invoke<{ status: string, text?: string }>('transcribe_audio', { audio: pcmBytesArray });
+            const result = await voiceApi.transcribeAudio(pcmBytesArray);
             if (result.status === 'Transcript' && result.text?.trim()) {
                 setUserSpeechText(result.text.trim());
                 setAiSpeechText('');

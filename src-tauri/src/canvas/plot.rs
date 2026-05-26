@@ -1,7 +1,7 @@
+use anyhow::{bail, Result};
 /// Math Plot Engine - Parametric, Function, and Polar Plotting
 /// Enables precise curve generation from mathematical expressions
 use serde::{Deserialize, Serialize};
-use anyhow::{Result, bail};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PlotType {
@@ -59,7 +59,7 @@ fn default_step() -> f64 {
 }
 
 fn default_max_points() -> usize {
-    5000  // Reduced for real-time browser rendering safety
+    5000 // Reduced for real-time browser rendering safety
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,7 +93,7 @@ fn normalize_unicode(expr: &str) -> String {
 pub fn eval_expr(expr: &str, vars: &std::collections::HashMap<String, f64>) -> Result<f64> {
     // Normalize Unicode symbols to ASCII before evaluation
     let normalized = normalize_unicode(expr);
-    
+
     let mut ctx = meval::Context::new();
     for (name, val) in vars {
         ctx.var(name.clone(), *val);
@@ -178,32 +178,44 @@ pub fn generate_plot(request: &PlotRequest) -> Result<PlotOutput> {
                 if last[0].is_finite() && last[1].is_finite() {
                     let dy = (y - last[1]).abs();
                     let dx = (x - last[0]).abs();
-                    
+
                     // Compute dynamic threshold based on observed y-range
                     let y_range = if !y_values_seen.is_empty() {
-                        let y_min_seen = y_values_seen.iter().cloned().fold(f64::INFINITY, f64::min);
-                        let y_max_seen = y_values_seen.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+                        let y_min_seen =
+                            y_values_seen.iter().cloned().fold(f64::INFINITY, f64::min);
+                        let y_max_seen = y_values_seen
+                            .iter()
+                            .cloned()
+                            .fold(f64::NEG_INFINITY, f64::max);
                         (y_max_seen - y_min_seen).max(50.0)
                     } else {
                         50.0
                     };
-                    
+
                     let threshold = (y_range * 0.1).max(50.0);
-                    
+
                     // If vertical jump exceeds threshold with small horizontal step, insert pen lift
                     if dy > threshold && dx < step * 2.0 {
                         points.push([f64::NAN, f64::NAN]);
                     }
                 }
             }
-            
+
             y_values_seen.push(y);
-            
+
             // Track bounds
-            if x < x_min { x_min = x; }
-            if x > x_max { x_max = x; }
-            if y < y_min { y_min = y; }
-            if y > y_max { y_max = y; }
+            if x < x_min {
+                x_min = x;
+            }
+            if x > x_max {
+                x_max = x;
+            }
+            if y < y_min {
+                y_min = y;
+            }
+            if y > y_max {
+                y_max = y;
+            }
             finite_count += 1;
             points.push([x, y]);
         } else {
@@ -269,7 +281,9 @@ pub fn simplify_path(points: &[[f64; 2]], tolerance: f64) -> Vec<[f64; 2]> {
 /// Validate an expression string is safe (no code injection)
 pub fn validate_expression_safety(expr: &str) -> Result<()> {
     // Block suspicious patterns
-    let forbidden = [";", "__", "eval", "exec", "import", "system", "unsafe", "drop"];
+    let forbidden = [
+        ";", "__", "eval", "exec", "import", "system", "unsafe", "drop",
+    ];
     for f in &forbidden {
         if expr.contains(f) {
             bail!("Expression contains forbidden pattern: '{}'", f);
@@ -277,7 +291,8 @@ pub fn validate_expression_safety(expr: &str) -> Result<()> {
     }
 
     // Allowlist chars: letters, digits, operators, parens, dot, comma, space, underscore, tilde
-    let allowed: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-*/^().,= _πθ~";
+    let allowed: &str =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-*/^().,= _πθ~";
     for ch in expr.chars() {
         if !allowed.contains(ch) {
             bail!("Expression contains disallowed character: '{}'", ch);

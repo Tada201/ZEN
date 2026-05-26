@@ -2,10 +2,10 @@ use crate::db::models::{ChatMessage, ChatResponse};
 use crate::error::{ZenError, ZenResult};
 use crate::llm::openai_compat::types::*;
 use crate::llm::openai_compat::OpenAiCompatProvider;
+use futures::StreamExt;
 use std::collections::HashMap;
 use std::sync::RwLock;
-use futures::StreamExt;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 impl OpenAiCompatProvider {
     pub async fn do_chat_stream(
@@ -36,21 +36,22 @@ impl OpenAiCompatProvider {
                 });
 
                 // For assistant messages with tool calls but no text, content should be None
-                let oauth_content = if m.role == "assistant" && m.content.is_empty() && tool_calls_out.is_some() {
-                    None
-                } else if let Some(images) = m.images {
-                    let mut parts = vec![OpenAiContentPart::Text { text: m.content }];
-                    for img in images {
-                        parts.push(OpenAiContentPart::ImageUrl {
-                            image_url: OpenAiImageUrl {
-                                url: img, // Assumes it's already a data URL
-                            },
-                        });
-                    }
-                    Some(OpenAiContent::Parts(parts))
-                } else {
-                    Some(OpenAiContent::Text(m.content))
-                };
+                let oauth_content =
+                    if m.role == "assistant" && m.content.is_empty() && tool_calls_out.is_some() {
+                        None
+                    } else if let Some(images) = m.images {
+                        let mut parts = vec![OpenAiContentPart::Text { text: m.content }];
+                        for img in images {
+                            parts.push(OpenAiContentPart::ImageUrl {
+                                image_url: OpenAiImageUrl {
+                                    url: img, // Assumes it's already a data URL
+                                },
+                            });
+                        }
+                        Some(OpenAiContent::Parts(parts))
+                    } else {
+                        Some(OpenAiContent::Text(m.content))
+                    };
 
                 OpenAiMessage {
                     role: m.role,
@@ -77,12 +78,13 @@ impl OpenAiCompatProvider {
         });
 
         // Map model specific parameters from config
-        let (max_tokens_mapped, max_completion_tokens) = if model.starts_with("o1") || model.starts_with("o3") {
-            // OpenAI o1/o3 models require max_completion_tokens instead of max_tokens
-            (None, config.max_tokens)
-        } else {
-            (config.max_tokens, None)
-        };
+        let (max_tokens_mapped, max_completion_tokens) =
+            if model.starts_with("o1") || model.starts_with("o3") {
+                // OpenAI o1/o3 models require max_completion_tokens instead of max_tokens
+                (None, config.max_tokens)
+            } else {
+                (config.max_tokens, None)
+            };
 
         let response_format = config.json_schema.map(|s| {
             serde_json::json!({
@@ -119,7 +121,11 @@ impl OpenAiCompatProvider {
         );
 
         let resp = self
-            .send_with_retry(self.auth_post(&url).json(&request))
+            .send_with_retry(
+                self.auth_post(&url)
+                    .json(&request)
+                    .timeout(std::time::Duration::from_secs(600)),
+            )
             .await?;
 
         if !resp.status().is_success() {
@@ -185,17 +191,23 @@ impl OpenAiCompatProvider {
                             if let Some(deltas) = &choice.delta.tool_calls {
                                 for delta in deltas {
                                     let idx = delta.index.unwrap_or(0);
-                                    
+
                                     // Ensure results_tool_calls has enough space
                                     while results_tool_calls.len() <= idx {
                                         results_tool_calls.push(ToolCallAccumulator::default());
                                     }
 
                                     let acc = &mut results_tool_calls[idx];
-                                    if let Some(id) = &delta.id { acc.id.push_str(id); }
+                                    if let Some(id) = &delta.id {
+                                        acc.id.push_str(id);
+                                    }
                                     if let Some(func) = &delta.function {
-                                        if let Some(name) = &func.name { acc.name.push_str(name); }
-                                        if let Some(args) = &func.arguments { acc.arguments.push_str(args); }
+                                        if let Some(name) = &func.name {
+                                            acc.name.push_str(name);
+                                        }
+                                        if let Some(args) = &func.arguments {
+                                            acc.arguments.push_str(args);
+                                        }
                                     }
                                 }
                             }
@@ -222,13 +234,22 @@ impl OpenAiCompatProvider {
             for acc in results_tool_calls {
                 if !acc.name.is_empty() {
                     tcs.push(crate::db::models::ToolCall {
-                        id: if acc.id.is_empty() { format!("call_{}", uuid::Uuid::new_v4()) } else { acc.id },
+                        id: if acc.id.is_empty() {
+                            format!("call_{}", uuid::Uuid::new_v4())
+                        } else {
+                            acc.id
+                        },
                         name: acc.name,
-                        args: serde_json::from_str(&acc.arguments).unwrap_or_else(|_| serde_json::json!({})),
+                        args: serde_json::from_str(&acc.arguments)
+                            .unwrap_or_else(|_| serde_json::json!({})),
                     });
                 }
             }
-            if tcs.is_empty() { None } else { Some(tcs) }
+            if tcs.is_empty() {
+                None
+            } else {
+                Some(tcs)
+            }
         };
 
         Ok(ChatResponse {
@@ -248,7 +269,12 @@ impl OpenAiCompatProvider {
             input: text.to_string(),
         };
 
-        let resp = self.auth_post(&url).json(&request).send().await?;
+        let resp = self
+            .auth_post(&url)
+            .json(&request)
+            .timeout(std::time::Duration::from_secs(60))
+            .send()
+            .await?;
 
         if !resp.status().is_success() {
             let status = resp.status();
@@ -269,7 +295,12 @@ impl OpenAiCompatProvider {
 
     pub async fn do_health_check(&self) -> bool {
         let url = self.url("/models");
-        match self.auth_get(&url).send().await {
+        match self
+            .auth_get(&url)
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await
+        {
             Ok(resp) => resp.status().is_success(),
             Err(_) => {
                 let base_str = self.base_url.read().unwrap().clone();
@@ -285,7 +316,12 @@ impl OpenAiCompatProvider {
                     };
                     let alt_url = alt_provider.url("/models");
                     debug!(url = %alt_url, "Trying 127.0.0.1 fallback for health check");
-                    if let Ok(resp) = alt_provider.auth_get(&alt_url).send().await {
+                    if let Ok(resp) = alt_provider
+                        .auth_get(&alt_url)
+                        .timeout(std::time::Duration::from_secs(10))
+                        .send()
+                        .await
+                    {
                         if resp.status().is_success() {
                             self.update_base_url(&base_str, &alt_base);
                             return true;
@@ -317,9 +353,9 @@ impl OpenAiCompatProvider {
         let p = self.provider_name.to_lowercase();
         match p.as_str() {
             // Curated / official catalogs — all models support tools
-            "openai" | "groq" | "mistral" | "gemini" | "google" |
-            "deepseek" | "qwen" | "xai" | "kilocode" | "nine_router" | "nine-router" |
-            "n9router" | "9router" | "aihubmix" | "nvidia" => true,
+            "openai" | "groq" | "mistral" | "gemini" | "google" | "deepseek" | "qwen" | "xai"
+            | "kilocode" | "nine_router" | "nine-router" | "n9router" | "9router" | "aihubmix"
+            | "nvidia" => true,
 
             // Mixed catalogs — many models lack tool support
             "openrouter" | "together" | "perplexity" => false,
@@ -340,7 +376,11 @@ pub struct ToolCallAccumulator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::{method, path}};
+    use crate::llm::LlmProvider;
+    use wiremock::{
+        matchers::{method, path},
+        Mock, MockServer, ResponseTemplate,
+    };
 
     async fn mock_provider() -> (OpenAiCompatProvider, MockServer) {
         let server = MockServer::start().await;
@@ -401,7 +441,10 @@ mod tests {
         assert_eq!(models[0].id, "gpt-4o");
         assert_eq!(models[0].name, "gpt-4o");
         assert_eq!(models[0].display_name.as_deref(), Some("GPT-4o"));
-        assert_eq!(models[0].description.as_deref(), Some("High-intelligence multimodal model"));
+        assert_eq!(
+            models[0].description.as_deref(),
+            Some("High-intelligence multimodal model")
+        );
         assert_eq!(models[0].max_context_length, Some(128000));
         assert_eq!(models[0].provider.as_deref(), Some("openai"));
         assert!(models[0].modified_at.is_some());
@@ -411,7 +454,10 @@ mod tests {
 
         // text-embedding-3-small — minimal fields
         assert_eq!(models[2].id, "text-embedding-3-small");
-        assert_eq!(models[2].display_name.as_deref(), Some("text-embedding-3-small")); // falls back to id
+        assert_eq!(
+            models[2].display_name.as_deref(),
+            Some("text-embedding-3-small")
+        ); // falls back to id
         assert_eq!(models[2].max_context_length, Some(8192));
 
         // gemini-1.5-flash — no owned_by
@@ -491,8 +537,12 @@ mod tests {
         let result = provider.list_models().await;
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("401") || err.contains("unauthorized") || err.contains("Incorrect")
-            || err.contains("openai"));
+        assert!(
+            err.contains("401")
+                || err.contains("unauthorized")
+                || err.contains("Incorrect")
+                || err.contains("openai")
+        );
         Ok(())
     }
 
@@ -502,8 +552,14 @@ mod tests {
 
         Mock::given(method("GET"))
             .and(path("/v1/models"))
-            .and(wiremock::matchers::header("authorization", "Bearer test-key-123"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"data": [{"id": "gpt-4o"}]})))
+            .and(wiremock::matchers::header(
+                "authorization",
+                "Bearer test-key-123",
+            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"data": [{"id": "gpt-4o"}]})),
+            )
             .mount(&server)
             .await;
 
@@ -527,9 +583,15 @@ mod tests {
 
         Mock::given(method("GET"))
             .and(path("/v1/models"))
-            .and(wiremock::matchers::header("http-referer", "https://zen.local"))
+            .and(wiremock::matchers::header(
+                "http-referer",
+                "https://zen.local",
+            ))
             .and(wiremock::matchers::header("x-title", "Zen AI"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"data": [{"id": "openai/gpt-4o"}]})))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"data": [{"id": "openai/gpt-4o"}]})),
+            )
             .mount(&server)
             .await;
 

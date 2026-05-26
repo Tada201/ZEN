@@ -1,3 +1,5 @@
+use crate::agent::types::Agent;
+use crate::agent::utils::now_ms;
 /// ISSUE-004: Agent Lifecycle State Management
 ///
 /// Runtime wrapper around the config-only `Agent` struct, adding:
@@ -5,10 +7,7 @@
 /// - Role assignment (Leader / Worker / Peer)
 /// - Capability-based task matching (`can_execute`)
 /// - Per-agent metrics with auto-calculated health
-
 use serde::{Deserialize, Serialize};
-use crate::agent::types::Agent;
-use crate::agent::utils::now_ms;
 
 // ─── Enums ───
 

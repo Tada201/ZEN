@@ -89,7 +89,7 @@ enum AnthropicContent {
 #[serde(tag = "type")]
 enum AnthropicContentBlock {
     #[serde(rename = "text")]
-    Text { 
+    Text {
         text: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         cache_control: Option<AnthropicCacheControl>,
@@ -139,7 +139,7 @@ struct AnthropicStreamEvent {
     #[serde(rename = "type")]
     event_type: String,
     #[serde(default)]
-    index: Option<usize>,
+    _index: Option<usize>,
     #[serde(default)]
     content_block: Option<AnthropicContentBlockResponse>,
     #[serde(default)]
@@ -159,7 +159,7 @@ struct AnthropicContentBlockResponse {
     #[serde(default)]
     name: Option<String>,
     #[serde(default)]
-    text: Option<String>,
+    _text: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -460,11 +460,13 @@ impl LlmProvider for AnthropicProvider {
                     let tool_call_id = msg.tool_call_id.unwrap_or_default();
                     anthropic_messages.push(AnthropicMessage {
                         role: "user".to_string(),
-                        content: AnthropicContent::Blocks(vec![AnthropicContentBlock::ToolResult {
-                            tool_use_id: tool_call_id,
-                            content: msg.content,
-                            cache_control: None,
-                        }]),
+                        content: AnthropicContent::Blocks(vec![
+                            AnthropicContentBlock::ToolResult {
+                                tool_use_id: tool_call_id,
+                                content: msg.content,
+                                cache_control: None,
+                            },
+                        ]),
                     });
                 }
                 "user" => {
@@ -527,21 +529,26 @@ impl LlmProvider for AnthropicProvider {
                 AnthropicContent::Blocks(blocks) => {
                     if let Some(last_block) = blocks.last_mut() {
                         match last_block {
-                            AnthropicContentBlock::Text { cache_control, .. } |
-                            AnthropicContentBlock::ToolUse { cache_control, .. } |
-                            AnthropicContentBlock::ToolResult { cache_control, .. } |
-                            AnthropicContentBlock::Image { cache_control, .. } => {
-                                *cache_control = Some(AnthropicCacheControl { cache_type: "ephemeral".to_string() });
+                            AnthropicContentBlock::Text { cache_control, .. }
+                            | AnthropicContentBlock::ToolUse { cache_control, .. }
+                            | AnthropicContentBlock::ToolResult { cache_control, .. }
+                            | AnthropicContentBlock::Image { cache_control, .. } => {
+                                *cache_control = Some(AnthropicCacheControl {
+                                    cache_type: "ephemeral".to_string(),
+                                });
                             }
                         }
                     }
                 }
                 AnthropicContent::Text(text) => {
                     // Convert to block to support caching
-                    anthropic_messages[last_idx].content = AnthropicContent::Blocks(vec![AnthropicContentBlock::Text {
-                        text: text.clone(),
-                        cache_control: Some(AnthropicCacheControl { cache_type: "ephemeral".to_string() }),
-                    }]);
+                    anthropic_messages[last_idx].content =
+                        AnthropicContent::Blocks(vec![AnthropicContentBlock::Text {
+                            text: text.clone(),
+                            cache_control: Some(AnthropicCacheControl {
+                                cache_type: "ephemeral".to_string(),
+                            }),
+                        }]);
                 }
             }
         }
@@ -663,14 +670,18 @@ impl LlmProvider for AnthropicProvider {
                                         "text_delta" => {
                                             if let Some(text) = &delta.text {
                                                 if !text.is_empty() {
-                                                    on_chunk(crate::llm::LlmChunk::Text(text.clone()));
+                                                    on_chunk(crate::llm::LlmChunk::Text(
+                                                        text.clone(),
+                                                    ));
                                                     full_content.push_str(text);
                                                 }
                                             }
                                         }
                                         "thinking_delta" => {
                                             if let Some(thought) = &delta.thinking {
-                                                on_chunk(crate::llm::LlmChunk::Thought(thought.clone()));
+                                                on_chunk(crate::llm::LlmChunk::Thought(
+                                                    thought.clone(),
+                                                ));
                                             }
                                         }
                                         "input_json_delta" => {
@@ -726,7 +737,11 @@ impl LlmProvider for AnthropicProvider {
                     });
                 }
             }
-            if tcs.is_empty() { None } else { Some(tcs) }
+            if tcs.is_empty() {
+                None
+            } else {
+                Some(tcs)
+            }
         };
 
         Ok(ChatResponse {

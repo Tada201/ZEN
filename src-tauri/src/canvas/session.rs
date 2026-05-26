@@ -1,9 +1,9 @@
+use anyhow::{bail, Result};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 /// GraphSession — Core state engine for bidirectional math co-creation
 /// Manages expression versioning, variable state, and constraint validation.
 use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use anyhow::{Result, bail};
 use uuid::Uuid;
 
 use crate::canvas::plot::{generate_plot, validate_expression_safety, PlotRequest, PlotType};
@@ -43,12 +43,12 @@ pub struct GraphSession {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Expression {
-    pub id: String,                   // "f1", "f2", ...
-    pub expr: String,                 // "y = a * sin(x)"
+    pub id: String,   // "f1", "f2", ...
+    pub expr: String, // "y = a * sin(x)"
     pub visible: bool,
-    pub color: String,                // "#00FF9F"
-    pub error: Option<String>,        // last parse/eval error
-    pub dependencies: Vec<String>,    // variable names referenced
+    pub color: String,             // "#00FF9F"
+    pub error: Option<String>,     // last parse/eval error
+    pub dependencies: Vec<String>, // variable names referenced
     pub thickness: Option<f64>,
     pub opacity: Option<f64>,
     pub style: Option<String>,
@@ -74,13 +74,13 @@ pub struct Expression {
 /// Annotation on a plot (point, label, marker)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Annotation {
-    pub id: String,                   // "a1", "a2", ...
-    pub expr_id: Option<String>,      // Associated expression (optional)
+    pub id: String,              // "a1", "a2", ...
+    pub expr_id: Option<String>, // Associated expression (optional)
     pub x: f64,
     pub y: f64,
-    pub label: Option<String>,        // Text label
+    pub label: Option<String>, // Text label
     pub color: String,
-    pub style: String,                // "point", "label", "marker", "arrow"
+    pub style: String, // "point", "label", "marker", "arrow"
     pub visible: bool,
 }
 
@@ -94,7 +94,12 @@ pub struct Viewport {
 
 impl Default for Viewport {
     fn default() -> Self {
-        Self { x_min: -10.0, x_max: 10.0, y_min: -10.0, y_max: 10.0 }
+        Self {
+            x_min: -10.0,
+            x_max: 10.0,
+            y_min: -10.0,
+            y_max: 10.0,
+        }
     }
 }
 
@@ -102,7 +107,7 @@ impl Default for Viewport {
 pub struct Commit {
     pub version: usize,
     pub timestamp: u64,
-    pub author: String,   // "llm" or "user"
+    pub author: String, // "llm" or "user"
     pub summary: String,
     pub snapshot: CommitSnapshot,
 }
@@ -119,7 +124,7 @@ pub struct CommitSnapshot {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Issue {
     pub id: String,
-    pub severity: String,      // "error" | "warning" | "info"
+    pub severity: String, // "error" | "warning" | "info"
     pub code: String,
     pub message: String,
     pub affected_expression: Option<String>,
@@ -183,7 +188,7 @@ pub enum SessionAction {
         id: String,
         visible: bool,
     },
-    
+
     // Variable actions
     SetVariable {
         name: String,
@@ -192,7 +197,7 @@ pub enum SessionAction {
     DeleteVariable {
         name: String,
     },
-    
+
     // Viewport actions
     SetViewport {
         x_min: f64,
@@ -200,15 +205,15 @@ pub enum SessionAction {
         y_min: f64,
         y_max: f64,
     },
-    
+
     // Annotation actions
     AddAnnotation {
         x: f64,
         y: f64,
         label: Option<String>,
         color: Option<String>,
-        style: Option<String>,  // "point", "label", "marker"
-        expr_id: Option<String>,  // Associated expression
+        style: Option<String>,   // "point", "label", "marker"
+        expr_id: Option<String>, // Associated expression
     },
     DeleteAnnotation {
         id: String,
@@ -217,7 +222,7 @@ pub enum SessionAction {
         id: String,
         visible: bool,
     },
-    
+
     // Session actions
     ResetSession,
     /// Capture current graph state for vision-enabled LLM analysis
@@ -325,9 +330,21 @@ impl GraphSession {
         let snapshot = self.snapshot();
 
         match action {
-            SessionAction::AddExpression { expr, color, plot_type, y_expr, domain, step, label, renderer } => {
+            SessionAction::AddExpression {
+                expr,
+                color,
+                plot_type,
+                y_expr,
+                domain,
+                step,
+                label,
+                renderer,
+            } => {
                 if self.expressions.len() >= self.limits.max_expressions {
-                    bail!("Maximum expressions ({}) reached", self.limits.max_expressions);
+                    bail!(
+                        "Maximum expressions ({}) reached",
+                        self.limits.max_expressions
+                    );
                 }
                 validate_expression_safety(&expr)?;
 
@@ -353,12 +370,18 @@ impl GraphSession {
                     last_plot_hash: None,
                     cached_plot: None,
                 });
-                self.commit(snapshot, author, format!("Add expression {} = {}", id, expr));
+                self.commit(
+                    snapshot,
+                    author,
+                    format!("Add expression {} = {}", id, expr),
+                );
             }
 
             SessionAction::UpdateExpression { id, expr } => {
                 validate_expression_safety(&expr)?;
-                let ex = self.expressions.iter_mut()
+                let ex = self
+                    .expressions
+                    .iter_mut()
                     .find(|e| e.id == id)
                     .ok_or_else(|| anyhow::anyhow!("Expression '{}' not found", id))?;
                 ex.expr = expr.clone();
@@ -367,30 +390,55 @@ impl GraphSession {
                 self.commit(snapshot, author, format!("Update {} = {}", id, expr));
             }
 
-            SessionAction::UpdateExpressionStyle { id, color, thickness, opacity, style } => {
-                let ex = self.expressions.iter_mut()
+            SessionAction::UpdateExpressionStyle {
+                id,
+                color,
+                thickness,
+                opacity,
+                style,
+            } => {
+                let ex = self
+                    .expressions
+                    .iter_mut()
                     .find(|e| e.id == id)
                     .ok_or_else(|| anyhow::anyhow!("Expression '{}' not found", id))?;
-                if let Some(c) = color { ex.color = c; }
-                if let Some(t) = thickness { ex.thickness = Some(t); }
-                if let Some(o) = opacity { ex.opacity = Some(o); }
-                if let Some(s) = style { ex.style = Some(s); }
+                if let Some(c) = color {
+                    ex.color = c;
+                }
+                if let Some(t) = thickness {
+                    ex.thickness = Some(t);
+                }
+                if let Some(o) = opacity {
+                    ex.opacity = Some(o);
+                }
+                if let Some(s) = style {
+                    ex.style = Some(s);
+                }
                 self.commit(snapshot, author, format!("Update style for {}", id));
             }
 
             SessionAction::DeleteExpression { id } => {
-                let pos = self.expressions.iter().position(|e| e.id == id)
+                let pos = self
+                    .expressions
+                    .iter()
+                    .position(|e| e.id == id)
                     .ok_or_else(|| anyhow::anyhow!("Expression '{}' not found", id))?;
                 self.expressions.remove(pos);
                 self.commit(snapshot, author, format!("Delete expression {}", id));
             }
 
             SessionAction::SetVisible { id, visible } => {
-                let ex = self.expressions.iter_mut()
+                let ex = self
+                    .expressions
+                    .iter_mut()
                     .find(|e| e.id == id)
                     .ok_or_else(|| anyhow::anyhow!("Expression '{}' not found", id))?;
                 ex.visible = visible;
-                self.commit(snapshot, author, format!("Set {}.visible = {}", id, visible));
+                self.commit(
+                    snapshot,
+                    author,
+                    format!("Set {}.visible = {}", id, visible),
+                );
             }
 
             SessionAction::SetVariable { name, value } => {
@@ -398,7 +446,9 @@ impl GraphSession {
                 if name.chars().any(|c| !c.is_alphanumeric() && c != '_') {
                     bail!("Invalid variable name: '{}'", name);
                 }
-                if self.variables.len() >= self.limits.max_variables && !self.variables.contains_key(&name) {
+                if self.variables.len() >= self.limits.max_variables
+                    && !self.variables.contains_key(&name)
+                {
                     bail!("Maximum variables ({}) reached", self.limits.max_variables);
                 }
                 self.variables.insert(name.clone(), value);
@@ -410,16 +460,33 @@ impl GraphSession {
                 self.commit(snapshot, author, format!("Delete variable {}", name));
             }
 
-            SessionAction::SetViewport { x_min, x_max, y_min, y_max } => {
+            SessionAction::SetViewport {
+                x_min,
+                x_max,
+                y_min,
+                y_max,
+            } => {
                 if x_min >= x_max || y_min >= y_max {
                     bail!("Invalid viewport: mins must be less than maxes");
                 }
-                self.viewport = Viewport { x_min, x_max, y_min, y_max };
+                self.viewport = Viewport {
+                    x_min,
+                    x_max,
+                    y_min,
+                    y_max,
+                };
                 self.commit(snapshot, author, "Update viewport".to_string());
             }
 
             // Annotation actions
-            SessionAction::AddAnnotation { x, y, label, color, style, expr_id } => {
+            SessionAction::AddAnnotation {
+                x,
+                y,
+                label,
+                color,
+                style,
+                expr_id,
+            } => {
                 if self.annotations.len() >= 50 {
                     bail!("Maximum annotations (50) reached");
                 }
@@ -436,22 +503,35 @@ impl GraphSession {
                     style,
                     visible: true,
                 });
-                self.commit(snapshot, author, format!("Add annotation at ({}, {})", x, y));
+                self.commit(
+                    snapshot,
+                    author,
+                    format!("Add annotation at ({}, {})", x, y),
+                );
             }
 
             SessionAction::DeleteAnnotation { id } => {
-                let pos = self.annotations.iter().position(|a| a.id == id)
+                let pos = self
+                    .annotations
+                    .iter()
+                    .position(|a| a.id == id)
                     .ok_or_else(|| anyhow::anyhow!("Annotation '{}' not found", id))?;
                 self.annotations.remove(pos);
                 self.commit(snapshot, author, format!("Delete annotation {}", id));
             }
 
             SessionAction::SetAnnotationVisible { id, visible } => {
-                let ann = self.annotations.iter_mut()
+                let ann = self
+                    .annotations
+                    .iter_mut()
                     .find(|a| a.id == id)
                     .ok_or_else(|| anyhow::anyhow!("Annotation '{}' not found", id))?;
                 ann.visible = visible;
-                self.commit(snapshot, author, format!("Set annotation {}.visible = {}", id, visible));
+                self.commit(
+                    snapshot,
+                    author,
+                    format!("Set annotation {}.visible = {}", id, visible),
+                );
             }
 
             // Read-only actions (no state modification)
@@ -490,7 +570,9 @@ impl GraphSession {
 
     /// Rollback to a specific version
     pub fn rollback_to_version(&mut self, version: usize) -> Result<()> {
-        let commit = self.history.get(version)
+        let commit = self
+            .history
+            .get(version)
             .ok_or_else(|| anyhow::anyhow!("Version {} not found", version))?
             .clone();
 
@@ -555,39 +637,50 @@ impl GraphSession {
             // Generate new plot
             let rhs = parse_rhs(&expr.expr);
             let ineq_op = parse_operator(&expr.expr);
-            let pt = if ineq_op.is_some() { PlotType::Inequality } else { PlotType::Function };
-            
+            let pt = if ineq_op.is_some() {
+                PlotType::Inequality
+            } else {
+                PlotType::Function
+            };
+
             // Handle piecewise
             let mut all_points = Vec::new();
-            let mut current_bounds = [f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY];
+            let mut current_bounds = [
+                f64::INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::NEG_INFINITY,
+            ];
             let mut current_error = None;
-            
+
             let trimmed = rhs.trim();
             let is_piecewise = trimmed.starts_with('{') && trimmed.ends_with('}');
-            
+
             let segments = if is_piecewise {
-                let inner = trimmed[1..trimmed.len()-1].trim();
+                let inner = trimmed[1..trimmed.len() - 1].trim();
                 let mut segs = Vec::new();
                 for piece in inner.split(',') {
                     if let Some(colon_pos) = piece.find(':') {
                         let cond_str = piece[..colon_pos].trim();
-                        let exp_str = piece[colon_pos+1..].trim();
-                        
+                        let exp_str = piece[colon_pos + 1..].trim();
+
                         let mut op = "";
                         let ops = ["<=", ">=", "==", "<", ">"];
                         let mut val_str = "";
                         for o in ops {
                             if let Some(pos) = cond_str.find(o) {
                                 op = o;
-                                val_str = cond_str[pos+o.len()..].trim();
+                                val_str = cond_str[pos + o.len()..].trim();
                                 break;
                             }
                         }
-                        
+
                         let mut vmin = self.viewport.x_min;
                         let mut vmax = self.viewport.x_max;
                         if !op.is_empty() {
-                            if let Ok(val) = crate::canvas::plot::eval_expr(val_str, &self.variables) {
+                            if let Ok(val) =
+                                crate::canvas::plot::eval_expr(val_str, &self.variables)
+                            {
                                 match op {
                                     "<" | "<=" => vmax = val.min(vmax),
                                     ">" | ">=" => vmin = val.max(vmin),
@@ -595,20 +688,23 @@ impl GraphSession {
                                 }
                             }
                         }
-                        
+
                         // Valid overlap check
                         if vmin < vmax {
                             segs.push((exp_str.to_string(), [vmin, vmax]));
                         }
                     } else {
-                        segs.push((piece.trim().to_string(), [self.viewport.x_min, self.viewport.x_max]));
+                        segs.push((
+                            piece.trim().to_string(),
+                            [self.viewport.x_min, self.viewport.x_max],
+                        ));
                     }
                 }
                 segs
             } else {
                 vec![(rhs.clone(), [self.viewport.x_min, self.viewport.x_max])]
             };
-            
+
             for (expr_str, domain) in segments {
                 let req = PlotRequest {
                     plot_type: pt.clone(),
@@ -681,7 +777,10 @@ impl GraphSession {
                             id: Uuid::new_v4().to_string(),
                             severity: "error".to_string(),
                             code: "undefined_variable".to_string(),
-                            message: format!("Variable '{}' used in {} but not defined", dep, expr.id),
+                            message: format!(
+                                "Variable '{}' used in {} but not defined",
+                                dep, expr.id
+                            ),
                             affected_expression: Some(expr.id.clone()),
                             suggestion: format!("Add variable: set_variable({}, 1.0)", dep),
                         });
@@ -779,31 +878,42 @@ impl GraphSession {
     /// or used with a server-side renderer for PNG generation
     pub fn generate_vision_capture(&mut self) -> VisionCapture {
         let plots = self.generate_plots();
-        
+
         VisionCapture {
             session_id: self.id.clone(),
             viewport: self.viewport.clone(),
-            expressions: self.expressions.iter().map(|e| VisionExpression {
-                id: e.id.clone(),
-                expr: e.expr.clone(),
-                color: e.color.clone(),
-                visible: e.visible,
-                error: e.error.clone(),
-            }).collect(),
+            expressions: self
+                .expressions
+                .iter()
+                .map(|e| VisionExpression {
+                    id: e.id.clone(),
+                    expr: e.expr.clone(),
+                    color: e.color.clone(),
+                    visible: e.visible,
+                    error: e.error.clone(),
+                })
+                .collect(),
             variables: self.variables.clone(),
-            plots: plots.into_iter().map(|p| VisionPlot {
-                id: p.id,
-                color: p.color,
-                point_count: p.points.len(),
-                bounds: p.bounds,
-                error: p.error,
-            }).collect(),
-            issues: self.issues.iter().map(|i| VisionIssue {
-                severity: i.severity.clone(),
-                code: i.code.clone(),
-                message: i.message.clone(),
-                suggestion: i.suggestion.clone(),
-            }).collect(),
+            plots: plots
+                .into_iter()
+                .map(|p| VisionPlot {
+                    id: p.id,
+                    color: p.color,
+                    point_count: p.points.len(),
+                    bounds: p.bounds,
+                    error: p.error,
+                })
+                .collect(),
+            issues: self
+                .issues
+                .iter()
+                .map(|i| VisionIssue {
+                    severity: i.severity.clone(),
+                    code: i.code.clone(),
+                    message: i.message.clone(),
+                    suggestion: i.suggestion.clone(),
+                })
+                .collect(),
         }
     }
 
@@ -838,8 +948,10 @@ impl GraphSession {
 
 /// Extract variable name dependencies from an expression
 fn extract_dependencies(expr: &str, known_vars: &HashMap<String, f64>) -> Vec<String> {
-    let builtins = ["sin", "cos", "tan", "sqrt", "abs", "ln", "log2", "floor",
-                    "ceil", "exp", "pi", "e", "x", "t", "theta"];
+    let builtins = [
+        "sin", "cos", "tan", "sqrt", "abs", "ln", "log2", "floor", "ceil", "exp", "pi", "e", "x",
+        "t", "theta",
+    ];
 
     // Naive tokenizer: split on non-alphanumeric, find identifiers
     let tokens: Vec<&str> = expr
@@ -862,9 +974,30 @@ fn extract_dependencies(expr: &str, known_vars: &HashMap<String, f64>) -> Vec<St
 }
 
 fn is_builtin_func(name: &str) -> bool {
-    matches!(name, "sin" | "cos" | "tan" | "asin" | "acos" | "atan" | "atan2"
-        | "sqrt" | "abs" | "ln" | "log" | "log2" | "log10" | "exp"
-        | "floor" | "ceil" | "round" | "min" | "max" | "pi" | "e")
+    matches!(
+        name,
+        "sin"
+            | "cos"
+            | "tan"
+            | "asin"
+            | "acos"
+            | "atan"
+            | "atan2"
+            | "sqrt"
+            | "abs"
+            | "ln"
+            | "log"
+            | "log2"
+            | "log10"
+            | "exp"
+            | "floor"
+            | "ceil"
+            | "round"
+            | "min"
+            | "max"
+            | "pi"
+            | "e"
+    )
 }
 
 fn parse_operator(expr: &str) -> Option<String> {
@@ -922,16 +1055,20 @@ mod tests {
     #[test]
     fn test_add_expression() {
         let mut s = make_session();
-        s.apply_action(SessionAction::AddExpression {
-            expr: "sin(x)".to_string(),
-            color: None,
-            plot_type: None,
-            y_expr: None,
-            domain: None,
-            step: None,
-            label: None,
-            renderer: None,
-        }, "llm").unwrap();
+        s.apply_action(
+            SessionAction::AddExpression {
+                expr: "sin(x)".to_string(),
+                color: None,
+                plot_type: None,
+                y_expr: None,
+                domain: None,
+                step: None,
+                label: None,
+                renderer: None,
+            },
+            "llm",
+        )
+        .unwrap();
         assert_eq!(s.expressions.len(), 1);
         assert_eq!(s.expressions[0].id, "f1");
     }
@@ -939,53 +1076,76 @@ mod tests {
     #[test]
     fn test_set_variable() {
         let mut s = make_session();
-        s.apply_action(SessionAction::SetVariable {
-            name: "a".to_string(),
-            value: 3.5,
-        }, "user").unwrap();
+        s.apply_action(
+            SessionAction::SetVariable {
+                name: "a".to_string(),
+                value: 3.5,
+            },
+            "user",
+        )
+        .unwrap();
         assert_eq!(*s.variables.get("a").unwrap(), 3.5);
     }
 
     #[test]
     fn test_update_expression() {
         let mut s = make_session();
-        s.apply_action(SessionAction::AddExpression {
-            expr: "sin(x)".to_string(),
-            color: None,
-            plot_type: None,
-            y_expr: None,
-            domain: None,
-            step: None,
-            label: None,
-            renderer: None,
-        }, "llm").unwrap();
-        s.apply_action(SessionAction::UpdateExpression { id: "f1".to_string(), expr: "cos(x)".to_string() }, "llm").unwrap();
+        s.apply_action(
+            SessionAction::AddExpression {
+                expr: "sin(x)".to_string(),
+                color: None,
+                plot_type: None,
+                y_expr: None,
+                domain: None,
+                step: None,
+                label: None,
+                renderer: None,
+            },
+            "llm",
+        )
+        .unwrap();
+        s.apply_action(
+            SessionAction::UpdateExpression {
+                id: "f1".to_string(),
+                expr: "cos(x)".to_string(),
+            },
+            "llm",
+        )
+        .unwrap();
         assert_eq!(s.expressions[0].expr, "cos(x)");
     }
 
     #[test]
     fn test_version_rollback() {
         let mut s = make_session();
-        s.apply_action(SessionAction::AddExpression {
-            expr: "sin(x)".to_string(),
-            color: None,
-            plot_type: None,
-            y_expr: None,
-            domain: None,
-            step: None,
-            label: None,
-            renderer: None,
-        }, "llm").unwrap();
-        s.apply_action(SessionAction::AddExpression {
-            expr: "cos(x)".to_string(),
-            color: None,
-            plot_type: None,
-            y_expr: None,
-            domain: None,
-            step: None,
-            label: None,
-            renderer: None,
-        }, "llm").unwrap();
+        s.apply_action(
+            SessionAction::AddExpression {
+                expr: "sin(x)".to_string(),
+                color: None,
+                plot_type: None,
+                y_expr: None,
+                domain: None,
+                step: None,
+                label: None,
+                renderer: None,
+            },
+            "llm",
+        )
+        .unwrap();
+        s.apply_action(
+            SessionAction::AddExpression {
+                expr: "cos(x)".to_string(),
+                color: None,
+                plot_type: None,
+                y_expr: None,
+                domain: None,
+                step: None,
+                label: None,
+                renderer: None,
+            },
+            "llm",
+        )
+        .unwrap();
         assert_eq!(s.expressions.len(), 2);
         s.rollback_to_version(0).unwrap();
         assert_eq!(s.expressions.len(), 1);
@@ -995,38 +1155,57 @@ mod tests {
     fn test_validation_undefined_variable() {
         let mut s = make_session();
         // Add expression with undefined variable 'b'
-        s.apply_action(SessionAction::AddExpression {
-            expr: "a * sin(x) + b".to_string(),
-            color: None,
-            plot_type: None,
-            y_expr: None,
-            domain: None,
-            step: None,
-            label: None,
-            renderer: None,
-        }, "llm").unwrap();
+        s.apply_action(
+            SessionAction::AddExpression {
+                expr: "a * sin(x) + b".to_string(),
+                color: None,
+                plot_type: None,
+                y_expr: None,
+                domain: None,
+                step: None,
+                label: None,
+                renderer: None,
+            },
+            "llm",
+        )
+        .unwrap();
         // 'a' and 'b' not defined
         assert!(!s.issues.is_empty());
-        let undefined: Vec<_> = s.issues.iter().filter(|i| i.code == "undefined_variable").collect();
+        let undefined: Vec<_> = s
+            .issues
+            .iter()
+            .filter(|i| i.code == "undefined_variable")
+            .collect();
         assert!(!undefined.is_empty());
     }
 
     #[test]
     fn test_define_variable_clears_issue() {
         let mut s = make_session();
-        s.apply_action(SessionAction::AddExpression {
-            expr: "a * sin(x)".to_string(),
-            color: None,
-            plot_type: None,
-            y_expr: None,
-            domain: None,
-            step: None,
-            label: None,
-            renderer: None,
-        }, "llm").unwrap();
+        s.apply_action(
+            SessionAction::AddExpression {
+                expr: "a * sin(x)".to_string(),
+                color: None,
+                plot_type: None,
+                y_expr: None,
+                domain: None,
+                step: None,
+                label: None,
+                renderer: None,
+            },
+            "llm",
+        )
+        .unwrap();
         let errors_before = s.issues.iter().filter(|i| i.severity == "error").count();
         // Define 'a'
-        s.apply_action(SessionAction::SetVariable { name: "a".to_string(), value: 2.0 }, "user").unwrap();
+        s.apply_action(
+            SessionAction::SetVariable {
+                name: "a".to_string(),
+                value: 2.0,
+            },
+            "user",
+        )
+        .unwrap();
         let errors_after = s.issues.iter().filter(|i| i.severity == "error").count();
         assert!(errors_after < errors_before);
     }
@@ -1035,53 +1214,75 @@ mod tests {
     fn test_max_expressions() {
         let mut s = make_session();
         s.limits.max_expressions = 2;
-        s.apply_action(SessionAction::AddExpression {
-            expr: "sin(x)".to_string(),
-            color: None,
-            plot_type: None,
-            y_expr: None,
-            domain: None,
-            step: None,
-            label: None,
-            renderer: None,
-        }, "llm").unwrap();
-        s.apply_action(SessionAction::AddExpression {
-            expr: "cos(x)".to_string(),
-            color: None,
-            plot_type: None,
-            y_expr: None,
-            domain: None,
-            step: None,
-            label: None,
-            renderer: None,
-        }, "llm").unwrap();
-        let result = s.apply_action(SessionAction::AddExpression {
-            expr: "tan(x)".to_string(),
-            color: None,
-            plot_type: None,
-            y_expr: None,
-            domain: None,
-            step: None,
-            label: None,
-            renderer: None,
-        }, "llm");
+        s.apply_action(
+            SessionAction::AddExpression {
+                expr: "sin(x)".to_string(),
+                color: None,
+                plot_type: None,
+                y_expr: None,
+                domain: None,
+                step: None,
+                label: None,
+                renderer: None,
+            },
+            "llm",
+        )
+        .unwrap();
+        s.apply_action(
+            SessionAction::AddExpression {
+                expr: "cos(x)".to_string(),
+                color: None,
+                plot_type: None,
+                y_expr: None,
+                domain: None,
+                step: None,
+                label: None,
+                renderer: None,
+            },
+            "llm",
+        )
+        .unwrap();
+        let result = s.apply_action(
+            SessionAction::AddExpression {
+                expr: "tan(x)".to_string(),
+                color: None,
+                plot_type: None,
+                y_expr: None,
+                domain: None,
+                step: None,
+                label: None,
+                renderer: None,
+            },
+            "llm",
+        );
         assert!(result.is_err());
     }
 
     #[test]
     fn test_reset_session() {
         let mut s = make_session();
-        s.apply_action(SessionAction::AddExpression {
-            expr: "sin(x)".to_string(),
-            color: None,
-            plot_type: None,
-            y_expr: None,
-            domain: None,
-            step: None,
-            label: None,
-            renderer: None,
-        }, "llm").unwrap();
-        s.apply_action(SessionAction::SetVariable { name: "a".to_string(), value: 3.0 }, "user").unwrap();
+        s.apply_action(
+            SessionAction::AddExpression {
+                expr: "sin(x)".to_string(),
+                color: None,
+                plot_type: None,
+                y_expr: None,
+                domain: None,
+                step: None,
+                label: None,
+                renderer: None,
+            },
+            "llm",
+        )
+        .unwrap();
+        s.apply_action(
+            SessionAction::SetVariable {
+                name: "a".to_string(),
+                value: 3.0,
+            },
+            "user",
+        )
+        .unwrap();
         s.apply_action(SessionAction::ResetSession, "user").unwrap();
         assert!(s.expressions.is_empty());
         assert!(s.variables.is_empty());

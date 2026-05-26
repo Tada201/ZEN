@@ -1,8 +1,8 @@
+use anyhow::{Context, Result};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use anyhow::{Result, Context};
-use text_splitter::{TextSplitter, ChunkConfig};
+use text_splitter::{ChunkConfig, TextSplitter};
 use tiktoken_rs::cl100k_base;
 
 use super::DocumentChunk;
@@ -39,7 +39,8 @@ impl IngestionEngine {
 
     /// Read file content and extract text based on extension extension
     pub async fn extract_text(&self, path: &Path) -> Result<String> {
-        let extension = path.extension()
+        let extension = path
+            .extension()
             .and_then(|s| s.to_str())
             .unwrap_or_default()
             .to_lowercase();
@@ -88,7 +89,7 @@ impl IngestionEngine {
         })
         .await
         .context("Async blocking task failed")??;
-        
+
         Ok(text)
     }
 
@@ -96,7 +97,7 @@ impl IngestionEngine {
     pub fn chunk_text(&self, source_path: &str, text: &str) -> Result<Vec<DocumentChunk>> {
         // Use tiktoken tokenizer for accurate token counting
         let _tokenizer = cl100k_base()?;
-        
+
         let chunk_config = ChunkConfig::new(self.config.max_tokens)
             .with_overlap(self.config.overlap_tokens)
             .context("Failed to configure chunk overlap")?;
@@ -106,16 +107,15 @@ impl IngestionEngine {
         let chunks: Vec<DocumentChunk> = splitter
             .chunks(text)
             .enumerate()
-            .map(|(i, chunk_text)| {
-                DocumentChunk {
-                    id: format!("{}-chunk-{}", source_path, i),
-                    source: source_path.to_string(),
-                    text: chunk_text.to_string(),
-                    metadata: serde_json::json!({
-                        "chunk_index": i,
-                        "file_type": source_path.split('.').last().unwrap_or_default(),
-                    }).to_string(),
-                }
+            .map(|(i, chunk_text)| DocumentChunk {
+                id: format!("{}-chunk-{}", source_path, i),
+                source: source_path.to_string(),
+                text: chunk_text.to_string(),
+                metadata: serde_json::json!({
+                    "chunk_index": i,
+                    "file_type": source_path.split('.').last().unwrap_or_default(),
+                })
+                .to_string(),
             })
             .collect();
 

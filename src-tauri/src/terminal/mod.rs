@@ -1,9 +1,9 @@
+use anyhow::{Context, Result};
+use portable_pty::{native_pty_system, Child, CommandBuilder, PtySize};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use portable_pty::{CommandBuilder, PtySize, native_pty_system, Child};
-use anyhow::{Result, Context};
 
 const OUTPUT_BUFFER_LIMIT: usize = 64 * 1024; // 64KB max buffer per session
 
@@ -16,10 +16,6 @@ pub struct PtySession {
     output_buffer: Arc<std::sync::RwLock<String>>,
     /// Background reader task handle
     _reader_handle: tokio::task::JoinHandle<()>,
-    /// Notified when the reader thread exits
-    reader_done: Arc<tokio::sync::Notify>,
-    /// Stored PtySize for resize
-    size: Mutex<(u16, u16)>,
     /// Master PTY handle MUST be kept alive. Dropping it closes the connection.
     pub master: Arc<Mutex<Box<dyn portable_pty::MasterPty + Send>>>,
     /// Session ID for process manager tracking
@@ -76,7 +72,9 @@ impl TerminalManager {
     }
 
     /// Create a new TerminalManager with process manager integration
-    pub fn with_process_manager(process_manager: Arc<crate::services::process_manager::ProcessManager>) -> Self {
+    pub fn with_process_manager(
+        process_manager: Arc<crate::services::process_manager::ProcessManager>,
+    ) -> Self {
         Self {
             sessions: HashMap::new(),
             process_manager: Some(process_manager),
@@ -130,18 +128,21 @@ impl TerminalManager {
             cmd.cwd(dir);
         }
 
-        let child = pair.slave
+        let child = pair
+            .slave
             .spawn_command(cmd)
             .map_err(|e| anyhow::anyhow!("Failed to spawn command: {}", e))?;
-        
+
         let pid = child.process_id().unwrap_or(0);
 
         // Clone reader and writer from master BEFORE dropping master
-        let mut reader = pair.master
+        let mut reader = pair
+            .master
             .try_clone_reader()
             .map_err(|e| anyhow::anyhow!("Failed to clone PTY reader: {}", e))?;
 
-        let writer = pair.master
+        let writer = pair
+            .master
             .take_writer()
             .map_err(|e| anyhow::anyhow!("Failed to clone PTY writer: {}", e))?;
 
@@ -179,7 +180,7 @@ impl TerminalManager {
                     Err(e) => {
                         tracing::error!("PTY Read error: {}", e);
                         break;
-                    } 
+                    }
                 }
             }
             tracing::info!("PTY Reader thread exiting");
@@ -191,14 +192,12 @@ impl TerminalManager {
             child: Mutex::new(child),
             output_buffer,
             _reader_handle: reader_handle,
-            reader_done,
-            size: Mutex::new((cols, rows)),
             master: Arc::new(Mutex::new(pair.master)),
             session_id: session_id.clone(),
         };
 
         self.sessions.insert(session_id.clone(), session);
-        
+
         // Register with process manager if available
         if let Some(ref pm) = self.process_manager {
             let pm_clone = pm.clone();
@@ -207,7 +206,7 @@ impl TerminalManager {
                 pm_clone.register(&sid, "pty-session", pid).await;
             });
         }
-        
+
         tracing::info!(session_id = %session_id, "PTY session spawned");
         Ok(session_id)
     }
@@ -221,7 +220,13 @@ impl TerminalManager {
     ) -> Result<CommandResult> {
         let mut child = if cfg!(target_os = "windows") {
             let mut c = tokio::process::Command::new("powershell.exe");
-            c.args(["-NonInteractive", "-NoLogo", "-NoProfile", "-Command", command]);
+            c.args([
+                "-NonInteractive",
+                "-NoLogo",
+                "-NoProfile",
+                "-Command",
+                command,
+            ]);
             c
         } else {
             let mut c = tokio::process::Command::new("sh");
@@ -239,7 +244,7 @@ impl TerminalManager {
         child.stdin(std::process::Stdio::null());
 
         let mut spawned = child.spawn().context("Failed to spawn command process")?;
-        
+
         let mut stdout = spawned.stdout.take().context("Failed to take stdout")?;
         let mut stderr = spawned.stderr.take().context("Failed to take stderr")?;
 
@@ -257,8 +262,9 @@ impl TerminalManager {
         // Wait with timeout
         let result = tokio::time::timeout(
             tokio::time::Duration::from_millis(timeout_ms),
-            spawned.wait()
-        ).await;
+            spawned.wait(),
+        )
+        .await;
 
         match result {
             Ok(Ok(status)) => {
@@ -266,8 +272,12 @@ impl TerminalManager {
                 let stderr_out = stderr_handle.await.unwrap_or_default();
                 let stdout_str = String::from_utf8_lossy(&stdout_out).to_string();
                 let stderr_str = String::from_utf8_lossy(&stderr_out).to_string();
-                let combined = if stderr_str.is_empty() { stdout_str } else { format!("{}{}", stdout_str, stderr_str) };
-                
+                let combined = if stderr_str.is_empty() {
+                    stdout_str
+                } else {
+                    format!("{}{}", stdout_str, stderr_str)
+                };
+
                 Ok(CommandResult {
                     output: combined,
                     exit_code: status.code().map(|c| c as u32),
@@ -283,7 +293,11 @@ impl TerminalManager {
                 let stderr_out = stderr_handle.await.unwrap_or_default();
                 let stdout_str = String::from_utf8_lossy(&stdout_out).to_string();
                 let stderr_str = String::from_utf8_lossy(&stderr_out).to_string();
-                let combined = if stderr_str.is_empty() { stdout_str } else { format!("{}{}", stdout_str, stderr_str) };
+                let combined = if stderr_str.is_empty() {
+                    stdout_str
+                } else {
+                    format!("{}{}", stdout_str, stderr_str)
+                };
                 Ok(CommandResult {
                     output: combined,
                     exit_code: None,
@@ -307,7 +321,7 @@ impl TerminalManager {
             // Kill asynchronously — best effort
             let session_id_owned = session_id.to_string();
             let pm_clone = self.process_manager.clone();
-            
+
             tokio::spawn(async move {
                 let _ = session.kill().await;
                 // Unregister from process manager
@@ -323,18 +337,18 @@ impl TerminalManager {
     /// Kill all sessions - call this on app exit
     pub async fn kill_all_sessions(&mut self) {
         let session_ids: Vec<String> = self.sessions.keys().cloned().collect();
-        
+
         for session_id in session_ids {
             if let Err(e) = self.kill_session(&session_id) {
                 tracing::error!(session_id = %session_id, error = %e, "Failed to kill session");
             }
         }
-        
+
         // Unregister all from process manager
         if let Some(ref pm) = self.process_manager {
             pm.kill_all().await;
         }
-        
+
         self.sessions.clear();
         tracing::info!("All terminal sessions cleaned up");
     }

@@ -5,7 +5,6 @@
 /// and react without tight coupling.
 ///
 /// A bridge task forwards events to the Tauri frontend via `app.emit()`.
-
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use tracing;
@@ -17,16 +16,16 @@ use tracing;
 pub enum AgentEvent {
     #[serde(rename = "agent:spawn")]
     AgentSpawn(AgentSpawnPayload),
-    
+
     #[serde(rename = "agent:complete")]
     AgentComplete(AgentCompletePayload),
-    
+
     #[serde(rename = "agent:handoff")]
     AgentHandoff(AgentHandoffPayload),
 
     #[serde(rename = "orchestrator:start")]
     OrchestratorStart(OrchestratorStartPayload),
-    
+
     #[serde(rename = "orchestrator:progress")]
     OrchestratorProgress(serde_json::Value), // Flexible payload for progress
 
@@ -35,25 +34,25 @@ pub enum AgentEvent {
 
     #[serde(rename = "chat:chunk:first")]
     ChatChunkFirst(ChatChunkFirstPayload),
-    
+
     #[serde(rename = "chat:message")]
     ChatMessage(ChatMessagePayload),
-    
+
     #[serde(rename = "chat:status")]
     ChatStatus(ChatStatusPayload),
-    
+
     #[serde(rename = "chat:error")]
     ChatError(ChatErrorPayload),
 
     #[serde(rename = "chat:done")]
     ChatDone(ChatDonePayload),
-    
+
     #[serde(rename = "chat:stream-reset")]
     ChatStreamReset(ChatStreamResetPayload),
-    
+
     #[serde(rename = "tool:start")]
     ToolStart(ToolStartPayload),
-    
+
     #[serde(rename = "tool:complete")]
     ToolComplete(ToolCompletePayload),
 
@@ -70,10 +69,7 @@ pub enum AgentEvent {
         duration_ms: u64,
     },
     #[serde(rename = "workflow:failed")]
-    WorkflowFailed {
-        workflow_id: String,
-        error: String,
-    },
+    WorkflowFailed { workflow_id: String, error: String },
     #[serde(rename = "task:started")]
     TaskStarted {
         task_id: String,
@@ -113,9 +109,7 @@ pub enum AgentEvent {
         agent_type: String,
     },
     #[serde(rename = "agent:terminated")]
-    AgentTerminated {
-        agent_id: String,
-    },
+    AgentTerminated { agent_id: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -425,7 +419,8 @@ impl<F: Fn(AgentEvent)> StreamingArtifactDetector<F> {
                     if self.partial.len() > body_start {
                         let body = self.partial[body_start..].to_string();
                         if !body.is_empty() {
-                            let artifact_id = self.active_artifact.as_ref().unwrap().artifact_id.clone();
+                            let artifact_id =
+                                self.active_artifact.as_ref().unwrap().artifact_id.clone();
                             let cid = self.active_artifact.as_ref().unwrap().chat_id.clone();
                             (self.emit_fn)(AgentEvent::ArtifactDelta(ArtifactDeltaPayload {
                                 chat_id: cid,
@@ -477,32 +472,44 @@ impl<F: Fn(AgentEvent)> StreamingArtifactDetector<F> {
             while pos < bytes.len() && bytes[pos].is_ascii_whitespace() {
                 pos += 1;
             }
-            if pos >= bytes.len() { break; }
+            if pos >= bytes.len() {
+                break;
+            }
 
             // Read key name
             let key_start = pos;
-            while pos < bytes.len() && (bytes[pos].is_ascii_alphanumeric() || bytes[pos] == b'_' || bytes[pos] == b'-') {
+            while pos < bytes.len()
+                && (bytes[pos].is_ascii_alphanumeric() || bytes[pos] == b'_' || bytes[pos] == b'-')
+            {
                 pos += 1;
             }
-            if pos == key_start { break; }
+            if pos == key_start {
+                break;
+            }
             let key = &attrs_str[key_start..pos];
 
             // Skip whitespace and '='
             while pos < bytes.len() && (bytes[pos].is_ascii_whitespace() || bytes[pos] == b'=') {
                 pos += 1;
             }
-            if pos >= bytes.len() { break; }
+            if pos >= bytes.len() {
+                break;
+            }
 
             // Read quoted value
             let quote = bytes[pos];
-            if quote != b'"' && quote != b'\'' { break; }
+            if quote != b'"' && quote != b'\'' {
+                break;
+            }
             pos += 1; // skip opening quote
             let val_start = pos;
             while pos < bytes.len() && bytes[pos] != quote {
                 pos += 1;
             }
             let val = &attrs_str[val_start..pos];
-            if pos < bytes.len() { pos += 1; } // skip closing quote
+            if pos < bytes.len() {
+                pos += 1;
+            } // skip closing quote
 
             match key {
                 "id" => id = val.to_string(),
@@ -517,7 +524,12 @@ impl<F: Fn(AgentEvent)> StreamingArtifactDetector<F> {
             return None;
         }
 
-        Some(ArtifactAttrs { id, artifact_type, title, language })
+        Some(ArtifactAttrs {
+            id,
+            artifact_type,
+            title,
+            language,
+        })
     }
 }
 
@@ -559,10 +571,14 @@ impl AgentEvent {
     }
 
     /// Emit via direct channel or fallback to app handle
-    pub fn emit_via(&self, app: &tauri::AppHandle, channel: &Option<tauri::ipc::Channel<serde_json::Value>>) {
+    pub fn emit_via(
+        &self,
+        app: &tauri::AppHandle,
+        channel: &Option<tauri::ipc::Channel<serde_json::Value>>,
+    ) {
         use tauri::Emitter;
         let payload = self.payload();
-        
+
         if let Some(ref ch) = channel {
             // For channels, we keep the {type, payload} structure
             let _ = ch.send(payload);
@@ -629,10 +645,15 @@ impl EventBus {
                             AgentEvent::ArtifactDelta(p) => serde_json::to_value(p),
                             AgentEvent::ArtifactComplete(p) => serde_json::to_value(p),
                             _ => serde_json::to_value(&event),
-                        }.unwrap_or(serde_json::Value::Null);
+                        }
+                        .unwrap_or(serde_json::Value::Null);
 
                         if let Err(e) = app.emit(event_name, payload) {
-                            tracing::warn!("Failed to bridge event '{}' to Tauri: {}", event_name, e);
+                            tracing::warn!(
+                                "Failed to bridge event '{}' to Tauri: {}",
+                                event_name,
+                                e
+                            );
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(n)) => {

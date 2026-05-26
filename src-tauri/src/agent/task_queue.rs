@@ -413,7 +413,7 @@ impl TaskQueueSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::task::{TaskType, TaskPriority};
+    use crate::agent::task::{TaskPriority, TaskType};
 
     #[test]
     fn test_task_queue_basic() {

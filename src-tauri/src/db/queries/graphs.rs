@@ -1,8 +1,5 @@
-use sqlx::SqlitePool;
-use uuid::Uuid;
-use crate::db::models::*;
 use crate::error::ZenResult;
-
+use sqlx::SqlitePool;
 
 // --- Graph Sessions ---
 
@@ -15,12 +12,10 @@ pub async fn get_or_create_graph_session(
     name: &str,
 ) -> ZenResult<GraphSessionDb> {
     // Try to get existing session
-    let existing = sqlx::query_as::<_, GraphSessionDb>(
-        "SELECT * FROM graph_sessions WHERE id = ?"
-    )
-    .bind(session_id)
-    .fetch_optional(pool)
-    .await?;
+    let existing = sqlx::query_as::<_, GraphSessionDb>("SELECT * FROM graph_sessions WHERE id = ?")
+        .bind(session_id)
+        .fetch_optional(pool)
+        .await?;
 
     if let Some(session) = existing {
         return Ok(session);
@@ -38,13 +33,11 @@ pub async fn get_or_create_graph_session(
     .await?;
 
     // Fetch the newly created session (non-recursive)
-    let session = sqlx::query_as::<_, GraphSessionDb>(
-        "SELECT * FROM graph_sessions WHERE id = ?"
-    )
-    .bind(session_id)
-    .fetch_one(pool)
-    .await?;
-    
+    let session = sqlx::query_as::<_, GraphSessionDb>("SELECT * FROM graph_sessions WHERE id = ?")
+        .bind(session_id)
+        .fetch_one(pool)
+        .await?;
+
     Ok(session)
 }
 
@@ -65,7 +58,7 @@ pub async fn save_graph_session(
            SET expressions = ?, variables = ?, viewport_x_min = ?, viewport_x_max = ?, 
                viewport_y_min = ?, viewport_y_max = ?, current_version = ?, history = ?,
                updated_at = datetime('now')
-           WHERE id = ?"#
+           WHERE id = ?"#,
     )
     .bind(expressions_json)
     .bind(variables_json)
@@ -81,13 +74,14 @@ pub async fn save_graph_session(
     Ok(())
 }
 
-pub async fn get_graph_session(pool: &SqlitePool, session_id: &str) -> ZenResult<Option<GraphSessionDb>> {
-    let session = sqlx::query_as::<_, GraphSessionDb>(
-        "SELECT * FROM graph_sessions WHERE id = ?"
-    )
-    .bind(session_id)
-    .fetch_optional(pool)
-    .await?;
+pub async fn get_graph_session(
+    pool: &SqlitePool,
+    session_id: &str,
+) -> ZenResult<Option<GraphSessionDb>> {
+    let session = sqlx::query_as::<_, GraphSessionDb>("SELECT * FROM graph_sessions WHERE id = ?")
+        .bind(session_id)
+        .fetch_optional(pool)
+        .await?;
     Ok(session)
 }
 
@@ -99,7 +93,6 @@ pub async fn delete_graph_session(pool: &SqlitePool, session_id: &str) -> ZenRes
     Ok(())
 }
 
-
 // --- Drawing Canvases ---
 
 use crate::db::models::DrawingCanvasDb;
@@ -110,12 +103,11 @@ pub async fn get_or_create_drawing_canvas(
     chat_id: &str,
     name: &str,
 ) -> ZenResult<DrawingCanvasDb> {
-    let existing = sqlx::query_as::<_, DrawingCanvasDb>(
-        "SELECT * FROM drawing_canvases WHERE id = ?"
-    )
-    .bind(canvas_id)
-    .fetch_optional(pool)
-    .await?;
+    let existing =
+        sqlx::query_as::<_, DrawingCanvasDb>("SELECT * FROM drawing_canvases WHERE id = ?")
+            .bind(canvas_id)
+            .fetch_optional(pool)
+            .await?;
 
     if let Some(canvas) = existing {
         return Ok(canvas);
@@ -123,7 +115,7 @@ pub async fn get_or_create_drawing_canvas(
 
     sqlx::query(
         r#"INSERT INTO drawing_canvases (id, chat_id, name, objects, background)
-           VALUES (?, ?, ?, '[]', '#050505')"#
+           VALUES (?, ?, ?, '[]', '#050505')"#,
     )
     .bind(canvas_id)
     .bind(chat_id)
@@ -132,13 +124,12 @@ pub async fn get_or_create_drawing_canvas(
     .await?;
 
     // Fetch the newly created canvas (non-recursive)
-    let canvas = sqlx::query_as::<_, DrawingCanvasDb>(
-        "SELECT * FROM drawing_canvases WHERE id = ?"
-    )
-    .bind(canvas_id)
-    .fetch_one(pool)
-    .await?;
-    
+    let canvas =
+        sqlx::query_as::<_, DrawingCanvasDb>("SELECT * FROM drawing_canvases WHERE id = ?")
+            .bind(canvas_id)
+            .fetch_one(pool)
+            .await?;
+
     Ok(canvas)
 }
 
@@ -151,7 +142,7 @@ pub async fn save_drawing_canvas(
     sqlx::query(
         r#"UPDATE drawing_canvases 
            SET objects = ?, background = ?, updated_at = datetime('now')
-           WHERE id = ?"#
+           WHERE id = ?"#,
     )
     .bind(objects_json)
     .bind(background)
@@ -160,4 +151,3 @@ pub async fn save_drawing_canvas(
     .await?;
     Ok(())
 }
-

@@ -1,8 +1,6 @@
-use sqlx::SqlitePool;
-use uuid::Uuid;
 use crate::db::models::*;
 use crate::error::ZenResult;
-
+use sqlx::SqlitePool;
 
 // --- Documents ---
 
@@ -57,27 +55,56 @@ pub async fn link_document_to_workspace(
 }
 
 pub async fn get_document(pool: &SqlitePool, id: &str) -> ZenResult<crate::db::models::Document> {
-    let doc = sqlx::query_as::<_, crate::db::models::Document>("SELECT * FROM documents WHERE id = ?")
-        .bind(id)
-        .fetch_one(pool)
-        .await?;
+    let doc =
+        sqlx::query_as::<_, crate::db::models::Document>("SELECT * FROM documents WHERE id = ?")
+            .bind(id)
+            .fetch_one(pool)
+            .await?;
     Ok(doc)
 }
 
 pub async fn list_documents(pool: &SqlitePool) -> ZenResult<Vec<crate::db::models::Document>> {
-    let docs = sqlx::query_as::<_, crate::db::models::Document>("SELECT * FROM documents ORDER BY created_at DESC")
-        .fetch_all(pool)
-        .await?;
+    let docs = sqlx::query_as::<_, crate::db::models::Document>(
+        "SELECT * FROM documents ORDER BY created_at DESC",
+    )
+    .fetch_all(pool)
+    .await?;
     Ok(docs)
 }
 
-pub async fn update_document_status(pool: &SqlitePool, id: &str, status: &str, error_msg: Option<&str>) -> ZenResult<()> {
+pub async fn update_document_status(
+    pool: &SqlitePool,
+    id: &str,
+    status: &str,
+    error_msg: Option<&str>,
+) -> ZenResult<()> {
     sqlx::query("UPDATE documents SET status = ?, error_msg = ? WHERE id = ?")
         .bind(status)
         .bind(error_msg)
         .bind(id)
         .execute(pool)
         .await?;
+    Ok(())
+}
+
+pub async fn add_document_chunk(
+    pool: &SqlitePool,
+    id: &str,
+    document_id: &str,
+    chunk_index: i64,
+    content: &str,
+    token_count: i64,
+) -> ZenResult<()> {
+    sqlx::query(
+        "INSERT INTO document_chunks (id, document_id, chunk_index, content, token_count) VALUES (?, ?, ?, ?, ?)"
+    )
+    .bind(id)
+    .bind(document_id)
+    .bind(chunk_index)
+    .bind(content)
+    .bind(token_count)
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
@@ -122,4 +149,3 @@ pub async fn toggle_pin_chat(pool: &SqlitePool, id: &str) -> ZenResult<()> {
         .await?;
     Ok(())
 }
-

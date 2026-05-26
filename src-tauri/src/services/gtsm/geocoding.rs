@@ -1,5 +1,5 @@
 use super::types::GeocodingResult;
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -27,32 +27,35 @@ pub async fn search(query: &str, limit: u8) -> Result<Vec<GeocodingResult>> {
 
     let results: Vec<NominatimResult> = client.get(&url).send().await?.json().await?;
 
-    let geocoded = results.into_iter().filter_map(|r| {
-        let lat = r.lat.parse::<f64>().ok()?;
-        let lon = r.lon.parse::<f64>().ok()?;
+    let geocoded = results
+        .into_iter()
+        .filter_map(|r| {
+            let lat = r.lat.parse::<f64>().ok()?;
+            let lon = r.lon.parse::<f64>().ok()?;
 
-        let bounding_box = r.boundingbox.and_then(|bb| {
-            if bb.len() == 4 {
-                Some([
-                    bb[0].parse::<f64>().unwrap_or(0.0),
-                    bb[1].parse::<f64>().unwrap_or(0.0),
-                    bb[2].parse::<f64>().unwrap_or(0.0),
-                    bb[3].parse::<f64>().unwrap_or(0.0),
-                ])
-            } else {
-                None
-            }
-        });
+            let bounding_box = r.boundingbox.and_then(|bb| {
+                if bb.len() == 4 {
+                    Some([
+                        bb[0].parse::<f64>().unwrap_or(0.0),
+                        bb[1].parse::<f64>().unwrap_or(0.0),
+                        bb[2].parse::<f64>().unwrap_or(0.0),
+                        bb[3].parse::<f64>().unwrap_or(0.0),
+                    ])
+                } else {
+                    None
+                }
+            });
 
-        Some(GeocodingResult {
-            lat,
-            lon,
-            display_name: r.display_name,
-            place_type: r.place_type.unwrap_or_else(|| "unknown".to_string()),
-            importance: r.importance.unwrap_or(0.0),
-            bounding_box,
+            Some(GeocodingResult {
+                lat,
+                lon,
+                display_name: r.display_name,
+                place_type: r.place_type.unwrap_or_else(|| "unknown".to_string()),
+                importance: r.importance.unwrap_or(0.0),
+                bounding_box,
+            })
         })
-    }).collect();
+        .collect();
 
     Ok(geocoded)
 }
@@ -70,8 +73,14 @@ pub async fn reverse(lat: f64, lon: f64) -> Result<GeocodingResult> {
 
     let result: NominatimResult = client.get(&url).send().await?.json().await?;
 
-    let lat = result.lat.parse::<f64>().map_err(|_| anyhow!("Invalid lat"))?;
-    let lon = result.lon.parse::<f64>().map_err(|_| anyhow!("Invalid lon"))?;
+    let lat = result
+        .lat
+        .parse::<f64>()
+        .map_err(|_| anyhow!("Invalid lat"))?;
+    let lon = result
+        .lon
+        .parse::<f64>()
+        .map_err(|_| anyhow!("Invalid lon"))?;
 
     let bounding_box = result.boundingbox.and_then(|bb| {
         if bb.len() == 4 {
@@ -97,12 +106,19 @@ pub async fn reverse(lat: f64, lon: f64) -> Result<GeocodingResult> {
 }
 
 /// Search within a radius (uses Nominatim viewbox)
-pub async fn search_near(query: &str, center_lat: f64, center_lon: f64, radius_km: f64) -> Result<Vec<GeocodingResult>> {
+pub async fn search_near(
+    query: &str,
+    center_lat: f64,
+    center_lon: f64,
+    radius_km: f64,
+) -> Result<Vec<GeocodingResult>> {
     let delta = radius_km / 111.0;
     let viewbox = format!(
         "{},{},{},{}",
-        center_lon - delta, center_lat + delta,
-        center_lon + delta, center_lat - delta
+        center_lon - delta,
+        center_lat + delta,
+        center_lon + delta,
+        center_lat - delta
     );
 
     let url = format!(
@@ -117,18 +133,21 @@ pub async fn search_near(query: &str, center_lat: f64, center_lon: f64, radius_k
 
     let results: Vec<NominatimResult> = client.get(&url).send().await?.json().await?;
 
-    let geocoded = results.into_iter().filter_map(|r| {
-        let lat = r.lat.parse::<f64>().ok()?;
-        let lon = r.lon.parse::<f64>().ok()?;
-        Some(GeocodingResult {
-            lat,
-            lon,
-            display_name: r.display_name,
-            place_type: r.place_type.unwrap_or_else(|| "unknown".to_string()),
-            importance: r.importance.unwrap_or(0.0),
-            bounding_box: None,
+    let geocoded = results
+        .into_iter()
+        .filter_map(|r| {
+            let lat = r.lat.parse::<f64>().ok()?;
+            let lon = r.lon.parse::<f64>().ok()?;
+            Some(GeocodingResult {
+                lat,
+                lon,
+                display_name: r.display_name,
+                place_type: r.place_type.unwrap_or_else(|| "unknown".to_string()),
+                importance: r.importance.unwrap_or(0.0),
+                bounding_box: None,
+            })
         })
-    }).collect();
+        .collect();
 
     Ok(geocoded)
 }

@@ -23,7 +23,7 @@ export function MermaidDiagram({ code, isStreaming }: { code: string; isStreamin
         mermaid.initialize({
           startOnLoad: false,
           theme: resolvedTheme === "dark" ? "dark" : "default",
-          securityLevel: "loose",
+          securityLevel: "strict",
         });
         
         const id = `mermaid-${Math.random().toString(36).substring(7)}`;

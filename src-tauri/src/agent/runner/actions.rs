@@ -1,22 +1,22 @@
-use anyhow::Result;
-use tauri::AppHandle;
-use sqlx::SqlitePool;
-use crate::db::queries;
-use crate::agent::types::{MessageKind, ActionMeta};
 use crate::agent::event_bus::{
-    AgentEvent, ChatMessagePayload, AgentSpawnPayload, AgentCompletePayload, AgentHandoffPayload,
+    AgentCompletePayload, AgentEvent, AgentHandoffPayload, AgentSpawnPayload, ChatMessagePayload,
 };
+use crate::agent::types::{ActionMeta, MessageKind};
+use crate::db::queries;
+use anyhow::Result;
+use sqlx::SqlitePool;
+use tauri::AppHandle;
 
 impl std::fmt::Display for MessageKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MessageKind::Text               => write!(f, "text"),
-            MessageKind::ToolCall           => write!(f, "tool_call"),
-            MessageKind::ToolResult         => write!(f, "tool_result"),
-            MessageKind::AgentHandoff       => write!(f, "agent_handoff"),
-            MessageKind::AgentSpawn         => write!(f, "agent_spawn"),
-            MessageKind::AgentComplete      => write!(f, "agent_complete"),
-            MessageKind::ApprovalRequest    => write!(f, "approval_request"),
+            MessageKind::Text => write!(f, "text"),
+            MessageKind::ToolCall => write!(f, "tool_call"),
+            MessageKind::ToolResult => write!(f, "tool_result"),
+            MessageKind::AgentHandoff => write!(f, "agent_handoff"),
+            MessageKind::AgentSpawn => write!(f, "agent_spawn"),
+            MessageKind::AgentComplete => write!(f, "agent_complete"),
+            MessageKind::ApprovalRequest => write!(f, "approval_request"),
             MessageKind::ClarificationRequest => write!(f, "clarification_request"),
         }
     }
@@ -54,10 +54,16 @@ pub async fn persist_and_emit_action(
         None,                    // tokens_out
         Some(&kind.to_string()),
         Some(&metadata_json),
-    ).await {
+    )
+    .await
+    {
         Ok(m) => m,
         Err(e) => {
-            tracing::warn!("Failed to persist action to DB (chat_id: {}): {}", chat_id, e);
+            tracing::warn!(
+                "Failed to persist action to DB (chat_id: {}): {}",
+                chat_id,
+                e
+            );
             return Err(e.into());
         }
     };
@@ -73,9 +79,12 @@ pub async fn persist_and_emit_action(
         kind: Some(kind.to_string()),
         content: content.clone(),
         metadata: Some(serde_json::to_value(meta.clone())?),
-    }).emit_via(app, channel);
+    })
+    .emit_via(app, channel);
 
-    bridge_lifecycle_events(app, channel, &kind, &meta, &msg_id, &msg_ts, chat_id, content);
+    bridge_lifecycle_events(
+        app, channel, &kind, &meta, &msg_id, &msg_ts, chat_id, content,
+    );
 
     Ok(msg_id)
 }
@@ -101,9 +110,12 @@ pub fn emit_action_only(
         kind: Some(kind.to_string()),
         content: content.clone(),
         metadata: Some(serde_json::to_value(meta.clone())?),
-    }).emit_via(app, channel);
+    })
+    .emit_via(app, channel);
 
-    bridge_lifecycle_events(app, channel, &kind, &meta, &msg_id, &msg_ts, chat_id, content);
+    bridge_lifecycle_events(
+        app, channel, &kind, &meta, &msg_id, &msg_ts, chat_id, content,
+    );
 
     Ok(msg_id)
 }
@@ -131,7 +143,8 @@ fn bridge_lifecycle_events(
                     task: spawn.task.clone(),
                     chat_id: chat_id.to_string(),
                     timestamp: msg_ts.to_string(),
-                }).emit_via(app, channel);
+                })
+                .emit_via(app, channel);
             }
         }
         MessageKind::AgentComplete => {
@@ -143,11 +156,20 @@ fn bridge_lifecycle_events(
                     agent_id: meta.agent_id.clone(),
                     chat_id: chat_id.to_string(),
                     status: status.clone(),
-                    result: if status == "completed" { Some(serde_json::Value::String(content.clone())) } else { None },
-                    error: if status == "failed" { Some(content) } else { None },
+                    result: if status == "completed" {
+                        Some(serde_json::Value::String(content.clone()))
+                    } else {
+                        None
+                    },
+                    error: if status == "failed" {
+                        Some(content)
+                    } else {
+                        None
+                    },
                     duration_ms: spawn.duration_ms.unwrap_or(0),
                     timestamp: msg_ts.to_string(),
-                }).emit_via(app, channel);
+                })
+                .emit_via(app, channel);
             }
         }
         MessageKind::AgentHandoff => {
@@ -158,7 +180,8 @@ fn bridge_lifecycle_events(
                     reason: handoff.reason.clone(),
                     chat_id: chat_id.to_string(),
                     timestamp: msg_ts.to_string(),
-                }).emit_via(app, channel);
+                })
+                .emit_via(app, channel);
             }
         }
         _ => {}

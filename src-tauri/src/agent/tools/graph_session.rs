@@ -1,14 +1,14 @@
+use anyhow::Result;
+use async_trait::async_trait;
 /// GraphSessionTool — Agent tool for interactive math graph co-creation
 /// Allows the LLM to create, edit, and iterate on mathematical expressions
 /// with real-time validation feedback and plot generation.
 use serde_json::{json, Value};
-use anyhow::Result;
 use tauri::AppHandle;
-use async_trait::async_trait;
 
 use crate::agent::tools::AgentTool;
+use crate::canvas::protocol::{generate_error_feedback, generate_feedback, parse_session_action};
 use crate::canvas::session::GraphSession;
-use crate::canvas::protocol::{generate_feedback, generate_error_feedback, parse_session_action};
 
 pub struct GraphSessionTool;
 
@@ -193,13 +193,16 @@ impl AgentTool for GraphSessionTool {
         chat_id: String,
         input: Value,
         _depth: u32,
-        _allowed_tools: Option<std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
+        _allowed_tools: Option<
+            std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>,
+        >,
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
-        use tauri::{Manager, Emitter};
         use crate::commands::AppState;
+        use tauri::{Emitter, Manager};
 
-        let session_id = input.get("session_id")
+        let session_id = input
+            .get("session_id")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .unwrap_or_else(|| format!("chat_{}", chat_id));
@@ -209,13 +212,14 @@ impl AgentTool for GraphSessionTool {
 
         // Auto-create session if it doesn't exist
         if !sessions.contains_key(&session_id) {
-            sessions.insert(session_id.clone(), GraphSession::new(
+            sessions.insert(
                 session_id.clone(),
-                format!("Session for {}", chat_id),
-            ));
+                GraphSession::new(session_id.clone(), format!("Session for {}", chat_id)),
+            );
         }
 
-        let session = sessions.get_mut(&session_id)
+        let session = sessions
+            .get_mut(&session_id)
             .ok_or_else(|| anyhow::anyhow!("Graph session {} not found", session_id))?;
 
         // Handle capture_vision separately - it doesn't modify state
@@ -227,10 +231,10 @@ impl AgentTool for GraphSessionTool {
                 expressions = vision_capture.expressions.len(),
                 "GraphSessionTool: capture_vision requested"
             );
-            
+
             // Emit to frontend as well
             let _ = app.emit("graph:session:vision_capture", &vision_capture);
-            
+
             return Ok(serde_json::to_value(vision_capture)?);
         }
 
@@ -272,7 +276,10 @@ impl AgentTool for GraphSessionTool {
 
 /// Generate a human-readable summary of an action for commit history
 fn describe_action(input: &Value) -> String {
-    let action = input.get("action").and_then(|v| v.as_str()).unwrap_or("unknown");
+    let action = input
+        .get("action")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
     match action {
         "add_expression" => {
             let expr = input.get("expr").and_then(|v| v.as_str()).unwrap_or("?");

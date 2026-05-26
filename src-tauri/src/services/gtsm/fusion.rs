@@ -22,8 +22,16 @@ pub fn correlate_satellites_earthquakes(
                     ),
                     timestamp: now,
                     entities: vec![
-                        FusionEntity { source: "satellite".to_string(), id: sat.id.clone(), name: sat.name.clone() },
-                        FusionEntity { source: "earthquake".to_string(), id: eq.id.clone(), name: eq.title.clone() },
+                        FusionEntity {
+                            source: "satellite".to_string(),
+                            id: sat.id.clone(),
+                            name: sat.name.clone(),
+                        },
+                        FusionEntity {
+                            source: "earthquake".to_string(),
+                            id: eq.id.clone(),
+                            name: eq.title.clone(),
+                        },
                     ],
                     lat: eq.lat,
                     lon: eq.lon,
@@ -59,8 +67,16 @@ pub fn correlate_military_earthquakes(
                     ),
                     timestamp: now,
                     entities: vec![
-                        FusionEntity { source: "military".to_string(), id: ac.hex.clone(), name },
-                        FusionEntity { source: "earthquake".to_string(), id: eq.id.clone(), name: eq.title.clone() },
+                        FusionEntity {
+                            source: "military".to_string(),
+                            id: ac.hex.clone(),
+                            name,
+                        },
+                        FusionEntity {
+                            source: "earthquake".to_string(),
+                            id: eq.id.clone(),
+                            name: eq.title.clone(),
+                        },
                     ],
                     lat: eq.lat,
                     lon: eq.lon,
@@ -87,7 +103,10 @@ pub fn correlate_flights_military(
             let dist = haversine(flight.lat, flight.lon, ac.lat, ac.lon);
             if dist <= radius_km {
                 let mil_name = ac.flight.clone().unwrap_or_else(|| ac.hex.clone());
-                let civ_name = flight.callsign.clone().unwrap_or_else(|| flight.icao24.clone());
+                let civ_name = flight
+                    .callsign
+                    .clone()
+                    .unwrap_or_else(|| flight.icao24.clone());
                 events.push(FusionEvent {
                     id: format!("fuse-prox-{}-{}", ac.hex, flight.icao24),
                     event_type: "military_civilian_proximity".to_string(),
@@ -97,8 +116,16 @@ pub fn correlate_flights_military(
                     ),
                     timestamp: now,
                     entities: vec![
-                        FusionEntity { source: "military".to_string(), id: ac.hex.clone(), name: mil_name },
-                        FusionEntity { source: "flight".to_string(), id: flight.icao24.clone(), name: civ_name },
+                        FusionEntity {
+                            source: "military".to_string(),
+                            id: ac.hex.clone(),
+                            name: mil_name,
+                        },
+                        FusionEntity {
+                            source: "flight".to_string(),
+                            id: flight.icao24.clone(),
+                            name: civ_name,
+                        },
                     ],
                     lat: (flight.lat + ac.lat) / 2.0,
                     lon: (flight.lon + ac.lon) / 2.0,

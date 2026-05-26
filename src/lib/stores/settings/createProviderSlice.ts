@@ -1,5 +1,5 @@
 import type { StateCreator } from "zustand";
-import { invoke } from "@tauri-apps/api/core";
+import { isSecretPresentValue, providersApi } from "@/api";
 import type { SettingsState, ProviderSlice } from "./types";
 import { DIRECT_PROVIDER_URLS } from "./types";
 import { ModelInfo, CustomProviderConfig, PROVIDER_KEY_MAP, PROVIDER_BASE_URL_MAP, providerOrder } from "../../types/provider";
@@ -45,7 +45,7 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
     if (providerInfo?.requiresKey) {
         const configKey = PROVIDER_KEY_MAP[provider];
         const key = configKey ? (get() as any)[configKey] : "";
-        if (!key) {
+        if (!key && !isSecretPresentValue(key)) {
             console.debug(`[fetchModels] Skipping ${provider} - No API key configured`);
             return [];
         }
@@ -53,9 +53,8 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
 
     set({ fetchingModels: true });
     try {
-        const backendModels = (await invoke<ModelInfo[]>('get_all_available_models', { 
-            provider: providerOverride || null 
-          })).map(m => ({ ...m, source: m.source || 'local' }));
+        const backendModels = (await providersApi.getAllAvailableModels(providerOverride || null))
+          .map(m => ({ ...m, source: m.source || 'local' }));
         
         const customModels: ModelInfo[] = [];
         (get().customProviders || []).forEach(cp => {
@@ -147,6 +146,23 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
         return;
     }
 
+    if (isSecretPresentValue(apiKey)) {
+        try {
+            const models = await providersApi.getAllAvailableModels(provider);
+            set(s => ({
+                availableModelsByProvider: { ...s.availableModelsByProvider, [provider]: models },
+                connectionStatuses: { ...s.connectionStatuses, [provider]: models.length > 0 ? 'success' : 'error' },
+                testingConnections: { ...s.testingConnections, [provider]: false },
+            }));
+        } catch {
+            set(s => ({
+                connectionStatuses: { ...s.connectionStatuses, [provider]: 'error' },
+                testingConnections: { ...s.testingConnections, [provider]: false },
+            }));
+        }
+        return;
+    }
+
     const config = {
         providerType: provider,
         baseUrl: baseUrl,
@@ -156,7 +172,7 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
     };
     
     try {
-        const models = await invoke<ModelInfo[]>('test_provider_connection', { config });
+        const models = await providersApi.testProviderConnection(config);
         
         if (customProvider && models && models.length > 0) {
             const updatedCustomProviders = state.customProviders.map(cp =>

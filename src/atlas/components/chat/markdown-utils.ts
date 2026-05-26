@@ -43,7 +43,7 @@ export function splitMarkdownIntoBlocks(content: string, isStreaming: boolean): 
     const line = lines[i];
 
     // 1. Detect Code Blocks
-    const codeMatch = line.match(/^(```+)(\w*)/);
+    const codeMatch = line.match(/^(```+)([^\s`]*)/);
     if (codeMatch && !inThoughtBlock) {
       if (!inCodeBlock) {
         // Close current text block
@@ -57,6 +57,11 @@ export function splitMarkdownIntoBlocks(content: string, isStreaming: boolean): 
         currentBlock.push(line);
         continue;
       } else if (line.startsWith(codeFence)) {
+        if (isStreaming && shouldDeferStreamingFenceClose(codeLanguage, currentBlock, lines, i)) {
+          currentBlock.push(line);
+          continue;
+        }
+
         // Closing code block
         currentBlock.push(line);
         blocks.push(createBlock('code', currentBlock.join('\n'), true, blocks.length, codeLanguage));
@@ -121,6 +126,58 @@ export function splitMarkdownIntoBlocks(content: string, isStreaming: boolean): 
   }
 
   return blocks;
+}
+
+function shouldDeferStreamingFenceClose(
+  language: string,
+  currentBlock: string[],
+  lines: string[],
+  fenceLineIndex: number,
+): boolean {
+  const lang = language.toLowerCase();
+  if (!['svg', 'xml', 'html'].includes(lang)) return false;
+
+  const body = currentBlock.slice(1).join('\n');
+  if (lang === 'svg' && !hasClosedTag(body, 'svg')) {
+    return true;
+  }
+  if (lang === 'html' && hasLikelyUnclosedHtmlTag(body)) {
+    return true;
+  }
+  if (lang === 'xml' && hasDanglingXmlTail(lines, fenceLineIndex)) {
+    return true;
+  }
+
+  return hasDanglingXmlTail(lines, fenceLineIndex);
+}
+
+function hasClosedTag(content: string, tagName: string): boolean {
+  return new RegExp(`</${tagName}\\s*>`, 'i').test(content);
+}
+
+function hasLikelyUnclosedHtmlTag(content: string): boolean {
+  const lastOpen = Math.max(
+    content.toLowerCase().lastIndexOf('<div'),
+    content.toLowerCase().lastIndexOf('<section'),
+    content.toLowerCase().lastIndexOf('<main'),
+    content.toLowerCase().lastIndexOf('<article'),
+  );
+  if (lastOpen === -1) return false;
+  const tail = content.slice(lastOpen).toLowerCase();
+  return !/(<\/div>|<\/section>|<\/main>|<\/article>)/.test(tail);
+}
+
+function hasDanglingXmlTail(lines: string[], fenceLineIndex: number): boolean {
+  const lookahead = lines
+    .slice(fenceLineIndex + 1, Math.min(lines.length, fenceLineIndex + 8))
+    .join('\n')
+    .trim();
+
+  if (!lookahead) return false;
+  if (lookahead.startsWith('```')) return false;
+
+  return /^<\/?[a-z][\w:-]*(\s|>|\/>)/i.test(lookahead)
+    || /^<\/[a-z][\w:-]*>/i.test(lookahead);
 }
 
 function createBlock(

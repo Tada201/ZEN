@@ -1,34 +1,29 @@
-use crate::agent::event_bus::{
-    AgentEvent, ChatChunkPayload, ChatStatusPayload, ChatErrorPayload, ChatDonePayload,
-    ToolStartPayload, ToolCompletePayload, AgentHandoffPayload, AgentSpawnPayload, AgentCompletePayload,
-};
-use crate::db::queries;
-use std::sync::Arc;
-use anyhow::{Result, Context};
-use sqlx::SqlitePool;
-use tauri::{AppHandle, Manager};
-use crate::llm::LlmProvider;
-use crate::agent::types::*;
-use crate::agent::tools::ToolRegistry;
-use crate::agent::hooks::{HookRegistry, HookDecision};
-use crate::tools::permission::PermissionDecision;
-use crate::tools::GlobalToolRegistry;
-use crate::tools::manager::ToolManager;
-use crate::db::models::ChatMessage;
-use crate::agent::cache::ToolCache;
-use std::collections::{HashMap, HashSet};
-use tokio_util::sync::CancellationToken;
-use sha2::{Sha256, Digest};
-use super::config::{RunConfig, ContextTracker};
+use super::actions::{emit_action_only, persist_and_emit_action};
+use super::config::RunConfig;
 use super::helpers::{
-    estimate_tokens, estimate_conversation_tokens,
-    parse_file_changes, is_tool_capability_error,
-    compact_conversation, compact_conversation_token_aware,
-    generate_handoff_summary, execute_single_tool,
-    parse_text_tool_calls, try_parse_tool_json,
+    compact_conversation, compact_conversation_token_aware, estimate_conversation_tokens,
+    generate_handoff_summary, parse_file_changes, parse_text_tool_calls,
 };
-use super::actions::{persist_and_emit_action, emit_action_only};
+use crate::agent::cache::ToolCache;
+use crate::agent::event_bus::{
+    AgentEvent, ChatChunkPayload, ChatDonePayload, ChatErrorPayload, ChatStatusPayload,
+    ToolCompletePayload,
+};
+use crate::agent::hooks::HookRegistry;
 use crate::agent::middleware::{EnrichmentContext, MiddlewareChain};
+use crate::agent::tools::ToolRegistry;
+use crate::agent::types::*;
+use crate::db::models::ChatMessage;
+use crate::db::queries;
+use crate::llm::LlmProvider;
+use crate::tools::manager::ToolManager;
+use crate::tools::GlobalToolRegistry;
+use anyhow::{Context, Result};
+use sqlx::SqlitePool;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+use tauri::{AppHandle, Manager};
+use tokio_util::sync::CancellationToken;
 
 /// Maximum recursion depth for sub-agent spawning (prevents infinite loops)
 pub const MAX_SPAWN_DEPTH: u32 = 3;
@@ -109,7 +104,10 @@ impl Runner {
         self
     }
 
-    pub fn with_allowed_tools(mut self, allowed_tools: Arc<tokio::sync::Mutex<HashSet<String>>>) -> Self {
+    pub fn with_allowed_tools(
+        mut self,
+        allowed_tools: Arc<tokio::sync::Mutex<HashSet<String>>>,
+    ) -> Self {
         self.allowed_tools = allowed_tools;
         self
     }
@@ -173,12 +171,28 @@ impl Runner {
                 queries::get_setting(db, "memory.drift_detection_enabled"),
                 queries::get_setting(db, "memory.drift_threshold"),
             );
-            if let Ok(Some(val)) = r_summ_enabled    { summarization_enabled = val != "false"; }
-            if let Ok(Some(val)) = r_summ_model       { run_config.summarization_model = if val.is_empty() { None } else { Some(val) }; }
-            if let Ok(Some(val)) = r_recall_enabled   { semantic_recall_enabled = val != "false"; }
-            if let Ok(Some(val)) = r_recall_max        { if let Ok(p) = val.parse::<usize>() { max_recalled_messages = p; } }
-            if let Ok(Some(val)) = r_drift_enabled    { drift_detection_enabled = val != "false"; }
-            if let Ok(Some(val)) = r_drift_threshold  { if let Ok(p) = val.parse::<f32>() { run_config.drift_threshold = p; } }
+            if let Ok(Some(val)) = r_summ_enabled {
+                summarization_enabled = val != "false";
+            }
+            if let Ok(Some(val)) = r_summ_model {
+                run_config.summarization_model = if val.is_empty() { None } else { Some(val) };
+            }
+            if let Ok(Some(val)) = r_recall_enabled {
+                semantic_recall_enabled = val != "false";
+            }
+            if let Ok(Some(val)) = r_recall_max {
+                if let Ok(p) = val.parse::<usize>() {
+                    max_recalled_messages = p;
+                }
+            }
+            if let Ok(Some(val)) = r_drift_enabled {
+                drift_detection_enabled = val != "false";
+            }
+            if let Ok(Some(val)) = r_drift_threshold {
+                if let Ok(p) = val.parse::<f32>() {
+                    run_config.drift_threshold = p;
+                }
+            }
         }
 
         // ── Fix #3: Skip duplicate DB fetch – chat.rs already loaded fresh messages ──
@@ -187,15 +201,18 @@ impl Runner {
         let mut conversation = if messages.is_empty() {
             if let Some(ref db) = self.db_pool {
                 match queries::get_active_messages(db, &chat_id).await {
-                    Ok(db_msgs) if !db_msgs.is_empty() => {
-                        db_msgs.into_iter().map(|m| ChatMessage {
+                    Ok(db_msgs) if !db_msgs.is_empty() => db_msgs
+                        .into_iter()
+                        .map(|m| ChatMessage {
                             role: m.role,
                             content: m.content,
                             images: None,
-                            tool_calls: m.tool_calls.and_then(|tc_str| serde_json::from_str(&tc_str).ok()),
+                            tool_calls: m
+                                .tool_calls
+                                .and_then(|tc_str| serde_json::from_str(&tc_str).ok()),
                             tool_call_id: m.tool_call_id,
-                        }).collect()
-                    }
+                        })
+                        .collect(),
                     _ => messages,
                 }
             } else {
@@ -208,24 +225,21 @@ impl Runner {
         // ── Fix #1: Pre-load cached recall from previous turn (zero-cost) ──
         // The heavy embedding work runs in a background task AFTER the LLM responds.
         // On the first message of a new chat the cache is empty – the recall block is simply absent.
-        let mut cached_recall_context: Option<String> =
-            if semantic_recall_enabled {
-                if let Some(state) = self.app.try_state::<crate::commands::AppState>() {
-                    let guard = state.recall_cache.lock().await;
-                    // Reuse the previous-turn recall block regardless of the new user text;
-                    // it will be refreshed in the background after this response.
-                    guard.get(&chat_id).map(|(block, _)| block.clone())
-                } else {
-                    None
-                }
+        let cached_recall_context: Option<String> = if semantic_recall_enabled {
+            if let Some(state) = self.app.try_state::<crate::commands::AppState>() {
+                let guard = state.recall_cache.lock().await;
+                // Reuse the previous-turn recall block regardless of the new user text;
+                // it will be refreshed in the background after this response.
+                guard.get(&chat_id).map(|(block, _)| block.clone())
             } else {
                 None
-            };
+            }
+        } else {
+            None
+        };
         // Suppress the old per-loop cache variables – recall is now injected once at iteration start
-        let mut cached_recall_user_msg: Option<String> = None;
         // context_tracker still needs its first-msg vector for drift; but we no longer block on it.
         // We'll skip the blocker and just initialise to None (drift check is best-effort).
-        let mut context_tracker: Option<ContextTracker> = None;
         let _ = drift_detection_enabled; // consumed below when checking
 
         let mut iteration = 0;
@@ -255,7 +269,8 @@ impl Runner {
                     let partial_text = if !accumulated_commentary.is_empty() {
                         accumulated_commentary.clone()
                     } else {
-                        conversation.last()
+                        conversation
+                            .last()
                             .filter(|m| m.role == "assistant")
                             .map(|m| m.content.clone())
                             .unwrap_or_else(|| "Agent run cancelled.".to_string())
@@ -271,7 +286,8 @@ impl Runner {
                             Some(total_tokens_in),
                             Some(total_tokens_out),
                             None,
-                        ).await
+                        )
+                        .await
                     } else {
                         queries::add_message(
                             db,
@@ -289,13 +305,18 @@ impl Runner {
                             Some(total_tokens_out),
                             None,
                             None,
-                        ).await.map(|msg| {
+                        )
+                        .await
+                        .map(|msg| {
                             assistant_message_id = Some(msg.id);
                         })
                     };
 
                     if let Err(e) = save_res {
-                        tracing::error!("Failed to save partial assistant message to SQLite: {:?}", e);
+                        tracing::error!(
+                            "Failed to save partial assistant message to SQLite: {:?}",
+                            e
+                        );
                     } else {
                         message_persisted = true;
                     }
@@ -324,9 +345,15 @@ impl Runner {
             }
             iteration += 1;
             if iteration > run_config.max_iterations {
-                tracing::warn!("Agent loop reached max iterations ({})", run_config.max_iterations);
-                let final_msg = format!("Completed {} steps. Here's what I found so far based on the tools I used.", run_config.max_iterations);
-                
+                tracing::warn!(
+                    "Agent loop reached max iterations ({})",
+                    run_config.max_iterations
+                );
+                let final_msg = format!(
+                    "Completed {} steps. Here's what I found so far based on the tools I used.",
+                    run_config.max_iterations
+                );
+
                 // Emit chunk for UI awareness
                 self.emit(AgentEvent::ChatChunk(ChatChunkPayload {
                     chat_id: chat_id.clone(),
@@ -352,7 +379,8 @@ impl Runner {
                             Some(total_tokens_in),
                             Some(total_tokens_out),
                             None,
-                        ).await
+                        )
+                        .await
                     } else {
                         queries::add_message(
                             db,
@@ -370,13 +398,18 @@ impl Runner {
                             Some(total_tokens_out),
                             None,
                             None,
-                        ).await.map(|msg| {
+                        )
+                        .await
+                        .map(|msg| {
                             assistant_message_id = Some(msg.id);
                         })
                     };
 
                     if let Err(e) = save_res {
-                        tracing::error!("Failed to save max iterations assistant message to SQLite: {:?}", e);
+                        tracing::error!(
+                            "Failed to save max iterations assistant message to SQLite: {:?}",
+                            e
+                        );
                     } else {
                         message_persisted = true;
                     }
@@ -392,7 +425,11 @@ impl Runner {
                     done: true,
                 }));
                 if summarization_enabled {
-                    self.trigger_background_compaction(&chat_id, &model, run_config.summarization_model.clone());
+                    self.trigger_background_compaction(
+                        &chat_id,
+                        &model,
+                        run_config.summarization_model.clone(),
+                    );
                 }
                 self.trigger_background_embedding(&chat_id);
                 return Ok(AgentResponse {
@@ -417,9 +454,19 @@ impl Runner {
             let current_tokens = estimate_conversation_tokens(&conversation);
             if current_tokens > run_config.max_context_tokens {
                 // Aggressive compaction when approaching hard limit
-                tracing::warn!("Context at {} tokens – aggressive compaction", current_tokens);
-                compact_conversation_token_aware(&mut conversation, 8, run_config.max_context_tokens / 2);
-            } else if summarization_enabled && (current_tokens > run_config.compaction_token_threshold || conversation.len() > run_config.compaction_threshold) {
+                tracing::warn!(
+                    "Context at {} tokens – aggressive compaction",
+                    current_tokens
+                );
+                compact_conversation_token_aware(
+                    &mut conversation,
+                    8,
+                    run_config.max_context_tokens / 2,
+                );
+            } else if summarization_enabled
+                && (current_tokens > run_config.compaction_token_threshold
+                    || conversation.len() > run_config.compaction_threshold)
+            {
                 // Gentle compaction
                 compact_conversation(&mut conversation, 10);
             }
@@ -431,7 +478,10 @@ impl Runner {
             // tool_info, tool_exec) instead of all individual tool schemas.
             // The LLM discovers tools dynamically via tool_list / tool_info.
             let authorized_tool_ids: Vec<String> = if run_config.tools_enabled {
-                self.tool_registry.read().await.list()
+                self.tool_registry
+                    .read()
+                    .await
+                    .list()
                     .into_iter()
                     .filter(|t| current_agent.tool_ids.contains(&t.id().to_string()))
                     .map(|t| t.id().to_string())
@@ -460,10 +510,7 @@ impl Runner {
                 tools_enabled: run_config.tools_enabled,
             };
 
-            let chain = MiddlewareChain::default_chain(
-                app_inner.clone(),
-                self.db_pool.clone(),
-            );
+            let chain = MiddlewareChain::default_chain(app_inner.clone(), self.db_pool.clone());
             chain.enrich_all(&mut enrich_ctx).await?;
 
             let system_content = enrich_ctx.system_content;
@@ -493,7 +540,10 @@ impl Runner {
                     for summary in prev_summaries {
                         full_context.push(ChatMessage {
                             role: "system".to_string(),
-                            content: format!("[Previous conversation summary]: {}", summary.summary),
+                            content: format!(
+                                "[Previous conversation summary]: {}",
+                                summary.summary
+                            ),
                             images: None,
                             tool_calls: None,
                             tool_call_id: None,
@@ -502,10 +552,14 @@ impl Runner {
                 }
 
                 // Warm: current session summary (if compacted)
-                if let Ok(Some(current_summary)) = queries::get_current_summary(db, &chat_id).await {
+                if let Ok(Some(current_summary)) = queries::get_current_summary(db, &chat_id).await
+                {
                     full_context.push(ChatMessage {
                         role: "system".to_string(),
-                        content: format!("[Current conversation summary]: {}", current_summary.summary),
+                        content: format!(
+                            "[Current conversation summary]: {}",
+                            current_summary.summary
+                        ),
                         images: None,
                         tool_calls: None,
                         tool_call_id: None,
@@ -526,18 +580,21 @@ impl Runner {
             };
 
             // Auto-escalation: try current model, fallback to cloud if local fails
-            let response = match self.call_llm_with_escalation(
-                provider,
-                &model,
-                full_context.clone(),
-                tools_arg.clone(),
-                config.clone(),
-                token.clone(),
-                &app_inner,
-                &chat_id_inner,
-                &mut assistant_message_id,
-                None,
-            ).await {
+            let response = match self
+                .call_llm_with_escalation(
+                    provider,
+                    &model,
+                    full_context.clone(),
+                    tools_arg.clone(),
+                    config.clone(),
+                    token.clone(),
+                    &app_inner,
+                    &chat_id_inner,
+                    &mut assistant_message_id,
+                    None,
+                )
+                .await
+            {
                 Ok(resp) => resp,
                 Err(e) => {
                     // Check if we already tried escalation inside call_llm_with_escalation
@@ -584,7 +641,8 @@ impl Runner {
                 if *count > self.config.max_duplicate_calls {
                     tracing::warn!(
                         "Tool '{}' called {} times with same args – skipping to prevent loop",
-                        tc.name, count
+                        tc.name,
+                        count
                     );
                     continue;
                 }
@@ -606,17 +664,22 @@ impl Runner {
                 let response_seems_empty = response.content.trim().len() < 100;
                 let response_is_non_answer = {
                     let lower = response.content.to_lowercase();
-                    lower.contains("let me") || lower.contains("i'll check")
-                    || lower.contains("i will") || lower.contains("searching")
-                    || lower.contains("looking into") || lower.contains("i found some")
-                    || (lower.contains("i don't") && lower.contains("information"))
-                    || (lower.contains("i cannot") && lower.contains("find"))
+                    lower.contains("let me")
+                        || lower.contains("i'll check")
+                        || lower.contains("i will")
+                        || lower.contains("searching")
+                        || lower.contains("looking into")
+                        || lower.contains("i found some")
+                        || (lower.contains("i don't") && lower.contains("information"))
+                        || (lower.contains("i cannot") && lower.contains("find"))
                 };
                 if just_received_tool_results && (response_seems_empty || response_is_non_answer) {
                     tracing::info!("Model gave non-substantive response after tool results ({} chars) – nudging to use data", response.content.trim().len());
 
                     // Collect a brief summary of what tool data is available
-                    let tool_data_hint: String = conversation.iter().rev()
+                    let tool_data_hint: String = conversation
+                        .iter()
+                        .rev()
                         .filter(|m| m.role == "tool")
                         .take(3)
                         .map(|m| m.content.chars().take(120).collect::<String>())
@@ -667,7 +730,8 @@ impl Runner {
                             Some(total_tokens_in),
                             Some(total_tokens_out),
                             None,
-                        ).await
+                        )
+                        .await
                     } else {
                         queries::add_message(
                             db,
@@ -685,12 +749,17 @@ impl Runner {
                             Some(total_tokens_out),
                             None,
                             None,
-                        ).await.map(|msg| {
+                        )
+                        .await
+                        .map(|msg| {
                             assistant_message_id = Some(msg.id);
                         })
                     };
                     if let Err(e) = save_res {
-                        tracing::error!("Failed to save final assistant message to SQLite: {:?}", e);
+                        tracing::error!(
+                            "Failed to save final assistant message to SQLite: {:?}",
+                            e
+                        );
                     } else {
                         message_persisted = true;
                     }
@@ -706,11 +775,19 @@ impl Runner {
                     done: true,
                 }));
                 if summarization_enabled {
-                    self.trigger_background_compaction(&chat_id, &model, run_config.summarization_model.clone());
+                    self.trigger_background_compaction(
+                        &chat_id,
+                        &model,
+                        run_config.summarization_model.clone(),
+                    );
                 }
                 self.trigger_background_embedding(&chat_id);
                 // ── Fix #1: Refresh recall cache for the NEXT turn (background) ──
-                self.trigger_background_recall_cache(&chat_id, max_recalled_messages, semantic_recall_enabled);
+                self.trigger_background_recall_cache(
+                    &chat_id,
+                    max_recalled_messages,
+                    semantic_recall_enabled,
+                );
 
                 return Ok(AgentResponse {
                     content: Some(accumulated_commentary),
@@ -724,19 +801,23 @@ impl Runner {
             }
 
             // ── Record assistant message with tool calls ──
-            let models_tool_calls: Vec<crate::db::models::ToolCall> = tool_calls.iter().map(|tc| {
-                crate::db::models::ToolCall {
+            let models_tool_calls: Vec<crate::db::models::ToolCall> = tool_calls
+                .iter()
+                .map(|tc| crate::db::models::ToolCall {
                     id: tc.id.clone(),
                     name: tc.name.clone(),
                     args: tc.args.clone(),
-                }
-            }).collect();
+                })
+                .collect();
 
             // ── Emit intermediate commentary to the user ──
             // If the LLM produced text alongside tool calls, it was already streamed via callback.
             // We just need to ensure it's saved correctly if DB is enabled.
             if !response.content.trim().is_empty() {
-                tracing::info!("Recording intermediate commentary: {}...", &response.content[..response.content.len().min(80)]);
+                tracing::info!(
+                    "Recording intermediate commentary: {}...",
+                    &response.content[..response.content.len().min(80)]
+                );
                 if !accumulated_commentary.is_empty() {
                     accumulated_commentary.push('\n');
                 }
@@ -762,7 +843,8 @@ impl Runner {
                         None,
                         None,
                         serialized_tool_calls.as_deref(),
-                    ).await
+                    )
+                    .await
                 } else {
                     queries::add_message(
                         db,
@@ -778,9 +860,11 @@ impl Runner {
                         None,
                         None,
                         None,
-                        None,  // kind
-                        None,  // metadata
-                    ).await.map(|msg| {
+                        None, // kind
+                        None, // metadata
+                    )
+                    .await
+                    .map(|msg| {
                         assistant_message_id = Some(msg.id);
                     })
                 };
@@ -797,28 +881,17 @@ impl Runner {
                 tool_call_id: None,
             });
 
-            // Emit tool:start event for UI tracking
-            for tool_call in &tool_calls {
-                self.emit(AgentEvent::ToolStart(ToolStartPayload {
-                    tool_name: tool_call.name.clone(),
-                    tool_call_id: tool_call.id.clone(),
-                    arguments: tool_call.args.clone(),
-                    agent_id: current_agent.id.clone(),
-                    agent_name: current_agent.name.clone(),
-                    chat_id: chat_id.clone(),
+            let results = self
+                .execute_tools_with_hooks(
+                    &tool_calls,
+                    &chat_id,
                     iteration,
-                }));
-            }
-
-            let results = self.execute_tools_with_hooks(
-                &tool_calls,
-                &chat_id,
-                iteration,
-                &current_agent.id,
-                &current_agent.name,
-                &authorized_tool_ids,
-                token.clone(),
-            ).await;
+                    &current_agent.id,
+                    &current_agent.name,
+                    &authorized_tool_ids,
+                    token.clone(),
+                )
+                .await;
 
             // Emit tool:complete event for UI tracking
             for (tool_call, result) in tool_calls.iter().zip(results.iter()) {
@@ -845,7 +918,11 @@ impl Runner {
                     agent_name: current_agent.name.clone(),
                     chat_id: chat_id.clone(),
                     duration_ms: result.duration_ms,
-                    status: if result.is_error { "error".to_string() } else { "success".to_string() },
+                    status: if result.is_error {
+                        "error".to_string()
+                    } else {
+                        "success".to_string()
+                    },
                     iteration,
                     output: Some(content_str),
                 }));
@@ -863,7 +940,11 @@ impl Runner {
 
                 // Check for agent handoff
                 if tool_call.name == "handoff_to_agent" {
-                    if let Some(target_id) = result.content.get("target_agent_id").and_then(|v| v.as_str()) {
+                    if let Some(target_id) = result
+                        .content
+                        .get("target_agent_id")
+                        .and_then(|v| v.as_str())
+                    {
                         if let Some(next_agent) = self.agent_registry.get(target_id) {
                             tracing::info!("HANDOFF: {} → {}", current_agent.id, next_agent.id);
 
@@ -874,7 +955,6 @@ impl Runner {
                                 iteration: Some(iteration),
                             }));
 
-
                             // Phase 3.4: Generate handoff summary (context compression)
                             let handoff_summary = generate_handoff_summary(
                                 &conversation,
@@ -883,7 +963,9 @@ impl Runner {
                             );
 
                             // Emit structured handoff action with summary
-                            let handoff_reason = tool_call.args.get("reason")
+                            let handoff_reason = tool_call
+                                .args
+                                .get("reason")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("Specialized expertise required")
                                 .to_string();
@@ -891,7 +973,10 @@ impl Runner {
                             let handoff_meta = HandoffMeta {
                                 from_agent: current_agent.id.clone(),
                                 to_agent: next_agent.id.clone(),
-                                reason: format!("{} | Summary: {}", handoff_reason, handoff_summary),
+                                reason: format!(
+                                    "{} | Summary: {}",
+                                    handoff_reason, handoff_summary
+                                ),
                             };
 
                             let action_meta = ActionMeta {
@@ -915,24 +1000,31 @@ impl Runner {
                                     &chat_id,
                                     None,
                                     MessageKind::AgentHandoff,
-                                    format!("{} handing off to {}", current_agent.name, next_agent.name),
+                                    format!(
+                                        "{} handing off to {}",
+                                        current_agent.name, next_agent.name
+                                    ),
                                     action_meta,
                                     None,
                                     None,
                                     &self.on_event,
-                                ).await;
+                                )
+                                .await;
                             } else {
                                 let _ = emit_action_only(
                                     &self.app,
                                     &chat_id,
                                     None,
                                     MessageKind::AgentHandoff,
-                                    format!("{} handing off to {}", current_agent.name, next_agent.name),
+                                    format!(
+                                        "{} handing off to {}",
+                                        current_agent.name, next_agent.name
+                                    ),
                                     action_meta,
                                     &self.on_event,
                                 );
                             }
-                            
+
                             current_agent = next_agent.clone();
                         }
                     }
@@ -974,12 +1066,17 @@ impl Runner {
 
                 let tool_result_meta = ToolResultMeta {
                     tool_name: tool_call.name.clone(),
-                    status: if result.is_error { "error".to_string() } else { "ok".to_string() },
+                    status: if result.is_error {
+                        "error".to_string()
+                    } else {
+                        "ok".to_string()
+                    },
                     duration_ms: result.duration_ms,
                     content_summary: content_str.chars().take(200).collect(),
                     args: tool_call.args.clone(), // P1: Added args for result preview
                     files,
                     raw_result: Some(result.content.clone()),
+                    tool_call_id: Some(result.tool_call_id.clone()),
                 };
 
                 let action_meta = ActionMeta {
@@ -988,10 +1085,16 @@ impl Runner {
                     iteration,
                     depth: self.depth,
                     progress_percent: None,
-                    tool_call: Some(ToolCallMeta { // P1: Populate tool_call for correlation
+                    tool_call: Some(ToolCallMeta {
+                        // P1: Populate tool_call for correlation
                         tool_name: tool_call.name.clone(),
                         args: tool_call.args.clone(),
-                        status: if result.is_error { "failed".to_string() } else { "completed".to_string() },
+                        status: if result.is_error {
+                            "failed".to_string()
+                        } else {
+                            "completed".to_string()
+                        },
+                        tool_call_id: Some(result.tool_call_id.clone()),
                     }),
                     tool_result: Some(tool_result_meta),
                     handoff: None,
@@ -999,14 +1102,14 @@ impl Runner {
                     approval_request: None,
                     ..Default::default()
                 };
-                
+
                 let result_content = format!(
                     "{}: {} {}",
                     tool_call.name,
                     if result.is_error { "Error" } else { "Success" },
                     content_str.chars().take(50).collect::<String>()
                 );
-                
+
                 if let Some(ref db) = self.db_pool {
                     let _ = persist_and_emit_action(
                         &self.app,
@@ -1019,7 +1122,8 @@ impl Runner {
                         Some("tool"),
                         Some(result.tool_call_id.clone()),
                         &self.on_event,
-                    ).await;
+                    )
+                    .await;
                 } else {
                     let _ = emit_action_only(
                         &self.app,
@@ -1045,7 +1149,9 @@ impl Runner {
                 });
 
                 // Build a brief hint of what data is now available
-                let latest_data: String = conversation.iter().rev()
+                let latest_data: String = conversation
+                    .iter()
+                    .rev()
                     .filter(|m| m.role == "tool")
                     .take(2)
                     .map(|m| m.content.chars().take(80).collect::<String>())
@@ -1076,7 +1182,8 @@ impl Runner {
                     tracing::warn!("3 consecutive tool errors – injecting recovery hint");
                     // Remove ALL previous error nudges
                     conversation.retain(|m| {
-                        !(m.role == "system" && m.content.contains("Multiple tool calls have failed"))
+                        !(m.role == "system"
+                            && m.content.contains("Multiple tool calls have failed"))
                     });
                     conversation.push(ChatMessage {
                         role: "system".to_string(),

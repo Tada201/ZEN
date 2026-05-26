@@ -1,18 +1,18 @@
-use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::{json, Value};
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::agent::tools::AgentTool;
-use crate::agent::runner::{Runner, MAX_SPAWN_DEPTH};
-use crate::agent::types::{AgentRegistry, ActionMeta, SpawnMeta, MessageKind};
 use crate::agent::hooks::HookRegistry;
+use crate::agent::runner::{Runner, MAX_SPAWN_DEPTH};
+use crate::agent::tools::AgentTool;
 use crate::agent::tools::ToolRegistry;
-use anyhow::Result;
+use crate::agent::types::{ActionMeta, AgentRegistry, MessageKind, SpawnMeta};
 use crate::commands::AppState;
 use crate::db::models::ChatMessage;
-use uuid::Uuid;
+use anyhow::Result;
 use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
 
 /// Tool that spawns a child agent runner for parallel sub-tasks.
 /// The child agent runs with its own conversation context and bounded iterations,
@@ -34,7 +34,12 @@ impl SpawnAgentTool {
         hook_registry: Arc<HookRegistry>,
         permissions: crate::tools::GlobalToolRegistry,
     ) -> Self {
-        Self { tool_registry, agent_registry, hook_registry, permissions }
+        Self {
+            tool_registry,
+            agent_registry,
+            hook_registry,
+            permissions,
+        }
     }
 }
 
@@ -85,39 +90,53 @@ impl AgentTool for SpawnAgentTool {
         allowed_tools: Option<Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
         token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
-        let agent_id = input.get("agent_id")
+        let agent_id = input
+            .get("agent_id")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("Missing required field: agent_id"))?;
 
-        let task = input.get("task")
+        let task = input
+            .get("task")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("Missing required field: task"))?;
 
-        let max_steps = input.get("max_steps")
+        let max_steps = input
+            .get("max_steps")
             .and_then(|v| v.as_u64())
             .unwrap_or(10) as usize;
 
-        let model_override = input.get("model")
+        let model_override = input
+            .get("model")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
         // Look up the agent
-        let agent = self.agent_registry.get(agent_id)
-            .cloned()
-            .ok_or_else(|| anyhow::anyhow!(
+        let agent = self.agent_registry.get(agent_id).cloned().ok_or_else(|| {
+            anyhow::anyhow!(
                 "Agent '{}' not found. Available: {:?}",
                 agent_id,
-                self.agent_registry.list().iter().map(|a| &a.id).collect::<Vec<_>>()
-            ))?;
+                self.agent_registry
+                    .list()
+                    .iter()
+                    .map(|a| &a.id)
+                    .collect::<Vec<_>>()
+            )
+        })?;
 
         // Determine model to use (priority: explicit override > agent override > active setting)
         let state = app.state::<crate::commands::AppState>();
         let model = if let Some(m) = model_override.or(agent.model_override.clone()) {
             m
         } else {
-            crate::db::queries::get_setting(&state.db().await.map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?, "model_name")
-                .await?
-                .unwrap_or_else(|| "gemini-1.5-flash".to_string())
+            crate::db::queries::get_setting(
+                &state
+                    .db()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?,
+                "model_name",
+            )
+            .await?
+            .unwrap_or_else(|| "gemini-1.5-flash".to_string())
         };
 
         // Check depth limit before spawning (prevents infinite recursion)
@@ -138,16 +157,18 @@ impl AgentTool for SpawnAgentTool {
             self.hook_registry.clone(),
             self.permissions.clone(),
             tool_manager,
-        ).with_depth(depth + 1).with_max_iterations(max_steps);
+        )
+        .with_depth(depth + 1)
+        .with_max_iterations(max_steps);
 
         if let Some(allowed) = allowed_tools {
             child_runner = child_runner.with_allowed_tools(allowed);
         }
-        
+
         // Create unique memory scope for this subagent task
         // Format: subagent:{agent_id}:{timestamp}:{task_hash}
         let task_hash = {
-            use sha2::{Sha256, Digest};
+            use sha2::{Digest, Sha256};
             let mut hasher = Sha256::new();
             hasher.update(task.as_bytes());
             format!("{:x}", hasher.finalize())[..8].to_string()
@@ -157,7 +178,7 @@ impl AgentTool for SpawnAgentTool {
             .map(|d| d.as_secs())
             .unwrap_or(0);
         let memory_scope = format!("subagent:{}:{}:{}", agent_id, timestamp, task_hash);
-        
+
         let child_runner = child_runner.with_memory_scope(memory_scope.clone());
 
         // Build structured delegation prompt for the sub-agent
@@ -181,7 +202,12 @@ You are {}, a specialized AI agent.
 This task was delegated to you by the main agent. Focus on completing this specific task.
 "#,
             agent.name,
-            agent.instructions.lines().take(50).collect::<Vec<_>>().join("\n"),
+            agent
+                .instructions
+                .lines()
+                .take(50)
+                .collect::<Vec<_>>()
+                .join("\n"),
             task
         );
 
@@ -205,7 +231,10 @@ This task was delegated to you by the main agent. Focus on completing this speci
                         role: m.role,
                         content: m.content,
                         images: m.images.as_ref().and_then(|s| serde_json::from_str(s).ok()),
-                        tool_calls: m.tool_calls.as_ref().and_then(|s| serde_json::from_str(s).ok()),
+                        tool_calls: m
+                            .tool_calls
+                            .as_ref()
+                            .and_then(|s| serde_json::from_str(s).ok()),
                         tool_call_id: m.tool_call_id,
                     })
                     .collect();
@@ -261,7 +290,7 @@ This task was delegated to you by the main agent. Focus on completing this speci
         }));
 
         let subagent_token = CancellationToken::new();
-        
+
         // Track the sub-agent token for direct task cancellation
         {
             let mut tokens = state.subagent_cancellation_tokens.lock().await;
@@ -269,20 +298,26 @@ This task was delegated to you by the main agent. Focus on completing this speci
         }
 
         // Emit agent:spawn event for UI detection
-        let _ = app.emit("agent:spawn", json!({
-            "spawn_id": spawn_id,
-            "parent_agent": agent_id,
-            "child_agent_id": agent.id,
-            "child_agent_name": agent.name,
-            "task": task,
-            "chat_id": chat_id,
-        }));
+        let _ = app.emit(
+            "agent:spawn",
+            json!({
+                "spawn_id": spawn_id,
+                "parent_agent": agent_id,
+                "child_agent_id": agent.id,
+                "child_agent_name": agent.name,
+                "task": task,
+                "chat_id": chat_id,
+            }),
+        );
 
         // Emit internal AgentEvent::AgentSpawned for backend coordination (ISSUE-008)
-        state.agent.event_bus.emit(crate::agent::event_bus::AgentEvent::AgentSpawned {
-            agent_id: agent.id.clone(),
-            agent_type: agent.name.clone(),
-        });
+        state
+            .agent
+            .event_bus
+            .emit(crate::agent::event_bus::AgentEvent::AgentSpawned {
+                agent_id: agent.id.clone(),
+                agent_type: agent.name.clone(),
+            });
 
         // Wrap in tokio::select! to handle parent cancellation
         let spawn_start = std::time::Instant::now();
@@ -314,7 +349,9 @@ This task was delegated to you by the main agent. Focus on completing this speci
 
         match result {
             Ok(response) => {
-                let content = response.content.unwrap_or_else(|| "Sub-agent completed with no output.".to_string());
+                let content = response
+                    .content
+                    .unwrap_or_else(|| "Sub-agent completed with no output.".to_string());
 
                 // Emit spawn complete action
                 let complete_meta = ActionMeta {
@@ -337,12 +374,15 @@ This task was delegated to you by the main agent. Focus on completing this speci
                     approval_request: None,
                     ..Default::default()
                 };
-                let _ = app.emit("chat:message", json!({
-                    "chat_id": chat_id,
-                    "kind": MessageKind::AgentSpawn.to_string(),
-                    "content": format!("{} completed in {}ms", agent.name, spawn_duration_ms),
-                    "metadata": complete_meta,
-                }));
+                let _ = app.emit(
+                    "chat:message",
+                    json!({
+                        "chat_id": chat_id,
+                        "kind": MessageKind::AgentSpawn.to_string(),
+                        "content": format!("{} completed in {}ms", agent.name, spawn_duration_ms),
+                        "metadata": complete_meta,
+                    }),
+                );
 
                 // ✅ FIX #1: Emit explicit session end marker
                 let session_end_meta = ActionMeta {
@@ -373,9 +413,12 @@ This task was delegated to you by the main agent. Focus on completing this speci
                 }));
 
                 // Emit internal AgentEvent::AgentTerminated for backend coordination (ISSUE-008)
-                state.agent.event_bus.emit(crate::agent::event_bus::AgentEvent::AgentTerminated {
-                    agent_id: agent.id.clone(),
-                });
+                state
+                    .agent
+                    .event_bus
+                    .emit(crate::agent::event_bus::AgentEvent::AgentTerminated {
+                        agent_id: agent.id.clone(),
+                    });
 
                 let parsed: Result<serde_json::Value, _> = serde_json::from_str(&content);
                 let structured_result = match parsed {
@@ -390,14 +433,17 @@ This task was delegated to you by the main agent. Focus on completing this speci
                 };
 
                 // Emit agent:complete event for UI task board tracking
-                let _ = app.emit("agent:complete", json!({
-                    "spawn_id": spawn_id,
-                    "agent_id": agent.id, // Use consistent canonical ID
-                    "chat_id": chat_id,
-                    "status": "completed",
-                    "result": structured_result,
-                    "duration_ms": spawn_duration_ms,
-                }));
+                let _ = app.emit(
+                    "agent:complete",
+                    json!({
+                        "spawn_id": spawn_id,
+                        "agent_id": agent.id, // Use consistent canonical ID
+                        "chat_id": chat_id,
+                        "status": "completed",
+                        "result": structured_result,
+                        "duration_ms": spawn_duration_ms,
+                    }),
+                );
 
                 Ok(json!({
                     "agent_id": agent_id,
@@ -428,27 +474,36 @@ This task was delegated to you by the main agent. Focus on completing this speci
                     approval_request: None,
                     ..Default::default()
                 };
-                let _ = app.emit("chat:message", json!({
-                    "chat_id": chat_id,
-                    "kind": MessageKind::AgentSpawn.to_string(),
-                    "content": format!("✗ {} session failed: {}", agent.name, e),
-                    "metadata": error_session_meta,
-                }));
+                let _ = app.emit(
+                    "chat:message",
+                    json!({
+                        "chat_id": chat_id,
+                        "kind": MessageKind::AgentSpawn.to_string(),
+                        "content": format!("✗ {} session failed: {}", agent.name, e),
+                        "metadata": error_session_meta,
+                    }),
+                );
 
                 // Emit internal AgentEvent::AgentTerminated for backend coordination (ISSUE-008)
-                state.agent.event_bus.emit(crate::agent::event_bus::AgentEvent::AgentTerminated {
-                    agent_id: agent.id.clone(),
-                });
+                state
+                    .agent
+                    .event_bus
+                    .emit(crate::agent::event_bus::AgentEvent::AgentTerminated {
+                        agent_id: agent.id.clone(),
+                    });
 
                 // Emit agent:complete event for UI task board tracking (error case)
-                let _ = app.emit("agent:complete", json!({
-                    "spawn_id": spawn_id,
-                    "agent_id": agent.id, // Use consistent canonical ID
-                    "chat_id": chat_id,
-                    "status": "failed",
-                    "error": e.to_string(),
-                    "duration_ms": spawn_duration_ms,
-                }));
+                let _ = app.emit(
+                    "agent:complete",
+                    json!({
+                        "spawn_id": spawn_id,
+                        "agent_id": agent.id, // Use consistent canonical ID
+                        "chat_id": chat_id,
+                        "status": "failed",
+                        "error": e.to_string(),
+                        "duration_ms": spawn_duration_ms,
+                    }),
+                );
 
                 Ok(json!({
                     "agent_id": agent_id,

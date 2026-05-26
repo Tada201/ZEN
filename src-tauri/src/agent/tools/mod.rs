@@ -1,26 +1,27 @@
-pub mod terminal_tools;
-pub mod map_tools;
-pub mod search_tools;
-pub mod system_tools;
-pub mod handoff_tools;
-pub mod fs_tools;
-pub mod osint_tools;
-pub mod routing_tools;
-pub mod info_tools;
-pub mod spawn_tools;
 pub mod delegate_to_agent;
-pub mod session_memory_tools;
-pub mod progressive;
-pub mod graph_session;
 pub mod drawing_tools;
+pub mod fs_tools;
 pub mod geofence_tools;
+pub mod graph_session;
+pub mod handoff_tools;
+pub mod info_tools;
+pub mod map_tools;
+pub mod osint_tools;
+pub mod progressive;
+pub mod routing_tools;
+pub mod search_tools;
+pub mod session_memory_tools;
+pub mod spawn_tools;
+pub mod system_tools;
+pub mod task_tools;
+pub mod terminal_tools;
 
-use serde_json::Value;
 use anyhow::Result;
+use async_trait::async_trait;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use async_trait::async_trait;
 
 #[async_trait]
 pub trait AgentTool: Send + Sync {
@@ -58,7 +59,9 @@ impl ToolRegistry {
         }
     }
 
-    pub fn with_progressive(progressive: Arc<RwLock<crate::agent::tools::progressive::ProgressiveToolRegistry>>) -> Self {
+    pub fn with_progressive(
+        progressive: Arc<RwLock<crate::agent::tools::progressive::ProgressiveToolRegistry>>,
+    ) -> Self {
         let mut tools = HashMap::new();
         if let Ok(prog) = progressive.try_read() {
             for tool in prog.loaded_tool_ids() {
@@ -71,6 +74,12 @@ impl ToolRegistry {
             tools,
             progressive: Some(progressive),
         }
+    }
+
+    pub fn progressive(
+        &self,
+    ) -> Option<Arc<RwLock<crate::agent::tools::progressive::ProgressiveToolRegistry>>> {
+        self.progressive.clone()
     }
 
     pub fn register(&mut self, tool: Arc<dyn AgentTool>) {
@@ -108,12 +117,13 @@ impl ToolRegistry {
     }
 
     pub fn list_as_tool_info(&self) -> Vec<crate::tools::ToolInfo> {
-        self.list().into_iter().map(|t| {
-            crate::tools::ToolInfo {
+        self.list()
+            .into_iter()
+            .map(|t| crate::tools::ToolInfo {
                 name: t.id().to_string(),
                 description: t.description().to_string(),
                 parameters: t.input_schema(),
-            }
-        }).collect()
+            })
+            .collect()
     }
 }

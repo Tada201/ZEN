@@ -3,7 +3,7 @@ import { Folder, File, ChevronRight, FolderOpen, RefreshCcw } from "lucide-react
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { invoke } from "@tauri-apps/api/core";
+import { workspaceApi } from "@/api";
 
 interface FileNode {
   name: string;
@@ -19,7 +19,7 @@ export function FileExplorer({ onFileClick }: { onFileClick: (path: string) => v
 
   const fetchFolder = useCallback(async (path: string = ""): Promise<FileNode[]> => {
     try {
-      const data = await invoke<{ entries: Array<{ name: string; type: string; path: string }> }>("browseFolder", { path: path || null });
+      const data = await workspaceApi.browseFolder(path || null);
       if (!data.entries) return [];
       return data.entries.map((e) => ({
         name: e.name,

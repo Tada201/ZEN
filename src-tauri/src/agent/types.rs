@@ -188,6 +188,8 @@ pub struct ToolCallMeta {
     pub tool_name: String,
     pub args: Value,
     pub status: String, // 'pending', 'running', 'completed', 'failed'
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -202,6 +204,8 @@ pub struct ToolResultMeta {
     pub files: Option<Vec<FileChange>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub raw_result: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

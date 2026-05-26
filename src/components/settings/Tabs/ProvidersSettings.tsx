@@ -1,5 +1,4 @@
 import React, { useState, memo, useCallback, useMemo } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { providerOrder, PROVIDER_KEY_MAP } from '@/lib/types/provider';
 import { cn } from '@/lib/utils/style';
@@ -14,6 +13,7 @@ import { ModelConfig } from './providers/ModelConfig';
 import { CustomProviderConfig } from './providers/CustomProviderConfig';
 import { ConnectionStatus } from './providers/ConnectionStatus';
 import { ProviderParamsConfig } from './providers/ProviderParamsConfig';
+import { providersApi } from '@/api';
 
 const CATEGORIES = [
     { id: 'cloud', label: 'Cloud Intelligence', providers: ['openai', 'anthropic', 'google', 'xai', 'mistral', 'groq', 'perplexity', 'deepseek', 'openrouter', 'together', 'kilo', 'aihubmix'] },
@@ -25,7 +25,11 @@ export const ProvidersSettings = memo(() => {
     const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
 
-    const customProviders = useSettingsStore(s => s.customProviders || []);
+    const customProvidersValue = useSettingsStore(s => s.customProviders);
+    const customProviders = useMemo(
+        () => Array.isArray(customProvidersValue) ? customProvidersValue : [],
+        [customProvidersValue]
+    );
     const connectionStatuses = useSettingsStore(s => s.connectionStatuses);
     const fetchModels = useSettingsStore(s => s.fetchModels);
     const addCustomProvider = useSettingsStore(s => s.addCustomProvider);
@@ -101,13 +105,11 @@ export const ProvidersSettings = memo(() => {
         if (addForm.testStatus === 'testing') return;
         setAddForm(prev => ({ ...prev, testStatus: 'testing', validationError: null }));
         try {
-            const models = await invoke<any[]>('test_provider_connection', {
-                config: {
-                    providerType: 'custom',
-                    baseUrl: addForm.baseUrl,
-                    apiKey: addForm.apiKey,
-                    displayName: addForm.displayName || 'Custom Node',
-                }
+            const models = await providersApi.testProviderConnection({
+                providerType: 'custom',
+                baseUrl: addForm.baseUrl,
+                apiKey: addForm.apiKey,
+                displayName: addForm.displayName || 'Custom Node',
             });
             setAddForm(prev => ({ 
                 ...prev, 

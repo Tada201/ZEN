@@ -1,31 +1,35 @@
+pub mod agent;
+pub mod canvas;
+pub mod chat;
+pub mod document;
+pub mod mcp;
+pub mod memory;
+pub mod settings;
+pub mod spatial;
 pub mod system;
 pub mod terminal;
-pub mod document;
-pub mod settings;
-pub mod chat;
-pub mod agent;
 pub mod voice;
-pub mod canvas;
-pub mod spatial;
-pub mod memory;
 
-use std::sync::Arc;
-use tokio::sync::{RwLock, Mutex};
-use std::collections::HashMap;
-use tokio_util::sync::CancellationToken;
 use sqlx::SqlitePool;
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::{Mutex, RwLock};
+use tokio_util::sync::CancellationToken;
 
-use crate::services::{HardwareService, TerminalService, DocumentService, SettingsService, SpeechService, TtsService, process_manager::ProcessManager};
-use crate::llm::{LlmProvider, ProviderRegistry};
-use crate::error::{ZenResult, ZenError};
-use crate::agent::types::AgentRegistry;
-use crate::agent::hooks::HookRegistry;
 use crate::agent::event_bus::EventBus;
-use crate::agent::swarm::SwarmCoordinator;
-use crate::tools::manager::ToolManager;
-use crate::agent::orchestrator::Orchestrator;
+use crate::agent::hooks::HookRegistry;
 use crate::agent::memory::UnifiedMemoryBackend;
+use crate::agent::orchestrator::Orchestrator;
+use crate::agent::swarm::SwarmCoordinator;
+use crate::agent::types::AgentRegistry;
+use crate::error::{ZenError, ZenResult};
+use crate::llm::{LlmProvider, ProviderRegistry};
+use crate::services::{
+    process_manager::ProcessManager, DocumentService, HardwareService, SecretService,
+    SecurityService, SettingsService, SpeechService, TerminalService, ToolService, TtsService,
+};
+use crate::tools::manager::ToolManager;
 
 /// Wrapper for lazy-initialized services with validation
 pub struct InitState<T> {
@@ -40,10 +44,14 @@ impl<T> InitState<T> {
     }
 
     pub async fn get(&self) -> ZenResult<T>
-    where T: Clone {
+    where
+        T: Clone,
+    {
         let guard = self.inner.read().await;
         guard.as_ref().cloned().ok_or_else(|| {
-            ZenError::Internal("Service not initialized. Ensure initialization completed before use.".into())
+            ZenError::Internal(
+                "Service not initialized. Ensure initialization completed before use.".into(),
+            )
         })
     }
 
@@ -108,15 +116,20 @@ pub struct AppState {
     pub speech: Arc<tokio::sync::RwLock<Option<SpeechService>>>,
     pub tts: Arc<tokio::sync::RwLock<Option<TtsService>>>,
     pub settings_manager: Arc<SettingsService>,
+    pub secret_manager: Arc<SecretService>,
+    pub security: Arc<SecurityService>,
     pub chat_cancellation_tokens: Arc<tokio::sync::Mutex<HashMap<String, CancellationToken>>>,
     pub rag: InitState<Arc<dyn crate::rag::VectorStore>>,
     pub conversation_store: InitState<Arc<crate::rag::conversation_store::ConversationStore>>,
     pub workspace_folder: Arc<RwLock<PathBuf>>,
-    pub graph_sessions: Arc<tokio::sync::Mutex<HashMap<String, crate::canvas::session::GraphSession>>>,
+    pub graph_sessions:
+        Arc<tokio::sync::Mutex<HashMap<String, crate::canvas::session::GraphSession>>>,
     pub session_memory: Arc<RwLock<Arc<crate::rag::session_memory::SessionMemoryManager>>>,
     pub mcp_server: Arc<RwLock<crate::mcp::McpServer>>,
-    pub pending_tool_approvals: Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<bool>>>>,
-    pub pending_orchestrator_approvals: Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<bool>>>>,
+    pub pending_tool_approvals:
+        Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<bool>>>>,
+    pub pending_orchestrator_approvals:
+        Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<bool>>>>,
     pub subagent_cancellation_tokens: Arc<tokio::sync::Mutex<HashMap<String, CancellationToken>>>,
     pub session_permissions: Arc<tokio::sync::Mutex<HashMap<String, HashMap<String, bool>>>>,
     pub sys_metrics: SysInfoState,
@@ -124,6 +137,7 @@ pub struct AppState {
     pub process_manager: Arc<ProcessManager>,
     pub swarm: Arc<SwarmCoordinator>,
     pub tool_manager: Arc<ToolManager>,
+    pub tool_service: Arc<ToolService>,
     pub orchestrator: InitState<Arc<Orchestrator>>,
     pub memory_backend: Arc<UnifiedMemoryBackend>,
     pub geofence_engine: Arc<crate::services::gtsm::geofence::GeofenceEngine>,
@@ -132,16 +146,48 @@ pub struct AppState {
     /// Keyed by chat_id; value is (recall_block, last_user_msg_text).
     /// Populated in background after each LLM response; consumed on the NEXT message's iteration-1.
     pub recall_cache: Arc<tokio::sync::Mutex<HashMap<String, (String, String)>>>,
-    pub provider_cache: Arc<tokio::sync::Mutex<HashMap<String, (Arc<dyn LlmProvider>, std::time::Instant)>>>,
+    pub provider_cache:
+        Arc<tokio::sync::Mutex<HashMap<String, (Arc<dyn LlmProvider>, std::time::Instant)>>>,
     pub provider_registry: Arc<ProviderRegistry>,
 }
 
 impl AppState {
     pub fn new() -> Self {
-        let progressive = Arc::new(RwLock::new(crate::agent::tools::progressive::ProgressiveToolRegistry::new()));
-        let tool_registry_v1 = Arc::new(RwLock::new(crate::agent::tools::ToolRegistry::with_progressive(progressive.clone())));
-        let tool_registry_v2 = Arc::new(RwLock::new(crate::tools::ToolRegistry::new()));
-        let agent_registry = Arc::new(AgentRegistry::new());
+        let progressive = Arc::new(RwLock::new(
+            crate::agent::tools::progressive::ProgressiveToolRegistry::new(),
+        ));
+        let tool_registry_v1 = Arc::new(RwLock::new(
+            crate::agent::tools::ToolRegistry::with_progressive(progressive.clone()),
+        ));
+        let tool_registry_v2 = Arc::new(RwLock::new(crate::tools::init_tool_registry(
+            crate::tools::permission::ToolPermissions::default(),
+        )));
+        let mut agent_registry_inner = AgentRegistry::new();
+        let mut paths_to_try = vec![
+            std::path::PathBuf::from("resources/agents"),
+            std::path::PathBuf::from("src-tauri/resources/agents"),
+            std::path::PathBuf::from("../resources/agents"),
+        ];
+        if let Ok(curr) = std::env::current_dir() {
+            paths_to_try.push(curr.join("resources").join("agents"));
+            paths_to_try.push(curr.join("src-tauri").join("resources").join("agents"));
+        }
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(parent) = exe.parent() {
+                paths_to_try.push(parent.join("resources").join("agents"));
+                if let Some(p2) = parent.parent() {
+                    paths_to_try.push(p2.join("resources").join("agents"));
+                }
+            }
+        }
+        for path in paths_to_try {
+            if path.exists() && path.is_dir() {
+                if agent_registry_inner.load_from_dir(&path) > 0 {
+                    break;
+                }
+            }
+        }
+        let agent_registry = Arc::new(agent_registry_inner);
         let hook_registry = Arc::new(HookRegistry::new());
 
         {
@@ -157,10 +203,23 @@ impl AppState {
         }
 
         let default_workspace = crate::workspace::get_default_workspace();
-        let shared_session_memory = Arc::new(crate::rag::session_memory::SessionMemoryManager::new(default_workspace.clone()));
+        let shared_session_memory = Arc::new(
+            crate::rag::session_memory::SessionMemoryManager::new(default_workspace.clone()),
+        );
         let process_manager = Arc::new(ProcessManager::new());
         let event_bus = Arc::new(EventBus::default());
         let settings_manager = Arc::new(SettingsService::new());
+        let security = Arc::new(SecurityService::new());
+        let secret_manager = Arc::new(SecretService::new(
+            settings_manager.clone(),
+            security.clone(),
+        ));
+        let pending_tool_approvals = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+        let tool_service = Arc::new(ToolService::new(
+            tool_registry_v2.clone(),
+            security.clone(),
+            pending_tool_approvals.clone(),
+        ));
 
         Self {
             db: InitState::new(),
@@ -169,7 +228,9 @@ impl AppState {
             tool_registry_v1: tool_registry_v1.clone(),
             agent_registry: agent_registry.clone(),
             hook_registry: hook_registry.clone(),
-            agent: AgentState { event_bus: event_bus.clone() },
+            agent: AgentState {
+                event_bus: event_bus.clone(),
+            },
             settings: Arc::new(RwLock::new(HashMap::new())),
             hardware: Arc::new(Mutex::new(HardwareService::new())),
             terminal: Arc::new(TerminalService::new()),
@@ -177,6 +238,8 @@ impl AppState {
             speech: Arc::new(tokio::sync::RwLock::new(None)),
             tts: Arc::new(tokio::sync::RwLock::new(None)),
             settings_manager: settings_manager.clone(),
+            secret_manager: secret_manager.clone(),
+            security,
             chat_cancellation_tokens: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             rag: InitState::new(),
             conversation_store: InitState::new(),
@@ -188,17 +251,20 @@ impl AppState {
                 tool_registry_v2.clone(),
                 None,
             ))),
-            pending_tool_approvals: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            pending_tool_approvals,
             pending_orchestrator_approvals: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             subagent_cancellation_tokens: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             session_permissions: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             sys_metrics: SysInfoState::new(),
-            terminal_sessions: Arc::new(RwLock::new(crate::terminal::TerminalManager::with_process_manager(process_manager.clone()))),
+            terminal_sessions: Arc::new(RwLock::new(
+                crate::terminal::TerminalManager::with_process_manager(process_manager.clone()),
+            )),
             process_manager,
             tool_manager: Arc::new(ToolManager::new(
                 tool_registry_v1.clone(),
                 tool_registry_v2.clone(),
             )),
+            tool_service,
             swarm: Arc::new(SwarmCoordinator::new(
                 crate::agent::swarm::SwarmTopology::default(),
                 event_bus.clone(),
@@ -206,14 +272,17 @@ impl AppState {
             )),
             orchestrator: InitState::new(),
             memory_backend: {
-                let session_memory = Arc::new(crate::rag::session_memory::SessionMemoryManager::new(default_workspace.clone()));
+                let session_memory =
+                    Arc::new(crate::rag::session_memory::SessionMemoryManager::new(
+                        default_workspace.clone(),
+                    ));
                 Arc::new(UnifiedMemoryBackend::new(session_memory))
             },
             geofence_engine: Arc::new(crate::services::gtsm::geofence::GeofenceEngine::new()),
             gtsm_cache: Arc::new(crate::services::gtsm::cache::GtsmCache::new()),
             recall_cache: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             provider_cache: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
-            provider_registry: Arc::new(ProviderRegistry::new(settings_manager)),
+            provider_registry: Arc::new(ProviderRegistry::new(settings_manager, secret_manager)),
         }
     }
 
@@ -226,62 +295,36 @@ impl AppState {
     }
 
     pub async fn provider(&self) -> ZenResult<Arc<dyn LlmProvider>> {
-        let db = self.db().await?;
-        let active_provider = crate::db::queries::get_setting(&db, "active_provider")
-            .await
-            .unwrap_or_default()
+        let active_provider = self
+            .settings_manager
+            .get("active_provider")
+            .await?
             .unwrap_or_else(|| "ollama".to_string());
-            
-        // Check cache first (60s TTL)
-        {
-            let mut cache = self.provider_cache.lock().await;
-            if let Some((provider, timestamp)) = cache.get(&active_provider) {
-                if timestamp.elapsed().as_secs() < 60 {
-                    return Ok(provider.clone());
-                }
-            }
-        }
-        
-        let provider = crate::llm::create_provider(&db, &active_provider).await?;
-        
-        // Update cache
-        {
-            let mut cache = self.provider_cache.lock().await;
-            cache.insert(active_provider.clone(), (provider.clone(), std::time::Instant::now()));
-        }
-        
-        Ok(provider)
+
+        self.provider_registry.create(&active_provider).await
     }
 
-    pub async fn provider_by_name(&self, name: &str, db: &SqlitePool) -> ZenResult<Arc<dyn LlmProvider>> {
-        let name_str = name.to_string();
-        // Check cache first (60s TTL)
-        {
-            let mut cache = self.provider_cache.lock().await;
-            if let Some((provider, timestamp)) = cache.get(&name_str) {
-                if timestamp.elapsed().as_secs() < 60 {
-                    return Ok(provider.clone());
-                }
-            }
-        }
-        
-        let provider = crate::llm::create_provider(db, &name_str).await?;
-        
-        // Update cache
-        {
-            let mut cache = self.provider_cache.lock().await;
-            cache.insert(name_str, (provider.clone(), std::time::Instant::now()));
-        }
-        
-        Ok(provider)
+    pub async fn provider_by_name(
+        &self,
+        name: &str,
+        db: &SqlitePool,
+    ) -> ZenResult<Arc<dyn LlmProvider>> {
+        let _ = db;
+        self.provider_registry.create(name).await
     }
 
     pub async fn get_provider(&self) -> ZenResult<Arc<dyn LlmProvider>> {
         self.provider().await
     }
 
-    pub async fn search_rag(&self, query_vec: Vec<f32>, limit: usize) -> ZenResult<Vec<crate::rag::SearchResult>> {
+    pub async fn search_rag(
+        &self,
+        query_vec: Vec<f32>,
+        limit: usize,
+    ) -> ZenResult<Vec<crate::rag::SearchResult>> {
         let rag = self.rag.get().await?;
-        rag.search(query_vec, limit).await.map_err(|e| ZenError::Custom(format!("RAG search failed: {}", e).into()))
+        rag.search(query_vec, limit)
+            .await
+            .map_err(|e| ZenError::Custom(format!("RAG search failed: {}", e).into()))
     }
 }

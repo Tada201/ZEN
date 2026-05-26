@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Serialize)]
 pub struct OpenAiChatRequest {
     pub model: String,
@@ -159,5 +158,3 @@ pub struct OpenAiEmbedResponse {
 pub struct OpenAiEmbedData {
     pub embedding: Vec<f32>,
 }
-
-

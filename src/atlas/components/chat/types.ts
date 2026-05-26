@@ -8,11 +8,20 @@ export type MessageKind =
   | 'tool_result'
   | 'agent_handoff'
   | 'agent_spawn'
+  | 'agent_complete'
   | 'error'
   | 'system'
   | 'approval_request'
   | 'clarification_request'
-  | 'deep_research';
+  | 'deep_research'
+  | 'chat_status'
+  | 'orchestrator_progress'
+  | 'workflow_started'
+  | 'workflow_completed'
+  | 'workflow_failed'
+  | 'task_started'
+  | 'task_completed'
+  | 'task_failed';
 
 export interface ToolCallMeta {
   toolName: string;
@@ -49,7 +58,7 @@ export interface SpawnMeta {
   parentAgent: string;
   childAgent: string;
   task: string;
-  status: 'spawned' | 'completed';
+  status: 'spawned' | 'completed' | 'failed';
   durationMs?: number;
 }
 
@@ -83,6 +92,8 @@ export interface ActionMeta {
   agentName?: string;
   iteration?: number;
   depth?: number;
+  phase?: string;
+  message?: string;
   progressPercent?: number;
   toolCall?: ToolCallMeta;
   toolResult?: ToolResultMeta;
@@ -177,10 +188,17 @@ export interface ToolInvocation {
   step?: number;
 }
 
+export type ExecutionEventStatus = "pending" | "running" | "completed" | "error" | "cancelled";
+
 export type Step = { 
-  type: "text" | "tool-call" | "reasoning"; 
+  type: "text" | "tool-call" | "reasoning" | "action"; 
   content?: string; 
   toolCall?: ToolCall;
+  kind?: MessageKind | string;
+  status?: ExecutionEventStatus;
+  metadata?: ActionMeta;
+  timestamp?: number;
+  eventId?: string;
 };
 
 export type ThinkingConfig = {
@@ -252,6 +270,23 @@ export function normalizeVercelMessage(msg: any): Message {
       });
       normalized.steps = steps;
     }
+  }
+
+  // Fallback: If steps is still empty, reconstruct it from existing toolCalls and content for history messages
+  if (!normalized.steps || normalized.steps.length === 0) {
+    const steps: Step[] = [];
+    if (normalized.reasoning) {
+      steps.push({ type: 'reasoning', content: normalized.reasoning });
+    }
+    if (normalized.toolCalls && normalized.toolCalls.length > 0) {
+      normalized.toolCalls.forEach((tc: ToolCall) => {
+        steps.push({ type: 'tool-call', toolCall: tc });
+      });
+    }
+    if (normalized.content) {
+      steps.push({ type: 'text', content: normalized.content });
+    }
+    normalized.steps = steps;
   }
 
   return normalized as Message;

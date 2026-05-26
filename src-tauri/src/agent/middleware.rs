@@ -66,14 +66,13 @@ impl MiddlewareChain {
     }
 
     /// Create the default chain used by `send_message`.
-    pub fn default_chain(
-        app: AppHandle,
-        db_pool: Option<SqlitePool>,
-    ) -> Self {
+    pub fn default_chain(app: AppHandle, db_pool: Option<SqlitePool>) -> Self {
         Self::new()
             .add(Box::new(SystemPromptMiddleware { app: app.clone() }))
             .add(Box::new(RecallMiddleware))
-            .add(Box::new(SummaryMiddleware { db_pool: db_pool.clone() }))
+            .add(Box::new(SummaryMiddleware {
+                db_pool: db_pool.clone(),
+            }))
             .add(Box::new(CompactionMiddleware))
     }
 
@@ -117,7 +116,8 @@ impl ContextMiddleware for SystemPromptMiddleware {
         ctx.system_content.push_str(&time_block);
 
         // ── UI Rendering & Formatting Rules ──
-        ctx.system_content.push_str("\n\n## UI Rendering & Formatting Rules\n");
+        ctx.system_content
+            .push_str("\n\n## UI Rendering & Formatting Rules\n");
         ctx.system_content.push_str(
             "1. When generating SVGs or visual assets, ALWAYS wrap the raw `<svg>` code inside a \
              markdown code block with the `svg` language identifier (e.g. ```svg\n<svg>...</svg>\n```). \
@@ -130,23 +130,34 @@ impl ContextMiddleware for SystemPromptMiddleware {
         // ── Canvas context ──
         if ctx.authorized_tool_ids.iter().any(|t| t == "draw") {
             ctx.system_content.push_str("\n\n## Drawing Canvas\n");
-            ctx.system_content.push_str("You have access to a drawing canvas (800x600 pixels).\n");
-            ctx.system_content.push_str("Use the 'draw' tool to create diagrams, flowcharts, or visual content.\n");
+            ctx.system_content
+                .push_str("You have access to a drawing canvas (800x600 pixels).\n");
+            ctx.system_content.push_str(
+                "Use the 'draw' tool to create diagrams, flowcharts, or visual content.\n",
+            );
             ctx.system_content.push_str("IMPORTANT: Before drawing complex scenes, ask for the current canvas state to avoid overlaps.\n");
             ctx.system_content.push_str("Canvas context is automatically provided with each iteration if there are existing objects.\n");
         }
 
         // ── Graph session context ──
         if ctx.authorized_tool_ids.iter().any(|t| t == "graph_session") {
-            ctx.system_content.push_str("\n\n## Interactive Math Graphs\n");
-            ctx.system_content.push_str("You have access to an interactive graphing engine for mathematical expressions.\n");
-            ctx.system_content.push_str("Use the 'graph_session' tool to:\n");
+            ctx.system_content
+                .push_str("\n\n## Interactive Math Graphs\n");
+            ctx.system_content.push_str(
+                "You have access to an interactive graphing engine for mathematical expressions.\n",
+            );
+            ctx.system_content
+                .push_str("Use the 'graph_session' tool to:\n");
             ctx.system_content.push_str("- Add expressions: {\"action\": \"add_expression\", \"expr\": \"sin(x)\", \"color\": \"#00FF9F\"}\n");
             ctx.system_content.push_str("- Update expressions: {\"action\": \"update_expression\", \"id\": \"f1\", \"expr\": \"a * sin(x)\"}\n");
             ctx.system_content.push_str("- Set variables: {\"action\": \"set_variable\", \"name\": \"a\", \"value\": 2.5}\n");
             ctx.system_content.push_str("- Adjust viewport: {\"action\": \"set_viewport\", \"x_min\": -5, \"x_max\": 5, \"y_min\": -3, \"y_max\": 3}\n");
-            ctx.system_content.push_str("- Delete expressions: {\"action\": \"delete_expression\", \"id\": \"f1\"}\n");
-            ctx.system_content.push_str("When you use this tool, the UI automatically switches to math plot mode.\n");
+            ctx.system_content.push_str(
+                "- Delete expressions: {\"action\": \"delete_expression\", \"id\": \"f1\"}\n",
+            );
+            ctx.system_content.push_str(
+                "When you use this tool, the UI automatically switches to math plot mode.\n",
+            );
             ctx.system_content.push_str("Iteratively refine expressions based on validation feedback (undefined variables, parse errors, etc.).\n");
             ctx.system_content.push_str("Supported: sin, cos, tan, sqrt, abs, ln, log10, exp, floor, ceil, and named variables.\n");
 
@@ -167,8 +178,10 @@ impl ContextMiddleware for SystemPromptMiddleware {
                             session_id,
                             session.expressions.len(),
                             session.variables,
-                            session.viewport.x_min, session.viewport.x_max,
-                            session.viewport.y_min, session.viewport.y_max,
+                            session.viewport.x_min,
+                            session.viewport.x_max,
+                            session.viewport.y_min,
+                            session.viewport.y_max,
                             session.issues.len(),
                             session.current_version
                         ));
@@ -196,20 +209,69 @@ impl ContextMiddleware for SystemPromptMiddleware {
             Vec::new()
         };
 
-        if !ctx.tools_supported && !meta_tools.is_empty() {
-            ctx.system_content.push_str("\n\n## Tool System (Deferred Discovery)\n");
-            ctx.system_content.push_str("You have access to a library of tools. Instead of loading all schemas upfront, you use 3 meta-tools to discover and invoke them dynamically:\n\n");
-            ctx.system_content.push_str("1. **tool_list** - Lists all available tools with 1-line descriptions. Call this first to discover what you can do.\n");
+        if !meta_tools.is_empty() {
+            ctx.system_content
+                .push_str("\n\n## Tool System (Deferred Discovery)\n");
+            ctx.system_content.push_str("You have access to a library of tools through compact meta-tools. Use this workflow to choose the right specialized tool without loading every schema upfront:\n\n");
+            ctx.system_content.push_str("1. **tool_list** - Lists/searches available tools with short descriptions. Call this first for unfamiliar tasks, and pass `query` when you know the intent.\n");
             ctx.system_content.push_str("2. **tool_info** - Gets the full JSON schema, parameters, and usage details for a specific tool.\n");
-            ctx.system_content.push_str("3. **tool_exec** - Executes a tool by name with the given arguments.\n\n");
+            ctx.system_content.push_str(
+                "3. **tool_exec** - Executes a tool by name with the given arguments.\n\n",
+            );
             ctx.system_content.push_str("### Workflow\n");
-            ctx.system_content.push_str("1. Call `tool_list({})` to see available tools.\n");
-            ctx.system_content.push_str("2. Call `tool_info({\"tool_id\": \"tool_name\"})` to learn a tool's parameters.\n");
-            ctx.system_content.push_str("3. Call `tool_exec({\"tool_id\": \"tool_name\", \"arguments\": {\"param\": \"value\"}})` to execute it.\n\n");
+            ctx.system_content.push_str("1. Call `tool_list({})` or `tool_list({\"query\":\"intent\"})` to discover available tools.\n");
+            ctx.system_content.push_str("2. Call `tool_info({\"tool_id\":\"tool_name\"})` before first use of a non-trivial tool.\n");
+            ctx.system_content.push_str("3. Call `tool_exec({\"tool_id\":\"tool_name\",\"arguments\":{...}})` to execute using that schema.\n\n");
             ctx.system_content.push_str("### Rules\n");
-            ctx.system_content.push_str("- Output EXACTLY one JSON block per tool call: ```json\n{\"tool\": \"TOOL_NAME\", \"args\": {\"...\"}}\n```\n");
-            ctx.system_content.push_str("- After receiving a tool result, incorporate the data into your response.\n");
-            ctx.system_content.push_str("- Do NOT ask the user which tool to use - you have full autonomy.\n");
+            ctx.system_content.push_str("- **Thoughtful Planning & Commentary**: On your first response turn to a new task or goal, DO NOT execute heavy tools immediately. You MUST first think, analyze the goal, and write a brief commentary explaining your understanding and your proposed plan. State which tools you plan to search for or use.\n");
+            ctx.system_content.push_str("- **Dynamic Tool Discovery & Loading**: Search for appropriate tools using `tool_list` first, and use `tool_info` to get the parameters/schema. This conceptually 'loads' the tool's schema into your memory before you execute it via `tool_exec` in subsequent steps.\n");
+            ctx.system_content
+                .push_str("- Choose tools autonomously; do not ask the user which tool to use.\n");
+            ctx.system_content.push_str("- Execute dependent tools sequentially. Use parallel tool calls only when results do not depend on each other.\n");
+            ctx.system_content.push_str("- After tool results arrive, use their specific data in the next response and summarize findings before final answer when useful.\n");
+            ctx.system_content.push_str("- If a tool is unknown or denied, use the hint in the result and rediscover with `tool_list`.\n");
+            if !ctx.tools_supported {
+                ctx.system_content.push_str("- Output EXACTLY one JSON block per tool call: ```json\n{\"tool\":\"TOOL_NAME\",\"args\":{}}\n```\n");
+            }
+        }
+
+        if ctx.authorized_tool_ids.iter().any(|t| t == "write_todos") {
+            ctx.system_content
+                .push_str("\n\n## Visible Task Checklist\n");
+            ctx.system_content.push_str("For any task determined to be difficult or requiring 3 or more steps, you MUST call `write_todos` early on your first or second iteration to establish a trackable, visible checklist/todolist. Update it as steps complete. Skip it for simple questions or single-step actions.\n");
+        }
+
+        if ctx.tools_enabled
+            && ctx
+                .authorized_tool_ids
+                .iter()
+                .any(|t| t == "spawn_agent" || t == "delegate_to_agent")
+        {
+            if let Some(state) = self.app.try_state::<crate::commands::AppState>() {
+                let agents = state.agent_registry.list();
+                if !agents.is_empty() {
+                    ctx.system_content
+                        .push_str("\n\n## Available Agent Roles\n");
+                    ctx.system_content.push_str("Use delegation only when a specialized role clearly reduces uncertainty or parallelizes independent work.\n");
+                    for agent in agents.into_iter().take(12) {
+                        if agent.id == "generalist" {
+                            continue;
+                        }
+                        let description = agent
+                            .description
+                            .as_deref()
+                            .unwrap_or(&agent.instructions)
+                            .lines()
+                            .next()
+                            .unwrap_or("Specialized assistant");
+                        ctx.system_content.push_str(&format!(
+                            "- `{}`: {}\n",
+                            agent.id,
+                            description.chars().take(160).collect::<String>()
+                        ));
+                    }
+                }
+            }
         }
 
         Ok(())

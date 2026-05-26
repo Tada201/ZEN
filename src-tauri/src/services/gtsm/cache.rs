@@ -45,7 +45,13 @@ impl GtsmCache {
     // ── Satellites ──
     pub async fn get_satellites(&self) -> Option<Vec<super::types::Satellite>> {
         let guard = self.satellites.read().await;
-        guard.as_ref().and_then(|e| if e.is_valid() { Some(e.data.clone()) } else { None })
+        guard.as_ref().and_then(|e| {
+            if e.is_valid() {
+                Some(e.data.clone())
+            } else {
+                None
+            }
+        })
     }
 
     pub async fn set_satellites(&self, data: Vec<super::types::Satellite>, ttl_secs: u64) {
@@ -60,7 +66,13 @@ impl GtsmCache {
     // ── Flights ──
     pub async fn get_flights(&self) -> Option<Vec<super::types::Flight>> {
         let guard = self.flights.read().await;
-        guard.as_ref().and_then(|e| if e.is_valid() { Some(e.data.clone()) } else { None })
+        guard.as_ref().and_then(|e| {
+            if e.is_valid() {
+                Some(e.data.clone())
+            } else {
+                None
+            }
+        })
     }
 
     pub async fn set_flights(&self, data: Vec<super::types::Flight>, ttl_secs: u64) {
@@ -75,7 +87,13 @@ impl GtsmCache {
     // ── Earthquakes ──
     pub async fn get_earthquakes(&self) -> Option<Vec<super::types::Earthquake>> {
         let guard = self.earthquakes.read().await;
-        guard.as_ref().and_then(|e| if e.is_valid() { Some(e.data.clone()) } else { None })
+        guard.as_ref().and_then(|e| {
+            if e.is_valid() {
+                Some(e.data.clone())
+            } else {
+                None
+            }
+        })
     }
 
     pub async fn set_earthquakes(&self, data: Vec<super::types::Earthquake>, ttl_secs: u64) {
@@ -90,7 +108,13 @@ impl GtsmCache {
     // ── Military ──
     pub async fn get_military(&self) -> Option<Vec<super::types::MilitaryAircraft>> {
         let guard = self.military.read().await;
-        guard.as_ref().and_then(|e| if e.is_valid() { Some(e.data.clone()) } else { None })
+        guard.as_ref().and_then(|e| {
+            if e.is_valid() {
+                Some(e.data.clone())
+            } else {
+                None
+            }
+        })
     }
 
     pub async fn set_military(&self, data: Vec<super::types::MilitaryAircraft>, ttl_secs: u64) {
@@ -105,7 +129,13 @@ impl GtsmCache {
     // ── Vessels ──
     pub async fn get_vessels(&self) -> Option<Vec<super::types::Vessel>> {
         let guard = self.vessels.read().await;
-        guard.as_ref().and_then(|e| if e.is_valid() { Some(e.data.clone()) } else { None })
+        guard.as_ref().and_then(|e| {
+            if e.is_valid() {
+                Some(e.data.clone())
+            } else {
+                None
+            }
+        })
     }
 
     pub async fn set_vessels(&self, data: Vec<super::types::Vessel>, ttl_secs: u64) {
@@ -120,7 +150,13 @@ impl GtsmCache {
     // ── Natural Events ──
     pub async fn get_natural_events(&self) -> Option<Vec<super::types::NaturalEvent>> {
         let guard = self.natural_events.read().await;
-        guard.as_ref().and_then(|e| if e.is_valid() { Some(e.data.clone()) } else { None })
+        guard.as_ref().and_then(|e| {
+            if e.is_valid() {
+                Some(e.data.clone())
+            } else {
+                None
+            }
+        })
     }
 
     pub async fn set_natural_events(&self, data: Vec<super::types::NaturalEvent>, ttl_secs: u64) {
@@ -136,46 +172,78 @@ impl GtsmCache {
     pub async fn get_weather(&self, lat: f64, lon: f64) -> Option<super::types::WeatherPoint> {
         let key = format!("{:.2},{:.2}", lat, lon);
         let guard = self.weather.read().await;
-        guard.get(&key).and_then(|e| if e.is_valid() { Some(e.data.clone()) } else { None })
+        guard.get(&key).and_then(|e| {
+            if e.is_valid() {
+                Some(e.data.clone())
+            } else {
+                None
+            }
+        })
     }
 
     pub async fn set_weather(&self, data: super::types::WeatherPoint, ttl_secs: u64) {
         let key = format!("{:.2},{:.2}", data.lat, data.lon);
         let mut guard = self.weather.write().await;
-        guard.insert(key, CacheEntry {
-            data,
-            inserted_at: Instant::now(),
-            ttl: Duration::from_secs(ttl_secs),
-        });
+        guard.insert(
+            key,
+            CacheEntry {
+                data,
+                inserted_at: Instant::now(),
+                ttl: Duration::from_secs(ttl_secs),
+            },
+        );
     }
 
     // ── Geocoding (keyed by query string) ──
     pub async fn get_geocoding(&self, query: &str) -> Option<Vec<super::types::GeocodingResult>> {
         let guard = self.geocoding.read().await;
-        guard.get(query).and_then(|e| if e.is_valid() { Some(e.data.clone()) } else { None })
+        guard.get(query).and_then(|e| {
+            if e.is_valid() {
+                Some(e.data.clone())
+            } else {
+                None
+            }
+        })
     }
 
-    pub async fn set_geocoding(&self, query: &str, data: Vec<super::types::GeocodingResult>, ttl_secs: u64) {
+    pub async fn set_geocoding(
+        &self,
+        query: &str,
+        data: Vec<super::types::GeocodingResult>,
+        ttl_secs: u64,
+    ) {
         let mut guard = self.geocoding.write().await;
-        guard.insert(query.to_string(), CacheEntry {
-            data,
-            inserted_at: Instant::now(),
-            ttl: Duration::from_secs(ttl_secs),
-        });
+        guard.insert(
+            query.to_string(),
+            CacheEntry {
+                data,
+                inserted_at: Instant::now(),
+                ttl: Duration::from_secs(ttl_secs),
+            },
+        );
     }
 
     // ── Routes (keyed by origin+dest) ──
     pub async fn get_route(&self, key: &str) -> Option<super::types::Route> {
         let guard = self.routes.read().await;
-        guard.get(key).and_then(|e| if e.is_valid() { Some(e.data.clone()) } else { None })
+        guard.get(key).and_then(|e| {
+            if e.is_valid() {
+                Some(e.data.clone())
+            } else {
+                None
+            }
+        })
     }
 
     pub async fn set_route(&self, key: &str, data: super::types::Route, ttl_secs: u64) {
         let mut guard = self.routes.write().await;
-        guard.insert(key.to_string(), CacheEntry {
-            data,
-            inserted_at: Instant::now(),
-            ttl: Duration::from_secs(ttl_secs),
-        });
+        guard.insert(
+            key.to_string(),
+            CacheEntry {
+                data,
+                inserted_at: Instant::now(),
+                ttl: Duration::from_secs(ttl_secs),
+            },
+        );
     }
 }

@@ -1,9 +1,9 @@
+use crate::agent::tools::AgentTool;
+use anyhow::{anyhow, Result};
+use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use anyhow::{Result, anyhow};
 use tauri::{AppHandle, Emitter};
-use async_trait::async_trait;
-use crate::agent::tools::AgentTool;
 
 pub struct MapTool;
 
@@ -61,11 +61,13 @@ impl AgentTool for MapTool {
         _chat_id: String,
         input: Value,
         _depth: u32,
-        _allowed_tools: Option<std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
+        _allowed_tools: Option<
+            std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>,
+        >,
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
-        let args: MapArgs = serde_json::from_value(input)
-            .map_err(|e| anyhow!("Invalid map arguments: {}", e))?;
+        let args: MapArgs =
+            serde_json::from_value(input).map_err(|e| anyhow!("Invalid map arguments: {}", e))?;
 
         let mut final_lat = args.lat;
         let mut final_lon = args.lon;
@@ -73,7 +75,8 @@ impl AgentTool for MapTool {
 
         if final_lat.is_none() || final_lon.is_none() {
             if let Some(name) = &args.location_name {
-                let results = crate::services::gtsm::geocoding::search(name, 1).await
+                let results = crate::services::gtsm::geocoding::search(name, 1)
+                    .await
                     .map_err(|e| anyhow!("Geocoding failed: {}", e))?;
 
                 if let Some(first) = results.first() {
@@ -86,7 +89,9 @@ impl AgentTool for MapTool {
                     return Err(anyhow!("Location '{}' could not be resolved. Please be more specific or provide direct coordinates.", name));
                 }
             } else {
-                return Err(anyhow!("Either 'location_name' or both 'lat' and 'lon' must be provided."));
+                return Err(anyhow!(
+                    "Either 'location_name' or both 'lat' and 'lon' must be provided."
+                ));
             }
         }
 
@@ -98,15 +103,24 @@ impl AgentTool for MapTool {
         let label = resolved_name.unwrap_or_else(|| format!("{:.4}, {:.4}", lat, lon));
         let altitude_meters = 40_000_000.0 / (2.0_f64.powi(zoom as i32));
 
-        tracing::info!("[GLOBE] Activating 3D globe at {}, {} (altitude {:.0}m, zoom {})", lat, lon, altitude_meters, zoom);
+        tracing::info!(
+            "[GLOBE] Activating 3D globe at {}, {} (altitude {:.0}m, zoom {})",
+            lat,
+            lon,
+            altitude_meters,
+            zoom
+        );
 
         // Emit to frontend to navigate 3D globe
-        let _ = app.emit("globe:navigate", json!({
-            "lat": lat,
-            "lon": lon,
-            "altitude": altitude_meters,
-            "label": label
-        }));
+        let _ = app.emit(
+            "globe:navigate",
+            json!({
+                "lat": lat,
+                "lon": lon,
+                "altitude": altitude_meters,
+                "label": label
+            }),
+        );
 
         Ok(json!({
             "status": "success",

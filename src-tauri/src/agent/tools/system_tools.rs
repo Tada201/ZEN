@@ -1,9 +1,9 @@
-use serde_json::{json, Value};
-use anyhow::Result;
-use tauri::{AppHandle, Manager};
-use async_trait::async_trait;
 use crate::agent::tools::AgentTool;
 use crate::commands::AppState;
+use anyhow::Result;
+use async_trait::async_trait;
+use serde_json::{json, Value};
+use tauri::{AppHandle, Manager};
 
 pub struct SystemMetricsTool;
 
@@ -32,11 +32,13 @@ impl AgentTool for SystemMetricsTool {
         _chat_id: String,
         _input: Value,
         _depth: u32,
-        _allowed_tools: Option<std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
+        _allowed_tools: Option<
+            std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>,
+        >,
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         let state = app.state::<AppState>();
-        
+
         // Refresh sysinfo data
         {
             let mut sys = state.sys_metrics.system.write().await;
@@ -47,13 +49,15 @@ impl AgentTool for SystemMetricsTool {
             nets.refresh(true);
         }
 
-        let sys: tokio::sync::RwLockReadGuard<'_, sysinfo::System> = state.sys_metrics.system.read().await;
-        let nets: tokio::sync::RwLockReadGuard<'_, sysinfo::Networks> = state.sys_metrics.networks.read().await;
+        let sys: tokio::sync::RwLockReadGuard<'_, sysinfo::System> =
+            state.sys_metrics.system.read().await;
+        let nets: tokio::sync::RwLockReadGuard<'_, sysinfo::Networks> =
+            state.sys_metrics.networks.read().await;
 
         let total_memory = sys.total_memory();
         let used_memory = sys.used_memory();
         let cpu_global = sys.global_cpu_usage();
-        
+
         let mut total_transmitted = 0;
         let mut total_received = 0;
         for (_interface_name, data) in nets.iter() {

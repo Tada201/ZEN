@@ -2,10 +2,10 @@ use async_trait::async_trait;
 use serde_json::json;
 use tauri::{AppHandle, Manager};
 
-use crate::commands::AppState;
 use crate::commands::system::get_system_metrics;
-use crate::tools::{Tool, ToolOutput, ToolError};
+use crate::commands::AppState;
 use crate::tools::permission::RiskLevel;
+use crate::tools::{Tool, ToolError, ToolOutput};
 
 pub struct SystemMetricsTool;
 
@@ -42,8 +42,10 @@ impl Tool for SystemMetricsTool {
         _args: serde_json::Value,
     ) -> Result<ToolOutput, ToolError> {
         let state = app.state::<AppState>();
-        let metrics_res: crate::error::AppResult<crate::models::SystemMetrics> = get_system_metrics(state).await;
-        let metrics = metrics_res.map_err(|e: crate::error::ZenError| ToolError::ExecutionFailed {
+        let metrics_res: crate::error::AppResult<crate::models::SystemMetrics> =
+            get_system_metrics(state).await;
+        let metrics =
+            metrics_res.map_err(|e: crate::error::ZenError| ToolError::ExecutionFailed {
                 message: e.to_string(),
             })?;
 

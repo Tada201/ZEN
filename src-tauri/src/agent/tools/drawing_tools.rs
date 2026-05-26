@@ -1,8 +1,8 @@
-use serde_json::{json, Value};
-use anyhow::{Result, bail};
-use tauri::{AppHandle, Emitter};
-use async_trait::async_trait;
 use crate::agent::tools::AgentTool;
+use anyhow::{bail, Result};
+use async_trait::async_trait;
+use serde_json::{json, Value};
+use tauri::{AppHandle, Emitter};
 
 pub struct DrawTool;
 
@@ -54,8 +54,7 @@ fn resolve_color(s: &str) -> Result<String> {
     }
     if s.starts_with('#') {
         let hex = &s[1..];
-        let valid = matches!(hex.len(), 3 | 6 | 8)
-            && hex.chars().all(|c| c.is_ascii_hexdigit());
+        let valid = matches!(hex.len(), 3 | 6 | 8) && hex.chars().all(|c| c.is_ascii_hexdigit());
         if valid {
             return Ok(s.to_string());
         }
@@ -71,7 +70,10 @@ fn parse_f64(tok: &str, line: usize) -> Result<f64> {
 
 fn need(tokens: &[&str], n: usize, cmd: &str, line: usize) -> Result<()> {
     if tokens.len() < n {
-        bail!("line {line}: '{cmd}' requires at least {n} args, got {}", tokens.len());
+        bail!(
+            "line {line}: '{cmd}' requires at least {n} args, got {}",
+            tokens.len()
+        );
     }
     Ok(())
 }
@@ -104,15 +106,17 @@ fn parse_toon(input: &str) -> Result<Vec<Value>> {
 
         // Special handling for `tx` command — need to preserve quoted text
         if line.starts_with("tx ") {
-            let rest = line.strip_prefix("tx ").ok_or_else(|| {
-                anyhow::anyhow!("line {ln}: 'tx' expected prefix 'tx '")
-            })?;
+            let rest = line
+                .strip_prefix("tx ")
+                .ok_or_else(|| anyhow::anyhow!("line {ln}: 'tx' expected prefix 'tx '"))?;
             // find the quoted string
-            let quote_start = rest.find('"')
+            let quote_start = rest
+                .find('"')
                 .ok_or_else(|| anyhow::anyhow!("line {ln}: 'tx' missing opening quote"))?;
             let before_quote = rest[..quote_start].trim();
             let after_quote_start = &rest[quote_start + 1..];
-            let quote_end = after_quote_start.find('"')
+            let quote_end = after_quote_start
+                .find('"')
                 .ok_or_else(|| anyhow::anyhow!("line {ln}: 'tx' missing closing quote"))?;
             let text = &after_quote_start[..quote_end];
 
@@ -147,19 +151,27 @@ fn parse_toon(input: &str) -> Result<Vec<Value>> {
                 need(args, 3, "s", ln)?;
                 let stroke_col = resolve_color(args[0])
                     .map_err(|e| anyhow::anyhow!("line {ln}: stroke — {e}"))?;
-                let fill_col = resolve_color(args[1])
-                    .map_err(|e| anyhow::anyhow!("line {ln}: fill — {e}"))?;
+                let fill_col =
+                    resolve_color(args[1]).map_err(|e| anyhow::anyhow!("line {ln}: fill — {e}"))?;
                 let w = parse_f64(args[2], ln)?;
-                style.stroke = if stroke_col == "-" { None } else { Some(stroke_col) };
-                style.fill = if fill_col == "-" { None } else { Some(fill_col) };
+                style.stroke = if stroke_col == "-" {
+                    None
+                } else {
+                    Some(stroke_col)
+                };
+                style.fill = if fill_col == "-" {
+                    None
+                } else {
+                    Some(fill_col)
+                };
                 style.stroke_width = w;
             }
 
             // ── background ────────────────────────────────────────────
             "bg" => {
                 need(args, 1, "bg", ln)?;
-                let col = resolve_color(args[0])
-                    .map_err(|e| anyhow::anyhow!("line {ln}: bg — {e}"))?;
+                let col =
+                    resolve_color(args[0]).map_err(|e| anyhow::anyhow!("line {ln}: bg — {e}"))?;
                 ops.push(json!({ "kind": "bg", "color": col }));
             }
 
@@ -299,7 +311,8 @@ fn parse_toon(input: &str) -> Result<Vec<Value>> {
                     bail!("line {ln}: star radii cannot be negative");
                 }
                 let n = if args.len() > 4 {
-                    args[4].parse::<usize>()
+                    args[4]
+                        .parse::<usize>()
                         .map_err(|_| anyhow::anyhow!("line {ln}: star points must be integer"))?
                 } else {
                     5
@@ -411,24 +424,28 @@ impl AgentTool for DrawTool {
         chat_id: String,
         input: Value,
         _depth: u32,
-        _allowed_tools: Option<std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
+        _allowed_tools: Option<
+            std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>,
+        >,
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
-        let toon = input.get("t")
+        let toon = input
+            .get("t")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("Missing required field: t"))?;
 
         let mut ops = parse_toon(toon)?;
-        
+
         // Tag all operations with source="llm"
         for op in &mut ops {
             op["source"] = json!("llm");
         }
-        
+
         let n = ops.len();
 
         // Build canvas summary: count shapes by kind
-        let mut shape_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let mut shape_counts: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
         for op in &ops {
             if let Some(kind) = op.get("kind").and_then(|v| v.as_str()) {
                 *shape_counts.entry(kind.to_string()).or_insert(0) += 1;
@@ -437,17 +454,21 @@ impl AgentTool for DrawTool {
         let canvas_summary = if shape_counts.is_empty() {
             "No shapes drawn".to_string()
         } else {
-            let parts: Vec<String> = shape_counts.iter()
+            let parts: Vec<String> = shape_counts
+                .iter()
                 .map(|(kind, count)| format!("{} {}", count, kind))
                 .collect();
             format!("Drew {}", parts.join(", "))
         };
 
-        app.emit("drawing:ops", json!({
-            "chat_id": chat_id,
-            "source": "llm",
-            "ops": ops,
-        }))?;
+        app.emit(
+            "drawing:ops",
+            json!({
+                "chat_id": chat_id,
+                "source": "llm",
+                "ops": ops,
+            }),
+        )?;
 
         tracing::info!(ops_count = n, "DrawTool emitted {n} ops");
 

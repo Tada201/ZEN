@@ -1,27 +1,23 @@
-use crate::agent::event_bus::{
-    AgentEvent, ChatStatusPayload, ToolStartPayload, ToolCompletePayload,
+use super::tool_actions::{emit_cached_tool_result_action, emit_tool_call_action};
+use super::tool_pipeline::{
+    cache_key_for, normalize_tool_result, preprocess_tool_calls, should_read_cache,
+    should_write_cache,
 };
-use crate::agent::types::{ToolCall, ToolResult, ToolCallMeta, ToolResultMeta, ActionMeta, MessageKind};
-use crate::db::models::ChatMessage;
-use crate::tools::permission::PermissionDecision;
-use crate::agent::hooks::HookDecision;
-use super::helpers::{execute_single_tool, parse_file_changes};
-use super::actions::{persist_and_emit_action, emit_action_only};
 use super::Runner;
-use crate::agent::cache::ToolCache;
-use tokio_util::sync::CancellationToken;
-use std::sync::Arc;
-use std::collections::HashSet;
-use sha2::{Sha256, Digest};
+use crate::agent::event_bus::{AgentEvent, ChatStatusPayload, ToolStartPayload};
+use crate::agent::hooks::HookDecision;
+use crate::agent::types::{ToolCall, ToolResult};
+use crate::tools::permission::PermissionDecision;
 use serde_json::json;
-use tauri::{Emitter, Manager};
+use sha2::{Digest, Sha256};
+use tauri::Manager;
+use tokio_util::sync::CancellationToken;
 
 impl Runner {
     /// Execute tool calls with P3 lifecycle hooks (pre/post).
     /// For high-risk tools like `run_command`, emits an authorization request
     /// and waits for user approval before executing.
     pub(super) async fn execute_tools_with_hooks(
-
         &self,
         tool_calls: &[ToolCall],
         chat_id: &str,
@@ -31,216 +27,80 @@ impl Runner {
         authorized_tool_ids: &[String],
         token: CancellationToken,
     ) -> Vec<ToolResult> {
-        // Preprocess tool calls for meta-tool dispatch
-        // Meta-tools (tool_list, tool_info) are handled inline.
-        // tool_exec is transformed to use the real tool name and arguments.
-        let mut processed_calls: Vec<(ToolCall, Option<ToolResult>)> = Vec::new();
-        for tc in tool_calls {
-            match tc.name.as_str() {
-                "tool_list" => {
-                    let descriptors = self.tool_manager.list_allowed(authorized_tool_ids).await;
-                    let result = ToolResult {
-                        tool_call_id: tc.id.clone(),
-                        content: serde_json::to_value(&descriptors).unwrap_or_default(),
-                        is_error: false,
-                        duration_ms: 0,
-                    };
-                    processed_calls.push((tc.clone(), Some(result)));
-                }
-                "tool_info" => {
-                    let tool_id = tc.args.get("tool_id")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("");
-                    let schema = self.tool_manager.get_info(tool_id).await;
-                    let result = match schema {
-                        Some(s) => ToolResult {
-                            tool_call_id: tc.id.clone(),
-                            content: serde_json::to_value(&s).unwrap_or_default(),
-                            is_error: false,
-                            duration_ms: 0,
-                        },
-                        None => ToolResult {
-                            tool_call_id: tc.id.clone(),
-                            content: serde_json::json!({
-                                "error": format!("Tool '{}' not found. Use tool_list to see available tools.", tool_id),
-                                "hint": "Check the tool_id spelling or call tool_list first to see all available tools."
-                            }),
-                            is_error: true,
-                            duration_ms: 0,
-                        },
-                    };
-                    processed_calls.push((tc.clone(), Some(result)));
-                }
-                "tool_exec" => {
-                    // Transform tool_exec into the real tool call
-                    if let Some((real_id, real_args)) = self.tool_manager.resolve_tool_exec(&tc.args).await {
-                        let real_tc = ToolCall {
-                            id: tc.id.clone(),
-                            name: real_id,
-                            args: real_args,
-                        };
-                        processed_calls.push((real_tc, None));
-                    } else {
-                        let result = ToolResult {
-                            tool_call_id: tc.id.clone(),
-                            content: serde_json::json!({
-                                "error": "Tool not found or invalid arguments. Use tool_list and tool_info to discover valid tools.",
-                                "hint": "Call tool_list() to see available tools, then tool_info({\"tool_id\": \"name\"}) for the schema."
-                            }),
-                            is_error: true,
-                            duration_ms: 0,
-                        };
-                        processed_calls.push((tc.clone(), Some(result)));
-                    }
-                }
-                _ => {
-                    processed_calls.push((tc.clone(), None));
-                }
-            }
-        }
-
-        // Separate inline results from calls that need the full pipeline
-        let mut results: Vec<ToolResult> = Vec::new();
-        let mut pipeline_calls: Vec<ToolCall> = Vec::new();
-        for (tc, inline_result) in processed_calls {
-            match inline_result {
-                Some(r) => results.push(r),
-                None => pipeline_calls.push(tc),
-            }
-        }
+        let (mut ordered_results, pipeline_calls) =
+            preprocess_tool_calls(&self.tool_manager, tool_calls, authorized_tool_ids).await;
 
         // Process pipeline calls (non-meta-tools and transformed tool_exec)
         let mut handles = Vec::new();
 
-        for tool_call in &pipeline_calls {
+        for pipeline_call in &pipeline_calls {
+            let tool_call = &pipeline_call.resolved;
             let _ = self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
                 message: format!("Executing: {}", tool_call.name),
                 chat_id: chat_id.to_string(),
                 iteration: Some(iteration),
             }));
 
-            // Emit structured tool_call action (Phase 1.4)
-            let tool_call_meta = ToolCallMeta {
-                tool_name: tool_call.name.clone(),
-                args: tool_call.args.clone(),
-                status: "running".to_string(),
-            };
-
-            let action_meta = ActionMeta {
-                agent_id: agent_id.to_string(),
-                agent_name: agent_name.to_string(),
+            emit_tool_call_action(
+                &self.app,
+                self.db_pool.as_ref(),
+                &self.on_event,
+                chat_id,
+                tool_call,
+                agent_id,
+                agent_name,
                 iteration,
-                depth: self.depth,
-                progress_percent: None,
-                tool_call: Some(tool_call_meta),
-                tool_result: None,
-                handoff: None,
-                spawn: None,
-                approval_request: None,
-                ..Default::default()
-            };
-
-            let call_content = format!("{} calling {}...", agent_name, tool_call.name);
-            if let Some(ref db) = self.db_pool {
-                let _ = persist_and_emit_action(
-                    &self.app,
-                    db,
-                    chat_id,
-                    None,
-                    MessageKind::ToolCall,
-                    call_content,
-                    action_meta,
-                    None,
-                    None,
-                    &self.on_event,
-                ).await;
-            } else {
-                let _ = emit_action_only(
-                    &self.app,
-                    chat_id,
-                    None,
-                    MessageKind::ToolCall,
-                    call_content,
-                    action_meta,
-                    &self.on_event,
-                );
-            }
+                self.depth,
+            )
+            .await;
 
             // ── Phase 3.2: Tool Cache Lookup ──
-            let cache_key = ToolCache::generate_key(&tool_call.name, &tool_call.args);
+            let cache_key = cache_key_for(tool_call);
             let tc_id = tool_call.id.clone();
-            
+
             // Check cache with proper lifetime handling
-            let cached_result = self.cache.lock().await.get(&cache_key).cloned();
+            let cached_result = if should_read_cache(&tool_call.name) {
+                self.cache.lock().await.get(&cache_key).cloned()
+            } else {
+                None
+            };
             if let Some(cached_result) = cached_result {
                 tracing::info!("Cache HIT for tool '{}'", tool_call.name);
 
-                // Emit tool_result action for cached result
-                let files = parse_file_changes(&cached_result);
-
-                let tool_result_meta = ToolResultMeta {
-                    tool_name: tool_call.name.clone(),
-                    status: "ok".to_string(),
-                    duration_ms: 0,
-                    content_summary: cached_result.to_string().chars().take(200).collect(),
-                    args: tool_call.args.clone(), // P1: Populate args for cached results
-                    files,
-                    raw_result: Some(cached_result.clone()),
-                };
-                
-                let result_action_meta = ActionMeta {
-                    agent_id: agent_id.to_string(),
-                    agent_name: agent_name.to_string(),
+                emit_cached_tool_result_action(
+                    &self.app,
+                    self.db_pool.as_ref(),
+                    &self.on_event,
+                    chat_id,
+                    tool_call,
+                    &cached_result,
+                    agent_id,
+                    agent_name,
                     iteration,
-                    depth: self.depth,
-                    progress_percent: None,
-                    tool_call: Some(ToolCallMeta { // P1: Populate tool_call for correlation even in cache
-                        tool_name: tool_call.name.clone(),
-                        args: tool_call.args.clone(),
-                        status: "completed".to_string(),
-                    }),
-                    tool_result: Some(tool_result_meta),
-                    handoff: None,
-                    spawn: None,
-                    approval_request: None,
-                    ..Default::default()
-                };
-                
-                let result_content = format!("{}: Success (cached)", tool_call.name);
-                if let Some(ref db) = self.db_pool {
-                    let _ = persist_and_emit_action(
-                        &self.app,
-                        db,
-                        chat_id,
-                        None,
-                        MessageKind::ToolResult,
-                        result_content,
-                        result_action_meta,
-                        Some("tool"),
-                        Some(tc_id.clone()),
-                        &self.on_event,
-                    ).await;
-                } else {
-                    let _ = emit_action_only(
-                        &self.app,
-                        chat_id,
-                        None,
-                        MessageKind::ToolResult,
-                        result_content,
-                        result_action_meta,
-                        &self.on_event,
-                    );
-                }
-                
+                    self.depth,
+                )
+                .await;
+
                 let tc_id_inner = tc_id.clone();
-                handles.push((tc_id_inner, tokio::spawn(async move {
-                    ToolResult {
-                        tool_call_id: tc_id,
-                        content: cached_result,
-                        is_error: false,
-                        duration_ms: 0,
-                    }
-                })));
+                let result_tool_name = tool_call.name.clone();
+                let result_args = tool_call.args.clone();
+                let started_at = chrono::Utc::now();
+                handles.push((
+                    pipeline_call.index,
+                    tc_id_inner,
+                    tokio::spawn(async move {
+                        normalize_tool_result(
+                            tc_id,
+                            &result_tool_name,
+                            &result_tool_name,
+                            result_args,
+                            cached_result,
+                            false,
+                            0,
+                            started_at,
+                        )
+                    }),
+                ));
                 continue;
             }
 
@@ -255,7 +115,10 @@ impl Runner {
                     tracing::info!("Hook DENIED tool '{}': {}", tc_name, reason);
                     let hook_reg = self.hook_registry.clone();
                     let tc_id_for_handle = tc_id.clone();
+                    let result_tool_name = tc_name.clone();
+                    let result_args = tc_args.clone();
                     let handle = tokio::spawn(async move {
+                        let started_at = chrono::Utc::now();
                         let result = ToolResult {
                             tool_call_id: tc_id.clone(),
                             content: json!({
@@ -266,50 +129,108 @@ impl Runner {
                             is_error: true,
                             duration_ms: 0,
                         };
-                        hook_reg.post_tool_use(&ToolCall { id: tc_id, name: tc_name, args: tc_args }, &result);
-                        result
+                        hook_reg.post_tool_use(
+                            &ToolCall {
+                                id: tc_id,
+                                name: tc_name,
+                                args: tc_args,
+                            },
+                            &result,
+                        );
+                        normalize_tool_result(
+                            result.tool_call_id,
+                            &result_tool_name,
+                            &result_tool_name,
+                            result_args,
+                            result.content,
+                            true,
+                            result.duration_ms,
+                            started_at,
+                        )
                     });
-                    handles.push((tc_id_for_handle, handle));
+                    handles.push((pipeline_call.index, tc_id_for_handle, handle));
                     continue;
                 }
                 HookDecision::Modify { new_args } => {
+                    self.emit(AgentEvent::ToolStart(ToolStartPayload {
+                        tool_name: tc_name.clone(),
+                        tool_call_id: tc_id.clone(),
+                        arguments: tc_args.clone(),
+                        agent_id: agent_id.to_string(),
+                        agent_name: agent_name.to_string(),
+                        chat_id: chat_id.to_string(),
+                        iteration,
+                    }));
                     let tool = self.tool_registry.read().await.get(&tc_name);
+                    let tool_service = self
+                        .app
+                        .state::<crate::commands::AppState>()
+                        .tool_service
+                        .clone();
                     let app = self.app.clone();
                     let hook_reg = self.hook_registry.clone();
 
                     let chat_id_inner = chat_id.to_string();
                     let tc_id_inner = tc_id.clone();
                     let token_inner = token.clone();
-                    let agent_id_str = agent_id.to_string();
-                    let agent_name_str = agent_name.to_string();
                     let depth = self.depth;
+                    let original_name = pipeline_call.original.name.clone();
+                    let result_tool_name = tc_name.clone();
 
                     let allowed_tools = self.allowed_tools.clone();
                     let handle = tokio::spawn(async move {
                         let start = std::time::Instant::now();
-                        let mut result = execute_single_tool(
-                            tool, app, chat_id_inner, tc_id.clone(), tc_name.clone(), new_args.clone(), token_inner,
-                            agent_id_str, agent_name_str, depth, Some(allowed_tools)
-                        ).await;
+                        let started_at = chrono::Utc::now();
+                        let mut result = tool_service
+                            .execute_agent_tool(
+                                tool,
+                                app,
+                                chat_id_inner,
+                                ToolCall {
+                                    id: tc_id.clone(),
+                                    name: tc_name.clone(),
+                                    args: new_args.clone(),
+                                },
+                                token_inner,
+                                depth,
+                                Some(allowed_tools),
+                            )
+                            .await;
                         result.duration_ms = start.elapsed().as_millis() as u64;
-                        hook_reg.post_tool_use(&ToolCall { id: tc_id, name: tc_name, args: new_args }, &result);
-                        result
+                        hook_reg.post_tool_use(
+                            &ToolCall {
+                                id: tc_id,
+                                name: tc_name,
+                                args: new_args,
+                            },
+                            &result,
+                        );
+                        normalize_tool_result(
+                            result.tool_call_id,
+                            &result_tool_name,
+                            &result_tool_name,
+                            json!({ "via": original_name }),
+                            result.content,
+                            result.is_error,
+                            result.duration_ms,
+                            started_at,
+                        )
                     });
-                    handles.push((tc_id_inner, handle));
+                    handles.push((pipeline_call.index, tc_id_inner, handle));
                 }
                 HookDecision::Allow => {
                     // ── Unified Permission Check (YOLO mode, overrides, etc.) ──
-                    let registry = self.permissions.clone();
                     let v2_tool_call = crate::tools::ToolCall {
                         id: tc_id.clone(),
                         name: tc_name.clone(),
                         arguments: tc_args.clone(),
                     };
 
-                    let permission_result = {
-                        let reg = registry.read().await;
-                        reg.check_permission(&v2_tool_call, None)
-                    };
+                    let state = self.app.state::<crate::commands::AppState>();
+                    let permission_result = state
+                        .tool_service
+                        .check_permission("agent_runner", &v2_tool_call)
+                        .await;
 
                     match permission_result {
                         Ok(PermissionDecision::Allow) => {
@@ -320,8 +241,8 @@ impl Runner {
                             let is_inherited = self.allowed_tools.lock().await.contains(&tc_name);
 
                             // Phase 3.3: Check session-scoped permission memory first
-                            let cache_key = format!("{}:{:x}", tc_name, Sha256::digest(&tc_args.to_string()));
-                            let state = self.app.state::<crate::commands::AppState>();
+                            let cache_key =
+                                format!("{}:{:x}", tc_name, Sha256::digest(&tc_args.to_string()));
                             let session_perms = state.session_permissions.lock().await;
                             let always_allow = session_perms
                                 .get(chat_id)
@@ -335,20 +256,36 @@ impl Runner {
                                 if is_inherited {
                                     tracing::info!("Inheriting permission for tool '{}' (approved earlier in this session tree)", tc_name);
                                 } else {
-                                    tracing::info!("Session memory: ALWAYS ALLOW tool '{}'", tc_name);
+                                    tracing::info!(
+                                        "Session memory: ALWAYS ALLOW tool '{}'",
+                                        tc_name
+                                    );
                                 }
                             } else {
                                 // User confirmation required
-                                let approved = self.request_user_confirmation(
-                                    &tc_id, &tc_name, &tc_args, chat_id, context,
-                                    agent_id, agent_name, iteration
-                                ).await;
+                                let approved = self
+                                    .request_user_confirmation(
+                                        &v2_tool_call,
+                                        chat_id,
+                                        context,
+                                        agent_id,
+                                        agent_name,
+                                        iteration,
+                                    )
+                                    .await;
 
                                 if !approved {
-                                    tracing::info!("User DENIED tool '{}' (id: {})", tc_name, tc_id);
+                                    tracing::info!(
+                                        "User DENIED tool '{}' (id: {})",
+                                        tc_name,
+                                        tc_id
+                                    );
                                     let hook_reg = self.hook_registry.clone();
                                     let tc_id_for_handle = tc_id.clone();
+                                    let result_tool_name = tc_name.clone();
+                                    let result_args = tc_args.clone();
                                     let handle = tokio::spawn(async move {
+                                        let started_at = chrono::Utc::now();
                                         let result = ToolResult {
                                             tool_call_id: tc_id.clone(),
                                             content: json!({
@@ -359,10 +296,26 @@ impl Runner {
                                             is_error: true,
                                             duration_ms: 0,
                                         };
-                                        hook_reg.post_tool_use(&ToolCall { id: tc_id, name: tc_name, args: tc_args }, &result);
-                                        result
+                                        hook_reg.post_tool_use(
+                                            &ToolCall {
+                                                id: tc_id,
+                                                name: tc_name,
+                                                args: tc_args,
+                                            },
+                                            &result,
+                                        );
+                                        normalize_tool_result(
+                                            result.tool_call_id,
+                                            &result_tool_name,
+                                            &result_tool_name,
+                                            result_args,
+                                            result.content,
+                                            true,
+                                            result.duration_ms,
+                                            started_at,
+                                        )
                                     });
-                                    handles.push((tc_id_for_handle, handle));
+                                    handles.push((pipeline_call.index, tc_id_for_handle, handle));
                                     continue;
                                 }
                                 tracing::info!("User APPROVED tool '{}' (id: {})", tc_name, tc_id);
@@ -374,7 +327,10 @@ impl Runner {
                             tracing::info!("Permission DENIED tool '{}': {}", tc_name, reason);
                             let hook_reg = self.hook_registry.clone();
                             let tc_id_for_handle = tc_id.clone();
+                            let result_tool_name = tc_name.clone();
+                            let result_args = tc_args.clone();
                             let handle = tokio::spawn(async move {
+                                let started_at = chrono::Utc::now();
                                 let result = ToolResult {
                                     tool_call_id: tc_id.clone(),
                                     content: json!({
@@ -385,18 +341,41 @@ impl Runner {
                                     is_error: true,
                                     duration_ms: 0,
                                 };
-                                hook_reg.post_tool_use(&ToolCall { id: tc_id, name: tc_name, args: tc_args }, &result);
-                                result
+                                hook_reg.post_tool_use(
+                                    &ToolCall {
+                                        id: tc_id,
+                                        name: tc_name,
+                                        args: tc_args,
+                                    },
+                                    &result,
+                                );
+                                normalize_tool_result(
+                                    result.tool_call_id,
+                                    &result_tool_name,
+                                    &result_tool_name,
+                                    result_args,
+                                    result.content,
+                                    true,
+                                    result.duration_ms,
+                                    started_at,
+                                )
                             });
-                            handles.push((tc_id_for_handle, handle));
+                            handles.push((pipeline_call.index, tc_id_for_handle, handle));
                             continue;
                         }
                         Err(e) => {
-                            tracing::error!("Permission check failed for tool '{}': {}", tc_name, e);
+                            tracing::error!(
+                                "Permission check failed for tool '{}': {}",
+                                tc_name,
+                                e
+                            );
                             // Fallback to safe denial if permission check itself errors out
                             let hook_reg = self.hook_registry.clone();
                             let tc_id_for_handle = tc_id.clone();
+                            let result_tool_name = tc_name.clone();
+                            let result_args = tc_args.clone();
                             let handle = tokio::spawn(async move {
+                                let started_at = chrono::Utc::now();
                                 let result = ToolResult {
                                     tool_call_id: tc_id.clone(),
                                     content: json!({
@@ -406,15 +385,46 @@ impl Runner {
                                     is_error: true,
                                     duration_ms: 0,
                                 };
-                                hook_reg.post_tool_use(&ToolCall { id: tc_id, name: tc_name, args: tc_args }, &result);
-                                result
+                                hook_reg.post_tool_use(
+                                    &ToolCall {
+                                        id: tc_id,
+                                        name: tc_name,
+                                        args: tc_args,
+                                    },
+                                    &result,
+                                );
+                                normalize_tool_result(
+                                    result.tool_call_id,
+                                    &result_tool_name,
+                                    &result_tool_name,
+                                    result_args,
+                                    result.content,
+                                    true,
+                                    result.duration_ms,
+                                    started_at,
+                                )
                             });
-                            handles.push((tc_id_for_handle, handle));
+                            handles.push((pipeline_call.index, tc_id_for_handle, handle));
                             continue;
                         }
                     }
 
+                    self.emit(AgentEvent::ToolStart(ToolStartPayload {
+                        tool_name: tc_name.clone(),
+                        tool_call_id: tc_id.clone(),
+                        arguments: tc_args.clone(),
+                        agent_id: agent_id.to_string(),
+                        agent_name: agent_name.to_string(),
+                        chat_id: chat_id.to_string(),
+                        iteration,
+                    }));
+
                     let tool = self.tool_registry.read().await.get(&tc_name);
+                    let tool_service = self
+                        .app
+                        .state::<crate::commands::AppState>()
+                        .tool_service
+                        .clone();
                     let app = self.app.clone();
                     let hook_reg = self.hook_registry.clone();
                     let cache = self.cache.clone();
@@ -424,137 +434,138 @@ impl Runner {
                     let token_inner = token.clone();
                     let tc_args_inner = tc_args.clone();
                     let tc_id_inner = tc_id.clone();
-                    let agent_id_str = agent_id.to_string();
-                    let agent_name_str = agent_name.to_string();
                     let depth = self.depth;
+                    let result_tool_name = tc_name.clone();
+                    let original_name = pipeline_call.original.name.clone();
 
                     let allowed_tools = self.allowed_tools.clone();
                     let handle = tokio::spawn(async move {
                         let start = std::time::Instant::now();
-                        let mut result = execute_single_tool(
-                            tool, app, chat_id_inner, tc_id.clone(), tc_name.clone(), tc_args_inner, token_inner,
-                            agent_id_str, agent_name_str, depth, Some(allowed_tools)
-                        ).await;
+                        let started_at = chrono::Utc::now();
+                        let mut result = tool_service
+                            .execute_agent_tool(
+                                tool,
+                                app,
+                                chat_id_inner,
+                                ToolCall {
+                                    id: tc_id.clone(),
+                                    name: tc_name.clone(),
+                                    args: tc_args_inner,
+                                },
+                                token_inner,
+                                depth,
+                                Some(allowed_tools),
+                            )
+                            .await;
                         result.duration_ms = start.elapsed().as_millis() as u64;
-                        
-                        // Cache successful results (not errors)
-                        if !result.is_error {
-                            cache.lock().await.set(cache_key_clone, result.content.clone());
+
+                        if should_write_cache(&tc_name, result.is_error) {
+                            cache
+                                .lock()
+                                .await
+                                .set(cache_key_clone, result.content.clone());
                         }
-                        
-                        hook_reg.post_tool_use(&ToolCall { id: tc_id, name: tc_name, args: tc_args }, &result);
-                        result
+
+                        hook_reg.post_tool_use(
+                            &ToolCall {
+                                id: tc_id,
+                                name: tc_name,
+                                args: tc_args,
+                            },
+                            &result,
+                        );
+                        normalize_tool_result(
+                            result.tool_call_id,
+                            &result_tool_name,
+                            &result_tool_name,
+                            json!({ "via": original_name }),
+                            result.content,
+                            result.is_error,
+                            result.duration_ms,
+                            started_at,
+                        )
                     });
-                    handles.push((tc_id_inner, handle));
+                    handles.push((pipeline_call.index, tc_id_inner, handle));
                 }
             }
         }
 
-        // Collect pipeline results into the existing results vec (which already has inline meta-tool results)
-        for (tc_id, handle) in handles {
+        // Collect pipeline results by original call index so meta tools and real
+        // tools stay in the exact order the model emitted them.
+        for (index, tc_id, handle) in handles {
             match handle.await {
-                Ok(result) => results.push(result),
+                Ok(result) => ordered_results[index] = Some(result),
                 Err(e) => {
                     tracing::error!("Tool task panicked for {}: {}", tc_id, e);
-                    results.push(ToolResult {
-                        tool_call_id: tc_id,
-                        content: json!({ 
+                    let started_at = chrono::Utc::now();
+                    ordered_results[index] = Some(normalize_tool_result(
+                        tc_id,
+                        "unknown",
+                        "Unknown Tool",
+                        json!({}),
+                        json!({
                             "error": format!("Internal execution panic: {}", e),
                             "hint": "The tool thread crashed unexpectedly. Please report this if it persists."
                         }),
-                        is_error: true,
-                        duration_ms: 0,
-                    })
+                        true,
+                        0,
+                        started_at,
+                    ))
                 }
             }
         }
-        results
+
+        ordered_results
+            .into_iter()
+            .enumerate()
+            .map(|(index, maybe_result)| {
+                maybe_result.unwrap_or_else(|| {
+                    let tc = &tool_calls[index];
+                    normalize_tool_result(
+                        tc.id.clone(),
+                        &tc.name,
+                        &tc.name,
+                        tc.args.clone(),
+                        json!({
+                            "error": "Tool call did not produce a result.",
+                            "hint": "Retry the request or call tool_list/tool_info before executing."
+                        }),
+                        true,
+                        0,
+                        chrono::Utc::now(),
+                    )
+                })
+            })
+            .collect()
     }
 
     /// Emit a `tool:authorization_request` event and wait for user response.
     /// Returns `true` if approved, `false` if denied or timed out.
     async fn request_user_confirmation(
         &self,
-        tool_call_id: &str,
-        tool_name: &str,
-        args: &serde_json::Value,
+        tool_call: &crate::tools::ToolCall,
         chat_id: &str,
         context: crate::tools::permission::PermissionContext,
         _agent_id: &str,
         _agent_name: &str,
         iteration: usize,
     ) -> bool {
-        use tauri::Manager;
-
-        // Create oneshot channel for the response
-        let (tx, rx) = tokio::sync::oneshot::channel::<bool>();
-
-        // Store the sender in AppState
-        {
-            let state = self.app.state::<crate::commands::AppState>();
-            let mut approvals = state.pending_tool_approvals.lock().await;
-            approvals.insert(tool_call_id.to_string(), tx);
-        }
-
-        // Update status to show we're waiting
         let _ = self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
-            message: format!("⚠ Awaiting approval: {}", tool_name),
+            message: format!("Awaiting approval: {}", tool_call.name),
             chat_id: chat_id.to_string(),
             iteration: Some(iteration),
         }));
 
-        // Emit authorization request to frontend (direct app.emit for legacy behavior)
-        let _ = self.app.emit("tool:authorization_request", json!({
-            "chat_id": chat_id,
-            "tool_call_id": tool_call_id,
-            "tool_name": tool_name,
-            "arguments": args,
-            "model": "default",
-            "context": context
-        }));
-
-        // Emit structured chat:message for inline approval card (direct app.emit)
-        let _ = self.app.emit("chat:message", json!({
-            "chat_id": chat_id,
-            "id": uuid::Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-            "role": "assistant",
-            "content": "",
-            "kind": "approval_request",
-            "metadata": {
-                "kind": "approval_request",
-                "approval_request": {
-                    "tool_call_id": tool_call_id,
-                    "tool_name": tool_name,
-                    "arguments": args,
-                    "chat_id": chat_id,
-                    "context": context
-                }
-            }
-        }));
-
-        // Wait for user response with 120s timeout
-        match tokio::time::timeout(
-            tokio::time::Duration::from_secs(120),
-            rx,
-        ).await {
-            Ok(Ok(approved)) => approved,
-            Ok(Err(_)) => {
-                tracing::warn!("Tool approval channel closed for '{}'", tool_call_id);
-                // Clean up the pending entry so it doesn't leak
-                let state = self.app.state::<crate::commands::AppState>();
-                let mut approvals = state.pending_tool_approvals.lock().await;
-                approvals.remove(tool_call_id);
-                false
-            }
-            Err(_) => {
-                tracing::warn!("Tool approval timed out for '{}'", tool_call_id);
-                // Clean up the pending entry
-                let state = self.app.state::<crate::commands::AppState>();
-                let mut approvals = state.pending_tool_approvals.lock().await;
-                approvals.remove(tool_call_id);
-                false
-            }
-        }
+        let state = self.app.state::<crate::commands::AppState>();
+        state
+            .tool_service
+            .request_interactive_approval(
+                self.app.clone(),
+                "agent_runner",
+                chat_id,
+                tool_call,
+                context,
+            )
+            .await
     }
 }

@@ -23,22 +23,55 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
         resetHeartbeatTimeout(chatId);
         
         useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-          const last = prev[prev.length - 1];
-          if (!last || last.role !== "assistant") return prev;
+          const existingMessageIdx = prev.findIndex((message) =>
+            message.toolCalls?.some((tc) => tc.id === event.payload.tool_call_id) ||
+            message.steps?.some((step) => step.type === "tool-call" && step.toolCall?.id === event.payload.tool_call_id)
+          );
+          if (existingMessageIdx !== -1) return prev;
 
+          let targetIdx = -1;
+          for (let i = prev.length - 1; i >= 0; i--) {
+            if (prev[i].role === "assistant" && prev[i].status === "sending") {
+              targetIdx = i;
+              break;
+            }
+          }
           const newTool: ToolCall = {
             id: event.payload.tool_call_id,
             name: event.payload.tool_name,
             status: "running",
             input: event.payload.arguments,
-            output: ""
+            output: "",
+            startTime: Date.now(),
+            attempts: [{
+              status: "running",
+              timestamp: Date.now(),
+            }],
           };
 
+          if (targetIdx === -1) {
+            return [
+              ...prev,
+              {
+                id: `tool-ledger-${event.payload.tool_call_id}`,
+                sessionId: chatId,
+                role: "system",
+                content: "",
+                status: "sent",
+                kind: "system",
+                createdAt: Date.now(),
+                toolCalls: [newTool],
+                steps: [{ type: "tool-call", toolCall: newTool }],
+              } as Message,
+            ];
+          }
+          const target = prev[targetIdx];
+
           const next = [...prev];
-          next[next.length - 1] = {
-            ...last,
-            toolCalls: [...(last.toolCalls || []), newTool],
-            steps: [...(last.steps || []), { type: "tool-call", toolCall: newTool }]
+          next[targetIdx] = {
+            ...target,
+            toolCalls: [...(target.toolCalls || []), newTool],
+            steps: [...(target.steps || []), { type: "tool-call", toolCall: newTool }]
           };
           return next;
         });
@@ -50,16 +83,32 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
 
         resetHeartbeatTimeout(chatId);
         useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-          const last = prev[prev.length - 1];
-          if (!last || last.role !== "assistant") return prev;
+          let targetIdx = -1;
+          for (let i = prev.length - 1; i >= 0; i--) {
+            if (prev[i].toolCalls?.some(tc => tc.id === event.payload.tool_call_id) || prev[i].steps?.some(s => s.type === "tool-call" && s.toolCall?.id === event.payload.tool_call_id)) {
+              targetIdx = i;
+              break;
+            }
+          }
+          if (targetIdx === -1) return prev;
+          const target = prev[targetIdx];
 
-          const updated = { ...last };
+          const updated = { ...target };
           updated.toolCalls = (updated.toolCalls || []).map(tc =>
             tc.id === event.payload.tool_call_id
               ? {
                   ...tc,
                   status: event.payload.status === "success" ? "completed" : "error" as any,
-                  output: event.payload.output
+                  output: event.payload.output,
+                  durationMs: event.payload.duration_ms,
+                  attempts: [
+                    ...(tc.attempts || []),
+                    {
+                      status: event.payload.status === "success" ? "completed" : "error" as any,
+                      durationMs: event.payload.duration_ms,
+                      timestamp: Date.now(),
+                    },
+                  ],
                 }
               : tc
           );
@@ -72,7 +121,16 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
                     toolCall: {
                       ...s.toolCall!,
                       status: event.payload.status === "success" ? "completed" : "error" as any,
-                      output: event.payload.output
+                      output: event.payload.output,
+                      durationMs: event.payload.duration_ms,
+                      attempts: [
+                        ...(s.toolCall!.attempts || []),
+                        {
+                          status: event.payload.status === "success" ? "completed" : "error" as any,
+                          durationMs: event.payload.duration_ms,
+                          timestamp: Date.now(),
+                        },
+                      ],
                     }
                   }
                 : s
@@ -80,7 +138,7 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
           }
 
           const next = [...prev];
-          next[next.length - 1] = updated;
+          next[targetIdx] = updated;
           return next;
         });
       });

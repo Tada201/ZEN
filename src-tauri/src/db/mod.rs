@@ -33,12 +33,24 @@ pub async fn init_pool(db_path: &Path) -> ZenResult<SqlitePool> {
 async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
     // Each PRAGMA must be a separate query — sqlx only executes the first
     // statement in a multi-statement string, silently ignoring the rest.
-    sqlx::query("PRAGMA journal_mode = WAL;").execute(pool).await?;
-    sqlx::query("PRAGMA foreign_keys = ON;").execute(pool).await?;
-    sqlx::query("PRAGMA synchronous = NORMAL;").execute(pool).await?;
-    sqlx::query("PRAGMA cache_size = -64000;").execute(pool).await?;
-    sqlx::query("PRAGMA temp_store = MEMORY;").execute(pool).await?;
-    sqlx::query("PRAGMA mmap_size = 268435456;").execute(pool).await?;
+    sqlx::query("PRAGMA journal_mode = WAL;")
+        .execute(pool)
+        .await?;
+    sqlx::query("PRAGMA foreign_keys = ON;")
+        .execute(pool)
+        .await?;
+    sqlx::query("PRAGMA synchronous = NORMAL;")
+        .execute(pool)
+        .await?;
+    sqlx::query("PRAGMA cache_size = -64000;")
+        .execute(pool)
+        .await?;
+    sqlx::query("PRAGMA temp_store = MEMORY;")
+        .execute(pool)
+        .await?;
+    sqlx::query("PRAGMA mmap_size = 268435456;")
+        .execute(pool)
+        .await?;
 
     sqlx::query(
         r#"
@@ -125,11 +137,9 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         .execute(pool)
         .await;
 
-    sqlx::query(
-        "CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id, created_at);",
-    )
-    .execute(pool)
-    .await?;
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id, created_at);")
+        .execute(pool)
+        .await?;
 
     sqlx::query(
         r#"
@@ -152,10 +162,11 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
     .await?;
 
     // Migration Fix: Ensure 'documents' table status CHECK constraint includes 'workspace'
-    let table_sql: String = sqlx::query_scalar("SELECT sql FROM sqlite_master WHERE type='table' AND name='documents'")
-        .fetch_optional(pool)
-        .await?
-        .unwrap_or_default();
+    let table_sql: String =
+        sqlx::query_scalar("SELECT sql FROM sqlite_master WHERE type='table' AND name='documents'")
+            .fetch_optional(pool)
+            .await?
+            .unwrap_or_default();
 
     if (!table_sql.is_empty() && !table_sql.contains("'workspace'")) || table_sql.is_empty() {
         // Double check if documents_old exists (implies a failed previous migration)
@@ -165,10 +176,10 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
 
         if !table_sql.contains("'workspace'") || old_table_exists {
             info!("Upgrading 'documents' table schema to support 'workspace' status (Old table exists: {})", old_table_exists);
-            
+
             let mut migration_query = String::new();
             migration_query.push_str("PRAGMA foreign_keys = OFF; BEGIN TRANSACTION;");
-            
+
             if !table_sql.is_empty() && !old_table_exists {
                 migration_query.push_str("ALTER TABLE documents RENAME TO documents_old;");
             }
@@ -190,7 +201,9 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
             "#);
 
             if old_table_exists || (!table_sql.is_empty()) {
-                migration_query.push_str("INSERT INTO documents SELECT * FROM documents_old; DROP TABLE documents_old;");
+                migration_query.push_str(
+                    "INSERT INTO documents SELECT * FROM documents_old; DROP TABLE documents_old;",
+                );
             }
 
             migration_query.push_str("COMMIT; PRAGMA foreign_keys = ON;");
@@ -216,11 +229,9 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
     .execute(pool)
     .await?;
 
-    sqlx::query(
-        "CREATE INDEX IF NOT EXISTS idx_chunks_doc ON document_chunks(document_id);",
-    )
-    .execute(pool)
-    .await?;
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_chunks_doc ON document_chunks(document_id);")
+        .execute(pool)
+        .await?;
 
     sqlx::query(
         r#"
@@ -270,6 +281,28 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
 
     sqlx::query(
         r#"
+        CREATE TABLE IF NOT EXISTS audit_events (
+            id          TEXT PRIMARY KEY,
+            timestamp   TEXT NOT NULL DEFAULT (datetime('now')),
+            operation   TEXT NOT NULL,
+            decision    TEXT NOT NULL,
+            caller      TEXT NOT NULL,
+            target      TEXT,
+            reason      TEXT
+        );
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    let _ = sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_audit_events_timestamp ON audit_events(timestamp DESC);",
+    )
+    .execute(pool)
+    .await;
+
+    sqlx::query(
+        r#"
         CREATE TABLE IF NOT EXISTS settings (
             key         TEXT PRIMARY KEY,
             value       TEXT NOT NULL,
@@ -281,9 +314,10 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
     .await?;
 
     // Attempt to add columns if the DB already exists from an older version
-    let _ = sqlx::query("ALTER TABLE settings ADD COLUMN updated_at TEXT DEFAULT (datetime('now'));")
-        .execute(pool)
-        .await;
+    let _ =
+        sqlx::query("ALTER TABLE settings ADD COLUMN updated_at TEXT DEFAULT (datetime('now'));")
+            .execute(pool)
+            .await;
 
     // ── Telemetry snapshots for historical data ──
     sqlx::query(
@@ -309,8 +343,10 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
     ).execute(pool).await;
 
     let _ = sqlx::query(
-        "CREATE INDEX IF NOT EXISTS idx_snap_entity ON telemetry_snapshots(entity_id, timestamp);"
-    ).execute(pool).await;
+        "CREATE INDEX IF NOT EXISTS idx_snap_entity ON telemetry_snapshots(entity_id, timestamp);",
+    )
+    .execute(pool)
+    .await;
 
     // ── Graph Sessions ──
     sqlx::query(
@@ -324,12 +360,16 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
             created_at TEXT DEFAULT (datetime('now')),
             updated_at TEXT DEFAULT (datetime('now'))
         );
-        "#
-    ).execute(pool).await?;
+        "#,
+    )
+    .execute(pool)
+    .await?;
 
     let _ = sqlx::query(
-        "CREATE INDEX IF NOT EXISTS idx_graph_sessions_chat ON graph_sessions(chat_id);"
-    ).execute(pool).await;
+        "CREATE INDEX IF NOT EXISTS idx_graph_sessions_chat ON graph_sessions(chat_id);",
+    )
+    .execute(pool)
+    .await;
 
     // ── Drawing Canvases ──
     sqlx::query(
@@ -349,8 +389,10 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
     .await?;
 
     let _ = sqlx::query(
-        "CREATE INDEX IF NOT EXISTS idx_drawing_canvases_chat ON drawing_canvases(chat_id);"
-    ).execute(pool).await;
+        "CREATE INDEX IF NOT EXISTS idx_drawing_canvases_chat ON drawing_canvases(chat_id);",
+    )
+    .execute(pool)
+    .await;
 
     // ── GTSM Geofences ──
     sqlx::query(
@@ -432,21 +474,49 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
     let _ = sqlx::query("CREATE INDEX IF NOT EXISTS idx_chat_folder_members_folder_id ON chat_folder_members(folder_id);").execute(pool).await;
 
     // Archive and Metadata for chats
-    let _ = sqlx::query("ALTER TABLE chats ADD COLUMN is_archived INTEGER DEFAULT 0;").execute(pool).await;
-    let _ = sqlx::query("ALTER TABLE chats ADD COLUMN archived_at DATETIME;").execute(pool).await;
-    let _ = sqlx::query("CREATE INDEX IF NOT EXISTS idx_chats_archived ON chats(is_archived, archived_at);").execute(pool).await;
+    let _ = sqlx::query("ALTER TABLE chats ADD COLUMN is_archived INTEGER DEFAULT 0;")
+        .execute(pool)
+        .await;
+    let _ = sqlx::query("ALTER TABLE chats ADD COLUMN archived_at DATETIME;")
+        .execute(pool)
+        .await;
+    let _ = sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_chats_archived ON chats(is_archived, archived_at);",
+    )
+    .execute(pool)
+    .await;
 
-    let _ = sqlx::query("ALTER TABLE chats ADD COLUMN message_count INTEGER DEFAULT 0;").execute(pool).await;
-    let _ = sqlx::query("ALTER TABLE chats ADD COLUMN total_tokens_in INTEGER DEFAULT 0;").execute(pool).await;
-    let _ = sqlx::query("ALTER TABLE chats ADD COLUMN total_tokens_out INTEGER DEFAULT 0;").execute(pool).await;
-    let _ = sqlx::query("ALTER TABLE chats ADD COLUMN last_activity DATETIME;").execute(pool).await;
-    let _ = sqlx::query("ALTER TABLE chats ADD COLUMN folder_id TEXT;").execute(pool).await;
-    let _ = sqlx::query("CREATE INDEX IF NOT EXISTS idx_chats_last_activity ON chats(last_activity DESC);").execute(pool).await;
+    let _ = sqlx::query("ALTER TABLE chats ADD COLUMN message_count INTEGER DEFAULT 0;")
+        .execute(pool)
+        .await;
+    let _ = sqlx::query("ALTER TABLE chats ADD COLUMN total_tokens_in INTEGER DEFAULT 0;")
+        .execute(pool)
+        .await;
+    let _ = sqlx::query("ALTER TABLE chats ADD COLUMN total_tokens_out INTEGER DEFAULT 0;")
+        .execute(pool)
+        .await;
+    let _ = sqlx::query("ALTER TABLE chats ADD COLUMN last_activity DATETIME;")
+        .execute(pool)
+        .await;
+    let _ = sqlx::query("ALTER TABLE chats ADD COLUMN folder_id TEXT;")
+        .execute(pool)
+        .await;
+    let _ = sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_chats_last_activity ON chats(last_activity DESC);",
+    )
+    .execute(pool)
+    .await;
 
     // Action timeline support for messages
-    let _ = sqlx::query("ALTER TABLE messages ADD COLUMN kind TEXT DEFAULT 'text';").execute(pool).await;
-    let _ = sqlx::query("ALTER TABLE messages ADD COLUMN metadata TEXT;").execute(pool).await;
-    let _ = sqlx::query("CREATE INDEX IF NOT EXISTS idx_messages_kind ON messages(kind);").execute(pool).await;
+    let _ = sqlx::query("ALTER TABLE messages ADD COLUMN kind TEXT DEFAULT 'text';")
+        .execute(pool)
+        .await;
+    let _ = sqlx::query("ALTER TABLE messages ADD COLUMN metadata TEXT;")
+        .execute(pool)
+        .await;
+    let _ = sqlx::query("CREATE INDEX IF NOT EXISTS idx_messages_kind ON messages(kind);")
+        .execute(pool)
+        .await;
 
     // Full Text Search for Messages
     sqlx::query(
@@ -575,7 +645,9 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
     .await?;
 
     // Restore accidentally dropped index for artifacts
-    let _ = sqlx::query("CREATE INDEX IF NOT EXISTS idx_artifacts_chat_id ON artifacts(chat_id);").execute(pool).await;
+    let _ = sqlx::query("CREATE INDEX IF NOT EXISTS idx_artifacts_chat_id ON artifacts(chat_id);")
+        .execute(pool)
+        .await;
 
     // ── Orchestration Persistence ──
     sqlx::query(
@@ -594,20 +666,30 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
     .execute(pool)
     .await?;
 
-    let _ = sqlx::query("CREATE INDEX IF NOT EXISTS idx_orchestration_plans_chat ON orchestration_plans(chat_id);").execute(pool).await;
+    let _ = sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_orchestration_plans_chat ON orchestration_plans(chat_id);",
+    )
+    .execute(pool)
+    .await;
 
     // Migration Fix: Ensure 'orchestration_plans' table status CHECK constraint includes new statuses
-    let plan_table_sql: String = sqlx::query_scalar("SELECT sql FROM sqlite_master WHERE type='table' AND name='orchestration_plans'")
-        .fetch_optional(pool)
-        .await?
-        .unwrap_or_default();
+    let plan_table_sql: String = sqlx::query_scalar(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='orchestration_plans'",
+    )
+    .fetch_optional(pool)
+    .await?
+    .unwrap_or_default();
 
     if !plan_table_sql.is_empty() && !plan_table_sql.contains("'planning'") {
         info!("Upgrading 'orchestration_plans' table schema to support new statuses");
-        
-        sqlx::query("PRAGMA foreign_keys = OFF;").execute(pool).await?;
+
+        sqlx::query("PRAGMA foreign_keys = OFF;")
+            .execute(pool)
+            .await?;
         sqlx::query("BEGIN TRANSACTION;").execute(pool).await?;
-        sqlx::query("ALTER TABLE orchestration_plans RENAME TO orchestration_plans_old;").execute(pool).await?;
+        sqlx::query("ALTER TABLE orchestration_plans RENAME TO orchestration_plans_old;")
+            .execute(pool)
+            .await?;
         sqlx::query(r#"
             CREATE TABLE orchestration_plans (
                 id          TEXT PRIMARY KEY,
@@ -619,10 +701,16 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
                 updated_at  TEXT DEFAULT (datetime('now'))
             );
         "#).execute(pool).await?;
-        sqlx::query("INSERT INTO orchestration_plans SELECT * FROM orchestration_plans_old;").execute(pool).await?;
-        sqlx::query("DROP TABLE orchestration_plans_old;").execute(pool).await?;
+        sqlx::query("INSERT INTO orchestration_plans SELECT * FROM orchestration_plans_old;")
+            .execute(pool)
+            .await?;
+        sqlx::query("DROP TABLE orchestration_plans_old;")
+            .execute(pool)
+            .await?;
         sqlx::query("COMMIT;").execute(pool).await?;
-        sqlx::query("PRAGMA foreign_keys = ON;").execute(pool).await?;
+        sqlx::query("PRAGMA foreign_keys = ON;")
+            .execute(pool)
+            .await?;
         info!("'orchestration_plans' table migration completed successfully");
     }
 
@@ -646,7 +734,11 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
     .execute(pool)
     .await?;
 
-    let _ = sqlx::query("CREATE INDEX IF NOT EXISTS idx_orchestration_tasks_plan ON orchestration_tasks(plan_id);").execute(pool).await;
+    let _ = sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_orchestration_tasks_plan ON orchestration_tasks(plan_id);",
+    )
+    .execute(pool)
+    .await;
 
     sqlx::query(
         r#"

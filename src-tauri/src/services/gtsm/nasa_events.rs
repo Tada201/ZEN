@@ -19,7 +19,8 @@ struct EonetEvent {
 #[derive(Debug, Deserialize)]
 struct EonetCategory {
     id: String,
-    title: String,
+    #[serde(rename = "title")]
+    _title: String,
 }
 
 #[derive(Debug, Deserialize)]

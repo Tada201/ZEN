@@ -1,9 +1,9 @@
-use tauri::{Emitter, State};
+use crate::agent::instance::AgentInstance;
+use crate::agent::swarm::SwarmState;
 use crate::commands::AppState;
 use crate::error::ZenResult;
-use crate::agent::swarm::SwarmState;
-use crate::agent::instance::AgentInstance;
 use serde::Serialize;
+use tauri::State;
 
 #[derive(Debug, Serialize)]
 pub struct SwarmMetrics {
@@ -50,7 +50,9 @@ pub async fn list_agents(state: State<'_, AppState>) -> ZenResult<Vec<AgentInfoR
 }
 
 #[tauri::command]
-pub async fn list_agents_with_configs(state: State<'_, AppState>) -> ZenResult<Vec<AgentConfigResponse>> {
+pub async fn list_agents_with_configs(
+    state: State<'_, AppState>,
+) -> ZenResult<Vec<AgentConfigResponse>> {
     let pool = state.db().await?;
 
     let config_manager = crate::agent::config::AgentConfigManager::new(pool);
@@ -106,7 +108,8 @@ pub async fn spawn_agent(
 
     Ok(format!(
         "Agent '{}' spawned successfully (instance: {})",
-        instance.config.name, instance.id()
+        instance.config.name,
+        instance.id()
     ))
 }
 
@@ -149,21 +152,9 @@ pub async fn orchestrator_get_status(state: State<'_, AppState>) -> ZenResult<se
 
     // Try to get plan stats from DB
     let (active, completed) = if let Ok(db) = state.db().await {
-        let active = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM orchestration_plans WHERE status NOT IN ('completed', 'failed')"
-        )
-        .fetch_one(&db)
-        .await
-        .unwrap_or(0) as usize;
-
-        let completed = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM orchestration_plans WHERE status = 'completed'"
-        )
-        .fetch_one(&db)
-        .await
-        .unwrap_or(0) as usize;
-
-        (active, completed)
+        crate::db::queries::get_orchestration_plan_counts(&db)
+            .await
+            .unwrap_or((0, 0))
     } else {
         (0, 0)
     };
@@ -199,7 +190,9 @@ pub async fn run_tool_command(
 ) -> Result<serde_json::Value, String> {
     let chat_id = chat_id
         .filter(|id| !id.is_empty() && id != "canvas-dynamic-execution")
-        .ok_or_else(|| "run_tool_command requires a valid chat_id (no active session)".to_string())?;
+        .ok_or_else(|| {
+            "run_tool_command requires a valid chat_id (no active session)".to_string()
+        })?;
 
     let tool_call_id = format!("openui-{}", uuid::Uuid::new_v4());
     let tool_call = crate::tools::ToolCall {
@@ -208,74 +201,10 @@ pub async fn run_tool_command(
         arguments: args.clone(),
     };
 
-    let permission_result = {
-        let mut registry = state.tools.write().await;
-        registry.execute_with_permission(app.clone(), chat_id.clone(), tool_call).await
-    };
-
-    match permission_result {
-        Ok(output) => Ok(output.content),
-        Err(crate::tools::ToolError::AwaitingConfirmation { context }) => {
-            let (tx, rx) = tokio::sync::oneshot::channel::<bool>();
-
-            {
-                let mut approvals = state.pending_tool_approvals.lock().await;
-                approvals.insert(tool_call_id.clone(), tx);
-            }
-
-            let _ = app.emit("chat:message", serde_json::json!({
-                "chat_id": chat_id,
-                "id": uuid::Uuid::new_v4().to_string(),
-                "timestamp": chrono::Utc::now().to_rfc3339(),
-                "role": "assistant",
-                "content": "",
-                "kind": "approval_request",
-                "metadata": {
-                    "kind": "approval_request",
-                    "approval_request": {
-                        "tool_call_id": tool_call_id,
-                        "tool_name": tool_name,
-                        "arguments": args,
-                        "chat_id": chat_id,
-                        "context": context
-                    }
-                }
-            }));
-
-            let approved = match tokio::time::timeout(
-                tokio::time::Duration::from_secs(120),
-                rx,
-            ).await {
-                Ok(Ok(approved)) => approved,
-                Ok(Err(_)) => {
-                    let mut approvals = state.pending_tool_approvals.lock().await;
-                    approvals.remove(&tool_call_id);
-                    false
-                }
-                Err(_) => {
-                    let mut approvals = state.pending_tool_approvals.lock().await;
-                    approvals.remove(&tool_call_id);
-                    false
-                }
-            };
-
-            if approved {
-                let confirmed_call = crate::tools::ToolCall {
-                    id: tool_call_id,
-                    name: tool_name,
-                    arguments: args,
-                };
-                let mut registry = state.tools.write().await;
-                match registry.execute_authorized(app, chat_id, confirmed_call).await {
-                    Ok(output) => Ok(output.content),
-                    Err(e) => Err(e.to_string()),
-                }
-            } else {
-                Err("Tool execution denied by user".to_string())
-            }
-        }
-        Err(e) => Err(e.to_string()),
-    }
+    state
+        .tool_service
+        .execute_interactive(app, "run_tool_command", chat_id, tool_call)
+        .await
 }
 
 /// Resolve a pending tool approval request from the frontend.

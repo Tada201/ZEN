@@ -1,10 +1,10 @@
-use serde::Deserialize;
-use serde_json::{json, Value};
-use anyhow::{Result, anyhow};
-use tauri::{AppHandle, Manager};
-use async_trait::async_trait;
 use crate::agent::tools::AgentTool;
 use crate::commands::AppState;
+use anyhow::{anyhow, Result};
+use async_trait::async_trait;
+use serde::Deserialize;
+use serde_json::{json, Value};
+use tauri::{AppHandle, Manager};
 
 pub struct VectorSearchTool;
 
@@ -42,14 +42,19 @@ impl AgentTool for VectorSearchTool {
         _chat_id: String,
         input: Value,
         _depth: u32,
-        _allowed_tools: Option<std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
+        _allowed_tools: Option<
+            std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>,
+        >,
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         let args: SearchArgs = serde_json::from_value(input)
             .map_err(|e| anyhow!("Invalid search arguments: {}", e))?;
 
         let state = app.state::<AppState>();
-        let db = state.db().await.map_err(|_| anyhow::anyhow!("DB Init error"))?;
+        let db = state
+            .db()
+            .await
+            .map_err(|_| anyhow::anyhow!("DB Init error"))?;
 
         // Get embedding model name and provider from settings
         let model_name = crate::db::queries::get_setting(&db, "embedding_model")
@@ -81,17 +86,26 @@ impl AgentTool for VectorSearchTool {
             .map_err(|e| anyhow!("Embedding failed: {}", e))?;
 
         let limit = args.limit.unwrap_or(5).clamp(1, 20);
-        let results = state.search_rag(query_vec, limit).await
+        let results = state
+            .search_rag(query_vec, limit)
+            .await
             .map_err(|e| anyhow!("Vector search failed: {}", e))?;
 
         if results.is_empty() {
-            return Ok(json!(format!("No relevant information found for query: '{}'", args.query)));
+            return Ok(json!(format!(
+                "No relevant information found for query: '{}'",
+                args.query
+            )));
         }
 
         let mut formatted_text = format!("Found {} relevant excerpts:\n\n", results.len());
         for (i, res) in results.iter().enumerate() {
-            formatted_text.push_str(&format!("Excerpt {} (Source: {}):\n{}\n\n",
-                i + 1, res.chunk.source, res.chunk.text));
+            formatted_text.push_str(&format!(
+                "Excerpt {} (Source: {}):\n{}\n\n",
+                i + 1,
+                res.chunk.source,
+                res.chunk.text
+            ));
         }
 
         Ok(json!(formatted_text))
@@ -114,7 +128,13 @@ async fn generate_embedding(base_url: &str, model: &str, text: &str) -> Result<V
         }))
         .send()
         .await
-        .map_err(|e| anyhow!("Failed to connect to embedding service at {}: {}", base_url, e))?;
+        .map_err(|e| {
+            anyhow!(
+                "Failed to connect to embedding service at {}: {}",
+                base_url,
+                e
+            )
+        })?;
 
     if !response.status().is_success() {
         let status = response.status();
@@ -127,7 +147,9 @@ async fn generate_embedding(base_url: &str, model: &str, text: &str) -> Result<V
         embedding: Vec<f32>,
     }
 
-    let result: EmbeddingResponse = response.json().await
+    let result: EmbeddingResponse = response
+        .json()
+        .await
         .map_err(|e| anyhow!("Failed to parse embedding response: {}", e))?;
 
     Ok(result.embedding)

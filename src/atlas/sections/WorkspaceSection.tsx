@@ -155,6 +155,7 @@ export function WorkspaceApp() {
                       <div className="w-full border-t border-border/15 bg-[#09090b]/85 rounded-t-2xl shrink-0">
                         <div className="max-w-3xl mx-auto w-full px-6 py-4">
                           <PremiumChatInput
+                            activeChatId={currentSessionId}
                             onSend={handleSendMessageInternal}
                             onAbort={abortStream}
                             isLoading={isLoading}
@@ -194,6 +195,7 @@ export function WorkspaceApp() {
                           <div className="w-full border-t border-border/15 bg-[#09090b]/85 rounded-t-2xl shrink-0">
                             <div className="max-w-3xl mx-auto w-full px-6 py-4">
                               <PremiumChatInput
+                                activeChatId={currentSessionId}
                                 onSend={handleSendMessageInternal}
                                 onAbort={abortStream}
                                 isLoading={isLoading}

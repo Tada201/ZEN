@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { chatApi } from "@/api";
 import { toast } from "sonner";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
@@ -86,6 +86,8 @@ export function useSendMessage(currentSessionId: string | null) {
     console.log("[useChat] Optimistically adding user/assistant messages to per-session buffer.");
     setSessionMessages(currentSessionId, (prev: Message[]) => [...prev, userMsg, assistantMsg]);
 
+    useChatStore.getState().setStreamingForChat(currentSessionId, true);
+
     try {
       const promptOptions = { ...openuiPromptOptions, editMode: true, inlineMode: true };
       const systemPrompt = data.generativeUI
@@ -95,7 +97,7 @@ export function useSendMessage(currentSessionId: string | null) {
         : null;
 
       console.log("[useChat] Invoking 'send_message' backend IPC command with Gen UI prompt status:", !!systemPrompt);
-      await invoke("send_message", {
+      await chatApi.sendMessage({
         chatId: currentSessionId,
         content: data.message,
         model: data.model === "No Model" ? null : data.model,
@@ -120,6 +122,7 @@ export function useSendMessage(currentSessionId: string | null) {
       console.log("[useChat] 'send_message' IPC command succeeded.");
     } catch (e: any) {
       console.error("[useChat] 'send_message' IPC command failed:", e);
+      useChatStore.getState().setStreamingForChat(currentSessionId, false);
       setSessionMessages(currentSessionId, (prev: Message[]) => {
         const next = [...prev];
         const last = next[next.length - 1];

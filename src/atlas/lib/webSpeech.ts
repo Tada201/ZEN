@@ -1,5 +1,5 @@
-import { invoke } from '@tauri-apps/api/core';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
+import { voiceApi } from '@/api';
 
 /**
  * Speaks text using the appropriate TTS backend.
@@ -17,7 +17,7 @@ export function speakText(text: string): Promise<void> {
         return speakWithWebSpeech(text);
     }
 
-    return invoke('speak_text', { text }).catch(console.error) as Promise<void>;
+    return voiceApi.speakText(text).catch(console.error) as Promise<void>;
 }
 
 /**
@@ -29,7 +29,7 @@ export function stopSpeech(): void {
     if (ttsEngine === 'web') {
         window.speechSynthesis?.cancel();
     } else {
-        invoke('stop_speech').catch(console.error);
+        voiceApi.stopSpeech().catch(console.error);
     }
 }
 
@@ -58,7 +58,7 @@ function speakWithWebSpeech(text: string): Promise<void> {
     return new Promise((resolve, reject) => {
         if (!window.speechSynthesis) {
             console.warn('[TTS] Web Speech API not available, falling back to Piper');
-            invoke('speak_text', { text }).catch(console.error);
+            voiceApi.speakText(text).catch(console.error);
             resolve();
             return;
         }

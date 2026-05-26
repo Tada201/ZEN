@@ -1,5 +1,5 @@
-use tauri::{State, AppHandle, Manager};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager, State};
 use tracing::info;
 
 use crate::commands::AppState;
@@ -12,8 +12,11 @@ pub async fn download_whisper_model(
     model_name: String,
 ) -> Result<crate::services::speech_service::ModelFileStatus, ZenError> {
     let mut speech_lock = state.speech.write().await;
-    let speech = speech_lock.as_mut().ok_or(ZenError::Internal("Speech service not initialized".into()))?;
-    speech.download_model(&model_name)
+    let speech = speech_lock
+        .as_mut()
+        .ok_or(ZenError::Internal("Speech service not initialized".into()))?;
+    speech
+        .download_model(&model_name)
         .await
         .map_err(|e| ZenError::Internal(e))
 }
@@ -82,7 +85,10 @@ pub async fn transcribe_audio(
     }
 
     // Convert 16-bit PCM to f32 samples for Whisper
-    let samples = pcm_i16.iter().map(|&x| x as f32 / 32768.0).collect::<Vec<f32>>();
+    let samples = pcm_i16
+        .iter()
+        .map(|&x| x as f32 / 32768.0)
+        .collect::<Vec<f32>>();
 
     let requested_model = crate::db::queries::get_setting(&state.db().await?, "stt_whisper_model")
         .await
@@ -90,14 +96,23 @@ pub async fn transcribe_audio(
         .unwrap_or_else(|| "ggml-base.en.bin".to_string());
 
     let speech_lock = state.speech.read().await;
-    let speech: &SpeechService = speech_lock.as_ref().ok_or(ZenError::Internal("Speech service not initialized".into()))?;
+    let speech: &SpeechService = speech_lock
+        .as_ref()
+        .ok_or(ZenError::Internal("Speech service not initialized".into()))?;
 
-    let transcript = speech.transcribe(samples, &requested_model)
+    let transcript = speech
+        .transcribe(samples, &requested_model)
         .await
         .map_err(|e| ZenError::Internal(e))?;
 
     let lower = transcript.to_lowercase();
-    let blacklist = ["locate france", "thank you for watching", "subscribe", "bye", "you"];
+    let blacklist = [
+        "locate france",
+        "thank you for watching",
+        "subscribe",
+        "bye",
+        "you",
+    ];
     if blacklist.iter().any(|&b| lower.contains(b)) && transcript.split_whitespace().count() <= 3 {
         info!(transcript = %transcript, "Blocked suspected STT hallucination");
         return Ok(TranscriptionResult::NoSpeech);
@@ -142,7 +157,10 @@ pub async fn transcribe_stream(
         return Ok(TranscriptionResult::NoSpeech);
     }
 
-    let samples = pcm_i16.iter().map(|&x| x as f32 / 32768.0).collect::<Vec<f32>>();
+    let samples = pcm_i16
+        .iter()
+        .map(|&x| x as f32 / 32768.0)
+        .collect::<Vec<f32>>();
 
     let requested_model = crate::db::queries::get_setting(&state.db().await?, "stt_whisper_model")
         .await
@@ -150,18 +168,27 @@ pub async fn transcribe_stream(
         .unwrap_or_else(|| "ggml-base.en.bin".to_string());
 
     let speech_lock = state.speech.read().await;
-    let speech: &SpeechService = speech_lock.as_ref().ok_or(ZenError::Internal("Speech service not initialized".into()))?;
+    let speech: &SpeechService = speech_lock
+        .as_ref()
+        .ok_or(ZenError::Internal("Speech service not initialized".into()))?;
     let transcript_result = speech.transcribe(samples, &requested_model).await;
 
     match transcript_result {
         Ok(t) if !t.is_empty() => {
             let lower = t.to_lowercase();
-            let blacklist = ["locate france", "thank you", "subscribe", "watching", "you", "bye"];
+            let blacklist = [
+                "locate france",
+                "thank you",
+                "subscribe",
+                "watching",
+                "you",
+                "bye",
+            ];
             if blacklist.iter().any(|&b| lower.contains(b)) && t.split_whitespace().count() <= 3 {
                 return Ok(TranscriptionResult::NoSpeech);
             }
             Ok(TranscriptionResult::Transcript(t))
-        },
+        }
         _ => Ok(TranscriptionResult::NoSpeech),
     }
 }
@@ -174,7 +201,9 @@ pub async fn speak_text(
 ) -> Result<(), ZenError> {
     let tts_lock = state.tts.read().await;
     if let Some(tts) = tts_lock.as_ref() {
-        tts.speak(&text, app).await.map_err(|e| ZenError::Internal(e))?;
+        tts.speak(&text, app)
+            .await
+            .map_err(|e| ZenError::Internal(e))?;
     } else {
         tracing::warn!("TTS service is not available");
     }
@@ -182,9 +211,7 @@ pub async fn speak_text(
 }
 
 #[tauri::command]
-pub async fn stop_speech(
-    state: State<'_, AppState>,
-) -> Result<(), ZenError> {
+pub async fn stop_speech(state: State<'_, AppState>) -> Result<(), ZenError> {
     let tts_lock = state.tts.read().await;
     if let Some(tts) = tts_lock.as_ref() {
         tts.stop().await;
@@ -201,14 +228,17 @@ pub struct VoiceModel {
 }
 
 #[tauri::command]
-pub async fn list_voice_models(
-    app: AppHandle,
-) -> Result<Vec<VoiceModel>, ZenError> {
+pub async fn list_voice_models(app: AppHandle) -> Result<Vec<VoiceModel>, ZenError> {
     let mut voices = Vec::new();
 
-    let resource_dir = app.path().resource_dir()
+    let resource_dir = app
+        .path()
+        .resource_dir()
         .map_err(|e| ZenError::Internal(e.to_string()))?;
-    let default_path = resource_dir.join("resources").join("models").join("glados_piper_medium.onnx");
+    let default_path = resource_dir
+        .join("resources")
+        .join("models")
+        .join("glados_piper_medium.onnx");
 
     if default_path.exists() {
         voices.push(VoiceModel {
@@ -219,7 +249,9 @@ pub async fn list_voice_models(
         });
     }
 
-    let app_data_dir = app.path().app_data_dir()
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
         .map_err(|e| ZenError::Internal(e.to_string()))?;
     let voices_dir = app_data_dir.join("voices");
 
@@ -231,7 +263,8 @@ pub async fn list_voice_models(
             if let Ok(entry) = entry {
                 let path = entry.path();
                 if path.extension().map(|e| e == "onnx").unwrap_or(false) {
-                    let name = path.file_stem()
+                    let name = path
+                        .file_stem()
                         .map(|s| s.to_string_lossy().to_string())
                         .unwrap_or_else(|| "Unknown".to_string());
 
@@ -265,14 +298,17 @@ pub async fn add_voice_model(
         return Err(ZenError::Custom("Config (JSON) file not found".to_string()));
     }
 
-    let app_data_dir = app.path().app_data_dir()
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
         .map_err(|e| ZenError::Internal(e.to_string()))?;
     let voices_dir = app_data_dir.join("voices");
 
     std::fs::create_dir_all(&voices_dir)
         .map_err(|e| ZenError::Internal(format!("Failed to create voices dir: {}", e)))?;
 
-    let onnx_file_name = onnx_src.file_name()
+    let onnx_file_name = onnx_src
+        .file_name()
         .ok_or_else(|| ZenError::Custom("Invalid ONNX file name".to_string()))?;
     let onnx_dest = voices_dir.join(onnx_file_name);
 
@@ -287,7 +323,8 @@ pub async fn add_voice_model(
     std::fs::copy(&config_src, &config_dest)
         .map_err(|e| ZenError::Internal(format!("Failed to copy config file: {}", e)))?;
 
-    let name = onnx_dest.file_stem()
+    let name = onnx_dest
+        .file_stem()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| "Unknown".to_string());
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { providersApi } from '@/api';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { useChatStore } from '@/lib/stores/useChatStore';
 
@@ -51,7 +51,7 @@ export function useAppInit(onStepsUpdate?: (steps: InitStep[]) => void) {
 
                 setStep('provider', 'loading');
                 try {
-                    const models = await invoke<any[]>('get_all_available_models', { provider: null as any });
+                    const models = await providersApi.getAllAvailableModels(null);
                     if (models?.length > 0) {
                         setStep('provider', 'done', 'Connected');
                     } else {

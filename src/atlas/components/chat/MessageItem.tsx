@@ -19,8 +19,9 @@ export function MessageItem({
 }) {
   const message = useMemo(() => normalizeVercelMessage(rawMessage), [rawMessage]);
   const isAssistant = message.role === "assistant";
+  const hasExecutionLedger = message.steps?.some((step) => step.type === "action" || step.type === "tool-call" || step.type === "reasoning");
 
-  if (isAssistant) {
+  if (isAssistant || hasExecutionLedger) {
     if (message.kind === "deep_research") {
       return (
         <DeepResearchMessage 

@@ -7,17 +7,16 @@
 /// - Rollback on failure
 /// - Nested workflows
 /// - Workflow metrics & debug tracing
-
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use tracing::{info, warn};
 
+use crate::agent::event_bus::EventBus;
 use crate::agent::memory::{AgentMemoryBackend, UnifiedMemoryBackend};
 use crate::agent::swarm::SwarmCoordinator;
 use crate::agent::task::{Task, TaskStatus, TaskType};
-use crate::agent::event_bus::EventBus;
 
 // ─── Workflow Definition ───
 
@@ -85,11 +84,25 @@ impl WorkflowDefinition {
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowExecutionState {
     Pending,
-    Running { completed: usize, total: usize },
-    Paused { completed: usize, total: usize },
-    Completed { success: bool },
-    Failed { error: String, failed_task_id: Option<String> },
-    RollingBack { rolled_back: usize, total: usize },
+    Running {
+        completed: usize,
+        total: usize,
+    },
+    Paused {
+        completed: usize,
+        total: usize,
+    },
+    Completed {
+        success: bool,
+    },
+    Failed {
+        error: String,
+        failed_task_id: Option<String>,
+    },
+    RollingBack {
+        rolled_back: usize,
+        total: usize,
+    },
 }
 
 /// Runtime execution context for a workflow.
@@ -131,25 +144,43 @@ impl WorkflowExecution {
         match &self.state {
             WorkflowExecutionState::Running { completed, total }
             | WorkflowExecutionState::Paused { completed, total } => {
-                if *total == 0 { 100.0 } else { (*completed as f64 / *total as f64) * 100.0 }
+                if *total == 0 {
+                    100.0
+                } else {
+                    (*completed as f64 / *total as f64) * 100.0
+                }
             }
-            WorkflowExecutionState::Completed { success } => if *success { 100.0 } else { 0.0 },
+            WorkflowExecutionState::Completed { success } => {
+                if *success {
+                    100.0
+                } else {
+                    0.0
+                }
+            }
             WorkflowExecutionState::Failed { .. } => 0.0,
             WorkflowExecutionState::Pending => 0.0,
             WorkflowExecutionState::RollingBack { rolled_back, total } => {
-                if *total == 0 { 100.0 } else { (*rolled_back as f64 / *total as f64) * 100.0 }
+                if *total == 0 {
+                    100.0
+                } else {
+                    (*rolled_back as f64 / *total as f64) * 100.0
+                }
             }
         }
     }
 
     /// Check if all dependencies for a task are resolved.
     pub fn are_dependencies_met(&self, task: &Task) -> bool {
-        task.dependencies.iter().all(|dep| self.completed_tasks.contains(dep))
+        task.dependencies
+            .iter()
+            .all(|dep| self.completed_tasks.contains(dep))
     }
 
     /// Get the next tasks that are ready to execute.
     pub fn get_ready_tasks(&self) -> Vec<&Task> {
-        self.definition.tasks.iter()
+        self.definition
+            .tasks
+            .iter()
             .filter(|t| {
                 t.status == TaskStatus::Pending
                     && !self.running_tasks.contains(&t.id)
@@ -240,11 +271,9 @@ impl WorkflowMetrics {
         let total = exec.definition.tasks.len();
         let completed = exec.completed_tasks.len();
         let failed = exec.failed_tasks.len();
-        
-        let total_duration: u64 = exec.task_results.values()
-            .map(|r| r.duration_ms)
-            .sum();
-        
+
+        let total_duration: u64 = exec.task_results.values().map(|r| r.duration_ms).sum();
+
         let avg_duration = if completed > 0 {
             total_duration as f64 / completed as f64
         } else {
@@ -293,7 +322,7 @@ pub struct WorkflowEngine {
 impl WorkflowEngine {
     /// Create a new workflow engine.
     pub fn new(
-        swarm: Arc<RwLock<SwarmCoordinator>>, 
+        swarm: Arc<RwLock<SwarmCoordinator>>,
         event_bus: Arc<EventBus>,
         memory_backend: Arc<UnifiedMemoryBackend>,
         app: AppHandle,
@@ -310,7 +339,10 @@ impl WorkflowEngine {
     }
 
     /// Execute a workflow definition.
-    pub async fn execute_workflow(&self, definition: WorkflowDefinition) -> Result<WorkflowResult, WorkflowError> {
+    pub async fn execute_workflow(
+        &self,
+        definition: WorkflowDefinition,
+    ) -> Result<WorkflowResult, WorkflowError> {
         // Validate the workflow first
         definition.validate()?;
 
@@ -339,10 +371,11 @@ impl WorkflowEngine {
             total_tasks,
         });
 
-        self.event_bus.emit(crate::agent::event_bus::AgentEvent::WorkflowStarted {
-            workflow_id: workflow_id.clone(),
-            total_tasks,
-        });
+        self.event_bus
+            .emit(crate::agent::event_bus::AgentEvent::WorkflowStarted {
+                workflow_id: workflow_id.clone(),
+                total_tasks,
+            });
 
         // Execute the workflow
         let result = self.run_workflow_loop(&workflow_id).await;
@@ -352,22 +385,24 @@ impl WorkflowEngine {
             let mut workflows = self.workflows.write().await;
             if let Some(exec) = workflows.get_mut(&workflow_id) {
                 exec.completed_at = Some(current_time_ms());
-                
+
                 match &result {
                     Ok(r) => {
                         exec.state = WorkflowExecutionState::Completed { success: r.success };
-                        
+
                         let _ = self.workflow_tx.send(WorkflowEvent::WorkflowCompleted {
                             workflow_id: workflow_id.clone(),
                             success: r.success,
                             duration_ms: r.duration_ms,
                         });
 
-                        self.event_bus.emit(crate::agent::event_bus::AgentEvent::WorkflowCompleted {
-                            workflow_id: workflow_id.clone(),
-                            tasks_completed: r.tasks_completed,
-                            duration_ms: r.duration_ms,
-                        });
+                        self.event_bus.emit(
+                            crate::agent::event_bus::AgentEvent::WorkflowCompleted {
+                                workflow_id: workflow_id.clone(),
+                                tasks_completed: r.tasks_completed,
+                                duration_ms: r.duration_ms,
+                            },
+                        );
                     }
                     Err(e) => {
                         exec.state = WorkflowExecutionState::Failed {
@@ -381,10 +416,11 @@ impl WorkflowEngine {
                             failed_task_id: None,
                         });
 
-                        self.event_bus.emit(crate::agent::event_bus::AgentEvent::WorkflowFailed {
-                            workflow_id: workflow_id.clone(),
-                            error: e.to_string(),
-                        });
+                        self.event_bus
+                            .emit(crate::agent::event_bus::AgentEvent::WorkflowFailed {
+                                workflow_id: workflow_id.clone(),
+                                error: e.to_string(),
+                            });
                     }
                 }
             }
@@ -401,10 +437,13 @@ impl WorkflowEngine {
             // Get ready tasks and execution state
             let (ready_tasks, is_done, _completed_count, _total_count, failed_tasks, running_tasks) = {
                 let workflows = self.workflows.read().await;
-                let exec = workflows.get(workflow_id)
+                let exec = workflows
+                    .get(workflow_id)
                     .ok_or_else(|| WorkflowError::WorkflowNotFound(workflow_id.to_string()))?;
 
-                let ready = exec.get_ready_tasks().into_iter()
+                let ready = exec
+                    .get_ready_tasks()
+                    .into_iter()
                     .map(|t| t.clone())
                     .collect::<Vec<_>>();
 
@@ -448,7 +487,9 @@ impl WorkflowEngine {
                             duration_ms,
                         });
                     } else {
-                        return Err(WorkflowError::TaskFailed(failed_tasks.first().cloned().unwrap_or_default()));
+                        return Err(WorkflowError::TaskFailed(
+                            failed_tasks.first().cloned().unwrap_or_default(),
+                        ));
                     }
                 }
                 break;
@@ -474,7 +515,8 @@ impl WorkflowEngine {
                 });
 
                 // Execute the task
-                let task_result = execute_single_task(self.swarm.clone(), self.app.clone(), &task).await;
+                let task_result =
+                    execute_single_task(self.swarm.clone(), self.app.clone(), &task).await;
                 let success = task_result.success;
                 let duration_ms = task_result.duration_ms;
 
@@ -487,19 +529,22 @@ impl WorkflowEngine {
                         if success {
                             exec.completed_tasks.insert(task_id.clone());
 
-                            self.event_bus.emit(crate::agent::event_bus::AgentEvent::TaskCompleted {
-                                task_id: task_id.clone(),
-                                agent_id: "workflow".to_string(),
-                                duration_ms,
-                            });
+                            self.event_bus.emit(
+                                crate::agent::event_bus::AgentEvent::TaskCompleted {
+                                    task_id: task_id.clone(),
+                                    agent_id: "workflow".to_string(),
+                                    duration_ms,
+                                },
+                            );
                         } else {
                             exec.failed_tasks.push(task_id.clone());
 
-                            self.event_bus.emit(crate::agent::event_bus::AgentEvent::TaskFailed {
-                                task_id: task_id.clone(),
-                                agent_id: "workflow".to_string(),
-                                error: task_result.error.clone().unwrap_or_default(),
-                            });
+                            self.event_bus
+                                .emit(crate::agent::event_bus::AgentEvent::TaskFailed {
+                                    task_id: task_id.clone(),
+                                    agent_id: "workflow".to_string(),
+                                    error: task_result.error.clone().unwrap_or_default(),
+                                });
                         }
 
                         exec.task_results.insert(task_id.clone(), task_result);
@@ -519,11 +564,12 @@ impl WorkflowEngine {
                     duration_ms,
                 });
 
-                self.event_bus.emit(crate::agent::event_bus::AgentEvent::TaskStarted {
-                    task_id: task_id.clone(),
-                    agent_id: "workflow".to_string(),
-                    description: format!("Workflow task: {}", task_id),
-                });
+                self.event_bus
+                    .emit(crate::agent::event_bus::AgentEvent::TaskStarted {
+                        task_id: task_id.clone(),
+                        agent_id: "workflow".to_string(),
+                        description: format!("Workflow task: {}", task_id),
+                    });
             }
 
             // Small delay to prevent tight loop
@@ -543,12 +589,17 @@ impl WorkflowEngine {
     /// Pause a running workflow.
     pub async fn pause_workflow(&self, workflow_id: &str) -> Result<(), WorkflowError> {
         let mut workflows = self.workflows.write().await;
-        let exec = workflows.get_mut(workflow_id)
+        let exec = workflows
+            .get_mut(workflow_id)
             .ok_or_else(|| WorkflowError::WorkflowNotFound(workflow_id.to_string()))?;
 
         let (completed, total) = match &exec.state {
             WorkflowExecutionState::Running { completed, total } => (*completed, *total),
-            _ => return Err(WorkflowError::InvalidState("Workflow is not running".to_string())),
+            _ => {
+                return Err(WorkflowError::InvalidState(
+                    "Workflow is not running".to_string(),
+                ))
+            }
         };
 
         exec.state = WorkflowExecutionState::Paused { completed, total };
@@ -566,7 +617,8 @@ impl WorkflowEngine {
     /// Resume a paused workflow.
     pub async fn resume_workflow(&self, workflow_id: &str) -> Result<(), WorkflowError> {
         let mut workflows = self.workflows.write().await;
-        let exec = workflows.get_mut(workflow_id)
+        let exec = workflows
+            .get_mut(workflow_id)
             .ok_or_else(|| WorkflowError::WorkflowNotFound(workflow_id.to_string()))?;
 
         match &exec.state {
@@ -583,14 +635,17 @@ impl WorkflowEngine {
                 info!(workflow_id = %workflow_id, "Workflow resumed");
                 Ok(())
             }
-            _ => Err(WorkflowError::InvalidState("Workflow is not paused".to_string())),
+            _ => Err(WorkflowError::InvalidState(
+                "Workflow is not paused".to_string(),
+            )),
         }
     }
 
     /// Rollback a failed workflow (execute on_rollback callbacks).
     pub async fn rollback_workflow(&self, workflow_id: &str) -> Result<(), WorkflowError> {
         let workflows = self.workflows.read().await;
-        let exec = workflows.get(workflow_id)
+        let exec = workflows
+            .get(workflow_id)
             .ok_or_else(|| WorkflowError::WorkflowNotFound(workflow_id.to_string()))?;
 
         let completed_tasks: Vec<String> = exec.completed_tasks.iter().cloned().collect();
@@ -627,17 +682,25 @@ impl WorkflowEngine {
     }
 
     /// Get the current state of a workflow.
-    pub async fn get_workflow_state(&self, workflow_id: &str) -> Result<WorkflowExecution, WorkflowError> {
+    pub async fn get_workflow_state(
+        &self,
+        workflow_id: &str,
+    ) -> Result<WorkflowExecution, WorkflowError> {
         let workflows = self.workflows.read().await;
-        workflows.get(workflow_id)
+        workflows
+            .get(workflow_id)
             .cloned()
             .ok_or_else(|| WorkflowError::WorkflowNotFound(workflow_id.to_string()))
     }
 
     /// Get metrics for a workflow.
-    pub async fn get_workflow_metrics(&self, workflow_id: &str) -> Result<WorkflowMetrics, WorkflowError> {
+    pub async fn get_workflow_metrics(
+        &self,
+        workflow_id: &str,
+    ) -> Result<WorkflowMetrics, WorkflowError> {
         let workflows = self.workflows.read().await;
-        let exec = workflows.get(workflow_id)
+        let exec = workflows
+            .get(workflow_id)
             .ok_or_else(|| WorkflowError::WorkflowNotFound(workflow_id.to_string()))?;
 
         Ok(WorkflowMetrics::from_execution(exec))
@@ -651,12 +714,15 @@ impl WorkflowEngine {
     /// Save the current workflow state to memory backend.
     pub async fn save_workflow(&self, workflow_id: &str) -> Result<(), WorkflowError> {
         let workflows = self.workflows.read().await;
-        let execution = workflows.get(workflow_id)
+        let execution = workflows
+            .get(workflow_id)
             .ok_or_else(|| WorkflowError::WorkflowNotFound(workflow_id.to_string()))?
             .clone();
         drop(workflows);
 
-        self.memory_backend.store_workflow_state(workflow_id, &execution).await
+        self.memory_backend
+            .store_workflow_state(workflow_id, &execution)
+            .await
             .map_err(|e| WorkflowError::InvalidState(e.to_string()))?;
 
         info!(workflow_id = %workflow_id, "Workflow state saved");
@@ -664,8 +730,14 @@ impl WorkflowEngine {
     }
 
     /// Restore a workflow state from memory backend.
-    pub async fn restore_workflow(&self, workflow_id: &str) -> Result<WorkflowExecution, WorkflowError> {
-        let execution = self.memory_backend.retrieve_workflow_state(workflow_id).await
+    pub async fn restore_workflow(
+        &self,
+        workflow_id: &str,
+    ) -> Result<WorkflowExecution, WorkflowError> {
+        let execution = self
+            .memory_backend
+            .retrieve_workflow_state(workflow_id)
+            .await
             .map_err(|e| WorkflowError::InvalidState(e.to_string()))?
             .ok_or_else(|| WorkflowError::WorkflowNotFound(workflow_id.to_string()))?;
 
@@ -678,13 +750,17 @@ impl WorkflowEngine {
 
     /// List all saved workflows.
     pub async fn list_saved_workflows(&self) -> Result<Vec<String>, WorkflowError> {
-        self.memory_backend.list_saved_workflows().await
+        self.memory_backend
+            .list_saved_workflows()
+            .await
             .map_err(|e| WorkflowError::InvalidState(e.to_string()))
     }
 
     /// Delete a saved workflow state.
     pub async fn delete_saved_workflow(&self, workflow_id: &str) -> Result<(), WorkflowError> {
-        self.memory_backend.delete_workflow_state(workflow_id).await
+        self.memory_backend
+            .delete_workflow_state(workflow_id)
+            .await
             .map_err(|e| WorkflowError::InvalidState(e.to_string()))?;
 
         info!(workflow_id = %workflow_id, "Workflow state deleted");
@@ -717,22 +793,24 @@ async fn execute_single_task(
     match task.task_type {
         TaskType::ToolCall => {
             // Extract tool info from task metadata
-            let tool_name = task.metadata.get("tool_name")
+            let tool_name = task
+                .metadata
+                .get("tool_name")
                 .and_then(|v| v.as_str())
                 .map(String::from);
             let _tool_args = task.metadata.get("tool_args").cloned();
-            let tool_call_id = task.metadata.get("tool_call_id")
+            let tool_call_id = task
+                .metadata
+                .get("tool_call_id")
                 .and_then(|v| v.as_str())
                 .map(String::from);
 
             if let (Some(_name), Some(_call_id)) = (&tool_name, &tool_call_id) {
                 // Dispatch to swarm coordinator for tool execution
                 let swarm_guard = swarm.read().await;
-                let result = swarm_guard.execute_tasks_concurrent(
-                    vec![task.clone()],
-                    app.clone(),
-                    task_id.clone(),
-                ).await;
+                let result = swarm_guard
+                    .execute_tasks_concurrent(vec![task.clone()], app.clone(), task_id.clone())
+                    .await;
 
                 if let Some(res) = result.into_iter().next() {
                     return TaskResult {
@@ -776,7 +854,10 @@ async fn execute_single_task(
             TaskResult {
                 task_id,
                 success: true,
-                output: format!("Custom agent task '{}' completed for {}", task.description, agent_type),
+                output: format!(
+                    "Custom agent task '{}' completed for {}",
+                    task.description, agent_type
+                ),
                 duration_ms,
                 error: None,
                 on_rollback: None,
@@ -874,11 +955,17 @@ mod tests {
         assert_eq!(execution.progress(), 0.0);
 
         execution.completed_tasks.insert("a".to_string());
-        execution.state = WorkflowExecutionState::Running { completed: 1, total: 2 };
+        execution.state = WorkflowExecutionState::Running {
+            completed: 1,
+            total: 2,
+        };
         assert_eq!(execution.progress(), 50.0);
 
         execution.completed_tasks.insert("b".to_string());
-        execution.state = WorkflowExecutionState::Running { completed: 2, total: 2 };
+        execution.state = WorkflowExecutionState::Running {
+            completed: 2,
+            total: 2,
+        };
         assert_eq!(execution.progress(), 100.0);
     }
 
@@ -891,22 +978,28 @@ mod tests {
         let mut execution = WorkflowExecution::new(workflow);
         execution.completed_tasks.insert("a".to_string());
         execution.completed_tasks.insert("b".to_string());
-        execution.task_results.insert("a".to_string(), TaskResult {
-            task_id: "a".to_string(),
-            success: true,
-            output: "done".to_string(),
-            duration_ms: 100,
-            error: None,
-            on_rollback: None,
-        });
-        execution.task_results.insert("b".to_string(), TaskResult {
-            task_id: "b".to_string(),
-            success: true,
-            output: "done".to_string(),
-            duration_ms: 200,
-            error: None,
-            on_rollback: None,
-        });
+        execution.task_results.insert(
+            "a".to_string(),
+            TaskResult {
+                task_id: "a".to_string(),
+                success: true,
+                output: "done".to_string(),
+                duration_ms: 100,
+                error: None,
+                on_rollback: None,
+            },
+        );
+        execution.task_results.insert(
+            "b".to_string(),
+            TaskResult {
+                task_id: "b".to_string(),
+                success: true,
+                output: "done".to_string(),
+                duration_ms: 200,
+                error: None,
+                on_rollback: None,
+            },
+        );
 
         let metrics = WorkflowMetrics::from_execution(&execution);
         assert_eq!(metrics.total_tasks, 2);

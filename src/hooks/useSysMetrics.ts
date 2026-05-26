@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { systemApi, type BackendSystemMetrics } from '@/api';
 
 export interface SystemMetrics {
     cpuBrand: string;
@@ -52,14 +53,6 @@ export interface SystemMetrics {
     } | null;
     numProcesses: number;
     uptimeSecs: number;
-}
-
-interface BackendMetrics {
-    cpu_load: number;
-    mem_used: number;
-    mem_total: number;
-    net_up: number;
-    net_down: number;
 }
 
 function detectActualGPU(): { name: string; memoryTotal: number } {
@@ -216,23 +209,7 @@ export function useSysMetrics(intervalMs = 2000) {
     useEffect(() => {
         const fetchHwInfo = async () => {
             try {
-                const { invoke } = await import('@tauri-apps/api/core');
-                const info = await invoke<{
-                    cpu: string;
-                    cores: number;
-                    threads: number;
-                    memory_gb: number;
-                    os: string;
-                    hostname: string;
-                    has_cuda: boolean;
-                    disks: {
-                        name: string;
-                        mount_point: string;
-                        total_space: number;
-                        available_space: number;
-                        is_removable: boolean;
-                    }[];
-                }>('get_hardware_info', {});
+                const info = await systemApi.getHardwareInfo();
 
                 if (info) {
                     const brand = info.cpu || "Intel Core i7 Processor";
@@ -335,8 +312,7 @@ export function useSysMetrics(intervalMs = 2000) {
             let netDown = 12500;
 
             try {
-                const { invoke } = await import('@tauri-apps/api/core');
-                const data = await invoke<BackendMetrics>('get_system_metrics', {});
+                const data: BackendSystemMetrics = await systemApi.getSystemMetrics();
                 if (data) {
                     cpuLoad = data.cpu_load;
                     memUsed = data.mem_used;

@@ -4,7 +4,7 @@ import { extendedLibrary } from "./genui";
 import { openuiLibrary, openuiPromptOptions } from "@openuidev/react-ui/genui-lib";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { listen } from "@tauri-apps/api/event";
-import { invoke } from "@tauri-apps/api/core";
+import { chatApi } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "lucide-react";
 import { useChat } from "@/atlas/hooks/useChat";
@@ -136,7 +136,7 @@ export function OpenUICanvas({ selectedModelId, selectedProvider }: OpenUICanvas
 
         // Support manual cancellation
         abortController.signal.addEventListener("abort", () => {
-          invoke("abort_chat", { chatId: activeSessionId })
+          chatApi.abortChat(activeSessionId)
             .catch((e) => console.warn("Failed to abort stream:", e))
             .finally(() => {
               cleanup();
@@ -148,7 +148,7 @@ export function OpenUICanvas({ selectedModelId, selectedProvider }: OpenUICanvas
 
         try {
           // Invoke the Tauri Rust command
-          invoke("send_message", {
+          chatApi.sendMessage({
             chatId: activeSessionId,
             content: userMessage,
             model: selectedModelId,

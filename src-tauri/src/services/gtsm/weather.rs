@@ -1,4 +1,4 @@
-use super::types::{WeatherPoint, WeatherGridPoint};
+use super::types::{WeatherGridPoint, WeatherPoint};
 use anyhow::Result;
 use serde::Deserialize;
 
@@ -195,6 +195,6 @@ fn wmo_code_to_description(code: i32) -> String {
         96 => "Thunderstorm with slight hail",
         99 => "Thunderstorm with heavy hail",
         _ => "Unknown",
-    }.to_string()
+    }
+    .to_string()
 }
-

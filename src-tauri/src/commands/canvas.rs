@@ -1,20 +1,18 @@
-use tauri::State;
-use serde_json::json;
-use crate::error::ZenError;
-use crate::commands::AppState;
-use crate::canvas::{
-    generate_canvas_summary, CanvasSummary, GeometryContext, LayoutConstraints,
-    validate_layout, auto_fix_layout, AnchorResolver, AnchorType, AnchorDrawCommand,
-    compile_anchor_command, PlotRequest, generate_plot, GraphSession,
-};
 use crate::canvas::protocol::{generate_feedback, SessionFeedback};
+use crate::canvas::{
+    auto_fix_layout, compile_anchor_command, generate_canvas_summary, generate_plot,
+    validate_layout, AnchorDrawCommand, AnchorResolver, AnchorType, CanvasSummary, GeometryContext,
+    GraphSession, LayoutConstraints, PlotRequest,
+};
+use crate::commands::AppState;
+use crate::error::ZenError;
+use serde_json::json;
+use tauri::State;
 
 // ─── Canvas Commands ───
 
 #[tauri::command]
-pub async fn get_canvas_summary(
-    canvas_json: String,
-) -> Result<CanvasSummary, ZenError> {
+pub async fn get_canvas_summary(canvas_json: String) -> Result<CanvasSummary, ZenError> {
     let canvas: serde_json::Value = serde_json::from_str(&canvas_json)
         .map_err(|e| ZenError::Custom(format!("Invalid canvas JSON: {}", e)))?;
 
@@ -26,7 +24,8 @@ pub async fn get_canvas_summary(
     let height = canvas
         .get("height")
         .and_then(|v| v.as_u64())
-        .ok_or_else(|| ZenError::Custom("Missing or invalid height".into()))? as u32;
+        .ok_or_else(|| ZenError::Custom("Missing or invalid height".into()))?
+        as u32;
 
     let ops = canvas
         .get("ops")
@@ -38,13 +37,13 @@ pub async fn get_canvas_summary(
         .and_then(|v| v.as_str())
         .unwrap_or("#1a1a2e");
 
-    Ok(generate_canvas_summary(width, height, ops, background, None))
+    Ok(generate_canvas_summary(
+        width, height, ops, background, None,
+    ))
 }
 
 #[tauri::command]
-pub async fn get_canvas_screenshot_base64(
-    canvas_data_url: String,
-) -> Result<String, ZenError> {
+pub async fn get_canvas_screenshot_base64(canvas_data_url: String) -> Result<String, ZenError> {
     if let Some(base64_part) = canvas_data_url.strip_prefix("data:image/png;base64,") {
         Ok(base64_part.to_string())
     } else if let Some(base64_part) = canvas_data_url.strip_prefix("data:image/jpeg;base64,") {
@@ -128,8 +127,7 @@ pub async fn resolve_anchor(
         resolver.register_object(id, bbox);
     }
 
-    let anchor = AnchorType::parse(&anchor_str)
-        .map_err(|e| ZenError::Custom(e.to_string()))?;
+    let anchor = AnchorType::parse(&anchor_str).map_err(|e| ZenError::Custom(e.to_string()))?;
 
     let pos = resolver
         .resolve_with_offset(&anchor, offset)
@@ -156,8 +154,8 @@ pub async fn compile_anchor_draw_command(
         resolver.register_object(id, bbox);
     }
 
-    let result = compile_anchor_command(&cmd, &resolver)
-        .map_err(|e| ZenError::Custom(e.to_string()))?;
+    let result =
+        compile_anchor_command(&cmd, &resolver).map_err(|e| ZenError::Custom(e.to_string()))?;
 
     Ok(result)
 }
@@ -165,17 +163,13 @@ pub async fn compile_anchor_draw_command(
 // ─── Math Plot Engine Commands ───
 
 #[tauri::command]
-pub async fn plot_mathematical(
-    request_json: String,
-) -> Result<serde_json::Value, ZenError> {
+pub async fn plot_mathematical(request_json: String) -> Result<serde_json::Value, ZenError> {
     let request: PlotRequest = serde_json::from_str(&request_json)
         .map_err(|e| ZenError::Custom(format!("Invalid plot request JSON: {}", e)))?;
 
-    let output = generate_plot(&request)
-        .map_err(|e| ZenError::Custom(e.to_string()))?;
+    let output = generate_plot(&request).map_err(|e| ZenError::Custom(e.to_string()))?;
 
-    Ok(serde_json::to_value(output)
-        .unwrap_or_else(|_| json!({"error": "serialization failed"})))
+    Ok(serde_json::to_value(output).unwrap_or_else(|_| json!({"error": "serialization failed"})))
 }
 
 // ─── Graph Session Commands (MathPlot Mode) ───
@@ -190,10 +184,12 @@ pub async fn create_graph_session(
     let session = GraphSession::new(id.clone(), name.clone());
     let mut sessions = state.graph_sessions.lock().await;
     sessions.insert(id.clone(), session);
-    
+
     // Persist to database
-    let _ = crate::db::queries::get_or_create_graph_session(&state.db().await?, &id, "default", &name).await;
-    
+    let _ =
+        crate::db::queries::get_or_create_graph_session(&state.db().await?, &id, "default", &name)
+            .await;
+
     Ok(id)
 }
 
@@ -205,26 +201,32 @@ pub async fn apply_session_action(
     action: serde_json::Value,
 ) -> Result<SessionFeedback, ZenError> {
     let mut sessions = state.graph_sessions.lock().await;
-    let session = sessions.entry(session_id.clone()).or_insert_with(|| {
-        GraphSession::new(session_id.clone(), "Auto Session".to_string())
-    });
+    let session = sessions
+        .entry(session_id.clone())
+        .or_insert_with(|| GraphSession::new(session_id.clone(), "Auto Session".to_string()));
 
     let parsed = crate::canvas::protocol::parse_session_action(action.clone())
         .map_err(|e| ZenError::Custom(e.to_string()))?;
 
-    let summary = format!("Action: {}", action.get("action").and_then(|v| v.as_str()).unwrap_or("unknown"));
+    let summary = format!(
+        "Action: {}",
+        action
+            .get("action")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+    );
 
-    session.apply_action(parsed, "user")
+    session
+        .apply_action(parsed, "user")
         .map_err(|e| ZenError::Custom(e.to_string()))?;
 
     // Persist to database after each action
-    let expressions_json = serde_json::to_string(&session.expressions)
-        .unwrap_or_else(|_| "[]".to_string());
-    let variables_json = serde_json::to_string(&session.variables)
-        .unwrap_or_else(|_| "{}".to_string());
-    let history_json = serde_json::to_string(&session.history)
-        .unwrap_or_else(|_| "[]".to_string());
-    
+    let expressions_json =
+        serde_json::to_string(&session.expressions).unwrap_or_else(|_| "[]".to_string());
+    let variables_json =
+        serde_json::to_string(&session.variables).unwrap_or_else(|_| "{}".to_string());
+    let history_json = serde_json::to_string(&session.history).unwrap_or_else(|_| "[]".to_string());
+
     let _ = crate::db::queries::save_graph_session(
         &state.db().await?,
         &session_id,
@@ -236,7 +238,8 @@ pub async fn apply_session_action(
         session.viewport.y_max,
         session.current_version as i64,
         &history_json,
-    ).await;
+    )
+    .await;
 
     Ok(generate_feedback(session, summary))
 }
@@ -248,7 +251,8 @@ pub async fn get_session_state(
     session_id: String,
 ) -> Result<serde_json::Value, ZenError> {
     let sessions = state.graph_sessions.lock().await;
-    let session = sessions.get(&session_id)
+    let session = sessions
+        .get(&session_id)
         .ok_or_else(|| ZenError::Custom(format!("Session '{}' not found", session_id)))?;
     Ok(session.export_state())
 }
@@ -261,20 +265,21 @@ pub async fn rollback_session(
     version: usize,
 ) -> Result<SessionFeedback, ZenError> {
     let mut sessions = state.graph_sessions.lock().await;
-    let session = sessions.get_mut(&session_id)
+    let session = sessions
+        .get_mut(&session_id)
         .ok_or_else(|| ZenError::Custom(format!("Session '{}' not found", session_id)))?;
 
-    session.rollback_to_version(version)
+    session
+        .rollback_to_version(version)
         .map_err(|e| ZenError::Custom(e.to_string()))?;
 
     // Persist rollback to database
-    let expressions_json = serde_json::to_string(&session.expressions)
-        .unwrap_or_else(|_| "[]".to_string());
-    let variables_json = serde_json::to_string(&session.variables)
-        .unwrap_or_else(|_| "{}".to_string());
-    let history_json = serde_json::to_string(&session.history)
-        .unwrap_or_else(|_| "[]".to_string());
-    
+    let expressions_json =
+        serde_json::to_string(&session.expressions).unwrap_or_else(|_| "[]".to_string());
+    let variables_json =
+        serde_json::to_string(&session.variables).unwrap_or_else(|_| "{}".to_string());
+    let history_json = serde_json::to_string(&session.history).unwrap_or_else(|_| "[]".to_string());
+
     let _ = crate::db::queries::save_graph_session(
         &state.db().await?,
         &session_id,
@@ -286,9 +291,13 @@ pub async fn rollback_session(
         session.viewport.y_max,
         session.current_version as i64,
         &history_json,
-    ).await;
+    )
+    .await;
 
-    Ok(generate_feedback(session, format!("Rolled back to version {}", version)))
+    Ok(generate_feedback(
+        session,
+        format!("Rolled back to version {}", version),
+    ))
 }
 
 /// Load graph sessions from database on app init
@@ -299,17 +308,18 @@ pub async fn load_graph_sessions_from_db(
 ) -> Result<serde_json::Value, ZenError> {
     use crate::canvas::session::Expression;
     use std::collections::HashMap;
-    
-    let db_session = crate::db::queries::get_graph_session(&state.db().await?, &format!("chat_{}", chat_id))
-        .await
-        .map_err(|e| ZenError::Custom(e.to_string()))?;
-    
+
+    let db_session =
+        crate::db::queries::get_graph_session(&state.db().await?, &format!("chat_{}", chat_id))
+            .await
+            .map_err(|e| ZenError::Custom(e.to_string()))?;
+
     if let Some(db_session) = db_session {
-        let expressions: Vec<Expression> = serde_json::from_str(&db_session.expressions)
-            .unwrap_or_default();
-        let variables: HashMap<String, f64> = serde_json::from_str(&db_session.variables)
-            .unwrap_or_default();
-        
+        let expressions: Vec<Expression> =
+            serde_json::from_str(&db_session.expressions).unwrap_or_default();
+        let variables: HashMap<String, f64> =
+            serde_json::from_str(&db_session.variables).unwrap_or_default();
+
         return Ok(serde_json::json!({
             "id": db_session.id,
             "expressions": expressions,
@@ -324,7 +334,7 @@ pub async fn load_graph_sessions_from_db(
             "restored": true
         }));
     }
-    
+
     Ok(serde_json::json!({ "restored": false }))
 }
 
@@ -340,11 +350,22 @@ pub async fn save_drawing_canvas_to_db(
     objects_json: String,
     background: String,
 ) -> Result<(), ZenError> {
-    let _ = crate::db::queries::get_or_create_drawing_canvas(&state.db().await?, &canvas_id, &chat_id, &name).await;
-    
-    crate::db::queries::save_drawing_canvas(&state.db().await?, &canvas_id, &objects_json, &background)
-        .await
-        .map_err(|e| ZenError::Custom(e.to_string()))
+    let _ = crate::db::queries::get_or_create_drawing_canvas(
+        &state.db().await?,
+        &canvas_id,
+        &chat_id,
+        &name,
+    )
+    .await;
+
+    crate::db::queries::save_drawing_canvas(
+        &state.db().await?,
+        &canvas_id,
+        &objects_json,
+        &background,
+    )
+    .await
+    .map_err(|e| ZenError::Custom(e.to_string()))
 }
 
 /// Load drawing canvas from database
@@ -355,11 +376,11 @@ pub async fn load_drawing_canvas_from_db(
 ) -> Result<serde_json::Value, ZenError> {
     use crate::canvas::session::Expression;
     use std::collections::HashMap;
-    
+
     let db_canvas = crate::db::queries::get_graph_session(&state.db().await?, &canvas_id)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))?;
-    
+
     if let Some(canvas) = db_canvas {
         return Ok(serde_json::json!({
             "id": canvas.id,
@@ -375,6 +396,6 @@ pub async fn load_drawing_canvas_from_db(
             "restored": true
         }));
     }
-    
+
     Ok(serde_json::json!({ "restored": false }))
 }

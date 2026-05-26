@@ -1,8 +1,7 @@
-use sqlx::SqlitePool;
-use uuid::Uuid;
 use crate::db::models::*;
 use crate::error::ZenResult;
-
+use sqlx::SqlitePool;
+use uuid::Uuid;
 
 // --- Messages ---
 
@@ -23,7 +22,9 @@ pub async fn add_message(
     kind: Option<&str>,
     metadata: Option<&str>,
 ) -> ZenResult<Message> {
-    let id = id.map(|s| s.to_string()).unwrap_or_else(|| Uuid::new_v4().to_string());
+    let id = id
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
 
     let mut tx = pool.begin().await?;
 
@@ -55,7 +56,7 @@ pub async fn add_message(
                message_count = message_count + 1,
                total_tokens_in = total_tokens_in + ?,
                total_tokens_out = total_tokens_out + ?
-           WHERE id = ?"#
+           WHERE id = ?"#,
     )
     .bind(tokens_in.unwrap_or(0))
     .bind(tokens_out.unwrap_or(0))
@@ -71,4 +72,3 @@ pub async fn add_message(
         .await?;
     Ok(msg)
 }
-

@@ -1,30 +1,10 @@
 import { useState, useEffect, memo } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
 import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
 import { WorkbenchInput } from '@/components/settings/ui/WorkbenchInput';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
 import { cn } from '@/lib/utils';
-
-interface AgentInfo {
-  id: string;
-  name: string;
-  description: string;
-  tool_count: number;
-  model_override?: string;
-  max_iterations?: number;
-}
-
-interface AgentConfig {
-  agent_id: string;
-  agent_name: string;
-  model_name: string;
-  context_window: number;
-  max_messages_in_memory: number;
-  max_iterations: number;
-  enabled_tools: string[];
-  system_prompt_override?: string;
-}
+import { agentsApi, type AgentConfig, type AgentInfo } from '@/api';
 
 const FALLBACK_AGENTS: AgentInfo[] = [
   {
@@ -68,8 +48,8 @@ export const AgentGallery = memo(() => {
     setLoading(true);
     try {
       const [agentList, configList] = await Promise.all([
-        invoke<AgentInfo[]>('list_agents'),
-        invoke<AgentConfig[]>('list_agents_with_configs'),
+        agentsApi.listAgents(),
+        agentsApi.listAgentsWithConfigs(),
       ]);
       if (agentList?.length) setAgents(agentList);
       if (configList?.length) setConfigs(configList);
@@ -100,11 +80,7 @@ export const AgentGallery = memo(() => {
     setSpawnResult(null);
 
     try {
-      await invoke('spawn_agent', {
-        agentId: selectedAgent.id,
-        message: testMessage,
-        options: {},
-      });
+      await agentsApi.spawnAgent(selectedAgent.id, testMessage, {});
       setSpawnResult({
         success: true,
         message: 'Cognitive handshake complete. Agent initialized in sandbox.'

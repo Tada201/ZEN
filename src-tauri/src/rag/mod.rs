@@ -1,19 +1,19 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-pub mod lancedb_store;
-pub mod ingestion;
-pub mod session_memory;
+pub mod conversation_store;
 pub mod embedding;
 pub mod hybrid_backend;
-pub mod conversation_store;
+pub mod ingestion;
+pub mod lancedb_store;
+pub mod session_memory;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentChunk {
     pub id: String,
-    pub source: String,     // File path or URL
-    pub text: String,       // The actual chunk payload
-    pub metadata: String,   // JSON string of extra context
+    pub source: String,   // File path or URL
+    pub text: String,     // The actual chunk payload
+    pub metadata: String, // JSON string of extra context
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,14 +31,14 @@ pub trait VectorStore: Send + Sync {
     async fn add_chunks(
         &self,
         chunks: Vec<DocumentChunk>,
-        embeddings: Vec<Vec<f32>>
+        embeddings: Vec<Vec<f32>>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
     /// Search for semantically similar chunks based on a query embedding
     async fn search(
         &self,
         query_embedding: Vec<f32>,
-        limit: usize
+        limit: usize,
     ) -> Result<Vec<SearchResult>, Box<dyn std::error::Error + Send + Sync>>;
 
     /// Delete all vector chunks whose source matches the given file path.

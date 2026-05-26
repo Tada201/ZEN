@@ -1,35 +1,15 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { memoryApi, type MemorySearchResult, type MemoryStats } from '@/api';
 import { useChatStore } from '@/lib/stores/useChatStore';
 import { 
   Database, RefreshCw, Trash2, Search, Brain, Calendar, Info, ShieldAlert, Cpu
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-interface MemoryEntry {
-  id: string;
-  chat_id: string;
-  message_id: string;
-  vector: number[];
-  text: string;
-  role: string;
-  timestamp: number;
-  metadata: string;
-}
-
-interface SearchResult {
-  entry: MemoryEntry;
-  score: number;
-}
-
-interface MemoryStats {
-  total_vectors: number;
-}
-
 export function MemoryStatsWidget() {
   const activeSessionId = useChatStore(s => s.activeSessionId);
   const [stats, setStats] = useState<MemoryStats | null>(null);
-  const [memories, setMemories] = useState<SearchResult[]>([]);
+  const [memories, setMemories] = useState<MemorySearchResult[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -41,16 +21,12 @@ export function MemoryStatsWidget() {
     setError(null);
     try {
       // 1. Fetch overall database stats
-      const statsRes = await invoke<MemoryStats>('get_memory_stats');
+      const statsRes = await memoryApi.getStats();
       setStats(statsRes);
 
       // 2. Fetch memories for the current session (default empty search returning recent vectors)
       if (activeSessionId) {
-        const memsRes = await invoke<SearchResult[]>('get_conversation_memories', {
-          chatId: activeSessionId,
-          query: searchQuery.trim() || null,
-          limit: 20
-        });
+        const memsRes = await memoryApi.getConversationMemories(activeSessionId, searchQuery.trim() || null, 20);
         setMemories(memsRes);
       } else {
         setMemories([]);
@@ -86,10 +62,10 @@ export function MemoryStatsWidget() {
     
     setActionLoading(true);
     try {
-      await invoke('clear_conversation_memories', { chatId: activeSessionId });
+      await memoryApi.clearConversationMemories(activeSessionId);
       setMemories([]);
       // Reload stats
-      const statsRes = await invoke<MemoryStats>('get_memory_stats');
+      const statsRes = await memoryApi.getStats();
       setStats(statsRes);
     } catch (err: any) {
       alert(`Purge failed: ${err}`);
@@ -104,7 +80,7 @@ export function MemoryStatsWidget() {
     
     setActionLoading(true);
     try {
-      await invoke('clear_conversation_memories', { chatId: null });
+      await memoryApi.clearConversationMemories(null);
       setMemories([]);
       setStats({ total_vectors: 0 });
     } catch (err: any) {

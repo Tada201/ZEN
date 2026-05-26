@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { useGTSMStore } from '@/lib/stores/useGTSMStore';
+import { gtsmApi } from '@/api';
 
 export interface TrafficIncident {
     id: string;
@@ -65,7 +65,7 @@ export const useNavigation = () => {
         setIsRouting(true);
         setRouteError(null);
         try {
-            const route = await invoke('compute_navigation_route', {
+            const route = await gtsmApi.computeNavigationRoute<NavigationRoute>({
                 startLat: origin[1],
                 startLon: origin[0],
                 endLat: dest[1],

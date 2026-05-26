@@ -1,8 +1,8 @@
+use crate::tools::{RiskLevel, Tool, ToolError, ToolOutput};
 use async_trait::async_trait;
-use serde::{Deserialize};
+use serde::Deserialize;
 use serde_json::json;
 use tauri::{AppHandle, Emitter};
-use crate::tools::{Tool, ToolOutput, ToolError, RiskLevel};
 
 /// Tool to activate a 2D operational wireframe map at a specific location.
 pub struct ActivateOperationalMapTool;
@@ -65,9 +65,10 @@ impl Tool for ActivateOperationalMapTool {
         _chat_id: String,
         args: serde_json::Value,
     ) -> Result<ToolOutput, ToolError> {
-        let args: OperationalMapArgs = serde_json::from_value(args).map_err(|e| {
-            ToolError::InvalidArguments { details: e.to_string() }
-        })?;
+        let args: OperationalMapArgs =
+            serde_json::from_value(args).map_err(|e| ToolError::InvalidArguments {
+                details: e.to_string(),
+            })?;
 
         let mut final_lat = args.lat;
         let mut final_lon = args.lon;
@@ -75,8 +76,11 @@ impl Tool for ActivateOperationalMapTool {
 
         if final_lat.is_none() || final_lon.is_none() {
             if let Some(name) = &args.location_name {
-                let results = crate::services::gtsm::geocoding::search(name, 1).await
-                    .map_err(|e| ToolError::ExecutionFailed { message: format!("Geocoding failed: {}", e) })?;
+                let results = crate::services::gtsm::geocoding::search(name, 1)
+                    .await
+                    .map_err(|e| ToolError::ExecutionFailed {
+                        message: format!("Geocoding failed: {}", e),
+                    })?;
 
                 if let Some(first) = results.first() {
                     final_lat = Some(first.lat);
@@ -84,12 +88,13 @@ impl Tool for ActivateOperationalMapTool {
                     resolved_name = Some(first.display_name.clone());
                 } else {
                     return Err(ToolError::ExecutionFailed {
-                        message: format!("Location '{}' could not be resolved.", name)
+                        message: format!("Location '{}' could not be resolved.", name),
                     });
                 }
             } else {
                 return Err(ToolError::InvalidArguments {
-                    details: "Either location_name or both lat and lon must be provided.".to_string()
+                    details: "Either location_name or both lat and lon must be provided."
+                        .to_string(),
                 });
             }
         }
@@ -99,12 +104,15 @@ impl Tool for ActivateOperationalMapTool {
         let zoom = args.zoom.unwrap_or(10);
 
         // Emit event to frontend
-        let _ = app.emit("map:activate-operational", json!({
-            "lat": lat,
-            "lon": lon,
-            "zoom": zoom,
-            "label": resolved_name.clone().unwrap_or_else(|| format!("{:.4}, {:.4}", lat, lon))
-        }));
+        let _ = app.emit(
+            "map:activate-operational",
+            json!({
+                "lat": lat,
+                "lon": lon,
+                "zoom": zoom,
+                "label": resolved_name.clone().unwrap_or_else(|| format!("{:.4}, {:.4}", lat, lon))
+            }),
+        );
 
         Ok(ToolOutput {
             content: json!({

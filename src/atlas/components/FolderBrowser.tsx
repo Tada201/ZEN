@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { workspaceApi } from "@/api";
 import {
   Dialog, DialogContent,
   DialogTitle, DialogDescription,
@@ -37,7 +37,7 @@ export function FolderBrowser({ value, onChange }: FolderBrowserProps) {
     setLoading(true);
     setError(null);
     try {
-      const data = await invoke<BrowseResult>("browseFolder", { path: dirPath });
+      const data = await workspaceApi.browseFolder(dirPath) as BrowseResult;
       setBrowseData(data);
       if (data.current) {
         setSelectedPath(data.current);

@@ -61,6 +61,18 @@ function flattenChildren(children: any): string {
   return String(children);
 }
 
+function normalizeCodeLanguage(language?: string): string {
+  const lang = (language || "").toLowerCase();
+  if (lang === "openui-lang" || lang === "openuilang" || lang === "genui") return "openui";
+  return lang;
+}
+
+function stripCodeFence(content: string): string {
+  return content
+    .replace(/^```[^\n]*\n/, '')
+    .replace(/\n```$/, '')
+    .replace(/\n$/, '');
+}
 
 // Helper to remove the [!TYPE] text from the React element tree
 function removeAlertTag(children: React.ReactNode): React.ReactNode {
@@ -101,12 +113,9 @@ const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
 }) {
   // Code blocks: render with specialized support outside ReactMarkdown
   if (block.type === 'code') {
-    const codeStr = block.content
-      .replace(/^```\w*\n/, '')
-      .replace(/\n```$/, '')
-      .replace(/\n$/, '');
-    const langMatch = block.content.match(/^```(\w*)/);
-    const lang = langMatch ? langMatch[1].toLowerCase() : '';
+    const codeStr = stripCodeFence(block.content);
+    const langMatch = block.content.match(/^```([^\s`]*)/);
+    const lang = normalizeCodeLanguage(langMatch ? langMatch[1] : block.language);
 
     if (lang === 'openui') {
       return (
@@ -166,8 +175,8 @@ export function MarkdownContent({
   chatId?: string;
 }) {
   // 1. Extract thought blocks (handles both reasoning prop and <thought> tags)
-  let thought: string | null = isThinking ? content : (reasoning || null);
-  let mainContent = isThinking ? "" : content;
+  let thought: string | null = reasoning || null;
+  let mainContent = content;
 
   if (!thought) {
     const thoughtMatch = /<thought>([\s\S]*?)<\/thought>/.exec(content);
@@ -190,10 +199,10 @@ export function MarkdownContent({
   // 3. Build stable components reference for markdown rendering
   const components: Components = useMemo(() => ({
     code({ className, children }) {
-      const match = /language-(\w+)/.exec(className || "");
+      const match = /language-([\w-]+)/.exec(className || "");
       const codeStr = flattenChildren(children).replace(/\n$/, "");
       if (match) {
-        const lang = match[1].toLowerCase();
+        const lang = normalizeCodeLanguage(match[1]);
         // These are now primarily handled at the block level, but keep
         // as fallback for inline parsing edge cases
         if (lang === "openui") {
@@ -297,7 +306,7 @@ export function MarkdownContent({
     td: ({ children }) => <TableCell>{children}</TableCell>,
     strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
     hr: () => <hr className="my-8 border-border/20" />,
-  }), [onOpenArtifact, chatId]);
+  }), [onOpenArtifact, chatId, isStreaming]);
 
   return (
     <div className="space-y-6">

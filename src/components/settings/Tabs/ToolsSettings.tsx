@@ -1,14 +1,13 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { SettingsSection } from "../SettingsSection";
 import { SettingsRow } from "../SettingsRow";
 import { WorkbenchSwitch } from "../ui/WorkbenchSwitch";
 import { WorkbenchSelect } from "../ui/WorkbenchSelect";
-import { WorkbenchSlider } from "../ui/WorkbenchSlider";
 import { WorkbenchTextArea } from "../ui/WorkbenchTextArea";
 import { WorkbenchButton } from "@/components/ui/WorkbenchButton";
 import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 import { Badge } from "@/components/ui/badge";
+import { mapBackendToolMeta, toolsApi, type ToolMeta } from "@/api";
 
 interface ToolsSettingsProps {
   settings: Record<string, string>;
@@ -16,23 +15,6 @@ interface ToolsSettingsProps {
 }
 
 // ── Canonical tool shape from the backend ─────────────────────────
-
-interface ToolMeta {
-  id: string;
-  name: string;
-  icon: string;
-  riskLevel: "Low" | "Medium" | "High" | "Critical";
-  description: string;
-}
-
-/** Shape returned by the `list_tool_metadata` Tauri command. */
-interface BackendToolMeta {
-  id: string;
-  name: string;
-  icon: string;
-  risk_level: string;
-  description: string;
-}
 
 const RISK_COLORS: Record<string, string> = {
   Low: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
@@ -187,18 +169,12 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
   useEffect(() => {
     let cancelled = false;
     setFetching(true);
-    invoke<BackendToolMeta[]>("list_tool_metadata")
+    toolsApi.listToolMetadata()
       .then((backendList) => {
         if (cancelled) return;
         const mapped: ToolMeta[] = backendList
           .filter((t) => t.name !== "")
-          .map((t) => ({
-            id: t.id,
-            name: t.name,
-            icon: t.icon,
-            riskLevel: normalizeRiskLevel(t.risk_level),
-            description: t.description,
-          }));
+          .map(mapBackendToolMeta);
         setTools(mapped);
       })
       .catch((err) => {
@@ -227,8 +203,6 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
   const yoloMode = settings["tools.yolo-mode"] === "true";
   const autoApproveLowRisk = settings["tools.auto-approve-low-risk"] === "true";
   const globalDefault = settings["tools.global-default"] || "confirm";
-  const toolTimeout = parseInt(settings["tools.timeout-seconds"] || "30");
-  const sandboxEnabled = settings["tools.sandbox-enabled"] !== "false";
   const visibleTools = showAllTools ? tools : tools.slice(0, 3);
   const hiddenCount = Math.max(0, tools.length - 3);
 
@@ -357,53 +331,6 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
         </div>
       </SettingsSection>
 
-      {/* ── Execution Safety ── */}
-      <SettingsSection title="Execution Safety" icon="lucide:gauge" description="Constraints and limits for tool execution">
-        <SettingsRow
-          label="Sandbox Mode"
-          description="Isolate tool execution in a restricted environment"
-          control={
-            <WorkbenchSwitch
-              checked={sandboxEnabled}
-              onCheckedChange={(v) => onUpdate("tools.sandbox-enabled", String(v))}
-            />
-          }
-          icon="lucide:lock"
-        />
-
-        <SettingsRow
-          label="Tool Timeout"
-          description="Maximum execution time per tool call"
-          control={
-            <div className="flex items-center gap-2 w-[160px]">
-              <WorkbenchSlider
-                value={[toolTimeout]}
-                onValueChange={([v]) => onUpdate("tools.timeout-seconds", String(v))}
-                min={5}
-                max={300}
-                step={5}
-                className="flex-1"
-              />
-              <span className="text-[11px] font-mono text-muted-foreground w-9 text-right">
-                {toolTimeout}s
-              </span>
-            </div>
-          }
-          icon="lucide:clock"
-        />
-
-        <SettingsRow
-          label="Tool Logging"
-          description="Log all tool calls and their results for auditing"
-          control={
-            <WorkbenchSwitch
-              checked={settings["tools.logging-enabled"] !== "false"}
-              onCheckedChange={(v) => onUpdate("tools.logging-enabled", String(v))}
-            />
-          }
-          icon="lucide:download"
-        />
-      </SettingsSection>
 
       {/* ── Quick Presets ── */}
       <SettingsSection title="Quick Presets" icon="lucide:zap" description="Apply pre-configured permission profiles">
@@ -415,7 +342,6 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
                 onUpdate("tools.global-default", "always_deny");
                 onUpdate("tools.yolo-mode", "false");
                 onUpdate("tools.auto-approve-low-risk", "false");
-                onUpdate("tools.sandbox-enabled", "true");
               }}
               className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-white/[0.06] hover:bg-white/[0.03] transition-colors cursor-pointer"
             >
@@ -430,7 +356,6 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
                 onUpdate("tools.global-default", "confirm");
                 onUpdate("tools.yolo-mode", "false");
                 onUpdate("tools.auto-approve-low-risk", "true");
-                onUpdate("tools.sandbox-enabled", "true");
               }}
               className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-white/[0.06] border-primary/20 bg-primary/[0.03] hover:bg-primary/[0.06] transition-colors cursor-pointer"
             >
@@ -445,7 +370,6 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
                 onUpdate("tools.global-default", "always_allow");
                 onUpdate("tools.yolo-mode", "true");
                 onUpdate("tools.auto-approve-low-risk", "true");
-                onUpdate("tools.sandbox-enabled", "false");
               }}
               className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-white/[0.06] hover:bg-white/[0.03] transition-colors cursor-pointer"
             >
@@ -458,12 +382,4 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
       </SettingsSection>
     </div>
   );
-}
-
-function normalizeRiskLevel(raw: string): ToolMeta["riskLevel"] {
-  const level = raw.toLowerCase();
-  if (level === "critical") return "Critical";
-  if (level === "high") return "High";
-  if (level === "medium") return "Medium";
-  return "Low";
 }

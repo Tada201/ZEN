@@ -1,3 +1,5 @@
+use crate::agent::types::Agent;
+use crate::db::queries;
 /// Agentic Swarm Phase 6: Agent Configuration System
 ///
 /// Provides per-agent configuration management:
@@ -6,12 +8,9 @@
 /// - Tool permissions per agent
 /// - System prompt overrides
 /// - Persistence to database
-
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
-use crate::db::queries;
-use crate::agent::types::Agent;
 
 /// Default configuration values for each agent type
 const DEFAULT_GENERALIST_MODEL: &str = "llama3.2:latest";
@@ -80,7 +79,7 @@ impl AgentConfig {
                     "get_system_metrics".to_string(),
                     "vector_search".to_string(),
                     "handoff_to_agent".to_string(),
-                    "spawn_agent".to_string(),      // ✅ Enable delegation
+                    "spawn_agent".to_string(),       // ✅ Enable delegation
                     "delegate_to_agent".to_string(), // ✅ Alias for spawn_agent
                 ],
                 system_prompt_override: Some(GENERALIST_SYSTEM_PROMPT.to_string()),
@@ -137,7 +136,7 @@ impl AgentConfigManager {
     /// Returns saved config if exists, otherwise returns defaults
     pub async fn load_config(&self, agent_id: &str) -> Result<AgentConfig> {
         let key = format!("agent_{}_config", agent_id);
-        
+
         match queries::get_setting(&self.db_pool, &key).await? {
             Some(json_str) => {
                 // Parse saved config
@@ -157,7 +156,7 @@ impl AgentConfigManager {
         let key = config.db_key();
         let json_str = serde_json::to_string_pretty(config)
             .with_context(|| format!("Failed to serialize config for '{}'", config.agent_id))?;
-        
+
         queries::set_setting(&self.db_pool, &key, &json_str).await?;
         Ok(())
     }
@@ -165,7 +164,7 @@ impl AgentConfigManager {
     /// List all agent configurations
     pub async fn list_all_configs(&self) -> Result<Vec<AgentConfig>> {
         let all_settings = queries::get_all_settings(&self.db_pool).await?;
-        
+
         let mut configs = Vec::new();
         for (key, value) in all_settings {
             if key.starts_with("agent_") && key.ends_with("_config") {
@@ -174,7 +173,7 @@ impl AgentConfigManager {
                 }
             }
         }
-        
+
         // Add defaults for any agents without saved configs
         let default_agent_ids = ["generalist", "operational_expert", "researcher"];
         for agent_id in &default_agent_ids {
@@ -182,7 +181,7 @@ impl AgentConfigManager {
                 configs.push(AgentConfig::default_for_agent(agent_id));
             }
         }
-        
+
         Ok(configs)
     }
 
@@ -222,20 +221,22 @@ impl AgentConfigManager {
 pub fn apply_config_to_agent(agent: &mut Agent, config: &AgentConfig) {
     // Apply model override
     agent.model_override = Some(config.model_name.clone());
-    
+
     // Apply max iterations
     agent.max_iterations = Some(config.max_iterations as usize);
-    
+
     // Apply system prompt override if provided
     if let Some(ref override_prompt) = config.system_prompt_override {
         if !override_prompt.trim().is_empty() {
             agent.instructions = override_prompt.clone();
         }
     }
-    
+
     // Filter tools if enabled_tools is specified and non-empty
     if !config.enabled_tools.is_empty() {
-        agent.tool_ids.retain(|tool_id| config.enabled_tools.contains(tool_id));
+        agent
+            .tool_ids
+            .retain(|tool_id| config.enabled_tools.contains(tool_id));
     }
 }
 
@@ -256,12 +257,15 @@ mod tests {
     fn test_default_configs() {
         let configs = get_all_default_configs();
         assert_eq!(configs.len(), 3);
-        
+
         let generalist = configs.iter().find(|c| c.agent_id == "generalist").unwrap();
         assert_eq!(generalist.model_name, DEFAULT_GENERALIST_MODEL);
         assert_eq!(generalist.context_window, DEFAULT_GENERALIST_CONTEXT);
-        
-        let operational = configs.iter().find(|c| c.agent_id == "operational_expert").unwrap();
+
+        let operational = configs
+            .iter()
+            .find(|c| c.agent_id == "operational_expert")
+            .unwrap();
         assert_eq!(operational.context_window, DEFAULT_OPERATIONAL_CONTEXT);
     }
 
@@ -269,7 +273,7 @@ mod tests {
     fn test_config_serialization() {
         let config = AgentConfig::default_for_agent("generalist");
         let json = serde_json::to_string(&config).unwrap();
-        
+
         let parsed: AgentConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.agent_id, config.agent_id);
         assert_eq!(parsed.model_name, config.model_name);

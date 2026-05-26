@@ -1,19 +1,17 @@
-use std::sync::atomic::Ordering;
 use anyhow::Result;
 use serde_json::json;
+use std::sync::atomic::Ordering;
 use tokio_util::sync::CancellationToken;
-use tracing::{info, error};
+use tracing::{error, info};
 
 use super::Orchestrator;
 use super::OrchestratorPhase;
-use crate::agent::event_bus::{
-    AgentEvent, ChatChunkPayload, ChatChunkFirstPayload,
-};
+use crate::agent::event_bus::{AgentEvent, ChatChunkFirstPayload, ChatChunkPayload};
 use crate::agent::runner::{self, Runner};
-use crate::agent::types::{ActionMeta, AgentResponse, MessageKind, SpawnMeta};
 use crate::agent::task::Task;
+use crate::agent::types::{ActionMeta, AgentResponse, MessageKind, SpawnMeta};
 use crate::db::models::ChatMessage;
-use crate::llm::{LlmProvider, ChatRequestConfig, LlmChunk};
+use crate::llm::{ChatRequestConfig, LlmChunk, LlmProvider};
 
 impl Orchestrator {
     /// Execute a single task with the assigned agent
@@ -29,7 +27,9 @@ impl Orchestrator {
         token: CancellationToken,
     ) -> Result<AgentResponse> {
         // Get agent definition
-        let agent = self.agent_registry.get(agent_id)
+        let agent = self
+            .agent_registry
+            .get(agent_id)
             .cloned()
             .or_else(|| {
                 // Fallback to generalist if agent not found
@@ -100,7 +100,11 @@ impl Orchestrator {
             ..Default::default()
         };
 
-        let spawn_content = format!("Spawning {} for: {}", agent.name, task.description.chars().take(80).collect::<String>());
+        let spawn_content = format!(
+            "Spawning {} for: {}",
+            agent.name,
+            task.description.chars().take(80).collect::<String>()
+        );
         let spawn_id = if let Some(ref pool) = self.db_pool {
             runner::persist_and_emit_action(
                 &self.app,
@@ -113,7 +117,8 @@ impl Orchestrator {
                 Some("assistant"),
                 None,
                 &self.on_event,
-            ).await?
+            )
+            .await?
         } else {
             runner::emit_action_only(
                 &self.app,
@@ -182,7 +187,8 @@ impl Orchestrator {
                         Some("assistant"),
                         None,
                         &self.on_event,
-                    ).await;
+                    )
+                    .await;
                 } else {
                     let _ = runner::emit_action_only(
                         &self.app,
@@ -220,7 +226,8 @@ impl Orchestrator {
                     ..Default::default()
                 };
 
-                let failed_content = format!("{} failed after {}ms: {}", agent.name, duration_ms, e);
+                let failed_content =
+                    format!("{} failed after {}ms: {}", agent.name, duration_ms, e);
                 if let Some(ref pool) = self.db_pool {
                     let _ = runner::persist_and_emit_action(
                         &self.app,
@@ -233,7 +240,8 @@ impl Orchestrator {
                         Some("assistant"),
                         None,
                         &self.on_event,
-                    ).await;
+                    )
+                    .await;
                 } else {
                     let _ = runner::emit_action_only(
                         &self.app,
@@ -279,7 +287,8 @@ Guidelines:
 
 Be thorough but organized. Use formatting (headers, lists, code blocks) to make the response easy to read."#;
 
-        let task_results_str = task_results.iter()
+        let task_results_str = task_results
+            .iter()
             .map(|(id, result)| format!("- **Task {}**: {}", id, result))
             .collect::<Vec<_>>()
             .join("\n");
@@ -288,8 +297,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
             "Original Goal: {}\n\n\
              Task Results:\n{}\n\n\
              Synthesize these results into a comprehensive final answer.",
-            original_goal,
-            task_results_str
+            original_goal, task_results_str
         );
 
         let mut synth_messages = vec![
@@ -325,7 +333,11 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
         let first_chunk_sent_clone = first_chunk_sent.clone();
 
         // Optimize IPC: Buffer tokens for ~40ms windows to reduce event frequency
-        let buffer = std::sync::Arc::new(std::sync::Mutex::new((String::new(), std::time::Instant::now(), "text")));
+        let buffer = std::sync::Arc::new(std::sync::Mutex::new((
+            String::new(),
+            std::time::Instant::now(),
+            "text",
+        )));
         let buffer_clone = buffer.clone();
 
         let maybe_channel_clone = maybe_channel.clone();
@@ -337,8 +349,10 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
             crate::agent::event_bus::StreamingArtifactDetector::new({
                 let app = app_clone_2.clone();
                 let on_event = maybe_channel_clone.clone();
-                move |ev| { ev.emit_via(&app, &on_event); }
-            })
+                move |ev| {
+                    ev.emit_via(&app, &on_event);
+                }
+            }),
         ));
         let detector_clone = detector.clone();
 
@@ -360,13 +374,15 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
             // fall through to the normal chat:chunk buffered path so the
             // frontend renders it (the frontend does not yet consume the
             // chat:chunk:first event directly).
-            if chunk_type == "text" && !chunk_text.is_empty()
+            if chunk_type == "text"
+                && !chunk_text.is_empty()
                 && !first_chunk_sent_clone.swap(true, Ordering::SeqCst)
             {
                 AgentEvent::ChatChunkFirst(ChatChunkFirstPayload {
                     chat_id: chat_id_owned_2.clone(),
                     delta: chunk_text.clone(),
-                }).emit_via(&app_clone_2, &maybe_channel_clone);
+                })
+                .emit_via(&app_clone_2, &maybe_channel_clone);
             }
 
             if !chunk_text.is_empty() {
@@ -388,7 +404,8 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                         delta: old_text,
                         r#type: old_type.to_string(),
                         done: false,
-                    }).emit_via(&app_clone_2, &maybe_channel_clone);
+                    })
+                    .emit_via(&app_clone_2, &maybe_channel_clone);
 
                     data.1 = std::time::Instant::now();
                 }
@@ -407,19 +424,15 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                         delta: text,
                         r#type: current_type.to_string(),
                         done: false,
-                    }).emit_via(&app_clone_2, &maybe_channel_clone);
+                    })
+                    .emit_via(&app_clone_2, &maybe_channel_clone);
                 }
             }
         });
 
-        let response = provider.chat_stream(
-            model,
-            synth_messages,
-            None,
-            config,
-            on_chunk,
-            token,
-        ).await?;
+        let response = provider
+            .chat_stream(model, synth_messages, None, config, on_chunk, token)
+            .await?;
 
         // Final flush: Send any remaining tokens in the buffer
         let mut data = match buffer.lock() {

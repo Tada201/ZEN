@@ -1,10 +1,10 @@
 use async_trait::async_trait;
+use serde::Deserialize;
 use serde_json::json;
 use tauri::{AppHandle, Manager};
-use serde::Deserialize;
 
-use crate::commands::AppState;
 use super::{permission::RiskLevel, Tool, ToolError, ToolOutput};
+use crate::commands::AppState;
 
 // ─── 1. VectorSearchTool ───
 pub struct VectorSearchTool;
@@ -56,25 +56,42 @@ impl Tool for VectorSearchTool {
         _chat_id: String,
         args: serde_json::Value,
     ) -> Result<ToolOutput, ToolError> {
-        let parsed_args: VectorSearchArgs = serde_json::from_value(args)
-            .map_err(|e| ToolError::InvalidArguments { details: format!("Invalid arguments: {}", e) })?;
+        let parsed_args: VectorSearchArgs =
+            serde_json::from_value(args).map_err(|e| ToolError::InvalidArguments {
+                details: format!("Invalid arguments: {}", e),
+            })?;
 
         let state = app.state::<AppState>();
-        
-        let pool = state.db().await.map_err(|e| ToolError::ExecutionFailed { message: format!("DB error: {}", e) })?;
+
+        let pool = state.db().await.map_err(|e| ToolError::ExecutionFailed {
+            message: format!("DB error: {}", e),
+        })?;
         let model_name = crate::db::queries::get_setting(&pool, "embedding_model")
             .await
             .unwrap_or_default()
             .unwrap_or_else(|| "nomic-embed-text".to_string());
 
-        let provider = state.provider().await
-            .map_err(|e| ToolError::ExecutionFailed { message: format!("LLM not initialized: {}", e) })?;
-        let query_vec = provider.embed(&model_name, &parsed_args.query).await
-            .map_err(|e| ToolError::ExecutionFailed { message: format!("Embedding failed: {}", e) })?;
+        let provider = state
+            .provider()
+            .await
+            .map_err(|e| ToolError::ExecutionFailed {
+                message: format!("LLM not initialized: {}", e),
+            })?;
+        let query_vec = provider
+            .embed(&model_name, &parsed_args.query)
+            .await
+            .map_err(|e| ToolError::ExecutionFailed {
+                message: format!("Embedding failed: {}", e),
+            })?;
 
         let limit = parsed_args.limit.unwrap_or(5).clamp(1, 20);
-        let results = state.search_rag(query_vec, limit).await
-            .map_err(|e| ToolError::ExecutionFailed { message: format!("Vector search failed: {}", e) })?;
+        let results =
+            state
+                .search_rag(query_vec, limit)
+                .await
+                .map_err(|e| ToolError::ExecutionFailed {
+                    message: format!("Vector search failed: {}", e),
+                })?;
 
         if results.is_empty() {
             return Ok(ToolOutput {
@@ -135,9 +152,14 @@ impl Tool for ListDocumentsTool {
         _args: serde_json::Value,
     ) -> Result<ToolOutput, ToolError> {
         let state = app.state::<AppState>();
-        let pool = state.db().await.map_err(|e| ToolError::ExecutionFailed { message: format!("DB error: {}", e) })?;
-        let docs = crate::db::queries::list_documents(&pool).await
-            .map_err(|e| ToolError::ExecutionFailed { message: format!("Failed to list docs: {}", e) })?;
+        let pool = state.db().await.map_err(|e| ToolError::ExecutionFailed {
+            message: format!("DB error: {}", e),
+        })?;
+        let docs = crate::db::queries::list_documents(&pool)
+            .await
+            .map_err(|e| ToolError::ExecutionFailed {
+                message: format!("Failed to list docs: {}", e),
+            })?;
 
         let mut formatted_docs = Vec::new();
         for doc in docs {
@@ -201,47 +223,65 @@ impl Tool for ReadDocumentTool {
         _chat_id: String,
         args: serde_json::Value,
     ) -> Result<ToolOutput, ToolError> {
-        let parsed_args: ReadDocumentArgs = serde_json::from_value(args)
-            .map_err(|e| ToolError::InvalidArguments { details: format!("Invalid arguments: {}", e) })?;
+        let parsed_args: ReadDocumentArgs =
+            serde_json::from_value(args).map_err(|e| ToolError::InvalidArguments {
+                details: format!("Invalid arguments: {}", e),
+            })?;
 
         let state = app.state::<AppState>();
-        let pool = state.db().await.map_err(|e| ToolError::ExecutionFailed { message: format!("DB error: {}", e) })?;
-        
+        let pool = state.db().await.map_err(|e| ToolError::ExecutionFailed {
+            message: format!("DB error: {}", e),
+        })?;
+
         // 1. First try as direct absolute path
         let mut target_path = std::path::PathBuf::from(&parsed_args.file_path);
-        
+
         // 2. If it doesn't exist, check if it's a known ingested document by filename or ID
         if !target_path.exists() {
             if let Ok(docs) = crate::db::queries::list_documents(&pool).await {
-                if let Some(doc) = docs.into_iter().find(|d| d.filename == parsed_args.file_path || d.id == parsed_args.file_path) {
+                if let Some(doc) = docs
+                    .into_iter()
+                    .find(|d| d.filename == parsed_args.file_path || d.id == parsed_args.file_path)
+                {
                     if let Some(doc_path) = doc.file_path {
                         target_path = std::path::PathBuf::from(doc_path);
                     }
                 }
             }
         }
-        
+
         // 3. If STILL not found, let's try assuming it's relative to the current working directory of the app
         if !target_path.exists() {
-             if let Ok(cwd) = std::env::current_dir() {
-                 let relative_path = cwd.join(&parsed_args.file_path);
-                 if relative_path.exists() {
-                     target_path = relative_path;
-                 }
-             }
+            if let Ok(cwd) = std::env::current_dir() {
+                let relative_path = cwd.join(&parsed_args.file_path);
+                if relative_path.exists() {
+                    target_path = relative_path;
+                }
+            }
         }
 
         if !target_path.exists() {
-            return Err(ToolError::ExecutionFailed { message: format!("File not found. Searched database and local paths for: {}", parsed_args.file_path) });
+            return Err(ToolError::ExecutionFailed {
+                message: format!(
+                    "File not found. Searched database and local paths for: {}",
+                    parsed_args.file_path
+                ),
+            });
         }
 
-        let content = tokio::fs::read_to_string(&target_path).await
-            .map_err(|e| ToolError::ExecutionFailed { message: format!("Failed to read file (might be binary?): {}", e) })?;
+        let content = tokio::fs::read_to_string(&target_path).await.map_err(|e| {
+            ToolError::ExecutionFailed {
+                message: format!("Failed to read file (might be binary?): {}", e),
+            }
+        })?;
 
         // Truncate if too long (e.g. max 32KB of text)
         let max_len = 32 * 1024;
         let final_text = if content.len() > max_len {
-            format!("{}... [TRUNCATED - Content exceeded 32KB limit]", &content[..max_len])
+            format!(
+                "{}... [TRUNCATED - Content exceeded 32KB limit]",
+                &content[..max_len]
+            )
         } else {
             content
         };
@@ -307,13 +347,20 @@ impl Tool for GrepDocumentsTool {
         _chat_id: String,
         args: serde_json::Value,
     ) -> Result<ToolOutput, ToolError> {
-        let parsed_args: GrepDocumentsArgs = serde_json::from_value(args)
-            .map_err(|e| ToolError::InvalidArguments { details: format!("Invalid arguments: {}", e) })?;
+        let parsed_args: GrepDocumentsArgs =
+            serde_json::from_value(args).map_err(|e| ToolError::InvalidArguments {
+                details: format!("Invalid arguments: {}", e),
+            })?;
 
         let state = app.state::<AppState>();
-        let pool = state.db().await.map_err(|e| ToolError::ExecutionFailed { message: format!("DB error: {}", e) })?;
-        let docs = crate::db::queries::list_documents(&pool).await
-            .map_err(|e| ToolError::ExecutionFailed { message: e.to_string() })?;
+        let pool = state.db().await.map_err(|e| ToolError::ExecutionFailed {
+            message: format!("DB error: {}", e),
+        })?;
+        let docs = crate::db::queries::list_documents(&pool)
+            .await
+            .map_err(|e| ToolError::ExecutionFailed {
+                message: e.to_string(),
+            })?;
 
         let mut results = Vec::new();
         let query = if parsed_args.case_sensitive.unwrap_or(false) {
@@ -349,8 +396,9 @@ impl Tool for GrepDocumentsTool {
                                         "content": line.trim()
                                     }));
                                 }
-                                
-                                if matches.len() >= 10 { // Limit matches per file
+
+                                if matches.len() >= 10 {
+                                    // Limit matches per file
                                     break;
                                 }
                             }
@@ -364,8 +412,9 @@ impl Tool for GrepDocumentsTool {
                     }
                 }
             }
-            
-            if results.len() >= 20 { // Limit total files
+
+            if results.len() >= 20 {
+                // Limit total files
                 break;
             }
         }
@@ -379,4 +428,3 @@ impl Tool for GrepDocumentsTool {
         })
     }
 }
-

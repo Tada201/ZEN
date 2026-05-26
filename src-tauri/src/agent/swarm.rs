@@ -7,7 +7,6 @@
 /// - Per-agent metrics tracking
 /// - Consensus voting mechanism
 /// - Dynamic scaling support
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -15,10 +14,10 @@ use tokio::sync::broadcast;
 use tokio::sync::RwLock;
 use tracing::info;
 
-use crate::agent::instance::{AgentInstance, AgentMetrics, AgentStatus, AgentRole, AgentHealth};
+use crate::agent::event_bus::{AgentEvent, EventBus};
+use crate::agent::instance::{AgentHealth, AgentInstance, AgentMetrics, AgentRole, AgentStatus};
+use crate::agent::task::{Task, TaskPriority, TaskStatus};
 use crate::agent::types::{Agent, ModelTier};
-use crate::agent::task::{Task, TaskStatus, TaskPriority};
-use crate::agent::event_bus::{EventBus, AgentEvent};
 use crate::tools::GlobalToolRegistry;
 use tauri::AppHandle;
 
@@ -55,7 +54,9 @@ impl SwarmTopology {
     pub fn get_leader(&self) -> Option<&str> {
         match self {
             SwarmTopology::Hierarchical { leader_id } => Some(leader_id),
-            SwarmTopology::HierarchicalMesh { leader_ids } => leader_ids.first().map(|s| s.as_str()),
+            SwarmTopology::HierarchicalMesh { leader_ids } => {
+                leader_ids.first().map(|s| s.as_str())
+            }
             SwarmTopology::Star { coordinator_id } => Some(coordinator_id),
             _ => None,
         }
@@ -119,13 +120,33 @@ pub struct ConsensusResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SwarmEvent {
-    AgentJoined { agent_id: String, agent_type: String },
-    AgentLeft { agent_id: String },
-    TaskAssigned { task_id: String, agent_id: String },
-    TaskCompleted { task_id: String, agent_id: String, success: bool },
-    TopologyChanged { new_topology: String },
-    ConsensusReached { decision_id: String, winner: String },
-    SwarmScaled { agent_type: String, new_count: usize },
+    AgentJoined {
+        agent_id: String,
+        agent_type: String,
+    },
+    AgentLeft {
+        agent_id: String,
+    },
+    TaskAssigned {
+        task_id: String,
+        agent_id: String,
+    },
+    TaskCompleted {
+        task_id: String,
+        agent_id: String,
+        success: bool,
+    },
+    TopologyChanged {
+        new_topology: String,
+    },
+    ConsensusReached {
+        decision_id: String,
+        winner: String,
+    },
+    SwarmScaled {
+        agent_type: String,
+        new_count: usize,
+    },
 }
 
 // ─── Swarm State ───
@@ -135,9 +156,17 @@ pub enum SwarmEvent {
 #[serde(rename_all = "snake_case")]
 pub enum SwarmState {
     Initializing,
-    Active { agent_count: usize, active_tasks: usize },
-    Degraded { agent_count: usize, unhealthy_agents: usize },
-    Idle { agent_count: usize },
+    Active {
+        agent_count: usize,
+        active_tasks: usize,
+    },
+    Degraded {
+        agent_count: usize,
+        unhealthy_agents: usize,
+    },
+    Idle {
+        agent_count: usize,
+    },
     ShuttingDown,
 }
 
@@ -159,8 +188,6 @@ pub struct SwarmCoordinator {
     topology: SwarmTopology,
     /// Active agent instances (includes metrics inside each instance)
     agents: RwLock<HashMap<String, AgentInstance>>,
-    /// Mesh connections (for mesh topologies)
-    connections: Vec<MeshConnection>,
     /// Event bus for internal coordination
     event_bus: Arc<EventBus>,
     /// Swarm event broadcast channel
@@ -180,7 +207,6 @@ impl SwarmCoordinator {
         Self {
             topology,
             agents: RwLock::new(HashMap::new()),
-            connections: Vec::new(),
             event_bus,
             swarm_tx,
             tool_registry,
@@ -190,7 +216,7 @@ impl SwarmCoordinator {
     /// Spawn a new agent instance from the given config.
     pub async fn spawn_agent(&self, config: Agent) -> Result<AgentInstance, SwarmError> {
         let agent_id = config.id.clone();
-        
+
         // Check if agent already exists
         {
             let agents = self.agents.read().await;
@@ -201,7 +227,7 @@ impl SwarmCoordinator {
 
         // Create agent instance
         let mut instance = AgentInstance::from_config(config.clone());
-        
+
         // Set role based on topology
         if let Some(leader_id) = self.topology.get_leader() {
             if agent_id == leader_id {
@@ -233,10 +259,11 @@ impl SwarmCoordinator {
     /// Terminate an agent by ID.
     pub async fn terminate_agent(&self, agent_id: &str) -> Result<(), SwarmError> {
         let mut agents = self.agents.write().await;
-        
-        let instance = agents.get_mut(agent_id)
+
+        let instance = agents
+            .get_mut(agent_id)
             .ok_or_else(|| SwarmError::AgentNotFound(agent_id.to_string()))?;
-        
+
         instance.terminate();
         agents.remove(agent_id);
 
@@ -261,11 +288,11 @@ impl SwarmCoordinator {
         for mut task in tasks {
             // Find best agent for this task
             let best_agent = self.find_best_agent_for_task(&task, &agents);
-            
+
             if let Some(agent_id) = best_agent {
                 task.assigned_to = Some(agent_id.clone());
                 task.status = TaskStatus::InProgress;
-                
+
                 assignments.push(TaskAssignment {
                     task_id: task.id.clone(),
                     assigned_to: agent_id.clone(),
@@ -296,7 +323,8 @@ impl SwarmCoordinator {
         let capability = match task.task_type {
             crate::agent::task::TaskType::ToolCall => {
                 // For ToolCall, get tool_name from metadata
-                task.metadata.get("tool_name")
+                task.metadata
+                    .get("tool_name")
                     .and_then(|v| v.as_str())
                     .map(String::from)
             }
@@ -343,13 +371,13 @@ impl SwarmCoordinator {
         chat_id: String,
     ) -> Vec<TaskResult> {
         // Create a map from task_id to task for metadata lookup
-        let task_map: HashMap<String, Task> = tasks
-            .into_iter()
-            .map(|t| (t.id.clone(), t))
-            .collect();
-        
-        let assignments = self.distribute_tasks(task_map.values().cloned().collect()).await;
-        
+        let task_map: HashMap<String, Task> =
+            tasks.into_iter().map(|t| (t.id.clone(), t)).collect();
+
+        let assignments = self
+            .distribute_tasks(task_map.values().cloned().collect())
+            .await;
+
         let tool_registry = self.tool_registry.clone();
         let mut handles = Vec::new();
 
@@ -359,27 +387,36 @@ impl SwarmCoordinator {
             let tool_registry_clone = tool_registry.clone();
             let app_clone = app.clone();
             let chat_id_inner = chat_id.clone();
-            
+
             handles.push(tokio::spawn(async move {
                 if let Some(task) = task {
                     let start_time = std::time::Instant::now();
-                    
+
                     // Extract tool info from task metadata
-                    let tool_name = task.metadata.get("tool_name")
+                    let tool_name = task
+                        .metadata
+                        .get("tool_name")
                         .and_then(|v| v.as_str())
                         .map(String::from);
                     let tool_args = task.metadata.get("tool_args").cloned();
-                    let tool_call_id = task.metadata.get("tool_call_id")
+                    let tool_call_id = task
+                        .metadata
+                        .get("tool_call_id")
                         .and_then(|v| v.as_str())
                         .map(String::from);
-                    
-                    if let (Some(tool_name), Some(tool_args), Some(_call_id)) = (tool_name, tool_args, tool_call_id) {
+
+                    if let (Some(tool_name), Some(tool_args), Some(_call_id)) =
+                        (tool_name, tool_args, tool_call_id)
+                    {
                         // Execute tool via registry
                         let registry = tool_registry_clone.read().await;
                         if let Some(tool) = registry.get(&tool_name) {
                             let tool_args_value = tool_args;
                             let chat_id_for_tool = chat_id_inner.clone();
-                            match tool.execute(app_clone, chat_id_for_tool, tool_args_value).await {
+                            match tool
+                                .execute(app_clone, chat_id_for_tool, tool_args_value)
+                                .await
+                            {
                                 Ok(result) => {
                                     let duration_ms = start_time.elapsed().as_millis() as u64;
                                     return TaskResult {
@@ -405,7 +442,7 @@ impl SwarmCoordinator {
                             }
                         }
                     }
-                    
+
                     // Fallback: task metadata doesn't have tool info
                     TaskResult {
                         task_id,
@@ -435,7 +472,7 @@ impl SwarmCoordinator {
                 let task_id = result.task_id.clone();
                 let agent_id = result.agent_id.clone();
                 let success = result.success;
-                
+
                 results.push(result);
 
                 let _ = self.swarm_tx.send(SwarmEvent::TaskCompleted {
@@ -505,7 +542,8 @@ impl SwarmCoordinator {
             // Collect IDs of agents to terminate first (to avoid borrow issues)
             let agents_to_terminate = {
                 let agents = self.agents.read().await;
-                agents.iter()
+                agents
+                    .iter()
                     .filter(|(_, instance)| instance.config.name == agent_type)
                     .take(to_terminate as usize)
                     .map(|(id, _)| id.clone())
@@ -533,7 +571,7 @@ impl SwarmCoordinator {
         agent_ids: &[String],
     ) -> ConsensusResult {
         let mut votes: HashMap<String, u32> = HashMap::new();
-        
+
         // Initialize vote counts for each option
         for option in &decision.options {
             votes.insert(option.clone(), 0);
@@ -549,13 +587,9 @@ impl SwarmCoordinator {
                 }
 
                 total_voters += 1;
-                
-                let selected_option = self.select_option_for_vote(
-                    &agent,
-                    &decision,
-                    agent_idx,
-                );
-                
+
+                let selected_option = self.select_option_for_vote(&agent, &decision, agent_idx);
+
                 *votes.get_mut(&selected_option).unwrap_or(&mut 0) += 1;
             }
         }
@@ -568,8 +602,8 @@ impl SwarmCoordinator {
             .unwrap_or_else(|| (String::new(), 0));
 
         // Check quorum (simple majority)
-        let quorum_reached = total_voters > 0 && 
-            votes.get(&winner).unwrap_or(&0) > &(total_voters / 2);
+        let quorum_reached =
+            total_voters > 0 && votes.get(&winner).unwrap_or(&0) > &(total_voters / 2);
 
         let result = ConsensusResult {
             decision_id: decision.id,
@@ -591,7 +625,7 @@ impl SwarmCoordinator {
     pub async fn get_swarm_state(&self) -> SwarmState {
         let agents = self.agents.read().await;
         let agent_count = agents.len();
-        
+
         let unhealthy_count = agents
             .values()
             .filter(|a| a.metrics.health == AgentHealth::Unhealthy)
@@ -622,9 +656,9 @@ impl SwarmCoordinator {
     pub async fn reconfigure(&mut self, topology: SwarmTopology) -> Result<(), SwarmError> {
         let old_topology = format!("{:?}", self.topology);
         self.topology = topology;
-        
+
         let new_topology = format!("{:?}", self.topology);
-        
+
         let _ = self.swarm_tx.send(SwarmEvent::TopologyChanged {
             new_topology: new_topology.clone(),
         });
@@ -655,7 +689,7 @@ impl SwarmCoordinator {
         }
 
         let has_metadata = !decision.metadata.is_empty();
-        
+
         if has_metadata {
             if let Some(cap_matched) = self.try_capability_match(agent, decision) {
                 return cap_matched;
@@ -672,23 +706,23 @@ impl SwarmCoordinator {
         decision: &ConsensusDecision,
     ) -> Option<String> {
         let cap_key = "required_capabilities";
-        
+
         if let Some(serde_json::Value::Array(req_caps)) = decision.metadata.get(cap_key) {
-            let required: Vec<&str> = req_caps
-                .iter()
-                .filter_map(|v| v.as_str())
-                .collect();
-            
+            let required: Vec<&str> = req_caps.iter().filter_map(|v| v.as_str()).collect();
+
             for option in &decision.options {
                 let opt_cap_key = format!("{}_capabilities", option);
-                if let Some(serde_json::Value::Array(opt_caps)) = decision.metadata.get(&opt_cap_key) {
-                    let provided: Vec<&str> = opt_caps
-                        .iter()
-                        .filter_map(|v| v.as_str())
-                        .collect();
-                    
+                if let Some(serde_json::Value::Array(opt_caps)) =
+                    decision.metadata.get(&opt_cap_key)
+                {
+                    let provided: Vec<&str> = opt_caps.iter().filter_map(|v| v.as_str()).collect();
+
                     if required.iter().all(|r| provided.contains(r)) {
-                        if agent.capabilities.iter().any(|c| provided.contains(&c.as_str())) {
+                        if agent
+                            .capabilities
+                            .iter()
+                            .any(|c| provided.contains(&c.as_str()))
+                        {
                             return Some(option.clone());
                         }
                     }
@@ -704,7 +738,11 @@ impl SwarmCoordinator {
                 let opt_key = format!("{}_capabilities", option);
                 if let Some(serde_json::Value::Array(caps)) = decision.metadata.get(&opt_key) {
                     let opt_caps: Vec<&str> = caps.iter().filter_map(|v| v.as_str()).collect();
-                    if agent.capabilities.iter().any(|ac| opt_caps.contains(&ac.as_str())) {
+                    if agent
+                        .capabilities
+                        .iter()
+                        .any(|ac| opt_caps.contains(&ac.as_str()))
+                    {
                         return Some((option.clone(), idx));
                     }
                 }
@@ -728,18 +766,18 @@ impl SwarmCoordinator {
     ) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         agent.config.id.hash(&mut hasher);
         decision.id.hash(&mut hasher);
         agent_index.hash(&mut hasher);
         let hash = hasher.finish() as usize;
-        
+
         let options_len = decision.options.len();
         if options_len == 0 {
             return String::new();
         }
-        
+
         let round_robin_idx = (agent_index + hash) % options_len;
         decision.options[round_robin_idx].clone()
     }
@@ -763,16 +801,16 @@ impl SwarmCoordinator {
 pub enum SwarmError {
     #[error("Agent already exists: {0}")]
     AgentAlreadyExists(String),
-    
+
     #[error("Agent not found: {0}")]
     AgentNotFound(String),
-    
+
     #[error("Task execution failed: {0}")]
     TaskFailed(String),
-    
+
     #[error("Consensus not reached")]
     ConsensusNotReached,
-    
+
     #[error("Invalid topology configuration: {0}")]
     InvalidTopology(String),
 }
@@ -803,10 +841,10 @@ mod tests {
         let event_bus = Arc::new(EventBus::new(256));
         let tool_registry = Arc::new(RwLock::new(crate::tools::ToolRegistry::new()));
         let coordinator = SwarmCoordinator::new(SwarmTopology::default(), event_bus, tool_registry);
-        
+
         let result = coordinator.spawn_agent(test_agent()).await;
         assert!(result.is_ok());
-        
+
         let agents = coordinator.get_agents().await;
         assert_eq!(agents.len(), 1);
     }
@@ -816,11 +854,11 @@ mod tests {
         let event_bus = Arc::new(EventBus::new(256));
         let tool_registry = Arc::new(RwLock::new(crate::tools::ToolRegistry::new()));
         let coordinator = SwarmCoordinator::new(SwarmTopology::default(), event_bus, tool_registry);
-        
+
         let agent = coordinator.spawn_agent(test_agent()).await.unwrap();
         let result = coordinator.terminate_agent(&agent.config.id).await;
         assert!(result.is_ok());
-        
+
         let agents = coordinator.get_agents().await;
         assert_eq!(agents.len(), 0);
     }
@@ -830,14 +868,14 @@ mod tests {
         let event_bus = Arc::new(EventBus::new(256));
         let tool_registry = Arc::new(RwLock::new(crate::tools::ToolRegistry::new()));
         let coordinator = SwarmCoordinator::new(SwarmTopology::default(), event_bus, tool_registry);
-        
+
         // Spawn an agent
         let _ = coordinator.spawn_agent(test_agent()).await;
-        
+
         // Create a task
         let task = Task::new("Test task", TaskType::ToolCall);
         let tasks = vec![task];
-        
+
         let assignments = coordinator.distribute_tasks(tasks).await;
         assert_eq!(assignments.len(), 1);
         assert!(assignments[0].assigned_to == "test-agent");
@@ -848,22 +886,21 @@ mod tests {
         let event_bus = Arc::new(EventBus::new(256));
         let tool_registry = Arc::new(RwLock::new(crate::tools::ToolRegistry::new()));
         let coordinator = SwarmCoordinator::new(SwarmTopology::default(), event_bus, tool_registry);
-        
+
         // Spawn multiple agents
         let _ = coordinator.spawn_agent(test_agent()).await;
-        
+
         let decision = ConsensusDecision {
             id: "test-decision".to_string(),
             description: "Test consensus decision".to_string(),
             options: vec!["option_a".to_string(), "option_b".to_string()],
             metadata: HashMap::new(),
         };
-        
-        let result = coordinator.reach_consensus(
-            decision,
-            &["test-agent".to_string()],
-        ).await;
-        
+
+        let result = coordinator
+            .reach_consensus(decision, &["test-agent".to_string()])
+            .await;
+
         assert!(result.quorum_reached);
         assert!(!result.winner.is_empty());
     }

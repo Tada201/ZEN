@@ -1,8 +1,8 @@
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
-use std::sync::Arc;
-use tokio::sync::Mutex;
 use std::io::{Read, Write};
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
+use tokio::sync::Mutex;
 
 pub struct TerminalSession {
     pub id: String,
@@ -31,13 +31,26 @@ impl TerminalService {
             })
             .map_err(|e: anyhow::Error| e.to_string())?;
 
-        let shell = if cfg!(windows) { "powershell.exe" } else { "bash" };
+        let shell = if cfg!(windows) {
+            "powershell.exe"
+        } else {
+            "bash"
+        };
         let cmd = CommandBuilder::new(shell);
-        
-        let _child = pair.slave.spawn_command(cmd).map_err(|e: anyhow::Error| e.to_string())?;
-        
-        let reader = pair.master.try_clone_reader().map_err(|e: anyhow::Error| e.to_string())?;
-        let writer = pair.master.take_writer().map_err(|e: anyhow::Error| e.to_string())?;
+
+        let _child = pair
+            .slave
+            .spawn_command(cmd)
+            .map_err(|e: anyhow::Error| e.to_string())?;
+
+        let reader = pair
+            .master
+            .try_clone_reader()
+            .map_err(|e: anyhow::Error| e.to_string())?;
+        let writer = pair
+            .master
+            .take_writer()
+            .map_err(|e: anyhow::Error| e.to_string())?;
 
         let session = TerminalSession {
             id: id.clone(),
@@ -55,7 +68,9 @@ impl TerminalService {
             let mut reader = reader;
             let mut buffer = [0u8; 1024];
             while let Ok(n) = reader.read(&mut buffer) {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 let data = String::from_utf8_lossy(&buffer[..n]).to_string();
                 let _ = app_handle.emit(&format!("terminal-stdout-{}", id_clone), data);
             }
@@ -67,8 +82,14 @@ impl TerminalService {
     pub async fn write(&self, id: String, data: String) -> Result<(), String> {
         let mut sessions = self.sessions.lock().await;
         if let Some(session) = sessions.iter_mut().find(|s| s.id == id) {
-            session.writer.write_all(data.as_bytes()).map_err(|e: std::io::Error| e.to_string())?;
-            session.writer.flush().map_err(|e: std::io::Error| e.to_string())?;
+            session
+                .writer
+                .write_all(data.as_bytes())
+                .map_err(|e: std::io::Error| e.to_string())?;
+            session
+                .writer
+                .flush()
+                .map_err(|e: std::io::Error| e.to_string())?;
             Ok(())
         } else {
             Err("Session not found".to_string())

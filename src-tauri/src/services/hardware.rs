@@ -1,6 +1,6 @@
-use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 use crate::models::SystemMetrics;
 use serde::{Deserialize, Serialize};
+use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DiskInfo {
@@ -45,16 +45,24 @@ impl HardwareService {
 
     pub fn get_info(&self) -> HardwareInfo {
         let disks_list = sysinfo::Disks::new_with_refreshed_list();
-        let disks = disks_list.iter().map(|d| DiskInfo {
-            name: d.name().to_string_lossy().to_string(),
-            mount_point: d.mount_point().to_string_lossy().to_string(),
-            total_space: d.total_space(),
-            available_space: d.available_space(),
-            is_removable: d.is_removable(),
-        }).collect();
+        let disks = disks_list
+            .iter()
+            .map(|d| DiskInfo {
+                name: d.name().to_string_lossy().to_string(),
+                mount_point: d.mount_point().to_string_lossy().to_string(),
+                total_space: d.total_space(),
+                available_space: d.available_space(),
+                is_removable: d.is_removable(),
+            })
+            .collect();
 
         HardwareInfo {
-            cpu: self.sys.cpus().first().map(|c| c.brand().to_string()).unwrap_or_else(|| "Unknown".to_string()),
+            cpu: self
+                .sys
+                .cpus()
+                .first()
+                .map(|c| c.brand().to_string())
+                .unwrap_or_else(|| "Unknown".to_string()),
             cores: self.sys.physical_core_count().unwrap_or(0),
             threads: self.sys.cpus().len(),
             memory_gb: (self.sys.total_memory() as f64) / (1024.0 * 1024.0 * 1024.0),
@@ -67,11 +75,11 @@ impl HardwareService {
 
     pub fn get_metrics(&mut self) -> SystemMetrics {
         self.sys.refresh_all();
-        
+
         let cpu_load = self.sys.global_cpu_usage();
         let mem_used = self.sys.used_memory();
         let mem_total = self.sys.total_memory();
-        
+
         SystemMetrics {
             cpu_load,
             mem_used,

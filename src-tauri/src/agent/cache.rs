@@ -1,7 +1,7 @@
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
-use serde::{Deserialize, Serialize};
-use sha2::{Sha256, Digest};
 
 /// Cache entry for tool results
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,12 +69,15 @@ impl ToolCache {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
-        self.cache.insert(key, CacheEntry {
-            result,
-            timestamp,
-            ttl_secs,
-        });
+
+        self.cache.insert(
+            key,
+            CacheEntry {
+                result,
+                timestamp,
+                ttl_secs,
+            },
+        );
     }
 
     /// Remove a specific cache entry
@@ -84,12 +87,13 @@ impl ToolCache {
 
     /// Clear all expired entries
     pub fn cleanup_expired(&mut self) -> usize {
-        let expired_keys: Vec<String> = self.cache
+        let expired_keys: Vec<String> = self
+            .cache
             .iter()
             .filter(|(_, entry)| entry.is_expired())
             .map(|(key, _)| key.clone())
             .collect();
-        
+
         let count = expired_keys.len();
         for key in expired_keys {
             self.cache.remove(&key);
@@ -108,12 +112,20 @@ impl ToolCache {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         let total = self.cache.len();
-        let expired = self.cache.values().filter(|e| e.timestamp + e.ttl_secs < now).count();
+        let expired = self
+            .cache
+            .values()
+            .filter(|e| e.timestamp + e.ttl_secs < now)
+            .count();
         let active = total - expired;
-        
-        CacheStats { total, active, expired }
+
+        CacheStats {
+            total,
+            active,
+            expired,
+        }
     }
 }
 

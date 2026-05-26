@@ -1,15 +1,15 @@
 //! Background tasks: compaction, embedding, and recall-cache refresh.
 //! These run fire-and-forget via `tokio::spawn` after the LLM responds.
 
+use super::helpers::{estimate_conversation_tokens, estimate_tokens};
+use super::Runner;
+use crate::db::models::ChatMessage;
+use crate::db::queries;
+use crate::llm::LlmProvider;
 use anyhow::Result;
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Manager};
 use tokio_util::sync::CancellationToken;
-use crate::db::models::ChatMessage;
-use crate::db::queries;
-use crate::llm::LlmProvider;
-use super::helpers::{estimate_tokens, estimate_conversation_tokens};
-use super::Runner;
 
 // ─── Trigger methods (on Runner) ─────────────────────────────────────────────
 
@@ -29,12 +29,14 @@ impl Runner {
             let db_clone = db.clone();
             let chat_id_clone = chat_id.to_string();
             let model_clone = model.to_string();
+            let app_clone = self.app.clone();
             let compaction_threshold = self.config.compaction_threshold;
             let compaction_token_threshold = self.config.compaction_token_threshold;
             let summarization_token_budget = self.config.summarization_token_budget;
 
             tokio::spawn(async move {
                 if let Err(e) = perform_background_compaction(
+                    app_clone,
                     db_clone,
                     chat_id_clone,
                     model_clone,
@@ -42,7 +44,9 @@ impl Runner {
                     compaction_threshold,
                     compaction_token_threshold,
                     summarization_token_budget,
-                ).await {
+                )
+                .await
+                {
                     tracing::error!("Background conversation compaction failed: {:?}", e);
                 }
             });
@@ -57,7 +61,9 @@ impl Runner {
             let app_clone = self.app.clone();
 
             tokio::spawn(async move {
-                if let Err(e) = perform_background_embedding(app_clone, db_clone, chat_id_clone).await {
+                if let Err(e) =
+                    perform_background_embedding(app_clone, db_clone, chat_id_clone).await
+                {
                     tracing::error!("Background semantic embedding failed: {:?}", e);
                 }
             });
@@ -151,13 +157,18 @@ impl Runner {
                 if res.score < 1.0 && res.entry.chat_id != chat_id_clone {
                     let memory_str = format!(
                         "- Past User Message: \"{}\" (Session: {})\n",
-                        res.entry.text.trim(), res.entry.chat_id
+                        res.entry.text.trim(),
+                        res.entry.chat_id
                     );
                     let est_tok = estimate_tokens(&memory_str);
-                    if recalled_tokens + est_tok > 1500 { break; }
+                    if recalled_tokens + est_tok > 1500 {
+                        break;
+                    }
                     recalled_tokens += est_tok;
                     recalled_memories.push(memory_str);
-                    if recalled_memories.len() >= max_recalled_messages { break; }
+                    if recalled_memories.len() >= max_recalled_messages {
+                        break;
+                    }
                 }
             }
 
@@ -184,8 +195,12 @@ impl Runner {
     ) -> Result<String> {
         let mut text = String::new();
         for m in messages {
-            if m.role == "system" { continue; }
-            let name_part = m.tool_call_id.as_ref()
+            if m.role == "system" {
+                continue;
+            }
+            let name_part = m
+                .tool_call_id
+                .as_ref()
                 .map(|id| format!(" (tool: {})", id))
                 .unwrap_or_default();
             text.push_str(&format!("{}{} : {}\n", m.role, name_part, m.content));
@@ -211,14 +226,16 @@ impl Runner {
             ..Default::default()
         };
 
-        let res = provider.chat_stream(
-            model,
-            vec![prompt_message],
-            None,
-            config,
-            Box::new(|_| {}),
-            CancellationToken::new(),
-        ).await?;
+        let res = provider
+            .chat_stream(
+                model,
+                vec![prompt_message],
+                None,
+                config,
+                Box::new(|_| {}),
+                CancellationToken::new(),
+            )
+            .await?;
 
         Ok(res.content)
     }
@@ -228,6 +245,7 @@ impl Runner {
 
 /// Summarize old messages and mark them as compacted in SQLite.
 async fn perform_background_compaction(
+    app: AppHandle,
     db: SqlitePool,
     chat_id: String,
     active_model: String,
@@ -238,13 +256,19 @@ async fn perform_background_compaction(
 ) -> Result<()> {
     let active_msgs = queries::get_active_messages(&db, &chat_id).await?;
 
-    let active_chat_msgs: Vec<ChatMessage> = active_msgs.iter().map(|m| ChatMessage {
-        role: m.role.clone(),
-        content: m.content.clone(),
-        images: None,
-        tool_calls: m.tool_calls.as_ref().and_then(|tc_str| serde_json::from_str(tc_str).ok()),
-        tool_call_id: m.tool_call_id.clone(),
-    }).collect();
+    let active_chat_msgs: Vec<ChatMessage> = active_msgs
+        .iter()
+        .map(|m| ChatMessage {
+            role: m.role.clone(),
+            content: m.content.clone(),
+            images: None,
+            tool_calls: m
+                .tool_calls
+                .as_ref()
+                .and_then(|tc_str| serde_json::from_str(tc_str).ok()),
+            tool_call_id: m.tool_call_id.clone(),
+        })
+        .collect();
 
     let current_tokens = estimate_conversation_tokens(&active_chat_msgs);
 
@@ -266,19 +290,32 @@ async fn perform_background_compaction(
                 Ok(Some(p)) if !p.is_empty() => p,
                 _ => "ollama".to_string(),
             };
-            let provider = crate::llm::create_provider(&db, &resolved_provider_name).await?;
+            let state = app.state::<crate::commands::AppState>();
+            let provider = state.provider_by_name(&resolved_provider_name, &db).await?;
             let sum_model = summarization_model.unwrap_or(active_model);
 
             let summary = Runner::summarize_messages(
-                to_summarize, &*provider, &sum_model, summarization_token_budget,
-            ).await?;
+                to_summarize,
+                &*provider,
+                &sum_model,
+                summarization_token_budget,
+            )
+            .await?;
 
             let message_count = to_summarize.len() as i32;
             let token_count = estimate_conversation_tokens(to_summarize) as i32;
 
-            queries::save_summary(&db, &chat_id, &summary, Some(message_count), Some(token_count)).await?;
+            queries::save_summary(
+                &db,
+                &chat_id,
+                &summary,
+                Some(message_count),
+                Some(token_count),
+            )
+            .await?;
 
-            let ids_to_compact: Vec<String> = to_summarize_db.iter().map(|m| m.id.clone()).collect();
+            let ids_to_compact: Vec<String> =
+                to_summarize_db.iter().map(|m| m.id.clone()).collect();
             queries::mark_messages_compacted_by_ids(&db, &ids_to_compact).await?;
             tracing::info!(
                 chat_id = %chat_id,

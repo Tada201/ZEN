@@ -1,7 +1,10 @@
-use crate::error::ZenResult;
 use super::OpenAiCompatProvider;
+use crate::error::ZenResult;
 use crate::llm::LlmProvider;
-use wiremock::{Mock, MockServer, ResponseTemplate, matchers::{method, path}};
+use wiremock::{
+    matchers::{method, path},
+    Mock, MockServer, ResponseTemplate,
+};
 
 #[tokio::test]
 async fn test_openai_compat_list_models_retries_on_rate_limit() -> ZenResult<()> {
@@ -19,7 +22,10 @@ async fn test_openai_compat_list_models_retries_on_rate_limit() -> ZenResult<()>
     // Second request succeeds
     Mock::given(method("GET"))
         .and(path("/v1/models"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"data": [{"id": "gpt-4o"}]})))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"data": [{"id": "gpt-4o"}]})),
+        )
         .mount(&server)
         .await;
 

@@ -1,21 +1,24 @@
+pub mod anchors;
+pub mod geometry;
 /// Canvas-related utilities for LLM context awareness
 pub mod planning;
-pub mod validator;
-pub mod geometry;
-pub mod anchors;
 pub mod plot;
-pub mod session;
 pub mod protocol;
+pub mod session;
+pub mod validator;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub use planning::*;
-pub use validator::*;
-pub use geometry::*;
 pub use anchors::*;
+pub use geometry::*;
+pub use planning::*;
 pub use plot::*;
-pub use session::{GraphSession, SessionAction, Viewport, Expression, Issue, ExprPlotResult, VisionCapture, VisionExpression, VisionPlot, VisionIssue};
+pub use session::{
+    ExprPlotResult, Expression, GraphSession, Issue, SessionAction, Viewport, VisionCapture,
+    VisionExpression, VisionIssue, VisionPlot,
+};
+pub use validator::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CanvasObject {
@@ -74,7 +77,10 @@ pub fn compute_bbox(kind: &str, params: &Value) -> Option<[f64; 4]> {
             let mut max_y = f64::NEG_INFINITY;
 
             for pt in points {
-                if let (Some(x), Some(y)) = (pt.get("x").and_then(|v| v.as_f64()), pt.get("y").and_then(|v| v.as_f64())) {
+                if let (Some(x), Some(y)) = (
+                    pt.get("x").and_then(|v| v.as_f64()),
+                    pt.get("y").and_then(|v| v.as_f64()),
+                ) {
                     min_x = min_x.min(x);
                     min_y = min_y.min(y);
                     max_x = max_x.max(x);
@@ -114,7 +120,10 @@ pub fn compute_bbox(kind: &str, params: &Value) -> Option<[f64; 4]> {
             let mut max_y = f64::NEG_INFINITY;
 
             for pt in points {
-                if let (Some(x), Some(y)) = (pt.get("x").and_then(|v| v.as_f64()), pt.get("y").and_then(|v| v.as_f64())) {
+                if let (Some(x), Some(y)) = (
+                    pt.get("x").and_then(|v| v.as_f64()),
+                    pt.get("y").and_then(|v| v.as_f64()),
+                ) {
                     min_x = min_x.min(x - radius);
                     min_y = min_y.min(y - radius);
                     max_x = max_x.max(x + radius);

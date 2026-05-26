@@ -1,10 +1,10 @@
-use serde_json::{json, Value};
-use anyhow::Result;
-use tauri::AppHandle;
-use async_trait::async_trait;
 use crate::agent::tools::AgentTool;
-use std::sync::Arc;
 use crate::agent::tools::ToolRegistry;
+use anyhow::Result;
+use async_trait::async_trait;
+use serde_json::{json, Value};
+use std::sync::Arc;
+use tauri::AppHandle;
 
 pub struct ListToolsTool {
     registry: Arc<ToolRegistry>,
@@ -41,7 +41,9 @@ impl AgentTool for ListToolsTool {
         _chat_id: String,
         _input: Value,
         _depth: u32,
-        _allowed_tools: Option<std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
+        _allowed_tools: Option<
+            std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>,
+        >,
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         let tools = self.registry.list();

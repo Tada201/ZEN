@@ -1,4 +1,4 @@
-import { useEffect, useRef, memo, useCallback } from "react";
+import { useEffect, useRef, memo, useCallback, useMemo } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Message, ArtifactData } from "./types";
@@ -32,8 +32,21 @@ export const MessageList = memo(function MessageList({
   // Fix #8: Dynamic estimateSize — track measured sizes for better scroll bar accuracy
   const sizeCache = useRef(new Map<number, number>());
 
+  const filteredMessages = useMemo(() => {
+    return messages.filter(m => m.kind !== "tool_call" && m.kind !== "tool_result");
+  }, [messages]);
+
+  const activeMessageSignature = useMemo(() => {
+    const last = filteredMessages[filteredMessages.length - 1];
+    if (!last) return "";
+    const stepFingerprint = (last.steps || [])
+      .map((s) => `${s.type}:${s.status || ""}:${s.content?.length || 0}:${s.toolCall?.status || ""}:${s.toolCall?.output?.length || 0}`)
+      .join("|");
+    return `${last.id}:${last.status}:${last.content.length}:${last.reasoning?.length || 0}:${stepFingerprint}`;
+  }, [filteredMessages]);
+
   const rowVirtualizer = useVirtualizer({
-    count: messages.length,
+    count: filteredMessages.length,
     getScrollElement: getViewport,
     estimateSize: (index) => sizeCache.current.get(index) || 200,
     overscan: 5,
@@ -69,17 +82,18 @@ export const MessageList = memo(function MessageList({
   // Fix #1 & #3: Auto-scroll using virtualizer API with throttle.
   // Removed content.length dependency — virtualizer handles size changes via measureElement.
   useEffect(() => {
-    if (!isAutoScrolling.current || messages.length === 0) return;
+    if (!isAutoScrolling.current || filteredMessages.length === 0) return;
 
     const now = Date.now();
     if (now - lastScrollTime.current < 50) return; // Max 20 scroll/sec
     lastScrollTime.current = now;
 
-    rowVirtualizer.scrollToIndex(messages.length - 1, {
+    rowVirtualizer.measure();
+    rowVirtualizer.scrollToIndex(filteredMessages.length - 1, {
       align: 'end',
       behavior: isStreaming ? 'auto' : 'smooth',
     });
-  }, [messages.length, isStreaming, rowVirtualizer]);
+  }, [filteredMessages.length, activeMessageSignature, isStreaming, rowVirtualizer]);
 
   const virtualItems = rowVirtualizer.getVirtualItems();
 
@@ -94,7 +108,7 @@ export const MessageList = memo(function MessageList({
           height: `${rowVirtualizer.getTotalSize() + 192}px`, // Add 192px (12rem) padding to total size
         }}
       >
-        {messages.length === 0 ? (
+        {filteredMessages.length === 0 ? (
           <div className="flex flex-col items-center justify-center pt-32 text-center px-6">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/5 text-primary mb-6 animate-pulse">
               <BotIcon className="h-8 w-8" />
@@ -106,7 +120,7 @@ export const MessageList = memo(function MessageList({
           </div>
         ) : (
           virtualItems.map((virtualItem) => {
-            const m = messages[virtualItem.index];
+            const m = filteredMessages[virtualItem.index];
             if (!m) return null;
             return (
               <div

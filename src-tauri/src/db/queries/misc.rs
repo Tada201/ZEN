@@ -1,10 +1,7 @@
-use sqlx::SqlitePool;
-use uuid::Uuid;
 use crate::db::models::*;
 use crate::error::ZenResult;
-
-
-
+use sqlx::SqlitePool;
+use uuid::Uuid;
 
 // --- Orchestration ---
 
@@ -58,15 +55,22 @@ pub async fn save_orchestration_task(pool: &SqlitePool, task: &OrchestrationTask
     Ok(())
 }
 
-pub async fn get_orchestration_plan(pool: &SqlitePool, plan_id: &str) -> ZenResult<OrchestrationPlan> {
-    let plan = sqlx::query_as::<_, OrchestrationPlan>("SELECT * FROM orchestration_plans WHERE id = ?")
-        .bind(plan_id)
-        .fetch_one(pool)
-        .await?;
+pub async fn get_orchestration_plan(
+    pool: &SqlitePool,
+    plan_id: &str,
+) -> ZenResult<OrchestrationPlan> {
+    let plan =
+        sqlx::query_as::<_, OrchestrationPlan>("SELECT * FROM orchestration_plans WHERE id = ?")
+            .bind(plan_id)
+            .fetch_one(pool)
+            .await?;
     Ok(plan)
 }
 
-pub async fn get_orchestration_tasks(pool: &SqlitePool, plan_id: &str) -> ZenResult<Vec<OrchestrationTask>> {
+pub async fn get_orchestration_tasks(
+    pool: &SqlitePool,
+    plan_id: &str,
+) -> ZenResult<Vec<OrchestrationTask>> {
     let tasks = sqlx::query_as::<_, OrchestrationTask>("SELECT * FROM orchestration_tasks WHERE plan_id = ? ORDER BY priority DESC, created_at ASC")
         .bind(plan_id)
         .fetch_all(pool)
@@ -74,15 +78,25 @@ pub async fn get_orchestration_tasks(pool: &SqlitePool, plan_id: &str) -> ZenRes
     Ok(tasks)
 }
 
-pub async fn get_orchestration_plans_by_chat(pool: &SqlitePool, chat_id: &str) -> ZenResult<Vec<OrchestrationPlan>> {
-    let plans = sqlx::query_as::<_, OrchestrationPlan>("SELECT * FROM orchestration_plans WHERE chat_id = ? ORDER BY created_at DESC")
-        .bind(chat_id)
-        .fetch_all(pool)
-        .await?;
+pub async fn get_orchestration_plans_by_chat(
+    pool: &SqlitePool,
+    chat_id: &str,
+) -> ZenResult<Vec<OrchestrationPlan>> {
+    let plans = sqlx::query_as::<_, OrchestrationPlan>(
+        "SELECT * FROM orchestration_plans WHERE chat_id = ? ORDER BY created_at DESC",
+    )
+    .bind(chat_id)
+    .fetch_all(pool)
+    .await?;
     Ok(plans)
 }
 
-pub async fn update_orchestration_task_status(pool: &SqlitePool, task_id: &str, status: &str, result: Option<&str>) -> ZenResult<()> {
+pub async fn update_orchestration_task_status(
+    pool: &SqlitePool,
+    task_id: &str,
+    status: &str,
+    result: Option<&str>,
+) -> ZenResult<()> {
     sqlx::query("UPDATE orchestration_tasks SET status = ?, result = ?, updated_at = datetime('now') WHERE id = ?")
         .bind(status)
         .bind(result)
@@ -92,23 +106,28 @@ pub async fn update_orchestration_task_status(pool: &SqlitePool, task_id: &str, 
     Ok(())
 }
 
-pub async fn update_orchestration_plan_status(pool: &SqlitePool, plan_id: &str, status: &str) -> ZenResult<()> {
-    sqlx::query("UPDATE orchestration_plans SET status = ?, updated_at = datetime('now') WHERE id = ?")
-        .bind(status)
-        .bind(plan_id)
-        .execute(pool)
-        .await?;
+pub async fn update_orchestration_plan_status(
+    pool: &SqlitePool,
+    plan_id: &str,
+    status: &str,
+) -> ZenResult<()> {
+    sqlx::query(
+        "UPDATE orchestration_plans SET status = ?, updated_at = datetime('now') WHERE id = ?",
+    )
+    .bind(status)
+    .bind(plan_id)
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
-
 // --- Skills, Hooks & Commands ---
 
-use crate::db::models::{Skill, Hook, HookLogEntry, ZenCommand};
+use crate::db::models::{Hook, HookLogEntry, Skill, ZenCommand};
 
 pub async fn list_skills(pool: &SqlitePool) -> ZenResult<Vec<Skill>> {
     let skills = sqlx::query_as::<_, Skill>(
-        "SELECT id, name, '' as description, '' as invocation_syntax, enabled FROM tools"
+        "SELECT id, name, '' as description, '' as invocation_syntax, enabled FROM tools",
     )
     .fetch_all(pool)
     .await?;
@@ -148,16 +167,18 @@ pub async fn list_commands(pool: &SqlitePool) -> ZenResult<Vec<ZenCommand>> {
 }
 
 pub async fn toggle_command(pool: &SqlitePool, id: &str) -> ZenResult<()> {
-    sqlx::query("UPDATE zen_commands SET enabled = CASE WHEN enabled = 1 THEN 0 ELSE 1 END WHERE id = ?")
-        .bind(id)
-        .execute(pool)
-        .await?;
+    sqlx::query(
+        "UPDATE zen_commands SET enabled = CASE WHEN enabled = 1 THEN 0 ELSE 1 END WHERE id = ?",
+    )
+    .bind(id)
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
 pub async fn get_hook_logs(pool: &SqlitePool, limit: i64) -> ZenResult<Vec<HookLogEntry>> {
     let logs = sqlx::query_as::<_, HookLogEntry>(
-        "SELECT * FROM hook_logs ORDER BY timestamp DESC LIMIT ?"
+        "SELECT * FROM hook_logs ORDER BY timestamp DESC LIMIT ?",
     )
     .bind(limit)
     .fetch_all(pool)
@@ -180,7 +201,6 @@ pub async fn add_hook_log(pool: &SqlitePool, log: &HookLogEntry) -> ZenResult<()
     Ok(())
 }
 
-
 // --- Hierarchical Memory (Phase 1) ---
 
 pub async fn save_summary(
@@ -202,16 +222,21 @@ pub async fn save_summary(
     .execute(pool)
     .await?;
 
-    let sum = sqlx::query_as::<_, ConversationSummary>("SELECT * FROM conversation_summaries WHERE id = ?")
-        .bind(&id)
-        .fetch_one(pool)
-        .await?;
+    let sum = sqlx::query_as::<_, ConversationSummary>(
+        "SELECT * FROM conversation_summaries WHERE id = ?",
+    )
+    .bind(&id)
+    .fetch_one(pool)
+    .await?;
     Ok(sum)
 }
 
-pub async fn get_current_summary(pool: &SqlitePool, chat_id: &str) -> ZenResult<Option<ConversationSummary>> {
+pub async fn get_current_summary(
+    pool: &SqlitePool,
+    chat_id: &str,
+) -> ZenResult<Option<ConversationSummary>> {
     let sum = sqlx::query_as::<_, ConversationSummary>(
-        "SELECT * FROM conversation_summaries WHERE chat_id = ? ORDER BY created_at DESC LIMIT 1"
+        "SELECT * FROM conversation_summaries WHERE chat_id = ? ORDER BY created_at DESC LIMIT 1",
     )
     .bind(chat_id)
     .fetch_optional(pool)
@@ -219,14 +244,17 @@ pub async fn get_current_summary(pool: &SqlitePool, chat_id: &str) -> ZenResult<
     Ok(sum)
 }
 
-pub async fn get_previous_summaries(pool: &SqlitePool, chat_id: &str) -> ZenResult<Vec<ConversationSummary>> {
+pub async fn get_previous_summaries(
+    pool: &SqlitePool,
+    chat_id: &str,
+) -> ZenResult<Vec<ConversationSummary>> {
     let summaries = sqlx::query_as::<_, ConversationSummary>(
-        "SELECT * FROM conversation_summaries WHERE chat_id = ? ORDER BY created_at ASC"
+        "SELECT * FROM conversation_summaries WHERE chat_id = ? ORDER BY created_at ASC",
     )
     .bind(chat_id)
     .fetch_all(pool)
     .await?;
-    
+
     if summaries.len() > 1 {
         let count = summaries.len();
         Ok(summaries[0..count - 1].to_vec())
@@ -235,14 +263,16 @@ pub async fn get_previous_summaries(pool: &SqlitePool, chat_id: &str) -> ZenResu
     }
 }
 
-pub async fn mark_messages_compacted(pool: &SqlitePool, chat_id: &str, up_to_created_at: &str) -> ZenResult<()> {
-    sqlx::query(
-        "UPDATE messages SET is_compacted = 1 WHERE chat_id = ? AND created_at <= ?"
-    )
-    .bind(chat_id)
-    .bind(up_to_created_at)
-    .execute(pool)
-    .await?;
+pub async fn mark_messages_compacted(
+    pool: &SqlitePool,
+    chat_id: &str,
+    up_to_created_at: &str,
+) -> ZenResult<()> {
+    sqlx::query("UPDATE messages SET is_compacted = 1 WHERE chat_id = ? AND created_at <= ?")
+        .bind(chat_id)
+        .bind(up_to_created_at)
+        .execute(pool)
+        .await?;
     Ok(())
 }
 
@@ -274,12 +304,17 @@ pub async fn mark_messages_compacted_by_ids(pool: &SqlitePool, ids: &[String]) -
 
 pub async fn get_active_messages(pool: &SqlitePool, chat_id: &str) -> ZenResult<Vec<Message>> {
     let msgs = sqlx::query_as::<_, Message>(
-        "SELECT * FROM messages WHERE chat_id = ? AND (is_compacted = 0 OR is_compacted IS NULL) ORDER BY created_at ASC"
+        r#"
+        SELECT * FROM (
+            SELECT * FROM messages
+            WHERE chat_id = ? AND (is_compacted = 0 OR is_compacted IS NULL)
+            ORDER BY created_at DESC
+            LIMIT 500
+        ) ORDER BY created_at ASC
+        "#,
     )
     .bind(chat_id)
     .fetch_all(pool)
     .await?;
     Ok(msgs)
 }
-
-

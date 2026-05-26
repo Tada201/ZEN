@@ -1,6 +1,3 @@
-use crate::error::ZenResult;
-use super::LmStudioProvider;
-use super::NATIVE_TOOL_ARCHS;
 use tracing::{debug, warn};
 
 impl super::LmStudioProvider {
@@ -48,31 +45,4 @@ impl super::LmStudioProvider {
             }
         }
     }
-
-    fn supports_tools(&self, model: &str) -> bool {
-        // Check cached arch mapping from list_models()
-        if let Ok(map) = self.model_archs.read() {
-            if let Some(arch) = map.get(model) {
-                let supported = Self::arch_supports_tools(arch);
-                if !supported {
-                    tracing::info!(model = model, arch = %arch, "Model arch does not support tools — using text-mode fallback");
-                }
-                return supported;
-            }
-        }
-        // If we haven't seen this model yet (cache miss), try to infer from name.
-        // Common patterns: qwen, llama, mistral, gemma, phi, deepseek have tool support.
-        // Unknown models default to false (text-mode fallback is safer).
-        let name_lower = model.to_lowercase();
-        let inferred = NATIVE_TOOL_ARCHS.iter().any(|arch| name_lower.contains(arch));
-        if !inferred {
-            tracing::info!(model = model, "Model not in arch cache, name doesn't match known tool archs — using text-mode fallback");
-        }
-        inferred
-    }
-
-
-
 }
-
-

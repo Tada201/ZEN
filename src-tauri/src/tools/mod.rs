@@ -1,21 +1,21 @@
+pub mod fs_tools;
+pub mod manager;
+pub mod operational_map;
 pub mod permission;
 pub mod sys_metrics;
 pub mod web_fetch;
-pub mod fs_tools;
-pub mod operational_map;
-pub mod manager;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tauri::{AppHandle, Emitter};
+use tokio::sync::RwLock;
 
+use self::operational_map::ActivateOperationalMapTool;
 use self::permission::{PermissionDecision, RiskLevel, ToolPermissions};
 use self::sys_metrics::SystemMetricsTool;
 use self::web_fetch::WebFetchTool;
-use self::operational_map::ActivateOperationalMapTool;
 
 // ========== TOOL OUTPUT / ERROR ==========
 
@@ -28,11 +28,21 @@ pub struct ToolOutput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ToolError {
-    PermissionDenied { reason: String },
-    InvalidArguments { details: String },
-    ExecutionFailed { message: String },
-    NotFound { name: String },
-    AwaitingConfirmation { context: permission::PermissionContext },
+    PermissionDenied {
+        reason: String,
+    },
+    InvalidArguments {
+        details: String,
+    },
+    ExecutionFailed {
+        message: String,
+    },
+    NotFound {
+        name: String,
+    },
+    AwaitingConfirmation {
+        context: permission::PermissionContext,
+    },
 }
 
 impl std::fmt::Display for ToolError {
@@ -195,11 +205,16 @@ impl ToolRegistry {
 
     /// Check permission for a tool call WITHOUT executing it.
     /// Returns the decision so the caller can handle Confirm via Tauri events.
-    pub fn check_permission(&self, tool_call: &ToolCall, overrides: Option<&ToolPermissions>) -> Result<PermissionDecision, ToolError> {
+    pub fn check_permission(
+        &self,
+        tool_call: &ToolCall,
+        overrides: Option<&ToolPermissions>,
+    ) -> Result<PermissionDecision, ToolError> {
         // If the tool exists in our local registry, use its specific risk level.
         // Then check known_tool_risks for AgentTool-only tools.
         // Otherwise, assume Critical risk for truly unknown tools.
-        let risk_level = self.get(&tool_call.name)
+        let risk_level = self
+            .get(&tool_call.name)
             .map(|t| t.risk_level())
             .or_else(|| self.known_tool_risks.get(&tool_call.name).copied())
             .unwrap_or(RiskLevel::Critical);
@@ -222,8 +237,11 @@ impl ToolRegistry {
         chat_id: String,
         tool_call: ToolCall,
     ) -> Result<ToolOutput, ToolError> {
-        let tool = self.get(&tool_call.name)
-            .ok_or_else(|| ToolError::NotFound { name: tool_call.name.clone() })?;
+        let tool = self
+            .get(&tool_call.name)
+            .ok_or_else(|| ToolError::NotFound {
+                name: tool_call.name.clone(),
+            })?;
 
         self.record_execution(&tool_call, true, "allow");
         tool.execute(app, chat_id, tool_call.arguments).await
@@ -240,9 +258,7 @@ impl ToolRegistry {
         let decision = self.check_permission(&tool_call, None)?;
 
         match decision {
-            PermissionDecision::Allow => {
-                self.execute_authorized(app, chat_id, tool_call).await
-            }
+            PermissionDecision::Allow => self.execute_authorized(app, chat_id, tool_call).await,
             PermissionDecision::Deny { reason } => {
                 self.record_execution(&tool_call, false, "deny");
                 Err(ToolError::PermissionDenied { reason })
@@ -250,12 +266,15 @@ impl ToolRegistry {
             PermissionDecision::Confirm { context } => {
                 self.record_execution(&tool_call, false, "confirm_pending");
                 // Emit event so frontend can show authorization modal
-                let _ = app.emit("tool:authorization_request", serde_json::json!({
-                    "tool_call_id": tool_call.id,
-                    "tool_name": tool_call.name,
-                    "arguments": tool_call.arguments,
-                    "context": context,
-                }));
+                let _ = app.emit(
+                    "tool:authorization_request",
+                    serde_json::json!({
+                        "tool_call_id": tool_call.id,
+                        "tool_name": tool_call.name,
+                        "arguments": tool_call.arguments,
+                        "context": context,
+                    }),
+                );
                 Err(ToolError::AwaitingConfirmation { context })
             }
         }
@@ -277,21 +296,21 @@ impl ToolRegistry {
 
 pub type GlobalToolRegistry = Arc<RwLock<ToolRegistry>>;
 
-pub async fn init_tool_registry(permissions: ToolPermissions) -> ToolRegistry {
+pub fn init_tool_registry(permissions: ToolPermissions) -> ToolRegistry {
     let mut registry = ToolRegistry::with_permissions(permissions);
-    
+
     // Register built-in tools
     registry.register(Arc::new(SystemMetricsTool));
     registry.register(Arc::new(WebFetchTool));
     registry.register(Arc::new(crate::search::WebSearchTool));
     registry.register(Arc::new(ActivateOperationalMapTool));
-    
+
     // Register File System / RAG tools
     registry.register(Arc::new(fs_tools::VectorSearchTool));
     registry.register(Arc::new(fs_tools::ListDocumentsTool));
     registry.register(Arc::new(fs_tools::ReadDocumentTool));
     registry.register(Arc::new(fs_tools::GrepDocumentsTool));
-    
+
     // In the future, this is where we'd also wire up MCP tools.
     registry
 }

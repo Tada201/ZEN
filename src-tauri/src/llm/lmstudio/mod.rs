@@ -1,18 +1,15 @@
-pub mod types;
-pub mod models;
 pub mod chat;
 pub mod health;
+pub mod models;
+pub mod types;
 
 pub use types::*;
 
 use async_trait::async_trait;
-use futures::StreamExt;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
-use tracing::{debug, error, info, warn};
 
 use crate::db::models::{ChatMessage, ChatResponse, ModelInfo};
-use crate::error::{ZenError, ZenResult};
+use crate::error::ZenResult;
 use crate::llm::LlmProvider;
 
 /// Dedicated LM Studio provider.
@@ -28,8 +25,20 @@ pub struct LmStudioProvider {
 
 /// Architectures known to have native tool calling support in LM Studio.
 const NATIVE_TOOL_ARCHS: &[&str] = &[
-    "qwen2", "qwen2_vl", "qwen3", "llama", "mistral", "gemma", "gemma2", "gemma3",
-    "phi3", "phi4", "granite", "command-r", "deepseek", "deepseek2",
+    "qwen2",
+    "qwen2_vl",
+    "qwen3",
+    "llama",
+    "mistral",
+    "gemma",
+    "gemma2",
+    "gemma3",
+    "phi3",
+    "phi4",
+    "granite",
+    "command-r",
+    "deepseek",
+    "deepseek2",
 ];
 
 impl LmStudioProvider {
@@ -47,7 +56,9 @@ impl LmStudioProvider {
 
     fn arch_supports_tools(arch: &str) -> bool {
         let arch_lower = arch.to_lowercase();
-        NATIVE_TOOL_ARCHS.iter().any(|known| arch_lower.starts_with(known))
+        NATIVE_TOOL_ARCHS
+            .iter()
+            .any(|known| arch_lower.starts_with(known))
     }
 
     /// Cache the arch for a model after listing.
@@ -73,7 +84,8 @@ impl LlmProvider for LmStudioProvider {
         on_chunk: Box<dyn Fn(crate::llm::LlmChunk) + Send>,
         token: tokio_util::sync::CancellationToken,
     ) -> ZenResult<ChatResponse> {
-        self.do_chat_stream(model, messages, tools, config, on_chunk, token).await
+        self.do_chat_stream(model, messages, tools, config, on_chunk, token)
+            .await
     }
 
     async fn embed(&self, model: &str, text: &str) -> ZenResult<Vec<f32>> {
@@ -92,6 +104,8 @@ impl LlmProvider for LmStudioProvider {
             }
         }
         let name_lower = model.to_lowercase();
-        NATIVE_TOOL_ARCHS.iter().any(|arch| name_lower.contains(arch))
+        NATIVE_TOOL_ARCHS
+            .iter()
+            .any(|arch| name_lower.contains(arch))
     }
 }

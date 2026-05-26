@@ -11,6 +11,7 @@ shell commands, and other important information, read the current plan:
 <!-- SPECKIT END -->
 
 ## Agent Rules
+0. **Read RULES.md First**: Before planning or editing, read [RULES.md](RULES.md). It is the current architecture contract and phase rebuild guide for this codebase.
 1. **Function over Form**: Prioritize utility and performance. Every unique animation or UI feature must serve a clear purpose and be useful. Avoid performance waste on purely decorative elements.
 2. **Utilize .codegraph Rules**: Always consult `.agents/rules/codegraph.md` when querying the SQLite codegraph database to inspect schemas and find optimal SQL query templates.
 3. **Concise Claude-style Responses**: Always consult and follow the guidelines in `.agents/rules/agents_response.md` to keep communication concise, direct, tool-first, and minimally verbose during task execution.

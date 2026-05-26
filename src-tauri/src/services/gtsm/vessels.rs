@@ -1,10 +1,10 @@
-use super::types::{Vessel, GtsmStreamMessage};
 use super::cache::GtsmCache;
+use super::types::{GtsmStreamMessage, Vessel};
 use anyhow::Result;
+use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use std::sync::Arc;
 use tokio::sync::broadcast;
-use futures_util::{StreamExt, SinkExt};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 /// Vessel type code from AIS to human-readable string
@@ -32,43 +32,10 @@ fn ais_ship_type(code: Option<i32>) -> String {
 
 // ─── REST Fallback approach using a public AIS aggregator ─────────
 
-/// Response from a public AIS data source
-#[derive(Debug, Deserialize)]
-struct AisResponse {
-    #[serde(default)]
-    data: Vec<AisVessel>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AisVessel {
-    #[serde(rename = "MMSI")]
-    mmsi: Option<i64>,
-    #[serde(rename = "SHIPNAME")]
-    ship_name: Option<String>,
-    #[serde(rename = "LAT")]
-    lat: Option<f64>,
-    #[serde(rename = "LON")]
-    lon: Option<f64>,
-    #[serde(rename = "SPEED")]
-    speed: Option<f64>,
-    #[serde(rename = "HEADING")]
-    heading: Option<f64>,
-    #[serde(rename = "DESTINATION")]
-    destination: Option<String>,
-    #[serde(rename = "FLAG")]
-    flag: Option<String>,
-    #[serde(rename = "SHIPTYPE")]
-    ship_type: Option<i32>,
-}
-
 /// Spawn a background task to connect to aisstream.io and stream vessels.
 /// Vessels are batched and broadcast every few seconds to avoid flooding the
 /// internal WebSocket channel with thousands of tiny per-message updates.
-pub fn spawn_ais_stream(
-    api_key: String,
-    tx: broadcast::Sender<String>,
-    cache: Arc<GtsmCache>,
-) {
+pub fn spawn_ais_stream(api_key: String, tx: broadcast::Sender<String>, cache: Arc<GtsmCache>) {
     tokio::spawn(async move {
         if api_key.is_empty() {
             tracing::debug!("No AIS API key configured, skipping vessel stream");
@@ -103,13 +70,16 @@ pub fn spawn_ais_stream(
                         continue;
                     }
 
-                    tracing::info!("Subscribed to AIS stream (filtered: PositionReport, ShipStaticData)");
+                    tracing::info!(
+                        "Subscribed to AIS stream (filtered: PositionReport, ShipStaticData)"
+                    );
 
                     // 2. Heartbeat task to keep connection alive
                     let write_arc = Arc::new(tokio::sync::Mutex::new(write));
                     let write_ping = write_arc.clone();
                     let ping_handle = tokio::spawn(async move {
-                        let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
+                        let mut interval =
+                            tokio::time::interval(std::time::Duration::from_secs(30));
                         loop {
                             interval.tick().await;
                             let mut w = write_ping.lock().await;
@@ -128,8 +98,7 @@ pub fn spawn_ais_stream(
                     let tx_flush = tx.clone();
 
                     let flush_handle = tokio::spawn(async move {
-                        let mut interval =
-                            tokio::time::interval(std::time::Duration::from_secs(5));
+                        let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
                         loop {
                             interval.tick().await;
                             let pending: Vec<Vessel> = {
@@ -141,16 +110,15 @@ pub fn spawn_ais_stream(
                             }
 
                             // Merge into cache
-                            let mut existing =
-                                cache_flush.get_vessels().await.unwrap_or_default();
+                            let mut existing = cache_flush.get_vessels().await.unwrap_or_default();
                             for v in &pending {
-                                if let Some(idx) =
-                                    existing.iter().position(|e| e.mmsi == v.mmsi)
-                                {
+                                if let Some(idx) = existing.iter().position(|e| e.mmsi == v.mmsi) {
                                     // Combine message data if possible
                                     let mut updated = v.clone();
                                     // If new msg is position report and we had metadata, keep metadata
-                                    if updated.ship_type == "other" && existing[idx].ship_type != "other" {
+                                    if updated.ship_type == "other"
+                                        && existing[idx].ship_type != "other"
+                                    {
                                         updated.ship_type = existing[idx].ship_type.clone();
                                     }
                                     if updated.destination.is_none() {
@@ -205,7 +173,7 @@ pub fn spawn_ais_stream(
                     tracing::error!("Failed to connect to AIS stream: {}", e);
                 }
             }
-            
+
             tracing::info!("Reconnecting to AIS stream in 15 seconds...");
             tokio::time::sleep(std::time::Duration::from_secs(15)).await;
         }
@@ -217,7 +185,7 @@ pub fn parse_ais_message(json: &str) -> Result<Vec<Vessel>> {
     #[derive(Deserialize)]
     struct AisStreamMessage {
         #[serde(rename = "MessageType")]
-        message_type: Option<String>,
+        _message_type: Option<String>,
         #[serde(rename = "MetaData")]
         metadata: Option<AisMetadata>,
         #[serde(rename = "Message")]
@@ -241,8 +209,11 @@ pub fn parse_ais_message(json: &str) -> Result<Vec<Vessel>> {
     };
 
     let mmsi = meta.mmsi.unwrap_or(0).to_string();
-    let name = meta.ship_name.map(|s| s.trim().to_string()).unwrap_or_else(|| "Unknown".to_string());
-    
+    let name = meta
+        .ship_name
+        .map(|s| s.trim().to_string())
+        .unwrap_or_else(|| "Unknown".to_string());
+
     let mut ship_type = "other".to_string();
     let mut speed = 0.0;
     let mut heading = 0.0;
@@ -252,15 +223,19 @@ pub fn parse_ais_message(json: &str) -> Result<Vec<Vessel>> {
         // --- Handle Position Reports ---
         if let Some(pos) = inner.get("PositionReport") {
             speed = pos.get("Sog").and_then(|v| v.as_f64()).unwrap_or(0.0);
-            heading = pos.get("TrueHeading").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            heading = pos
+                .get("TrueHeading")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
         }
-        
+
         // --- Handle Static Data (Ship specific info) ---
         if let Some(stat) = inner.get("ShipStaticData") {
             let type_id = stat.get("Type").and_then(|v| v.as_i64()).map(|i| i as i32);
             ship_type = ais_ship_type(type_id);
-            
-            destination = stat.get("Destination")
+
+            destination = stat
+                .get("Destination")
                 .and_then(|v| v.as_str())
                 .map(|s| s.trim().to_string());
         }

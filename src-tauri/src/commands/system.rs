@@ -1,7 +1,7 @@
-use tauri::State;
+use crate::commands::AppState;
 use crate::error::AppResult;
 use crate::models::SystemMetrics;
-use crate::commands::AppState;
+use tauri::State;
 
 #[tauri::command]
 pub async fn get_system_metrics(state: State<'_, AppState>) -> AppResult<SystemMetrics> {
@@ -21,7 +21,9 @@ pub async fn get_system_stats(state: State<'_, AppState>) -> AppResult<SystemMet
 }
 
 #[tauri::command]
-pub async fn get_hardware_info(state: State<'_, AppState>) -> AppResult<crate::services::HardwareInfo> {
+pub async fn get_hardware_info(
+    state: State<'_, AppState>,
+) -> AppResult<crate::services::HardwareInfo> {
     let hardware = state.hardware.lock().await;
     Ok(hardware.get_info().clone())
 }
@@ -52,7 +54,8 @@ pub async fn browse_folder(path: Option<String>) -> AppResult<BrowseFolderResult
     });
 
     let validated_path = crate::utils::validate_path(&target)?;
-    let dir = std::fs::read_dir(&validated_path).map_err(|e| crate::error::ZenError::Internal(format!("Cannot read directory: {}", e)))?;
+    let dir = std::fs::read_dir(&validated_path)
+        .map_err(|e| crate::error::ZenError::Internal(format!("Cannot read directory: {}", e)))?;
 
     let mut dirs: Vec<FolderEntry> = Vec::new();
     let mut entries: Vec<FolderEntry> = Vec::new();
@@ -69,7 +72,11 @@ pub async fn browse_folder(path: Option<String>) -> AppResult<BrowseFolderResult
         let name = entry.file_name().to_string_lossy().to_string();
         let fpath = entry.path().to_string_lossy().to_string();
         let r#type = if ft.is_dir() { "dir" } else { "file" };
-        let fe = FolderEntry { name, path: fpath, r#type: r#type.to_string() };
+        let fe = FolderEntry {
+            name,
+            path: fpath,
+            r#type: r#type.to_string(),
+        };
         if ft.is_dir() {
             dirs.push(fe.clone());
         }

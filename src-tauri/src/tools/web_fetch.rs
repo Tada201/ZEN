@@ -14,18 +14,25 @@ struct WebFetchArgs {
 
 async fn nine_router_fetch_fallback(app: &AppHandle, url: &str) -> Result<String, String> {
     use tauri::Manager;
-    let state = app.try_state::<crate::AppState>()
+    let state = app
+        .try_state::<crate::AppState>()
         .ok_or_else(|| "AppState not found in Tauri manager".to_string())?;
-    
-    let db_pool = state.db().await
+
+    let db_pool = state
+        .db()
+        .await
         .map_err(|e| format!("Failed to get database pool: {}", e))?;
-    
-    let nine_router_base_url = crate::db::queries::get_setting(&db_pool, "nine_router_base_url")
+
+    let nine_router_base_url = state
+        .settings_manager
+        .get("nine_router_base_url")
         .await
         .unwrap_or_default()
         .unwrap_or_else(|| "http://localhost:20128/v1".to_string());
-    
-    let nine_router_api_key = crate::db::queries::get_setting(&db_pool, "nine_router_api_key")
+
+    let nine_router_api_key = state
+        .secret_manager
+        .get_secret("nine_router_api_key")
         .await
         .unwrap_or_default()
         .unwrap_or_default();
@@ -33,7 +40,7 @@ async fn nine_router_fetch_fallback(app: &AppHandle, url: &str) -> Result<String
     // 2. Fetch models to perform dynamic search model discovery
     let client = reqwest::Client::new();
     let models_url = format!("{}/models", nine_router_base_url.trim_end_matches('/'));
-    
+
     let mut selected_model = "kr/claude-sonnet-4.5".to_string(); // Premium fallback model
     let mut has_explicit_search_model = false;
 
@@ -63,9 +70,13 @@ async fn nine_router_fetch_fallback(app: &AppHandle, url: &str) -> Result<String
         if let Ok(resp) = request.send().await {
             if resp.status().is_success() {
                 #[derive(serde::Deserialize)]
-                struct ModelObj { id: String }
+                struct ModelObj {
+                    id: String,
+                }
                 #[derive(serde::Deserialize)]
-                struct ModelsResp { data: Vec<ModelObj> }
+                struct ModelsResp {
+                    data: Vec<ModelObj>,
+                }
 
                 if let Ok(models_data) = resp.json::<ModelsResp>().await {
                     // Find model that matches keywords: sonar, perplexity, search, online
@@ -83,7 +94,10 @@ async fn nine_router_fetch_fallback(app: &AppHandle, url: &str) -> Result<String
     }
 
     // 3. Post to chat completion endpoint
-    let chat_url = format!("{}/chat/completions", nine_router_base_url.trim_end_matches('/'));
+    let chat_url = format!(
+        "{}/chat/completions",
+        nine_router_base_url.trim_end_matches('/')
+    );
     let payload = json!({
         "model": selected_model,
         "messages": [
@@ -104,28 +118,43 @@ async fn nine_router_fetch_fallback(app: &AppHandle, url: &str) -> Result<String
         post_req = post_req.bearer_auth(&nine_router_api_key);
     }
 
-    let resp = post_req.send().await
+    let resp = post_req
+        .send()
+        .await
         .map_err(|e| format!("Failed to reach 9Router chat completion: {}", e))?;
 
     if !resp.status().is_success() {
-        return Err(format!("9Router chat completion returned status: {}", resp.status()));
+        return Err(format!(
+            "9Router chat completion returned status: {}",
+            resp.status()
+        ));
     }
 
-    let text_content = resp.text().await
+    let text_content = resp
+        .text()
+        .await
         .map_err(|e| format!("Failed to read 9Router response text: {}", e))?;
 
     // Parse the chat completions JSON
     #[derive(serde::Deserialize)]
-    struct ChoiceMsg { content: String }
+    struct ChoiceMsg {
+        content: String,
+    }
     #[derive(serde::Deserialize)]
-    struct Choice { message: ChoiceMsg }
+    struct Choice {
+        message: ChoiceMsg,
+    }
     #[derive(serde::Deserialize)]
-    struct ChatCompletion { choices: Vec<Choice> }
+    struct ChatCompletion {
+        choices: Vec<Choice>,
+    }
 
     let completion: ChatCompletion = serde_json::from_str(&text_content)
         .map_err(|e| format!("Failed to parse chat completion structure: {}", e))?;
 
-    let raw_content = completion.choices.first()
+    let raw_content = completion
+        .choices
+        .first()
         .map(|c| c.message.content.trim().to_string())
         .ok_or_else(|| "9Router returned an empty choice list".to_string())?;
 
@@ -160,7 +189,7 @@ impl Tool for WebFetchTool {
     }
 
     fn risk_level(&self) -> RiskLevel {
-        RiskLevel::High 
+        RiskLevel::High
         // High risk because it can be used for SSRF if the AI is tricked into requesting local network IPs
     }
 
@@ -170,20 +199,26 @@ impl Tool for WebFetchTool {
         _chat_id: String,
         args: serde_json::Value,
     ) -> Result<ToolOutput, ToolError> {
-        let parsed_args: WebFetchArgs = serde_json::from_value(args)
-            .map_err(|e| ToolError::InvalidArguments { details: format!("Invalid arguments: {}", e) })?;
+        let parsed_args: WebFetchArgs =
+            serde_json::from_value(args).map_err(|e| ToolError::InvalidArguments {
+                details: format!("Invalid arguments: {}", e),
+            })?;
 
         let url = parsed_args.url.trim();
-        
+
         if !url.starts_with("http://") && !url.starts_with("https://") {
-            return Err(ToolError::InvalidArguments { details: "URL must start with http:// or https://".into() });
+            return Err(ToolError::InvalidArguments {
+                details: "URL must start with http:// or https://".into(),
+            });
         }
 
         // We try reqwest first for direct fetch.
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
-            .map_err(|e| ToolError::ExecutionFailed { message: format!("Failed to build HTTP client: {}", e) })?;
+            .map_err(|e| ToolError::ExecutionFailed {
+                message: format!("Failed to build HTTP client: {}", e),
+            })?;
 
         let fetch_result = client.get(url).send().await;
 
@@ -191,22 +226,37 @@ impl Tool for WebFetchTool {
             Ok(response) => {
                 let status = response.status();
                 if status.is_success() {
-                    response.text().await.map_err(|e| ToolError::ExecutionFailed { message: format!("Failed to read response body: {}", e) })?
+                    response
+                        .text()
+                        .await
+                        .map_err(|e| ToolError::ExecutionFailed {
+                            message: format!("Failed to read response body: {}", e),
+                        })?
                 } else {
-                    nine_router_fetch_fallback(&app, url).await
-                        .map_err(|e| ToolError::ExecutionFailed { message: format!("Direct fetch failed with status: {}. Fallback fetch failed: {}", status, e) })?
+                    nine_router_fetch_fallback(&app, url).await.map_err(|e| {
+                        ToolError::ExecutionFailed {
+                            message: format!(
+                                "Direct fetch failed with status: {}. Fallback fetch failed: {}",
+                                status, e
+                            ),
+                        }
+                    })?
                 }
             }
-            Err(err) => {
-                nine_router_fetch_fallback(&app, url).await
-                    .map_err(|e| ToolError::ExecutionFailed { message: format!("Direct fetch failed: {}. Fallback fetch failed: {}", err, e) })?
-            }
+            Err(err) => nine_router_fetch_fallback(&app, url).await.map_err(|e| {
+                ToolError::ExecutionFailed {
+                    message: format!("Direct fetch failed: {}. Fallback fetch failed: {}", err, e),
+                }
+            })?,
         };
 
         // Truncate to avoid exploding context window (e.g. max 16KB of text)
         let max_len = 16 * 1024;
         let final_text = if text.len() > max_len {
-            format!("{}... [TRUNCATED - Content exceeded 16KB]", &text[..max_len])
+            format!(
+                "{}... [TRUNCATED - Content exceeded 16KB]",
+                &text[..max_len]
+            )
         } else {
             text
         };

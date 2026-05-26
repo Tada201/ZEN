@@ -86,10 +86,7 @@ impl RateLimiter {
         let mut buckets = self.buckets.lock().await;
         let bucket = buckets
             .entry(tool_name.to_string())
-            .or_insert_with(|| TokenBucket::new(
-                self.default_max_tokens,
-                self.default_refill_rate,
-            ));
+            .or_insert_with(|| TokenBucket::new(self.default_max_tokens, self.default_refill_rate));
         bucket.try_consume()
     }
 

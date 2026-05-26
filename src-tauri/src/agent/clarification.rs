@@ -1,15 +1,15 @@
 //! Clarification request handling for agent system
-//! 
+//!
 //! This module provides backend support for clarification widgets:
 //! - Store clarification requests in database
 //! - Handle user responses
 //! - Resume agent execution with selected options
 
-use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
-use tauri::{Emitter, State};
-use crate::error::ZenError;
 use crate::commands::AppState;
+use crate::db::queries;
+use crate::error::ZenError;
+use serde::{Deserialize, Serialize};
+use tauri::{Emitter, State};
 
 /// Clarification request structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,24 +53,18 @@ pub async fn create_clarification_request(
     let pool = app_state.db().await?;
 
     // Store in database
-    let options_json = serde_json::to_string(&options)
-        .map_err(|e| ZenError::Json(e))?;
+    let options_json = serde_json::to_string(&options).map_err(|e| ZenError::Json(e))?;
 
-    sqlx::query(
-        r#"
-        INSERT INTO clarification_requests (id, chat_id, question, clarification_type, options, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        "#
+    queries::add_clarification_request(
+        &pool,
+        &id,
+        chat_id,
+        question,
+        clarification_type,
+        &options_json,
+        &created_at,
     )
-    .bind(&id)
-    .bind(chat_id)
-    .bind(question)
-    .bind(clarification_type)
-    .bind(&options_json)
-    .bind(&created_at)
-    .execute(&pool)
-    .await
-    .map_err(|e| ZenError::Database(e))?;
+    .await?;
 
     Ok(ClarificationRequest {
         id,
@@ -99,55 +93,24 @@ pub async fn submit_clarification_response(
     // Update database
     let response_json = serde_json::to_string(&selected_ids)
         .map_err(|e| format!("Failed to serialize response: {}", e))?;
-    
+
     let responded_at = chrono::Utc::now().to_rfc3339();
 
-    sqlx::query(
-        r#"
-        UPDATE clarification_requests
-        SET response = ?, responded_at = ?
-        WHERE chat_id = ?
-        "#
-    )
-    .bind(&response_json)
-    .bind(&responded_at)
-    .bind(&chat_id)
-    .execute(&pool)
-    .await
-    .map_err(|e| format!("Database error: {}", e))?;
+    queries::update_clarification_response(&pool, &chat_id, &response_json, &responded_at)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
 
     // Emit event to resume agent execution
-    app.emit("clarification:submitted", ClarificationResponsePayload {
-        chat_id: chat_id.clone(),
-        selected_ids,
-    })
+    app.emit(
+        "clarification:submitted",
+        ClarificationResponsePayload {
+            chat_id: chat_id.clone(),
+            selected_ids,
+        },
+    )
     .map_err(|e| format!("Failed to emit event: {}", e))?;
 
     tracing::info!(chat_id = %chat_id, "Agent resumed with clarification response");
-    Ok(())
-}
-
-/// Database migration for clarification requests table
-pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS clarification_requests (
-            id TEXT PRIMARY KEY,
-            chat_id TEXT NOT NULL,
-            question TEXT NOT NULL,
-            clarification_type TEXT NOT NULL,
-            options TEXT NOT NULL,
-            response TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            responded_at DATETIME,
-            FOREIGN KEY (chat_id) REFERENCES chats(id)
-        )
-        "#
-    )
-    .execute(pool)
-    .await?;
-
-    tracing::info!("Clarification requests table created/migrated");
     Ok(())
 }
 
@@ -165,7 +128,7 @@ mod tests {
 
         let json = serde_json::to_string(&option).unwrap();
         assert!(json.contains("Option 1"));
-        
+
         let deserialized: ClarificationOption = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.id, "opt1");
     }

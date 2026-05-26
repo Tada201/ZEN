@@ -70,6 +70,28 @@ export const useTaskStore = create<TaskState>((set, get) => {
       });
     });
 
+    listen('task:list_updated', (event: any) => {
+      const { chat_id, tasks } = event.payload as { chat_id: string; tasks: Task[] };
+      if (!chat_id || !Array.isArray(tasks)) return;
+
+      set((state) => {
+        const newTasks = new Map(state.tasks);
+        for (const [id, task] of newTasks.entries()) {
+          if (task.chatId === chat_id && id.includes('_todo_')) {
+            newTasks.delete(id);
+          }
+        }
+        for (const task of tasks) {
+          newTasks.set(task.id, {
+            ...task,
+            createdAt: task.createdAt || Date.now(),
+            updatedAt: Date.now(),
+          });
+        }
+        return { tasks: newTasks, activeChatId: chat_id, isVisible: true };
+      });
+    });
+
     // Listen for orchestrator start - show task board
     listen('orchestrator:start', () => {
       get().setVisibility(true);

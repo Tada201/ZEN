@@ -34,6 +34,27 @@ const TRANSIENT_KEYS = new Set([
   "hardwareInfo",
 ]);
 
+const SECRET_KEY_PATTERN = /(apiKey|api_key|token|secret|credential|password)$/i;
+
+function redactSecretsForLocalStorage(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => redactSecretsForLocalStorage(item));
+  }
+
+  if (value && typeof value === "object") {
+    const redacted: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      if (SECRET_KEY_PATTERN.test(key)) {
+        continue;
+      }
+      redacted[key] = redactSecretsForLocalStorage(entry);
+    }
+    return redacted;
+  }
+
+  return value;
+}
+
 /**
  * Known camelCase keys from the OLD (v1) store format.
  * Used to detect legacy data and skip snake_case conversion.
@@ -100,8 +121,27 @@ function deserializeState(rawState: Record<string, unknown>): Partial<SettingsSt
   if (result) {
     if ((result as any).providerParams === null) delete (result as any).providerParams;
     if ((result as any).chatPlugins === null) delete (result as any).chatPlugins;
-    if ((result as any).toolSettings === null) delete (result as any).toolSettings;
-    if ((result as any).customProviders === null) delete (result as any).customProviders;
+    if ((result as any).toolSettings === null || (result as any).toolSettings === undefined) {
+      (result as any).toolSettings = {};
+    } else if (typeof (result as any).toolSettings === "string") {
+      try {
+        (result as any).toolSettings = JSON.parse((result as any).toolSettings);
+      } catch {
+        (result as any).toolSettings = {};
+      }
+    }
+    if ((result as any).customProviders === null || (result as any).customProviders === undefined) {
+      delete (result as any).customProviders;
+    } else if (typeof (result as any).customProviders === "string") {
+      try {
+        const parsed = JSON.parse((result as any).customProviders);
+        (result as any).customProviders = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        (result as any).customProviders = [];
+      }
+    } else if (!Array.isArray((result as any).customProviders)) {
+      (result as any).customProviders = [];
+    }
   }
 
   return result;
@@ -143,7 +183,9 @@ export const createSettingsStorage = (_key: string): PersistStorage<SettingsStat
       try {
         const persistable = getPersistableState(value.state as Partial<SettingsState>);
         // Convert camelCase state to snake_case string map for storage
-        const sqliteData = mapStateToSqlite(persistable);
+        const sqliteData = mapStateToSqlite(
+          redactSecretsForLocalStorage(persistable) as Partial<SettingsState>
+        );
 
         localStorage.setItem(
           name,

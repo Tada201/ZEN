@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useStreamingChat } from "./useStreamingChat";
@@ -6,6 +5,7 @@ import { useChatQueries } from "./chat/useChatQueries";
 import { useChatMutations } from "./chat/useChatMutations";
 import { useSendMessage } from "./chat/useSendMessage";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
+import { chatApi } from "@/api";
 
 export function useChat() {
   const queryClient = useQueryClient();
@@ -49,7 +49,7 @@ export function useChat() {
 
   const handleExportSession = async (id: string) => {
     try {
-      const data = await invoke<any>("export_chat", { chatId: id });
+      const data = await chatApi.exportChat(id);
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -65,7 +65,7 @@ export function useChat() {
 
   const handleImportSession = async (path: string) => {
     try {
-      const chat = await invoke<any>("import_chat", { sourcePath: path });
+      const chat = await chatApi.importChat(path) as { id: string };
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
       setCurrentSessionId(chat.id);
       toast.success("Chat imported");

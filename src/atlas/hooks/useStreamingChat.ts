@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { chatApi } from "@/api";
 import { Message } from "../components/chat/types";
 
 import { useChatStore } from "@/lib/stores/useChatStore";
@@ -28,7 +28,7 @@ export function useStreamingChat(
   const abortStream = useCallback(async () => {
     try {
       if (chatId) {
-        await invoke("abort_chat", { chatId });
+        await chatApi.abortChat(chatId);
       }
     } catch (e) {
       console.warn("Failed to abort chat:", e);

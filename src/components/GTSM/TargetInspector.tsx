@@ -1,9 +1,9 @@
 import React from 'react';
 import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 import { useGTSMStore, SpatialEntity, TelemetrySnapshot } from '@/lib/stores/useGTSMStore';
-import { invoke } from '@tauri-apps/api/core';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
+import { gtsmApi } from '@/api';
 
 // Helper component for the SVG sparkline graph
 function SignalSparkline({ target, snapshots }: { target: SpatialEntity, snapshots: TelemetrySnapshot[] }) {
@@ -97,10 +97,7 @@ export const TargetInspector: React.FC = () => {
         }
 
         const nowSecs = Math.floor(Date.now() / 1000);
-        invoke<TelemetrySnapshot[]>('get_telemetry_history', {
-            entityType: selectedTarget.type,
-            timestamp: nowSecs,
-        }).then(snaps => {
+        gtsmApi.getTelemetryHistory(selectedTarget.type, nowSecs).then(snaps => {
             const targetSnaps = snaps.filter(s => s.entity_id === selectedTarget.id);
             setRecentSnapshots(targetSnaps);
         }).catch(err => {
@@ -119,7 +116,7 @@ export const TargetInspector: React.FC = () => {
 
         const prompt = `[SYSTEM OVERRIDE: ROLE = MAP_ASK]\nINTEL BRIEFING REQUEST — Entity: ${selectedTarget.id} | Type: ${selectedTarget.type.toUpperCase()}\n\nEntity data:\n${JSON.stringify(selectedTarget, null, 2)}\n\nProvide tactical intelligence assessment.`;
         try {
-            await invoke('generate_insight', { payload: { prompt, model: activeModel || 'llama3.2' } });
+            await gtsmApi.generateInsight(prompt, activeModel || 'llama3.2');
         } catch (e) {
             setAiSynthesis(`[SYSTEM_ERROR] ${e}`);
             setIsAnalyzing(false);

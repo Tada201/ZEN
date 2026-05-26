@@ -1,5 +1,5 @@
 use super::types::{Route, RouteStep};
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -65,11 +65,14 @@ pub async fn calculate_route(
         return Err(anyhow!("OSRM error: {}", response.code));
     }
 
-    let osrm_route = response.routes
+    let osrm_route = response
+        .routes
         .and_then(|r| r.into_iter().next())
         .ok_or_else(|| anyhow!("No route found"))?;
 
-    let geometry: Vec<[f64; 2]> = osrm_route.geometry.coordinates
+    let geometry: Vec<[f64; 2]> = osrm_route
+        .geometry
+        .coordinates
         .into_iter()
         .map(|c| {
             let lon = c.first().copied().unwrap_or(0.0);
@@ -83,12 +86,17 @@ pub async fn calculate_route(
 
     for leg in &osrm_route.legs {
         if let Some(s) = &leg.summary {
-            if !summary.is_empty() { summary.push_str(" → "); }
+            if !summary.is_empty() {
+                summary.push_str(" → ");
+            }
             summary.push_str(s);
         }
         for step in &leg.steps {
             let instruction = if let Some(modifier) = &step.maneuver.modifier {
-                format!("{} {} onto {}", step.maneuver.maneuver_type, modifier, step.name)
+                format!(
+                    "{} {} onto {}",
+                    step.maneuver.maneuver_type, modifier, step.name
+                )
             } else {
                 format!("{} on {}", step.maneuver.maneuver_type, step.name)
             };
@@ -118,7 +126,8 @@ pub async fn calculate_route_waypoints(waypoints: &[[f64; 2]]) -> Result<Route> 
         return Err(anyhow!("Need at least 2 waypoints"));
     }
 
-    let coords: Vec<String> = waypoints.iter()
+    let coords: Vec<String> = waypoints
+        .iter()
         .map(|[lat, lon]| format!("{},{}", lon, lat))
         .collect();
 
@@ -137,11 +146,14 @@ pub async fn calculate_route_waypoints(waypoints: &[[f64; 2]]) -> Result<Route> 
         return Err(anyhow!("OSRM error: {}", response.code));
     }
 
-    let osrm_route = response.routes
+    let osrm_route = response
+        .routes
         .and_then(|r| r.into_iter().next())
         .ok_or_else(|| anyhow!("No route found"))?;
 
-    let geometry: Vec<[f64; 2]> = osrm_route.geometry.coordinates
+    let geometry: Vec<[f64; 2]> = osrm_route
+        .geometry
+        .coordinates
         .into_iter()
         .map(|c| {
             let lon = c.first().copied().unwrap_or(0.0);
@@ -155,12 +167,17 @@ pub async fn calculate_route_waypoints(waypoints: &[[f64; 2]]) -> Result<Route> 
 
     for leg in &osrm_route.legs {
         if let Some(s) = &leg.summary {
-            if !summary.is_empty() { summary.push_str(" → "); }
+            if !summary.is_empty() {
+                summary.push_str(" → ");
+            }
             summary.push_str(s);
         }
         for step in &leg.steps {
             let instruction = if let Some(modifier) = &step.maneuver.modifier {
-                format!("{} {} onto {}", step.maneuver.maneuver_type, modifier, step.name)
+                format!(
+                    "{} {} onto {}",
+                    step.maneuver.maneuver_type, modifier, step.name
+                )
             } else {
                 format!("{} on {}", step.maneuver.maneuver_type, step.name)
             };

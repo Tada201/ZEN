@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { settingsApi } from '@/api';
 
 export interface UpdateState {
     currentVersion: string;
@@ -131,23 +132,15 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
     },
 
     setUpdateConfig: async (config) => {
-        const { invoke } = await import('@tauri-apps/api/core');
-
         set(config);
 
         // Persist to settings
         try {
             if (config.autoCheckEnabled !== undefined) {
-                await invoke('set_setting', {
-                    key: 'auto_check_updates',
-                    value: String(config.autoCheckEnabled),
-                });
+                await settingsApi.setSetting('auto_check_updates', String(config.autoCheckEnabled));
             }
             if (config.checkBeta !== undefined) {
-                await invoke('set_setting', {
-                    key: 'check_beta_updates',
-                    value: String(config.checkBeta),
-                });
+                await settingsApi.setSetting('check_beta_updates', String(config.checkBeta));
             }
         } catch {
             // Backend not available, just keep in memory

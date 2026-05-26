@@ -33,9 +33,8 @@ impl GeometryContext {
 
     /// Get center of an object
     pub fn get_center(&self, id: &str) -> Option<[f64; 2]> {
-        self.get_bbox(id).map(|[x1, y1, x2, y2]| {
-            [(x1 + x2) / 2.0, (y1 + y2) / 2.0]
-        })
+        self.get_bbox(id)
+            .map(|[x1, y1, x2, y2]| [(x1 + x2) / 2.0, (y1 + y2) / 2.0])
     }
 
     /// Calculate distance between two objects
@@ -114,7 +113,10 @@ impl GeometryContext {
             _ => {
                 // Find least congested area
                 let free_space = self.find_free_space();
-                [(free_space[0] + free_space[2]) / 2.0, (free_space[1] + free_space[3]) / 2.0]
+                [
+                    (free_space[0] + free_space[2]) / 2.0,
+                    (free_space[1] + free_space[3]) / 2.0,
+                ]
             }
         }
     }
@@ -136,12 +138,7 @@ impl GeometryContext {
     }
 
     /// Align position relative to another object
-    pub fn align_relative(
-        &self,
-        to_id: &str,
-        direction: &str,
-        offset: f64,
-    ) -> Option<[f64; 2]> {
+    pub fn align_relative(&self, to_id: &str, direction: &str, offset: f64) -> Option<[f64; 2]> {
         let bbox = self.get_bbox(to_id)?;
         let [x1, y1, x2, y2] = bbox;
         let center = [(x1 + x2) / 2.0, (y1 + y2) / 2.0];
@@ -182,11 +179,7 @@ pub fn generate_geometry_hints(ctx: &GeometryContext) -> String {
             let [x1, y1, x2, y2] = bbox;
             hints.push_str(&format!(
                 "- {} bbox=[{}, {}, {}, {}]\n",
-                id,
-                *x1 as i32,
-                *y1 as i32,
-                *x2 as i32,
-                *y2 as i32
+                id, *x1 as i32, *y1 as i32, *x2 as i32, *y2 as i32
             ));
         }
     }
@@ -226,8 +219,10 @@ mod tests {
     #[test]
     fn test_distance() {
         let mut ctx = GeometryContext::new(800.0, 600.0);
-        ctx.objects.push(("a".to_string(), [0.0, 0.0, 100.0, 100.0]));
-        ctx.objects.push(("b".to_string(), [200.0, 0.0, 300.0, 100.0]));
+        ctx.objects
+            .push(("a".to_string(), [0.0, 0.0, 100.0, 100.0]));
+        ctx.objects
+            .push(("b".to_string(), [200.0, 0.0, 300.0, 100.0]));
 
         let dist = ctx.distance("a", "b").unwrap();
         assert!((dist - 200.0).abs() < 1.0); // centers are 100px apart horizontally

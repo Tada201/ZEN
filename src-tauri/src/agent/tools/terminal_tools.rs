@@ -1,9 +1,9 @@
-use serde_json::{json, Value};
-use anyhow::Result;
-use tauri::{AppHandle, Manager, Emitter};
-use async_trait::async_trait;
 use crate::agent::tools::AgentTool;
 use crate::commands::AppState;
+use anyhow::Result;
+use async_trait::async_trait;
+use serde_json::{json, Value};
+use tauri::{AppHandle, Emitter, Manager};
 
 /// Agent tool that executes a shell command and returns the output.
 /// Similar to Zed's terminal_tool — spawns a temporary PTY, runs the command,
@@ -55,21 +55,26 @@ impl AgentTool for RunCommandTool {
         _chat_id: String,
         input: Value,
         _depth: u32,
-        _allowed_tools: Option<std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
+        _allowed_tools: Option<
+            std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>,
+        >,
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         use crate::workspace::resolve_workspace_path;
 
-        let command = input.get("command")
+        let command = input
+            .get("command")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("Missing required field: command"))?
             .to_string();
 
-        let cwd = input.get("cwd")
+        let cwd = input
+            .get("cwd")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        let timeout_ms = input.get("timeout_ms")
+        let timeout_ms = input
+            .get("timeout_ms")
             .and_then(|v| v.as_u64())
             .unwrap_or(30_000);
 
@@ -79,8 +84,10 @@ impl AgentTool for RunCommandTool {
 
         // Resolve and validate cwd is within workspace (if provided)
         let resolved_cwd = if let Some(ref dir) = cwd {
-            Some(resolve_workspace_path(&workspace, dir)
-                .map_err(|e| anyhow::anyhow!("Workspace violation: {}", e))?)
+            Some(
+                resolve_workspace_path(&workspace, dir)
+                    .map_err(|e| anyhow::anyhow!("Workspace violation: {}", e))?,
+            )
         } else {
             // Default to workspace root
             Some(workspace.clone())
@@ -89,23 +96,35 @@ impl AgentTool for RunCommandTool {
         // Validate path exists and is a directory
         if let Some(ref dir) = resolved_cwd {
             if !dir.exists() || !dir.is_dir() {
-                return Err(anyhow::anyhow!("CWD path does not exist or is not a directory: {}", dir.display()));
+                return Err(anyhow::anyhow!(
+                    "CWD path does not exist or is not a directory: {}",
+                    dir.display()
+                ));
             }
         }
 
         tracing::info!(command = %command, cwd = ?resolved_cwd, timeout_ms = timeout_ms, "RunCommandTool executing");
 
         // Emit event so the TERM panel can show the command being executed
-        let _ = app.emit("terminal:ai-command", json!({
-            "command": command,
-            "cwd": resolved_cwd,
-        }));
+        let _ = app.emit(
+            "terminal:ai-command",
+            json!({
+                "command": command,
+                "cwd": resolved_cwd,
+            }),
+        );
 
         // Execute the command through the terminal manager
         let state = app.state::<AppState>();
         let result: Result<crate::terminal::CommandResult, anyhow::Error> = {
             let mut sessions = state.terminal_sessions.write().await;
-            sessions.execute_command(&command, resolved_cwd.map(|p| p.to_string_lossy().to_string()), timeout_ms).await
+            sessions
+                .execute_command(
+                    &command,
+                    resolved_cwd.map(|p| p.to_string_lossy().to_string()),
+                    timeout_ms,
+                )
+                .await
         };
 
         match result {
@@ -113,12 +132,15 @@ impl AgentTool for RunCommandTool {
                 let formatted = cmd_result.format_for_llm(&command);
 
                 // Emit the output to the TERM panel
-                let _ = app.emit("terminal:ai-output", json!({
-                    "command": command,
-                    "output": cmd_result.output,
-                    "exit_code": cmd_result.exit_code,
-                    "timed_out": cmd_result.timed_out,
-                }));
+                let _ = app.emit(
+                    "terminal:ai-output",
+                    json!({
+                        "command": command,
+                        "output": cmd_result.output,
+                        "exit_code": cmd_result.exit_code,
+                        "timed_out": cmd_result.timed_out,
+                    }),
+                );
 
                 tracing::info!(
                     exit_code = ?cmd_result.exit_code,

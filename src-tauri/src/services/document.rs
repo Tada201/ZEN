@@ -1,13 +1,13 @@
+use sqlx::SqlitePool;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use sqlx::SqlitePool;
 use uuid::Uuid;
 
-use crate::error::{AppResult, AppError};
-use crate::rag::{DocumentChunk, VectorStore, ingestion::IngestionEngine};
-use crate::rag::embedding::EmbeddingModel;
 use crate::db::models::Document;
+use crate::error::{AppError, AppResult};
+use crate::rag::embedding::EmbeddingModel;
+use crate::rag::{ingestion::IngestionEngine, DocumentChunk, VectorStore};
 
 pub struct DocumentService {
     pub db_pool: Arc<RwLock<Option<SqlitePool>>>,
@@ -39,7 +39,13 @@ impl DocumentService {
     }
 
     fn guess_mime_type(path: &PathBuf) -> String {
-        match path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase().as_str() {
+        match path
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_lowercase()
+            .as_str()
+        {
             "pdf" => "application/pdf".to_string(),
             "txt" => "text/plain".to_string(),
             "md" => "text/markdown".to_string(),
@@ -59,7 +65,13 @@ impl DocumentService {
     }
 
     fn guess_doc_type(path: &PathBuf) -> &'static str {
-        match path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase().as_str() {
+        match path
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_lowercase()
+            .as_str()
+        {
             "pdf" => "pdf",
             "md" => "md",
             "txt" | "csv" | "json" => "txt",
@@ -69,15 +81,20 @@ impl DocumentService {
 
     pub async fn ingest(&self, path: PathBuf) -> AppResult<Document> {
         // 1. Read file metadata
-        let metadata = tokio::fs::metadata(&path).await
-            .map_err(|e| AppError::Custom(format!("Cannot read file '{}': {}", path.display(), e)))?;
-        
+        let metadata = tokio::fs::metadata(&path).await.map_err(|e| {
+            AppError::Custom(format!("Cannot read file '{}': {}", path.display(), e))
+        })?;
+
         if !metadata.is_file() {
-            return Err(AppError::Custom(format!("'{}' is not a file", path.display())));
+            return Err(AppError::Custom(format!(
+                "'{}' is not a file",
+                path.display()
+            )));
         }
 
         let file_size = metadata.len() as i64;
-        let filename = path.file_name()
+        let filename = path
+            .file_name()
             .and_then(|s| s.to_str())
             .unwrap_or("unknown")
             .to_string();
@@ -86,11 +103,24 @@ impl DocumentService {
         let doc_id = Uuid::new_v4().to_string();
 
         // 2. Extract text & chunk via IngestionEngine
-        let chunks: Vec<DocumentChunk> = self.ingestion_engine.process_file(&path).await
-            .map_err(|e| AppError::Custom(format!("Failed to extract text from '{}': {}", path.display(), e)))?;
+        let chunks: Vec<DocumentChunk> =
+            self.ingestion_engine
+                .process_file(&path)
+                .await
+                .map_err(|e| {
+                    AppError::Custom(format!(
+                        "Failed to extract text from '{}': {}",
+                        path.display(),
+                        e
+                    ))
+                })?;
 
         // 3. Get DB pool
-        let pool = self.db_pool.read().await.clone()
+        let pool = self
+            .db_pool
+            .read()
+            .await
+            .clone()
             .ok_or_else(|| AppError::Custom("Database not initialized".into()))?;
 
         // 4. Store document metadata in SQLite
@@ -103,7 +133,8 @@ impl DocumentService {
             doc_type,
             "nomic-embed-text", // default embedding model name
             &mime_type,
-        ).await?;
+        )
+        .await?;
 
         // 5. Store chunks in document_chunks table
         for (i, chunk) in chunks.iter().enumerate() {
@@ -111,28 +142,28 @@ impl DocumentService {
             // Rough token estimate: ~4 chars per token
             let token_count = (chunk.text.len() / 4) as i64;
 
-            sqlx::query(
-                "INSERT INTO document_chunks (id, document_id, chunk_index, content, token_count) VALUES (?, ?, ?, ?, ?)"
+            crate::db::queries::add_document_chunk(
+                &pool,
+                &chunk_id,
+                &doc_id,
+                i as i64,
+                &chunk.text,
+                token_count,
             )
-            .bind(&chunk_id)
-            .bind(&doc_id)
-            .bind(i as i64)
-            .bind(&chunk.text)
-            .bind(token_count)
-            .execute(&pool)
             .await
             .map_err(|e| AppError::Custom(format!("Failed to store chunk {}: {}", i, e)))?;
         }
 
         // 6. Optional: Embed chunks and store in vector DB
-        let has_rag = self.rag_store.read().await.is_some()
-            && self.embedding_model.read().await.is_some();
+        let has_rag =
+            self.rag_store.read().await.is_some() && self.embedding_model.read().await.is_some();
 
         if has_rag {
             let rag_store_opt = self.rag_store.read().await.clone();
             let embed_guard = self.embedding_model.read().await;
 
-            if let (Some(rag_store), Some(embed_model_box)) = (rag_store_opt, embed_guard.as_ref()) {
+            if let (Some(rag_store), Some(embed_model_box)) = (rag_store_opt, embed_guard.as_ref())
+            {
                 let embed_model: &dyn EmbeddingModel = &**embed_model_box;
 
                 // Generate embeddings for all chunks
@@ -146,8 +177,9 @@ impl DocumentService {
                         } else {
                             // Update status to indexed
                             let _ = crate::db::queries::update_document_status(
-                                &pool, &doc_id, "indexed", None
-                            ).await;
+                                &pool, &doc_id, "indexed", None,
+                            )
+                            .await;
                         }
                     }
                     Err(e) => {
@@ -164,19 +196,31 @@ impl DocumentService {
     }
 
     pub async fn list(&self) -> AppResult<Vec<Document>> {
-        let pool = self.db_pool.read().await.clone()
+        let pool = self
+            .db_pool
+            .read()
+            .await
+            .clone()
             .ok_or_else(|| AppError::Custom("Database not initialized".into()))?;
         crate::db::queries::list_documents(&pool).await
     }
 
     pub async fn get_by_id(&self, doc_id: &str) -> AppResult<Document> {
-        let pool = self.db_pool.read().await.clone()
+        let pool = self
+            .db_pool
+            .read()
+            .await
+            .clone()
             .ok_or_else(|| AppError::Custom("Database not initialized".into()))?;
         crate::db::queries::get_document(&pool, doc_id).await
     }
 
     pub async fn delete(&self, doc_id: &str) -> AppResult<()> {
-        let pool = self.db_pool.read().await.clone()
+        let pool = self
+            .db_pool
+            .read()
+            .await
+            .clone()
             .ok_or_else(|| AppError::Custom("Database not initialized".into()))?;
 
         // Remove from vector store if available

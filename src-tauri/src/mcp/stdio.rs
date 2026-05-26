@@ -1,3 +1,4 @@
+use serde_json::{json, Value};
 /// MCP stdio Transport Layer
 ///
 /// Implements JSON-RPC 2.0 over standard input/output streams.
@@ -8,19 +9,18 @@
 /// - Requests are read from stdin
 /// - Responses are written to stdout
 /// - Logs/errors are written to stderr
-
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use serde_json::{json, Value};
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 
 use crate::mcp::server::McpServer;
-use crate::mcp::types::{JsonRpcRequest, JsonRpcResponse, JsonRpcError};
+use crate::mcp::types::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 
 /// Run the MCP stdio server loop
-pub async fn run_stdio_server(server: &McpServer) -> Result<(), std::io::Error> {
+pub async fn run_stdio_server(
+    server: std::sync::Arc<tokio::sync::RwLock<McpServer>>,
+) -> Result<(), std::io::Error> {
     info!("Starting MCP stdio server...");
 
-    let server_clone = server.clone_for_stdio();
     let stdin = tokio::io::stdin();
     let mut stdout = tokio::io::stdout();
     let mut reader = BufReader::new(stdin);
@@ -46,7 +46,10 @@ pub async fn run_stdio_server(server: &McpServer) -> Result<(), std::io::Error> 
                 match serde_json::from_str::<JsonRpcRequest>(trimmed) {
                     Ok(request) => {
                         // Handle the request (fully async)
-                        let response = server_clone.handle_request(request).await;
+                        let response = {
+                            let server_guard = server.read().await;
+                            server_guard.handle_request(request).await
+                        };
 
                         // Write response
                         let response_json = serde_json::to_string(&response)
@@ -55,7 +58,10 @@ pub async fn run_stdio_server(server: &McpServer) -> Result<(), std::io::Error> 
                                 r#"{"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error"},"id":null}"#.to_string()
                             });
 
-                        if let Err(e) = stdout.write_all(format!("{}\n", response_json).as_bytes()).await {
+                        if let Err(e) = stdout
+                            .write_all(format!("{}\n", response_json).as_bytes())
+                            .await
+                        {
                             error!("Failed to write response: {}", e);
                             break;
                         }
@@ -76,7 +82,10 @@ pub async fn run_stdio_server(server: &McpServer) -> Result<(), std::io::Error> 
                             r#"{"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error"},"id":null}"#.to_string()
                         });
 
-                        if let Err(e) = stdout.write_all(format!("{}\n", error_json).as_bytes()).await {
+                        if let Err(e) = stdout
+                            .write_all(format!("{}\n", error_json).as_bytes())
+                            .await
+                        {
                             error!("Failed to write error response: {}", e);
                             break;
                         }
@@ -99,19 +108,22 @@ pub async fn run_stdio_server(server: &McpServer) -> Result<(), std::io::Error> 
 }
 
 /// Send a notification to the client (server-initiated message)
-pub async fn send_notification(notification: &str, params: Option<Value>) -> Result<(), std::io::Error> {
+pub async fn send_notification(
+    notification: &str,
+    params: Option<Value>,
+) -> Result<(), std::io::Error> {
     let mut stdout = tokio::io::stdout();
-    
+
     let message = json!({
         "jsonrpc": "2.0",
         "method": notification,
         "params": params,
     });
-    
+
     let json = serde_json::to_string(&message)?;
     stdout.write_all(format!("{}\n", json).as_bytes()).await?;
     stdout.flush().await?;
-    
+
     Ok(())
 }
 

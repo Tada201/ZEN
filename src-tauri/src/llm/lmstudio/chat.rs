@@ -1,8 +1,7 @@
+use super::ToolCallAccumulator;
 use crate::db::models::{ChatMessage, ChatResponse};
 use crate::error::{ZenError, ZenResult};
 use crate::llm::openai_compat::types::*;
-use super::LmStudioProvider;
-use super::ToolCallAccumulator;
 use futures::StreamExt;
 use tracing::{debug, error, info};
 
@@ -34,11 +33,12 @@ impl super::LmStudioProvider {
                         .collect()
                 });
 
-                let content = if m.role == "assistant" && m.content.is_empty() && tool_calls_out.is_some() {
-                    None
-                } else {
-                    Some(OpenAiContent::Text(m.content))
-                };
+                let content =
+                    if m.role == "assistant" && m.content.is_empty() && tool_calls_out.is_some() {
+                        None
+                    } else {
+                        Some(OpenAiContent::Text(m.content))
+                    };
 
                 OpenAiMessage {
                     role: m.role,
@@ -51,14 +51,16 @@ impl super::LmStudioProvider {
 
         let oai_tools = tools.map(|ts| {
             ts.into_iter()
-                .map(|t| serde_json::json!({
-                    "type": "function",
-                    "function": {
-                        "name": t.name,
-                        "description": t.description,
-                        "parameters": t.parameters
-                    }
-                }))
+                .map(|t| {
+                    serde_json::json!({
+                        "type": "function",
+                        "function": {
+                            "name": t.name,
+                            "description": t.description,
+                            "parameters": t.parameters
+                        }
+                    })
+                })
                 .collect()
         });
 
@@ -87,7 +89,10 @@ impl super::LmStudioProvider {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
             error!(status = %status, body = %body, "LM Studio chat request failed");
-            return Err(ZenError::Custom(format!("LM Studio returned {}: {}", status, body)));
+            return Err(ZenError::Custom(format!(
+                "LM Studio returned {}: {}",
+                status, body
+            )));
         }
 
         let mut full_content = String::new();
@@ -151,10 +156,16 @@ impl super::LmStudioProvider {
                                         results_tool_calls.push(ToolCallAccumulator::default());
                                     }
                                     let acc = &mut results_tool_calls[idx];
-                                    if let Some(id) = &delta.id { acc.id.push_str(id); }
+                                    if let Some(id) = &delta.id {
+                                        acc.id.push_str(id);
+                                    }
                                     if let Some(func) = &delta.function {
-                                        if let Some(name) = &func.name { acc.name.push_str(name); }
-                                        if let Some(args) = &func.arguments { acc.arguments.push_str(args); }
+                                        if let Some(name) = &func.name {
+                                            acc.name.push_str(name);
+                                        }
+                                        if let Some(args) = &func.arguments {
+                                            acc.arguments.push_str(args);
+                                        }
                                     }
                                 }
                             }
@@ -179,7 +190,11 @@ impl super::LmStudioProvider {
                 if !acc.name.is_empty() {
                     let tool_name = acc.name.clone();
                     tcs.push(crate::db::models::ToolCall {
-                        id: if acc.id.is_empty() { format!("call_{}", uuid::Uuid::new_v4()) } else { acc.id },
+                        id: if acc.id.is_empty() {
+                            format!("call_{}", uuid::Uuid::new_v4())
+                        } else {
+                            acc.id
+                        },
                         name: acc.name,
                         args: match serde_json::from_str(&acc.arguments) {
                             Ok(args) => args,
@@ -196,7 +211,11 @@ impl super::LmStudioProvider {
                     });
                 }
             }
-            if tcs.is_empty() { None } else { Some(tcs) }
+            if tcs.is_empty() {
+                None
+            } else {
+                Some(tcs)
+            }
         };
 
         Ok(ChatResponse {
@@ -220,7 +239,10 @@ impl super::LmStudioProvider {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(ZenError::Custom(format!("LM Studio embedding failed ({}): {}", status, body)));
+            return Err(ZenError::Custom(format!(
+                "LM Studio embedding failed ({}): {}",
+                status, body
+            )));
         }
 
         let body: OpenAiEmbedResponse = resp.json().await?;
@@ -230,5 +252,4 @@ impl super::LmStudioProvider {
             .map(|d| d.embedding)
             .ok_or_else(|| ZenError::Custom("No embedding returned".into()))
     }
-
 }

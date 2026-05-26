@@ -1,3 +1,6 @@
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+use sqlx::SqlitePool;
 /// Hybrid Memory Backend (SQLite with Vector Search)
 ///
 /// This module provides semantic search for session memories:
@@ -13,16 +16,11 @@
 /// - O(n) similarity computation (acceptable for <10K memories per session)
 /// - Typical latency: <10ms for 1000 vectors, <100ms for 10K vectors
 /// - For larger datasets, consider LanceDB HNSW integration (future enhancement)
-
 use std::sync::Arc;
-use anyhow::{Result, Context};
-use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
 
+use crate::db::queries;
 use crate::rag::embedding::EmbeddingModel;
 use crate::rag::session_memory::MemoryEntry;
-
-use sqlx::Row;
 
 /// Hybrid memory backend configuration
 pub struct HybridBackendConfig {
@@ -41,77 +39,52 @@ impl HybridMemoryBackend {
     /// Create and initialize hybrid backend
     pub async fn new(config: HybridBackendConfig) -> Result<Self> {
         let backend = Self { config };
-        
+
         // Initialize SQLite tables
         backend.init().await?;
-        
+
         Ok(backend)
     }
-    
+
     /// Initialize database tables
     pub async fn init(&self) -> Result<()> {
-        // Create SQLite table with embedding vector column
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS session_memories (
-                id TEXT PRIMARY KEY,
-                session_id TEXT NOT NULL,
-                content TEXT NOT NULL,
-                metadata TEXT,
-                written_by TEXT NOT NULL,
-                timestamp INTEGER NOT NULL,
-                embedding BLOB,
-                created_at INTEGER DEFAULT (strftime('%s', 'now'))
-            )
-            "#
-        )
-        .execute(&self.config.sqlite_pool)
-        .await?;
-        
-        // Create index for fast session lookup
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_session_memories_session_id ON session_memories (session_id)")
-            .execute(&self.config.sqlite_pool)
-            .await?;
-        
+        queries::init_session_memories(&self.config.sqlite_pool).await?;
         tracing::info!("Hybrid memory backend initialized (SQLite with vector search)");
-        
+
         Ok(())
     }
-    
+
     /// Store memory entry with automatic embedding generation
     pub async fn store(&self, entry: MemoryEntry) -> Result<MemoryEntry> {
         // 1. Generate embedding
         let embedding = self.config.embedding_model.encode(&entry.content).await?;
-        
+
         // 2. Serialize embedding to bytes (f32 array -> Vec<u8>)
-        let embedding_bytes: Vec<u8> = embedding
-            .iter()
-            .flat_map(|f| f.to_le_bytes())
-            .collect();
-        
+        let embedding_bytes: Vec<u8> = embedding.iter().flat_map(|f| f.to_le_bytes()).collect();
+
         // 3. Store in SQLite with embedding
-        sqlx::query(
-            r#"
-            INSERT INTO session_memories (id, session_id, content, metadata, written_by, timestamp, embedding)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            "#
+        queries::add_session_memory(
+            &self.config.sqlite_pool,
+            &entry.id,
+            &entry.session_id,
+            &entry.content,
+            entry.metadata.as_deref().unwrap_or("{}"),
+            &entry.written_by,
+            entry.timestamp as i64,
+            &embedding_bytes,
         )
-        .bind(&entry.id)
-        .bind(&entry.session_id)
-        .bind(&entry.content)
-        .bind(entry.metadata.as_deref().unwrap_or("{}"))
-        .bind(&entry.written_by)
-        .bind(entry.timestamp as i64)
-        .bind(&embedding_bytes)
-        .execute(&self.config.sqlite_pool)
         .await
         .context("Failed to insert memory into SQLite")?;
-        
-        tracing::debug!("Stored memory entry {} with {}-dim embedding", entry.id, embedding.len());
-        
+
+        tracing::debug!(
+            "Stored memory entry {} with {}-dim embedding",
+            entry.id,
+            embedding.len()
+        );
+
         Ok(entry)
     }
-    
+
     /// Semantic search within session memory using vector similarity
     pub async fn semantic_search(
         &self,
@@ -121,70 +94,53 @@ impl HybridMemoryBackend {
     ) -> Result<Vec<MemorySearchResult>> {
         // 1. Generate embedding for the query
         let query_embedding = self.config.embedding_model.encode(query).await?;
-        
+
         // 2. Fetch all memories for the session WITH embeddings
-        let rows = sqlx::query(
-            r#"
-            SELECT id, session_id, content, metadata, written_by, timestamp, embedding
-            FROM session_memories
-            WHERE session_id = ?
-            ORDER BY timestamp DESC
-            "#
-        )
-        .bind(session_id)
-        .fetch_all(&self.config.sqlite_pool)
-        .await?;
-        
+        let rows =
+            queries::get_session_memory_rows_for_session(&self.config.sqlite_pool, session_id)
+                .await?;
+
         // 3. Compute cosine similarity for each memory
         let mut results: Vec<(MemorySearchResult, f32)> = Vec::new();
-        
+
         for row in rows {
-            // Extract fields
-            let id: String = row.get(0);
-            let session_id: String = row.get(1);
-            let content: String = row.get(2);
-            let metadata: String = row.get(3);
-            let written_by: String = row.get(4);
-            let timestamp: i64 = row.get(5);
-            let embedding_blob: Vec<u8> = row.get::<Option<Vec<u8>>, _>(6).unwrap_or_default();
-            
+            let Some(embedding_blob) = row.embedding.as_deref() else {
+                continue;
+            };
+
             // Skip if no embedding stored
             if embedding_blob.is_empty() {
                 continue;
             }
-            
+
             // Deserialize embedding from BLOB (little-endian f32 bytes)
             let stored_embedding = deserialize_embedding(&embedding_blob);
-            
+
             // Skip if embedding dimensions don't match
             if stored_embedding.len() != query_embedding.len() {
-                tracing::warn!("Embedding dimension mismatch: stored={}, query={}", 
-                    stored_embedding.len(), query_embedding.len());
+                tracing::warn!(
+                    "Embedding dimension mismatch: stored={}, query={}",
+                    stored_embedding.len(),
+                    query_embedding.len()
+                );
                 continue;
             }
-            
+
             // Compute cosine similarity
             let similarity = cosine_similarity(&query_embedding, &stored_embedding);
-            
+
             results.push((
                 MemorySearchResult {
-                    memory: MemoryEntry {
-                        id,
-                        session_id,
-                        content,
-                        metadata: Some(metadata),
-                        written_by,
-                        timestamp: timestamp as u64,
-                    },
+                    memory: memory_entry_from_row(row),
                     similarity: 0.0, // Will be set after sorting
                 },
                 similarity,
             ));
         }
-        
+
         // 4. Sort by similarity (descending)
         results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        
+
         // 5. Take top-k and set similarity scores
         let search_results: Vec<MemorySearchResult> = results
             .into_iter()
@@ -194,12 +150,16 @@ impl HybridMemoryBackend {
                 result
             })
             .collect();
-        
-        tracing::debug!("Semantic search found {} results (query: '{}')", search_results.len(), query);
-        
+
+        tracing::debug!(
+            "Semantic search found {} results (query: '{}')",
+            search_results.len(),
+            query
+        );
+
         Ok(search_results)
     }
-    
+
     /// Hybrid search: semantic + metadata filters
     pub async fn hybrid_search(
         &self,
@@ -210,77 +170,59 @@ impl HybridMemoryBackend {
     ) -> Result<Vec<MemorySearchResult>> {
         // 1. Generate embedding for the query
         let query_embedding = self.config.embedding_model.encode(query).await?;
-        
+
         // 2. Fetch all memories for the session WITH embeddings
-        let rows = sqlx::query(
-            r#"
-            SELECT id, session_id, content, metadata, written_by, timestamp, embedding
-            FROM session_memories
-            WHERE session_id = ?
-            ORDER BY timestamp DESC
-            "#
-        )
-        .bind(session_id)
-        .fetch_all(&self.config.sqlite_pool)
-        .await?;
-        
+        let rows =
+            queries::get_session_memory_rows_for_session(&self.config.sqlite_pool, session_id)
+                .await?;
+
         // 3. Compute cosine similarity with filters
         let mut results: Vec<(MemorySearchResult, f32)> = Vec::new();
-        
+
         for row in rows {
-            let id: String = row.get(0);
-            let session_id: String = row.get(1);
-            let content: String = row.get(2);
-            let metadata: String = row.get(3);
-            let written_by: String = row.get(4);
-            let timestamp: i64 = row.get(5);
-            let embedding_blob: Vec<u8> = row.get::<Option<Vec<u8>>, _>(6).unwrap_or_default();
-            
+            let Some(embedding_blob) = row.embedding.as_deref() else {
+                continue;
+            };
+
             if embedding_blob.is_empty() {
                 continue;
             }
-            
+
             // Apply written_by filter
             if let Some(ref filter_writer) = filters.written_by {
-                if &written_by != filter_writer {
+                if &row.written_by != filter_writer {
                     continue;
                 }
             }
-            
+
             // Apply time range filter
             if let Some(ref time_range) = filters.time_range {
-                if (timestamp as u64) < time_range.start || (timestamp as u64) > time_range.end {
+                let timestamp = row.timestamp as u64;
+                if timestamp < time_range.start || timestamp > time_range.end {
                     continue;
                 }
             }
-            
+
             let stored_embedding = deserialize_embedding(&embedding_blob);
-            
+
             if stored_embedding.len() != query_embedding.len() {
                 continue;
             }
-            
+
             let similarity = cosine_similarity(&query_embedding, &stored_embedding);
-            
+
             results.push((
                 MemorySearchResult {
-                    memory: MemoryEntry {
-                        id,
-                        session_id,
-                        content,
-                        metadata: Some(metadata),
-                        written_by,
-                        timestamp: timestamp as u64,
-                    },
+                    memory: memory_entry_from_row(row),
                     similarity: 0.0,
                 },
                 similarity,
             ));
         }
-        
+
         // 4. Sort and take top-k
         results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        
+
         let search_results: Vec<MemorySearchResult> = results
             .into_iter()
             .take(limit)
@@ -289,72 +231,52 @@ impl HybridMemoryBackend {
                 result
             })
             .collect();
-        
+
         Ok(search_results)
     }
-    
+
     /// Get memory entry by ID from SQLite
     pub async fn get(&self, id: &str) -> Result<Option<MemoryEntry>> {
-        let row = sqlx::query(
-            r#"
-            SELECT id, session_id, content, metadata, written_by, timestamp
-            FROM session_memories
-            WHERE id = ?
-            "#
-        )
-        .bind(id)
-        .fetch_optional(&self.config.sqlite_pool)
-        .await?;
-
-        if let Some(row) = row {
-            Ok(Some(MemoryEntry {
-                id: row.get::<String, _>(0),
-                session_id: row.get::<String, _>(1),
-                content: row.get::<String, _>(2),
-                metadata: Some(row.get::<String, _>(3)),
-                written_by: row.get::<String, _>(4),
-                timestamp: row.get::<i64, _>(5) as u64,
-            }))
-        } else {
-            Ok(None)
-        }
+        Ok(queries::get_session_memory(&self.config.sqlite_pool, id)
+            .await?
+            .map(memory_entry_from_row))
     }
-    
+
     /// Delete memory entry by ID
     pub async fn delete(&self, id: &str) -> Result<()> {
-        sqlx::query("DELETE FROM session_memories WHERE id = ?")
-            .bind(id)
-            .execute(&self.config.sqlite_pool)
-            .await?;
+        queries::delete_session_memory(&self.config.sqlite_pool, id).await?;
         Ok(())
     }
-    
+
     /// Delete all memories for a session
     pub async fn delete_session(&self, session_id: &str) -> Result<()> {
-        sqlx::query("DELETE FROM session_memories WHERE session_id = ?")
-            .bind(session_id)
-            .execute(&self.config.sqlite_pool)
-            .await?;
+        queries::delete_session_memories_for_session(&self.config.sqlite_pool, session_id).await?;
         Ok(())
     }
-    
+
     /// Get memory count for a session
     pub async fn count(&self, session_id: &str) -> Result<usize> {
-        let result = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM session_memories WHERE session_id = ?"
-        )
-        .bind(session_id)
-        .fetch_one(&self.config.sqlite_pool)
-        .await?;
+        let result =
+            queries::count_session_memories_for_session(&self.config.sqlite_pool, session_id)
+                .await?;
         Ok(result as usize)
     }
-    
+
     /// Get total memory count
     pub async fn total_count(&self) -> Result<usize> {
-        let result = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM session_memories")
-            .fetch_one(&self.config.sqlite_pool)
-            .await?;
+        let result = queries::count_session_memories(&self.config.sqlite_pool).await?;
         Ok(result as usize)
+    }
+}
+
+fn memory_entry_from_row(row: queries::SessionMemoryRow) -> MemoryEntry {
+    MemoryEntry {
+        id: row.id,
+        session_id: row.session_id,
+        content: row.content,
+        metadata: Some(row.metadata),
+        written_by: row.written_by,
+        timestamp: row.timestamp as u64,
     }
 }
 
@@ -407,7 +329,7 @@ pub struct TimeRange {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rag::embedding::{EmbeddingConfig, EmbeddingBackend};
+    use crate::rag::embedding::{EmbeddingBackend, EmbeddingConfig};
     use tempfile::TempDir;
 
     #[tokio::test]
@@ -461,7 +383,10 @@ mod tests {
             backend.store(entry).await.unwrap();
         }
 
-        let results = backend.semantic_search("session-1", "How do I manage dependencies?", 5).await.unwrap();
+        let results = backend
+            .semantic_search("session-1", "How do I manage dependencies?", 5)
+            .await
+            .unwrap();
         assert!(!results.is_empty());
         assert!(results[0].similarity > 0.5);
     }

@@ -313,6 +313,25 @@ export const useChatStore = create<ChatState>()(
     }),
     {
       name: 'zen-chat-storage',
+      merge: (persistedState, currentState) => {
+        const persisted = (persistedState as Partial<ChatState>) || {};
+        const durableState = { ...persisted } as Partial<ChatState> & {
+          isStreaming?: unknown;
+          messages?: unknown;
+        };
+
+        delete durableState.streamingChats;
+        delete durableState.sessionMessages;
+        delete durableState.isStreaming;
+        delete durableState.messages;
+
+        return {
+          ...currentState,
+          ...durableState,
+          streamingChats: {},
+          sessionMessages: {},
+        } as ChatState;
+      },
       partialize: (state) => ({
         // Persist only durable state — exclude ephemeral streaming data
         sessions: state.sessions,

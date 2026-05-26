@@ -35,6 +35,18 @@ pub struct ChatFolder {
     pub updated_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct AuditLogEntry {
+    pub id: String,
+    pub timestamp: String,
+    pub operation: String,
+    pub decision: String,
+    pub caller: String,
+    pub target: Option<String>,
+    pub reason: Option<String>,
+}
+
 // ─── Search Result ───
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -170,14 +182,14 @@ pub struct GraphSessionDb {
     pub id: String,
     pub chat_id: String,
     pub name: String,
-    pub expressions: String,  // JSON
-    pub variables: String,    // JSON
+    pub expressions: String, // JSON
+    pub variables: String,   // JSON
     pub viewport_x_min: f64,
     pub viewport_x_max: f64,
     pub viewport_y_min: f64,
     pub viewport_y_max: f64,
     pub current_version: i64,
-    pub history: String,      // JSON
+    pub history: String, // JSON
     pub created_at: String,
     pub updated_at: String,
 }
@@ -190,7 +202,7 @@ pub struct DrawingCanvasDb {
     pub id: String,
     pub chat_id: String,
     pub name: String,
-    pub objects: String,      // JSON
+    pub objects: String, // JSON
     pub background: String,
     pub created_at: String,
     pub updated_at: String,
@@ -207,7 +219,7 @@ pub struct GtsmGeofence {
     pub center_lat: Option<f64>,
     pub center_lon: Option<f64>,
     pub radius_km: Option<f64>,
-    pub polygon_coords: Option<String>,  // JSON
+    pub polygon_coords: Option<String>, // JSON
     pub box_north: Option<f64>,
     pub box_south: Option<f64>,
     pub box_east: Option<f64>,
@@ -230,7 +242,7 @@ pub struct GtsmMarker {
     pub alt: f64,
     pub color: String,
     pub icon: String,
-    pub metadata: Option<String>,  // JSON
+    pub metadata: Option<String>, // JSON
     pub created_at: String,
 }
 
@@ -427,4 +439,3 @@ pub struct ConversationSummary {
     pub token_count: Option<i32>,
     pub created_at: String,
 }
-

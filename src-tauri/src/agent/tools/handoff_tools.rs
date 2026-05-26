@@ -1,9 +1,9 @@
+use crate::agent::tools::AgentTool;
+use anyhow::Result;
+use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use anyhow::Result;
 use tauri::AppHandle;
-use async_trait::async_trait;
-use crate::agent::tools::AgentTool;
 
 pub struct HandoffTool;
 
@@ -28,13 +28,13 @@ impl AgentTool for HandoffTool {
         json!({
             "type": "object",
             "properties": {
-                "target_agent_id": { 
-                    "type": "string", 
-                    "description": "The ID of the expert agent to hand off to (e.g., 'operational_expert', 'generalist')" 
+                "target_agent_id": {
+                    "type": "string",
+                    "description": "The ID of the expert agent to hand off to (e.g., 'operational_expert', 'generalist')"
                 },
-                "reason": { 
-                    "type": "string", 
-                    "description": "Brief explanation for the handoff" 
+                "reason": {
+                    "type": "string",
+                    "description": "Brief explanation for the handoff"
                 }
             },
             "required": ["target_agent_id", "reason"]
@@ -47,7 +47,9 @@ impl AgentTool for HandoffTool {
         _chat_id: String,
         input: Value,
         _depth: u32,
-        _allowed_tools: Option<std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
+        _allowed_tools: Option<
+            std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>,
+        >,
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         let args: HandoffArgs = serde_json::from_value(input)?;

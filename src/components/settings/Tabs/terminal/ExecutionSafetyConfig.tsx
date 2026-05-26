@@ -18,7 +18,7 @@ export const ExecutionSafetyConfig = memo(() => {
         >
             <div className="flex flex-col gap-4">
                 <WorkbenchSettingRow
-                    label="Sandbox Mode"
+                    label="Sandbox Mode (Terminal)"
                     description="Isolate code execution in a secure sandbox environment"
                     control={
                         <WorkbenchSwitch
@@ -29,7 +29,7 @@ export const ExecutionSafetyConfig = memo(() => {
                 />
 
                 <WorkbenchSettingRow
-                    label="Max Execution Time"
+                    label="Terminal Command Timeout"
                     description="Maximum time in seconds before terminating runaway code"
                     control={
                         <div className="flex items-center gap-2">

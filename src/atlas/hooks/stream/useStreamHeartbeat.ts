@@ -2,6 +2,8 @@ import { useCallback, useRef, useEffect } from "react";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { Message } from "../../components/chat/types";
 
+const STREAM_HEARTBEAT_TIMEOUT_MS = 5 * 60 * 1000;
+
 export function useStreamHeartbeat() {
   const heartbeatTimeoutsRef = useRef<Record<string, NodeJS.Timeout>>({});
 
@@ -29,13 +31,13 @@ export function useStreamHeartbeat() {
         next[next.length - 1] = {
           ...last,
           status: "failed",
-          error: "Connection interrupted. No response from model for 10 seconds."
+          error: "Connection interrupted. No response from model for 5 minutes."
         };
         return next;
       });
 
       delete heartbeatTimeoutsRef.current[chatId];
-    }, 10000);
+    }, STREAM_HEARTBEAT_TIMEOUT_MS);
   }, [clearHeartbeatTimeout]);
 
   // Cleanup on unmount

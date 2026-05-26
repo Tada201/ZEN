@@ -15,8 +15,7 @@ import { cn } from "@/lib/utils";
 import { extendedLibrary } from "./genui";
 export { extendedLibrary };
 import { SourceEditor } from "./SourceEditor";
-
-import { invoke } from "@tauri-apps/api/core";
+import { toolsApi } from "@/api";
 
 import "@openuidev/react-ui/components.css";
 import "@openuidev/react-ui/styles/index.css";
@@ -27,7 +26,7 @@ import "@openuidev/react-ui/styles/index.css";
  * Creates a function-map toolProvider that proxies tool calls
  * to the backend API via Tauri IPC.
  */
-function createToolProvider(): Record<
+function createToolProvider(chatId?: string | null): Record<
   string,
   (args: Record<string, unknown>) => Promise<unknown>
 > {
@@ -37,22 +36,21 @@ function createToolProvider(): Record<
       get(_target, toolName: string) {
         return async (args: Record<string, unknown>) => {
           try {
-            const result = await invoke<unknown>("run_tool_command", {
+            const result = await toolsApi.runToolCommand({
               toolName,
               args,
+              chatId,
             });
             return result;
-          } catch (err: any) {
+          } catch (err: unknown) {
             console.error(`[OpenUI] Tauri Tool "${toolName}" failed:`, err);
-            throw new Error(err?.toString() || `Tauri Tool execution failed`);
+            throw new Error(err instanceof Error ? err.message : String(err || "Tauri Tool execution failed"));
           }
         };
       },
     }
   );
 }
-
-const defaultToolProvider = createToolProvider();
 
 /* ── Custom Loading Spinner ───────────────────────────────── */
 
@@ -85,6 +83,7 @@ export function OpenUIRenderer({
   isStreaming = false,
   toolProvider,
   onAction,
+  chatId,
 }: OpenUIRendererProps) {
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview");
   const [renderErrors, setRenderErrors] = useState<any[]>([]);
@@ -93,6 +92,8 @@ export function OpenUIRenderer({
   useEffect(() => {
     setRenderErrors([]);
   }, [content]);
+
+  const defaultToolProvider = useMemo(() => createToolProvider(chatId), [chatId]);
 
   const { extractedCode, chatterText } = useMemo(() => {
     // 1. Try to find code inside markdown blocks first (if the model ignored instructions)

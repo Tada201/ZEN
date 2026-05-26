@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { invoke } from '@tauri-apps/api/core';
+import { sessionApi } from '@/api';
 import { GraphSessionState, SessionAction, SessionFeedback, VisionCapture, ExprPlotResult } from '../../types/session';
 
 interface SessionStore {
@@ -31,7 +31,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   createSession: async (name: string) => {
     set({ isLoading: true, error: null });
     try {
-      const sessionId: string = await invoke('create_graph_session', { name });
+      const sessionId = await sessionApi.createGraphSession(name);
       set({ activeSessionId: sessionId });
       await get().loadSession(sessionId);
     } catch (e: any) {
@@ -44,7 +44,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   loadSession: async (sessionId: string) => {
     set({ isLoading: true, error: null });
     try {
-      const state: GraphSessionState = await invoke('get_session_state', { sessionId });
+      const state = await sessionApi.getSessionState(sessionId);
       set({ state, activeSessionId: sessionId });
     } catch (e: any) {
       set({ error: e.toString() });
@@ -59,10 +59,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
     set({ isLoading: true, error: null });
     try {
-      const feedback: SessionFeedback = await invoke('apply_session_action', {
-        sessionId: activeSessionId,
-        action,
-      });
+      const feedback = await sessionApi.applySessionAction(activeSessionId, action);
       console.log('[SessionStore] Feedback received:', feedback);
       
       const plotData = (feedback.plots || []).reduce((acc: Record<string, ExprPlotResult>, plot) => {
@@ -88,10 +85,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
     set({ isLoading: true, error: null });
     try {
-      const visionCapture: VisionCapture = await invoke('apply_session_action', {
-        sessionId: activeSessionId,
-        action: { action: 'capture_vision' },
-      });
+      const visionCapture = await sessionApi.applySessionAction<VisionCapture>(
+        activeSessionId,
+        { action: 'capture_vision' },
+      );
       
       set({ lastVisionCapture: visionCapture });
       return visionCapture;
@@ -110,10 +107,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
     set({ isLoading: true, error: null });
     try {
-      const feedback: SessionFeedback = await invoke('rollback_session', {
-        sessionId: activeSessionId,
-        version,
-      });
+      const feedback = await sessionApi.rollbackSession(activeSessionId, version);
       const plotData = (feedback.plots || []).reduce((acc: Record<string, ExprPlotResult>, plot) => {
         acc[plot.id] = plot;
         return acc;

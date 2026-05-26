@@ -73,9 +73,7 @@ const DOT_TO_FIELD: Record<string, BridgeEntry> = {
   "tools.yolo-mode":              { field: "toolYoloMode",          type: "boolean" },
   "tools.auto-approve-low-risk":  { field: "toolAutoApproveLowRisk", type: "boolean" },
   "tools.global-default":         { field: "toolGlobalDefault",     type: "string" },
-  "tools.timeout-seconds":        { field: "maxExecutionTime",      type: "number" },
-  "tools.sandbox-enabled":        { field: "sandboxEnabled",        type: "boolean" },
-  "tools.logging-enabled":        { field: "agentLoggingEnabled",   type: "boolean" },
+
 
   // Audio
   "audio.microphone":   { field: "micDeviceId",          type: "string" },

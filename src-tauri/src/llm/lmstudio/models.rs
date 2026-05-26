@@ -1,8 +1,7 @@
+use super::types::*;
 use crate::db::models::ModelInfo;
 use crate::error::{ZenError, ZenResult};
 use crate::llm::openai_compat::types::*;
-use super::LmStudioProvider;
-use super::types::*;
 use tracing::{debug, info, warn};
 
 impl super::LmStudioProvider {
@@ -30,11 +29,14 @@ impl super::LmStudioProvider {
         let mut models = match resp {
             Ok(r) if r.status().is_success() => {
                 let body: LmStudioModelsResponse = r.json().await?;
-                let results: Vec<ModelInfo> = body.data
+                let results: Vec<ModelInfo> = body
+                    .data
                     .into_iter()
                     .map(|m| {
                         let is_vlm = m.model_type.as_deref() == Some("vlm");
-                        let has_native_tools = m.arch.as_deref()
+                        let has_native_tools = m
+                            .arch
+                            .as_deref()
                             .map(Self::arch_supports_tools)
                             .unwrap_or(false);
 
@@ -94,27 +96,34 @@ impl super::LmStudioProvider {
         Ok(models)
     }
 
-
     pub async fn list_models_v1(&self) -> ZenResult<Vec<ModelInfo>> {
         let url = format!("{}/api/v1/models", self.base_url);
         let resp = self.client.get(&url).send().await?;
 
         if !resp.status().is_success() {
-            return Err(ZenError::Custom(format!("LM Studio v1 API returned {}", resp.status())));
+            return Err(ZenError::Custom(format!(
+                "LM Studio v1 API returned {}",
+                resp.status()
+            )));
         }
 
         let body: LmStudioV1ModelsResponse = resp.json().await?;
-        let results: Vec<ModelInfo> = body.data
+        let results: Vec<ModelInfo> = body
+            .data
             .into_iter()
             .map(|m| {
                 let is_loaded = !m.loaded_instances.is_empty();
-                let state = if is_loaded { Some("loaded".to_string()) } else { None };
+                let state = if is_loaded {
+                    Some("loaded".to_string())
+                } else {
+                    None
+                };
                 let max_context = m.loaded_instances.get(0).and_then(|i| i.context_length);
-                
-                // In v1, arch is often part of the key or publisher. 
+
+                // In v1, arch is often part of the key or publisher.
                 // We'll try to infer it for supports_tools() if not explicitly provided.
                 let arch = m.key.split('/').next().map(|s| s.to_string());
-                
+
                 if let Some(a) = &arch {
                     self.cache_model_arch(&m.key, a);
                 }
@@ -148,11 +157,15 @@ impl super::LmStudioProvider {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(ZenError::Custom(format!("LM Studio returned {}: {}", status, body)));
+            return Err(ZenError::Custom(format!(
+                "LM Studio returned {}: {}",
+                status, body
+            )));
         }
 
         let body: OpenAiModelsResponse = resp.json().await?;
-        Ok(body.data
+        Ok(body
+            .data
             .into_iter()
             .map(|m| ModelInfo {
                 id: m.id.clone(),
@@ -172,8 +185,4 @@ impl super::LmStudioProvider {
             })
             .collect())
     }
-
-
 }
-
-

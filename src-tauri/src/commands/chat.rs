@@ -1,10 +1,10 @@
-use tauri::{AppHandle, State};
-use crate::error::ZenResult;
-use crate::commands::AppState;
-use crate::db::models::{Chat, Message, ChatMessage};
-use crate::db::queries;
 use crate::agent::runner::Runner;
+use crate::commands::AppState;
+use crate::db::models::{Chat, ChatMessage, Message};
+use crate::db::queries;
+use crate::error::ZenResult;
 use crate::llm::ChatRequestConfig;
+use tauri::{AppHandle, State};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -114,7 +114,7 @@ pub async fn send_message(
         "Received send_message command"
     );
     let db = state.db().await?;
-    
+
     // 1. Add user message to DB
     info!(chat_id = %chat_id, "Inserting user message into database");
     queries::add_message(
@@ -133,7 +133,8 @@ pub async fn send_message(
         None,
         None,
         None,
-    ).await?;
+    )
+    .await?;
     info!(chat_id = %chat_id, "User message successfully saved to database");
 
     // 2. Get active provider and model
@@ -151,9 +152,11 @@ pub async fn send_message(
         resolved_provider_name = %resolved_provider_name,
         "Resolving active LLM provider instance"
     );
-    let active_model = model.ok_or_else(|| crate::error::ZenError::Custom(
-        "No model selected. Open Settings → Models to choose a model.".to_string()
-    ))?;
+    let active_model = model.ok_or_else(|| {
+        crate::error::ZenError::Custom(
+            "No model selected. Open Settings → Models to choose a model.".to_string(),
+        )
+    })?;
 
     info!(
         chat_id = %chat_id,
@@ -185,16 +188,16 @@ pub async fn send_message(
     config.repeat_penalty = repeat_penalty;
     config.seed = seed;
     config.stop = stop;
-    
+
     if let Some(t) = thinking {
         if t.enabled {
             config.reasoning_effort = t.effort;
             config.thinking_budget = t.budget_tokens;
         }
     }
-    
+
     let token = CancellationToken::new();
-    
+
     // Register cancellation token
     let cancel_tokens = state.chat_cancellation_tokens.clone();
     {
@@ -203,20 +206,43 @@ pub async fn send_message(
     }
 
     // 4. Convert history to ChatMessage format (already fetched in parallel)
-    let chat_messages: Vec<ChatMessage> = history.into_iter().map(|m| ChatMessage {
-        role: m.role,
-        content: m.content,
-        images: None,
-        tool_calls: None,
-        tool_call_id: None,
-    }).collect();
+    let chat_messages: Vec<ChatMessage> = history
+        .into_iter()
+        .filter_map(|m| {
+            let role = m.role;
+            let tool_calls = m
+                .tool_calls
+                .as_deref()
+                .and_then(|tc_str| serde_json::from_str(tc_str).ok());
+
+            if role == "tool" && m.tool_call_id.as_deref().unwrap_or("").is_empty() {
+                tracing::warn!(
+                    chat_id = %chat_id,
+                    message_id = %m.id,
+                    "Skipping malformed historical tool message without tool_call_id"
+                );
+                return None;
+            }
+
+            Some(ChatMessage {
+                role,
+                content: m.content,
+                images: m
+                    .images
+                    .as_deref()
+                    .and_then(|img_str| serde_json::from_str(img_str).ok()),
+                tool_calls,
+                tool_call_id: m.tool_call_id,
+            })
+        })
+        .collect();
 
     // 5. Build Agent
     let mut tool_ids = vec![];
     if web_search.unwrap_or(false) {
         tool_ids.push("web_search".to_string());
     }
-    
+
     // If specific tools were requested, use them. Otherwise default to a few core tools if enabled and supported.
     if let Some(requested_tools) = tools {
         tool_ids.extend(requested_tools);
@@ -227,6 +253,7 @@ pub async fn send_message(
 
         if tools_enabled && llm_provider.supports_tools(&active_model) {
             tool_ids.extend(vec![
+                "write_todos".to_string(),
                 "read_document_content".to_string(),
                 "list_documents".to_string(),
                 "run_command".to_string(),
@@ -235,7 +262,7 @@ pub async fn send_message(
     }
 
     // (custom_prompt_setting was already fetched in parallel above)
-    
+
     let default_instructions = "You are Zen, a powerful agentic AI assistant. Keep responses direct, short, and highly concise. Avoid redundant conversational fluff.
 
 ## 🌟 Rich Content Markdown Support
@@ -257,7 +284,7 @@ Always use these specialized code blocks for visual scenarios:
         _ => match custom_prompt_setting {
             Some(p) if !p.trim().is_empty() => p,
             _ => default_instructions,
-        }
+        },
     };
 
     // Inject state watcher directive to prevent LLM context confusion
@@ -279,7 +306,7 @@ Always use these specialized code blocks for visual scenarios:
     };
 
     let chat_id_clone = chat_id.clone();
-    
+
     // Deep Research branch
     if deep_research.unwrap_or(false) {
         let chat_id_inner = chat_id.clone();
@@ -288,7 +315,7 @@ Always use these specialized code blocks for visual scenarios:
         let provider_clone = llm_provider.clone();
         let cancel_tokens_clone = cancel_tokens.clone();
         let db_clone = db.clone();
-        
+
         info!(chat_id = %chat_id, "Routing request to Deep Research Orchestrator");
         tokio::spawn(async move {
             crate::agent::deep_research::run_deep_research(
@@ -300,8 +327,9 @@ Always use these specialized code blocks for visual scenarios:
                 content_inner,
                 config,
                 token,
-            ).await;
-            
+            )
+            .await;
+
             let mut tokens = cancel_tokens_clone.lock().await;
             tokens.remove(&chat_id_inner);
         });
@@ -309,7 +337,8 @@ Always use these specialized code blocks for visual scenarios:
     }
 
     // 6. Check if we should use Orchestrator (Phase 3)
-    let use_orchestrator = web_search.unwrap_or(false) || (content.len() > 3000 && has_complexity_markers(&content));
+    let use_orchestrator =
+        web_search.unwrap_or(false) || (content.len() > 3000 && has_complexity_markers(&content));
 
     if use_orchestrator {
         match state.orchestrator.get().await {
@@ -324,16 +353,18 @@ Always use these specialized code blocks for visual scenarios:
                 info!(chat_id = %chat_id, "Routing request to Orchestrator (multi-agent loop)");
                 let cancel_tokens_clone = cancel_tokens.clone();
                 tokio::spawn(async move {
-                    let result = orchestrator.run_orchestrator_loop(
-                        provider_clone,
-                        &model_inner,
-                        chat_messages,
-                        &chat_id_inner,
-                        &content_inner,
-                        config_clone,
-                        token_clone,
-                        None,
-                    ).await;
+                    let result = orchestrator
+                        .run_orchestrator_loop(
+                            provider_clone,
+                            &model_inner,
+                            chat_messages,
+                            &chat_id_inner,
+                            &content_inner,
+                            config_clone,
+                            token_clone,
+                            None,
+                        )
+                        .await;
                     // Clean up cancellation token on completion
                     let mut tokens = cancel_tokens_clone.lock().await;
                     tokens.remove(&chat_id_inner);
@@ -344,7 +375,10 @@ Always use these specialized code blocks for visual scenarios:
                 return Ok(());
             }
             Err(e) => {
-                tracing::warn!("Orchestrator not available: {:?}. Falling back to Runner.", e);
+                tracing::warn!(
+                    "Orchestrator not available: {:?}. Falling back to Runner.",
+                    e
+                );
             }
         }
     }
@@ -357,19 +391,22 @@ Always use these specialized code blocks for visual scenarios:
         state.hook_registry.clone(),
         state.tools.clone(),
         state.tool_manager.clone(),
-    ).with_db_pool(db.clone());
+    )
+    .with_db_pool(db.clone());
 
     let cancel_tokens_runner = cancel_tokens.clone();
     tokio::spawn(async move {
-        let result = runner.run(
-            &*llm_provider,
-            chat_id_clone.clone(),
-            active_model,
-            chat_messages,
-            agent,
-            config,
-            token,
-        ).await;
+        let result = runner
+            .run(
+                &*llm_provider,
+                chat_id_clone.clone(),
+                active_model,
+                chat_messages,
+                agent,
+                config,
+                token,
+            )
+            .await;
         // Clean up cancellation token on completion
         let mut tokens = cancel_tokens_runner.lock().await;
         tokens.remove(&chat_id_clone);
@@ -382,7 +419,11 @@ Always use these specialized code blocks for visual scenarios:
 }
 
 #[tauri::command]
-pub async fn update_chat_title(state: State<'_, AppState>, chat_id: String, title: String) -> ZenResult<()> {
+pub async fn update_chat_title(
+    state: State<'_, AppState>,
+    chat_id: String,
+    title: String,
+) -> ZenResult<()> {
     let db = state.db().await?;
     queries::update_chat_title(&db, &chat_id, &title).await
 }
@@ -412,11 +453,14 @@ pub async fn list_archived_chats(state: State<'_, AppState>) -> ZenResult<Vec<Ch
 }
 
 #[tauri::command]
-pub async fn search_chats(state: State<'_, AppState>, query: String, limit: Option<i64>) -> ZenResult<Vec<crate::db::models::SearchResult>> {
+pub async fn search_chats(
+    state: State<'_, AppState>,
+    query: String,
+    limit: Option<i64>,
+) -> ZenResult<Vec<crate::db::models::SearchResult>> {
     let db = state.db().await?;
     queries::search_chats(&db, &query, limit).await
 }
-
 
 // --- Folders ---
 
@@ -432,13 +476,19 @@ pub async fn create_chat_folder(
 }
 
 #[tauri::command]
-pub async fn list_chat_folders(state: State<'_, AppState>) -> ZenResult<Vec<crate::db::models::ChatFolder>> {
+pub async fn list_chat_folders(
+    state: State<'_, AppState>,
+) -> ZenResult<Vec<crate::db::models::ChatFolder>> {
     let db = state.db().await?;
     queries::list_chat_folders(&db).await
 }
 
 #[tauri::command]
-pub async fn move_chat_to_folder(state: State<'_, AppState>, chat_id: String, folder_id: String) -> ZenResult<()> {
+pub async fn move_chat_to_folder(
+    state: State<'_, AppState>,
+    chat_id: String,
+    folder_id: String,
+) -> ZenResult<()> {
     let db = state.db().await?;
     queries::move_chat_to_folder(&db, &chat_id, &folder_id).await
 }
@@ -466,22 +516,26 @@ pub async fn remove_chat_from_folder(state: State<'_, AppState>, chat_id: String
 }
 
 #[tauri::command]
-pub async fn bulk_archive_chats(state: State<'_, AppState>, chat_ids: Vec<String>) -> ZenResult<()> {
+pub async fn bulk_archive_chats(
+    state: State<'_, AppState>,
+    chat_ids: Vec<String>,
+) -> ZenResult<()> {
     let db = state.db().await?;
     queries::bulk_archive_chats(&db, &chat_ids).await
 }
 
 #[tauri::command]
-pub async fn fork_chat(state: State<'_, AppState>, chat_id: String, message_id: String) -> ZenResult<Chat> {
+pub async fn fork_chat(
+    state: State<'_, AppState>,
+    chat_id: String,
+    message_id: String,
+) -> ZenResult<Chat> {
     let db = state.db().await?;
     queries::fork_chat(&db, &chat_id, &message_id).await
 }
 
 #[tauri::command]
-pub async fn abort_chat(
-    state: State<'_, AppState>,
-    chat_id: String,
-) -> ZenResult<()> {
+pub async fn abort_chat(state: State<'_, AppState>, chat_id: String) -> ZenResult<()> {
     info!(chat_id = %chat_id, "Aborting chat runner/orchestrator stream requested by user");
     let mut tokens = state.chat_cancellation_tokens.lock().await;
     if let Some(token) = tokens.remove(&chat_id) {
@@ -500,10 +554,7 @@ pub struct ChatExport {
 }
 
 #[tauri::command]
-pub async fn export_chat(
-    state: State<'_, AppState>,
-    chat_id: String,
-) -> ZenResult<ChatExport> {
+pub async fn export_chat(state: State<'_, AppState>, chat_id: String) -> ZenResult<ChatExport> {
     let db = state.db().await?;
     let chat = queries::get_chat(&db, &chat_id).await?;
     let messages = queries::get_messages(&db, &chat_id).await?;
@@ -511,16 +562,21 @@ pub async fn export_chat(
 }
 
 #[tauri::command]
-pub async fn import_chat(
-    state: State<'_, AppState>,
-    source_path: String,
-) -> ZenResult<Chat> {
+pub async fn import_chat(state: State<'_, AppState>, source_path: String) -> ZenResult<Chat> {
     let db = state.db().await?;
     let validated_path = crate::utils::validate_path(&source_path)?;
-    let content = std::fs::read_to_string(&validated_path).map_err(|e| crate::error::ZenError::Custom(format!("Failed to read export file: {}", e)))?;
-    let export: ChatExport = serde_json::from_str(&content).map_err(|e| crate::error::ZenError::Custom(format!("Invalid export format: {}", e)))?;
-    
-    let new_chat = queries::create_chat(&db, &format!("{} (Imported)", export.chat.title), export.chat.model.as_deref()).await?;
+    let content = std::fs::read_to_string(&validated_path).map_err(|e| {
+        crate::error::ZenError::Custom(format!("Failed to read export file: {}", e))
+    })?;
+    let export: ChatExport = serde_json::from_str(&content)
+        .map_err(|e| crate::error::ZenError::Custom(format!("Invalid export format: {}", e)))?;
+
+    let new_chat = queries::create_chat(
+        &db,
+        &format!("{} (Imported)", export.chat.title),
+        export.chat.model.as_deref(),
+    )
+    .await?;
 
     for msg in export.messages {
         queries::add_message(
@@ -539,9 +595,10 @@ pub async fn import_chat(
             msg.tokens_out,
             None,
             None,
-        ).await?;
+        )
+        .await?;
     }
-    
+
     Ok(new_chat)
 }
 
@@ -554,9 +611,17 @@ fn has_complexity_markers(content: &str) -> bool {
 
     // 2. Check for complex semantic keywords
     let complex_keywords = [
-        "refactor", "architect", "database schema", "system design", 
-        "class diagram", "design pattern", "multi-agent", "orchestrate", 
-        "performance optimization", "memory leak", "race condition"
+        "refactor",
+        "architect",
+        "database schema",
+        "system design",
+        "class diagram",
+        "design pattern",
+        "multi-agent",
+        "orchestrate",
+        "performance optimization",
+        "memory leak",
+        "race condition",
     ];
     let lower_content = content.to_lowercase();
     for keyword in complex_keywords.iter() {

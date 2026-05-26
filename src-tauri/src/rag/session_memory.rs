@@ -1,3 +1,7 @@
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::PathBuf;
 /// Session-Scoped Vector Sub-Memory (Hybrid Backend)
 ///
 /// This module provides temporary storage for complex Tier 3 workflows.
@@ -8,20 +12,15 @@
 ///
 /// **Privacy Guarantee:** All embeddings generated locally via Ollama or Candle.
 /// No data sent to cloud APIs.
-
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use anyhow::Result;
 
 // Re-export MemoryEntry for backward compatibility
 pub use crate::rag::hybrid_backend::MemorySearchResult;
 
 // Re-export embedding types for convenience
-pub use crate::rag::embedding::{EmbeddingConfig, EmbeddingBackend, EmbeddingModel};
-pub use crate::rag::hybrid_backend::{HybridMemoryBackend, HybridBackendConfig};
+pub use crate::rag::embedding::{EmbeddingBackend, EmbeddingConfig, EmbeddingModel};
+pub use crate::rag::hybrid_backend::{HybridBackendConfig, HybridMemoryBackend};
 
 /// Session memory entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -90,7 +89,9 @@ impl SessionMemoryManager {
                     tracing::debug!("Stored memory in hybrid backend");
                     // Also update in-memory cache for fast access
                     let mut memories = self.memories.write().await;
-                    let entries = memories.entry(session_id.to_string()).or_insert_with(Vec::new);
+                    let entries = memories
+                        .entry(session_id.to_string())
+                        .or_insert_with(Vec::new);
                     entries.push(entry);
                     return Ok(());
                 }
@@ -103,7 +104,9 @@ impl SessionMemoryManager {
 
         // Fallback: in-memory storage
         let mut memories = self.memories.write().await;
-        let entries = memories.entry(session_id.to_string()).or_insert_with(Vec::new);
+        let entries = memories
+            .entry(session_id.to_string())
+            .or_insert_with(Vec::new);
         entries.push(entry);
         let _ = self.persist_session(session_id).await;
         Ok(())
@@ -126,7 +129,10 @@ impl SessionMemoryManager {
                     return Ok(results.into_iter().map(|r| r.memory).collect());
                 }
                 Err(e) => {
-                    tracing::warn!("Hybrid semantic search failed, falling back to text search: {}", e);
+                    tracing::warn!(
+                        "Hybrid semantic search failed, falling back to text search: {}",
+                        e
+                    );
                     // Fall through to text search
                 }
             }
@@ -139,8 +145,11 @@ impl SessionMemoryManager {
             let mut results: Vec<&MemoryEntry> = entries
                 .iter()
                 .filter(|e| {
-                    e.content.to_lowercase().contains(&query_lower) ||
-                    e.metadata.as_ref().map(|m| m.to_lowercase().contains(&query_lower)).unwrap_or(false)
+                    e.content.to_lowercase().contains(&query_lower)
+                        || e.metadata
+                            .as_ref()
+                            .map(|m| m.to_lowercase().contains(&query_lower))
+                            .unwrap_or(false)
                 })
                 .take(limit)
                 .collect();
@@ -165,18 +174,18 @@ impl SessionMemoryManager {
         } else {
             // Fallback: return text search results with dummy scores
             let entries = self.search_session_memory(session_id, query, limit).await?;
-            Ok(entries.into_iter().map(|e| MemorySearchResult {
-                memory: e,
-                similarity: 0.5, // Dummy score
-            }).collect())
+            Ok(entries
+                .into_iter()
+                .map(|e| MemorySearchResult {
+                    memory: e,
+                    similarity: 0.5, // Dummy score
+                })
+                .collect())
         }
     }
 
     /// Delete a session's memory (cleanup)
-    pub async fn delete_session_memory(
-        &self,
-        session_id: &str,
-    ) -> Result<(), anyhow::Error> {
+    pub async fn delete_session_memory(&self, session_id: &str) -> Result<(), anyhow::Error> {
         // Delete from hybrid backend first
         if let Some(ref hybrid) = self.hybrid_backend {
             let _ = hybrid.delete_session(session_id).await;
@@ -193,10 +202,7 @@ impl SessionMemoryManager {
     }
 
     /// Get count of memories in a session
-    pub async fn get_memory_count(
-        &self,
-        session_id: &str,
-    ) -> Result<usize, anyhow::Error> {
+    pub async fn get_memory_count(&self, session_id: &str) -> Result<usize, anyhow::Error> {
         // Try hybrid backend first
         if let Some(ref hybrid) = self.hybrid_backend {
             match hybrid.count(session_id).await {
@@ -215,49 +221,52 @@ impl SessionMemoryManager {
     /// Persist session to file
     async fn persist_session(&self, session_id: &str) -> Result<(), anyhow::Error> {
         let memories = self.memories.read().await;
-        
+
         if let Some(entries) = memories.get(session_id) {
-            let session_path = self.workspace_root
+            let session_path = self
+                .workspace_root
                 .join("sessions")
                 .join(session_id)
                 .join("memory.json");
-            
+
             let json = serde_json::to_string_pretty(entries)?;
             tokio::fs::write(session_path, json).await?;
         }
-        
+
         Ok(())
     }
 
     /// Delete persisted session file
     async fn delete_persisted_session(&self, session_id: &str) -> Result<(), anyhow::Error> {
-        let session_path = self.workspace_root
+        let session_path = self
+            .workspace_root
             .join("sessions")
             .join(session_id)
             .join("memory.json");
-        
+
         if session_path.exists() {
             tokio::fs::remove_file(session_path).await?;
         }
-        
+
         Ok(())
     }
 
     /// Load session from file (if exists)
     pub async fn load_session(&self, session_id: &str) -> Result<(), anyhow::Error> {
-        let session_path = self.workspace_root
+        let session_path = self
+            .workspace_root
             .join("sessions")
             .join(session_id)
             .join("memory.json");
-        
+
         if session_path.exists() {
             let json = tokio::fs::read_to_string(session_path).await?;
             let entries: Vec<MemoryEntry> = serde_json::from_str(&json)?;
-            
+
             let mut memories = self.memories.write().await;
             memories.insert(session_id.to_string(), entries);
         }
-        
+
         Ok(())
     }
 }
@@ -270,7 +279,7 @@ pub fn create_memory_entry(
     metadata: Option<&str>,
 ) -> MemoryEntry {
     use uuid::Uuid;
-    
+
     MemoryEntry {
         id: Uuid::new_v4().to_string(),
         session_id: session_id.to_string(),
@@ -293,9 +302,9 @@ mod tests {
     async fn test_write_and_search_memory() {
         let temp_dir = TempDir::new().unwrap();
         let manager = SessionMemoryManager::new(temp_dir.path().to_path_buf());
-        
+
         let session_id = "test-session-123";
-        
+
         // Write memory
         let entry = create_memory_entry(
             session_id,
@@ -303,7 +312,7 @@ mod tests {
             "ZEN-DOCS",
             Some("{\"source\": \"web_search\"}"),
         );
-        
+
         let write_result = manager.write_memory(session_id, entry).await;
         assert!(write_result.is_ok());
 
@@ -317,21 +326,21 @@ mod tests {
     async fn test_delete_session_memory() {
         let temp_dir = TempDir::new().unwrap();
         let manager = SessionMemoryManager::new(temp_dir.path().to_path_buf());
-        
+
         let session_id = "test-session-456";
-        
+
         // Write memory
         let entry = create_memory_entry(session_id, "Test content", "ZEN", None);
         let _ = manager.write_memory(session_id, entry).await;
-        
+
         // Verify exists
         let count = manager.get_memory_count(session_id).await.unwrap();
         assert_eq!(count, 1);
-        
+
         // Delete
         let delete_result = manager.delete_session_memory(session_id).await;
         assert!(delete_result.is_ok());
-        
+
         // Verify deleted
         let count = manager.get_memory_count(session_id).await.unwrap();
         assert_eq!(count, 0);

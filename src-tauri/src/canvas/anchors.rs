@@ -1,8 +1,8 @@
+use anyhow::{bail, Result};
 /// Anchor System - Relative Positioning for Stable Layouts
 /// Allows LLM to place objects relative to canvas or other objects
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use anyhow::{Result, bail};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -77,7 +77,9 @@ impl AnchorResolver {
         match anchor {
             AnchorType::Canvas(point) => self.resolve_canvas_anchor(point),
             AnchorType::Object { object_id, point } => {
-                let bbox = self.objects.get(object_id)
+                let bbox = self
+                    .objects
+                    .get(object_id)
                     .ok_or_else(|| anyhow::anyhow!("Object '{}' not found", object_id))?;
                 self.resolve_object_anchor(bbox, point)
             }
@@ -245,7 +247,9 @@ mod tests {
     fn test_offset() {
         let resolver = AnchorResolver::new(800.0, 600.0);
         let anchor = AnchorType::Canvas("center".to_string());
-        let pos = resolver.resolve_with_offset(&anchor, Some([50.0, -30.0])).unwrap();
+        let pos = resolver
+            .resolve_with_offset(&anchor, Some([50.0, -30.0]))
+            .unwrap();
         assert_eq!(pos[0], 450.0);
         assert_eq!(pos[1], 270.0);
     }

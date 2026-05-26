@@ -1,13 +1,13 @@
+use rodio::{buffer::SamplesBuffer, OutputStream, OutputStreamHandle, Sink};
 use std::io::Write;
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
 use std::sync::Arc;
+use tauri::{AppHandle, Emitter};
 use tokio::sync::{Mutex, RwLock};
 use tracing::{error, info};
-use rodio::{buffer::SamplesBuffer, OutputStream, OutputStreamHandle, Sink};
-use tauri::{AppHandle, Emitter};
 
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -38,19 +38,32 @@ impl TtsService {
         }
     }
 
-    pub fn new(_app_data_dir: &std::path::Path, resource_dir: &std::path::Path) -> Result<Self, String> {
+    pub fn new(
+        _app_data_dir: &std::path::Path,
+        resource_dir: &std::path::Path,
+    ) -> Result<Self, String> {
         let (stream, stream_handle) = OutputStream::try_default()
             .map_err(|e| format!("Failed to open default audio stream: {}", e))?;
-        let sink = Sink::try_new(&stream_handle)
-            .map_err(|e| format!("Failed to create sink: {}", e))?;
+        let sink =
+            Sink::try_new(&stream_handle).map_err(|e| format!("Failed to create sink: {}", e))?;
 
-        let piper_path = resource_dir.join("resources").join("binaries").join("piper").join("piper.exe");
+        let piper_path = resource_dir
+            .join("resources")
+            .join("binaries")
+            .join("piper")
+            .join("piper.exe");
 
         // Check if there's a custom model saved in settings; otherwise use default
-        let model_path = resource_dir.join("resources").join("models").join("glados_piper_medium.onnx");
+        let model_path = resource_dir
+            .join("resources")
+            .join("models")
+            .join("glados_piper_medium.onnx");
 
         if !piper_path.exists() {
-            error!("Piper binary not found at resource path: {}", piper_path.display());
+            error!(
+                "Piper binary not found at resource path: {}",
+                piper_path.display()
+            );
         }
 
         Ok(Self {
@@ -69,14 +82,24 @@ impl TtsService {
     ) -> Result<Self, String> {
         let (stream, stream_handle) = OutputStream::try_default()
             .map_err(|e| format!("Failed to open default audio stream: {}", e))?;
-        let sink = Sink::try_new(&stream_handle)
-            .map_err(|e| format!("Failed to create sink: {}", e))?;
+        let sink =
+            Sink::try_new(&stream_handle).map_err(|e| format!("Failed to create sink: {}", e))?;
 
-        let piper_path = resource_dir.join("resources").join("binaries").join("piper").join("piper.exe");
-        let model_path = resource_dir.join("resources").join("models").join("glados_piper_medium.onnx");
+        let piper_path = resource_dir
+            .join("resources")
+            .join("binaries")
+            .join("piper")
+            .join("piper.exe");
+        let model_path = resource_dir
+            .join("resources")
+            .join("models")
+            .join("glados_piper_medium.onnx");
 
         if !piper_path.exists() {
-            error!("Piper binary not found at resource path: {}", piper_path.display());
+            error!(
+                "Piper binary not found at resource path: {}",
+                piper_path.display()
+            );
         }
 
         Ok(Self {
@@ -142,10 +165,7 @@ impl TtsService {
                 }
             }
 
-            command
-                .arg("--model")
-                .arg(&model_path)
-                .arg("--output_raw");
+            command.arg("--model").arg(&model_path).arg("--output_raw");
 
             if let Some(cp) = config_path {
                 command.arg("--config").arg(cp);
@@ -162,7 +182,10 @@ impl TtsService {
             {
                 Ok(child) => child,
                 Err(e) => {
-                    error!("Failed to spawn piper process: {}. Ensure '{}' exists and is executable.", e, piper_exe);
+                    error!(
+                        "Failed to spawn piper process: {}. Ensure '{}' exists and is executable.",
+                        e, piper_exe
+                    );
                     return;
                 }
             };
@@ -176,7 +199,9 @@ impl TtsService {
                 let _ = std::thread::spawn(move || {
                     let rt = tokio::runtime::Handle::current();
                     rt.block_on(async move {
-                        pm_clone.register(&format!("piper-{}", pid), "piper-tts", pid).await;
+                        pm_clone
+                            .register(&format!("piper-{}", pid), "piper-tts", pid)
+                            .await;
                     });
                 });
             }
@@ -212,7 +237,7 @@ impl TtsService {
             if output.status.success() && !output.stdout.is_empty() {
                 let raw_bytes = output.stdout;
                 let mut samples: Vec<f32> = Vec::with_capacity(raw_bytes.len() / 2);
-                
+
                 let mut iter = raw_bytes.chunks_exact(2);
                 for chunk in &mut iter {
                     let sample_i16 = i16::from_le_bytes([chunk[0], chunk[1]]);
@@ -222,7 +247,7 @@ impl TtsService {
 
                 let channels = std::num::NonZeroU16::new(1).unwrap();
                 let sample_rate = std::num::NonZeroU32::new(22050).unwrap();
-                
+
                 // Calculate estimated duration before playing
                 let duration_secs = samples.len() as f32 / 22050.0;
                 let duration_ms = (duration_secs * 1000.0) as u64;
@@ -243,7 +268,10 @@ impl TtsService {
                     }
                 }
             } else {
-                error!("Piper failed or returned empty output. Status: {:?}", output.status);
+                error!(
+                    "Piper failed or returned empty output. Status: {:?}",
+                    output.status
+                );
                 if !output.stderr.is_empty() {
                     error!("Piper stderr: {}", String::from_utf8_lossy(&output.stderr));
                 }
@@ -264,7 +292,9 @@ impl TtsService {
                     *handle_lock = Some(AudioHandle(stream, stream_handle, sink));
                 }
             }
-            Err(e) => { tracing::error!("Failed to reopen audio sink after stop: {}", e); }
+            Err(e) => {
+                tracing::error!("Failed to reopen audio sink after stop: {}", e);
+            }
         }
     }
 }

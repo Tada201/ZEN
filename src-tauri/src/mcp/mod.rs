@@ -1,3 +1,6 @@
+pub mod http;
+pub mod server;
+pub mod stdio;
 /// MCP (Model Context Protocol) Module
 ///
 /// Provides MCP server implementation for external tool integration.
@@ -17,13 +20,9 @@
 /// let mut server = McpServer::new(config, tool_registry);
 /// server.start().await?;
 /// ```
-
 pub mod types;
-pub mod server;
-pub mod stdio;
-pub mod http;
 
-pub use types::*;
-pub use server::{McpServer, McpServerConfig, McpServerState, McpEvent, McpError};
+pub use http::{create_mcp_router, start_http_server, HttpState};
+pub use server::{McpError, McpEvent, McpServer, McpServerConfig, McpServerState};
 pub use stdio::run_stdio_server;
-pub use http::{start_http_server, create_mcp_router, HttpState};
+pub use types::*;

@@ -1,8 +1,8 @@
+use super::ModelCapabilities;
 use crate::db::models::ModelInfo;
 use crate::error::{ZenError, ZenResult};
 use crate::llm::openai_compat::types::*;
 use crate::llm::openai_compat::OpenAiCompatProvider;
-use super::ModelCapabilities;
 use std::collections::HashMap;
 use std::sync::RwLock;
 use tracing::{info, warn};
@@ -12,7 +12,13 @@ impl OpenAiCompatProvider {
         let url = self.url("/models");
         info!(provider = %self.provider_name, url = %url, "Fetching model list");
 
-        let resp = match self.send_with_retry(self.auth_get(&url)).await {
+        let resp = match self
+            .send_with_retry(
+                self.auth_get(&url)
+                    .timeout(std::time::Duration::from_secs(30)),
+            )
+            .await
+        {
             Ok(resp) => resp,
             Err(e) => {
                 let base_str = self.base_url.read().unwrap().clone();
@@ -28,7 +34,14 @@ impl OpenAiCompatProvider {
                     };
                     let alt_url = alt_provider.url("/models");
                     warn!(error = %e, alt_url = %alt_url, "Failed to reach OpenAI-compat on localhost, trying 127.0.0.1");
-                    match alt_provider.send_with_retry(alt_provider.auth_get(&alt_url)).await {
+                    match alt_provider
+                        .send_with_retry(
+                            alt_provider
+                                .auth_get(&alt_url)
+                                .timeout(std::time::Duration::from_secs(30)),
+                        )
+                        .await
+                    {
                         Ok(resp) => {
                             self.update_base_url(&base_str, &alt_base);
                             resp
@@ -58,7 +71,7 @@ impl OpenAiCompatProvider {
             .into_iter()
             .map(|m| {
                 let model_id_lower = m.id.to_lowercase();
-                
+
                 // If the API provided a human-readable name, fall back to id otherwise
                 let display_name = match m.name {
                     Some(n) if !n.is_empty() => n,
@@ -81,17 +94,14 @@ impl OpenAiCompatProvider {
                     || model_id_lower.contains("deepseek-vl");
 
                 let supports_vision = has_vision_keyword || is_multimodal_family;
-                
+
                 // Modern multimodal models usually support tools too.
                 // We only disable tools if it's explicitly marked as a vision-only model.
                 let supports_tools = !model_id_lower.contains("vision-only");
 
                 // Populate capability cache for runtime lookups
                 if let Ok(mut cache) = self.model_capabilities.write() {
-                    cache.insert(
-                        m.id.clone(),
-                        ModelCapabilities { supports_tools },
-                    );
+                    cache.insert(m.id.clone(), ModelCapabilities { supports_tools });
                 }
 
                 ModelInfo {
@@ -123,5 +133,4 @@ impl OpenAiCompatProvider {
         );
         Ok(models)
     }
-
 }

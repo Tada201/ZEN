@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
+import { chatApi } from "@/api";
 import { toast } from "sonner";
 import { Session, ChatFolder } from "../../components/chat/types";
 import { mapChatToSession, mapChatFolderToFolder } from "./useChatQueries";
@@ -20,10 +20,10 @@ export function useChatMutations({
   const queryClient = useQueryClient();
 
   const createSessionMutation = useMutation({
-    mutationFn: (title?: string) => invoke<any>("create_chat", { 
-      title: title || "New Case", 
-      model: selectedModelId === "No Model" ? null : selectedModelId 
-    }),
+    mutationFn: (title?: string) => chatApi.createChat(
+      title || "New Case",
+      selectedModelId === "No Model" ? null : selectedModelId,
+    ),
     onSuccess: (chat) => {
       console.log("[useChat] Session created successfully:", chat);
       const session = mapChatToSession(chat);
@@ -37,7 +37,7 @@ export function useChatMutations({
   });
 
   const deleteSessionMutation = useMutation({
-    mutationFn: (id: string) => invoke("delete_chat", { chatId: id }),
+    mutationFn: (id: string) => chatApi.deleteChat(id),
     onSuccess: (_, id) => {
       queryClient.setQueryData<Session[]>(["sessions"], (prev) => prev?.filter((s) => s.id !== id));
       queryClient.setQueryData<Session[]>(["archived-sessions"], (prev) => prev?.filter((s) => s.id !== id));
@@ -48,7 +48,7 @@ export function useChatMutations({
   });
 
   const renameSessionMutation = useMutation({
-    mutationFn: ({ id, title }: { id: string; title: string }) => invoke("update_chat_title", { chatId: id, title }),
+    mutationFn: ({ id, title }: { id: string; title: string }) => chatApi.updateChatTitle(id, title),
     onSuccess: (_, { id, title }) => {
       queryClient.setQueryData<Session[]>(["sessions"], (prev) => 
         prev?.map(s => s.id === id ? { ...s, title } : s)
@@ -58,7 +58,7 @@ export function useChatMutations({
   });
 
   const pinSessionMutation = useMutation({
-    mutationFn: (id: string) => invoke("toggle_pin_chat", { chatId: id }),
+    mutationFn: (id: string) => chatApi.togglePinChat(id),
     onSuccess: (_, id) => {
       queryClient.setQueryData<Session[]>(["sessions"], (prev) => 
         prev?.map(s => s.id === id ? { ...s, pinned: !s.pinned } : s)
@@ -67,7 +67,7 @@ export function useChatMutations({
   });
 
   const archiveSessionMutation = useMutation({
-    mutationFn: (id: string) => invoke("archive_chat", { chatId: id }),
+    mutationFn: (id: string) => chatApi.archiveChat(id),
     onSuccess: (_, id) => {
       const session = sessions.find(s => s.id === id);
       if (session) {
@@ -80,7 +80,7 @@ export function useChatMutations({
   });
 
   const unarchiveSessionMutation = useMutation({
-    mutationFn: (id: string) => invoke("unarchive_chat", { chatId: id }),
+    mutationFn: (id: string) => chatApi.unarchiveChat(id),
     onSuccess: (_, id) => {
       const session = archivedSessions.find(s => s.id === id);
       if (session) {
@@ -92,7 +92,7 @@ export function useChatMutations({
   });
 
   const bulkDeleteMutation = useMutation({
-    mutationFn: (ids: string[]) => invoke("bulk_delete_chats", { chatIds: ids }),
+    mutationFn: (ids: string[]) => chatApi.bulkDeleteChats(ids),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
       queryClient.invalidateQueries({ queryKey: ["archived-sessions"] });
@@ -101,7 +101,7 @@ export function useChatMutations({
   });
 
   const createFolderMutation = useMutation({
-    mutationFn: (name: string) => invoke<any>("create_chat_folder", { name }),
+    mutationFn: (name: string) => chatApi.createFolder(name),
     onSuccess: (folder) => {
       queryClient.setQueryData<ChatFolder[]>(["folders"], (prev) => [mapChatFolderToFolder(folder), ...(prev || [])]);
     }
@@ -110,8 +110,8 @@ export function useChatMutations({
   const moveChatToFolderMutation = useMutation({
     mutationFn: ({ chatId, folderId }: { chatId: string; folderId: string | null }) => 
       folderId 
-        ? invoke("move_chat_to_folder", { chatId, folderId })
-        : invoke("remove_chat_from_folder", { chatId }),
+        ? chatApi.moveChatToFolder(chatId, folderId)
+        : chatApi.removeChatFromFolder(chatId),
     onSuccess: (_, { chatId, folderId }) => {
       queryClient.setQueryData<Session[]>(["sessions"], (prev) => 
         prev?.map(s => s.id === chatId ? { ...s, folderId } : s)

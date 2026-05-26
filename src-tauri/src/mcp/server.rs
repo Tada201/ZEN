@@ -1,3 +1,4 @@
+use serde_json::{json, Value};
 /// MCP (Model Context Protocol) Server
 ///
 /// Implements an MCP server that exposes ZEN agent tools to external clients.
@@ -6,17 +7,16 @@
 /// - Tool registration and discovery
 /// - Tool execution with result formatting
 /// - stdio and HTTP transport layers
-
 use std::sync::Arc;
-use tokio::sync::{RwLock, broadcast};
-use serde_json::{json, Value};
-use tracing::{info, debug, error};
+use tokio::sync::{broadcast, RwLock};
+use tracing::{debug, error, info};
 use uuid::Uuid;
 
-use crate::mcp::types::*;
-use crate::tools::ToolRegistry;
-use crate::mcp::stdio;
 use crate::mcp::http;
+use crate::mcp::stdio;
+use crate::mcp::types::*;
+use crate::services::ToolService;
+use crate::tools::ToolRegistry;
 
 /// MCP Server configuration
 #[derive(Debug, Clone)]
@@ -25,6 +25,7 @@ pub struct McpServerConfig {
     pub server_version: String,
     pub stdio_enabled: bool,
     pub http_enabled: bool,
+    pub http_bind_host: String,
     pub http_port: u16,
 }
 
@@ -35,6 +36,7 @@ impl Default for McpServerConfig {
             server_version: env!("CARGO_PKG_VERSION").to_string(),
             stdio_enabled: false,
             http_enabled: true,
+            http_bind_host: "127.0.0.1".to_string(),
             http_port: 8989,
         }
     }
@@ -57,6 +59,10 @@ pub struct McpServer {
     initialized: bool,
     event_tx: broadcast::Sender<McpEvent>,
     app_handle: Option<tauri::AppHandle>,
+    tool_service: Option<Arc<ToolService>>,
+    http_task: Option<tokio::task::JoinHandle<()>>,
+    http_shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
+    stdio_task: Option<tokio::task::JoinHandle<()>>,
 }
 
 /// MCP Server events
@@ -73,12 +79,12 @@ pub enum McpEvent {
 impl McpServer {
     /// Create a new MCP server instance
     pub fn new(
-        config: McpServerConfig, 
-        tool_registry: Arc<RwLock<ToolRegistry>>, 
-        app_handle: Option<tauri::AppHandle>
+        config: McpServerConfig,
+        tool_registry: Arc<RwLock<ToolRegistry>>,
+        app_handle: Option<tauri::AppHandle>,
     ) -> Self {
         let (event_tx, _) = broadcast::channel(256);
-        
+
         Self {
             config,
             state: McpServerState::Stopped,
@@ -86,49 +92,95 @@ impl McpServer {
             initialized: false,
             event_tx,
             app_handle,
+            tool_service: None,
+            http_task: None,
+            http_shutdown_tx: None,
+            stdio_task: None,
         }
     }
 
-    /// Start the MCP server
-    pub async fn start(&mut self) -> Result<(), McpError> {
+    /// Set or update the live AppHandle
+    pub fn set_app_handle(&mut self, app_handle: tauri::AppHandle) {
+        self.app_handle = Some(app_handle);
+    }
+
+    /// Set or update the canonical app tool service.
+    pub fn set_tool_service(&mut self, tool_service: Arc<ToolService>) {
+        self.tool_service = Some(tool_service);
+    }
+
+    /// Start the MCP server.
+    ///
+    /// Binds transport listeners BEFORE transitioning state to `Running` so that
+    /// a failed bind never reports the server as healthy.  If any bind fails the
+    /// state stays `Stopped` and an error is returned immediately.
+    pub async fn start(&mut self, server_arc: Arc<RwLock<McpServer>>) -> Result<(), McpError> {
         if self.state == McpServerState::Running {
             return Err(McpError::AlreadyRunning);
         }
 
-        info!("Starting MCP server v{} on port {}",
-              self.config.server_version, self.config.http_port);
+        info!(
+            "Starting MCP server v{} on {}:{}",
+            self.config.server_version, self.config.http_bind_host, self.config.http_port
+        );
 
-        self.state = McpServerState::Starting;
+        // Pre-bind the TCP listener so we only go to Running after bind succeeds.
+        let http_listener = if self.config.http_enabled {
+            let addr = format!("{}:{}", self.config.http_bind_host, self.config.http_port)
+                .parse::<std::net::SocketAddr>()
+                .map_err(|e| McpError::Transport(format!("Invalid MCP HTTP bind address: {e}")))?;
+            match tokio::net::TcpListener::bind(addr).await {
+                Ok(l) => Some(l),
+                Err(e) => {
+                    error!("MCP HTTP bind failed on {}: {}", addr, e);
+                    return Err(McpError::Io(e));
+                }
+            }
+        } else {
+            None
+        };
 
-        // Start HTTP server if enabled
-        if self.config.http_enabled {
-            let server_clone = Arc::new(RwLock::new(self.clone_for_stdio()));
-            let port = self.config.http_port;
+        self.state = McpServerState::Running;
+        self.initialized = true;
 
-            tokio::spawn(async move {
-                if let Err(e) = http::start_http_server(server_clone, port).await {
+        // Start HTTP server with the pre-bound listener
+        if let Some(listener) = http_listener {
+            let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+            self.http_shutdown_tx = Some(tx);
+
+            let server_clone = server_arc.clone();
+
+            let handle = tokio::spawn(async move {
+                if let Err(e) = http::start_http_server(server_clone.clone(), listener, rx).await {
                     error!("MCP HTTP server error: {}", e);
+                    let mut s = server_clone.write().await;
+                    if s.state == McpServerState::Running {
+                        s.state = McpServerState::Stopped;
+                        s.initialized = false;
+                    }
                 }
             });
+            self.http_task = Some(handle);
 
-            info!("MCP HTTP server started on port {}", port);
+            info!(
+                "MCP HTTP server started on {}:{}",
+                self.config.http_bind_host, self.config.http_port
+            );
         }
 
         // Start stdio server if enabled
         if self.config.stdio_enabled {
-            let server_clone = self.clone_for_stdio();
+            let server_clone = server_arc.clone();
 
-            tokio::spawn(async move {
-                if let Err(e) = stdio::run_stdio_server(&server_clone).await {
+            let handle = tokio::spawn(async move {
+                if let Err(e) = stdio::run_stdio_server(server_clone).await {
                     error!("MCP stdio server error: {}", e);
                 }
             });
+            self.stdio_task = Some(handle);
 
             info!("MCP stdio server started");
         }
-
-        self.state = McpServerState::Running;
-        self.initialized = true;
 
         let _ = self.event_tx.send(McpEvent::ServerStarted);
         info!("MCP server started successfully");
@@ -145,8 +197,21 @@ impl McpServer {
         info!("Stopping MCP server...");
         self.state = McpServerState::Stopping;
 
-        // Note: HTTP and stdio servers run in spawned tasks
-        // They will stop when the server state changes
+        // Trigger axum HTTP server shutdown
+        if let Some(tx) = self.http_shutdown_tx.take() {
+            let _ = tx.send(());
+        }
+
+        // Await HTTP task graceful shutdown
+        if let Some(handle) = self.http_task.take() {
+            let _ = handle.await;
+        }
+
+        // Abort and await stdio task
+        if let Some(handle) = self.stdio_task.take() {
+            handle.abort();
+            let _ = handle.await;
+        }
 
         self.state = McpServerState::Stopped;
         self.initialized = false;
@@ -166,6 +231,10 @@ impl McpServer {
             initialized: self.initialized,
             event_tx: self.event_tx.clone(),
             app_handle: self.app_handle.clone(),
+            tool_service: self.tool_service.clone(),
+            http_task: None,
+            http_shutdown_tx: None,
+            stdio_task: None,
         }
     }
 
@@ -193,6 +262,7 @@ impl McpServer {
             "initialized": self.initialized,
             "stdio_enabled": self.config.stdio_enabled,
             "http_enabled": self.config.http_enabled,
+            "http_bind_host": self.config.http_bind_host,
             "http_port": self.config.http_port,
         })
     }
@@ -220,11 +290,14 @@ impl McpServer {
 
     /// Handle ping request
     fn handle_ping(&self, id: Option<Value>) -> JsonRpcResponse {
-        JsonRpcResponse::success(json!({
-            "status": "ok",
-            "server": self.config.server_name,
-            "version": self.config.server_version,
-        }), id)
+        JsonRpcResponse::success(
+            json!({
+                "status": "ok",
+                "server": self.config.server_name,
+                "version": self.config.server_version,
+            }),
+            id,
+        )
     }
 
     /// Handle initialize request
@@ -232,8 +305,10 @@ impl McpServer {
         // Parse initialize params (optional validation)
         if let Some(params_value) = params {
             if let Ok(init_params) = serde_json::from_value::<McpInitializeParams>(params_value) {
-                info!("MCP client connected: {} v{}", 
-                      init_params.client_info.name, init_params.client_info.version);
+                info!(
+                    "MCP client connected: {} v{}",
+                    init_params.client_info.name, init_params.client_info.version
+                );
                 debug!("Client protocol version: {}", init_params.protocol_version);
             }
         }
@@ -241,9 +316,7 @@ impl McpServer {
         let result = McpInitializeResult {
             protocol_version: MCP_VERSION.to_string(),
             capabilities: McpServerCapabilities {
-                tools: Some(McpToolsCapability {
-                    list_changed: true,
-                }),
+                tools: Some(McpToolsCapability { list_changed: true }),
                 resources: None,
                 prompts: None,
             },
@@ -256,7 +329,10 @@ impl McpServer {
         match serde_json::to_value(result) {
             Ok(val) => JsonRpcResponse::success(val, id),
             Err(e) => {
-                let err = JsonRpcError::internal_error(format!("Failed to serialize initialize result: {}", e));
+                let err = JsonRpcError::internal_error(format!(
+                    "Failed to serialize initialize result: {}",
+                    e
+                ));
                 JsonRpcResponse::failure(err, id)
             }
         }
@@ -267,17 +343,16 @@ impl McpServer {
         let tool_registry = self.tool_registry.read().await;
         let tools = tool_registry.list();
 
-        let mcp_tools: Vec<McpToolDefinition> = tools.into_iter().map(|tool| {
-            McpToolDefinition {
+        let mcp_tools: Vec<McpToolDefinition> = tools
+            .into_iter()
+            .map(|tool| McpToolDefinition {
                 name: tool.name,
                 description: Some(tool.description),
                 input_schema: tool.parameters,
-            }
-        }).collect();
+            })
+            .collect();
 
-        let result = McpToolsListResult {
-            tools: mcp_tools,
-        };
+        let result = McpToolsListResult { tools: mcp_tools };
 
         JsonRpcResponse::success(serde_json::to_value(result).unwrap(), id)
     }
@@ -287,78 +362,62 @@ impl McpServer {
         let params: McpToolCallParams = match params {
             Some(p) => match serde_json::from_value(p) {
                 Ok(p) => p,
-                Err(e) => return JsonRpcResponse::failure(
-                    JsonRpcError::invalid_params(format!("Invalid params: {}", e)),
-                    id,
-                ),
+                Err(e) => {
+                    return JsonRpcResponse::failure(
+                        JsonRpcError::invalid_params(format!("Invalid params: {}", e)),
+                        id,
+                    )
+                }
             },
-            None => return JsonRpcResponse::failure(
-                JsonRpcError::invalid_params("Missing params"),
-                id,
-            ),
+            None => {
+                return JsonRpcResponse::failure(JsonRpcError::invalid_params("Missing params"), id)
+            }
         };
 
         let tool_name = params.name.clone();
-        let tool_registry_guard = self.tool_registry.read().await;
-
-        // Find the tool
-        let tool = tool_registry_guard.get(&tool_name);
-
-        if tool.is_none() {
+        if self.tool_registry.read().await.get(&tool_name).is_none() {
             return JsonRpcResponse::failure(
                 JsonRpcError::invalid_params(format!("Tool not found: {}", tool_name)),
                 id,
             );
         }
 
-        let tool = tool.unwrap();
-
-        // Check permissions via the v2 registry
         let tool_call = crate::tools::ToolCall {
             id: Uuid::new_v4().to_string(),
             name: tool_name.clone(),
             arguments: params.arguments.clone(),
         };
 
-        match tool_registry_guard.check_permission(&tool_call, None) {
-            Ok(crate::tools::permission::PermissionDecision::Allow) => {
-                // Authorized, proceed to execution
-            }
-            Ok(crate::tools::permission::PermissionDecision::Deny { reason }) => {
-                return JsonRpcResponse::failure(
-                    JsonRpcError::internal_error(format!("Permission denied: {}", reason)),
-                    id,
-                );
-            }
-            Ok(crate::tools::permission::PermissionDecision::Confirm { .. }) => {
-                return JsonRpcResponse::failure(
-                    JsonRpcError::internal_error("User confirmation required for this tool call. Please authorize in the ZEN application.".to_string()),
-                    id,
-                );
-            }
-            Err(e) => {
-                return JsonRpcResponse::failure(
-                    JsonRpcError::internal_error(format!("Security check failed: {}", e)),
-                    id,
-                );
-            }
-        }
-        
-        // We must drop the read guard before calling tool.execute as it might need to acquire a lock
-        drop(tool_registry_guard);
-
         let (output_text, is_error) = if let Some(app) = &self.app_handle {
-            match tool.execute(app.clone(), "mcp-call".to_string(), params.arguments.clone()).await {
-                Ok(output) => {
-                    let text = serde_json::to_string(&output.content).unwrap_or_else(|e| format!("Serialization of tool output failed: {}", e));
-                    (text, false)
+            if let Some(tool_service) = &self.tool_service {
+                match tool_service
+                    .execute_non_interactive(
+                        app.clone(),
+                        "mcp_server",
+                        "mcp-call".to_string(),
+                        tool_call,
+                    )
+                    .await
+                {
+                    Ok(output) => {
+                        let text = serde_json::to_string(&output).unwrap_or_else(|e| {
+                            format!("Serialization of tool output failed: {}", e)
+                        });
+                        (text, false)
+                    }
+                    Err(e) => (format!("Error executing tool: {}", e), true),
                 }
-                Err(e) => {
-                    (format!("Error executing tool: {}", e), true)
-                }
+            } else {
+                (
+                    "Error: ToolService not configured for MCP server".to_string(),
+                    true,
+                )
             }
         } else {
-            ("Error: AppHandle not available in MCP server".to_string(), true)
+            (
+                "Error: AppHandle not available in MCP server".to_string(),
+                true,
+            )
         };
 
         // Execute the tool
@@ -369,7 +428,7 @@ impl McpServer {
 
         let _ = self.event_tx.send(McpEvent::ToolCalled {
             tool_name: tool_name.clone(),
-            success: !is_error
+            success: !is_error,
         });
 
         JsonRpcResponse::success(serde_json::to_value(result).unwrap(), id)
@@ -381,16 +440,16 @@ impl McpServer {
 pub enum McpError {
     #[error("Server is already running")]
     AlreadyRunning,
-    
+
     #[error("Server is not running")]
     NotRunning,
-    
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    
+
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
-    
+
     #[error("Transport error: {0}")]
     Transport(String),
 }

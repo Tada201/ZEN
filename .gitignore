@@ -1,9 +1,11 @@
 # Tauri
 src-tauri/target/
+src-tauri/target-test/
 src-tauri/gen/
 src-tauri/bin/
 src-tauri/resources/binaries/
 src-tauri/resources/models/
+
 
 # Graphify
 graphify-out/
@@ -23,6 +25,8 @@ HANDOFF_INSTRUCTIONS.md
 continue.md
 c.txt
 tsc-errors.tmp
+scripts/scan-packages.ps1
+
 
 # Logs
 logs/

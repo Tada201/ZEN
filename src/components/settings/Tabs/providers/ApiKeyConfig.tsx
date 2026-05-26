@@ -5,6 +5,7 @@ import { WorkbenchInput } from '@/components/settings/ui/WorkbenchInput';
 import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
 import { PROVIDER_KEY_MAP } from '@/lib/types/provider';
+import { isSecretPresentValue } from '@/api';
 
 interface ApiKeyConfigProps {
     providerKey: string;
@@ -23,6 +24,9 @@ export const ApiKeyConfig = React.memo(({ providerKey, displayName }: ApiKeyConf
     const updateSetting = useSettingsStore(s => s.updateSetting);
     const applyChanges = useSettingsStore(s => s.applyChanges);
     const fetchModels = useSettingsStore(s => s.fetchModels);
+
+    const visibleApiKey = isSecretPresentValue(apiKey) ? '' : apiKey;
+    const placeholder = isSecretPresentValue(apiKey) ? 'Saved key present. Enter a new key to replace it.' : 'Enter secure API key...';
 
     const handleUpdate = useCallback((text: string) => {
         const target = PROVIDER_KEY_MAP[providerKey];
@@ -45,8 +49,8 @@ export const ApiKeyConfig = React.memo(({ providerKey, displayName }: ApiKeyConf
             <div className="relative max-w-lg">
                 <WorkbenchInput
                     type={showKey ? "text" : "password"}
-                    value={apiKey}
-                    placeholder="Enter secure API key..."
+                    value={visibleApiKey}
+                    placeholder={placeholder}
                     onChangeText={handleUpdate}
                     onBlur={handleBlur}
                     className="w-full h-9 pr-10 font-mono text-xs bg-muted/20 border-border/60 focus:border-primary/40 transition-all rounded-lg"

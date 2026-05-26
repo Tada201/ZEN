@@ -17,7 +17,7 @@ export const AgentConfigRow = memo(() => {
         >
             <div className="flex flex-col gap-4">
                 <WorkbenchSettingRow
-                    label="Agent Logging"
+                    label="Agent execution logging"
                     description="Log agent decisions and reasoning traces"
                     control={
                         <WorkbenchSwitch

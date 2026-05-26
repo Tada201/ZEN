@@ -1,5 +1,5 @@
 /// MCP (Model Context Protocol) Types
-/// 
+///
 /// Implements the MCP specification for AI assistant tool integration.
 /// See: https://modelcontextprotocol.io/specification
 ///
@@ -7,7 +7,6 @@
 /// - JSON-RPC 2.0 messages (requests, responses, errors)
 /// - MCP protocol messages (initialize, tools/list, tools/call, etc.)
 /// - Tool definitions and capabilities
-
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -226,7 +225,9 @@ impl McpContentBlock {
     }
 
     pub fn error(message: impl Into<String>) -> Self {
-        Self::Text { text: format!("Error: {}", message.into()) }
+        Self::Text {
+            text: format!("Error: {}", message.into()),
+        }
     }
 }
 

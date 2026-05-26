@@ -134,7 +134,9 @@ pub fn validate_plan(plan: &DrawingPlan) -> Vec<String> {
     }
 
     // Check for valid kind
-    let valid_kinds = ["text", "circle", "rect", "line", "arrow", "diagram", "shape"];
+    let valid_kinds = [
+        "text", "circle", "rect", "line", "arrow", "diagram", "shape",
+    ];
     for obj in &plan.objects {
         if !valid_kinds.contains(&obj.kind.as_str()) {
             issues.push(format!(

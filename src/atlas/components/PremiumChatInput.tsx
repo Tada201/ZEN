@@ -1,12 +1,19 @@
 import { useState, useRef, useEffect, useMemo, memo } from 'react';
 import { 
   ArrowUp,
+  CheckCircle2,
+  ChevronDown,
+  Circle,
+  ListTodo,
   Mic
 } from 'lucide-react';
 import { cn } from '@/lib/utils/style';
 import type { Model } from './ModelSelector';
 import { Attachment } from './chat/types';
 import { useUIStore } from '@/lib/stores/useUIStore';
+import { useSettingsStore } from '@/lib/stores/useSettingsStore';
+import { useTaskStore } from '@/lib/stores/taskStore';
+import { toolsApi } from '@/api';
 
 // Decomposed Components
 import { ActionPills } from './chat/input/ActionPills';
@@ -40,6 +47,7 @@ interface PremiumChatInputProps {
   onOpenModelSelector?: () => void;
   onOpenSkills?: () => void;
   onOpenSettings?: () => void;
+  activeChatId?: string | null;
   input?: string;
   onInputChange?: (value: string) => void;
   generativeUI?: boolean;
@@ -57,6 +65,7 @@ export const PremiumChatInput = memo(({
   onSelectModel,
   onOpenModelSelector,
   onOpenSkills,
+  activeChatId,
   input: externalInput,
   onInputChange,
   generativeUI,
@@ -101,13 +110,35 @@ export const PremiumChatInput = memo(({
   
   const [isModelOpen, setIsModelOpen] = useState(false);
   const [isPlusMenuOpen, setIsPlusMenuOpen] = useState(false);
-  const [isAuto, setIsAuto] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('zen_auto_mode');
-      if (saved !== null) return saved === 'true';
+  const [isTaskPanelOpen, setIsTaskPanelOpen] = useState(true);
+  const toolYoloMode = useSettingsStore(state => state.toolYoloMode);
+  const [isAuto, setIsAuto] = useState(toolYoloMode);
+  const taskMap = useTaskStore(state => state.tasks);
+
+  const visibleTasks = useMemo(() => {
+    if (!activeChatId) return [];
+    return Array.from(taskMap.values())
+      .filter(task => task.chatId === activeChatId)
+      .sort((a, b) => a.createdAt - b.createdAt);
+  }, [taskMap, activeChatId]);
+
+  const completedTaskCount = visibleTasks.filter(task => task.status === 'completed').length;
+  const hasVisibleTasks = visibleTasks.length > 0;
+
+  useEffect(() => {
+    setIsAuto(toolYoloMode);
+  }, [toolYoloMode]);
+
+  const handleSetIsAuto = async (val: boolean) => {
+    try {
+      await toolsApi.setYoloMode(val);
+      useSettingsStore.setState({ toolYoloMode: val });
+      setIsAuto(val);
+      localStorage.setItem('zen_auto_mode', String(val));
+    } catch (error) {
+      console.warn("[PremiumChatInput] Failed to update Auto mode:", error);
     }
-    return true;
-  });
+  };
 
   useEffect(() => { localStorage.setItem('zen_web_search', String(isWebSearch)); }, [isWebSearch]);
   useEffect(() => { localStorage.setItem('zen_thinking', String(isThinking)); }, [isThinking]);
@@ -115,7 +146,6 @@ export const PremiumChatInput = memo(({
   useEffect(() => { localStorage.setItem('zen_thinking_budget', String(thinkingBudget)); }, [thinkingBudget]);
   useEffect(() => { localStorage.setItem('zen_deep_research', String(isDeepResearch)); }, [isDeepResearch]);
   useEffect(() => { localStorage.setItem('zen_tools_disabled', String(isToolsDisabled)); }, [isToolsDisabled]);
-  useEffect(() => { localStorage.setItem('zen_auto_mode', String(isAuto)); }, [isAuto]);
   
   const [pinnedActions, setPinnedActions] = useState<string[]>(() => {
     if (typeof window !== 'undefined') {
@@ -301,6 +331,52 @@ export const PremiumChatInput = memo(({
       {isLoading && (
         <div className="absolute inset-x-4 -top-px h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent animate-shimmer-slide z-10" />
       )}
+      {hasVisibleTasks && (
+        <div className="absolute inset-x-0 bottom-[calc(100%+8px)] px-1 pointer-events-auto">
+          <div className="rounded-xl border border-white/10 bg-[#111113]/95 shadow-2xl overflow-hidden backdrop-blur-xl">
+            <button
+              type="button"
+              onClick={() => setIsTaskPanelOpen(prev => !prev)}
+              className="w-full h-10 px-3 flex items-center justify-between text-left hover:bg-white/[0.03] transition-colors"
+            >
+              <span className="flex items-center gap-2 min-w-0">
+                <ListTodo className="w-4 h-4 text-zinc-400" />
+                <span className="text-sm text-zinc-200">Task checklist</span>
+                <span className="text-xs tabular-nums text-zinc-500">{completedTaskCount}/{visibleTasks.length}</span>
+              </span>
+              <ChevronDown className={cn("w-4 h-4 text-zinc-500 transition-transform", isTaskPanelOpen && "rotate-180")} />
+            </button>
+            <div className={cn(
+              "grid transition-all duration-200 ease-out",
+              isTaskPanelOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+            )}>
+              <div className="overflow-hidden">
+                <div className="px-3 pb-3 space-y-2 max-h-48 overflow-y-auto">
+                  {visibleTasks.map(task => {
+                    const done = task.status === 'completed';
+                    const running = task.status === 'in-progress';
+                    return (
+                      <div key={task.id} className="flex items-start gap-2 text-sm">
+                        {done ? (
+                          <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-400 shrink-0" />
+                        ) : (
+                          <Circle className={cn("w-4 h-4 mt-0.5 shrink-0", running ? "text-blue-400 animate-pulse" : "text-zinc-600")} />
+                        )}
+                        <span className={cn(
+                          "leading-5 min-w-0",
+                          done ? "text-zinc-500 line-through" : running ? "text-zinc-200" : "text-zinc-400"
+                        )}>
+                          {task.description}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex flex-col">
         {isSidebar && (
           <div className="px-3 pt-2 flex items-center justify-between border-b border-border/10">
@@ -348,7 +424,7 @@ export const PremiumChatInput = memo(({
             generativeUI={internalGenerativeUI}
             setGenerativeUI={setGenerativeUIInternal}
             isAuto={isAuto}
-            setIsAuto={setIsAuto}
+            setIsAuto={handleSetIsAuto}
             isToolsDisabled={isToolsDisabled}
             setIsToolsDisabled={setIsToolsDisabled}
             onOpenSkills={onOpenSkills}

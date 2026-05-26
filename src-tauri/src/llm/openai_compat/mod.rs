@@ -1,17 +1,16 @@
-pub mod types;
 pub mod models;
 pub mod stream;
-#[cfg(test)] pub mod tests;
+#[cfg(test)]
+pub mod tests;
+pub mod types;
 
 pub use types::*;
 
 use async_trait::async_trait;
-use futures::StreamExt;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::warn;
 
 use crate::db::models::{ChatMessage, ChatResponse, ModelInfo};
 use crate::error::{ZenError, ZenResult};
@@ -53,7 +52,6 @@ impl OpenAiCompatProvider {
     ) -> Self {
         Self {
             client: Client::builder()
-                .timeout(std::time::Duration::from_secs(60))
                 .connect_timeout(std::time::Duration::from_secs(10))
                 .build()
                 .expect("Failed to build OpenAI-Compat HTTP client"),
@@ -77,8 +75,7 @@ impl OpenAiCompatProvider {
     /// Check if this is Groq provider (needs special rate limit handling)
     fn is_groq(&self) -> bool {
         let base = self.base_url.read().unwrap().clone();
-        self.provider_name.to_lowercase().contains("groq") 
-            || base.contains("groq.com")
+        self.provider_name.to_lowercase().contains("groq") || base.contains("groq.com")
     }
 
     /// Build the full URL for an API endpoint.
@@ -129,7 +126,7 @@ impl OpenAiCompatProvider {
 
         while attempts < max_attempts {
             let is_last_attempt = attempts == max_attempts - 1;
-            
+
             // Try to get a request for this attempt
             let req_to_send = if !is_last_attempt {
                 let current_ref = match current_req.as_ref() {
@@ -142,8 +139,9 @@ impl OpenAiCompatProvider {
                     None => {
                         // Request has a non-cloneable body (e.g. a stream).
                         // We must consume the original and can't retry.
-                        current_req.take()
-                            .ok_or_else(|| ZenError::Custom("Request body not available for retry".to_string()))?
+                        current_req.take().ok_or_else(|| {
+                            ZenError::Custom("Request body not available for retry".to_string())
+                        })?
                     }
                 }
             } else {
@@ -166,14 +164,14 @@ impl OpenAiCompatProvider {
                             .and_then(|v| v.to_str().ok())
                             .and_then(|s| s.parse::<u64>().ok())
                             .unwrap_or(2);
-                        
+
                         warn!(
                             provider = %self.provider_name,
                             retry_after = retry_after,
                             attempt = attempts + 1,
                             "Rate limited (429), retrying..."
                         );
-                        
+
                         tokio::time::sleep(tokio::time::Duration::from_secs(retry_after)).await;
                         attempts += 1;
                         continue;
@@ -183,18 +181,18 @@ impl OpenAiCompatProvider {
                 Err(e) => {
                     let err_msg = e.to_string();
                     last_error = Some(ZenError::from(e));
-                    
+
                     if can_not_retry_anymore {
                         break;
                     }
-                    
+
                     warn!(
                         provider = %self.provider_name,
                         error = %err_msg,
                         attempt = attempts + 1,
                         "Request failed, retrying..."
                     );
-                    
+
                     attempts += 1;
                     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                     continue;
@@ -202,7 +200,8 @@ impl OpenAiCompatProvider {
             }
         }
 
-        Err(last_error.unwrap_or_else(|| ZenError::Custom("Request failed after all retries".to_string())))
+        Err(last_error
+            .unwrap_or_else(|| ZenError::Custom("Request failed after all retries".to_string())))
     }
 }
 
@@ -221,7 +220,8 @@ impl LlmProvider for OpenAiCompatProvider {
         on_chunk: Box<dyn Fn(crate::llm::LlmChunk) + Send>,
         token: tokio_util::sync::CancellationToken,
     ) -> ZenResult<ChatResponse> {
-        self.do_chat_stream(model, messages, tools, config, on_chunk, token).await
+        self.do_chat_stream(model, messages, tools, config, on_chunk, token)
+            .await
     }
 
     async fn embed(&self, model: &str, text: &str) -> ZenResult<Vec<f32>> {

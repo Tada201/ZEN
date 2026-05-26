@@ -1,3 +1,4 @@
+use crate::agent::utils::now_ms;
 /// ISSUE-003: Formal Task Entity
 ///
 /// Provides a `Task` model with:
@@ -6,11 +7,9 @@
 /// - Status lifecycle (Pending → InProgress → Completed/Failed/Cancelled)
 /// - Topological sort for dependency-aware execution ordering
 /// - Cycle detection to prevent deadlocks
-
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BinaryHeap, HashMap, HashSet};
-use crate::agent::utils::now_ms;
 
 // ─── Enums ───
 
@@ -47,7 +46,10 @@ impl Default for TaskStatus {
 
 impl TaskStatus {
     pub fn is_terminal(&self) -> bool {
-        matches!(self, TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Cancelled)
+        matches!(
+            self,
+            TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Cancelled
+        )
     }
 }
 
@@ -187,7 +189,8 @@ impl Task {
         }
 
         // Build adjacency and in-degree maps
-        let id_to_idx: HashMap<&str, usize> = tasks.iter()
+        let id_to_idx: HashMap<&str, usize> = tasks
+            .iter()
             .enumerate()
             .map(|(i, t)| (t.id.as_str(), i))
             .collect();
@@ -214,11 +217,14 @@ impl Task {
             priority: TaskPriority,
             index: usize,
         }
-        
+
         let mut queue: BinaryHeap<PriorityTask> = BinaryHeap::new();
         for (i, &deg) in in_degree.iter().enumerate() {
             if deg == 0 {
-                queue.push(PriorityTask { priority: tasks[i].priority, index: i });
+                queue.push(PriorityTask {
+                    priority: tasks[i].priority,
+                    index: i,
+                });
             }
         }
 
@@ -230,24 +236,31 @@ impl Task {
             for &next in &adj[idx] {
                 in_degree[next] -= 1;
                 if in_degree[next] == 0 {
-                    queue.push(PriorityTask { priority: tasks[next].priority, index: next });
+                    queue.push(PriorityTask {
+                        priority: tasks[next].priority,
+                        index: next,
+                    });
                 }
             }
         }
 
         if sorted_indices.len() != n {
             // Find cycle participants for a useful error message
-            let cycle_ids: Vec<String> = in_degree.iter()
+            let cycle_ids: Vec<String> = in_degree
+                .iter()
                 .enumerate()
                 .filter(|(_, &d)| d > 0)
                 .map(|(i, _)| tasks[i].id.clone())
                 .collect();
 
-            return Err(TaskCycleError { task_ids: cycle_ids });
+            return Err(TaskCycleError {
+                task_ids: cycle_ids,
+            });
         }
 
         // Convert indices back to tasks - already in correct order from priority-aware topo sort
-        let result: Vec<Task> = sorted_indices.into_iter()
+        let result: Vec<Task> = sorted_indices
+            .into_iter()
             .map(|i| tasks[i].clone())
             .collect();
 
@@ -263,7 +276,11 @@ pub struct TaskCycleError {
 
 impl std::fmt::Display for TaskCycleError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Circular dependency detected among tasks: {:?}", self.task_ids)
+        write!(
+            f,
+            "Circular dependency detected among tasks: {:?}",
+            self.task_ids
+        )
     }
 }
 
@@ -336,16 +353,16 @@ mod tests {
     #[test]
     fn test_topological_sort_linear() {
         let t1 = Task::new("First", TaskType::ToolCall);
-        let t2 = Task::new("Second", TaskType::ToolCall)
-            .with_dependency(t1.id.as_str());
-        let t3 = Task::new("Third", TaskType::ToolCall)
-            .with_dependency(t2.id.as_str());
+        let t2 = Task::new("Second", TaskType::ToolCall).with_dependency(t1.id.as_str());
+        let t3 = Task::new("Third", TaskType::ToolCall).with_dependency(t2.id.as_str());
 
         let ids = vec![t1.id.clone(), t2.id.clone(), t3.id.clone()];
-        let result = Task::resolve_execution_order(vec![t3.clone(), t1.clone(), t2.clone()]).unwrap();
+        let result =
+            Task::resolve_execution_order(vec![t3.clone(), t1.clone(), t2.clone()]).unwrap();
 
         // t1 must come before t2, t2 before t3
-        let pos: HashMap<String, usize> = result.iter()
+        let pos: HashMap<String, usize> = result
+            .iter()
             .enumerate()
             .map(|(i, t)| (t.id.clone(), i))
             .collect();

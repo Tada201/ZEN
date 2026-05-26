@@ -1,6 +1,6 @@
 import type { StateCreator } from "zustand";
 import type { SettingsState } from "./types";
-import { invoke } from "@tauri-apps/api/core";
+import { settingsApi, toolsApi } from "@/api";
 import { mapStateToSqlite, mapSqliteToState } from "../settingsMapper";
 
 export interface AppSlice {
@@ -152,6 +152,17 @@ export const createAppSlice: StateCreator<SettingsState, [], [], AppSlice> = (se
       }
     }
 
+    // Ensure toolSettings is parsed correctly if it's sent as a string
+    if (flush.toolSettings !== undefined) {
+      if (typeof flush.toolSettings === "string") {
+        try {
+          flush.toolSettings = JSON.parse(flush.toolSettings);
+        } catch {
+          flush.toolSettings = {};
+        }
+      }
+    }
+
     set((state) => ({
       ...state,
       ...(flush as Partial<SettingsState>),
@@ -166,16 +177,12 @@ export const createAppSlice: StateCreator<SettingsState, [], [], AppSlice> = (se
       const sqliteData = mapStateToSqlite(flush as Record<string, unknown>);
       const entries = Object.entries(sqliteData);
       if (entries.length > 0) {
-        await Promise.all(
-          entries.map(([key, value]) =>
-            invoke("set_setting", { key, value })
-          )
-        );
+        await settingsApi.setSettings(sqliteData);
       }
 
       // After syncing all settings, sync tool permissions to ToolManager
       try {
-        await invoke("sync_tool_permissions");
+        await toolsApi.syncPermissions();
       } catch (e) {
         console.warn("[SettingsStore] Failed to sync tool permissions:", e);
       }
@@ -191,11 +198,17 @@ export const createAppSlice: StateCreator<SettingsState, [], [], AppSlice> = (se
 
   hydrateFromBackend: async () => {
     try {
-      const sqliteData = await invoke<Record<string, string>>("get_all_settings");
+      const sqliteData = await settingsApi.getAllSettings();
       if (!sqliteData || Object.keys(sqliteData).length === 0) return;
 
       const converted = mapSqliteToState(sqliteData);
       if (Object.keys(converted).length === 0) return;
+      if (
+        converted.customProviders !== undefined &&
+        !Array.isArray(converted.customProviders)
+      ) {
+        converted.customProviders = [];
+      }
 
       // Merge SQLite values into store — SQLite is authoritative over localStorage
       set((state) => ({

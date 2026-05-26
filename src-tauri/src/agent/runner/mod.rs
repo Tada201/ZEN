@@ -9,18 +9,20 @@
 //! | `escalation`  | LLM auto-escalation + streaming callback wrapper         |
 //! | `background`  | Background compaction, embedding, recall-cache refresh   |
 
+pub mod actions;
+mod background;
 pub mod config;
+mod escalation;
 pub mod helpers;
 #[allow(clippy::module_inception)]
 mod r#loop;
-pub mod actions;
-mod escalation;
-mod background;
+mod tool_actions;
 mod tool_dispatch;
+mod tool_pipeline;
 
 // ── Public re-exports ────────────────────────────────────────────────────────
 
-pub use config::{RunConfig, ContextTracker};
+pub use actions::{emit_action_only, persist_and_emit_action};
+pub use config::{ContextTracker, RunConfig};
+pub use helpers::{estimate_conversation_tokens, estimate_tokens};
 pub use r#loop::{Runner, MAX_SPAWN_DEPTH};
-pub use actions::{persist_and_emit_action, emit_action_only};
-pub use helpers::{estimate_tokens, estimate_conversation_tokens};

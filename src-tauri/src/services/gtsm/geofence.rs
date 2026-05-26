@@ -1,4 +1,4 @@
-use super::types::{GeofenceZone, GeofenceType, GeofenceAlert};
+use super::types::{GeofenceAlert, GeofenceType, GeofenceZone};
 use std::collections::{HashMap, HashSet};
 use tokio::sync::RwLock;
 
@@ -19,7 +19,11 @@ impl GeofenceEngine {
     pub async fn add_zone(&self, zone: GeofenceZone) {
         let id = zone.id.clone();
         self.zones.write().await.insert(id.clone(), zone);
-        self.inside.write().await.entry(id).or_insert_with(HashSet::new);
+        self.inside
+            .write()
+            .await
+            .entry(id)
+            .or_insert_with(HashSet::new);
     }
 
     pub async fn remove_zone(&self, zone_id: &str) {
@@ -63,7 +67,10 @@ impl GeofenceEngine {
                 .unwrap_or(false);
 
             if is_inside && !was_inside {
-                inside_map.entry(zone_id.clone()).or_default().insert(entity_key.clone());
+                inside_map
+                    .entry(zone_id.clone())
+                    .or_default()
+                    .insert(entity_key.clone());
                 alerts.push(GeofenceAlert {
                     zone_id: zone_id.clone(),
                     zone_name: zone.name.clone(),
@@ -98,7 +105,9 @@ impl GeofenceEngine {
 /// Ray-casting algorithm for point-in-polygon
 fn point_in_polygon(lat: f64, lon: f64, vertices: &[[f64; 2]]) -> bool {
     let n = vertices.len();
-    if n < 3 { return false; }
+    if n < 3 {
+        return false;
+    }
 
     let mut inside = false;
     let mut j = n - 1;

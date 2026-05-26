@@ -6,6 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "quality": "powershell -ExecutionPolicy Bypass -File scripts/quality-check.ps1",
+    "quality:fast": "powershell -ExecutionPolicy Bypass -File scripts/quality-check.ps1 -SkipBuild",
+    "test:backend": "powershell -ExecutionPolicy Bypass -File scripts/backend-test.ps1",
+    "scan": "powershell -ExecutionPolicy Bypass -File scripts/scan-packages.ps1",
     "preview": "vite preview",
     "tauri": "tauri"
   },

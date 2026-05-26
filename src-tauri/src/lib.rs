@@ -1,25 +1,25 @@
 extern crate pdf_inspector;
 
-pub mod error;
-pub mod models;
-pub mod db;
-pub mod rag;
-pub mod llm;
 pub mod agent;
-pub mod tools;
-pub mod services;
-pub mod commands;
-pub mod mcp;
 pub mod canvas;
+pub mod commands;
+pub mod db;
+pub mod error;
+pub mod llm;
+pub mod mcp;
+pub mod models;
+pub mod rag;
+pub mod search;
+pub mod services;
 pub mod terminal;
+pub mod tools;
 pub mod utils;
 pub mod workspace;
-pub mod search;
 
-use commands::AppState;
-use tauri::Manager;
-use std::sync::Arc;
 use crate::rag::VectorStore;
+use commands::AppState;
+use std::sync::Arc;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -47,17 +47,28 @@ pub fn run() {
                     }
                 }
 
+                match crate::services::init_backend_logging(&app_dir) {
+                    Ok(log_dir) => {
+                        tracing::info!(log_dir = %log_dir.display(), "Backend logging initialized");
+                    }
+                    Err(e) => {
+                        eprintln!("Warning: Backend logging initialization failed: {}", e);
+                    }
+                }
+
                 let db_path = app_dir.join("novus.db");
                 let pool = match crate::db::init_pool(&db_path).await {
                     Ok(p) => p,
                     Err(e) => {
+                        tracing::error!(error = %e, "Failed to initialize database");
                         eprintln!("FATAL: Failed to initialize database: {}. Application cannot start.", e);
                         return;
                     }
                 };
-                
+
                 let state = app_handle.state::<AppState>();
                 state.db.set(pool.clone()).await;
+                state.security.set_db_pool(pool.clone()).await;
 
                 // Start bridging EventBus events to the Tauri frontend
                 state.agent.event_bus.bridge_to_tauri(app_handle.clone());
@@ -65,6 +76,7 @@ pub fn run() {
                 // Initialize settings service with the database pool
                 state.settings_manager.set_db_pool(pool.clone()).await;
                 if let Err(e) = state.settings_manager.load_all().await {
+                    tracing::warn!(error = %e, "Failed to load settings from database");
                     eprintln!("Warning: Failed to load settings from database: {}", e);
                 }
 
@@ -74,6 +86,7 @@ pub fn run() {
                     let all_settings = match state.settings_manager.get_all().await {
                         Ok(s) => s,
                         Err(e) => {
+                            tracing::warn!(error = %e, "Failed to read settings for tool permission sync");
                             eprintln!("Warning: Failed to read settings for tool permission sync: {}", e);
                             std::collections::HashMap::new()
                         }
@@ -92,6 +105,7 @@ pub fn run() {
 
                 // Initialize TTS service
                 let tts_service = crate::services::TtsService::new(&app_dir, &resource_dir).unwrap_or_else(|e| {
+                    tracing::warn!(error = %e, "Failed to initialize TTS service");
                     eprintln!("Warning: Failed to initialize TTS service: {}", e);
                     crate::services::TtsService::new_dummy()
                 });
@@ -118,10 +132,12 @@ pub fn run() {
 
                 // Initialize the LanceDB table
                 if let Err(e) = lance_store.init().await {
+                    tracing::warn!(error = %e, "Failed to initialize LanceDB vector store");
                     eprintln!("Warning: Failed to initialize LanceDB vector store: {}", e);
                 } else {
                     // Store the vector store in app state
                     state.rag.set(lance_store.clone() as Arc<dyn crate::rag::VectorStore>).await;
+                    tracing::info!(path = %rag_dir.display(), "LanceDB vector store initialized");
                     eprintln!("LanceDB vector store initialized at: {}", rag_dir.display());
 
                     // Initialize and store Conversation Store
@@ -133,9 +149,11 @@ pub fn run() {
                         )
                     );
                     if let Err(e) = conversation_store.init().await {
+                        tracing::warn!(error = %e, "Failed to initialize LanceDB conversation vector store");
                         eprintln!("Warning: Failed to initialize LanceDB conversation vector store: {}", e);
                     } else {
                         state.conversation_store.set(conversation_store).await;
+                        tracing::info!("LanceDB conversation vector store initialized");
                         eprintln!("LanceDB conversation vector store initialized.");
                     }
 
@@ -146,9 +164,11 @@ pub fn run() {
                                 lance_store as Arc<dyn crate::rag::VectorStore>,
                                 embed_model,
                             ).await;
+                            tracing::info!("Document service RAG pipeline initialized");
                             eprintln!("Document service: Full RAG pipeline initialized (LanceDB + Ollama embeddings)");
                         }
                         Err(e) => {
+                            tracing::warn!(error = %e, "Document service RAG store initialized without Ollama embeddings");
                             eprintln!("Document service: RAG store initialized, but Ollama not available ({}). Documents will be stored in SQLite only.", e);
                         }
                     }
@@ -162,9 +182,14 @@ pub fn run() {
                     state.hook_registry.clone(),
                     state.tools.clone(),
                     state.tool_manager.clone(),
-                    state.agent.event_bus.clone(),
-                    state.memory_backend.clone(),
                 ).with_db_pool(pool);
+
+                // Pass live AppHandle into the McpServer
+                {
+                    let mut mcp_guard = state.mcp_server.write().await;
+                    mcp_guard.set_app_handle(app_handle.clone());
+                    mcp_guard.set_tool_service(state.tool_service.clone());
+                }
 
                 state.orchestrator.set(Arc::new(orchestrator)).await;
             });
@@ -187,6 +212,7 @@ pub fn run() {
             commands::document::delete_document,
             commands::settings::get_setting,
             commands::settings::set_setting,
+            commands::settings::set_settings,
             commands::settings::get_all_settings,
             commands::settings::discover_models,
             commands::settings::get_all_available_models,
@@ -272,6 +298,12 @@ pub fn run() {
             commands::memory::get_conversation_memories,
             commands::memory::clear_conversation_memories,
             commands::memory::get_memory_stats,
+            commands::mcp::mcp_get_config,
+            commands::mcp::mcp_save_config,
+            commands::mcp::mcp_get_status,
+            commands::mcp::mcp_start_server,
+            commands::mcp::mcp_stop_server,
+            commands::mcp::mcp_list_tools,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

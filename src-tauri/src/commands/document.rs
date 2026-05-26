@@ -1,8 +1,7 @@
-use tauri::State;
-use crate::error::AppResult;
 use crate::commands::AppState;
 use crate::db::models::Document;
-use std::path::PathBuf;
+use crate::error::AppResult;
+use tauri::State;
 
 #[tauri::command]
 pub async fn ingest_document(state: State<'_, AppState>, path: String) -> AppResult<Document> {

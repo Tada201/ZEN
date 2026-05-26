@@ -22,6 +22,9 @@ interface SmoothMarkdownProps {
   chatPlugins?: Record<string, boolean>;
 }
 
+const IMMEDIATE_STREAM_LAG_CHARS = 96;
+const MAX_ANIMATED_LAG_CHARS = 1800;
+
 export function SmoothMarkdown({ 
   content, 
   isStreaming, 
@@ -64,6 +67,17 @@ export function SmoothMarkdown({
     if (!isStreaming) {
       currentPosRef.current = content.length;
       setDisplayedContent(content);
+      return;
+    }
+
+    const lag = content.length - currentPosRef.current;
+
+    // For normal-speed providers, do not add artificial typewriter latency.
+    // Smooth only when the provider/UI backlog is large enough to cause chunky
+    // markdown reparse/render bursts.
+    if (lag > 0 && lag <= IMMEDIATE_STREAM_LAG_CHARS) {
+      currentPosRef.current = content.length;
+      setDisplayedContent(content);
     }
   }, [content, isStreaming]);
 
@@ -80,14 +94,29 @@ export function SmoothMarkdown({
       const current = currentPosRef.current;
 
       if (current < target.length) {
+        const remaining = target.length - current;
+
+        if (remaining <= IMMEDIATE_STREAM_LAG_CHARS) {
+          currentPosRef.current = target.length;
+          setDisplayedContent(target);
+          rafRef.current = null;
+          return;
+        }
+
+        if (remaining > MAX_ANIMATED_LAG_CHARS) {
+          const nextPos = target.length - MAX_ANIMATED_LAG_CHARS;
+          currentPosRef.current = nextPos;
+          setDisplayedContent(target.slice(0, nextPos));
+        }
+
         // 1. Detect if we are inside a code block
-        const textBefore = target.slice(0, current);
+        const adjustedCurrent = currentPosRef.current;
+        const textBefore = target.slice(0, adjustedCurrent);
         const backtickCount = (textBefore.match(/```/g) || []).length;
         const inCodeBlock = backtickCount % 2 !== 0;
 
         // 2. Determine increment — more aggressive catch-up to reduce
         //    the number of intermediate ReactMarkdown re-parses
-        const remaining = target.length - current;
         let baseIncrement = Math.random() > 0.85 ? 2 : 1; 
         
         let speedMultiplier = 1;
@@ -99,7 +128,7 @@ export function SmoothMarkdown({
         let increment = inCodeBlock ? 50 : Math.max(1, baseIncrement * speedMultiplier);
 
         // 3. Update position
-        const nextPos = Math.min(current + increment, target.length);
+        const nextPos = Math.min(adjustedCurrent + increment, target.length);
         currentPosRef.current = nextPos;
         setDisplayedContent(target.slice(0, nextPos));
 

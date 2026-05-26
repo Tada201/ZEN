@@ -7,8 +7,7 @@
 ///
 /// **Privacy Guarantee:** Embeddings are ALWAYS generated locally.
 /// No data is ever sent to cloud APIs (OpenAI, Anthropic, etc.)
-
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use candle_core::Tensor;
 use candle_transformers::models::bert::{BertModel, Config as BertConfig};
 use serde::{Deserialize, Serialize};
@@ -91,7 +90,10 @@ impl OllamaEmbedding {
     }
 
     fn ollama_url(&self) -> &str {
-        self.config.ollama_url.as_deref().unwrap_or("http://localhost:11434")
+        self.config
+            .ollama_url
+            .as_deref()
+            .unwrap_or("http://localhost:11434")
     }
 }
 
@@ -100,7 +102,8 @@ impl EmbeddingModel for OllamaEmbedding {
     async fn encode(&self, text: &str) -> Result<Vec<f32>> {
         let url = format!("{}/api/embeddings", self.ollama_url());
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .json(&serde_json::json!({
                 "model": self.config.model,
@@ -155,7 +158,6 @@ struct OllamaEmbeddingResponse {
 /// - `tokenizer.json` — HuggingFace tokenizer
 /// - `config.json` — Model configuration
 pub struct CandleEmbedding {
-    config: EmbeddingConfig,
     model: BertModel,
     tokenizer: tokenizers::Tokenizer,
     hidden_size: usize,
@@ -168,7 +170,9 @@ impl CandleEmbedding {
     /// Expects `model_path` to point to a directory containing
     /// `model.safetensors`, `tokenizer.json`, and `config.json`.
     pub fn new(config: EmbeddingConfig) -> Result<Self> {
-        let model_path = config.model_path.as_ref()
+        let model_path = config
+            .model_path
+            .as_ref()
             .context("Candle backend requires model_path")?;
 
         let model_dir = PathBuf::from(model_path);
@@ -203,10 +207,8 @@ impl CandleEmbedding {
         let device = candle_core::Device::cuda_if_available(0)?;
 
         // Load model weights
-        let weights = candle_core::safetensors::load(
-            &weights_path,
-            &device,
-        ).context("Failed to load model weights")?;
+        let weights = candle_core::safetensors::load(&weights_path, &device)
+            .context("Failed to load model weights")?;
 
         // Build VarBuilder from weights
         let vb = candle_nn::VarBuilder::from_tensors(weights, candle_core::DType::F32, &device);
@@ -226,7 +228,8 @@ impl CandleEmbedding {
             initializer_range: 0.02,
             layer_norm_eps: 1e-12,
             pad_token_id: 0,
-            position_embedding_type: candle_transformers::models::bert::PositionEmbeddingType::Absolute,
+            position_embedding_type:
+                candle_transformers::models::bert::PositionEmbeddingType::Absolute,
             use_cache: true,
             classifier_dropout: None,
             model_type: None,
@@ -236,7 +239,6 @@ impl CandleEmbedding {
         let hidden_size = bert_config.hidden_size;
 
         Ok(Self {
-            config,
             model: bert,
             tokenizer,
             hidden_size,
@@ -254,7 +256,8 @@ impl CandleEmbedding {
 
     /// Tokenize input text, returning token IDs and attention mask.
     fn tokenize(&self, text: &str) -> Result<(candle_core::Tensor, candle_core::Tensor)> {
-        let encoding = self.tokenizer
+        let encoding = self
+            .tokenizer
             .encode(text, true)
             .map_err(|e| anyhow::anyhow!("Failed to tokenize input: {}", e))?;
 
@@ -262,7 +265,8 @@ impl CandleEmbedding {
         let attention_mask: Vec<u32> = encoding.get_attention_mask().to_vec();
 
         let ids_tensor = Tensor::from_slice(&ids, (1, ids.len()), &self.device)?;
-        let mask_tensor = Tensor::from_slice(&attention_mask, (1, attention_mask.len()), &self.device)?;
+        let mask_tensor =
+            Tensor::from_slice(&attention_mask, (1, attention_mask.len()), &self.device)?;
 
         Ok((ids_tensor, mask_tensor))
     }
@@ -288,8 +292,8 @@ impl CandleEmbedding {
         let token_counts = mask_expanded.sum(1)?;
 
         // Avoid division by zero
-        let token_counts = token_counts
-            .maximum(&candle_core::Tensor::new(&[1e-9f32], &self.device)?)?;
+        let token_counts =
+            token_counts.maximum(&candle_core::Tensor::new(&[1e-9f32], &self.device)?)?;
 
         // Mean pooling
         let mean_pooled = (sum_embeddings / token_counts.as_ref())?;
@@ -349,18 +353,27 @@ pub async fn create_embedding_model(config: &EmbeddingConfig) -> Result<Box<dyn 
 
             // Health check
             if !model.health_check().await {
-                tracing::warn!("Ollama health check failed — ensure Ollama is running with '{}' model", config.model);
+                tracing::warn!(
+                    "Ollama health check failed — ensure Ollama is running with '{}' model",
+                    config.model
+                );
             } else {
-                tracing::info!("Ollama embedding backend ready (model: {}, dimensions: {})",
-                    config.model, config.dimensions);
+                tracing::info!(
+                    "Ollama embedding backend ready (model: {}, dimensions: {})",
+                    config.model,
+                    config.dimensions
+                );
             }
 
             Ok(Box::new(model))
         }
         EmbeddingBackend::Candle => {
             let model = CandleEmbedding::new(config.clone())?;
-            tracing::info!("Candle embedding backend ready (model: {}, dimensions: {})",
-                config.model, model.dimensions());
+            tracing::info!(
+                "Candle embedding backend ready (model: {}, dimensions: {})",
+                config.model,
+                model.dimensions()
+            );
             Ok(Box::new(model))
         }
     }
@@ -402,8 +415,7 @@ pub fn normalize_vector(vector: &[f32]) -> Vec<f32> {
 
 /// Default model cache directory
 pub fn default_model_cache_dir() -> PathBuf {
-    let base = dirs::data_dir()
-        .unwrap_or_else(|| PathBuf::from("."));
+    let base = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
     base.join("zen").join("models").join("all-MiniLM-L6-v2")
 }
 
@@ -412,8 +424,7 @@ pub fn default_model_cache_dir() -> PathBuf {
 /// Returns the path to the model directory.
 pub async fn download_default_model(cache_dir: Option<PathBuf>) -> Result<PathBuf> {
     let dir = cache_dir.unwrap_or_else(default_model_cache_dir);
-    std::fs::create_dir_all(&dir)
-        .context("Failed to create model cache directory")?;
+    std::fs::create_dir_all(&dir).context("Failed to create model cache directory")?;
 
     let files = [
         ("https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/model.safetensors", "model.safetensors"),
@@ -441,13 +452,20 @@ pub async fn download_default_model(cache_dir: Option<PathBuf>) -> Result<PathBu
             .context(format!("Failed to download {}", filename))?;
 
         if !response.status().is_success() {
-            anyhow::bail!("Failed to download {} (HTTP {})", filename, response.status());
+            anyhow::bail!(
+                "Failed to download {} (HTTP {})",
+                filename,
+                response.status()
+            );
         }
 
-        let bytes = response.bytes().await
+        let bytes = response
+            .bytes()
+            .await
             .context(format!("Failed to read response for {}", filename))?;
 
-        tokio::fs::write(&path, &bytes).await
+        tokio::fs::write(&path, &bytes)
+            .await
             .context(format!("Failed to write {}", filename))?;
 
         tracing::info!("Downloaded {} ({} bytes)", filename, bytes.len());

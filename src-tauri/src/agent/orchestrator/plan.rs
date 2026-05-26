@@ -1,13 +1,13 @@
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use serde::Deserialize;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, instrument};
 
 use super::Orchestrator;
 use super::TaskBreakdown;
-use crate::agent::task::{Task, TaskType, TaskPriority};
-use crate::llm::{LlmProvider, ChatRequestConfig};
+use crate::agent::task::{Task, TaskPriority, TaskType};
 use crate::db::models::ChatMessage;
+use crate::llm::{ChatRequestConfig, LlmProvider};
 
 impl Orchestrator {
     /// Break a high-level goal into concrete subtasks
@@ -57,15 +57,13 @@ Be specific in task descriptions. Include all necessary context for the assigned
         // Build user message with the goal
         let user_content = format!("Break down this goal into tasks:\n\n{}", goal);
 
-        let mut task_messages = vec![
-            ChatMessage {
-                role: "system".to_string(),
-                content: system_prompt.to_string(),
-                images: None,
-                tool_calls: None,
-                tool_call_id: None,
-            },
-        ];
+        let mut task_messages = vec![ChatMessage {
+            role: "system".to_string(),
+            content: system_prompt.to_string(),
+            images: None,
+            tool_calls: None,
+            tool_call_id: None,
+        }];
 
         // Add context from existing messages if provided
         if !messages.is_empty() {
@@ -89,14 +87,16 @@ Be specific in task descriptions. Include all necessary context for the assigned
             ..ChatRequestConfig::default()
         };
 
-        let response = provider.chat_stream(
-            model,
-            task_messages,
-            None, // No tools needed for planning
-            config,
-            Box::new(|_| {}), // No streaming callback needed
-            CancellationToken::new(),
-        ).await?;
+        let response = provider
+            .chat_stream(
+                model,
+                task_messages,
+                None, // No tools needed for planning
+                config,
+                Box::new(|_| {}), // No streaming callback needed
+                CancellationToken::new(),
+            )
+            .await?;
 
         // Parse the response to extract task breakdown
         let content = &response.content;
@@ -149,8 +149,7 @@ Be specific in task descriptions. Include all necessary context for the assigned
 
             let task_type = TaskType::Custom(format!("orchestrator_{}", spec.agent));
 
-            let mut task = Task::new(&spec.description, task_type)
-                .with_priority(priority);
+            let mut task = Task::new(&spec.description, task_type).with_priority(priority);
 
             // Add dependencies
             if let Some(deps) = &spec.dependencies {

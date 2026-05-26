@@ -193,19 +193,6 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
     [store, theme]
   );
 
-  // ── SkillsSettingsContent uses full-object update ───────────────
-
-  const setStoreSettings = useCallback(
-    (newSettings: Record<string, string>) => {
-      for (const [key, value] of Object.entries(newSettings)) {
-        const storeField = dotKeyToStoreField(key);
-        const coerced = coerceBridgeValue(key, value);
-        store.updateSetting(storeField as keyof typeof store, coerced as never);
-      }
-    },
-    [store]
-  );
-
   // ── Save / Cancel ───────────────────────────────────────────────
 
   const [saving, setSaving] = useState(false);
@@ -398,7 +385,7 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
                       <h3 className="text-lg font-bold tracking-tight text-zinc-100">Capabilities</h3>
                       <p className="text-[13px] text-zinc-500">Configure agent skills and advanced behavior.</p>
                     </div>
-                    <SkillsSettingsContent settings={settings} onUpdate={setStoreSettings} />
+                    <SkillsSettingsContent settings={settings} onUpdate={handleUpdate} />
                     <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                       <span className="text-[11px] font-bold text-zinc-500">Show advanced agent behavior</span>
                       <Switch checked={showAdvanced} onCheckedChange={setShowAdvanced} className="scale-75" />

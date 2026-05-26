@@ -1,42 +1,59 @@
-use tauri::State;
-use crate::error::{AppResult, ZenResult};
 use crate::commands::AppState;
-use std::collections::HashMap;
 use crate::db::models::{ModelInfo, ProviderConfig};
+use crate::error::{AppResult, ZenResult};
+use crate::services::secret::is_secret_key;
 use crate::tools::manager::{ToolManager, ToolMetadata};
-use crate::tools::permission::ToolPermissions;
+use std::collections::HashMap;
+use tauri::State;
 
 /// Get the canonical tool list with metadata for the Tools settings tab.
 /// Reads from the live registry so stale manual lists cannot drift.
 #[tauri::command]
-pub async fn list_tool_metadata(
-    state: State<'_, AppState>,
-) -> ZenResult<Vec<ToolMetadata>> {
+pub async fn list_tool_metadata(state: State<'_, AppState>) -> ZenResult<Vec<ToolMetadata>> {
     Ok(state.tool_manager.list_metadata().await)
 }
 
 #[tauri::command]
 pub async fn get_setting(state: State<'_, AppState>, key: String) -> AppResult<Option<String>> {
-    state.settings_manager.get(&key).await
+    state.settings_manager.get_public(&key).await
 }
 
 #[tauri::command]
 pub async fn set_setting(state: State<'_, AppState>, key: String, value: String) -> AppResult<()> {
-    state.settings_manager.set(key.clone(), value).await?;
-    
-    // Invalidate provider cache if a provider config setting changes
-    if key.ends_with("_base_url") || key.ends_with("_api_key") || key == "active_provider" {
-        let mut cache = state.provider_cache.lock().await;
-        cache.clear();
-        state.provider_registry.invalidate_all().await;
+    if is_secret_key(&key) {
+        state.secret_manager.set_secret(key.clone(), value).await?;
+    } else {
+        state.settings_manager.set(key.clone(), value).await?;
     }
-    
+
+    invalidate_provider_cache_if_needed(&state, std::iter::once(key.as_str())).await;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_settings(
+    state: State<'_, AppState>,
+    settings: HashMap<String, String>,
+) -> AppResult<()> {
+    let should_invalidate_provider_cache = settings.keys().any(|key| is_provider_setting_key(key));
+    let (secret_settings, public_settings): (HashMap<_, _>, HashMap<_, _>) = settings
+        .into_iter()
+        .partition(|(key, _)| is_secret_key(key));
+
+    state.settings_manager.set_many(public_settings).await?;
+    state.secret_manager.set_secrets(secret_settings).await?;
+
+    if should_invalidate_provider_cache {
+        clear_provider_cache(&state).await;
+    }
+
     Ok(())
 }
 
 #[tauri::command]
 pub async fn get_all_settings(state: State<'_, AppState>) -> AppResult<HashMap<String, String>> {
-    state.settings_manager.get_all().await
+    state.settings_manager.get_all_public().await
 }
 
 /// Discover available models from a provider by calling its live API.
@@ -73,10 +90,10 @@ pub async fn get_all_available_models(
     provider: Option<String>,
 ) -> ZenResult<Vec<ModelInfo>> {
     let db = state.db.get().await?;
-    
+
     if let Some(p_name) = provider {
         // Fetch from specific provider
-        let provider_instance = crate::llm::create_provider(&db, &p_name).await?;
+        let provider_instance = state.provider_by_name(&p_name, &db).await?;
         provider_instance.list_models().await
     } else {
         // Enumerate all configured providers — canonical names match providerOrder
@@ -85,11 +102,23 @@ pub async fn get_all_available_models(
         let all_settings = state.settings_manager.get_all().await?;
 
         let known_providers: Vec<&str> = vec![
-            "ollama", "lmstudio", "nine_router",
-            "openai", "anthropic", "google",
-            "groq", "mistral", "deepseek", "openrouter",
-            "together", "perplexity", "qwen", "xai",
-            "kilocode", "nvidia", "aihubmix",
+            "ollama",
+            "lmstudio",
+            "nine_router",
+            "openai",
+            "anthropic",
+            "google",
+            "groq",
+            "mistral",
+            "deepseek",
+            "openrouter",
+            "together",
+            "perplexity",
+            "qwen",
+            "xai",
+            "kilocode",
+            "nvidia",
+            "aihubmix",
         ];
 
         for p_name in known_providers {
@@ -101,13 +130,22 @@ pub async fn get_all_available_models(
             };
             let base_url_key = format!("{}_base_url", p_name);
 
-            let has_key = all_settings.get(&api_key_key).map(|v| !v.is_empty()).unwrap_or(false);
-            let has_url = all_settings.get(&base_url_key).map(|v| !v.is_empty()).unwrap_or(false);
+            let has_key = all_settings
+                .get(&api_key_key)
+                .map(|v| !v.is_empty())
+                .unwrap_or(false);
+            let has_url = all_settings
+                .get(&base_url_key)
+                .map(|v| !v.is_empty())
+                .unwrap_or(false);
             let is_local = p_name == "ollama" || p_name == "lmstudio";
-            let is_active = all_settings.get("active_provider").map(|v| v == p_name).unwrap_or(false);
+            let is_active = all_settings
+                .get("active_provider")
+                .map(|v| v == p_name)
+                .unwrap_or(false);
 
             if is_local || is_active || has_key || has_url {
-                if let Ok(provider_instance) = crate::llm::create_provider(&db, p_name).await {
+                if let Ok(provider_instance) = state.provider_by_name(p_name, &db).await {
                     match provider_instance.list_models().await {
                         Ok(models) => all_models.extend(models),
                         Err(e) => {
@@ -124,9 +162,7 @@ pub async fn get_all_available_models(
 /// Synchronize tool permissions from flat key-value settings into the ToolManager
 /// and the v2 ToolRegistry. Should be called after any `tools.*` setting is changed.
 #[tauri::command]
-pub async fn sync_tool_permissions(
-    state: State<'_, AppState>,
-) -> AppResult<()> {
+pub async fn sync_tool_permissions(state: State<'_, AppState>) -> AppResult<()> {
     let all_settings = state.settings_manager.get_all().await?;
     let permissions = ToolManager::build_permissions(&all_settings);
     state.tool_manager.update_permissions(permissions);
@@ -140,12 +176,34 @@ pub async fn test_provider_connection(
     config: ProviderConfig,
 ) -> ZenResult<Vec<ModelInfo>> {
     let provider_instance = crate::llm::make_provider(&config);
-    
+
     // Check health first
     if !provider_instance.health_check().await {
-        return Err(crate::error::ZenError::Internal(format!("Node {} is unreachable", config.display_name)));
+        return Err(crate::error::ZenError::Internal(format!(
+            "Node {} is unreachable",
+            config.display_name
+        )));
     }
-    
+
     // Return model list on success
     provider_instance.list_models().await
+}
+
+async fn invalidate_provider_cache_if_needed<'a>(
+    state: &State<'_, AppState>,
+    keys: impl IntoIterator<Item = &'a str>,
+) {
+    if keys.into_iter().any(is_provider_setting_key) {
+        clear_provider_cache(state).await;
+    }
+}
+
+async fn clear_provider_cache(state: &State<'_, AppState>) {
+    let mut cache = state.provider_cache.lock().await;
+    cache.clear();
+    state.provider_registry.invalidate_all().await;
+}
+
+fn is_provider_setting_key(key: &str) -> bool {
+    key.ends_with("_base_url") || key.ends_with("_api_key") || key == "active_provider"
 }

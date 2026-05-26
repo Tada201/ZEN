@@ -3,8 +3,8 @@ use futures::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use uuid::Uuid;
 use tracing::{debug, error, info, warn};
+use uuid::Uuid;
 
 use crate::db::models::{ChatMessage, ChatResponse, ModelInfo};
 use crate::error::{ZenError, ZenResult};
@@ -333,7 +333,11 @@ impl LlmProvider for OllamaProvider {
         Ok(ChatResponse {
             content: full_content,
             model: model.to_string(),
-            tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
+            tool_calls: if tool_calls.is_empty() {
+                None
+            } else {
+                Some(tool_calls)
+            },
             tokens_in,
             tokens_out,
             done: true,
@@ -360,7 +364,11 @@ impl LlmProvider for OllamaProvider {
             .ok_or_else(|| ZenError::Custom("No embedding returned".into()))
     }
 
-    async fn embed_batch(&self, model: &str, texts: &[&str]) -> crate::error::ZenResult<Vec<Vec<f32>>> {
+    async fn embed_batch(
+        &self,
+        model: &str,
+        texts: &[&str],
+    ) -> crate::error::ZenResult<Vec<Vec<f32>>> {
         if texts.is_empty() {
             return Ok(vec![]);
         }
@@ -405,7 +413,10 @@ impl LlmProvider for OllamaProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::{method, path}};
+    use wiremock::{
+        matchers::{method, path},
+        Mock, MockServer, ResponseTemplate,
+    };
 
     /// Helper to create an OllamaProvider pointed at a mock server.
     async fn mock_provider() -> (OllamaProvider, MockServer) {
@@ -429,10 +440,10 @@ mod tests {
 
         Mock::given(method("GET"))
             .and(path("/api/tags"))
-            .respond_with(ResponseTemplate::new(200).set_body_raw(
-                OLLAMA_TAGS_JSON.as_bytes().to_vec(),
-                "application/json",
-            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(OLLAMA_TAGS_JSON.as_bytes().to_vec(), "application/json"),
+            )
             .mount(&server)
             .await;
 
@@ -444,7 +455,10 @@ mod tests {
         assert_eq!(models[0].id, "llama3.3:70b");
         assert_eq!(models[0].name, "llama3.3:70b");
         assert_eq!(models[0].size, Some(40443546592));
-        assert_eq!(models[0].modified_at.as_deref(), Some("2025-01-15T10:30:00Z"));
+        assert_eq!(
+            models[0].modified_at.as_deref(),
+            Some("2025-01-15T10:30:00Z")
+        );
         assert_eq!(models[0].provider.as_deref(), Some("ollama"));
         assert!(models[0].supports_vision.is_none());
         assert!(models[0].supports_tools.is_none());
@@ -461,7 +475,9 @@ mod tests {
 
         Mock::given(method("GET"))
             .and(path("/api/tags"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"models": []})))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"models": []})),
+            )
             .mount(&server)
             .await;
 

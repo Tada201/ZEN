@@ -4,9 +4,9 @@ use std::time::Instant;
 use tokio::sync::Mutex;
 
 use crate::db::models::ProviderConfig;
-use crate::error::{ZenResult, ZenError};
+use crate::error::{ZenError, ZenResult};
 use crate::llm::{default_base_url, make_provider, LlmProvider};
-use crate::services::SettingsService;
+use crate::services::{SecretService, SettingsService};
 
 /// Cached provider instance with TTL.
 struct CacheEntry {
@@ -23,13 +23,15 @@ struct CacheEntry {
 /// setting-key convention (or listing an exception in the key helpers).
 pub struct ProviderRegistry {
     settings: Arc<SettingsService>,
+    secrets: Arc<SecretService>,
     cache: Mutex<HashMap<String, CacheEntry>>,
 }
 
 impl ProviderRegistry {
-    pub fn new(settings: Arc<SettingsService>) -> Self {
+    pub fn new(settings: Arc<SettingsService>, secrets: Arc<SecretService>) -> Self {
         Self {
             settings,
+            secrets,
             cache: Mutex::new(HashMap::new()),
         }
     }
@@ -59,15 +61,17 @@ impl ProviderRegistry {
             .await?
             .unwrap_or_else(|| default_base_url(&p_type));
 
-        if base_url.is_empty() || (!base_url.starts_with("http://") && !base_url.starts_with("https://")) {
+        if base_url.is_empty()
+            || (!base_url.starts_with("http://") && !base_url.starts_with("https://"))
+        {
             return Err(ZenError::Custom(
                 format!("Unknown provider '{}': no base URL configured. Configure '{base_url_key}' in Settings → Providers, or check the provider name.", provider_name)
             ));
         }
 
         let api_key = self
-            .settings
-            .get(&api_key_key)
+            .secrets
+            .get_secret(&api_key_key)
             .await?
             .unwrap_or_default();
 

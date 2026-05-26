@@ -36,7 +36,9 @@ pub async fn fetch_military() -> Result<Vec<MilitaryAircraft>> {
 
     let response: AdsbLolResponse = client.get(url).send().await?.json().await?;
 
-    let aircraft = response.ac.unwrap_or_default()
+    let aircraft = response
+        .ac
+        .unwrap_or_default()
         .into_iter()
         .filter_map(|ac| {
             let lat = ac.lat?;
@@ -68,9 +70,15 @@ pub async fn fetch_military() -> Result<Vec<MilitaryAircraft>> {
 }
 
 /// Fetch military aircraft within a bounding box
-pub async fn fetch_military_in_area(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> Result<Vec<MilitaryAircraft>> {
+pub async fn fetch_military_in_area(
+    lat1: f64,
+    lon1: f64,
+    lat2: f64,
+    lon2: f64,
+) -> Result<Vec<MilitaryAircraft>> {
     let all = fetch_military().await?;
-    let filtered = all.into_iter()
+    let filtered = all
+        .into_iter()
         .filter(|ac| {
             let min_lat = lat1.min(lat2);
             let max_lat = lat1.max(lat2);

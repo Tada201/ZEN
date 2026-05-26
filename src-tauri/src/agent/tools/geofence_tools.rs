@@ -1,16 +1,18 @@
-use serde_json::{json, Value};
-use anyhow::{Result, anyhow};
-use tauri::{AppHandle, Emitter, Manager};
-use async_trait::async_trait;
 use crate::agent::tools::AgentTool;
-use crate::services::gtsm::types::{GeofenceZone, GeofenceType};
+use crate::services::gtsm::types::{GeofenceType, GeofenceZone};
+use anyhow::{anyhow, Result};
+use async_trait::async_trait;
+use serde_json::{json, Value};
+use tauri::{AppHandle, Emitter, Manager};
 
 /// Create a geofence zone
 pub struct CreateGeofenceTool;
 
 #[async_trait]
 impl AgentTool for CreateGeofenceTool {
-    fn id(&self) -> &str { "create_geofence" }
+    fn id(&self) -> &str {
+        "create_geofence"
+    }
 
     fn description(&self) -> &str {
         "Create a geofence zone (polygon or circle) that monitors for entity enter/exit events. \
@@ -43,18 +45,31 @@ impl AgentTool for CreateGeofenceTool {
         _chat_id: String,
         input: Value,
         _depth: u32,
-        _allowed_tools: Option<std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
+        _allowed_tools: Option<
+            std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>,
+        >,
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
-        let name = input["name"].as_str().ok_or_else(|| anyhow!("name required"))?.to_string();
-        let zone_type_str = input["zone_type"].as_str().ok_or_else(|| anyhow!("zone_type required"))?;
+        let name = input["name"]
+            .as_str()
+            .ok_or_else(|| anyhow!("name required"))?
+            .to_string();
+        let zone_type_str = input["zone_type"]
+            .as_str()
+            .ok_or_else(|| anyhow!("zone_type required"))?;
         let id = uuid::Uuid::new_v4().to_string();
 
         let zone = match zone_type_str {
             "circle" => {
-                let center_lat = input["center_lat"].as_f64().ok_or_else(|| anyhow!("center_lat required"))?;
-                let center_lon = input["center_lon"].as_f64().ok_or_else(|| anyhow!("center_lon required"))?;
-                let radius = input["radius_km"].as_f64().ok_or_else(|| anyhow!("radius_km required"))?;
+                let center_lat = input["center_lat"]
+                    .as_f64()
+                    .ok_or_else(|| anyhow!("center_lat required"))?;
+                let center_lon = input["center_lon"]
+                    .as_f64()
+                    .ok_or_else(|| anyhow!("center_lon required"))?;
+                let radius = input["radius_km"]
+                    .as_f64()
+                    .ok_or_else(|| anyhow!("radius_km required"))?;
 
                 GeofenceZone {
                     id: id.clone(),
@@ -66,9 +81,8 @@ impl AgentTool for CreateGeofenceTool {
                 }
             }
             "polygon" => {
-                let vertices: Vec<[f64; 2]> = serde_json::from_value(
-                    input["vertices"].clone()
-                ).map_err(|_| anyhow!("vertices must be array of [lat, lon] pairs"))?;
+                let vertices: Vec<[f64; 2]> = serde_json::from_value(input["vertices"].clone())
+                    .map_err(|_| anyhow!("vertices must be array of [lat, lon] pairs"))?;
 
                 if vertices.len() < 3 {
                     return Err(anyhow!("Polygon needs at least 3 vertices"));
@@ -116,33 +130,44 @@ impl AgentTool for CreateGeofenceTool {
 
         // Attempt DB persistence with proper error handling
         let db_persisted = match state.db().await {
-            Ok(pool) => {
-                match crate::db::queries::save_geofence(&pool, &geofence_db).await {
-                    Ok(_) => {
-                        tracing::info!("Geofence '{}' (id: {}) saved to database", name, id);
-                        true
-                    }
-                    Err(e) => {
-                        tracing::error!("Geofence '{}' (id: {}) DB save failed: {}. Zone remains in memory.", name, id, e);
-                        false
-                    }
+            Ok(pool) => match crate::db::queries::save_geofence(&pool, &geofence_db).await {
+                Ok(_) => {
+                    tracing::info!("Geofence '{}' (id: {}) saved to database", name, id);
+                    true
                 }
-            }
+                Err(e) => {
+                    tracing::error!(
+                        "Geofence '{}' (id: {}) DB save failed: {}. Zone remains in memory.",
+                        name,
+                        id,
+                        e
+                    );
+                    false
+                }
+            },
             Err(e) => {
-                tracing::warn!("Geofence '{}' (id: {}) - DB pool unavailable: {}. Zone added to memory only.", name, id, e);
+                tracing::warn!(
+                    "Geofence '{}' (id: {}) - DB pool unavailable: {}. Zone added to memory only.",
+                    name,
+                    id,
+                    e
+                );
                 false
             }
         };
 
         // Emit event to frontend so the UI draws the zone
-        let _ = app.emit("map:geofence-created", json!({
-            "zone_id": id,
-            "name": name,
-            "zone_type": zone_type_str,
-            "center": zone.center,
-            "radius_km": zone.radius,
-            "vertices": zone.vertices,
-        }));
+        let _ = app.emit(
+            "map:geofence-created",
+            json!({
+                "zone_id": id,
+                "name": name,
+                "zone_type": zone_type_str,
+                "center": zone.center,
+                "radius_km": zone.radius,
+                "vertices": zone.vertices,
+            }),
+        );
 
         let persistence_status = if db_persisted {
             "persisted to database"

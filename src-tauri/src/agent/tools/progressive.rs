@@ -1,9 +1,9 @@
+use anyhow::{anyhow, Result};
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use anyhow::{Result, anyhow};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, Weak};
-use async_trait::async_trait;
 use tauri::{AppHandle, Manager};
 use tokio::sync::RwLock;
 
@@ -84,7 +84,9 @@ impl AgentTool for ProgressiveToolRegistry {
         _chat_id: String,
         _input: serde_json::Value,
         _depth: u32,
-        _allowed_tools: Option<std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
+        _allowed_tools: Option<
+            std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>,
+        >,
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<serde_json::Value> {
         Ok(serde_json::json!({
@@ -125,9 +127,10 @@ impl ProgressiveToolRegistry {
             vec!["help", "guide", "tutorial", "learn", "explain"],
             DetailLevel::Minimal,
         ));
-        self.tool_factory.insert("guidance".to_string(), Box::new(|| {
-            Arc::new(GuidanceTool::new_standalone()) as Arc<dyn AgentTool>
-        }));
+        self.tool_factory.insert(
+            "guidance".to_string(),
+            Box::new(|| Arc::new(GuidanceTool::new_standalone()) as Arc<dyn AgentTool>),
+        );
 
         self.register_metadata(ToolMetadata::new(
             "web_search",
@@ -137,9 +140,10 @@ impl ProgressiveToolRegistry {
             vec!["search", "web", "internet", "online", "current", "recent"],
             DetailLevel::Minimal,
         ));
-        self.tool_factory.insert("web_search".to_string(), Box::new(|| {
-            Arc::new(crate::search::tool::WebSearchTool) as Arc<dyn AgentTool>
-        }));
+        self.tool_factory.insert(
+            "web_search".to_string(),
+            Box::new(|| Arc::new(crate::search::tool::WebSearchTool) as Arc<dyn AgentTool>),
+        );
 
         self.register_metadata(ToolMetadata::new(
             "list_tools",
@@ -152,6 +156,21 @@ impl ProgressiveToolRegistry {
         // list_tools factory will be set later via setup_list_tools()
 
         self.register_metadata(ToolMetadata::new(
+            "write_todos",
+            "Write Todos",
+            "Write or update the visible task checklist for multi-step work. Use for tasks that require 3+ steps, and update it as work completes.",
+            "system",
+            vec!["todo", "task", "plan", "checklist", "progress"],
+            DetailLevel::Minimal,
+        ));
+        self.tool_factory.insert(
+            "write_todos".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::task_tools::WriteTodosTool) as Arc<dyn AgentTool>
+            }),
+        );
+
+        self.register_metadata(ToolMetadata::new(
             "vector_search",
             "Knowledge Base Search",
             "Search the user's local knowledge base for documents and information. Use for private data, previously ingested documents, or personal files.",
@@ -159,9 +178,10 @@ impl ProgressiveToolRegistry {
             vec!["rag", "knowledge", "documents", "vector", "embedding", "private"],
             DetailLevel::Standard,
         ));
-        self.tool_factory.insert("vector_search".to_string(), Box::new(|| {
-            Arc::new(VectorSearchStandalone::new_standalone()) as Arc<dyn AgentTool>
-        }));
+        self.tool_factory.insert(
+            "vector_search".to_string(),
+            Box::new(|| Arc::new(VectorSearchStandalone::new_standalone()) as Arc<dyn AgentTool>),
+        );
 
         self.register_metadata(ToolMetadata::new(
             "get_system_metrics",
@@ -198,9 +218,12 @@ impl ProgressiveToolRegistry {
             vec!["file", "read", "document", "knowledge", "text"],
             DetailLevel::Full,
         ));
-        self.tool_factory.insert("read_document_content".to_string(), Box::new(|| {
-            Arc::new(crate::agent::tools::fs_tools::ReadDocumentTool) as Arc<dyn AgentTool>
-        }));
+        self.tool_factory.insert(
+            "read_document_content".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::fs_tools::ReadDocumentTool) as Arc<dyn AgentTool>
+            }),
+        );
 
         self.register_metadata(ToolMetadata::new(
             "list_documents",
@@ -373,47 +396,157 @@ impl ProgressiveToolRegistry {
             DetailLevel::Full,
         ));
 
-        self.tool_factory.insert("get_system_metrics".to_string(), Box::new(|| Arc::new(crate::agent::tools::system_tools::SystemMetricsTool) as Arc<dyn AgentTool>));
-        self.tool_factory.insert("calculate_route".to_string(), Box::new(|| Arc::new(crate::agent::tools::routing_tools::RouteTool) as Arc<dyn AgentTool>));
-        self.tool_factory.insert("geocode_search".to_string(), Box::new(|| Arc::new(crate::agent::tools::routing_tools::GeocodeTool) as Arc<dyn AgentTool>));
-        self.tool_factory.insert("reverse_geocode".to_string(), Box::new(|| Arc::new(crate::agent::tools::routing_tools::ReverseGeocodeTool) as Arc<dyn AgentTool>));
-        self.tool_factory.insert("run_command".to_string(), Box::new(|| Arc::new(crate::agent::tools::terminal_tools::RunCommandTool) as Arc<dyn AgentTool>));
-        self.tool_factory.insert("get_military_aircraft".to_string(), Box::new(|| Arc::new(crate::agent::tools::osint_tools::MilitaryTrackingTool) as Arc<dyn AgentTool>));
-        self.tool_factory.insert("get_weather".to_string(), Box::new(|| Arc::new(crate::agent::tools::osint_tools::WeatherTool) as Arc<dyn AgentTool>));
-        self.tool_factory.insert("get_earthquakes".to_string(), Box::new(|| Arc::new(crate::agent::tools::osint_tools::EarthquakeTool) as Arc<dyn AgentTool>));
-        self.tool_factory.insert("draw".to_string(), Box::new(|| Arc::new(crate::agent::tools::drawing_tools::DrawTool) as Arc<dyn AgentTool>));
-        self.tool_factory.insert("list_documents".to_string(), Box::new(|| Arc::new(crate::agent::tools::fs_tools::ListDocumentsTool) as Arc<dyn AgentTool>));
-        self.tool_factory.insert("grep_documents".to_string(), Box::new(|| Arc::new(crate::agent::tools::fs_tools::GrepDocumentsTool) as Arc<dyn AgentTool>));
-        self.tool_factory.insert("write_file".to_string(), Box::new(|| Arc::new(crate::agent::tools::fs_tools::WriteFileTool) as Arc<dyn AgentTool>));
-        self.tool_factory.insert("edit_file".to_string(), Box::new(|| Arc::new(crate::agent::tools::fs_tools::EditFileTool) as Arc<dyn AgentTool>));
-        self.tool_factory.insert("create_geofence".to_string(), Box::new(|| Arc::new(crate::agent::tools::geofence_tools::CreateGeofenceTool) as Arc<dyn AgentTool>));
-        self.tool_factory.insert("graph_session".to_string(), Box::new(|| Arc::new(crate::agent::tools::graph_session::GraphSessionTool) as Arc<dyn AgentTool>));
-        self.tool_factory.insert("write_to_memory".to_string(), Box::new(|| Arc::new(crate::agent::tools::session_memory_tools::WriteToMemoryTool) as Arc<dyn AgentTool>));
-        self.tool_factory.insert("search_session_memory".to_string(), Box::new(|| Arc::new(crate::agent::tools::session_memory_tools::SearchSessionMemoryTool) as Arc<dyn AgentTool>));
-        self.tool_factory.insert("get_memory_stats".to_string(), Box::new(|| Arc::new(crate::agent::tools::session_memory_tools::GetMemoryStatsTool) as Arc<dyn AgentTool>));
-
+        self.tool_factory.insert(
+            "get_system_metrics".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::system_tools::SystemMetricsTool) as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
+            "calculate_route".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::routing_tools::RouteTool) as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
+            "geocode_search".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::routing_tools::GeocodeTool) as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
+            "reverse_geocode".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::routing_tools::ReverseGeocodeTool)
+                    as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
+            "run_command".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::terminal_tools::RunCommandTool) as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
+            "get_military_aircraft".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::osint_tools::MilitaryTrackingTool)
+                    as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
+            "get_weather".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::osint_tools::WeatherTool) as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
+            "get_earthquakes".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::osint_tools::EarthquakeTool) as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
+            "draw".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::drawing_tools::DrawTool) as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
+            "list_documents".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::fs_tools::ListDocumentsTool) as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
+            "grep_documents".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::fs_tools::GrepDocumentsTool) as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
+            "write_file".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::fs_tools::WriteFileTool) as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
+            "edit_file".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::fs_tools::EditFileTool) as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
+            "create_geofence".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::geofence_tools::CreateGeofenceTool)
+                    as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
+            "graph_session".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::graph_session::GraphSessionTool) as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
+            "write_to_memory".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::session_memory_tools::WriteToMemoryTool)
+                    as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
+            "search_session_memory".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::session_memory_tools::SearchSessionMemoryTool)
+                    as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
+            "get_memory_stats".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::session_memory_tools::GetMemoryStatsTool)
+                    as Arc<dyn AgentTool>
+            }),
+        );
 
         let mut guard = self.loaded_tools.lock().unwrap();
         // tools_search and list_tools will be loaded on-demand via get_or_load_tool when registry_arc is set
-        guard.insert("guidance".to_string(), Arc::new(GuidanceTool::new_standalone()));
-        guard.insert("web_search".to_string(), Arc::new(crate::search::tool::WebSearchTool));
-        guard.insert("vector_search".to_string(), Arc::new(VectorSearchStandalone::new_standalone()));
+        guard.insert(
+            "guidance".to_string(),
+            Arc::new(GuidanceTool::new_standalone()),
+        );
+        guard.insert(
+            "web_search".to_string(),
+            Arc::new(crate::search::tool::WebSearchTool),
+        );
+        guard.insert(
+            "vector_search".to_string(),
+            Arc::new(VectorSearchStandalone::new_standalone()),
+        );
     }
 
     /// Sets up the tools_search factory with a reference to the live registry.
     /// This must be called after the registry is wrapped in Arc<RwLock<>>.
     pub fn setup_tools_search(&mut self, registry_arc: Arc<RwLock<ProgressiveToolRegistry>>) {
-        self.tool_factory.insert("tools_search".to_string(), Box::new(move || {
-            Arc::new(ToolsSearchTool::new(Arc::clone(&registry_arc))) as Arc<dyn AgentTool>
-        }));
+        self.tool_factory.insert(
+            "tools_search".to_string(),
+            Box::new(move || {
+                Arc::new(ToolsSearchTool::new(Arc::clone(&registry_arc))) as Arc<dyn AgentTool>
+            }),
+        );
     }
 
     /// Sets up the list_tools factory with a reference to the live registry.
     /// This must be called after the registry is wrapped in Arc<RwLock<>>.
     pub fn setup_list_tools(&mut self, registry_arc: Arc<RwLock<ProgressiveToolRegistry>>) {
-        self.tool_factory.insert("list_tools".to_string(), Box::new(move || {
-            Arc::new(ListToolsStandalone::new(Arc::clone(&registry_arc))) as Arc<dyn AgentTool>
-        }));
+        self.tool_factory.insert(
+            "list_tools".to_string(),
+            Box::new(move || {
+                Arc::new(ListToolsStandalone::new(Arc::clone(&registry_arc))) as Arc<dyn AgentTool>
+            }),
+        );
     }
 
     pub fn setup_agent_tools(
@@ -427,27 +560,35 @@ impl ProgressiveToolRegistry {
         let ar = agent_registry.clone();
         let hr = hook_registry.clone();
         let p = permissions.clone();
-        self.tool_factory.insert("spawn_agent".to_string(), Box::new(move || {
-            Arc::new(crate::agent::tools::spawn_tools::SpawnAgentTool::new(
-                tr.clone(),
-                ar.clone(),
-                hr.clone(),
-                p.clone(),
-            )) as Arc<dyn AgentTool>
-        }));
+        self.tool_factory.insert(
+            "spawn_agent".to_string(),
+            Box::new(move || {
+                Arc::new(crate::agent::tools::spawn_tools::SpawnAgentTool::new(
+                    tr.clone(),
+                    ar.clone(),
+                    hr.clone(),
+                    p.clone(),
+                )) as Arc<dyn AgentTool>
+            }),
+        );
 
         let tr2 = tool_registry.clone();
         let ar2 = agent_registry.clone();
         let hr2 = hook_registry.clone();
         let p2 = permissions.clone();
-        self.tool_factory.insert("delegate_to_agent".to_string(), Box::new(move || {
-            Arc::new(crate::agent::tools::delegate_to_agent::DelegateToAgentTool::new(
-                tr2.clone(),
-                ar2.clone(),
-                hr2.clone(),
-                p2.clone(),
-            )) as Arc<dyn AgentTool>
-        }));
+        self.tool_factory.insert(
+            "delegate_to_agent".to_string(),
+            Box::new(move || {
+                Arc::new(
+                    crate::agent::tools::delegate_to_agent::DelegateToAgentTool::new(
+                        tr2.clone(),
+                        ar2.clone(),
+                        hr2.clone(),
+                        p2.clone(),
+                    ),
+                ) as Arc<dyn AgentTool>
+            }),
+        );
     }
 
     fn register_metadata(&mut self, metadata: ToolMetadata) {
@@ -464,7 +605,7 @@ impl ProgressiveToolRegistry {
 
     pub fn get_or_load_tool(&self, id: &str) -> Option<Arc<dyn AgentTool>> {
         let mut guard = self.loaded_tools.lock().ok()?;
-        
+
         if let Some(tool) = guard.get(id) {
             return Some(tool.clone());
         }
@@ -482,7 +623,8 @@ impl ProgressiveToolRegistry {
         let query_lower = query.to_lowercase();
         let query_terms: Vec<&str> = query_lower.split_whitespace().collect();
 
-        let mut scored: Vec<(ToolMetadata, f64)> = self.metadata
+        let mut scored: Vec<(ToolMetadata, f64)> = self
+            .metadata
             .values()
             .cloned()
             .map(|metadata| {
@@ -512,7 +654,8 @@ impl ProgressiveToolRegistry {
 
         scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
-        scored.into_iter()
+        scored
+            .into_iter()
             .filter(|(_, score)| *score > 0.0)
             .map(|(metadata, _)| metadata)
             .collect()
@@ -524,7 +667,7 @@ impl ProgressiveToolRegistry {
         } else {
             return;
         };
-        
+
         for id in ids {
             if !guard.contains_key(*id) {
                 if let Some(factory) = self.tool_factory.get(*id) {
@@ -536,19 +679,26 @@ impl ProgressiveToolRegistry {
     }
 
     pub fn list_as_tool_info(&self) -> Vec<crate::tools::ToolInfo> {
-        self.loaded_tools.lock().ok()
-            .map(|guard| guard.values().map(|t| {
-                crate::tools::ToolInfo {
-                    name: t.id().to_string(),
-                    description: t.description().to_string(),
-                    parameters: t.input_schema(),
-                }
-            }).collect())
+        self.loaded_tools
+            .lock()
+            .ok()
+            .map(|guard| {
+                guard
+                    .values()
+                    .map(|t| crate::tools::ToolInfo {
+                        name: t.id().to_string(),
+                        description: t.description().to_string(),
+                        parameters: t.input_schema(),
+                    })
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
     pub fn loaded_tool_ids(&self) -> Vec<String> {
-        self.loaded_tools.lock().ok()
+        self.loaded_tools
+            .lock()
+            .ok()
             .map(|guard| guard.keys().cloned().collect())
             .unwrap_or_default()
     }
@@ -566,7 +716,9 @@ struct ToolsSearchTool {
 
 impl ToolsSearchTool {
     fn new(registry: Arc<RwLock<ProgressiveToolRegistry>>) -> Self {
-        Self { registry: Arc::downgrade(&registry) }
+        Self {
+            registry: Arc::downgrade(&registry),
+        }
     }
 }
 
@@ -599,14 +751,18 @@ impl AgentTool for ToolsSearchTool {
         _chat_id: String,
         input: Value,
         _depth: u32,
-        _allowed_tools: Option<std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
+        _allowed_tools: Option<
+            std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>,
+        >,
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         let query = input["query"]
             .as_str()
             .ok_or_else(|| anyhow!("query is required"))?;
 
-        let registry_arc = self.registry.upgrade()
+        let registry_arc = self
+            .registry
+            .upgrade()
             .ok_or_else(|| anyhow!("Registry has been dropped"))?;
         let results = {
             let registry_guard = registry_arc.read().await;
@@ -682,16 +838,16 @@ impl AgentTool for GuidanceTool {
         _chat_id: String,
         input: Value,
         _depth: u32,
-        _allowed_tools: Option<std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
+        _allowed_tools: Option<
+            std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>,
+        >,
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         let task = input["task"]
             .as_str()
             .ok_or_else(|| anyhow!("task is required"))?;
 
-        let context = input["context"]
-            .as_str()
-            .unwrap_or("");
+        let context = input["context"].as_str().unwrap_or("");
 
         let guidance = generate_guidance(task, context);
 
@@ -711,17 +867,28 @@ fn generate_guidance(task: &str, context: &str) -> String {
              1. Use 'list_directory' to see what files exist in a path\n\
              2. Use 'read_file' to read file contents\n\
              3. Tools require exact file paths\n\nContext: {}",
-            if context.is_empty() { "No additional context provided" } else { context }
+            if context.is_empty() {
+                "No additional context provided"
+            } else {
+                context
+            }
         );
     }
 
-    if task_lower.contains("map") || task_lower.contains("route") || task_lower.contains("navigation") {
+    if task_lower.contains("map")
+        || task_lower.contains("route")
+        || task_lower.contains("navigation")
+    {
         return format!(
             "For map and routing:\n\
              1. Use 'geocode_search' to convert place names to coordinates\n\
              2. Use 'calculate_route' to get driving directions\n\
              3. Routes include distance, duration, and turn-by-turn summary\n\nContext: {}",
-            if context.is_empty() { "No additional context provided" } else { context }
+            if context.is_empty() {
+                "No additional context provided"
+            } else {
+                context
+            }
         );
     }
 
@@ -731,16 +898,27 @@ fn generate_guidance(task: &str, context: &str) -> String {
              1. Use 'web_search' for current information from the internet\n\
              2. Use 'vector_search' for your private knowledge base\n\
              3. Use 'tools_search' to find available tools\n\nContext: {}",
-            if context.is_empty() { "No additional context provided" } else { context }
+            if context.is_empty() {
+                "No additional context provided"
+            } else {
+                context
+            }
         );
     }
 
-    if task_lower.contains("system") || task_lower.contains("metrics") || task_lower.contains("performance") {
+    if task_lower.contains("system")
+        || task_lower.contains("metrics")
+        || task_lower.contains("performance")
+    {
         return format!(
             "For system monitoring:\n\
              1. Use 'get_system_metrics' for CPU, memory, and network stats\n\
              2. Metrics are retrieved in real-time\n\nContext: {}",
-            if context.is_empty() { "No specific guidance available for this task" } else { context }
+            if context.is_empty() {
+                "No specific guidance available for this task"
+            } else {
+                context
+            }
         );
     }
 
@@ -759,7 +937,9 @@ struct ListToolsStandalone {
 
 impl ListToolsStandalone {
     fn new(registry: Arc<RwLock<ProgressiveToolRegistry>>) -> Self {
-        Self { registry: Arc::downgrade(&registry) }
+        Self {
+            registry: Arc::downgrade(&registry),
+        }
     }
 }
 
@@ -792,10 +972,14 @@ impl AgentTool for ListToolsStandalone {
         _chat_id: String,
         input: Value,
         _depth: u32,
-        _allowed_tools: Option<std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
+        _allowed_tools: Option<
+            std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>,
+        >,
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
-        let registry_arc = self.registry.upgrade()
+        let registry_arc = self
+            .registry
+            .upgrade()
             .ok_or_else(|| anyhow!("Registry has been dropped"))?;
         let metadata = {
             let registry_guard = registry_arc.read().await;
@@ -867,7 +1051,9 @@ impl AgentTool for VectorSearchStandalone {
         _chat_id: String,
         input: Value,
         _depth: u32,
-        _allowed_tools: Option<std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
+        _allowed_tools: Option<
+            std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>,
+        >,
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         let query = input["query"]
@@ -880,7 +1066,10 @@ impl AgentTool for VectorSearchStandalone {
             .clamp(1, 20) as usize;
 
         let state = app.state::<crate::commands::AppState>();
-        let db = state.db().await.map_err(|_| anyhow::anyhow!("DB Init error"))?;
+        let db = state
+            .db()
+            .await
+            .map_err(|_| anyhow::anyhow!("DB Init error"))?;
 
         let model_name = crate::db::queries::get_setting(&db, "embedding_model")
             .await
@@ -908,18 +1097,31 @@ impl AgentTool for VectorSearchStandalone {
             .await
             .map_err(|e| anyhow!("Embedding failed: {}", e))?;
 
-        let rag = state.rag.get().await.map_err(|_| anyhow!("RAG not initialized"))?;
-        let results = rag.search(query_vec, limit).await
+        let rag = state
+            .rag
+            .get()
+            .await
+            .map_err(|_| anyhow!("RAG not initialized"))?;
+        let results = rag
+            .search(query_vec, limit)
+            .await
             .map_err(|e| anyhow!("Vector search failed: {}", e))?;
 
         if results.is_empty() {
-            return Ok(json!(format!("No relevant information found for query: '{}'", query)));
+            return Ok(json!(format!(
+                "No relevant information found for query: '{}'",
+                query
+            )));
         }
 
         let mut formatted_text = format!("Found {} relevant excerpts:\n\n", results.len());
         for (i, res) in results.iter().enumerate() {
-            formatted_text.push_str(&format!("Excerpt {} (Source: {}):\n{}\n\n",
-                i + 1, res.chunk.source, res.chunk.text));
+            formatted_text.push_str(&format!(
+                "Excerpt {} (Source: {}):\n{}\n\n",
+                i + 1,
+                res.chunk.source,
+                res.chunk.text
+            ));
         }
 
         Ok(json!(formatted_text))
@@ -938,7 +1140,13 @@ async fn generate_embedding(base_url: &str, model: &str, text: &str) -> Result<V
         }))
         .send()
         .await
-        .map_err(|e| anyhow!("Failed to connect to embedding service at {}: {}", base_url, e))?;
+        .map_err(|e| {
+            anyhow!(
+                "Failed to connect to embedding service at {}: {}",
+                base_url,
+                e
+            )
+        })?;
 
     if !response.status().is_success() {
         let status = response.status();
@@ -951,7 +1159,9 @@ async fn generate_embedding(base_url: &str, model: &str, text: &str) -> Result<V
         embedding: Vec<f32>,
     }
 
-    let result: EmbeddingResponse = response.json().await
+    let result: EmbeddingResponse = response
+        .json()
+        .await
         .map_err(|e| anyhow!("Failed to parse embedding response: {}", e))?;
 
     Ok(result.embedding)

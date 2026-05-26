@@ -62,7 +62,7 @@ impl ProcessManager {
             let mut cmd = std::process::Command::new("taskkill");
             cmd.creation_flags(CREATE_NO_WINDOW);
             cmd.args(["/F", "/PID", &pid.to_string()]);
-            
+
             match cmd.status() {
                 Ok(status) if status.success() => {
                     info!(pid = %pid, name = %name, "Process killed via taskkill");
@@ -80,7 +80,7 @@ impl ProcessManager {
         {
             use nix::sys::signal::{kill, Signal};
             use nix::unistd::Pid;
-            
+
             match kill(Pid::from_raw(pid as i32), Signal::SIGKILL) {
                 Ok(_) => {
                     info!(pid = %pid, name = %name, "Process killed via SIGKILL");

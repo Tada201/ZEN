@@ -1,13 +1,13 @@
-use serde::Deserialize;
-use serde_json::{json, Value};
-use anyhow::Result;
-use tauri::{AppHandle, Manager};
-use async_trait::async_trait;
 use crate::agent::tools::AgentTool;
 use crate::commands::AppState;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use anyhow::Result;
+use async_trait::async_trait;
+use serde::Deserialize;
+use serde_json::{json, Value};
 use std::collections::HashSet;
+use std::sync::Arc;
+use tauri::{AppHandle, Manager};
+use tokio::sync::Mutex;
 
 // ─── 1. ListDocumentsTool ───
 pub struct ListDocumentsTool;
@@ -41,7 +41,13 @@ impl AgentTool for ListDocumentsTool {
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         let state = app.state::<AppState>();
-        let docs = crate::db::queries::list_documents(&state.db().await.map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?).await?;
+        let docs = crate::db::queries::list_documents(
+            &state
+                .db()
+                .await
+                .map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?,
+        )
+        .await?;
 
         let mut formatted_docs = Vec::new();
         for doc in docs {
@@ -105,21 +111,30 @@ impl AgentTool for ReadDocumentTool {
         let mut target_path = std::path::PathBuf::from(&args.file_path);
 
         if !target_path.exists() {
-            let docs = crate::db::queries::list_documents(&state.db().await.map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?).await?;
-            if let Some(doc) = docs.into_iter().find(|d| d.filename == args.file_path || d.id == args.file_path) {
+            let docs = crate::db::queries::list_documents(
+                &state
+                    .db()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?,
+            )
+            .await?;
+            if let Some(doc) = docs
+                .into_iter()
+                .find(|d| d.filename == args.file_path || d.id == args.file_path)
+            {
                 if let Some(doc_path) = doc.file_path {
                     target_path = std::path::PathBuf::from(&doc_path);
                 }
             }
         }
-        
+
         if !target_path.exists() {
-             if let Ok(cwd) = std::env::current_dir() {
-                 let relative_path = cwd.join(&args.file_path);
-                 if relative_path.exists() {
-                     target_path = relative_path;
-                 }
-             }
+            if let Ok(cwd) = std::env::current_dir() {
+                let relative_path = cwd.join(&args.file_path);
+                if relative_path.exists() {
+                    target_path = relative_path;
+                }
+            }
         }
 
         if !target_path.exists() {
@@ -185,7 +200,13 @@ impl AgentTool for GrepDocumentsTool {
     ) -> Result<Value> {
         let args: GrepDocumentsArgs = serde_json::from_value(input)?;
         let state = app.state::<AppState>();
-        let docs = crate::db::queries::list_documents(&state.db().await.map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?).await?;
+        let docs = crate::db::queries::list_documents(
+            &state
+                .db()
+                .await
+                .map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?,
+        )
+        .await?;
 
         let mut results = Vec::new();
         let query = if args.case_sensitive.unwrap_or(false) {
@@ -214,9 +235,12 @@ impl AgentTool for GrepDocumentsTool {
                                     line.to_lowercase()
                                 };
                                 if search_line.contains(&query) {
-                                    matches.push(json!({ "line": idx + 1, "content": line.trim() }));
+                                    matches
+                                        .push(json!({ "line": idx + 1, "content": line.trim() }));
                                 }
-                                if matches.len() >= 5 { break; }
+                                if matches.len() >= 5 {
+                                    break;
+                                }
                             }
                             results.push(json!({
                                 "filename": doc.filename,
@@ -226,7 +250,9 @@ impl AgentTool for GrepDocumentsTool {
                     }
                 }
             }
-            if results.len() >= 10 { break; }
+            if results.len() >= 10 {
+                break;
+            }
         }
 
         Ok(json!({ "results": results }))
@@ -273,8 +299,8 @@ impl AgentTool for WriteFileTool {
         _allowed_tools: Option<Arc<Mutex<HashSet<String>>>>,
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
-        use similar::{ChangeTag, TextDiff};
         use crate::workspace::resolve_workspace_path;
+        use similar::{ChangeTag, TextDiff};
 
         let args: WriteFileArgs = serde_json::from_value(input)?;
 
@@ -301,39 +327,45 @@ impl AgentTool for WriteFileTool {
         tokio::fs::write(&target_path, &args.content).await?;
 
         // Generate diff if file existed
-        let (change_type, diff, lines_added, lines_removed) = if let Some(original) = original_content {
-            let diff = TextDiff::from_lines(&original, &args.content);
+        let (change_type, diff, lines_added, lines_removed) =
+            if let Some(original) = original_content {
+                let diff = TextDiff::from_lines(&original, &args.content);
 
-            let mut diff_lines = Vec::new();
-            let mut lines_added = 0;
-            let mut lines_removed = 0;
+                let mut diff_lines = Vec::new();
+                let mut lines_added = 0;
+                let mut lines_removed = 0;
 
-            // Add file headers
-            diff_lines.push(format!("--- a/{}", target_path.display()));
-            diff_lines.push(format!("+++ b/{}", target_path.display()));
+                // Add file headers
+                diff_lines.push(format!("--- a/{}", target_path.display()));
+                diff_lines.push(format!("+++ b/{}", target_path.display()));
 
-            for change in diff.iter_all_changes() {
-                match change.tag() {
-                    ChangeTag::Delete => {
-                        diff_lines.push(format!("-{}", change.value().trim_end()));
-                        lines_removed += 1;
-                    }
-                    ChangeTag::Insert => {
-                        diff_lines.push(format!("+{}", change.value().trim_end()));
-                        lines_added += 1;
-                    }
-                    ChangeTag::Equal => {
-                        diff_lines.push(format!(" {}", change.value().trim_end()));
+                for change in diff.iter_all_changes() {
+                    match change.tag() {
+                        ChangeTag::Delete => {
+                            diff_lines.push(format!("-{}", change.value().trim_end()));
+                            lines_removed += 1;
+                        }
+                        ChangeTag::Insert => {
+                            diff_lines.push(format!("+{}", change.value().trim_end()));
+                            lines_added += 1;
+                        }
+                        ChangeTag::Equal => {
+                            diff_lines.push(format!(" {}", change.value().trim_end()));
+                        }
                     }
                 }
-            }
 
-            ("modified".to_string(), Some(diff_lines.join("\n")), Some(lines_added), Some(lines_removed))
-        } else {
-            // New file
-            let lines_added = args.content.lines().count();
-            ("created".to_string(), None, Some(lines_added), Some(0))
-        };
+                (
+                    "modified".to_string(),
+                    Some(diff_lines.join("\n")),
+                    Some(lines_added),
+                    Some(lines_removed),
+                )
+            } else {
+                // New file
+                let lines_added = args.content.lines().count();
+                ("created".to_string(), None, Some(lines_added), Some(0))
+            };
 
         Ok(json!({
             "file_path": target_path.to_string_lossy(),
@@ -389,8 +421,8 @@ impl AgentTool for EditFileTool {
         _allowed_tools: Option<Arc<Mutex<HashSet<String>>>>,
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
-        use similar::{ChangeTag, TextDiff};
         use crate::workspace::resolve_workspace_path;
+        use similar::{ChangeTag, TextDiff};
 
         let args: EditFileArgs = serde_json::from_value(input)?;
 

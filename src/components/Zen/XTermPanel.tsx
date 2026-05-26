@@ -4,7 +4,7 @@ import {
     ArrowDownUp, X, Plus, Copy, Check, Sliders
 } from 'lucide-react';
 import { cn } from '@/lib/utils/style';
-import { invoke } from '@tauri-apps/api/core';
+import { terminalApi } from '@/api';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
@@ -84,11 +84,7 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
             const cols = lastResizeRef.current.cols || DEFAULT_COLS;
             const rows = lastResizeRef.current.rows || DEFAULT_ROWS;
             
-            const id = await invoke<string>('terminal_spawn', {
-                cols,
-                rows,
-                cwd: null,
-            });
+            const id = await terminalApi.spawn(cols, rows, null);
 
             const name = customName || `Shell ${sessions.length + 1}`;
             const newSession: Session = {
@@ -133,7 +129,7 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
             // Clean up all active listeners
             Object.keys(listenersMapRef.current).forEach(id => {
                 listenersMapRef.current[id]();
-                invoke('terminal_kill', { id }).catch(() => {});
+                terminalApi.kill(id).catch(() => {});
             });
             listenersMapRef.current = {};
         };
@@ -153,7 +149,7 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
         }
 
         try {
-            await invoke('terminal_kill', { id });
+            await terminalApi.kill(id);
         } catch (err) {}
 
         setSessions(prev => prev.filter(s => s.id !== id));
@@ -185,7 +181,7 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
         if (prev.cols === cols && prev.rows === rows) return;
         lastResizeRef.current = { cols, rows };
 
-        invoke('terminal_resize', { id: activeSessionId, cols, rows }).catch(() => {});
+        terminalApi.resize(activeSessionId, cols, rows).catch(() => {});
     }, [activeSessionId, showDrawer, charMetrics]);
 
     // Trigger resize on state alterations
@@ -247,7 +243,7 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
         setInput('');
 
         try {
-            await invoke('terminal_write', { id: activeSessionId, data: cmd + '\n' });
+            await terminalApi.write(activeSessionId, cmd + '\n');
         } catch (err: any) {
             const msg = typeof err === 'string' ? err : err?.message || 'Write failed';
             setSessions(prev => prev.map(s => {

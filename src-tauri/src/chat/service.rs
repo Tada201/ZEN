@@ -199,6 +199,7 @@ impl ChatService {
 
             if tools_enabled && llm_provider.supports_tools(&active_model) {
                 tool_ids.extend(vec![
+                    "write_todos".to_string(),
                     "read_document_content".to_string(),
                     "list_documents".to_string(),
                     "run_command".to_string(),
