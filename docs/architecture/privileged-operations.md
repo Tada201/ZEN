@@ -1,0 +1,139 @@
+# Privileged Operations Audit
+
+This document tracks backend operations that can affect the host system, network,
+local files, processes, secrets, or external services. It is a Phase 3.5 working
+document, not a permanent exemption list.
+
+## Rule
+
+Privileged operations must be owned by a service or documented helper. Feature
+modules may request privileged work, but they should not invent new process,
+filesystem, network, or secret-handling behavior.
+
+Required pattern:
+
+```txt
+command / feature
+  -> service/helper
+  -> validation and policy
+  -> operation
+  -> audit or structured log
+```
+
+## Current Findings
+
+### Tool Execution
+
+Status: mostly routed.
+
+- Production execution boundary is `ToolService`.
+- MCP, deep research, agent execution, and OpenUI tool commands are expected to
+  route through `ToolService`.
+- Quality gates check for direct registry execution and direct tool execution.
+
+Remaining work:
+
+- Keep collapsing legacy `agent::tools` wrappers into v2 tools when touched.
+- Add tests or exemptions for every production tool that remains privileged.
+
+### Terminal Processes
+
+Status: partially centralized.
+
+- `src-tauri/src/terminal/mod.rs` uses `ProcessManager` for session cleanup.
+- `src-tauri/src/services/terminal.rs` still owns PTY session behavior.
+
+Remaining work:
+
+- Keep terminal command execution behind policy gates.
+- Do not add new process-spawn paths outside terminal/runtime helpers.
+
+### Speech / Whisper Runtime
+
+Status: needs cleanup.
+
+Findings:
+
+- `src-tauri/src/services/speech_service/mod.rs` resolves Whisper binaries,
+  downloads models, writes temp WAV files, spawns `whisper-server`, runs a
+  watchdog, restarts the process, and kills stale Windows processes.
+- Some process tracking uses `ProcessManager`, but watchdog restart and `Drop`
+  cleanup still duplicate process-kill behavior.
+- Model path resolution is local to the service and duplicated with release
+  resource layout assumptions.
+
+Required next code step:
+
+- Extract a runtime resource/process helper that owns:
+  - bundled resource lookup
+  - app-data fallback lookup
+  - model directory creation
+  - atomic model write/finalize
+  - local binary spawn with Windows no-window flags
+  - process registration and cleanup
+  - stale process kill by tracked id
+
+### TTS / Piper Runtime
+
+Status: needs cleanup.
+
+Findings:
+
+- `src-tauri/src/services/tts_service/mod.rs` spawns the Piper binary directly.
+- It owns command construction, stdin/stdout piping, and thread-based IO.
+- It should share the same runtime helper as Whisper for binary path resolution
+  and process cleanup.
+
+Required next code step:
+
+- Reuse the runtime helper for binary lookup and process lifecycle.
+- Keep synthesis-specific stdin/stdout handling in TTS service.
+
+### RAG Filesystem And Network
+
+Status: acceptable but should be bounded.
+
+Findings:
+
+- `src-tauri/src/rag/ingestion.rs` reads user-selected files.
+- `src-tauri/src/rag/session_memory.rs` writes session memory under the
+  workspace.
+- `src-tauri/src/rag/embedding.rs` downloads embedding models and writes to a
+  model cache.
+
+Remaining work:
+
+- Keep all file ingestion workspace-bound or user-selected.
+- Add size limits or explicit caps where a path can read arbitrary files.
+- Prefer shared HTTP clients for repeated embedding calls.
+
+### GTSM And External Network
+
+Status: service-owned, performance cleanup remains.
+
+Findings:
+
+- GTSM modules create per-call `reqwest::Client` instances.
+- These calls are service-owned and not arbitrary user-controlled web fetches.
+
+Remaining work:
+
+- Introduce shared clients or a lightweight HTTP helper for repeated calls.
+- Keep API keys in `SecretService`; do not reintroduce settings-based secrets.
+
+## Non-Goals For This Phase
+
+- Remote MCP support.
+- Full frontend restructure.
+- RAG scaling redesign.
+- Release build tuning beyond current CI/runtime artifact guardrails.
+
+## Phase 3.5 Exit Checklist
+
+- Tool ownership doc is complete.
+- Runtime process/resource helper exists.
+- Speech and TTS use the helper for process/resource lifecycle.
+- Remaining direct privileged operations are either routed or listed here with a
+  clear owner and fix plan.
+- `npm run quality:fast`, `npm run test:backend`, and
+  `npm run secret:artifacts` pass.

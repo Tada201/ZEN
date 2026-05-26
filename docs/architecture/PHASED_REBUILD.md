@@ -78,12 +78,13 @@ Completed:
 - Direct tool execution quality gates exist.
 - Unknown agent tool ids are blocked by quality checks.
 - Placeholder/no-op tool registrations were reduced.
+- Tool ownership and migration rules are documented in
+  `docs/architecture/tool-system.md`.
 
 Remaining:
 
 - Collapse or explicitly document the two remaining tool surfaces:
   `src-tauri/src/tools/*` and `src-tauri/src/agent/tools/*`.
-- Write the "how to add a backend tool" architecture doc.
 - Ensure every production tool has metadata, risk level, permission policy, and
   tests or an exemption.
 
@@ -100,9 +101,10 @@ Goals:
 
 Current work items:
 
-- Document canonical tool ownership and migration rules.
 - Add a runtime resource/process helper for local binaries and models.
-- Split at least one oversized backend module.
+- Move Speech/Whisper and TTS/Piper process handling onto the runtime helper.
+- Continue splitting oversized backend modules after runtime process handling is
+  centralized.
 - Keep `npm run quality:fast`, `npm run test:backend`, and
   `npm run secret:artifacts` passing.
 
@@ -110,7 +112,7 @@ Exit criteria:
 
 - Tool-system ownership is documented.
 - Remaining direct privileged operations are either routed or explicitly
-  exempted.
+  documented in `docs/architecture/privileged-operations.md`.
 - Top backend oversized files have named split plans.
 - No new backend phase work increases architecture debt.
 
