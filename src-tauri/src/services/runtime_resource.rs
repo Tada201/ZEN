@@ -206,3 +206,158 @@ pub fn kill_pid_sync(pid: u32, name: &str) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    struct TestDirs {
+        root: PathBuf,
+        app_data: PathBuf,
+        resources: PathBuf,
+    }
+
+    impl TestDirs {
+        fn new(name: &str) -> Self {
+            let unique = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system clock should be after UNIX_EPOCH")
+                .as_nanos();
+            let root = std::env::temp_dir().join(format!(
+                "zen-runtime-resource-{name}-{}-{unique}",
+                std::process::id()
+            ));
+            let app_data = root.join("app-data");
+            let resources = root.join("resources-root");
+
+            fs::create_dir_all(&app_data).expect("create test app data dir");
+            fs::create_dir_all(&resources).expect("create test resource dir");
+
+            Self {
+                root,
+                app_data,
+                resources,
+            }
+        }
+
+        fn runtime_resources(&self) -> RuntimeResources {
+            RuntimeResources::new(&self.app_data, &self.resources)
+        }
+    }
+
+    impl Drop for TestDirs {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    #[test]
+    fn resolves_model_paths_under_resource_and_app_data_roots() {
+        let dirs = TestDirs::new("model-paths");
+        let resources = dirs.runtime_resources();
+
+        assert_eq!(resources.app_data_dir(), dirs.app_data.as_path());
+        assert_eq!(
+            resources.bundled_model_path("ggml-base.bin"),
+            dirs.resources
+                .join("resources")
+                .join("models")
+                .join("ggml-base.bin")
+        );
+        assert_eq!(
+            resources.downloaded_model_path("ggml-base.bin"),
+            dirs.app_data.join("models").join("ggml-base.bin")
+        );
+        assert_eq!(
+            resources.temp_file_path("capture.wav"),
+            dirs.app_data.join("capture.wav")
+        );
+    }
+
+    #[test]
+    fn whisper_model_path_prefers_bundled_model_when_present() {
+        let dirs = TestDirs::new("whisper-bundled");
+        let resources = dirs.runtime_resources();
+        let bundled = resources.bundled_model_path("tiny.en.bin");
+
+        fs::create_dir_all(bundled.parent().expect("bundled model has parent"))
+            .expect("create bundled model parent");
+        fs::write(&bundled, b"bundled").expect("write bundled model");
+
+        assert_eq!(resources.whisper_model_path("tiny.en.bin"), bundled);
+    }
+
+    #[test]
+    fn whisper_model_path_falls_back_to_downloaded_model_path() {
+        let dirs = TestDirs::new("whisper-downloaded");
+        let resources = dirs.runtime_resources();
+
+        assert_eq!(
+            resources.whisper_model_path("tiny.en.bin"),
+            resources.downloaded_model_path("tiny.en.bin")
+        );
+    }
+
+    #[test]
+    fn ensure_models_dir_creates_app_data_models_directory() {
+        let dirs = TestDirs::new("ensure-models");
+        let resources = dirs.runtime_resources();
+
+        let models_dir = resources
+            .ensure_models_dir()
+            .expect("ensure models dir should succeed");
+
+        assert_eq!(models_dir, dirs.app_data.join("models"));
+        assert!(models_dir.is_dir());
+    }
+
+    #[test]
+    fn atomic_write_writes_bytes_via_part_file_and_removes_it() {
+        let dirs = TestDirs::new("atomic-write");
+        let resources = dirs.runtime_resources();
+        let target = dirs.app_data.join("voice.onnx");
+        let part = target.with_extension("onnx.part");
+
+        resources
+            .atomic_write(&target, b"model-bytes")
+            .expect("atomic write should succeed");
+
+        assert_eq!(fs::read(&target).expect("read target"), b"model-bytes");
+        assert!(!part.exists(), "temporary part file should be renamed away");
+    }
+
+    #[test]
+    fn atomic_write_replaces_existing_file() {
+        let dirs = TestDirs::new("atomic-replace");
+        let resources = dirs.runtime_resources();
+        let target = dirs.app_data.join("voice.onnx");
+
+        fs::write(&target, b"old").expect("write existing target");
+
+        resources
+            .atomic_write(&target, b"new")
+            .expect("atomic write should replace existing file");
+
+        assert_eq!(fs::read(&target).expect("read replaced target"), b"new");
+    }
+
+    #[test]
+    fn atomic_write_cleans_part_file_when_finalize_fails() {
+        let dirs = TestDirs::new("atomic-cleanup");
+        let resources = dirs.runtime_resources();
+        let target = dirs.app_data.join("blocked.onnx");
+        let part = target.with_extension("onnx.part");
+
+        fs::create_dir(&target).expect("create directory at target path");
+
+        let error = resources
+            .atomic_write(&target, b"cannot-finalize")
+            .expect_err("finalize should fail when target is a directory");
+
+        assert!(error.contains("Failed to finalize file"));
+        assert!(!part.exists(), "temporary part file should be cleaned up");
+        assert!(target.is_dir(), "existing target directory should remain");
+    }
+}

@@ -16,6 +16,7 @@ mod escalation;
 pub mod helpers;
 #[allow(clippy::module_inception)]
 mod r#loop;
+mod memory_bootstrap;
 mod tool_actions;
 mod tool_dispatch;
 mod tool_pipeline;

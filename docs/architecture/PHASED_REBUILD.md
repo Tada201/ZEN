@@ -80,13 +80,15 @@ Completed:
 - Placeholder/no-op tool registrations were reduced.
 - Tool ownership and migration rules are documented in
   `docs/architecture/tool-system.md`.
+- Remaining v1/v2 tool surfaces are explicitly documented as a Phase 3.5
+  compatibility boundary.
 
 Remaining:
 
-- Collapse or explicitly document the two remaining tool surfaces:
-  `src-tauri/src/tools/*` and `src-tauri/src/agent/tools/*`.
 - Ensure every production tool has metadata, risk level, permission policy, and
   tests or an exemption.
+- Migrate legacy `src-tauri/src/agent/tools/*` tools into v2 only when touched
+  or when a security issue requires it.
 
 ## Phase 3.5: Backend Consolidation
 
@@ -101,16 +103,17 @@ Goals:
 
 Current work items:
 
-- Add a runtime resource/process helper for local binaries and models.
-- Move Speech/Whisper and TTS/Piper process handling onto the runtime helper.
-- Continue splitting oversized backend modules after runtime process handling is
-  centralized.
+- Add tests for runtime resource path resolution and atomic writes.
+- Split the highest-risk oversized backend module:
+  `src-tauri/src/agent/runner/loop.rs`.
+- Continue splitting oversized backend modules with named ownership.
 - Keep `npm run quality:fast`, `npm run test:backend`, and
   `npm run secret:artifacts` passing.
 
 Exit criteria:
 
 - Tool-system ownership is documented.
+- Runtime resource helper exists and is used by Speech/TTS process setup.
 - Remaining direct privileged operations are either routed or explicitly
   documented in `docs/architecture/privileged-operations.md`.
 - Top backend oversized files have named split plans.

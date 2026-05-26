@@ -4,6 +4,9 @@ use super::helpers::{
     compact_conversation, compact_conversation_token_aware, estimate_conversation_tokens,
     generate_handoff_summary, parse_file_changes, parse_text_tool_calls,
 };
+use super::memory_bootstrap::{
+    cached_recall_context, load_initial_conversation, load_memory_run_settings,
+};
 use crate::agent::cache::ToolCache;
 use crate::agent::event_bus::{
     AgentEvent, ChatChunkPayload, ChatDonePayload, ChatErrorPayload, ChatStatusPayload,
@@ -22,7 +25,7 @@ use anyhow::{Context, Result};
 use sqlx::SqlitePool;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use tokio_util::sync::CancellationToken;
 
 /// Maximum recursion depth for sub-agent spawning (prevents infinite loops)
@@ -148,95 +151,24 @@ impl Runner {
         config: crate::llm::ChatRequestConfig,
         token: CancellationToken,
     ) -> Result<crate::agent::types::AgentResponse, anyhow::Error> {
-        let mut run_config = self.config.clone();
-        let mut semantic_recall_enabled = true;
-        let mut max_recalled_messages = 5;
-        let mut drift_detection_enabled = true;
-        let mut summarization_enabled = true;
-
-        // ── Fix #2: Parallel memory settings load (was 6 sequential queries) ──
-        if let Some(ref db) = self.db_pool {
-            let (
-                r_summ_enabled,
-                r_summ_model,
-                r_recall_enabled,
-                r_recall_max,
-                r_drift_enabled,
-                r_drift_threshold,
-            ) = tokio::join!(
-                queries::get_setting(db, "memory.summarization_enabled"),
-                queries::get_setting(db, "memory.summarization_model"),
-                queries::get_setting(db, "memory.semantic_recall_enabled"),
-                queries::get_setting(db, "memory.max_recalled_messages"),
-                queries::get_setting(db, "memory.drift_detection_enabled"),
-                queries::get_setting(db, "memory.drift_threshold"),
-            );
-            if let Ok(Some(val)) = r_summ_enabled {
-                summarization_enabled = val != "false";
-            }
-            if let Ok(Some(val)) = r_summ_model {
-                run_config.summarization_model = if val.is_empty() { None } else { Some(val) };
-            }
-            if let Ok(Some(val)) = r_recall_enabled {
-                semantic_recall_enabled = val != "false";
-            }
-            if let Ok(Some(val)) = r_recall_max {
-                if let Ok(p) = val.parse::<usize>() {
-                    max_recalled_messages = p;
-                }
-            }
-            if let Ok(Some(val)) = r_drift_enabled {
-                drift_detection_enabled = val != "false";
-            }
-            if let Ok(Some(val)) = r_drift_threshold {
-                if let Ok(p) = val.parse::<f32>() {
-                    run_config.drift_threshold = p;
-                }
-            }
-        }
+        let memory_settings = load_memory_run_settings(self.db_pool.as_ref(), &self.config).await;
+        let run_config = memory_settings.run_config;
+        let summarization_enabled = memory_settings.summarization_enabled;
+        let semantic_recall_enabled = memory_settings.semantic_recall_enabled;
+        let max_recalled_messages = memory_settings.max_recalled_messages;
+        let drift_detection_enabled = memory_settings.drift_detection_enabled;
 
         // ── Fix #3: Skip duplicate DB fetch – chat.rs already loaded fresh messages ──
         // The runner trusts the passed-in `messages` slice; only falls back to a DB
         // fetch when the slice is empty (e.g. orchestrator path) or no DB is available.
-        let mut conversation = if messages.is_empty() {
-            if let Some(ref db) = self.db_pool {
-                match queries::get_active_messages(db, &chat_id).await {
-                    Ok(db_msgs) if !db_msgs.is_empty() => db_msgs
-                        .into_iter()
-                        .map(|m| ChatMessage {
-                            role: m.role,
-                            content: m.content,
-                            images: None,
-                            tool_calls: m
-                                .tool_calls
-                                .and_then(|tc_str| serde_json::from_str(&tc_str).ok()),
-                            tool_call_id: m.tool_call_id,
-                        })
-                        .collect(),
-                    _ => messages,
-                }
-            } else {
-                messages
-            }
-        } else {
-            messages
-        };
+        let mut conversation =
+            load_initial_conversation(self.db_pool.as_ref(), &chat_id, messages).await;
 
         // ── Fix #1: Pre-load cached recall from previous turn (zero-cost) ──
         // The heavy embedding work runs in a background task AFTER the LLM responds.
         // On the first message of a new chat the cache is empty – the recall block is simply absent.
-        let cached_recall_context: Option<String> = if semantic_recall_enabled {
-            if let Some(state) = self.app.try_state::<crate::commands::AppState>() {
-                let guard = state.recall_cache.lock().await;
-                // Reuse the previous-turn recall block regardless of the new user text;
-                // it will be refreshed in the background after this response.
-                guard.get(&chat_id).map(|(block, _)| block.clone())
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+        let cached_recall_context =
+            cached_recall_context(&self.app, &chat_id, semantic_recall_enabled).await;
         // Suppress the old per-loop cache variables – recall is now injected once at iteration start
         // context_tracker still needs its first-msg vector for drift; but we no longer block on it.
         // We'll skip the blocker and just initialise to None (drift check is best-effort).
