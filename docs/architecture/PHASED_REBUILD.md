@@ -141,16 +141,24 @@ Completed:
 - Raw frontend `invoke` calls are centralized through `src/api/tauriClient.ts`.
 - `src/api/events.ts` provides the first typed event wrapper.
 - Artifact and tool stream hooks use typed event payloads.
+- Chat, agent, terminal, voice, task, and embedding event listeners route
+  through typed event wrappers instead of raw `listen<any>`.
+- Custom provider/API key surfaces return presence metadata and route secret
+  writes through backend secret APIs.
+- Chat store persistence no longer keeps server-owned sessions, archived
+  sessions, folders, search results, or fetched messages. React Query owns those
+  datasets; Zustand keeps active chat id, streaming flags, live message buffers,
+  search UI state, and artifacts.
 - Frontend architecture rules are documented.
 
 Remaining:
 
-- Type `chat:*`, `agent:*`, terminal, voice, task, and embedding event listeners.
-- Remove duplicate chat stream listeners from `OpenUICanvas`.
 - Consolidate React Query versus Zustand ownership for sessions, folders,
-  messages, provider model discovery, and settings-derived audio state.
-- Move secret-shaped frontend fields such as map/provider keys to presence
-  metadata and backend secret APIs.
+  messages, provider model discovery, and settings-derived audio state where
+  legacy compatibility fields still exist.
+- Remove duplicate or compatibility-only store actions once all consumers use
+  query hooks directly.
+- Audit IPC error shapes and make UI handling consistent.
 
 Exit criteria:
 

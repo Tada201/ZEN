@@ -175,7 +175,8 @@ export const useChatStore = create<ChatState>()(
         }));
       },
 
-      // ── Session Actions ──
+      // Server-owned chat collections are intentionally runtime-only here.
+      // React Query owns durable sessions/folders and backend synchronization.
       setSessions: (sessions) => set({ sessions }),
 
       setActiveSession: (activeSessionId) => set({ activeSessionId }),
@@ -220,16 +221,7 @@ export const useChatStore = create<ChatState>()(
         };
       }),
 
-      loadArchivedSessions: () => {
-        const raw = localStorage.getItem('zen-chat-storage');
-        if (raw) {
-          try {
-            const parsed = JSON.parse(raw);
-            const archived = parsed.state?.archivedSessions ?? [];
-            set({ archivedSessions: archived });
-          } catch { /* ignore */ }
-        }
-      },
+      loadArchivedSessions: () => set({ archivedSessions: [] }),
 
       pinSession: (id) => set((state) => ({
         sessions: state.sessions.map(s => s.id === id ? { ...s, pinned: !s.pinned } : s)
@@ -256,16 +248,7 @@ export const useChatStore = create<ChatState>()(
         sessions: state.sessions.map(s => s.id === chatId ? { ...s, folderId: null } : s)
       })),
 
-      loadFolders: () => {
-        const raw = localStorage.getItem('zen-chat-storage');
-        if (raw) {
-          try {
-            const parsed = JSON.parse(raw);
-            const folders = parsed.state?.folders ?? [];
-            set({ folders });
-          } catch { /* ignore */ }
-        }
-      },
+      loadFolders: () => set({ folders: [] }),
 
       // ── Search Actions ──
       toggleSearch: () => set((state) => ({ isSearchOpen: !state.isSearchOpen })),
@@ -322,25 +305,31 @@ export const useChatStore = create<ChatState>()(
 
         delete durableState.streamingChats;
         delete durableState.sessionMessages;
+        delete durableState.sessions;
+        delete durableState.archivedSessions;
+        delete durableState.folders;
+        delete durableState.searchResults;
         delete durableState.isStreaming;
         delete durableState.messages;
 
         return {
           ...currentState,
           ...durableState,
+          sessions: [],
+          archivedSessions: [],
+          folders: [],
+          searchResults: [],
           streamingChats: {},
           sessionMessages: {},
         } as ChatState;
       },
       partialize: (state) => ({
-        // Persist only durable state — exclude ephemeral streaming data
-        sessions: state.sessions,
-        archivedSessions: state.archivedSessions,
-        folders: state.folders,
+        // Persist only local UI/runtime state. React Query owns durable server
+        // state: sessions, archived sessions, folders, search results, and
+        // fetched messages.
         activeSessionId: state.activeSessionId,
         isSearchOpen: state.isSearchOpen,
         searchQuery: state.searchQuery,
-        searchResults: state.searchResults,
         artifacts: state.artifacts,
         activeArtifactId: state.activeArtifactId,
         globalArtifacts: state.globalArtifacts,

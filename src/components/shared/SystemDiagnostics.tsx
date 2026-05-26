@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { chatApi } from '@/api';
 import { useSysMetrics } from '@/hooks/useSysMetrics';
 import { useUIStore } from '@/lib/stores/useUIStore';
 import { useChatStore } from '@/lib/stores/useChatStore';
@@ -64,9 +66,13 @@ const WIDGET_GROUPS = [
 export function SystemDiagnostics() {
     const metrics = useSysMetrics(2000);
     const { activeModel, activeProvider, appUptimeSecs } = useUIStore();
-    const sessions = useChatStore((s) => s.sessions) || [];
     const messages = useChatStore((s) => s.messages) || [];
     const isStreaming = useChatStore((s) => s.isStreaming) || false;
+    const { data: sessions = [] } = useQuery({
+        queryKey: ['sessions'],
+        queryFn: chatApi.listChats,
+        staleTime: 30_000,
+    });
 
     // Simulated latency tracker
     const [simulatedLatency, setSimulatedLatency] = useState<number | null>(null);

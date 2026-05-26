@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { providersApi } from '@/api';
+import { chatApi, providersApi } from '@/api';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { useChatStore } from '@/lib/stores/useChatStore';
 
@@ -72,16 +72,11 @@ export function useAppInit(onStepsUpdate?: (steps: InitStep[]) => void) {
                 setStep('chathistory', 'loading');
                 try {
                     const chatStore = useChatStore.getState();
-                    const sessions = chatStore.sessions;
                     let targetSessionId = chatStore.activeSessionId;
+                    const sessions = await chatApi.listChats();
                     if (!targetSessionId && sessions.length > 0) {
                         targetSessionId = sessions[0].id;
                         chatStore.setActiveSession(targetSessionId);
-                    } else if (!targetSessionId) {
-                        const now = Date.now();
-                        const id = `local-${now}`;
-                        chatStore.addSession({ id, title: 'New Session', model: '', systemPrompt: '', createdAt: now, updatedAt: now });
-                        chatStore.setActiveSession(id);
                     }
                     setStep('chathistory', 'done');
                 } catch {
