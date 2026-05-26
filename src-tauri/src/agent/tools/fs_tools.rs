@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 use tokio::sync::Mutex;
@@ -106,9 +107,10 @@ impl AgentTool for ReadDocumentTool {
     ) -> Result<Value> {
         let args: ReadDocumentArgs = serde_json::from_value(input)?;
         let state = app.state::<AppState>();
+        let workspace = state.workspace_folder.read().await.clone();
 
         // Resolve path
-        let mut target_path = std::path::PathBuf::from(&args.file_path);
+        let mut target_path = PathBuf::from(&args.file_path);
 
         if !target_path.exists() {
             let docs = crate::db::queries::list_documents(
@@ -123,14 +125,15 @@ impl AgentTool for ReadDocumentTool {
                 .find(|d| d.filename == args.file_path || d.id == args.file_path)
             {
                 if let Some(doc_path) = doc.file_path {
-                    target_path = std::path::PathBuf::from(&doc_path);
+                    target_path = PathBuf::from(&doc_path);
                 }
             }
         }
 
         if !target_path.exists() {
-            if let Ok(cwd) = std::env::current_dir() {
-                let relative_path = cwd.join(&args.file_path);
+            if let Ok(relative_path) =
+                crate::workspace::resolve_workspace_path(&workspace, &args.file_path)
+            {
                 if relative_path.exists() {
                     target_path = relative_path;
                 }
@@ -140,6 +143,9 @@ impl AgentTool for ReadDocumentTool {
         if !target_path.exists() {
             return Ok(json!({ "error": format!("File not found: {}", args.file_path) }));
         }
+
+        let target_path = crate::workspace::validate_workspace_path(&workspace, &target_path)
+            .map_err(|e| anyhow::anyhow!("Workspace violation: {}", e))?;
 
         let content = tokio::fs::read_to_string(&target_path).await?;
 
@@ -200,6 +206,7 @@ impl AgentTool for GrepDocumentsTool {
     ) -> Result<Value> {
         let args: GrepDocumentsArgs = serde_json::from_value(input)?;
         let state = app.state::<AppState>();
+        let workspace = state.workspace_folder.read().await.clone();
         let docs = crate::db::queries::list_documents(
             &state
                 .db()
@@ -217,9 +224,14 @@ impl AgentTool for GrepDocumentsTool {
 
         for doc in docs {
             if let Some(path_str) = doc.file_path {
-                let path = std::path::Path::new(&path_str);
+                let path = Path::new(&path_str);
                 if path.exists() {
-                    if let Ok(content) = tokio::fs::read_to_string(path).await {
+                    let Ok(path) = crate::workspace::validate_workspace_path(&workspace, path)
+                    else {
+                        continue;
+                    };
+
+                    if let Ok(content) = tokio::fs::read_to_string(&path).await {
                         let search_content = if args.case_sensitive.unwrap_or(false) {
                             content.clone()
                         } else {
