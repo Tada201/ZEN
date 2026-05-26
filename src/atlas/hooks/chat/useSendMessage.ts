@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { chatApi } from "@/api";
+import { chatApi, getIpcErrorMessage } from "@/api";
 import { toast } from "sonner";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
@@ -120,18 +120,19 @@ export function useSendMessage(currentSessionId: string | null) {
         systemPrompt: systemPrompt,
       });
       console.log("[useChat] 'send_message' IPC command succeeded.");
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const errorMessage = getIpcErrorMessage(e, "Failed to send message");
       console.error("[useChat] 'send_message' IPC command failed:", e);
       useChatStore.getState().setStreamingForChat(currentSessionId, false);
       setSessionMessages(currentSessionId, (prev: Message[]) => {
         const next = [...prev];
         const last = next[next.length - 1];
         if (last && last.role === "assistant") {
-          next[next.length - 1] = { ...last, status: "failed", error: e.toString() };
+          next[next.length - 1] = { ...last, status: "failed", error: errorMessage };
         }
         return next;
       });
-      toast.error(e.toString() || "Failed to send message");
+      toast.error(errorMessage);
     }
   }, [currentSessionId, setSessionMessages]);
 

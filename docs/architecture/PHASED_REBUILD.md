@@ -160,6 +160,10 @@ Completed:
   archived sessions, folders, or server search results. It keeps only active
   chat id, search UI input state, artifacts, streaming flags, and live message
   buffers.
+- Frontend IPC calls now reject with a normalized `IpcCommandError` from
+  `src/api/tauriClient.ts`, including command name, stable error code, message,
+  and raw payload. UI code can use `getIpcErrorMessage` instead of ad hoc
+  `toString()` handling.
 - Frontend architecture rules are documented.
 
 Remaining:
@@ -168,7 +172,8 @@ Remaining:
   compatibility fields still exist.
 - Remove duplicate or compatibility-only message setters once all consumers use
   per-session runtime APIs directly.
-- Audit IPC error shapes and make UI handling consistent.
+- Continue migrating older catch blocks to `getIpcErrorMessage` as files are
+  touched.
 
 Exit criteria:
 

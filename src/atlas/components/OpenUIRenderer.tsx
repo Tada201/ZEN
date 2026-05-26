@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { extendedLibrary } from "./genui";
 export { extendedLibrary };
 import { SourceEditor } from "./SourceEditor";
-import { toolsApi } from "@/api";
+import { getIpcErrorMessage, toolsApi } from "@/api";
 
 import "@openuidev/react-ui/components.css";
 import "@openuidev/react-ui/styles/index.css";
@@ -44,7 +44,7 @@ function createToolProvider(chatId?: string | null): Record<
             return result;
           } catch (err: unknown) {
             console.error(`[OpenUI] Tauri Tool "${toolName}" failed:`, err);
-            throw new Error(err instanceof Error ? err.message : String(err || "Tauri Tool execution failed"));
+            throw new Error(getIpcErrorMessage(err, "Tauri Tool execution failed"));
           }
         };
       },

@@ -1,4 +1,10 @@
 export { mcpApi } from "./mcpApi";
+export {
+  getIpcErrorMessage,
+  IpcCommandError,
+  isIpcCommandError,
+} from "./tauriClient";
+export type { IpcErrorCode, IpcErrorPayload } from "./tauriClient";
 export type { McpConfig, McpStatus, McpTool } from "./mcpApi";
 export { chatApi } from "./chatApi";
 export type {
