@@ -12,7 +12,9 @@ src-tauri/resources/models/
 graphify-out/
 
 # Spec Kit & Antigravity
-.agents/
+.agents/*
+!.agents/rules/
+!.agents/rules/*.md
 .bg-shell/
 .gsd/
 .specify/
