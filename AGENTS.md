@@ -42,6 +42,38 @@ Use CodeGraph for structural questions: what calls what, what would break, where
 ### If `.codegraph/` Does Not Exist
 
 Ask the user before initializing: "This project does not have CodeGraph initialized. Do you want me to run `codegraph init -i`?"
+
+### MCP Initialization
+
+This repo already has project-local MCP config in `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "codegraph": {
+      "type": "stdio",
+      "command": "codegraph",
+      "args": ["serve", "--mcp"]
+    }
+  }
+}
+```
+
+To initialize or repair CodeGraph MCP for an agent, prefer the official installer:
+
+```bash
+codegraph install --target=auto --location=global --yes
+```
+
+For Codex CLI specifically, CodeGraph prints this global config target:
+
+```toml
+[mcp_servers.codegraph]
+command = "codegraph"
+args = ["serve", "--mcp"]
+```
+
+Codex CLI uses the global `~/.codex/config.toml`; do not assume a project-local Codex config exists. Restart the agent session after changing MCP config.
 <!-- CODEGRAPH_END -->
 
 ## Agent Rules
