@@ -280,6 +280,15 @@ impl ProgressiveToolRegistry {
         ));
 
         self.register_metadata(ToolMetadata::new(
+            "handoff_to_agent",
+            "Handoff to Agent",
+            "Signal that the current conversation should be handed off to a specialized agent.",
+            "agent",
+            vec!["agent", "handoff", "transfer"],
+            DetailLevel::Full,
+        ));
+
+        self.register_metadata(ToolMetadata::new(
             "write_to_memory",
             "Write to Memory",
             "Writes a finding, observation, or intermediate result to session-scoped vector memory.",
@@ -307,15 +316,6 @@ impl ProgressiveToolRegistry {
         ));
 
         self.register_metadata(ToolMetadata::new(
-            "activate_space_observatory",
-            "3D Globe Control",
-            "Control the 3D globe visualization - zoom, pan, fly to locations.",
-            "visualization",
-            vec!["globe", "3d", "earth", "visualization", "cesium"],
-            DetailLevel::Full,
-        ));
-
-        self.register_metadata(ToolMetadata::new(
             "draw",
             "Draw on Canvas",
             "Draw shapes, lines, annotations on the operational canvas.",
@@ -325,11 +325,11 @@ impl ProgressiveToolRegistry {
         ));
 
         self.register_metadata(ToolMetadata::new(
-            "deep_space_query",
-            "Space View",
-            "Activate the space/stellar view with astronomical data.",
+            "activate_3d_globe",
+            "3D Globe Control",
+            "Navigate the 3D globe visualization to a location or coordinate.",
             "visualization",
-            vec!["space", "stars", "astronomy", "stellar", "sky"],
+            vec!["globe", "3d", "earth", "map", "cesium"],
             DetailLevel::Full,
         ));
 
@@ -484,6 +484,12 @@ impl ProgressiveToolRegistry {
             }),
         );
         self.tool_factory.insert(
+            "activate_3d_globe".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::map_tools::MapTool::new()) as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
             "graph_session".to_string(),
             Box::new(|| {
                 Arc::new(crate::agent::tools::graph_session::GraphSessionTool) as Arc<dyn AgentTool>
@@ -508,6 +514,12 @@ impl ProgressiveToolRegistry {
             Box::new(|| {
                 Arc::new(crate::agent::tools::session_memory_tools::GetMemoryStatsTool)
                     as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
+            "handoff_to_agent".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::handoff_tools::HandoffTool) as Arc<dyn AgentTool>
             }),
         );
 

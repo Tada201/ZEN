@@ -281,7 +281,7 @@ impl ToolRegistry {
         }
     }
 
-    fn record_execution(&mut self, call: &ToolCall, allowed: bool, decision: &str) {
+    pub(crate) fn record_execution(&mut self, call: &ToolCall, allowed: bool, decision: &str) {
         self.execution_history.push(ToolExecutionRecord {
             tool_name: call.name.clone(),
             timestamp: chrono::Utc::now(),
@@ -297,6 +297,24 @@ impl ToolRegistry {
 
 pub type GlobalToolRegistry = Arc<RwLock<ToolRegistry>>;
 
+pub fn default_tool_risk(id: &str) -> RiskLevel {
+    match id {
+        "run_command" | "terminal" => RiskLevel::Critical,
+        "web_fetch" | "write_file" | "edit_file" | "spawn_agent" | "delegate_to_agent"
+        | "file_write" => RiskLevel::High,
+        "web_search"
+        | "read_document_content"
+        | "geocode_search"
+        | "reverse_geocode"
+        | "create_geofence"
+        | "calculate_route"
+        | "draw"
+        | "activate_3d_globe"
+        | "handoff_to_agent" => RiskLevel::Medium,
+        _ => RiskLevel::Low,
+    }
+}
+
 pub fn init_tool_registry(permissions: ToolPermissions) -> ToolRegistry {
     let mut registry = ToolRegistry::with_permissions(permissions);
 
@@ -311,6 +329,41 @@ pub fn init_tool_registry(permissions: ToolPermissions) -> ToolRegistry {
     registry.register(Arc::new(fs_tools::ListDocumentsTool));
     registry.register(Arc::new(fs_tools::ReadDocumentTool));
     registry.register(Arc::new(fs_tools::GrepDocumentsTool));
+
+    for tool_id in [
+        "tools_search",
+        "list_tools",
+        "guidance",
+        "write_todos",
+        "vector_search",
+        "read_document_content",
+        "run_command",
+        "system_metrics",
+        "get_system_metrics",
+        "calculate_route",
+        "geocode_search",
+        "reverse_geocode",
+        "create_geofence",
+        "get_weather",
+        "get_earthquakes",
+        "get_military_aircraft",
+        "draw",
+        "activate_3d_globe",
+        "list_documents",
+        "grep_documents",
+        "write_file",
+        "edit_file",
+        "activate_2d_operational_map",
+        "graph_session",
+        "write_to_memory",
+        "search_session_memory",
+        "get_memory_stats",
+        "spawn_agent",
+        "delegate_to_agent",
+        "handoff_to_agent",
+    ] {
+        registry.register_known_tool(tool_id, default_tool_risk(tool_id));
+    }
 
     // In the future, this is where we'd also wire up MCP tools.
     registry

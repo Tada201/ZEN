@@ -68,15 +68,16 @@ impl ToolService {
         }
 
         let permission_result = {
-            let mut registry = self.registry.write().await;
-            registry
-                .execute_with_permission(app.clone(), chat_id.clone(), tool_call.clone())
-                .await
+            let registry = self.registry.read().await;
+            registry.check_permission(&tool_call, None)
         };
 
         match permission_result {
-            Ok(output) => Ok(output.content),
-            Err(ToolError::AwaitingConfirmation { context }) => {
+            Ok(crate::tools::permission::PermissionDecision::Allow) => {
+                self.execute_v2_authorized(app, chat_id, tool_call, "allow")
+                    .await
+            }
+            Ok(crate::tools::permission::PermissionDecision::Confirm { context }) => {
                 let approved = self
                     .request_interactive_approval(
                         app.clone(),
@@ -87,14 +88,18 @@ impl ToolService {
                     )
                     .await;
                 if approved {
-                    let mut registry = self.registry.write().await;
-                    match registry.execute_authorized(app, chat_id, tool_call).await {
-                        Ok(output) => Ok(output.content),
-                        Err(e) => Err(e.to_string()),
-                    }
+                    self.execute_v2_authorized(app, chat_id, tool_call, "allow")
+                        .await
                 } else {
                     Err("Tool execution denied by user".to_string())
                 }
+            }
+            Ok(crate::tools::permission::PermissionDecision::Deny { reason }) => {
+                {
+                    let mut registry = self.registry.write().await;
+                    registry.record_execution(&tool_call, false, "deny");
+                }
+                Err(format!("Permission denied: {}", reason))
             }
             Err(e) => Err(e.to_string()),
         }
@@ -239,11 +244,8 @@ impl ToolService {
                     "tool registry allowed execution",
                 )
                 .await;
-                let mut registry = self.registry.write().await;
-                match registry.execute_authorized(app, chat_id, tool_call).await {
-                    Ok(output) => Ok(output.content),
-                    Err(e) => Err(e.to_string()),
-                }
+                self.execute_v2_authorized(app, chat_id, tool_call, "allow")
+                    .await
             }
             Ok(crate::tools::permission::PermissionDecision::Deny { reason }) => {
                 self.audit(
@@ -280,6 +282,59 @@ impl ToolService {
         allowed_tools: Option<Arc<Mutex<HashSet<String>>>>,
     ) -> crate::agent::types::ToolResult {
         if let Some(tool) = tool {
+            let v2_tool_call = ToolCall {
+                id: tool_call.id.clone(),
+                name: tool_call.name.clone(),
+                arguments: tool_call.args.clone(),
+            };
+
+            let permission_decision = self.check_permission("agent_tool", &v2_tool_call).await;
+            match permission_decision {
+                Ok(crate::tools::permission::PermissionDecision::Allow) => {}
+                Ok(crate::tools::permission::PermissionDecision::Confirm { .. }) => {
+                    let already_allowed = if let Some(allowed_tools) = &allowed_tools {
+                        allowed_tools.lock().await.contains(&tool_call.name)
+                    } else {
+                        false
+                    };
+
+                    if !already_allowed {
+                        return crate::agent::types::ToolResult {
+                            tool_call_id: tool_call.id.clone(),
+                            content: serde_json::json!({
+                                "error": "Tool execution requires user confirmation.",
+                                "tool": tool_call.name,
+                                "hint": "Execution was blocked because this code path cannot approve confirmation prompts."
+                            }),
+                            is_error: true,
+                            duration_ms: 0,
+                        };
+                    }
+                }
+                Ok(crate::tools::permission::PermissionDecision::Deny { reason }) => {
+                    return crate::agent::types::ToolResult {
+                        tool_call_id: tool_call.id.clone(),
+                        content: serde_json::json!({
+                            "error": format!("Tool execution denied by security policy: {}", reason),
+                            "tool": tool_call.name,
+                        }),
+                        is_error: true,
+                        duration_ms: 0,
+                    };
+                }
+                Err(e) => {
+                    return crate::agent::types::ToolResult {
+                        tool_call_id: tool_call.id.clone(),
+                        content: serde_json::json!({
+                            "error": format!("Tool permission check failed: {}", e),
+                            "tool": tool_call.name,
+                        }),
+                        is_error: true,
+                        duration_ms: 0,
+                    };
+                }
+            }
+
             let timeout_seconds = tool.timeout_seconds();
             let tool_run_future = tool.run(
                 app.clone(),
@@ -352,6 +407,30 @@ impl ToolService {
                 duration_ms: 0,
             }
         }
+    }
+
+    async fn execute_v2_authorized(
+        &self,
+        app: AppHandle,
+        chat_id: String,
+        tool_call: ToolCall,
+        decision: &str,
+    ) -> Result<serde_json::Value, String> {
+        let tool = {
+            let registry = self.registry.read().await;
+            registry.get(&tool_call.name)
+        }
+        .ok_or_else(|| format!("Tool not found: {}", tool_call.name))?;
+
+        {
+            let mut registry = self.registry.write().await;
+            registry.record_execution(&tool_call, true, decision);
+        }
+
+        tool.execute(app, chat_id, tool_call.arguments)
+            .await
+            .map(|output| output.content)
+            .map_err(|e| e.to_string())
     }
 
     async fn audit(&self, decision: SecurityDecision, caller: &str, target: &str, reason: &str) {

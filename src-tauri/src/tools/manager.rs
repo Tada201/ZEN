@@ -600,17 +600,7 @@ fn id_to_icon(id: &str) -> String {
 }
 
 fn id_to_risk_label(id: &str) -> String {
-    match id {
-        "run_command" | "terminal" => "Critical".into(),
-        "web_fetch" | "write_file" | "edit_file" | "spawn_agent" | "delegate_to_agent"
-        | "file_write" => "High".into(),
-        "web_search"
-        | "read_document_content"
-        | "geocode_search"
-        | "reverse_geocode"
-        | "create_geofence" => "Medium".into(),
-        _ => "Low".into(),
-    }
+    format!("{:?}", crate::tools::default_tool_risk(id))
 }
 
 #[cfg(test)]

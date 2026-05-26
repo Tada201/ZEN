@@ -54,6 +54,14 @@ Assert-NoMatches `
     "rg 'execute_authorized|execute_with_permission' src-tauri/src -n -g '!src-tauri/src/services/tool.rs' -g '!src-tauri/src/tools/mod.rs'"
 
 Assert-NoMatches `
+    "Direct Tool.execute(app, ...) calls found outside ToolService" `
+    "rg '\.execute\(\s*app' src-tauri/src -n -g '!src-tauri/src/services/tool.rs' -g '!src-tauri/src/tools/mod.rs'"
+
+Assert-NoMatches `
+    "Direct AgentTool.run(...) calls found outside ToolService" `
+    "rg 'tool\.run\(' src-tauri/src -n -g '!src-tauri/src/services/tool.rs'"
+
+Assert-NoMatches `
     "Backend command reads secret-like keys through SettingsService" `
     "rg 'settings_manager\.get\([^`n]*(api_key|token|secret|credential|password)' src-tauri/src/commands src-tauri/src/agent src-tauri/src/tools src-tauri/src/search -n"
 
@@ -67,6 +75,22 @@ if ($getAllStart -ge 0) {
     $getAllBody = $settingsCommands.Substring($getAllStart, $nextCommand - $getAllStart)
     if ($getAllBody -match "settings_manager\.get_all\(\)") {
         Fail "Public get_all_settings command must use get_all_public, not get_all"
+    }
+}
+
+$progressiveTools = Get-Content "src-tauri/src/agent/tools/progressive.rs" -Raw
+$toolIds = [regex]::Matches($progressiveTools, 'ToolMetadata::new\(\s*"([^"]+)"') |
+    ForEach-Object { $_.Groups[1].Value } |
+    Sort-Object -Unique
+$toolIdSet = @{}
+$toolIds | ForEach-Object { $toolIdSet[$_] = $true }
+
+Get-ChildItem "src-tauri/resources/agents" -Filter *.json | ForEach-Object {
+    $agent = Get-Content $_.FullName -Raw | ConvertFrom-Json
+    foreach ($toolId in @($agent.tool_ids)) {
+        if (-not $toolIdSet.ContainsKey($toolId)) {
+            Fail "Agent config $($_.Name) references unknown tool_id '$toolId'"
+        }
     }
 }
 

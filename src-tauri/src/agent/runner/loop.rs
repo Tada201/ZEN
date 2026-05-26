@@ -943,6 +943,12 @@ impl Runner {
                     if let Some(target_id) = result
                         .content
                         .get("target_agent_id")
+                        .or_else(|| {
+                            result
+                                .content
+                                .get("output")
+                                .and_then(|v| v.get("target_agent_id"))
+                        })
                         .and_then(|v| v.as_str())
                     {
                         if let Some(next_agent) = self.agent_registry.get(target_id) {
