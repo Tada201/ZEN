@@ -149,13 +149,16 @@ Completed:
   sessions, folders, search results, or fetched messages. React Query owns those
   datasets; Zustand keeps active chat id, streaming flags, live message buffers,
   search UI state, and artifacts.
+- Audio preferences now have one owner: `useSettingsStore`. The unused
+  `useAudioStore` mirror was removed instead of keeping a second persisted
+  audio preference path.
 - Frontend architecture rules are documented.
 
 Remaining:
 
 - Consolidate React Query versus Zustand ownership for sessions, folders,
-  messages, provider model discovery, and settings-derived audio state where
-  legacy compatibility fields still exist.
+  messages and provider model discovery where legacy compatibility fields still
+  exist.
 - Remove duplicate or compatibility-only store actions once all consumers use
   query hooks directly.
 - Audit IPC error shapes and make UI handling consistent.
