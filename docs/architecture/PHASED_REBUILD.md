@@ -117,6 +117,8 @@ Exit criteria:
 - Tool-system ownership is documented.
 - Runtime resource helper exists and is used by Speech/TTS process setup.
 - Runtime resource path resolution and atomic write tests exist.
+- Runtime resource path/atomic-write coverage runs in the lightweight backend
+  test gate.
 - Remaining direct privileged operations are either routed or explicitly
   documented in `docs/architecture/privileged-operations.md`.
 - Top backend oversized files have named split plans, and no active backend file

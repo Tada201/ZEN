@@ -1,8 +1,9 @@
 # Backend Test Gate
 
 `npm run test:backend` runs lightweight backend policy tests first. These tests
-cover secret redaction rules and tool permission policy without linking the full
-Tauri application binary.
+cover secret redaction rules, URL safety, tool permission policy, and runtime
+resource path/atomic-write behavior without linking the full Tauri application
+binary.
 
 The full app test path is still available:
 
