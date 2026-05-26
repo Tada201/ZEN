@@ -1,5 +1,6 @@
 use crate::agent::tools::AgentTool;
 use crate::commands::AppState;
+use crate::services::{AuditEvent, PermissionDecision, PrivilegedOperation};
 use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -76,7 +77,8 @@ impl AgentTool for RunCommandTool {
         let timeout_ms = input
             .get("timeout_ms")
             .and_then(|v| v.as_u64())
-            .unwrap_or(30_000);
+            .unwrap_or(30_000)
+            .clamp(1_000, 120_000);
 
         // Get workspace folder from AppState
         let state = app.state::<AppState>();
@@ -104,6 +106,19 @@ impl AgentTool for RunCommandTool {
         }
 
         tracing::info!(command = %command, cwd = ?resolved_cwd, timeout_ms = timeout_ms, "RunCommandTool executing");
+        state
+            .security
+            .record_audit(AuditEvent {
+                operation: PrivilegedOperation::ShellCommand,
+                decision: PermissionDecision::Allow,
+                caller: "run_command_tool".to_string(),
+                target: Some(command.clone()),
+                reason: Some(format!(
+                    "agent command execution requested with timeout {}ms",
+                    timeout_ms
+                )),
+            })
+            .await;
 
         // Emit event so the TERM panel can show the command being executed
         let _ = app.emit(

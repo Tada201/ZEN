@@ -370,12 +370,21 @@ impl CommandResult {
         let is_empty = content.is_empty();
 
         // Truncate output if too large (16KB limit for LLM context)
-        let max_len = 16 * 1024;
-        let (content, was_truncated_now) = if content.len() > max_len {
-            let start = content.len() - max_len;
-            (&content[start..], true)
+        let max_chars = 16 * 1024;
+        let (content, was_truncated_now) = if content.chars().count() > max_chars {
+            (
+                content
+                    .chars()
+                    .rev()
+                    .take(max_chars)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                    .collect::<String>(),
+                true,
+            )
         } else {
-            (content, false)
+            (content.to_string(), false)
         };
 
         let truncation_warning = if was_truncated_now || self.was_truncated {
