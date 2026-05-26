@@ -55,11 +55,12 @@ Status: partially centralized.
 Findings:
 
 - `src-tauri/src/services/runtime_resource.rs` owns bundled/app-data model paths,
-  Whisper binary resolution, atomic model writes, command setup, and synchronous
-  PID cleanup.
+  Whisper binary resolution, atomic model writes, downloaded-model removal,
+  temporary audio read/remove cleanup, command setup, and synchronous PID
+  cleanup.
 - `src-tauri/src/services/speech_service/mod.rs` still owns Whisper-specific
-  model validation, manual model download, watchdog health checks, and
-  transcription.
+  model validation, manual model download orchestration, watchdog health checks,
+  and transcription.
 - App startup injects `ProcessManager` into `SpeechService` so the
   `whisper-server` process is tracked for cleanup.
 

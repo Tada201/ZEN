@@ -67,6 +67,28 @@ impl RuntimeResources {
         self.app_data_dir.join(file_name)
     }
 
+    pub fn remove_downloaded_model(&self, model_name: &str) -> Result<(), String> {
+        let path = self.downloaded_model_path(model_name);
+        match std::fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(format!(
+                "Failed to remove downloaded model '{}': {e}",
+                path.display()
+            )),
+        }
+    }
+
+    pub fn read_and_remove_temp_file(&self, path: &Path) -> Result<Vec<u8>, String> {
+        let data = std::fs::read(path).map_err(|e| {
+            std::fs::remove_file(path).ok();
+            format!("Failed to read temporary file '{}': {e}", path.display())
+        })?;
+        std::fs::remove_file(path)
+            .map_err(|e| format!("Failed to remove temporary file '{}': {e}", path.display()))?;
+        Ok(data)
+    }
+
     pub fn atomic_write(&self, target_path: &Path, bytes: &[u8]) -> Result<(), String> {
         let temp_path = target_path.with_extension(format!(
             "{}.part",
@@ -359,5 +381,54 @@ mod tests {
         assert!(error.contains("Failed to finalize file"));
         assert!(!part.exists(), "temporary part file should be cleaned up");
         assert!(target.is_dir(), "existing target directory should remain");
+    }
+
+    #[test]
+    fn remove_downloaded_model_removes_file_and_tolerates_missing_file() {
+        let dirs = TestDirs::new("remove-downloaded-model");
+        let resources = dirs.runtime_resources();
+        let model_path = resources.downloaded_model_path("tiny.en.bin");
+
+        fs::create_dir_all(model_path.parent().expect("model path has parent"))
+            .expect("create model parent");
+        fs::write(&model_path, b"bad-model").expect("write downloaded model");
+
+        resources
+            .remove_downloaded_model("tiny.en.bin")
+            .expect("remove downloaded model");
+        assert!(!model_path.exists());
+
+        resources
+            .remove_downloaded_model("tiny.en.bin")
+            .expect("missing model removal should be idempotent");
+    }
+
+    #[test]
+    fn read_and_remove_temp_file_returns_bytes_and_deletes_file() {
+        let dirs = TestDirs::new("read-remove-temp");
+        let resources = dirs.runtime_resources();
+        let temp = resources.temp_file_path("capture.wav");
+
+        fs::write(&temp, b"wav-bytes").expect("write temp audio");
+        let bytes = resources
+            .read_and_remove_temp_file(&temp)
+            .expect("read and remove temp file");
+
+        assert_eq!(bytes, b"wav-bytes");
+        assert!(!temp.exists());
+    }
+
+    #[test]
+    fn read_and_remove_temp_file_reports_missing_temp_file() {
+        let dirs = TestDirs::new("read-missing-temp");
+        let resources = dirs.runtime_resources();
+        let temp = resources.temp_file_path("missing.wav");
+
+        let error = resources
+            .read_and_remove_temp_file(&temp)
+            .expect_err("missing temp file should fail");
+
+        assert!(error.contains("Failed to read temporary file"));
+        assert!(!temp.exists());
     }
 }

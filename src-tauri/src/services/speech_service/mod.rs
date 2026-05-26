@@ -175,7 +175,7 @@ impl SpeechService {
                 return Ok(status);
             }
             info!(model = %model_name, "Existing file is invalid/truncated, re-downloading");
-            std::fs::remove_file(&target_path).ok();
+            self.runtime.remove_downloaded_model(model_name)?;
         }
 
         let url = format!(
@@ -464,14 +464,7 @@ impl SpeechService {
 
         info!(path = %temp_wav_path.display(), "Saved temp audio, sending to whisper-server");
 
-        // Read the WAV file contents
-        let audio_data = std::fs::read(&temp_wav_path).map_err(|e| {
-            std::fs::remove_file(&temp_wav_path).ok();
-            format!("Failed to read temp WAV: {}", e)
-        })?;
-
-        // Clean up file immediately after reading
-        std::fs::remove_file(&temp_wav_path).ok();
+        let audio_data = self.runtime.read_and_remove_temp_file(&temp_wav_path)?;
 
         // Prepare multipart form data
         let part = multipart::Part::bytes(audio_data)
