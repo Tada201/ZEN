@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { chatApi } from "@/api";
+import { useChatStore } from "@/lib/stores/useChatStore";
 import { toast } from "sonner";
 import { Session, ChatFolder } from "../../components/chat/types";
 import { mapChatToSession, mapChatFolderToFolder } from "./useChatQueries";
@@ -41,6 +42,7 @@ export function useChatMutations({
     onSuccess: (_, id) => {
       queryClient.setQueryData<Session[]>(["sessions"], (prev) => prev?.filter((s) => s.id !== id));
       queryClient.setQueryData<Session[]>(["archived-sessions"], (prev) => prev?.filter((s) => s.id !== id));
+      useChatStore.getState().clearSessionRuntime(id);
       if (currentSessionId === id) setCurrentSessionId(null);
       toast.success("Session deleted");
     },
@@ -93,7 +95,8 @@ export function useChatMutations({
 
   const bulkDeleteMutation = useMutation({
     mutationFn: (ids: string[]) => chatApi.bulkDeleteChats(ids),
-    onSuccess: () => {
+    onSuccess: (_, ids) => {
+      ids.forEach((id) => useChatStore.getState().clearSessionRuntime(id));
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
       queryClient.invalidateQueries({ queryKey: ["archived-sessions"] });
       toast.success("History cleared");

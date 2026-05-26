@@ -156,14 +156,18 @@ Completed:
   catalog call instead of depending on `useSettingsStore.availableModels` or
   `fetchingModels`. Settings screens still own provider configuration and
   provider-settings catalog sync.
+- Chat store no longer exposes compatibility mutators for server-owned sessions,
+  archived sessions, folders, or server search results. It keeps only active
+  chat id, search UI input state, artifacts, streaming flags, and live message
+  buffers.
 - Frontend architecture rules are documented.
 
 Remaining:
 
-- Consolidate React Query versus Zustand ownership for sessions, folders, and
-  messages where legacy compatibility fields still exist.
-- Remove duplicate or compatibility-only store actions once all consumers use
-  query hooks directly.
+- Consolidate React Query versus Zustand ownership for messages where legacy
+  compatibility fields still exist.
+- Remove duplicate or compatibility-only message setters once all consumers use
+  per-session runtime APIs directly.
 - Audit IPC error shapes and make UI handling consistent.
 
 Exit criteria:
