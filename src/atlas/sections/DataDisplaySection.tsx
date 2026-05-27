@@ -1,13 +1,16 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import {
   ChevronDown, ChevronRight, ChevronLeft, ArrowUpDown, MoreHorizontal,
-  Folder, FileText, Inbox, Plus, ArrowUp, ArrowDown, MessageSquare, Reply, Heart,
+  Folder, FileText, Inbox, Plus, ArrowUp, ArrowDown, MessageSquare,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DemoCard, Section } from "../Section";
+import { DataDisplayAvatarGroup } from "./DataDisplayAvatarGroup";
+import { DataDisplayComments } from "./DataDisplayComments";
+import { DataDisplaySparklines } from "./DataDisplaySparklines";
 
 const TABLE_DATA = [
   { name: "Sarah Chen", role: "Design Lead", status: "Active", revenue: "$12,450" },
@@ -109,153 +112,6 @@ function PaginationDemo() {
   );
 }
 
-const SPARK_RANGES = ["7D", "30D", "90D"] as const;
-type SparkRange = (typeof SPARK_RANGES)[number];
-
-const SPARK_DATA: Record<string, Record<SparkRange, number[]>> = {
-  Revenue: {
-    "7D": [30, 45, 35, 50, 48, 60, 55],
-    "30D": [20, 30, 28, 35, 40, 38, 50, 45, 55, 60, 58, 65, 62, 70, 68, 72, 75, 73, 80, 78, 82, 85, 83, 88, 87, 90, 88, 92, 95, 98],
-    "90D": Array.from({ length: 90 }, (_, i) => Math.round(20 + i * 0.8 + Math.sin(i / 5) * 5)),
-  },
-  Users: {
-    "7D": [20, 25, 40, 35, 45, 42, 50],
-    "30D": Array.from({ length: 30 }, (_, i) => Math.round(15 + i * 0.7 + Math.cos(i / 4) * 4)),
-    "90D": Array.from({ length: 90 }, (_, i) => Math.round(10 + i * 0.5 + Math.sin(i / 7) * 6)),
-  },
-  Churn: {
-    "7D": [5, 8, 6, 4, 3, 5, 4],
-    "30D": Array.from({ length: 30 }, (_, i) => Math.round(8 - i * 0.1 + Math.sin(i / 3) * 1.5)),
-    "90D": Array.from({ length: 90 }, (_, i) => Math.round(9 - i * 0.04 + Math.cos(i / 8) * 1)),
-  },
-};
-
-const STAT_META = [
-  { label: "Revenue", color: "hsl(var(--primary))", format: (v: number) => `$${v}` },
-  { label: "Users", color: "hsl(var(--success))", format: (v: number) => `${v}` },
-  { label: "Churn", color: "hsl(var(--destructive))", format: (v: number) => `${v}%` },
-];
-
-function SparkCard({ label, color, format, range }: { label: string; color: string; format: (v: number) => string; range: SparkRange }) {
-  // Simulate live data movement
-  const [jitter, setJitter] = useState(0);
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setJitter(prev => prev + (Math.random() - 0.5) * 2);
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const baseData = SPARK_DATA[label][range];
-  const data = useMemo(() => {
-    return baseData.map((v, i) => i === baseData.length - 1 ? v + jitter : v);
-  }, [baseData, jitter]);
-
-  const latest = data[data.length - 1];
-  const prev = data[data.length - 2];
-  const delta = latest - prev;
-  const pts = data.map((v, i) => `${(i / (data.length - 1)) * 120},${30 - (v / Math.max(...data)) * 28}`).join(" ");
-  return (
-    <div className="rounded-lg border border-border bg-card p-3 shadow-sm hover:shadow-md transition-shadow duration-300">
-      <div className="flex items-start justify-between gap-2">
-        <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</div>
-        <div className={`flex items-center gap-0.5 text-[10px] font-semibold transition-colors duration-500 ${delta >= 0 ? "text-[hsl(var(--success))]" : "text-destructive"}`}>
-          {delta >= 0 ? <ArrowUp className="h-2.5 w-2.5" /> : <ArrowDown className="h-2.5 w-2.5" />}
-          {Math.abs(delta).toFixed(1)}
-        </div>
-      </div>
-      <div className="mt-1 text-xl font-bold tabular-nums tracking-tight">{format(Math.round(latest))}</div>
-      <svg viewBox="0 0 120 30" className="mt-2 h-8 w-full overflow-visible">
-        <defs>
-          <linearGradient id={`grad-${label}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.2" />
-            <stop offset="100%" stopColor={color} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <polyline 
-          fill="none" 
-          stroke={color} 
-          strokeWidth="2" 
-          strokeLinecap="round" 
-          strokeLinejoin="round" 
-          points={pts} 
-          className="transition-all duration-1000 ease-in-out"
-        />
-      </svg>
-    </div>
-  );
-}
-
-/* ── Comments thread ── */
-type Comment = { id: string; author: string; initials: string; body: string; time: string; likes: number; liked: boolean; replies?: Comment[] };
-const SEED_COMMENTS: Comment[] = [
-  {
-    id: "c1", author: "Marcus Rivera", initials: "MR", body: "The new gradient palette is perfect — works great across all themes!", time: "2h ago", likes: 5, liked: false,
-    replies: [
-      { id: "c1r1", author: "Sarah Chen", initials: "SC", body: "Thanks! I tweaked the stop positions to avoid the muddy middle.", time: "1h ago", likes: 2, liked: true },
-    ],
-  },
-  { id: "c2", author: "Aiko Tanaka", initials: "AT", body: "Could we add a monochrome preset too? Would help for print docs.", time: "45m ago", likes: 3, liked: false },
-];
-
-function CommentNode({ c, depth = 0 }: { c: Comment; depth?: number }) {
-  const [liked, setLiked] = useState(c.liked);
-  const [likes, setLikes] = useState(c.likes);
-  const [replying, setReplying] = useState(false);
-  return (
-    <div className={depth > 0 ? "ml-8 mt-2 border-l-2 border-border pl-3" : ""}>
-      <div className="flex items-start gap-2.5">
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-primary-foreground" style={{ background: "var(--gradient-accent)" }}>{c.initials}</div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-2">
-            <span className="text-xs font-semibold">{c.author}</span>
-            <span className="text-[10px] text-muted-foreground">{c.time}</span>
-          </div>
-          <p className="mt-0.5 text-xs text-muted-foreground">{c.body}</p>
-          <div className="mt-1.5 flex items-center gap-3">
-            <button
-              className="press flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
-              onClick={(e) => { e.stopPropagation(); setLiked((l) => !l); setLikes((n) => liked ? n - 1 : n + 1); }}
-              aria-label={liked ? "Unlike" : "Like"}
-            >
-              <Heart className={`h-3 w-3 ${liked ? "fill-destructive text-destructive" : ""}`} /> {likes}
-            </button>
-            <button
-              className="press flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
-              onClick={(e) => { e.stopPropagation(); setReplying((r) => !r); }}
-            >
-              <Reply className="h-3 w-3" /> Reply
-            </button>
-          </div>
-          {replying && (
-            <div className="mt-2 flex gap-2">
-              <input autoFocus className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring" placeholder="Write a reply…" onClick={(e) => e.stopPropagation()} />
-              <button className="press rounded-md bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground" onClick={(e) => { e.stopPropagation(); setReplying(false); }}>Send</button>
-            </div>
-          )}
-        </div>
-      </div>
-      {c.replies?.map((r) => <CommentNode key={r.id} c={r} depth={depth + 1} />)}
-    </div>
-  );
-}
-
-/* ── Avatar group ── */
-const AVATAR_USERS = [
-  { initials: "SC", label: "Sarah Chen" },
-  { initials: "MR", label: "Marcus Rivera" },
-  { initials: "AT", label: "Aiko Tanaka" },
-  { initials: "ER", label: "Elena Rossi" },
-  { initials: "JD", label: "James Doe" },
-];
-const AVATAR_GRADIENTS = [
-  "var(--gradient-accent)",
-  "linear-gradient(135deg, hsl(260,70%,55%), hsl(220,80%,60%))",
-  "linear-gradient(135deg, hsl(160,65%,40%), hsl(200,70%,50%))",
-  "linear-gradient(135deg, hsl(30,90%,55%), hsl(50,90%,55%))",
-  "linear-gradient(135deg, hsl(340,75%,55%), hsl(310,70%,55%))",
-];
-
 /* ── Badge gallery ── */
 const BADGE_VARIANTS = [
   { variant: "default" as const, label: "Default" },
@@ -291,12 +147,6 @@ export function DataDisplaySection() {
     if (key === sortKey) setSortDir((d) => d === "asc" ? "desc" : "asc");
     else { setSortKey(key); setSortDir("asc"); }
   };
-
-  /* Stat sparklines */
-  const [sparkRange, setSparkRange] = useState<SparkRange>("7D");
-
-  /* Avatar group */
-  const [shownCount, setShownCount] = useState(3);
 
   return (
     <Section id="data-display" title="Data Display" description="Tables, metrics, trees, and structured data patterns.">
@@ -367,73 +217,8 @@ export function DataDisplaySection() {
       </DemoCard>
 
       {/* ── Avatar Group ── */}
-      <DemoCard
-        label="Avatar group"
-        selection={{
-          id: "dd-avatars", name: "Avatar Group", category: "Data Display",
-          variants: ["stacked", "overflow-count", "expandable"],
-          jsx: `<div className="flex -space-x-2">\n  {users.slice(0, 3).map(u => <Avatar key={u} />)}\n  {users.length > 3 && <span>+{users.length - 3}</span>}\n</div>`,
-        }}
-      >
-        <div onClick={(e) => e.stopPropagation()} className="space-y-4">
-          <div>
-            <div className="mb-2 text-xs font-medium text-muted-foreground">Assigned to</div>
-            <div className="flex items-center gap-3">
-              <div className="flex -space-x-2">
-                {AVATAR_USERS.slice(0, shownCount).map((u, i) => (
-                  <div
-                    key={u.initials}
-                    title={u.label}
-                    className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-background text-[10px] font-bold text-primary-foreground ring-0"
-                    style={{ background: AVATAR_GRADIENTS[i % AVATAR_GRADIENTS.length], zIndex: shownCount - i }}
-                  >
-                    {u.initials}
-                  </div>
-                ))}
-                {shownCount < AVATAR_USERS.length && (
-                  <button
-                    onClick={() => setShownCount(AVATAR_USERS.length)}
-                    className="press flex h-8 w-8 items-center justify-center rounded-full border-2 border-background bg-muted text-[10px] font-semibold text-muted-foreground hover:bg-muted/80"
-                    style={{ zIndex: 0 }}
-                  >
-                    +{AVATAR_USERS.length - shownCount}
-                  </button>
-                )}
-                {shownCount === AVATAR_USERS.length && (
-                  <button
-                    onClick={() => setShownCount(3)}
-                    className="press flex h-8 w-8 items-center justify-center rounded-full border-2 border-background bg-muted text-[10px] font-semibold text-muted-foreground hover:bg-muted/80"
-                    style={{ zIndex: 0 }}
-                  >
-                    ↩
-                  </button>
-                )}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {shownCount < AVATAR_USERS.length ? `${shownCount} of ${AVATAR_USERS.length} — click +${AVATAR_USERS.length - shownCount} to expand` : `All ${AVATAR_USERS.length} members`}
-              </div>
-            </div>
-          </div>
+      <DataDisplayAvatarGroup />
 
-          {/* Size variants */}
-          <div>
-            <div className="mb-2 text-xs font-medium text-muted-foreground">Size variants</div>
-            <div className="flex items-end gap-3">
-              {([6, 8, 10, 12] as const).map((size, i) => (
-                <div
-                  key={size}
-                  className={`flex h-${size} w-${size} items-center justify-center rounded-full border-2 border-background text-primary-foreground font-bold`}
-                  style={{ background: AVATAR_GRADIENTS[i], fontSize: `${size * 1.2}px`, width: `${size * 4}px`, height: `${size * 4}px` }}
-                >
-                  {AVATAR_USERS[i].initials}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </DemoCard>
-
-      {/* ── Badge Gallery ── */}
       <DemoCard
         label="Badge gallery"
         selection={{
@@ -542,36 +327,8 @@ export function DataDisplaySection() {
       </DemoCard>
 
       {/* ── Stat Sparklines ── */}
-      <DemoCard
-        label="Stat + sparkline"
-        selection={{
-          id: "dd-spark", name: "Stat with Sparkline", category: "Data Display",
-          variants: ["7D", "30D", "90D"],
-          jsx: `<SparkCard label="Revenue" range={range} />`,
-        }}
-        className="md:col-span-2 xl:col-span-1"
-      >
-        <div onClick={(e) => e.stopPropagation()} className="space-y-3">
-          <div className="flex items-center justify-end gap-1">
-            {SPARK_RANGES.map((r) => (
-              <button
-                key={r}
-                onClick={() => setSparkRange(r)}
-                className={`press rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${sparkRange === r ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {STAT_META.map((m) => (
-              <SparkCard key={m.label} label={m.label} color={m.color} format={m.format} range={sparkRange} />
-            ))}
-          </div>
-        </div>
-      </DemoCard>
+      <DataDisplaySparklines />
 
-      {/* ── Tree ── */}
       <DemoCard
         label="Tree"
         selection={{
@@ -668,31 +425,8 @@ export function DataDisplaySection() {
       </DemoCard>
 
       {/* ── Comments thread ── */}
-      <DemoCard
-        label="Comments thread"
-        selection={{
-          id: "dd-comments", name: "Comments Thread", category: "Data Display",
-          variants: ["nested", "reactions", "reply"],
-          jsx: `<CommentNode comment={c} depth={0} />`,
-        }}
-        className="md:col-span-2 xl:col-span-2"
-      >
-        <div onClick={(e) => e.stopPropagation()} className="space-y-4">
-          {SEED_COMMENTS.map((c) => <CommentNode key={c.id} c={c} />)}
-          <div className="flex gap-2 border-t border-border pt-3">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
-              You
-            </div>
-            <input
-              placeholder="Add a comment…"
-              className="flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-        </div>
-      </DemoCard>
+      <DataDisplayComments />
 
-      {/* ── Timeline ── */}
       <DemoCard
         label="Timeline"
         selection={{
