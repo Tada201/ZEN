@@ -1,50 +1,18 @@
 import { useState } from "react";
 import {
   ArrowRight, Bell, Check, ChevronRight, Globe, Lock,
-  Mail, Paperclip, Search, SlidersHorizontal,
-  Sparkles, Star, Trash2, TrendingUp, User, X, Zap,
+  Mail, Search, SlidersHorizontal,
+  Sparkles, Star, Trash2, TrendingUp, User, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DemoCard, Section } from "../Section";
-
-/* ─────────── Inbox ─────────── */
-type MailRow = { id: string; from: string; initials: string; subject: string; preview: string; time: string; unread: boolean; starred: boolean; hasAttach?: boolean };
-const SEED_MAIL: MailRow[] = [
-  { id: "m1", from: "Sarah Chen", initials: "SC", subject: "Design review notes from Friday", preview: "Loved the new motion timing — one nit on the toast position…", time: "9:42 AM", unread: true, starred: true, hasAttach: true },
-  { id: "m2", from: "GitHub", initials: "GH", subject: "PR #284 ready for review", preview: "fix(theme): respect reduced-motion when applying preset", time: "8:16 AM", unread: true, starred: false },
-  { id: "m3", from: "Linear", initials: "LN", subject: "3 issues moved to In Review", preview: "ATL-42, ATL-58, ATL-61 are awaiting your sign-off", time: "Yesterday", unread: false, starred: false },
-  { id: "m4", from: "Marcus Rivera", initials: "MR", subject: "Lunch on Thursday?", preview: "Free anytime after 12:30 — pick a spot near the office?", time: "Mon", unread: false, starred: false },
-];
-
-/* ─────────── Notification center ─────────── */
-type Notif = { id: string; icon: string; text: string; time: string; read: boolean };
-const SEED_NOTIFS: Notif[] = [
-  { id: "n1", icon: "💬", text: "Sarah left a comment on your PR #284", time: "2m ago", read: false },
-  { id: "n2", icon: "✅", text: "CI pipeline passed on main branch", time: "14m ago", read: false },
-  { id: "n3", icon: "🎉", text: "ATL-42 moved to Done by Marcus", time: "1h ago", read: false },
-  { id: "n4", icon: "🔔", text: "Weekly digest is ready to view", time: "Yesterday", read: true },
-  { id: "n5", icon: "📌", text: "You were mentioned in #design-review", time: "Yesterday", read: true },
-];
-
-/* ─────────── Filter bar helpers ─────────── */
-const STATUS_FILTERS = ["All", "Active", "Review", "Done", "Archived"] as const;
-type Status = (typeof STATUS_FILTERS)[number];
-type FilterRow = { id: string; name: string; status: Status; priority: string };
-const FILTER_ROWS: FilterRow[] = [
-  { id: "t1", name: "Update onboarding flow", status: "Active", priority: "High" },
-  { id: "t2", name: "Audit contrast tokens", status: "Done", priority: "Medium" },
-  { id: "t3", name: "Add range slider demo", status: "Review", priority: "High" },
-  { id: "t4", name: "Write motion guidelines", status: "Active", priority: "Low" },
-  { id: "t5", name: "Migrate legacy inputs", status: "Archived", priority: "Low" },
-  { id: "t6", name: "Publish v1.0 changelog", status: "Review", priority: "Medium" },
-];
-
-/* ─────────── Onboarding wizard ─────────── */
-const WIZARD_STEPS = ["Account", "Team", "Plan"] as const;
+import { CombosInbox } from "./CombosInbox";
+import { CombosNotificationCenter } from "./CombosNotificationCenter";
+import { CombosPricingTable } from "./CombosPricingTable";
+import { FILTER_ROWS, MailRow, Notif, SEED_MAIL, SEED_NOTIFS, STATUS_FILTERS, Status, WIZARD_STEPS } from "./combosData";
 
 export function CombosSection() {
   /* Settings */
@@ -193,124 +161,15 @@ export function CombosSection() {
         </div>
       </DemoCard>
 
-      {/* ── Notification center ── */}
-      <DemoCard
-        label="Notification center"
-        selection={{
-          id: "cb-notif", name: "Notification Center", category: "Combos",
-          variants: ["popover", "tabs-all-unread", "mark-all-read"],
-          jsx: `<Popover>\n  <PopoverTrigger>\n    <Bell /><Badge>{unread}</Badge>\n  </PopoverTrigger>\n  <PopoverContent>\n    <Tabs>\n      <TabsList>All | Unread</TabsList>\n      {notifs.map(n => <NotifRow />)}\n    </Tabs>\n  </PopoverContent>\n</Popover>`,
-        }}
-      >
-        <div onClick={(e) => e.stopPropagation()} className="flex items-center justify-center py-4">
-          <Popover>
-            <PopoverTrigger asChild>
-              <button className="press relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:bg-muted">
-                <Bell className="h-4 w-4" />
-                {unreadCount > 0 && (
-                  <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80 p-0" align="center">
-              <div className="flex items-center justify-between border-b border-border px-3 py-2">
-                <h4 className="text-sm font-semibold">Notifications</h4>
-                <div className="flex items-center gap-2">
-                  {unreadCount > 0 && (
-                    <button onClick={markAllRead} className="press text-[10px] font-medium text-primary hover:underline">
-                      Mark all read
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div className="flex border-b border-border">
-                {(["all", "unread"] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setNotifTab(tab)}
-                    className={`flex-1 py-1.5 text-xs font-medium capitalize transition-colors ${
-                      notifTab === tab ? "border-b-2 border-primary text-foreground" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {tab}
-                    {tab === "unread" && unreadCount > 0 && (
-                      <span className="ml-1.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold text-primary">{unreadCount}</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-              <ul className="max-h-64 overflow-y-auto divide-y divide-border">
-                {visibleNotifs.length === 0 ? (
-                  <li className="py-8 text-center text-xs text-muted-foreground">You're all caught up.</li>
-                ) : visibleNotifs.map((n) => (
-                  <li key={n.id} className={`group flex items-start gap-2.5 px-3 py-2.5 ${!n.read ? "bg-primary/[0.03]" : ""}`}>
-                    <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-base">{n.icon}</div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs leading-snug">{n.text}</p>
-                      <p className="mt-0.5 text-[10px] text-muted-foreground">{n.time}</p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-center gap-1">
-                      {!n.read && <div className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />}
-                      <button
-                        onClick={() => dismissNotif(n.id)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity press text-muted-foreground hover:text-foreground"
-                        aria-label="Dismiss"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              <div className="border-t border-border px-3 py-2">
-                <button className="press flex w-full items-center justify-center gap-1 text-[11px] font-medium text-primary hover:underline">
-                  View all notifications <ArrowRight className="h-3 w-3" />
-                </button>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-      </DemoCard>
-
-      {/* ── Pricing Table ── */}
-      <DemoCard
-        label="Pricing Table"
-        selection={{
-          id: "cb-pricing", name: "Pricing Table", category: "Combos",
-          variants: ["3-tier"],
-          jsx: `<div className="grid grid-cols-3 gap-4">\n  <PricingCard tier="Starter" price="$0" />\n</div>`,
-        }}
-        className="md:col-span-2 xl:col-span-3"
-      >
-        <div onClick={(e) => e.stopPropagation()} className="grid grid-cols-3 gap-3">
-          {[
-            { name: "Starter", price: "$0", features: ["3 projects", "Community support", "Basic analytics"] },
-            { name: "Pro", price: "$12", features: ["Unlimited projects", "Priority support", "Custom themes", "Team seats"], highlight: true },
-            { name: "Enterprise", price: "Custom", features: ["SSO & SAML", "Dedicated support", "SLA", "On-premise option"] },
-          ].map((tier) => (
-            <div
-              key={tier.name}
-              className={`relative rounded-xl border p-4 ${tier.highlight ? "border-primary" : "border-border"}`}
-              style={tier.highlight ? { boxShadow: "var(--shadow-accent)" } : {}}
-            >
-              {tier.highlight && <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground">Popular</span>}
-              <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{tier.name}</div>
-              <div className="mt-1 text-3xl font-bold">{tier.price}</div>
-              <div className="text-[10px] text-muted-foreground">{tier.price === "Custom" ? "Contact sales" : "/mo"}</div>
-              <ul className="mt-3 space-y-1.5">
-                {tier.features.map((f) => (
-                  <li key={f} className="flex items-center gap-1.5 text-xs">
-                    <Check className="h-3.5 w-3.5 text-primary" /> {f}
-                  </li>
-                ))}
-              </ul>
-              <Button className="press mt-4 w-full" variant={tier.highlight ? "default" : "outline"} size="sm">Choose {tier.name}</Button>
-            </div>
-          ))}
-        </div>
-      </DemoCard>
+      <CombosNotificationCenter
+        notifTab={notifTab}
+        unreadCount={unreadCount}
+        visibleNotifs={visibleNotifs}
+        setNotifTab={setNotifTab}
+        markAllRead={markAllRead}
+        dismissNotif={dismissNotif}
+      />
+      <CombosPricingTable />
 
       {/* ── Onboarding Wizard ── */}
       <DemoCard
@@ -551,80 +410,13 @@ export function CombosSection() {
         </div>
       </DemoCard>
 
-      {/* ── Inbox ── */}
-      <DemoCard
-        label="Inbox"
-        selection={{
-          id: "cb-inbox", name: "Email / Inbox List", category: "Combos",
-          variants: ["unread dot", "starred", "with attachment"],
-          jsx: `<ul role="list" className="divide-y">\n  <li className="flex items-center gap-3 p-3">\n    <Avatar /> <Subject /> <Time />\n  </li>\n</ul>`,
-        }}
-        className="md:col-span-2 xl:col-span-1"
-      >
-        <div onClick={(e) => e.stopPropagation()} className="overflow-hidden rounded-xl border border-border bg-card">
-          <div className="flex items-center justify-between border-b border-border px-3 py-2">
-            <div className="flex items-center gap-2">
-              <h4 className="text-sm font-semibold">Inbox</h4>
-              <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary tabular-nums">
-                {mailRows.filter((m) => m.unread).length}
-              </span>
-            </div>
-            <button
-              onClick={() => setMailRows(SEED_MAIL)}
-              className="press text-[10px] font-medium text-muted-foreground hover:text-foreground"
-            >
-              Reset
-            </button>
-          </div>
-          <ul role="list" className="divide-y divide-border">
-            {mailRows.length === 0 && (
-              <li className="px-4 py-8 text-center text-xs text-muted-foreground">Inbox zero. Nice work.</li>
-            )}
-            {mailRows.map((m) => (
-              <li key={m.id} className={`group flex items-start gap-3 px-3 py-2.5 ${m.unread ? "bg-primary/[0.03]" : ""}`}>
-                <button
-                  aria-label={m.unread ? "Mark as read" : "Read"}
-                  onClick={() => markRead(m.id)}
-                  className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${m.unread ? "bg-primary" : "bg-transparent border border-border"}`}
-                />
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-primary-foreground" style={{ background: "var(--gradient-accent)" }}>
-                  {m.initials}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className={`truncate text-xs ${m.unread ? "font-semibold text-foreground" : "font-medium text-foreground"}`}>{m.from}</span>
-                    <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{m.time}</span>
-                  </div>
-                  <div className={`mt-0.5 truncate text-xs ${m.unread ? "text-foreground" : "text-muted-foreground"}`}>
-                    {m.subject}
-                  </div>
-                  <div className="mt-0.5 flex items-center gap-1.5">
-                    {m.hasAttach && <Paperclip className="h-3 w-3 text-muted-foreground" />}
-                    <p className="truncate text-[11px] text-muted-foreground">{m.preview}</p>
-                  </div>
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                  <button
-                    aria-label={m.starred ? "Unstar" : "Star"}
-                    onClick={() => toggleStar(m.id)}
-                    className="press"
-                  >
-                    <Star className={`h-3.5 w-3.5 ${m.starred ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} />
-                  </button>
-                  <button
-                    aria-label="Delete"
-                    onClick={() => removeRow(m.id)}
-                    className="press text-muted-foreground hover:text-destructive"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </DemoCard>
-
+      <CombosInbox
+        mailRows={mailRows}
+        setMailRows={setMailRows}
+        toggleStar={toggleStar}
+        markRead={markRead}
+        removeRow={removeRow}
+      />
       {/* ── Login Page ── */}
       <DemoCard
         label="Login Page"
