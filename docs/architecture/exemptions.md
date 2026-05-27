@@ -17,26 +17,8 @@ Expires:
 ## Backend Exemptions
 
 ```txt
-File: src-tauri/src/canvas/session.rs
-Owner: backend/canvas
-Rule Exempted: Rust hard file-size limit
-Reason: Canvas session owns persistence, protocol handling, validation, and plotting in one module.
-Split or Fix Plan: Split into session_store.rs, session_commands.rs, element_ops.rs, and export/import helpers.
-Expires: Phase 5
-
-File: src-tauri/src/agent/workflow.rs
-Owner: backend/agent
-Rule Exempted: Rust hard file-size limit
-Reason: Workflow definitions, execution helpers, and orchestration behavior are colocated.
-Split or Fix Plan: Split workflow model types, execution engine, persistence adapter, and tests.
-Expires: Phase 5
-
-File: src-tauri/src/agent/swarm.rs
-Owner: backend/agent
-Rule Exempted: Rust hard file-size limit
-Reason: Swarm coordination, task assignment, and result synthesis are still in one module.
-Split or Fix Plan: Extract swarm_plan.rs, worker_pool.rs, task_assignment.rs, and synthesis.rs.
-Expires: Phase 5
+None active. Backend hard-limit files must fail the quality gate instead of
+being exempted.
 ```
 
 ## Frontend Exemptions

@@ -1,145 +1,28 @@
 use super::actions::{emit_action_only, persist_and_emit_action};
-use super::config::RunConfig;
 use super::helpers::{generate_handoff_summary, parse_file_changes, parse_text_tool_calls};
+use super::lifecycle::Runner;
 use super::memory_bootstrap::{
     cached_recall_context, compact_context_if_needed, load_initial_conversation,
     load_memory_run_settings,
 };
 use super::turn_persistence::{save_assistant_message, AssistantMessageSave};
-use crate::agent::cache::ToolCache;
 use crate::agent::event_bus::{
     AgentEvent, ChatChunkPayload, ChatDonePayload, ChatErrorPayload, ChatStatusPayload,
     ToolCompletePayload,
 };
-use crate::agent::hooks::HookRegistry;
 use crate::agent::middleware::{EnrichmentContext, MiddlewareChain};
-use crate::agent::tools::ToolRegistry;
 use crate::agent::types::*;
 use crate::db::models::ChatMessage;
 use crate::db::queries;
 use crate::llm::LlmProvider;
-use crate::tools::manager::ToolManager;
-use crate::tools::GlobalToolRegistry;
 use anyhow::{Context, Result};
-use sqlx::SqlitePool;
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
-use tauri::AppHandle;
+use std::collections::HashMap;
 use tokio_util::sync::CancellationToken;
 
 /// Maximum recursion depth for sub-agent spawning (prevents infinite loops)
 pub const MAX_SPAWN_DEPTH: u32 = 3;
 
-pub struct Runner {
-    pub(super) app: AppHandle,
-    pub(super) tool_registry: Arc<tokio::sync::RwLock<ToolRegistry>>,
-    pub(super) agent_registry: Arc<AgentRegistry>,
-    pub(super) hook_registry: Arc<HookRegistry>,
-    pub(super) permissions: GlobalToolRegistry,
-    pub(super) tool_manager: Arc<ToolManager>,
-    pub(super) config: RunConfig,
-    pub(super) db_pool: Option<SqlitePool>,
-    pub depth: u32,
-    pub(super) cache: Arc<tokio::sync::Mutex<ToolCache>>,
-    pub(super) allowed_tools: Arc<tokio::sync::Mutex<HashSet<String>>>,
-    pub(super) on_event: Option<tauri::ipc::Channel<serde_json::Value>>,
-}
-
 impl Runner {
-    pub fn new(
-        app: AppHandle,
-        tool_registry: Arc<tokio::sync::RwLock<ToolRegistry>>,
-        agent_registry: Arc<AgentRegistry>,
-        hook_registry: Arc<HookRegistry>,
-        permissions: GlobalToolRegistry,
-        tool_manager: Arc<ToolManager>,
-    ) -> Self {
-        Self {
-            app,
-            tool_registry,
-            agent_registry,
-            hook_registry,
-            permissions,
-            tool_manager,
-            config: RunConfig::default(),
-            db_pool: None,
-            depth: 0,
-            cache: Arc::new(tokio::sync::Mutex::new(ToolCache::new(300))), // 5 min default TTL
-            allowed_tools: Arc::new(tokio::sync::Mutex::new(HashSet::new())),
-            on_event: None,
-        }
-    }
-
-    /// Set a direct IPC channel for high-performance event streaming
-    pub fn with_channel(mut self, channel: tauri::ipc::Channel<serde_json::Value>) -> Self {
-        self.on_event = Some(channel);
-        self
-    }
-
-    pub fn with_db_pool(mut self, db_pool: SqlitePool) -> Self {
-        self.db_pool = Some(db_pool);
-        self
-    }
-
-    pub fn with_parallel_tools(mut self, parallel: bool) -> Self {
-        self.config.parallel_tools = parallel;
-        self
-    }
-
-    pub fn with_tools_enabled(mut self, enabled: bool) -> Self {
-        self.config.tools_enabled = enabled;
-        self
-    }
-
-    pub fn with_memory_scope(self, _scope: String) -> Self {
-        // Memory scope - retained for future session memory features
-        self
-    }
-
-    pub fn with_depth(mut self, depth: u32) -> Self {
-        self.depth = depth;
-        self
-    }
-
-    pub fn with_max_iterations(mut self, max_iterations: usize) -> Self {
-        self.config.max_iterations = max_iterations;
-        self
-    }
-
-    pub fn with_allowed_tools(
-        mut self,
-        allowed_tools: Arc<tokio::sync::Mutex<HashSet<String>>>,
-    ) -> Self {
-        self.allowed_tools = allowed_tools;
-        self
-    }
-
-    /// Emit an event via direct channel or fallback to global app emit
-    pub(super) fn emit(&self, event: AgentEvent) {
-        event.emit_via(&self.app, &self.on_event);
-    }
-
-    /// Create a child runner with bounded iterations (for sub-agent spawning).
-    pub fn child(&self, max_iterations: usize) -> Self {
-        Self {
-            app: self.app.clone(),
-            tool_registry: self.tool_registry.clone(),
-            agent_registry: self.agent_registry.clone(),
-            hook_registry: self.hook_registry.clone(),
-            permissions: self.permissions.clone(),
-            tool_manager: self.tool_manager.clone(),
-            config: RunConfig {
-                max_iterations,
-                ..self.config.clone()
-            },
-            db_pool: self.db_pool.clone(),
-            depth: self.depth + 1,
-            cache: self.cache.clone(), // Share cache across parent and child agents
-            allowed_tools: self.allowed_tools.clone(), // Share allowed tools across tree
-            on_event: self.on_event.clone(),
-        }
-    }
-
     pub async fn run(
         &self,
         provider: &dyn LlmProvider,

@@ -194,20 +194,36 @@ Phase 5 entry evidence:
 
 ## Phase 5: Split Oversized Modules
 
-Status: started only as exemptions and quality gates.
+Status: backend hard-limit split complete; frontend hard-limit split remains.
 
-Priority backend targets:
-
-- `src-tauri/src/canvas/session.rs`
-- `src-tauri/src/agent/tools/progressive.rs`
-- `src-tauri/src/agent/workflow.rs`
-- `src-tauri/src/agent/swarm.rs`
-- `src-tauri/src/db/mod.rs`
-
-Completed hard-limit target:
+Completed backend hard-limit targets:
 
 - `src-tauri/src/agent/runner/loop.rs` was reduced below the Rust hard limit by
-  extracting memory bootstrap, turn persistence, and tool authorization helpers.
+  extracting lifecycle, memory bootstrap, turn persistence, and tool
+  authorization helpers.
+- `src-tauri/src/canvas/session.rs` was reduced below the Rust hard limit by
+  extracting session contracts and parser/color/time helpers.
+- `src-tauri/src/agent/workflow.rs` was reduced below the Rust hard limit by
+  extracting workflow contracts, events, metrics, result, and error types.
+- `src-tauri/src/agent/swarm.rs` was reduced below the Rust hard limit by
+  extracting swarm contracts, events, state, result, and error types.
+
+Remaining backend warning-size targets:
+
+- `src-tauri/src/canvas/session.rs`
+- `src-tauri/src/agent/runner/loop.rs`
+- `src-tauri/src/db/mod.rs`
+- `src-tauri/src/agent/router.rs`
+- `src-tauri/src/llm/anthropic.rs`
+- `src-tauri/src/agent/plugins.rs`
+- `src-tauri/src/agent/memory.rs`
+- `src-tauri/src/agent/tools/progressive.rs`
+- `src-tauri/src/tools/permission.rs`
+
+Remaining frontend hard-limit targets:
+
+- Run the frontend file-size gate and split any non-exempt TS/TSX files over
+  500 lines.
 
 Exit criteria:
 

@@ -14,6 +14,7 @@ mod background;
 pub mod config;
 mod escalation;
 pub mod helpers;
+mod lifecycle;
 #[allow(clippy::module_inception)]
 mod r#loop;
 mod memory_bootstrap;
@@ -27,4 +28,5 @@ mod turn_persistence;
 pub use actions::{emit_action_only, persist_and_emit_action};
 pub use config::{ContextTracker, RunConfig};
 pub use helpers::{estimate_conversation_tokens, estimate_tokens};
-pub use r#loop::{Runner, MAX_SPAWN_DEPTH};
+pub use lifecycle::Runner;
+pub use r#loop::MAX_SPAWN_DEPTH;
