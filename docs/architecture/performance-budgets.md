@@ -28,6 +28,12 @@ getting worse while Phase 6 splits heavy surfaces.
 - Map engines, diagram renderers, chart renderers, 3D labs, editors, terminal,
   diagnostics, and voice overlays must not be imported by startup paths unless
   they are visible on first paint.
+- Mermaid is allowed for now only as a lazily imported, viewport-gated diagram
+  renderer. Replacing it with a narrower renderer is a product decision, not a
+  Phase 6 blocker.
+- Rich markdown extras such as KaTeX and syntax highlighting must remain behind
+  the rich markdown renderer boundary. Do not add markdown plugins to the core
+  chat path.
 - Use Vite manual chunks for large vendor families so bundle drift is visible.
 - Do not silence Vite chunk warnings by raising `chunkSizeWarningLimit` until
   the release budget is decided.
@@ -39,3 +45,5 @@ getting worse while Phase 6 splits heavy surfaces.
 - Streaming markdown and artifact rendering should avoid reparsing or recloning
   full content on every token delta.
 - Zustand stores used by timers or streams must avoid broad subscriptions.
+- Growable local-history and telemetry reads must use paginated typed API
+  wrappers. Legacy unpaginated command names are compatibility surfaces only.

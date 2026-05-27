@@ -248,7 +248,7 @@ Exit criteria:
 
 ## Phase 6: Performance Budgets
 
-Status: started.
+Status: complete for Phase 7 entry.
 
 Goals:
 
@@ -278,6 +278,13 @@ Completed:
 - `npm run perf:budget` reports local bundle budgets after `npm run build`.
 - `docs/architecture/performance-budgets.md` documents local budgets and Phase 6
   bundle/runtime rules.
+- Mermaid is retained for this phase because diagram support is a real chat
+  workflow. Its large vendor chunk is accepted only behind lazy import,
+  viewport gating, strict rendering mode, and visible bundle-budget evidence.
+- KaTeX, syntax highlighting, and markdown plugins are retained inside the rich
+  markdown renderer, but the renderer is no longer part of the initial chat
+  module. New markdown extensions must stay behind the same rich-renderer
+  boundary.
 - Voice oscilloscope, voice overlay barge-in monitor, media audio waveform, and
   GTSM minimap rendering now stop or idle when hidden/offscreen instead of
   keeping hot animation loops alive.
@@ -312,15 +319,16 @@ Current evidence:
   `npm run perf:budget`, and `git diff --check` passed for this Phase 6
   checkpoint.
 
-Remaining:
+Exit criteria:
 
-- Decide whether to keep Mermaid despite its all-diagram vendor chunk, restrict
-  supported diagram types, or replace it with a narrower renderer.
-- Decide whether `react-markdown`/KaTeX/highlight should be split behind
-  richer-message rendering or kept in core chat.
-- Continue using paginated wrappers for any new growable frontend data reads;
-  legacy command names remain only for compatibility and backend/internal flows.
-- Keep CI ratchet deferred until the full app feature surface is done.
+- Heavy optional frontend surfaces are lazy-loaded at interaction, render, or
+  viewport boundaries.
+- Runtime loops pause or idle when hidden, inactive, or offscreen.
+- Shared backend HTTP clients are used on hot request paths.
+- Broad local-history and secondary list surfaces have paginated command paths,
+  and frontend growable reads use paginated wrappers.
+- Local performance budget checks are documented and passing.
+- CI ratchet remains deferred until the full app feature surface is done.
 
 ## Phase 7: CI Ratchet
 
