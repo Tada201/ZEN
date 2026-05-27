@@ -8,17 +8,21 @@ import { ArtifactData } from "./types";
 import { CodeBlock } from "./CodeBlock";
 import { OpenUIRenderer } from "../OpenUIRenderer";
 import { ReasoningBlock } from "./ReasoningBlock";
-import { SmoothMarkdown } from "./SmoothMarkdown";
 import { FileTree } from "./FileTree";
 import { splitMarkdownIntoBlocks, type MarkdownBlock } from "./markdown-utils";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 
 const MermaidDiagram = React.lazy(() => import("./MermaidDiagram").then(m => ({ default: m.MermaidDiagram })));
 const ChartBlock = React.lazy(() => import("./ChartBlock").then(m => ({ default: m.ChartBlock })));
+const SmoothMarkdown = React.lazy(() => import("./SmoothMarkdown").then(m => ({ default: m.SmoothMarkdown })));
 
 const RichBlockFallback = () => (
-  <div className="my-6 flex items-center justify-center rounded-xl border border-border/30 bg-card/20 p-6 text-xs text-muted-foreground">
-    Loading renderer...
+  <div
+    className="my-6 h-24 animate-pulse rounded-xl border border-border/30 bg-card/20"
+    aria-hidden="true"
+  >
+    <div className="m-6 h-3 w-2/3 rounded-full bg-muted/40" />
+    <div className="mx-6 mt-3 h-3 w-1/2 rounded-full bg-muted/30" />
   </div>
 );
 
@@ -159,12 +163,14 @@ const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
   return (
     <MarkdownErrorBoundary content={block.content}>
       <div className="prose-frontier relative">
-        <SmoothMarkdown
-          content={block.content}
-          isStreaming={isStreaming}
-          components={components}
-          chatPlugins={chatPlugins}
-        />
+        <Suspense fallback={<RichBlockFallback />}>
+          <SmoothMarkdown
+            content={block.content}
+            isStreaming={isStreaming}
+            components={components}
+            chatPlugins={chatPlugins}
+          />
+        </Suspense>
       </div>
     </MarkdownErrorBoundary>
   );

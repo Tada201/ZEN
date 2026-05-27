@@ -266,9 +266,12 @@ Completed:
 
 - Optional settings, command palette, voice overlay, Mermaid, and chart
   renderers are lazy-loaded at interaction/render boundaries.
+- Rich markdown rendering is lazy-loaded at the chat block boundary instead of
+  being part of the initial chat renderer.
 - Mermaid itself is dynamically imported only when a Mermaid block renders.
 - Vite manual chunks split heavy vendor families for maps, diagrams, charts,
-  markdown, motion, and UI libraries without suppressing chunk warnings.
+  markdown, React, state, date, utility, motion, and UI libraries without
+  suppressing chunk warnings.
 - `npm run perf:budget` reports local bundle budgets after `npm run build`.
 - `docs/architecture/performance-budgets.md` documents local budgets and Phase 6
   bundle/runtime rules.
@@ -285,8 +288,10 @@ Completed:
 Current evidence:
 
 - Latest production build reduced the main JS entry from roughly 4.48 MB to
-  roughly 1.80 MB.
+  roughly 1.49 MB.
 - Current largest JS chunks are diagrams, main entry, map, charts, and markdown.
+- `npm run perf:budget` reports 7.8 MB total JavaScript against the current
+  12 MB local budget.
 - Local bundle budget currently passes, but Vite still emits large chunk
   warnings.
 - `cargo check --all-targets`, `npx tsc --noEmit`, `npm run build`,

@@ -7,8 +7,27 @@ import cesium from "vite-plugin-cesium";
 const host = process.env.TAURI_DEV_HOST;
 
 const manualChunks = (id: string) => {
+  if (id.includes("vite/preload-helper")) return "vendor-runtime";
   if (!id.includes("node_modules")) return undefined;
 
+  if (
+    id.includes("node_modules/react/") ||
+    id.includes("node_modules/react-dom/") ||
+    id.includes("node_modules/react-is/") ||
+    id.includes("node_modules/scheduler/") ||
+    id.includes("node_modules/use-sync-external-store/")
+  ) {
+    return "vendor-react";
+  }
+  if (id.includes("node_modules/zustand/") || id.includes("node_modules/@tanstack/")) {
+    return "vendor-state";
+  }
+  if (id.includes("node_modules/date-fns/") || id.includes("node_modules/react-day-picker/")) {
+    return "vendor-date";
+  }
+  if (id.includes("node_modules/lodash-es/")) {
+    return "vendor-utils";
+  }
   if (id.includes("cesium") || id.includes("@cesium")) return "vendor-cesium";
   if (id.includes("maplibre-gl") || id.includes("@maplibre")) return "vendor-map";
   if (id.includes("mermaid") || id.includes("@mermaid-js")) return "vendor-diagrams";
