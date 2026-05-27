@@ -286,6 +286,9 @@ Completed:
 - Broad backend list queries now have conservative query-layer caps for chats,
   messages, documents, artifacts, tags, orchestration rows, GTSM saved
   objects/history, and session memories.
+- Public paginated commands now exist for the highest-risk local-history paths:
+  active chats, chat messages, and documents. Legacy uncapped command names are
+  preserved as compatibility wrappers while frontend callers migrate.
 
 Current evidence:
 
@@ -308,8 +311,9 @@ Remaining:
   supported diagram types, or replace it with a narrower renderer.
 - Decide whether `react-markdown`/KaTeX/highlight should be split behind
   richer-message rendering or kept in core chat.
-- Replace query-layer caps with explicit paginated public APIs where large local
-  history is expected.
+- Continue replacing query-layer caps with explicit paginated public APIs for
+  lower-risk secondary lists such as archived chats, tags, artifacts, GTSM saved
+  objects/history, and session memories.
 - Keep CI ratchet deferred until the full app feature surface is done.
 
 ## Phase 7: CI Ratchet

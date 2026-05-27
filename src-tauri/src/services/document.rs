@@ -208,6 +208,16 @@ impl DocumentService {
         crate::db::queries::list_documents(&pool).await
     }
 
+    pub async fn list_page(&self, limit: i64, offset: i64) -> AppResult<Vec<Document>> {
+        let pool = self
+            .db_pool
+            .read()
+            .await
+            .clone()
+            .ok_or_else(|| AppError::Custom("Database not initialized".into()))?;
+        crate::db::queries::list_documents_page(&pool, limit, offset).await
+    }
+
     pub async fn get_by_id(&self, doc_id: &str) -> AppResult<Document> {
         let pool = self
             .db_pool

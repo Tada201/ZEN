@@ -11,9 +11,12 @@ export type {
   BackendChat,
   BackendFolder,
   BackendMessage,
+  PaginatedResponse,
   SearchResult,
   SendMessageRequest,
 } from "./chatApi";
+export { documentsApi } from "./documentsApi";
+export type { BackendDocument } from "./documentsApi";
 export {
   mapBackendToolMeta,
   normalizeToolRiskLevel,

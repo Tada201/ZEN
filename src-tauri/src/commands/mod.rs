@@ -4,6 +4,7 @@ pub mod chat;
 pub mod document;
 pub mod mcp;
 pub mod memory;
+pub mod pagination;
 pub mod settings;
 pub mod spatial;
 pub mod system;

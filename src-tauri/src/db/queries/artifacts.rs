@@ -63,18 +63,28 @@ pub async fn delete_artifact(pool: &SqlitePool, id: &str) -> ZenResult<()> {
 }
 
 pub async fn get_messages(pool: &SqlitePool, chat_id: &str) -> ZenResult<Vec<Message>> {
+    get_messages_page(pool, chat_id, MAX_CHAT_MESSAGE_ITEMS, 0).await
+}
+
+pub async fn get_messages_page(
+    pool: &SqlitePool,
+    chat_id: &str,
+    limit: i64,
+    offset: i64,
+) -> ZenResult<Vec<Message>> {
     let msgs = sqlx::query_as::<_, Message>(
         r#"
         SELECT * FROM (
             SELECT * FROM messages
             WHERE chat_id = ?
             ORDER BY created_at DESC
-            LIMIT ?
+            LIMIT ? OFFSET ?
         ) ORDER BY created_at ASC
         "#,
     )
     .bind(chat_id)
-    .bind(MAX_CHAT_MESSAGE_ITEMS)
+    .bind(limit.clamp(1, MAX_CHAT_MESSAGE_ITEMS + 1))
+    .bind(offset.max(0))
     .fetch_all(pool)
     .await?;
     Ok(msgs)

@@ -1,3 +1,4 @@
+use crate::commands::pagination::{normalize_page, page_from_fetch, Page};
 use crate::commands::AppState;
 use crate::db::models::Document;
 use crate::error::AppResult;
@@ -12,6 +13,17 @@ pub async fn ingest_document(state: State<'_, AppState>, path: String) -> AppRes
 #[tauri::command]
 pub async fn list_documents(state: State<'_, AppState>) -> AppResult<Vec<Document>> {
     state.documents.list().await
+}
+
+#[tauri::command]
+pub async fn list_documents_page(
+    state: State<'_, AppState>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+) -> AppResult<Page<Document>> {
+    let (limit, offset) = normalize_page(limit, offset);
+    let items = state.documents.list_page(limit + 1, offset).await?;
+    Ok(page_from_fetch(items, limit, offset))
 }
 
 #[tauri::command]

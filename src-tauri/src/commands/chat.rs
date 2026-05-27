@@ -1,4 +1,5 @@
 use crate::agent::runner::Runner;
+use crate::commands::pagination::{normalize_page, page_from_fetch, Page};
 use crate::commands::AppState;
 use crate::db::models::{Chat, ChatMessage, Message};
 use crate::db::queries;
@@ -28,9 +29,34 @@ pub async fn get_chats(state: State<'_, AppState>) -> ZenResult<Vec<Chat>> {
 }
 
 #[tauri::command]
+pub async fn get_chats_page(
+    state: State<'_, AppState>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+) -> ZenResult<Page<Chat>> {
+    let db = state.db().await?;
+    let (limit, offset) = normalize_page(limit, offset);
+    let items = queries::list_chats_page(&db, limit + 1, offset).await?;
+    Ok(page_from_fetch(items, limit, offset))
+}
+
+#[tauri::command]
 pub async fn get_messages(state: State<'_, AppState>, chat_id: String) -> ZenResult<Vec<Message>> {
     let db = state.db().await?;
     queries::get_messages(&db, &chat_id).await
+}
+
+#[tauri::command]
+pub async fn get_messages_page(
+    state: State<'_, AppState>,
+    chat_id: String,
+    limit: Option<i64>,
+    offset: Option<i64>,
+) -> ZenResult<Page<Message>> {
+    let db = state.db().await?;
+    let (limit, offset) = normalize_page(limit, offset);
+    let items = queries::get_messages_page(&db, &chat_id, limit + 1, offset).await?;
+    Ok(page_from_fetch(items, limit, offset))
 }
 
 #[tauri::command]

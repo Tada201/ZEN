@@ -34,6 +34,13 @@ export interface BackendMessage {
   metadata?: string;
 }
 
+export interface PaginatedResponse<T> {
+  items: T[];
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
 export interface SearchResult {
   chatId: string;
   chatTitle: string;
@@ -73,9 +80,13 @@ export interface SendMessageRequest extends Record<string, unknown> {
 
 export const chatApi = {
   listChats: () => callCommand<BackendChat[]>("get_chats"),
+  listChatsPage: (limit?: number, offset?: number) =>
+    callCommand<PaginatedResponse<BackendChat>>("get_chats_page", { limit, offset }),
   listArchivedChats: () => callCommand<BackendChat[]>("list_archived_chats"),
   listFolders: () => callCommand<BackendFolder[]>("list_chat_folders"),
   listMessages: (chatId: string | null) => callCommand<BackendMessage[]>("get_messages", { chatId }),
+  listMessagesPage: (chatId: string, limit?: number, offset?: number) =>
+    callCommand<PaginatedResponse<BackendMessage>>("get_messages_page", { chatId, limit, offset }),
   searchChats: (query: string) => callCommand<SearchResult[]>("search_chats", { query }),
   exportChat: (chatId: string) => callCommand<unknown>("export_chat", { chatId }),
   importChat: (sourcePath: string) => callCommand<unknown>("import_chat", { sourcePath }),

@@ -67,10 +67,19 @@ pub async fn get_document(pool: &SqlitePool, id: &str) -> ZenResult<crate::db::m
 }
 
 pub async fn list_documents(pool: &SqlitePool) -> ZenResult<Vec<crate::db::models::Document>> {
+    list_documents_page(pool, MAX_DOCUMENT_LIST_ITEMS, 0).await
+}
+
+pub async fn list_documents_page(
+    pool: &SqlitePool,
+    limit: i64,
+    offset: i64,
+) -> ZenResult<Vec<crate::db::models::Document>> {
     let docs = sqlx::query_as::<_, crate::db::models::Document>(
-        "SELECT * FROM documents ORDER BY created_at DESC LIMIT ?",
+        "SELECT * FROM documents ORDER BY created_at DESC LIMIT ? OFFSET ?",
     )
-    .bind(MAX_DOCUMENT_LIST_ITEMS)
+    .bind(limit.clamp(1, MAX_DOCUMENT_LIST_ITEMS + 1))
+    .bind(offset.max(0))
     .fetch_all(pool)
     .await?;
     Ok(docs)
@@ -121,10 +130,15 @@ pub async fn delete_document(pool: &SqlitePool, id: &str) -> ZenResult<()> {
 }
 
 pub async fn list_chats(pool: &SqlitePool) -> ZenResult<Vec<Chat>> {
+    list_chats_page(pool, MAX_CHAT_LIST_ITEMS, 0).await
+}
+
+pub async fn list_chats_page(pool: &SqlitePool, limit: i64, offset: i64) -> ZenResult<Vec<Chat>> {
     let chats = sqlx::query_as::<_, Chat>(
-        "SELECT c.id, c.title, c.model, c.created_at, c.updated_at, c.pinned, c.is_archived, c.archived_at, c.message_count, c.total_tokens_in, c.total_tokens_out, c.last_activity, COALESCE(c.folder_id, cfm.folder_id) as folder_id FROM chats c LEFT JOIN chat_folder_members cfm ON c.id = cfm.chat_id WHERE c.is_archived = 0 OR c.is_archived IS NULL ORDER BY c.updated_at DESC LIMIT ?"
+        "SELECT c.id, c.title, c.model, c.created_at, c.updated_at, c.pinned, c.is_archived, c.archived_at, c.message_count, c.total_tokens_in, c.total_tokens_out, c.last_activity, COALESCE(c.folder_id, cfm.folder_id) as folder_id FROM chats c LEFT JOIN chat_folder_members cfm ON c.id = cfm.chat_id WHERE c.is_archived = 0 OR c.is_archived IS NULL ORDER BY c.updated_at DESC LIMIT ? OFFSET ?"
     )
-    .bind(MAX_CHAT_LIST_ITEMS)
+    .bind(limit.clamp(1, MAX_CHAT_LIST_ITEMS + 1))
+    .bind(offset.max(0))
     .fetch_all(pool)
     .await?;
     Ok(chats)
