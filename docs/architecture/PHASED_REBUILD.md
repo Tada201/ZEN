@@ -258,9 +258,9 @@ Goals:
 Known issues:
 
 - Frontend production build emits large chunk warnings.
-- Query-layer caps are now in place for broad list APIs, but the public API
-  surface still needs real cursor/offset pagination before large-user-data
-  release.
+- Query-layer caps are now in place for broad list APIs, and highest-risk
+  local-history paths have public pagination. Secondary list surfaces still need
+  pagination before large-user-data release.
 
 Completed:
 
