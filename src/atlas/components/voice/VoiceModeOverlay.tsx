@@ -307,6 +307,10 @@ export function VoiceModeOverlay({
     useEffect(() => {
         if (!voiceModeOpen) return;
         const animate = (time: number) => {
+            if (document.hidden || !isOpenRef.current) {
+                rafRef.current = null;
+                return;
+            }
             const amp = amplitudeRef.current;
             const currentAiSpeaking = aiSpeakingRef.current;
             if (currentAiSpeaking && amp > SILENCE_THRESHOLD && !pttActiveRef.current) {
@@ -336,8 +340,27 @@ export function VoiceModeOverlay({
             }
             rafRef.current = requestAnimationFrame(animate);
         };
-        rafRef.current = requestAnimationFrame(animate);
-        return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+        const start = () => {
+            if (!rafRef.current && !document.hidden) {
+                rafRef.current = requestAnimationFrame(animate);
+            }
+        };
+        const stop = () => {
+            if (rafRef.current) {
+                cancelAnimationFrame(rafRef.current);
+                rafRef.current = null;
+            }
+        };
+        const handleVisibilityChange = () => {
+            if (document.hidden) stop();
+            else start();
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        start();
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            stop();
+        };
     }, [voiceModeOpen, voiceInputMode, sttEngine, flushVadUtterance, appendLog, setAiSpeaking]);
 
     useEffect(() => {

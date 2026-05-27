@@ -25,9 +25,7 @@ pub async fn fetch_weather(lat: f64, lon: f64) -> Result<WeatherPoint> {
         lat, lon
     );
 
-    let client = reqwest::Client::builder()
-        .user_agent("ZenGTSM/0.1")
-        .build()?;
+    let client = crate::utils::gtsm_http_client();
 
     let response: OpenMeteoResponse = client.get(&url).send().await?.json().await?;
 
@@ -95,10 +93,7 @@ pub async fn fetch_weather_grid(
         return Ok(vec![]);
     }
 
-    let client = reqwest::Client::builder()
-        .user_agent("ZenGTSM/0.1")
-        .timeout(std::time::Duration::from_secs(15))
-        .build()?;
+    let client = crate::utils::gtsm_http_client();
 
     // Open-Meteo supports comma-separated lat/lon for multi-point queries
     // But it's limited, so we batch in groups of 50

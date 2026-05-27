@@ -258,8 +258,9 @@ Goals:
 Known issues:
 
 - Frontend production build emits large chunk warnings.
-- Some backend paths still create per-request HTTP clients.
-- List query caps/pagination need a focused audit.
+- Query-layer caps are now in place for broad list APIs, but the public API
+  surface still needs real cursor/offset pagination before large-user-data
+  release.
 
 Completed:
 
@@ -271,6 +272,15 @@ Completed:
 - `npm run perf:budget` reports local bundle budgets after `npm run build`.
 - `docs/architecture/performance-budgets.md` documents local budgets and Phase 6
   bundle/runtime rules.
+- Voice oscilloscope, voice overlay barge-in monitor, media audio waveform, and
+  GTSM minimap rendering now stop or idle when hidden/offscreen instead of
+  keeping hot animation loops alive.
+- Web fetch, DuckDuckGo search, GTSM data fetches, speech model download,
+  speech inference, and legacy embedding helper paths use shared HTTP clients
+  instead of constructing a new client on each request path.
+- Broad backend list queries now have conservative query-layer caps for chats,
+  messages, documents, artifacts, tags, orchestration rows, GTSM saved
+  objects/history, and session memories.
 
 Current evidence:
 
@@ -279,14 +289,17 @@ Current evidence:
 - Current largest JS chunks are diagrams, main entry, map, charts, and markdown.
 - Local bundle budget currently passes, but Vite still emits large chunk
   warnings.
+- `cargo check --all-targets`, `npx tsc --noEmit`, `npm run build`,
+  `npm run perf:budget`, and `git diff --check` passed for this Phase 6
+  checkpoint.
 
 Remaining:
 
 - Reduce or defer Mermaid's all-diagram vendor chunk.
 - Decide whether `react-markdown`/KaTeX/highlight should be split behind
   richer-message rendering or kept in core chat.
-- Audit canvas/WebGL/audio loops for hidden/offscreen pause behavior.
-- Audit backend HTTP client creation and list-query pagination caps.
+- Replace query-layer caps with explicit paginated public APIs where large local
+  history is expected.
 - Keep CI ratchet deferred until the full app feature surface is done.
 
 ## Phase 7: CI Ratchet

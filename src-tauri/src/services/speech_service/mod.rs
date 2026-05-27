@@ -185,7 +185,9 @@ impl SpeechService {
 
         info!(url = %url, model = %model_name, "Downloading Whisper model...");
 
-        let response = reqwest::get(&url)
+        let response = crate::utils::model_download_http_client()
+            .get(&url)
+            .send()
             .await
             .map_err(|e| format!("Download failed: {e}"))?;
 
@@ -479,7 +481,7 @@ impl SpeechService {
             .part("file", part);
 
         // Send request to local whisper-server
-        let client = reqwest::Client::new();
+        let client = crate::utils::default_http_client();
         let res = client
             .post(format!("http://127.0.0.1:{WHISPER_PORT}/inference"))
             .multipart(form)

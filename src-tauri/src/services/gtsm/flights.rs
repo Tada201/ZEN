@@ -3,10 +3,7 @@ use anyhow::Result;
 
 pub async fn fetch_flights() -> Result<Vec<Flight>> {
     let url = "https://opensky-network.org/api/states/all";
-    let client = reqwest::Client::builder()
-        .user_agent("ZenGTSM/0.1 (operational-monitor)")
-        .timeout(std::time::Duration::from_secs(10))
-        .build()?;
+    let client = crate::utils::gtsm_http_client();
 
     let response_res = client.get(url).send().await?;
     let status = response_res.status();

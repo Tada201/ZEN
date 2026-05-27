@@ -3,15 +3,22 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
+const MAX_GTSM_GEOFENCE_ITEMS: i64 = 1_000;
+const MAX_GTSM_MARKER_ITEMS: i64 = 1_000;
+const MAX_TELEMETRY_HISTORY_ITEMS: i64 = 5_000;
+const MAX_ENTITY_TRACK_POINTS: i64 = 2_000;
+
 // --- GTSM Geofences ---
 
 use crate::db::models::GtsmGeofence;
 
 pub async fn list_geofences(pool: &SqlitePool) -> ZenResult<Vec<GtsmGeofence>> {
-    let geofences =
-        sqlx::query_as::<_, GtsmGeofence>("SELECT * FROM gtsm_geofences ORDER BY created_at DESC")
-            .fetch_all(pool)
-            .await?;
+    let geofences = sqlx::query_as::<_, GtsmGeofence>(
+        "SELECT * FROM gtsm_geofences ORDER BY created_at DESC LIMIT ?",
+    )
+    .bind(MAX_GTSM_GEOFENCE_ITEMS)
+    .fetch_all(pool)
+    .await?;
     Ok(geofences)
 }
 
@@ -59,10 +66,12 @@ pub async fn delete_geofence(pool: &SqlitePool, id: &str) -> ZenResult<()> {
 use crate::db::models::GtsmMarker;
 
 pub async fn list_markers(pool: &SqlitePool) -> ZenResult<Vec<GtsmMarker>> {
-    let markers =
-        sqlx::query_as::<_, GtsmMarker>("SELECT * FROM gtsm_markers ORDER BY created_at DESC")
-            .fetch_all(pool)
-            .await?;
+    let markers = sqlx::query_as::<_, GtsmMarker>(
+        "SELECT * FROM gtsm_markers ORDER BY created_at DESC LIMIT ?",
+    )
+    .bind(MAX_GTSM_MARKER_ITEMS)
+    .fetch_all(pool)
+    .await?;
     Ok(markers)
 }
 
@@ -182,10 +191,12 @@ pub async fn query_history(
     let rows = sqlx::query_as::<_, TelemetrySnapshot>(
         "SELECT * FROM telemetry_snapshots
          WHERE entity_type = ? AND timestamp = ?
-         ORDER BY entity_id",
+         ORDER BY entity_id
+         LIMIT ?",
     )
     .bind(entity_type)
     .bind(nearest)
+    .bind(MAX_TELEMETRY_HISTORY_ITEMS)
     .fetch_all(pool)
     .await?;
 
@@ -201,11 +212,13 @@ pub async fn query_entity_track(
     let rows = sqlx::query_as::<_, TrackPoint>(
         "SELECT timestamp, lat, lon, alt FROM telemetry_snapshots
          WHERE entity_id = ? AND timestamp BETWEEN ? AND ?
-         ORDER BY timestamp ASC",
+         ORDER BY timestamp ASC
+         LIMIT ?",
     )
     .bind(entity_id)
     .bind(start_time)
     .bind(end_time)
+    .bind(MAX_ENTITY_TRACK_POINTS)
     .fetch_all(pool)
     .await?;
 

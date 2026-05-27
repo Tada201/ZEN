@@ -13,17 +13,9 @@ pub struct WebSearchTool;
 
 /// Maximum search results to return
 const MAX_RESULTS: usize = 10;
-/// Timeout for the HTTP request
-const REQUEST_TIMEOUT_SECS: u64 = 15;
-
 /// Performs the actual DuckDuckGo HTML search and returns parsed results.
 async fn duckduckgo_search(query: &str) -> Result<Vec<SearchResult>, String> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(REQUEST_TIMEOUT_SECS))
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; rv:135.0) Gecko/20100101 Firefox/135.0")
-        .redirect(reqwest::redirect::Policy::limited(5))
-        .build()
-        .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+    let client = crate::utils::duckduckgo_http_client();
 
     let params = [("q", query)];
     let response = client
@@ -81,7 +73,7 @@ async fn nine_router_search_fallback(
         .unwrap_or_default();
 
     // 2. Fetch models to perform dynamic search model discovery
-    let client = reqwest::Client::new();
+    let client = crate::utils::default_http_client();
     let models_url = format!("{}/models", nine_router_base_url.trim_end_matches('/'));
 
     let mut selected_model = "kr/claude-sonnet-4.5".to_string(); // Premium fallback model

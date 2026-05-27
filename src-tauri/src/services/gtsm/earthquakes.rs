@@ -43,9 +43,7 @@ pub async fn fetch_earthquakes(min_magnitude: f64, hours: u32) -> Result<Vec<Ear
         min_magnitude
     );
 
-    let client = reqwest::Client::builder()
-        .user_agent("ZenGTSM/0.1 (operational-monitor)")
-        .build()?;
+    let client = crate::utils::gtsm_http_client();
 
     let response: UsgsResponse = client.get(&url).send().await?.json().await?;
 

@@ -1,6 +1,8 @@
 use crate::error::ZenResult;
 use sqlx::{Row, SqlitePool};
 
+const MAX_SESSION_MEMORY_ROWS: i64 = 1_000;
+
 #[derive(Debug, Clone)]
 pub struct SessionMemoryRow {
     pub id: String,
@@ -78,9 +80,11 @@ pub async fn get_session_memory_rows_for_session(
         FROM session_memories
         WHERE session_id = ?
         ORDER BY timestamp DESC
+        LIMIT ?
         "#,
     )
     .bind(session_id)
+    .bind(MAX_SESSION_MEMORY_ROWS)
     .fetch_all(pool)
     .await?;
 

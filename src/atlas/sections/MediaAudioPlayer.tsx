@@ -28,6 +28,7 @@ export function AudioPlayer() {
   const [volume, setVolume] = useState(0.8);
   const [loop, setLoop] = useState(false);
   const [shuffle, setShuffle] = useState(false);
+  const [waveformVisible, setWaveformVisible] = useState(false);
 
   const track = PLAYLIST[trackIdx];
 
@@ -51,6 +52,11 @@ export function AudioPlayer() {
     if (!ctx) return;
 
     const draw = () => {
+      if (!waveformVisible || document.hidden) {
+        rafRef.current = 0;
+        return;
+      }
+
       const w = canvas.width;
       const h = canvas.height;
       ctx.clearRect(0, 0, w, h);
@@ -83,11 +89,49 @@ export function AudioPlayer() {
           ctx.fillRect(x, (h - barH) / 2, (w / N) * 0.4, barH);
         }
       }
-      rafRef.current = requestAnimationFrame(draw);
+      if (playing) {
+        rafRef.current = requestAnimationFrame(draw);
+      } else {
+        rafRef.current = 0;
+      }
     };
-    draw();
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [playing, currentTime, duration]);
+    const start = () => {
+      if (rafRef.current === 0 && waveformVisible && !document.hidden) {
+        rafRef.current = requestAnimationFrame(draw);
+      }
+    };
+    const stop = () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (document.hidden) stop();
+      else start();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    start();
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      stop();
+    };
+  }, [playing, currentTime, duration, waveformVisible]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      const visible = entry.isIntersecting;
+      setWaveformVisible(visible);
+      if (!visible && rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+      }
+    });
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, []);
 
   const ensureCtx = useCallback(() => {
     const audio = audioRef.current;

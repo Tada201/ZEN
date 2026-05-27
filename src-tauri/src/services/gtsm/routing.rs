@@ -55,9 +55,7 @@ pub async fn calculate_route(
         start_lon, start_lat, end_lon, end_lat
     );
 
-    let client = reqwest::Client::builder()
-        .user_agent("ZenGTSM/0.1")
-        .build()?;
+    let client = crate::utils::gtsm_http_client();
 
     let response: OsrmResponse = client.get(&url).send().await?.json().await?;
 
@@ -136,9 +134,7 @@ pub async fn calculate_route_waypoints(waypoints: &[[f64; 2]]) -> Result<Route> 
         coords.join(";")
     );
 
-    let client = reqwest::Client::builder()
-        .user_agent("ZenGTSM/0.1")
-        .build()?;
+    let client = crate::utils::gtsm_http_client();
 
     let response: OsrmResponse = client.get(&url).send().await?.json().await?;
 

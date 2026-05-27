@@ -63,10 +63,7 @@ fn category_to_event_type(cat_id: &str) -> &'static str {
 pub async fn fetch_natural_events() -> Result<Vec<NaturalEvent>> {
     let url = "https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=100";
 
-    let client = reqwest::Client::builder()
-        .user_agent("ZenGTSM/0.1 (natural-events-monitor)")
-        .timeout(std::time::Duration::from_secs(30))
-        .build()?;
+    let client = crate::utils::gtsm_http_client();
 
     tracing::info!("Fetching natural events from NASA EONET...");
     let response: EonetResponse = client.get(url).send().await?.json().await?;

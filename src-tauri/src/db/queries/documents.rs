@@ -2,6 +2,9 @@ use crate::db::models::*;
 use crate::error::ZenResult;
 use sqlx::SqlitePool;
 
+const MAX_DOCUMENT_LIST_ITEMS: i64 = 1_000;
+const MAX_CHAT_LIST_ITEMS: i64 = 500;
+
 // --- Documents ---
 
 pub async fn add_document(
@@ -65,8 +68,9 @@ pub async fn get_document(pool: &SqlitePool, id: &str) -> ZenResult<crate::db::m
 
 pub async fn list_documents(pool: &SqlitePool) -> ZenResult<Vec<crate::db::models::Document>> {
     let docs = sqlx::query_as::<_, crate::db::models::Document>(
-        "SELECT * FROM documents ORDER BY created_at DESC",
+        "SELECT * FROM documents ORDER BY created_at DESC LIMIT ?",
     )
+    .bind(MAX_DOCUMENT_LIST_ITEMS)
     .fetch_all(pool)
     .await?;
     Ok(docs)
@@ -118,8 +122,9 @@ pub async fn delete_document(pool: &SqlitePool, id: &str) -> ZenResult<()> {
 
 pub async fn list_chats(pool: &SqlitePool) -> ZenResult<Vec<Chat>> {
     let chats = sqlx::query_as::<_, Chat>(
-        "SELECT c.id, c.title, c.model, c.created_at, c.updated_at, c.pinned, c.is_archived, c.archived_at, c.message_count, c.total_tokens_in, c.total_tokens_out, c.last_activity, COALESCE(c.folder_id, cfm.folder_id) as folder_id FROM chats c LEFT JOIN chat_folder_members cfm ON c.id = cfm.chat_id WHERE c.is_archived = 0 OR c.is_archived IS NULL ORDER BY c.updated_at DESC"
+        "SELECT c.id, c.title, c.model, c.created_at, c.updated_at, c.pinned, c.is_archived, c.archived_at, c.message_count, c.total_tokens_in, c.total_tokens_out, c.last_activity, COALESCE(c.folder_id, cfm.folder_id) as folder_id FROM chats c LEFT JOIN chat_folder_members cfm ON c.id = cfm.chat_id WHERE c.is_archived = 0 OR c.is_archived IS NULL ORDER BY c.updated_at DESC LIMIT ?"
     )
+    .bind(MAX_CHAT_LIST_ITEMS)
     .fetch_all(pool)
     .await?;
     Ok(chats)

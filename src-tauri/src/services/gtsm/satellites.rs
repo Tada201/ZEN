@@ -40,10 +40,7 @@ pub async fn fetch_satellites(tx: &Sender<String>) -> Result<Vec<Satellite>> {
         // Primary: CelesTrak stations group
         // If this continues to fail with "error sending request", we check for mirror fallbacks
         let url = "https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle";
-        let client = reqwest::Client::builder()
-            .user_agent("Zen-OSINT/1.0 (Cyber-Terminal)")
-            .timeout(std::time::Duration::from_secs(15)) // Reduced timeout to prevent long hangs
-            .build()?;
+        let client = crate::utils::gtsm_http_client();
 
         tracing::info!("Attempting TLE fetch from: {}", url);
         let response_res = match client.get(url).send().await {

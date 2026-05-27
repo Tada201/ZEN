@@ -30,9 +30,7 @@ struct AdsbAircraft {
 pub async fn fetch_military() -> Result<Vec<MilitaryAircraft>> {
     let url = "https://api.adsb.lol/v2/mil";
 
-    let client = reqwest::Client::builder()
-        .user_agent("ZenGTSM/0.1 (operational-monitor)")
-        .build()?;
+    let client = crate::utils::gtsm_http_client();
 
     let response: AdsbLolResponse = client.get(url).send().await?.json().await?;
 

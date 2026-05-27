@@ -3,6 +3,13 @@ use crate::error::ZenResult;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
+const MAX_ORCHESTRATION_TASK_ITEMS: i64 = 500;
+const MAX_ORCHESTRATION_PLAN_ITEMS: i64 = 100;
+const MAX_SKILL_ITEMS: i64 = 500;
+const MAX_HOOK_ITEMS: i64 = 500;
+const MAX_COMMAND_ITEMS: i64 = 500;
+const MAX_PREVIOUS_SUMMARY_ITEMS: i64 = 100;
+
 // --- Orchestration ---
 
 pub async fn save_orchestration_plan(pool: &SqlitePool, plan: &OrchestrationPlan) -> ZenResult<()> {
@@ -71,8 +78,9 @@ pub async fn get_orchestration_tasks(
     pool: &SqlitePool,
     plan_id: &str,
 ) -> ZenResult<Vec<OrchestrationTask>> {
-    let tasks = sqlx::query_as::<_, OrchestrationTask>("SELECT * FROM orchestration_tasks WHERE plan_id = ? ORDER BY priority DESC, created_at ASC")
+    let tasks = sqlx::query_as::<_, OrchestrationTask>("SELECT * FROM orchestration_tasks WHERE plan_id = ? ORDER BY priority DESC, created_at ASC LIMIT ?")
         .bind(plan_id)
+        .bind(MAX_ORCHESTRATION_TASK_ITEMS)
         .fetch_all(pool)
         .await?;
     Ok(tasks)
@@ -83,9 +91,10 @@ pub async fn get_orchestration_plans_by_chat(
     chat_id: &str,
 ) -> ZenResult<Vec<OrchestrationPlan>> {
     let plans = sqlx::query_as::<_, OrchestrationPlan>(
-        "SELECT * FROM orchestration_plans WHERE chat_id = ? ORDER BY created_at DESC",
+        "SELECT * FROM orchestration_plans WHERE chat_id = ? ORDER BY created_at DESC LIMIT ?",
     )
     .bind(chat_id)
+    .bind(MAX_ORCHESTRATION_PLAN_ITEMS)
     .fetch_all(pool)
     .await?;
     Ok(plans)
@@ -127,8 +136,9 @@ use crate::db::models::{Hook, HookLogEntry, Skill, ZenCommand};
 
 pub async fn list_skills(pool: &SqlitePool) -> ZenResult<Vec<Skill>> {
     let skills = sqlx::query_as::<_, Skill>(
-        "SELECT id, name, '' as description, '' as invocation_syntax, enabled FROM tools",
+        "SELECT id, name, '' as description, '' as invocation_syntax, enabled FROM tools LIMIT ?",
     )
+    .bind(MAX_SKILL_ITEMS)
     .fetch_all(pool)
     .await?;
     Ok(skills)
@@ -144,7 +154,8 @@ pub async fn set_skill_enabled(pool: &SqlitePool, skill_id: &str, enabled: bool)
 }
 
 pub async fn list_hooks(pool: &SqlitePool) -> ZenResult<Vec<Hook>> {
-    let hooks = sqlx::query_as::<_, Hook>("SELECT * FROM hooks ORDER BY name ASC")
+    let hooks = sqlx::query_as::<_, Hook>("SELECT * FROM hooks ORDER BY name ASC LIMIT ?")
+        .bind(MAX_HOOK_ITEMS)
         .fetch_all(pool)
         .await?;
     Ok(hooks)
@@ -160,9 +171,11 @@ pub async fn set_hook_enabled(pool: &SqlitePool, hook_id: &str, enabled: bool) -
 }
 
 pub async fn list_commands(pool: &SqlitePool) -> ZenResult<Vec<ZenCommand>> {
-    let commands = sqlx::query_as::<_, ZenCommand>("SELECT * FROM zen_commands ORDER BY name ASC")
-        .fetch_all(pool)
-        .await?;
+    let commands =
+        sqlx::query_as::<_, ZenCommand>("SELECT * FROM zen_commands ORDER BY name ASC LIMIT ?")
+            .bind(MAX_COMMAND_ITEMS)
+            .fetch_all(pool)
+            .await?;
     Ok(commands)
 }
 
@@ -249,9 +262,10 @@ pub async fn get_previous_summaries(
     chat_id: &str,
 ) -> ZenResult<Vec<ConversationSummary>> {
     let summaries = sqlx::query_as::<_, ConversationSummary>(
-        "SELECT * FROM conversation_summaries WHERE chat_id = ? ORDER BY created_at ASC",
+        "SELECT * FROM conversation_summaries WHERE chat_id = ? ORDER BY created_at ASC LIMIT ?",
     )
     .bind(chat_id)
+    .bind(MAX_PREVIOUS_SUMMARY_ITEMS + 1)
     .fetch_all(pool)
     .await?;
 

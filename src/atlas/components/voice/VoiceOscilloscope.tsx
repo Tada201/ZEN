@@ -15,7 +15,7 @@ export const VoiceOscilloscope: React.FC<VoiceOscilloscopeProps> = ({ analyserRe
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const frequencyDataRef = useRef(new Uint8Array(FFT_SIZE / 2));
     const requestRef = useRef<number | null>(null);
-    const isRunningRef = useRef(false);
+    const isMountedRef = useRef(false);
     
     // Sync props to refs to avoid stale closures in the animation loop
     const isAiSpeakingRef = useRef(isAiSpeaking);
@@ -32,7 +32,7 @@ export const VoiceOscilloscope: React.FC<VoiceOscilloscopeProps> = ({ analyserRe
         const ctx = canvas.getContext('2d', { alpha: true });
         if (!ctx) return;
 
-        isRunningRef.current = true;
+        isMountedRef.current = true;
 
         const drawRoundRect = (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => {
             c.beginPath();
@@ -53,11 +53,8 @@ export const VoiceOscilloscope: React.FC<VoiceOscilloscopeProps> = ({ analyserRe
         };
 
         const animate = () => {
-            if (!isRunningRef.current) return;
-            
-            // If not active, just keep loop warm but skip draw
-            if (!isActiveRef.current) {
-                requestRef.current = requestAnimationFrame(animate);
+            if (!isMountedRef.current || !isActiveRef.current || document.hidden) {
+                requestRef.current = null;
                 return;
             }
 
@@ -140,16 +137,33 @@ export const VoiceOscilloscope: React.FC<VoiceOscilloscopeProps> = ({ analyserRe
             requestRef.current = requestAnimationFrame(animate);
         };
 
-        requestRef.current = requestAnimationFrame(animate);
+        const start = () => {
+            if (!requestRef.current && isActiveRef.current && !document.hidden) {
+                requestRef.current = requestAnimationFrame(animate);
+            }
+        };
 
-        return () => {
-            isRunningRef.current = false;
+        const stop = () => {
             if (requestRef.current) {
                 cancelAnimationFrame(requestRef.current);
                 requestRef.current = null;
             }
         };
-    }, [analyserRef]); 
+
+        const handleVisibilityChange = () => {
+            if (document.hidden) stop();
+            else start();
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        start();
+
+        return () => {
+            isMountedRef.current = false;
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            stop();
+        };
+    }, [analyserRef, isActive]);
 
     return (
         <canvas 

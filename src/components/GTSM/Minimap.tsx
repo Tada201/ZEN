@@ -134,7 +134,9 @@ export const Minimap: React.FC = () => {
     const offscreenRef = useRef<HTMLCanvasElement | null>(null);
     const geoLoadedRef = useRef(false);
     const rafRef = useRef<number>(0);
+    const idleTimerRef = useRef<number | null>(null);
     const isVisibleRef = useRef(true);
+    const renderFrameRef = useRef<() => void>(() => {});
 
     const setFlyToRequest = useGTSMStore(state => state.setFlyToRequest);
     const animationFps = 30; // Solid performance default
@@ -144,6 +146,9 @@ export const Minimap: React.FC = () => {
         if (!canvasRef.current) return;
         const observer = new IntersectionObserver(([entry]) => {
             isVisibleRef.current = entry.isIntersecting;
+            if (entry.isIntersecting && rafRef.current === 0) {
+                rafRef.current = requestAnimationFrame(renderFrameRef.current);
+            }
         });
         observer.observe(canvasRef.current);
         return () => observer.disconnect();
@@ -226,13 +231,22 @@ export const Minimap: React.FC = () => {
         const frameInterval = 1000 / animationFps;
         let lastFrameTime = 0;
 
+        const stopIdleTimer = () => {
+            if (idleTimerRef.current) {
+                window.clearTimeout(idleTimerRef.current);
+                idleTimerRef.current = null;
+            }
+        };
+
         const renderFrame = () => {
             if (!isVisibleRef.current) {
-                setTimeout(() => {
-                    if (canvasRef.current) {
+                rafRef.current = 0;
+                stopIdleTimer();
+                idleTimerRef.current = window.setTimeout(() => {
+                    if (canvasRef.current && isVisibleRef.current && rafRef.current === 0) {
                         rafRef.current = requestAnimationFrame(renderFrame);
                     }
-                }, 200);
+                }, 500);
                 return;
             }
 
@@ -258,8 +272,13 @@ export const Minimap: React.FC = () => {
             rafRef.current = requestAnimationFrame(renderFrame);
         };
 
+        renderFrameRef.current = renderFrame;
         rafRef.current = requestAnimationFrame(renderFrame);
-        return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+        return () => {
+            stopIdleTimer();
+            if (rafRef.current) cancelAnimationFrame(rafRef.current);
+            rafRef.current = 0;
+        };
     }, [animationFps]);
 
     return (

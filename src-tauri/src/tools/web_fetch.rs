@@ -7,7 +7,7 @@ use url::Url;
 
 use super::url_safety::{
     resolve_redirect_url, validate_public_http_url, validate_public_ip, MAX_DIRECT_RESPONSE_BYTES,
-    MAX_OUTPUT_CHARS, MAX_REDIRECTS, REQUEST_TIMEOUT_SECS,
+    MAX_OUTPUT_CHARS, MAX_REDIRECTS,
 };
 use super::{permission::RiskLevel, Tool, ToolError, ToolOutput};
 
@@ -139,7 +139,7 @@ async fn nine_router_fetch_fallback(app: &AppHandle, url: &str) -> Result<String
         .unwrap_or_default();
 
     // 2. Fetch models to perform dynamic search model discovery
-    let client = reqwest::Client::new();
+    let client = crate::utils::default_http_client();
     let models_url = format!("{}/models", nine_router_base_url.trim_end_matches('/'));
 
     let mut selected_model = "kr/claude-sonnet-4.5".to_string(); // Premium fallback model
@@ -309,16 +309,10 @@ impl Tool for WebFetchTool {
         let validated_url = validate_public_http_url(url)
             .map_err(|e| ToolError::InvalidArguments { details: e })?;
 
-        // We try reqwest first for direct fetch.
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(REQUEST_TIMEOUT_SECS))
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .map_err(|e| ToolError::ExecutionFailed {
-                message: format!("Failed to build HTTP client: {}", e),
-            })?;
+        // Reuse the shared client so repeated tool calls do not rebuild pools.
+        let client = crate::utils::public_no_redirect_http_client();
 
-        let text = match fetch_public_url(&client, validated_url).await {
+        let text = match fetch_public_url(client, validated_url).await {
             Ok(text) => text,
             Err(err) => nine_router_fetch_fallback(&app, url).await.map_err(|e| {
                 ToolError::ExecutionFailed {

@@ -2,6 +2,10 @@ use crate::db::models::*;
 use crate::error::ZenResult;
 use sqlx::SqlitePool;
 
+const MAX_ARTIFACT_LIST_ITEMS: i64 = 1_000;
+const MAX_CHAT_ARTIFACT_ITEMS: i64 = 500;
+const MAX_CHAT_MESSAGE_ITEMS: i64 = 1_000;
+
 // --- Artifacts ---
 
 pub async fn upsert_artifact(pool: &SqlitePool, art: &Artifact) -> ZenResult<()> {
@@ -32,9 +36,10 @@ pub async fn upsert_artifact(pool: &SqlitePool, art: &Artifact) -> ZenResult<()>
 
 pub async fn get_chat_artifacts(pool: &SqlitePool, chat_id: &str) -> ZenResult<Vec<Artifact>> {
     let artifacts = sqlx::query_as::<_, Artifact>(
-        "SELECT * FROM artifacts WHERE chat_id = ? ORDER BY created_at DESC",
+        "SELECT * FROM artifacts WHERE chat_id = ? ORDER BY created_at DESC LIMIT ?",
     )
     .bind(chat_id)
+    .bind(MAX_CHAT_ARTIFACT_ITEMS)
     .fetch_all(pool)
     .await?;
     Ok(artifacts)
@@ -42,7 +47,8 @@ pub async fn get_chat_artifacts(pool: &SqlitePool, chat_id: &str) -> ZenResult<V
 
 pub async fn get_all_artifacts(pool: &SqlitePool) -> ZenResult<Vec<Artifact>> {
     let artifacts =
-        sqlx::query_as::<_, Artifact>("SELECT * FROM artifacts ORDER BY created_at DESC")
+        sqlx::query_as::<_, Artifact>("SELECT * FROM artifacts ORDER BY created_at DESC LIMIT ?")
+            .bind(MAX_ARTIFACT_LIST_ITEMS)
             .fetch_all(pool)
             .await?;
     Ok(artifacts)
@@ -58,9 +64,17 @@ pub async fn delete_artifact(pool: &SqlitePool, id: &str) -> ZenResult<()> {
 
 pub async fn get_messages(pool: &SqlitePool, chat_id: &str) -> ZenResult<Vec<Message>> {
     let msgs = sqlx::query_as::<_, Message>(
-        "SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC",
+        r#"
+        SELECT * FROM (
+            SELECT * FROM messages
+            WHERE chat_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+        ) ORDER BY created_at ASC
+        "#,
     )
     .bind(chat_id)
+    .bind(MAX_CHAT_MESSAGE_ITEMS)
     .fetch_all(pool)
     .await?;
     Ok(msgs)

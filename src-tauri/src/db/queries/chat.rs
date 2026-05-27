@@ -3,6 +3,14 @@ use crate::error::ZenResult;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
+const MAX_CHAT_FOLDER_ITEMS: i64 = 500;
+const MAX_ARCHIVED_CHAT_ITEMS: i64 = 500;
+const MAX_CHAT_TEMPLATE_ITEMS: i64 = 500;
+const MAX_CHAT_TAG_ITEMS: i64 = 500;
+const MAX_ALL_CHAT_TAG_ITEMS: i64 = 2_000;
+const MAX_UNIQUE_TAG_ITEMS: i64 = 500;
+const MAX_SEARCH_RESULTS: i64 = 100;
+
 // --- Chats ---
 
 pub async fn create_chat(pool: &SqlitePool, title: &str, model: Option<&str>) -> ZenResult<Chat> {
@@ -86,8 +94,9 @@ pub async fn delete_chat_folder(pool: &SqlitePool, folder_id: &str) -> ZenResult
 
 pub async fn list_chat_folders(pool: &SqlitePool) -> ZenResult<Vec<ChatFolder>> {
     let folders = sqlx::query_as::<_, ChatFolder>(
-        "SELECT * FROM chat_folders ORDER BY sort_order ASC, name ASC",
+        "SELECT * FROM chat_folders ORDER BY sort_order ASC, name ASC LIMIT ?",
     )
+    .bind(MAX_CHAT_FOLDER_ITEMS)
     .fetch_all(pool)
     .await?;
     Ok(folders)
@@ -137,8 +146,9 @@ pub async fn unarchive_chat(pool: &SqlitePool, chat_id: &str) -> ZenResult<()> {
 
 pub async fn list_archived_chats(pool: &SqlitePool) -> ZenResult<Vec<Chat>> {
     let chats = sqlx::query_as::<_, Chat>(
-        "SELECT * FROM chats WHERE is_archived = 1 ORDER BY archived_at DESC",
+        "SELECT * FROM chats WHERE is_archived = 1 ORDER BY archived_at DESC LIMIT ?",
     )
+    .bind(MAX_ARCHIVED_CHAT_ITEMS)
     .fetch_all(pool)
     .await?;
     Ok(chats)
@@ -152,7 +162,7 @@ pub async fn search_chats(
     if query.trim().is_empty() {
         return Ok(vec![]);
     }
-    let limit_val = limit.unwrap_or(20);
+    let limit_val = limit.unwrap_or(20).clamp(1, MAX_SEARCH_RESULTS);
     // Escape standard FTS quote character
     let fts_query = format!("\"{}\"", query.replace("\"", "\"\""));
 
@@ -214,8 +224,9 @@ pub async fn list_chat_templates(
     pool: &SqlitePool,
 ) -> ZenResult<Vec<crate::db::models::ChatTemplate>> {
     let templates = sqlx::query_as::<_, crate::db::models::ChatTemplate>(
-        "SELECT * FROM chat_templates ORDER BY name ASC",
+        "SELECT * FROM chat_templates ORDER BY name ASC LIMIT ?",
     )
+    .bind(MAX_CHAT_TEMPLATE_ITEMS)
     .fetch_all(pool)
     .await?;
     Ok(templates)
@@ -329,9 +340,10 @@ pub async fn list_chat_tags(
     chat_id: &str,
 ) -> ZenResult<Vec<crate::db::models::ChatTag>> {
     let tags = sqlx::query_as::<_, crate::db::models::ChatTag>(
-        "SELECT * FROM chat_tags WHERE chat_id = ? ORDER BY name ASC",
+        "SELECT * FROM chat_tags WHERE chat_id = ? ORDER BY name ASC LIMIT ?",
     )
     .bind(chat_id)
+    .bind(MAX_CHAT_TAG_ITEMS)
     .fetch_all(pool)
     .await?;
     Ok(tags)
@@ -339,17 +351,20 @@ pub async fn list_chat_tags(
 
 pub async fn list_all_chat_tags(pool: &SqlitePool) -> ZenResult<Vec<crate::db::models::ChatTag>> {
     let tags = sqlx::query_as::<_, crate::db::models::ChatTag>(
-        "SELECT * FROM chat_tags ORDER BY chat_id, name ASC",
+        "SELECT * FROM chat_tags ORDER BY chat_id, name ASC LIMIT ?",
     )
+    .bind(MAX_ALL_CHAT_TAG_ITEMS)
     .fetch_all(pool)
     .await?;
     Ok(tags)
 }
 
 pub async fn list_unique_tag_names(pool: &SqlitePool) -> ZenResult<Vec<String>> {
-    let tags =
-        sqlx::query_scalar::<_, String>("SELECT DISTINCT name FROM chat_tags ORDER BY name ASC")
-            .fetch_all(pool)
-            .await?;
+    let tags = sqlx::query_scalar::<_, String>(
+        "SELECT DISTINCT name FROM chat_tags ORDER BY name ASC LIMIT ?",
+    )
+    .bind(MAX_UNIQUE_TAG_ITEMS)
+    .fetch_all(pool)
+    .await?;
     Ok(tags)
 }

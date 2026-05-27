@@ -115,9 +115,10 @@ impl TerminalService {
         cwd: Option<String>,
     ) -> ZenResult<String> {
         let resolved_cwd = match cwd {
-            Some(path) => Some(crate::workspace::resolve_workspace_path(&workspace, &path).map_err(
-                |e| ZenError::Custom(format!("Workspace violation: {}", e)),
-            )?),
+            Some(path) => Some(
+                crate::workspace::resolve_workspace_path(&workspace, &path)
+                    .map_err(|e| ZenError::Custom(format!("Workspace violation: {}", e)))?,
+            ),
             None => Some(workspace.clone()),
         };
 

@@ -115,7 +115,7 @@ impl AgentTool for VectorSearchTool {
 /// Generate embedding using Ollama or LM Studio API
 /// Both use the same /api/embeddings endpoint format
 async fn generate_embedding(base_url: &str, model: &str, text: &str) -> Result<Vec<f32>> {
-    let client = reqwest::Client::new();
+    let client = crate::utils::default_http_client();
 
     // Try Ollama-style endpoint first
     let url = format!("{}/api/embeddings", base_url);

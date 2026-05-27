@@ -119,7 +119,7 @@ impl AgentTool for VectorSearchStandalone {
 }
 
 async fn generate_embedding(base_url: &str, model: &str, text: &str) -> Result<Vec<f32>> {
-    let client = reqwest::Client::new();
+    let client = crate::utils::default_http_client();
     let url = format!("{}/api/embeddings", base_url);
 
     let response = client

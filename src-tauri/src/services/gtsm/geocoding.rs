@@ -21,9 +21,7 @@ pub async fn search(query: &str, limit: u8) -> Result<Vec<GeocodingResult>> {
         limit.min(10)
     );
 
-    let client = reqwest::Client::builder()
-        .user_agent("ZenGTSM/0.1 (operational-monitor)")
-        .build()?;
+    let client = crate::utils::gtsm_http_client();
 
     let results: Vec<NominatimResult> = client.get(&url).send().await?.json().await?;
 
@@ -67,9 +65,7 @@ pub async fn reverse(lat: f64, lon: f64) -> Result<GeocodingResult> {
         lat, lon
     );
 
-    let client = reqwest::Client::builder()
-        .user_agent("ZenGTSM/0.1 (operational-monitor)")
-        .build()?;
+    let client = crate::utils::gtsm_http_client();
 
     let result: NominatimResult = client.get(&url).send().await?.json().await?;
 
@@ -127,9 +123,7 @@ pub async fn search_near(
         viewbox
     );
 
-    let client = reqwest::Client::builder()
-        .user_agent("ZenGTSM/0.1 (operational-monitor)")
-        .build()?;
+    let client = crate::utils::gtsm_http_client();
 
     let results: Vec<NominatimResult> = client.get(&url).send().await?.json().await?;
 
