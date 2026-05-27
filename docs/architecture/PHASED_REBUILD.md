@@ -5,7 +5,7 @@ stabilization, not a rewrite.
 
 ## Current Position
 
-Zen is currently ready to move into **Phase 5: oversized module splitting**.
+Zen is currently closing **Phase 5: oversized module splitting**.
 
 Phases 0-4 are no longer the active rebuild bottleneck. Phase 3 keeps a
 documented legacy tool compatibility boundary, and Phase 4 keeps incremental
@@ -194,7 +194,8 @@ Phase 5 entry evidence:
 
 ## Phase 5: Split Oversized Modules
 
-Status: backend hard-limit split complete; frontend hard-limit split remains.
+Status: hard-limit split complete except the documented generated UI primitive
+exemption.
 
 Completed backend hard-limit targets:
 
@@ -207,6 +208,20 @@ Completed backend hard-limit targets:
   extracting workflow contracts, events, metrics, result, and error types.
 - `src-tauri/src/agent/swarm.rs` was reduced below the Rust hard limit by
   extracting swarm contracts, events, state, result, and error types.
+
+Completed frontend hard-limit targets:
+
+- `src/components/widgets/workbench/InteractiveDrawingCanvas.tsx` was reduced
+  by extracting drawing utilities.
+- `src/atlas/sections/Lab3DSection.tsx` was reduced by extracting canvas guards.
+- `src/components/workbench/MapLibreMap.tsx` was reduced by extracting map
+  helpers.
+- `src/components/premium/PremiumChatTaskPanel.tsx` and
+  `src/components/xterm/XTermPanel.tsx` were split into smaller modules.
+- Chat, voice, provider settings, and atlas demo sections were split below the
+  frontend hard limit.
+- `src/components/workbench/CesiumMapRenderer.tsx` was reduced by extracting
+  Cesium setup, controls, clustering, entity-layer sync, and visual-layer sync.
 
 Remaining backend warning-size targets:
 
@@ -222,8 +237,8 @@ Remaining backend warning-size targets:
 
 Remaining frontend hard-limit targets:
 
-- Run the frontend file-size gate and split any non-exempt TS/TSX files over
-  500 lines.
+- `src/components/ui/sidebar.tsx` remains over 500 lines as a documented
+  generated UI primitive exemption. Do not add app behavior to this file.
 
 Exit criteria:
 
