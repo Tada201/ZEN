@@ -1,10 +1,7 @@
-import { useCallback, useRef, useState } from "react";
-import { Controller, useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { useState } from "react";
 import {
   AlertCircle, Check, CheckCircle2, ChevronsUpDown, Eye, EyeOff,
-  FileUp, Mail, UploadCloud, X,
+  Mail, X,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,8 +22,10 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@/components/ui/input-otp";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 import { DemoCard, Section } from "../Section";
+import { InputsColorPicker } from "./InputsColorPicker";
+import { InputsFileDropzone } from "./InputsFileDropzone";
+import { InputsValidatedForm } from "./InputsValidatedForm";
 
 const FRAMEWORKS = [
   { value: "next", label: "Next.js" },
@@ -56,28 +55,6 @@ function passwordScore(s: string) {
 const STRENGTH_LABELS = ["Too short", "Weak", "Okay", "Strong", "Excellent"];
 const STRENGTH_COLORS = ["bg-destructive", "bg-destructive", "bg-amber-500", "bg-primary", "bg-[hsl(var(--success))]"];
 
-const signupSchema = z.object({
-  name: z.string().min(2, "Please enter your name"),
-  email: z.string().email("Please enter a valid email"),
-  password: z.string().min(8, "At least 8 characters"),
-  terms: z.literal(true, { errorMap: () => ({ message: "You must accept the terms" }) }),
-});
-type SignupForm = z.infer<typeof signupSchema>;
-
-/* ── Colour picker helpers ── */
-const SWATCH_HUES = [0, 20, 40, 60, 120, 160, 200, 240, 270, 300, 330];
-
-function hslToHex(h: number, s: number, l: number) {
-  s /= 100; l /= 100;
-  const a = s * Math.min(l, 1 - l);
-  const f = (n: number) => {
-    const k = (n + h / 30) % 12;
-    const color = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
-    return Math.round(255 * color).toString(16).padStart(2, "0");
-  };
-  return `#${f(0)}${f(8)}${f(4)}`;
-}
-
 export function InputsSection() {
   const [show, setShow] = useState(false);
   const [text, setText] = useState("Hello UI Zen — type to grow this textarea automatically as your message expands.");
@@ -95,36 +72,11 @@ export function InputsSection() {
 
   const [otp, setOtp] = useState("");
 
-  const [files, setFiles] = useState<File[]>([]);
-  const [drag, setDrag] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const onPick = useCallback((list: FileList | null) => {
-    if (!list) return;
-    setFiles((prev) => [...prev, ...Array.from(list)].slice(0, 5));
-  }, []);
-
   /* Range slider */
   const [range, setRange] = useState([20, 75]);
 
   /* Date picker */
   const [pickedDate, setPickedDate] = useState<Date | undefined>(new Date());
-
-  /* Color picker */
-  const [hue, setHue] = useState(220);
-  const [sat, setSat] = useState(80);
-  const [lit, setLit] = useState(55);
-  const hexColor = hslToHex(hue, sat, lit);
-
-  /* RHF + Zod form */
-  const {
-    register, handleSubmit, control, formState: { errors, isSubmitting, isSubmitSuccessful }, reset,
-  } = useForm<SignupForm>({ resolver: zodResolver(signupSchema), mode: "onBlur" });
-
-  const onSubmit = async (data: SignupForm) => {
-    await new Promise((r) => setTimeout(r, 700));
-    toast.success(`Welcome, ${data.name}!`);
-    reset();
-  };
 
   return (
     <Section id="inputs" title="Inputs & Forms" description="Fields, controls, validation, and modern form patterns.">
@@ -482,130 +434,9 @@ export function InputsSection() {
         </div>
       </DemoCard>
 
-      <DemoCard
-        label="Color picker"
-        selection={{
-          id: "i-color", name: "Color Picker", category: "Inputs & Forms",
-          variants: ["hue-slider", "swatches", "hex-input"],
-          jsx: `<Slider value={[hue]} max={360} onValueChange={([h]) => setHue(h)} />\n<div className="grid grid-cols-11 gap-1">\n  {HUES.map(h => <button style={{ background: hsl(h, 80%, 55%) }} />)}\n</div>`,
-        }}
-      >
-        <div onClick={(e) => e.stopPropagation()} className="space-y-3">
-          <div className="flex items-center gap-3">
-            <div
-              className="h-9 w-9 shrink-0 rounded-md border border-border shadow-sm"
-              style={{ background: `hsl(${hue}, ${sat}%, ${lit}%)` }}
-            />
-            <div className="flex-1 space-y-1">
-              <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Hue</div>
-              <div
-                className="relative h-3 w-full rounded-full"
-                style={{ background: "linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)" }}
-              >
-                <Slider
-                  value={[hue]}
-                  min={0}
-                  max={360}
-                  step={1}
-                  onValueChange={([h]) => setHue(h)}
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                />
-              </div>
-            </div>
-          </div>
+      <InputsColorPicker />
 
-          <div className="grid grid-cols-11 gap-1">
-            {SWATCH_HUES.map((h) => (
-              <button
-                key={h}
-                type="button"
-                aria-label={`Color hue ${h}`}
-                onClick={() => setHue(h)}
-                className={cn(
-                  "aspect-square w-full rounded-md border-2 transition-transform hover:scale-110",
-                  hue === h ? "border-foreground" : "border-transparent"
-                )}
-                style={{ background: `hsl(${h}, 80%, 55%)` }}
-              />
-            ))}
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground">Saturation {sat}%</Label>
-              <Slider value={[sat]} min={0} max={100} step={1} onValueChange={([s]) => setSat(s)} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground">Lightness {lit}%</Label>
-              <Slider value={[lit]} min={10} max={90} step={1} onValueChange={([l]) => setLit(l)} />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-1.5">
-            <div className="h-4 w-4 rounded" style={{ background: `hsl(${hue}, ${sat}%, ${lit}%)` }} />
-            <span className="flex-1 font-mono text-xs">{hexColor}</span>
-            <span className="text-[10px] text-muted-foreground">hsl({hue}, {sat}%, {lit}%)</span>
-          </div>
-        </div>
-      </DemoCard>
-
-      <DemoCard
-        label="File dropzone"
-        selection={{
-          id: "i-dropzone", name: "File Dropzone", category: "Inputs & Forms",
-          variants: ["multiple", "drag-and-drop"],
-          jsx: `<div onDragOver={…} onDrop={…}>\n  <input type="file" multiple ref={ref} />\n</div>`,
-        }}
-      >
-        <div onClick={(e) => e.stopPropagation()} className="space-y-2">
-          <Label>Attachments</Label>
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => fileRef.current?.click()}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileRef.current?.click(); } }}
-            onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
-            onDragLeave={() => setDrag(false)}
-            onDrop={(e) => { e.preventDefault(); setDrag(false); onPick(e.dataTransfer.files); }}
-            className={cn(
-              "flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border bg-muted/40 px-4 py-5 text-center text-xs text-muted-foreground transition-colors",
-              drag && "border-primary bg-primary/5 text-primary"
-            )}
-            aria-label="File dropzone. Click or drag files to upload."
-          >
-            <UploadCloud className="h-5 w-5" aria-hidden="true" />
-            <span>{drag ? "Drop files to upload" : "Drag & drop, or click to browse"}</span>
-            <span className="text-[10px] opacity-70">PNG, JPG, PDF up to 10MB</span>
-            <input
-              ref={fileRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => onPick(e.target.files)}
-            />
-          </div>
-          {files.length > 0 && (
-            <ul className="space-y-1 text-xs" aria-label="Selected files">
-              {files.map((f, i) => (
-                <li key={`${f.name}-${i}`} className="flex items-center justify-between rounded border border-border bg-card px-2 py-1">
-                  <span className="flex items-center gap-1.5 truncate">
-                    <FileUp className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
-                    <span className="truncate">{f.name}</span>
-                  </span>
-                  <button
-                    type="button"
-                    aria-label={`Remove ${f.name}`}
-                    onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
-                    className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </DemoCard>
+      <InputsFileDropzone />
 
       <DemoCard
         label="Validation states"
@@ -633,62 +464,7 @@ export function InputsSection() {
         </div>
       </DemoCard>
 
-      <DemoCard
-        label="Validated form (RHF + Zod)"
-        selection={{
-          id: "i-rhf", name: "Sign-up Form (react-hook-form + zod)", category: "Inputs & Forms",
-          variants: ["validated", "schema-driven"],
-          jsx: `const schema = z.object({\n  email: z.string().email(),\n  password: z.string().min(8),\n});\nconst { register, handleSubmit, formState } =\n  useForm({ resolver: zodResolver(schema) });`,
-        }}
-        className="md:col-span-2 xl:col-span-2"
-      >
-        <form
-          onClick={(e) => e.stopPropagation()}
-          onSubmit={handleSubmit(onSubmit)}
-          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
-          noValidate
-        >
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="rhf-name">Name</Label>
-            <Input id="rhf-name" {...register("name")} aria-invalid={!!errors.name} aria-describedby="rhf-name-err" />
-            {errors.name && <p id="rhf-name-err" role="alert" className="text-xs text-destructive">{errors.name.message}</p>}
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="rhf-email">Email</Label>
-            <Input id="rhf-email" type="email" {...register("email")} aria-invalid={!!errors.email} aria-describedby="rhf-email-err" />
-            {errors.email && <p id="rhf-email-err" role="alert" className="text-xs text-destructive">{errors.email.message}</p>}
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="rhf-pw">Password</Label>
-            <Input id="rhf-pw" type="password" {...register("password")} aria-invalid={!!errors.password} aria-describedby="rhf-pw-err" />
-            {errors.password && <p id="rhf-pw-err" role="alert" className="text-xs text-destructive">{errors.password.message}</p>}
-          </div>
-          <div className="flex items-start gap-2 sm:col-span-2">
-            <Controller
-              control={control}
-              name="terms"
-              render={({ field }) => (
-                <Checkbox
-                  id="rhf-terms"
-                  checked={!!field.value}
-                  onCheckedChange={(v) => field.onChange(v === true)}
-                  onBlur={field.onBlur}
-                  aria-invalid={!!errors.terms}
-                />
-              )}
-            />
-            <Label htmlFor="rhf-terms" className="text-xs font-normal leading-snug">
-              I agree to the Terms of Service and Privacy Policy.
-              {errors.terms && <span className="ml-1 text-destructive">{errors.terms.message}</span>}
-            </Label>
-          </div>
-          <div className="sm:col-span-2">
-            <Button type="submit" className="press w-full" disabled={isSubmitting}>
-              {isSubmitting ? "Creating…" : isSubmitSuccessful ? "Done!" : "Create account"}
-            </Button>
-          </div>
-        </form>
-      </DemoCard>
+      <InputsValidatedForm />
     </Section>
   );
 }
