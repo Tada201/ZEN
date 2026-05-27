@@ -266,6 +266,8 @@ Completed:
 
 - Optional settings, command palette, voice overlay, Mermaid, and chart
   renderers are lazy-loaded at interaction/render boundaries.
+- Mermaid imports are additionally gated by viewport proximity, so a large
+  diagram vendor chunk is not requested for diagrams the user has not reached.
 - Rich markdown rendering is lazy-loaded at the chat block boundary instead of
   being part of the initial chat renderer.
 - Mermaid itself is dynamically imported only when a Mermaid block renders.
@@ -290,6 +292,8 @@ Current evidence:
 - Latest production build reduced the main JS entry from roughly 4.48 MB to
   roughly 1.49 MB.
 - Current largest JS chunks are diagrams, main entry, map, charts, and markdown.
+- The Mermaid vendor chunk remains roughly 2.79 MB minified, but it is now
+  delayed until a diagram is close to the viewport.
 - `npm run perf:budget` reports 7.8 MB total JavaScript against the current
   12 MB local budget.
 - Local bundle budget currently passes, but Vite still emits large chunk
@@ -300,7 +304,8 @@ Current evidence:
 
 Remaining:
 
-- Reduce or defer Mermaid's all-diagram vendor chunk.
+- Decide whether to keep Mermaid despite its all-diagram vendor chunk, restrict
+  supported diagram types, or replace it with a narrower renderer.
 - Decide whether `react-markdown`/KaTeX/highlight should be split behind
   richer-message rendering or kept in core chat.
 - Replace query-layer caps with explicit paginated public APIs where large local
