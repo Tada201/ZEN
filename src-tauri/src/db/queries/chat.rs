@@ -145,10 +145,19 @@ pub async fn unarchive_chat(pool: &SqlitePool, chat_id: &str) -> ZenResult<()> {
 }
 
 pub async fn list_archived_chats(pool: &SqlitePool) -> ZenResult<Vec<Chat>> {
+    list_archived_chats_page(pool, MAX_ARCHIVED_CHAT_ITEMS, 0).await
+}
+
+pub async fn list_archived_chats_page(
+    pool: &SqlitePool,
+    limit: i64,
+    offset: i64,
+) -> ZenResult<Vec<Chat>> {
     let chats = sqlx::query_as::<_, Chat>(
-        "SELECT * FROM chats WHERE is_archived = 1 ORDER BY archived_at DESC LIMIT ?",
+        "SELECT * FROM chats WHERE is_archived = 1 ORDER BY archived_at DESC LIMIT ? OFFSET ?",
     )
-    .bind(MAX_ARCHIVED_CHAT_ITEMS)
+    .bind(limit.clamp(1, MAX_ARCHIVED_CHAT_ITEMS + 1))
+    .bind(offset.max(0))
     .fetch_all(pool)
     .await?;
     Ok(chats)
@@ -339,31 +348,59 @@ pub async fn list_chat_tags(
     pool: &SqlitePool,
     chat_id: &str,
 ) -> ZenResult<Vec<crate::db::models::ChatTag>> {
+    list_chat_tags_page(pool, chat_id, MAX_CHAT_TAG_ITEMS, 0).await
+}
+
+pub async fn list_chat_tags_page(
+    pool: &SqlitePool,
+    chat_id: &str,
+    limit: i64,
+    offset: i64,
+) -> ZenResult<Vec<crate::db::models::ChatTag>> {
     let tags = sqlx::query_as::<_, crate::db::models::ChatTag>(
-        "SELECT * FROM chat_tags WHERE chat_id = ? ORDER BY name ASC LIMIT ?",
+        "SELECT * FROM chat_tags WHERE chat_id = ? ORDER BY name ASC LIMIT ? OFFSET ?",
     )
     .bind(chat_id)
-    .bind(MAX_CHAT_TAG_ITEMS)
+    .bind(limit.clamp(1, MAX_CHAT_TAG_ITEMS + 1))
+    .bind(offset.max(0))
     .fetch_all(pool)
     .await?;
     Ok(tags)
 }
 
 pub async fn list_all_chat_tags(pool: &SqlitePool) -> ZenResult<Vec<crate::db::models::ChatTag>> {
+    list_all_chat_tags_page(pool, MAX_ALL_CHAT_TAG_ITEMS, 0).await
+}
+
+pub async fn list_all_chat_tags_page(
+    pool: &SqlitePool,
+    limit: i64,
+    offset: i64,
+) -> ZenResult<Vec<crate::db::models::ChatTag>> {
     let tags = sqlx::query_as::<_, crate::db::models::ChatTag>(
-        "SELECT * FROM chat_tags ORDER BY chat_id, name ASC LIMIT ?",
+        "SELECT * FROM chat_tags ORDER BY chat_id, name ASC LIMIT ? OFFSET ?",
     )
-    .bind(MAX_ALL_CHAT_TAG_ITEMS)
+    .bind(limit.clamp(1, MAX_ALL_CHAT_TAG_ITEMS + 1))
+    .bind(offset.max(0))
     .fetch_all(pool)
     .await?;
     Ok(tags)
 }
 
 pub async fn list_unique_tag_names(pool: &SqlitePool) -> ZenResult<Vec<String>> {
+    list_unique_tag_names_page(pool, MAX_UNIQUE_TAG_ITEMS, 0).await
+}
+
+pub async fn list_unique_tag_names_page(
+    pool: &SqlitePool,
+    limit: i64,
+    offset: i64,
+) -> ZenResult<Vec<String>> {
     let tags = sqlx::query_scalar::<_, String>(
-        "SELECT DISTINCT name FROM chat_tags ORDER BY name ASC LIMIT ?",
+        "SELECT DISTINCT name FROM chat_tags ORDER BY name ASC LIMIT ? OFFSET ?",
     )
-    .bind(MAX_UNIQUE_TAG_ITEMS)
+    .bind(limit.clamp(1, MAX_UNIQUE_TAG_ITEMS + 1))
+    .bind(offset.max(0))
     .fetch_all(pool)
     .await?;
     Ok(tags)

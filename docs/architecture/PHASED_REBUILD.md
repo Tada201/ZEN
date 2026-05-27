@@ -258,9 +258,10 @@ Goals:
 Known issues:
 
 - Frontend production build emits large chunk warnings.
-- Query-layer caps are now in place for broad list APIs, and highest-risk
-  local-history paths have public pagination. Secondary list surfaces still need
-  pagination before large-user-data release.
+- Query-layer caps are now in place for broad list APIs. Primary local-history
+  and secondary list surfaces now have explicit paginated command paths; legacy
+  uncapped command names remain as compatibility wrappers during frontend
+  migration.
 
 Completed:
 
@@ -289,6 +290,9 @@ Completed:
 - Public paginated commands now exist for the highest-risk local-history paths:
   active chats, chat messages, and documents. Legacy uncapped command names are
   preserved as compatibility wrappers while frontend callers migrate.
+- Secondary paginated commands now exist for archived chats, chat tags,
+  artifacts, GTSM saved geofences/markers, GTSM telemetry history/tracks, and
+  session-memory rows.
 
 Current evidence:
 
@@ -311,9 +315,8 @@ Remaining:
   supported diagram types, or replace it with a narrower renderer.
 - Decide whether `react-markdown`/KaTeX/highlight should be split behind
   richer-message rendering or kept in core chat.
-- Continue replacing query-layer caps with explicit paginated public APIs for
-  lower-risk secondary lists such as archived chats, tags, artifacts, GTSM saved
-  objects/history, and session memories.
+- Migrate frontend call sites from legacy list commands to the new paginated
+  wrappers where user data can grow large.
 - Keep CI ratchet deferred until the full app feature surface is done.
 
 ## Phase 7: CI Ratchet

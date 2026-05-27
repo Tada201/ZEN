@@ -74,17 +74,27 @@ pub async fn get_session_memory_rows_for_session(
     pool: &SqlitePool,
     session_id: &str,
 ) -> ZenResult<Vec<SessionMemoryRow>> {
+    get_session_memory_rows_for_session_page(pool, session_id, MAX_SESSION_MEMORY_ROWS, 0).await
+}
+
+pub async fn get_session_memory_rows_for_session_page(
+    pool: &SqlitePool,
+    session_id: &str,
+    limit: i64,
+    offset: i64,
+) -> ZenResult<Vec<SessionMemoryRow>> {
     let rows = sqlx::query(
         r#"
         SELECT id, session_id, content, metadata, written_by, timestamp, embedding
         FROM session_memories
         WHERE session_id = ?
         ORDER BY timestamp DESC
-        LIMIT ?
+        LIMIT ? OFFSET ?
         "#,
     )
     .bind(session_id)
-    .bind(MAX_SESSION_MEMORY_ROWS)
+    .bind(limit.clamp(1, MAX_SESSION_MEMORY_ROWS + 1))
+    .bind(offset.max(0))
     .fetch_all(pool)
     .await?;
 

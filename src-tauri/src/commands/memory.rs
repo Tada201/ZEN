@@ -1,5 +1,18 @@
+use crate::commands::pagination::{normalize_page, page_from_fetch, Page};
 use crate::commands::AppState;
+use serde::Serialize;
 use tauri::State;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionMemoryItem {
+    pub id: String,
+    pub session_id: String,
+    pub content: String,
+    pub metadata: String,
+    pub written_by: String,
+    pub timestamp: i64,
+}
 
 #[tauri::command]
 pub async fn get_conversation_memories(
@@ -107,6 +120,39 @@ pub async fn clear_conversation_memories(
     }
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn list_session_memories_page(
+    state: State<'_, AppState>,
+    session_id: String,
+    limit: Option<i64>,
+    offset: Option<i64>,
+) -> Result<Page<SessionMemoryItem>, String> {
+    let pool = state.db().await.map_err(|e| e.to_string())?;
+    let (limit, offset) = normalize_page(limit, offset);
+    let rows = crate::db::queries::get_session_memory_rows_for_session_page(
+        &pool,
+        &session_id,
+        limit + 1,
+        offset,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let items = rows
+        .into_iter()
+        .map(|row| SessionMemoryItem {
+            id: row.id,
+            session_id: row.session_id,
+            content: row.content,
+            metadata: row.metadata,
+            written_by: row.written_by,
+            timestamp: row.timestamp,
+        })
+        .collect();
+
+    Ok(page_from_fetch(items, limit, offset))
 }
 
 #[tauri::command]

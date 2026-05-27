@@ -9,12 +9,15 @@ export type { McpConfig, McpStatus, McpTool } from "./mcpApi";
 export { chatApi } from "./chatApi";
 export type {
   BackendChat,
+  BackendChatTag,
   BackendFolder,
   BackendMessage,
   PaginatedResponse,
   SearchResult,
   SendMessageRequest,
 } from "./chatApi";
+export { artifactsApi } from "./artifactsApi";
+export type { BackendArtifact } from "./artifactsApi";
 export { documentsApi } from "./documentsApi";
 export type { BackendDocument } from "./documentsApi";
 export {
@@ -43,9 +46,9 @@ export type { BrowseFolderResult, FolderEntry } from "./workspaceApi";
 export { agentsApi } from "./agentsApi";
 export type { AgentConfig, AgentInfo } from "./agentsApi";
 export { memoryApi } from "./memoryApi";
-export type { MemoryEntry, MemorySearchResult, MemoryStats } from "./memoryApi";
+export type { MemoryEntry, MemorySearchResult, MemoryStats, SessionMemoryItem } from "./memoryApi";
 export { gtsmApi } from "./gtsmApi";
-export type { ComputeNavigationRouteRequest } from "./gtsmApi";
+export type { ComputeNavigationRouteRequest, GtsmGeofence, GtsmMarker, TrackPoint } from "./gtsmApi";
 export { voiceApi } from "./voiceApi";
 export type { TranscriptionResult } from "./voiceApi";
 export { sessionApi } from "./sessionApi";

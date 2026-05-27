@@ -13,10 +13,19 @@ const MAX_ENTITY_TRACK_POINTS: i64 = 2_000;
 use crate::db::models::GtsmGeofence;
 
 pub async fn list_geofences(pool: &SqlitePool) -> ZenResult<Vec<GtsmGeofence>> {
+    list_geofences_page(pool, MAX_GTSM_GEOFENCE_ITEMS, 0).await
+}
+
+pub async fn list_geofences_page(
+    pool: &SqlitePool,
+    limit: i64,
+    offset: i64,
+) -> ZenResult<Vec<GtsmGeofence>> {
     let geofences = sqlx::query_as::<_, GtsmGeofence>(
-        "SELECT * FROM gtsm_geofences ORDER BY created_at DESC LIMIT ?",
+        "SELECT * FROM gtsm_geofences ORDER BY created_at DESC LIMIT ? OFFSET ?",
     )
-    .bind(MAX_GTSM_GEOFENCE_ITEMS)
+    .bind(limit.clamp(1, MAX_GTSM_GEOFENCE_ITEMS + 1))
+    .bind(offset.max(0))
     .fetch_all(pool)
     .await?;
     Ok(geofences)
@@ -66,10 +75,19 @@ pub async fn delete_geofence(pool: &SqlitePool, id: &str) -> ZenResult<()> {
 use crate::db::models::GtsmMarker;
 
 pub async fn list_markers(pool: &SqlitePool) -> ZenResult<Vec<GtsmMarker>> {
+    list_markers_page(pool, MAX_GTSM_MARKER_ITEMS, 0).await
+}
+
+pub async fn list_markers_page(
+    pool: &SqlitePool,
+    limit: i64,
+    offset: i64,
+) -> ZenResult<Vec<GtsmMarker>> {
     let markers = sqlx::query_as::<_, GtsmMarker>(
-        "SELECT * FROM gtsm_markers ORDER BY created_at DESC LIMIT ?",
+        "SELECT * FROM gtsm_markers ORDER BY created_at DESC LIMIT ? OFFSET ?",
     )
-    .bind(MAX_GTSM_MARKER_ITEMS)
+    .bind(limit.clamp(1, MAX_GTSM_MARKER_ITEMS + 1))
+    .bind(offset.max(0))
     .fetch_all(pool)
     .await?;
     Ok(markers)
@@ -172,6 +190,16 @@ pub async fn query_history(
     entity_type: &str,
     timestamp: i64,
 ) -> Result<Vec<TelemetrySnapshot>> {
+    query_history_page(pool, entity_type, timestamp, MAX_TELEMETRY_HISTORY_ITEMS, 0).await
+}
+
+pub async fn query_history_page(
+    pool: &SqlitePool,
+    entity_type: &str,
+    timestamp: i64,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<TelemetrySnapshot>> {
     let nearest_ts: Option<i64> = sqlx::query_scalar(
         "SELECT timestamp FROM telemetry_snapshots
          WHERE entity_type = ?
@@ -192,11 +220,12 @@ pub async fn query_history(
         "SELECT * FROM telemetry_snapshots
          WHERE entity_type = ? AND timestamp = ?
          ORDER BY entity_id
-         LIMIT ?",
+         LIMIT ? OFFSET ?",
     )
     .bind(entity_type)
     .bind(nearest)
-    .bind(MAX_TELEMETRY_HISTORY_ITEMS)
+    .bind(limit.clamp(1, MAX_TELEMETRY_HISTORY_ITEMS + 1))
+    .bind(offset.max(0))
     .fetch_all(pool)
     .await?;
 
@@ -209,16 +238,36 @@ pub async fn query_entity_track(
     start_time: i64,
     end_time: i64,
 ) -> Result<Vec<TrackPoint>> {
+    query_entity_track_page(
+        pool,
+        entity_id,
+        start_time,
+        end_time,
+        MAX_ENTITY_TRACK_POINTS,
+        0,
+    )
+    .await
+}
+
+pub async fn query_entity_track_page(
+    pool: &SqlitePool,
+    entity_id: &str,
+    start_time: i64,
+    end_time: i64,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<TrackPoint>> {
     let rows = sqlx::query_as::<_, TrackPoint>(
         "SELECT timestamp, lat, lon, alt FROM telemetry_snapshots
          WHERE entity_id = ? AND timestamp BETWEEN ? AND ?
          ORDER BY timestamp ASC
-         LIMIT ?",
+         LIMIT ? OFFSET ?",
     )
     .bind(entity_id)
     .bind(start_time)
     .bind(end_time)
-    .bind(MAX_ENTITY_TRACK_POINTS)
+    .bind(limit.clamp(1, MAX_ENTITY_TRACK_POINTS + 1))
+    .bind(offset.max(0))
     .fetch_all(pool)
     .await?;
 

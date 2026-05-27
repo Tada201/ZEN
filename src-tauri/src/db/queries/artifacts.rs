@@ -35,22 +35,42 @@ pub async fn upsert_artifact(pool: &SqlitePool, art: &Artifact) -> ZenResult<()>
 }
 
 pub async fn get_chat_artifacts(pool: &SqlitePool, chat_id: &str) -> ZenResult<Vec<Artifact>> {
+    get_chat_artifacts_page(pool, chat_id, MAX_CHAT_ARTIFACT_ITEMS, 0).await
+}
+
+pub async fn get_chat_artifacts_page(
+    pool: &SqlitePool,
+    chat_id: &str,
+    limit: i64,
+    offset: i64,
+) -> ZenResult<Vec<Artifact>> {
     let artifacts = sqlx::query_as::<_, Artifact>(
-        "SELECT * FROM artifacts WHERE chat_id = ? ORDER BY created_at DESC LIMIT ?",
+        "SELECT * FROM artifacts WHERE chat_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
     )
     .bind(chat_id)
-    .bind(MAX_CHAT_ARTIFACT_ITEMS)
+    .bind(limit.clamp(1, MAX_CHAT_ARTIFACT_ITEMS + 1))
+    .bind(offset.max(0))
     .fetch_all(pool)
     .await?;
     Ok(artifacts)
 }
 
 pub async fn get_all_artifacts(pool: &SqlitePool) -> ZenResult<Vec<Artifact>> {
-    let artifacts =
-        sqlx::query_as::<_, Artifact>("SELECT * FROM artifacts ORDER BY created_at DESC LIMIT ?")
-            .bind(MAX_ARTIFACT_LIST_ITEMS)
-            .fetch_all(pool)
-            .await?;
+    get_all_artifacts_page(pool, MAX_ARTIFACT_LIST_ITEMS, 0).await
+}
+
+pub async fn get_all_artifacts_page(
+    pool: &SqlitePool,
+    limit: i64,
+    offset: i64,
+) -> ZenResult<Vec<Artifact>> {
+    let artifacts = sqlx::query_as::<_, Artifact>(
+        "SELECT * FROM artifacts ORDER BY created_at DESC LIMIT ? OFFSET ?",
+    )
+    .bind(limit.clamp(1, MAX_ARTIFACT_LIST_ITEMS + 1))
+    .bind(offset.max(0))
+    .fetch_all(pool)
+    .await?;
     Ok(artifacts)
 }
 

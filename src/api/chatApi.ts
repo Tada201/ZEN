@@ -34,6 +34,14 @@ export interface BackendMessage {
   metadata?: string;
 }
 
+export interface BackendChatTag {
+  id: string;
+  chatId: string;
+  name: string;
+  color?: string | null;
+  createdAt: string | number;
+}
+
 export interface PaginatedResponse<T> {
   items: T[];
   limit: number;
@@ -83,6 +91,14 @@ export const chatApi = {
   listChatsPage: (limit?: number, offset?: number) =>
     callCommand<PaginatedResponse<BackendChat>>("get_chats_page", { limit, offset }),
   listArchivedChats: () => callCommand<BackendChat[]>("list_archived_chats"),
+  listArchivedChatsPage: (limit?: number, offset?: number) =>
+    callCommand<PaginatedResponse<BackendChat>>("list_archived_chats_page", { limit, offset }),
+  listChatTagsPage: (chatId: string, limit?: number, offset?: number) =>
+    callCommand<PaginatedResponse<BackendChatTag>>("list_chat_tags_page", { chatId, limit, offset }),
+  listAllChatTagsPage: (limit?: number, offset?: number) =>
+    callCommand<PaginatedResponse<BackendChatTag>>("list_all_chat_tags_page", { limit, offset }),
+  listUniqueTagNamesPage: (limit?: number, offset?: number) =>
+    callCommand<PaginatedResponse<string>>("list_unique_tag_names_page", { limit, offset }),
   listFolders: () => callCommand<BackendFolder[]>("list_chat_folders"),
   listMessages: (chatId: string | null) => callCommand<BackendMessage[]>("get_messages", { chatId }),
   listMessagesPage: (chatId: string, limit?: number, offset?: number) =>

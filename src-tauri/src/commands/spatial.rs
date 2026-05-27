@@ -1,4 +1,5 @@
 use super::AppState;
+use crate::commands::pagination::{normalize_page, page_from_fetch, Page};
 use crate::error::ZenError;
 use tauri::State;
 
@@ -285,6 +286,27 @@ pub async fn get_telemetry_history(
 }
 
 #[tauri::command]
+pub async fn get_telemetry_history_page(
+    state: State<'_, AppState>,
+    entity_type: String,
+    timestamp: i64,
+    limit: Option<i64>,
+    offset: Option<i64>,
+) -> Result<Page<TelemetrySnapshot>, ZenError> {
+    let (limit, offset) = normalize_page(limit, offset);
+    let items = crate::services::gtsm::history::query_history_page(
+        &state.db().await?,
+        &entity_type,
+        timestamp,
+        limit + 1,
+        offset,
+    )
+    .await
+    .map_err(|e| ZenError::Internal(e.to_string()))?;
+    Ok(page_from_fetch(items, limit, offset))
+}
+
+#[tauri::command]
 pub async fn get_entity_track(
     state: State<'_, AppState>,
     entity_id: String,
@@ -299,6 +321,29 @@ pub async fn get_entity_track(
     )
     .await
     .map_err(|e| ZenError::Internal(e.to_string()))
+}
+
+#[tauri::command]
+pub async fn get_entity_track_page(
+    state: State<'_, AppState>,
+    entity_id: String,
+    start_time: i64,
+    end_time: i64,
+    limit: Option<i64>,
+    offset: Option<i64>,
+) -> Result<Page<TrackPoint>, ZenError> {
+    let (limit, offset) = normalize_page(limit, offset);
+    let items = crate::services::gtsm::history::query_entity_track_page(
+        &state.db().await?,
+        &entity_id,
+        start_time,
+        end_time,
+        limit + 1,
+        offset,
+    )
+    .await
+    .map_err(|e| ZenError::Internal(e.to_string()))?;
+    Ok(page_from_fetch(items, limit, offset))
 }
 
 #[tauri::command]
@@ -330,6 +375,19 @@ pub async fn list_geofences_db(state: State<'_, AppState>) -> Result<Vec<GtsmGeo
     crate::db::queries::list_geofences(&state.db().await?)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))
+}
+
+#[tauri::command]
+pub async fn list_geofences_db_page(
+    state: State<'_, AppState>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+) -> Result<Page<GtsmGeofence>, ZenError> {
+    let (limit, offset) = normalize_page(limit, offset);
+    let items = crate::db::queries::list_geofences_page(&state.db().await?, limit + 1, offset)
+        .await
+        .map_err(|e| ZenError::Custom(e.to_string()))?;
+    Ok(page_from_fetch(items, limit, offset))
 }
 
 #[tauri::command]
@@ -382,6 +440,19 @@ pub async fn list_markers_db(state: State<'_, AppState>) -> Result<Vec<GtsmMarke
     crate::db::queries::list_markers(&state.db().await?)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))
+}
+
+#[tauri::command]
+pub async fn list_markers_db_page(
+    state: State<'_, AppState>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+) -> Result<Page<GtsmMarker>, ZenError> {
+    let (limit, offset) = normalize_page(limit, offset);
+    let items = crate::db::queries::list_markers_page(&state.db().await?, limit + 1, offset)
+        .await
+        .map_err(|e| ZenError::Custom(e.to_string()))?;
+    Ok(page_from_fetch(items, limit, offset))
 }
 
 #[tauri::command]
