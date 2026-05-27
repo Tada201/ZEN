@@ -293,6 +293,9 @@ Completed:
 - Secondary paginated commands now exist for archived chats, chat tags,
   artifacts, GTSM saved geofences/markers, GTSM telemetry history/tracks, and
   session-memory rows.
+- Frontend session, archived-session, message, app-init, diagnostics, and GTSM
+  telemetry reads now use the paginated wrappers instead of legacy unpaginated
+  commands.
 
 Current evidence:
 
@@ -315,8 +318,8 @@ Remaining:
   supported diagram types, or replace it with a narrower renderer.
 - Decide whether `react-markdown`/KaTeX/highlight should be split behind
   richer-message rendering or kept in core chat.
-- Migrate frontend call sites from legacy list commands to the new paginated
-  wrappers where user data can grow large.
+- Continue using paginated wrappers for any new growable frontend data reads;
+  legacy command names remain only for compatibility and backend/internal flows.
 - Keep CI ratchet deferred until the full app feature surface is done.
 
 ## Phase 7: CI Ratchet

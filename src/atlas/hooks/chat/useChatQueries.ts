@@ -345,16 +345,16 @@ export function useChatQueries() {
   const { data: sessions = [] } = useQuery({
     queryKey: ["sessions"],
     queryFn: async () => {
-      const chats = await chatApi.listChats();
-      return chats.map(mapChatToSession);
+      const page = await chatApi.listChatsPage(500, 0);
+      return page.items.map(mapChatToSession);
     },
   });
 
   const { data: archivedSessions = [] } = useQuery({
     queryKey: ["archived-sessions"],
     queryFn: async () => {
-      const chats = await chatApi.listArchivedChats();
-      return chats.map(mapChatToSession);
+      const page = await chatApi.listArchivedChatsPage(500, 0);
+      return page.items.map(mapChatToSession);
     },
   });
 
@@ -403,8 +403,9 @@ export function useChatQueries() {
   const { data: fetchedMessages, isFetching: isMessagesFetching } = useQuery({
     queryKey: ["messages", currentSessionId],
     queryFn: async () => {
-      const msgs = await chatApi.listMessages(currentSessionId);
-      return coalesceTimelineMessages(msgs.map(mapDbMessageToMessage));
+      if (!currentSessionId) return [];
+      const page = await chatApi.listMessagesPage(currentSessionId, 500, 0);
+      return coalesceTimelineMessages(page.items.map(mapDbMessageToMessage));
     },
     enabled: !!currentSessionId,
   });

@@ -73,9 +73,9 @@ export function useAppInit(onStepsUpdate?: (steps: InitStep[]) => void) {
                 try {
                     const chatStore = useChatStore.getState();
                     let targetSessionId = chatStore.activeSessionId;
-                    const sessions = await chatApi.listChats();
-                    if (!targetSessionId && sessions.length > 0) {
-                        targetSessionId = sessions[0].id;
+                    const sessionsPage = await chatApi.listChatsPage(1, 0);
+                    if (!targetSessionId && sessionsPage.items.length > 0) {
+                        targetSessionId = sessionsPage.items[0].id;
                         chatStore.setActiveSession(targetSessionId);
                     }
                     setStep('chathistory', 'done');

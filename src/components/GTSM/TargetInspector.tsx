@@ -97,8 +97,8 @@ export const TargetInspector: React.FC = () => {
         }
 
         const nowSecs = Math.floor(Date.now() / 1000);
-        gtsmApi.getTelemetryHistory(selectedTarget.type, nowSecs).then(snaps => {
-            const targetSnaps = snaps.filter(s => s.entity_id === selectedTarget.id);
+        gtsmApi.getTelemetryHistoryPage(selectedTarget.type, nowSecs, 500, 0).then(page => {
+            const targetSnaps = page.items.filter(s => s.entity_id === selectedTarget.id);
             setRecentSnapshots(targetSnaps);
         }).catch(err => {
             console.error('[TargetInspector] Failed to fetch telemetry:', err);

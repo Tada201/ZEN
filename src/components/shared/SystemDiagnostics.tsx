@@ -70,7 +70,7 @@ export function SystemDiagnostics() {
     const isStreaming = useChatStore((s) => s.isStreaming) || false;
     const { data: sessions = [] } = useQuery({
         queryKey: ['sessions'],
-        queryFn: chatApi.listChats,
+        queryFn: async () => (await chatApi.listChatsPage(500, 0)).items,
         staleTime: 30_000,
     });
 
