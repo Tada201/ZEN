@@ -4,32 +4,13 @@ import { type UnlistenFn } from '@tauri-apps/api/event';
 import { VoiceOscilloscope } from './VoiceOscilloscope';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from "@/lib/utils";
-import { Mic, X, Terminal, Cpu, Sparkles, Volume2 } from 'lucide-react';
+import { Mic, X, Terminal, Sparkles, Volume2 } from 'lucide-react';
 import { stopSpeech } from '@/atlas/lib/webSpeech';
 import { voiceApi } from '@/api';
 import { listenAppEvent } from '@/api/events';
-
-// Utility helper to strip markdown for clean subtitles
-function stripMarkdown(text: string) {
-    if (!text) return '';
-    const codeBlocks: string[] = [];
-    let stripped = text.replace(/```[\s\S]*?```/g, (match) => {
-        codeBlocks.push(match.replace(/^```\w*\n?/, '').replace(/\n?```$/, ''));
-        return `\x00CB${codeBlocks.length - 1}\x00`;
-    });
-    stripped = stripped
-        .replace(/\[\d+\]/g, '')
-        .replace(/\*\*(.*?)\*\*/g, '$1')
-        .replace(/\*(.*?)\*/g, '$1')
-        .replace(/`(.*?)`/g, '$1')
-        .replace(/#+\s/g, '')
-        .replace(/\[(.*?)\]\(.*?\)/g, '$1')
-        .replace(/<.*?>/g, '')
-        .replace(/\n/g, ' ')
-        .trim();
-    stripped = stripped.replace(/\x00CB(\d+)\x00/g, (_, i) => codeBlocks[parseInt(i)]);
-    return stripped;
-}
+import { VoiceDiagnosticsPanel } from './VoiceDiagnosticsPanel';
+import { VoiceSubtitleBox } from './VoiceSubtitleBox';
+import { stripMarkdown } from './voiceTextUtils';
 
 type VoiceState = 'initializing' | 'listening' | 'processing' | 'speaking' | 'idle';
 const SILENCE_THRESHOLD = 0.015;
@@ -485,22 +466,15 @@ export function VoiceModeOverlay({
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: 'auto' }}
                             exit={{ opacity: 0, height: 0 }}
-                            className="w-full bg-[#05060b]/80 border border-white/5 rounded-xl p-4 overflow-hidden text-[9px] font-mono text-zinc-400 flex flex-col gap-3 z-10"
                         >
-                            <div className="flex justify-between items-center text-zinc-500 border-b border-white/5 pb-1">
-                                <span className="flex items-center gap-1.5"><Cpu size={10} /> TELEMETRY DIAGNOSTICS</span>
-                                <span>UPTIME: {Math.floor(appUptimeSecs / 60)}M {appUptimeSecs % 60}S</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                                <div className="flex justify-between"><span>STT_ENGINE</span><span className="text-white">{sttEngine.toUpperCase()}</span></div>
-                                <div className="flex justify-between"><span>LINK STATUS</span><span className={micStatus === 'live' ? 'text-emerald-400 font-bold' : 'text-red-400'}>{micStatus.toUpperCase()}</span></div>
-                                <div className="flex justify-between"><span>AMP SIGNAL</span><span className="text-white">{Math.min(100, Math.floor(amplitude * 250))}%</span></div>
-                                <div className="flex justify-between"><span>LATENCY</span><span className="text-white">{tokensPerSec ? `${(1000 / tokensPerSec).toFixed(0)}ms` : '24ms'}</span></div>
-                            </div>
-                            <div className="h-px bg-white/5 my-1" />
-                            <div className="flex flex-col gap-1 max-h-16 overflow-y-auto pr-1">
-                                {logLines.slice(-3).map((l, i) => <div key={i} className="truncate text-zinc-500">{l}</div>)}
-                            </div>
+                            <VoiceDiagnosticsPanel
+                                appUptimeSecs={appUptimeSecs}
+                                sttEngine={sttEngine}
+                                micStatus={micStatus}
+                                amplitude={amplitude}
+                                tokensPerSec={tokensPerSec}
+                                logLines={logLines}
+                            />
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -512,44 +486,7 @@ export function VoiceModeOverlay({
                 </div>
             </div>
 
-            {/* YouTube-style Closed Captioning Subtitle Box */}
-            <div className="absolute bottom-16 left-1/2 -translate-x-1/2 w-full max-w-xl px-6 z-40 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                <div className="bg-[#0c0d14]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl flex items-start gap-3.5 transition-all duration-200">
-                    
-                    {/* Color-Coded Speaker Pill Tag */}
-                    {subtitleSpeaker === 'user' && (
-                        <span className="shrink-0 text-[9px] font-extrabold tracking-widest px-2.5 py-0.5 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 select-none uppercase">
-                            YOU
-                        </span>
-                    )}
-                    {subtitleSpeaker === 'agent' && (
-                        <span className="shrink-0 text-[9px] font-extrabold tracking-widest px-2.5 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 select-none uppercase">
-                            ZEN
-                        </span>
-                    )}
-                    {subtitleSpeaker === 'system' && (
-                        <span className="shrink-0 text-[9px] font-extrabold tracking-widest px-2.5 py-0.5 rounded border border-zinc-500/30 bg-zinc-500/10 text-zinc-400 select-none uppercase">
-                            SYS
-                        </span>
-                    )}
-
-                    {/* Subtitle speech text */}
-                    <p className={cn(
-                        "text-[13px] font-semibold leading-relaxed flex-1 text-left select-none transition-colors duration-200",
-                        subtitleSpeaker === 'user' 
-                            ? "text-purple-100/90" 
-                            : subtitleSpeaker === 'agent' 
-                                ? "text-emerald-100/90" 
-                                : "text-zinc-500 italic"
-                    )}>
-                        {subtitleSpeaker === 'user' 
-                            ? (userSpeechText || 'Listening for speech...') 
-                            : subtitleSpeaker === 'agent' 
-                                ? (aiSpeechText || 'Responding...') 
-                                : 'Voice link established. Monitoring channel...'}
-                    </p>
-                </div>
-            </div>
+            <VoiceSubtitleBox speaker={subtitleSpeaker} userText={userSpeechText} aiText={aiSpeechText} />
         </div>
     );
 }
