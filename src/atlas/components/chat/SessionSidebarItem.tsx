@@ -1,0 +1,310 @@
+import {
+  Archive,
+  ArchiveRestore,
+  Download,
+  Edit2,
+  Folder,
+  MoreHorizontal,
+  Pin,
+  PinOff,
+  Plus,
+  Trash2,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
+import { ChatFolder, Session } from "./types";
+
+export interface SearchResult {
+  chatId: string;
+  chatTitle: string;
+  messageId: string;
+  messageContent: string;
+  role: string;
+  timestamp: string;
+}
+
+interface SessionSidebarItemProps {
+  item: Session | SearchResult;
+  isSearchResult?: boolean;
+  currentId: string | null;
+  editingId: string | null;
+  editTitle: string;
+  folders: ChatFolder[];
+  showArchived: boolean;
+  onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
+  onRename: (id: string, name: string) => void;
+  onPin: (id: string) => void;
+  onArchive: (id: string) => void;
+  onUnarchive: (id: string) => void;
+  onExport: (id: string) => void;
+  onCreateFolder: (name: string) => void;
+  onMoveToFolder: (chatId: string, folderId: string | null) => void;
+  setEditingId: (id: string | null) => void;
+  setEditTitle: (title: string) => void;
+}
+
+const ENTITY_MAP: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: "\"",
+  apos: "'",
+  "#39": "'",
+};
+
+function decodeEntities(value: string): string {
+  return value.replace(/&([^;]+);/g, (match, entity) => ENTITY_MAP[entity] ?? match);
+}
+
+function renderSearchSnippet(snippet: string) {
+  const safeSnippet = snippet.replace(/<(?!\/?mark\b)[^>]*>/gi, "");
+  const tokens = safeSnippet.split(/(<mark>|<\/mark>)/gi);
+  let highlighted = false;
+
+  return tokens.map((token, index) => {
+    const lower = token.toLowerCase();
+    if (lower === "<mark>") {
+      highlighted = true;
+      return null;
+    }
+    if (lower === "</mark>") {
+      highlighted = false;
+      return null;
+    }
+
+    const text = decodeEntities(token);
+    return highlighted ? (
+      <mark key={index} className="rounded bg-amber-500/20 px-0.5 text-amber-200">
+        {text}
+      </mark>
+    ) : (
+      <span key={index}>{text}</span>
+    );
+  });
+}
+
+export function SessionSidebarItem({
+  item,
+  isSearchResult = false,
+  currentId,
+  editingId,
+  editTitle,
+  folders,
+  showArchived,
+  onSelect,
+  onDelete,
+  onRename,
+  onPin,
+  onArchive,
+  onUnarchive,
+  onExport,
+  onCreateFolder,
+  onMoveToFolder,
+  setEditingId,
+  setEditTitle,
+}: SessionSidebarItemProps) {
+  const id = isSearchResult ? (item as SearchResult).chatId : (item as Session).id;
+  const displayTitle = isSearchResult ? (item as SearchResult).chatTitle : (item as Session).title;
+  const isPinned = !isSearchResult && (item as Session).pinned;
+  const itemKey = isSearchResult
+    ? `${(item as SearchResult).chatId}-${(item as SearchResult).messageId}`
+    : (item as Session).id;
+
+  return (
+    <div
+      key={itemKey}
+      className={cn(
+        "group relative flex flex-col gap-1 px-3 py-2 rounded-lg cursor-pointer transition-all border border-transparent",
+        id === currentId ? "bg-white/5 border-white/5" : "hover:bg-white/[0.03]",
+      )}
+      onClick={() => onSelect(id)}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex-1 min-w-0 flex flex-col gap-0">
+          {editingId === id ? (
+            <input
+              autoFocus
+              className="w-full bg-transparent outline-none text-xs text-primary"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  onRename(id, editTitle);
+                  setEditingId(null);
+                }
+                if (e.key === "Escape") setEditingId(null);
+              }}
+              onBlur={() => {
+                onRename(id, editTitle);
+                setEditingId(null);
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <div className="flex items-center gap-2">
+              <span
+                className={cn(
+                  "truncate text-xs block flex-1 tracking-tight transition-colors",
+                  id === currentId ? "text-white font-medium" : "text-zinc-400 group-hover:text-zinc-200",
+                )}
+              >
+                {displayTitle}
+              </span>
+              {isPinned && !showArchived && <Pin size={10} className="text-primary/60 shrink-0" />}
+            </div>
+          )}
+        </div>
+
+        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0 transition-all">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6 text-zinc-600 hover:text-white hover:bg-white/10"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MoreHorizontal size={14} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44 bg-zinc-950 border-white/10">
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingId(id);
+                  setEditTitle(displayTitle);
+                }}
+                className="text-xs"
+              >
+                <Edit2 className="mr-2 h-3.5 w-3.5" /> Rename
+              </DropdownMenuItem>
+
+              {!showArchived && !isSearchResult && (
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPin(id);
+                  }}
+                  className="text-xs"
+                >
+                  {(item as Session).pinned ? (
+                    <>
+                      <PinOff className="mr-2 h-3.5 w-3.5" /> Unpin
+                    </>
+                  ) : (
+                    <>
+                      <Pin className="mr-2 h-3.5 w-3.5" /> Pin
+                    </>
+                  )}
+                </DropdownMenuItem>
+              )}
+
+              {!isSearchResult && (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="text-xs" onClick={(e) => e.stopPropagation()}>
+                    <Folder className="mr-2 h-3.5 w-3.5" /> Move to Folder
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="bg-zinc-950 border-white/10">
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onMoveToFolder(id, null);
+                      }}
+                      className="text-xs"
+                    >
+                      None
+                    </DropdownMenuItem>
+                    {folders.map((folder) => (
+                      <DropdownMenuItem
+                        key={folder.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onMoveToFolder(id, folder.id);
+                        }}
+                        className="text-xs"
+                      >
+                        {folder.name}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator className="bg-white/5" />
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const name = prompt("Folder name:");
+                        if (name) onCreateFolder(name);
+                      }}
+                      className="text-xs"
+                    >
+                      <Plus className="mr-2 h-3.5 w-3.5" /> New Folder
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
+
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onExport(id);
+                }}
+                className="text-xs"
+              >
+                <Download className="mr-2 h-3.5 w-3.5" /> Export
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator className="bg-white/5" />
+
+              {showArchived ? (
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUnarchive(id);
+                  }}
+                  className="text-xs"
+                >
+                  <ArchiveRestore className="mr-2 h-3.5 w-3.5" /> Unarchive
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onArchive(id);
+                  }}
+                  className="text-xs"
+                >
+                  <Archive className="mr-2 h-3.5 w-3.5" /> Archive
+                </DropdownMenuItem>
+              )}
+
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(id);
+                }}
+                className="text-red-400 focus:bg-red-500/10 focus:text-red-400 text-xs"
+              >
+                <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      {isSearchResult && (item as SearchResult).messageContent && (
+        <div className="text-[10px] text-zinc-500 line-clamp-2 leading-relaxed">
+          {renderSearchSnippet((item as SearchResult).messageContent)}
+        </div>
+      )}
+    </div>
+  );
+}
