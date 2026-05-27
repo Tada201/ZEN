@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { Suspense, useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 import { WorkbenchButton } from "@/components/ui/WorkbenchButton";
@@ -7,8 +7,9 @@ import { useUIStore } from '../../lib/stores/useUIStore';
 import { cn } from '@/lib/utils/style';
 import { SandboxedIframe } from '@/atlas/components/SandboxedIframe';
 import { MarkdownContent } from '@/atlas/components/chat/MarkdownContent';
-import { MermaidDiagram } from '@/atlas/components/chat/MermaidDiagram';
 import { X, PanelLeft, RotateCw, Copy, Check, Download, Maximize2, Minimize2, Search, Archive, ExternalLink } from 'lucide-react';
+
+const MermaidDiagram = React.lazy(() => import('@/atlas/components/chat/MermaidDiagram').then(m => ({ default: m.MermaidDiagram })));
 
 const ArtifactActionButton: React.FC<{ 
     icon: React.ReactNode; 
@@ -150,7 +151,9 @@ export function ArtifactPanel({ isEmbedded = false }: { isEmbedded?: boolean }) 
                             animate={{ scale: 1, opacity: 1 }}
                             className="w-full max-w-4xl bg-slate-900/40 p-12 rounded-3xl border border-white/[0.04] shadow-2xl backdrop-blur-sm"
                         >
-                            <MermaidDiagram code={activeArtifact.content} />
+                            <Suspense fallback={<div className="p-4 text-xs text-muted-foreground">Loading diagram renderer...</div>}>
+                                <MermaidDiagram code={activeArtifact.content} />
+                            </Suspense>
                         </motion.div>
                     </div>
                 </div>

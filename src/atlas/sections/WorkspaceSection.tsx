@@ -1,22 +1,25 @@
-import { useState, useCallback, useEffect, useTransition, useMemo } from "react";
+import React, { Suspense, useState, useCallback, useEffect, useTransition, useMemo } from "react";
 import { useChat } from "@/atlas/hooks/useChat";
 import { WorkspaceLayout } from "../layouts/WorkspaceLayout";
 import { MessageList } from "../components/chat/MessageList";
 import { PremiumChatInput } from "../components/PremiumChatInput";
-import { SettingsModal, type TabId } from "../components/SettingsModal";
+import type { TabId } from "../components/SettingsModal";
 import { ArtifactData } from "../components/chat/types";
 import { ArtifactPanel } from "../components/chat/ArtifactPanel";
 import { SessionSidebar } from "../components/chat/SessionSidebar";
 import { MessageSquare, Settings, Hammer } from "lucide-react";
-import { AnimatePresence } from "framer-motion";
 import { useUIStore } from "@/lib/stores/useUIStore";
-import { VoiceModeOverlay } from "../components/voice/VoiceModeOverlay";
 
 import { RightPanel } from "../components/RightPanel";
-import { CommandPalette } from "@/atlas/CommandPalette";
 import { MainArea } from "@/components/workbench/MainArea";
 
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+
+const SettingsModal = React.lazy(() => import("../components/SettingsModal").then(m => ({ default: m.SettingsModal })));
+const CommandPalette = React.lazy(() => import("@/atlas/CommandPalette").then(m => ({ default: m.CommandPalette })));
+const VoiceModeOverlay = React.lazy(() => import("../components/voice/VoiceModeOverlay").then(m => ({ default: m.VoiceModeOverlay })));
+
+const DeferredOverlayFallback = () => null;
 
 export function WorkspaceApp() {
   const [, startTransition] = useTransition();
@@ -39,7 +42,17 @@ export function WorkspaceApp() {
   const [activeArtifact, setActiveArtifact] = useState<ArtifactData | null>(null);
   const [generativeUI, setGenerativeUI] = useState(true);
 
-  const { settingsOpen, setSettingsOpen, setActiveSettingsTab, activeSettingsTab, voiceModeOpen, toggleVoiceMode, activeTab, setActiveTab } = useUIStore();
+  const {
+    settingsOpen,
+    setSettingsOpen,
+    setActiveSettingsTab,
+    activeSettingsTab,
+    voiceModeOpen,
+    toggleVoiceMode,
+    activeTab,
+    setActiveTab,
+    isCommandPaletteOpen,
+  } = useUIStore();
 
   const handleSendMessageInternal = useCallback(async (data: any) => {
     handleSendMessage({
@@ -243,17 +256,24 @@ export function WorkspaceApp() {
         showStatusBar={true}
       />
 
-      <SettingsModal 
-        open={settingsOpen} 
-        onOpenChange={setSettingsOpen} 
-        initialTab={activeSettingsTab as TabId}
-      />
+      {settingsOpen && (
+        <Suspense fallback={<DeferredOverlayFallback />}>
+          <SettingsModal
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+            initialTab={activeSettingsTab as TabId}
+          />
+        </Suspense>
+      )}
 
-      <CommandPalette />
+      {isCommandPaletteOpen && (
+        <Suspense fallback={<DeferredOverlayFallback />}>
+          <CommandPalette />
+        </Suspense>
+      )}
 
-      {/* Voice Mode Overlay */}
-      <AnimatePresence>
-        {voiceModeOpen && (
+      {voiceModeOpen && (
+        <Suspense fallback={<DeferredOverlayFallback />}>
           <VoiceModeOverlay
             isOpen={voiceModeOpen}
             onClose={() => toggleVoiceMode()}
@@ -267,8 +287,8 @@ export function WorkspaceApp() {
               });
             }}
           />
-        )}
-      </AnimatePresence>
+        </Suspense>
+      )}
     </div>
   );
 }

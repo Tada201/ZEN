@@ -6,6 +6,22 @@ import cesium from "vite-plugin-cesium";
 
 const host = process.env.TAURI_DEV_HOST;
 
+const manualChunks = (id: string) => {
+  if (!id.includes("node_modules")) return undefined;
+
+  if (id.includes("cesium") || id.includes("@cesium")) return "vendor-cesium";
+  if (id.includes("maplibre-gl") || id.includes("@maplibre")) return "vendor-map";
+  if (id.includes("mermaid") || id.includes("@mermaid-js")) return "vendor-diagrams";
+  if (id.includes("monaco-editor") || id.includes("@monaco-editor")) return "vendor-editor";
+  if (id.includes("@react-three") || id.includes("three")) return "vendor-3d";
+  if (id.includes("recharts") || id.includes("chart.js") || id.includes("react-chartjs-2")) return "vendor-charts";
+  if (id.includes("react-markdown") || id.includes("remark-") || id.includes("rehype-") || id.includes("highlight.js") || id.includes("katex")) return "vendor-markdown";
+  if (id.includes("framer-motion")) return "vendor-motion";
+  if (id.includes("@radix-ui") || id.includes("cmdk") || id.includes("lucide-react") || id.includes("@iconify")) return "vendor-ui";
+
+  return undefined;
+};
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [react(), tailwindcss(), cesium({ devMinifyCesium: true })],
@@ -53,6 +69,13 @@ export default defineConfig(async () => ({
         "**/.specify/**", 
         "**/.bg-shell/**"
       ],
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks,
+      },
     },
   },
 }));

@@ -5,7 +5,7 @@ stabilization, not a rewrite.
 
 ## Current Position
 
-Zen is currently closing **Phase 5: oversized module splitting**.
+Zen is currently in **Phase 6: performance budgets**.
 
 Phases 0-4 are no longer the active rebuild bottleneck. Phase 3 keeps a
 documented legacy tool compatibility boundary, and Phase 4 keeps incremental
@@ -248,7 +248,7 @@ Exit criteria:
 
 ## Phase 6: Performance Budgets
 
-Status: not started.
+Status: started.
 
 Goals:
 
@@ -260,6 +260,34 @@ Known issues:
 - Frontend production build emits large chunk warnings.
 - Some backend paths still create per-request HTTP clients.
 - List query caps/pagination need a focused audit.
+
+Completed:
+
+- Optional settings, command palette, voice overlay, Mermaid, and chart
+  renderers are lazy-loaded at interaction/render boundaries.
+- Mermaid itself is dynamically imported only when a Mermaid block renders.
+- Vite manual chunks split heavy vendor families for maps, diagrams, charts,
+  markdown, motion, and UI libraries without suppressing chunk warnings.
+- `npm run perf:budget` reports local bundle budgets after `npm run build`.
+- `docs/architecture/performance-budgets.md` documents local budgets and Phase 6
+  bundle/runtime rules.
+
+Current evidence:
+
+- Latest production build reduced the main JS entry from roughly 4.48 MB to
+  roughly 1.80 MB.
+- Current largest JS chunks are diagrams, main entry, map, charts, and markdown.
+- Local bundle budget currently passes, but Vite still emits large chunk
+  warnings.
+
+Remaining:
+
+- Reduce or defer Mermaid's all-diagram vendor chunk.
+- Decide whether `react-markdown`/KaTeX/highlight should be split behind
+  richer-message rendering or kept in core chat.
+- Audit canvas/WebGL/audio loops for hidden/offscreen pause behavior.
+- Audit backend HTTP client creation and list-query pagination caps.
+- Keep CI ratchet deferred until the full app feature surface is done.
 
 ## Phase 7: CI Ratchet
 

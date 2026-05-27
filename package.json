@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "quality": "powershell -ExecutionPolicy Bypass -File scripts/quality-check.ps1",
     "quality:fast": "powershell -ExecutionPolicy Bypass -File scripts/quality-check.ps1 -SkipBuild",
+    "perf:budget": "powershell -ExecutionPolicy Bypass -File scripts/performance-budget.ps1",
     "runtime:fetch": "powershell -ExecutionPolicy Bypass -File scripts/fetch-runtime-binaries.ps1",
     "runtime:check": "powershell -ExecutionPolicy Bypass -File scripts/check-runtime-binaries.ps1",
     "secret:artifacts": "powershell -ExecutionPolicy Bypass -File scripts/secret-artifact-check.ps1",

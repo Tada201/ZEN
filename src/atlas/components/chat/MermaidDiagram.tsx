@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import mermaid from "mermaid";
 import { useTheme } from "next-themes";
 import { CodeBlock } from "./CodeBlock";
 
@@ -20,6 +19,8 @@ export function MermaidDiagram({ code, isStreaming }: { code: string; isStreamin
 
     const renderMermaid = async () => {
       try {
+        const { default: mermaid } = await import("mermaid");
+
         mermaid.initialize({
           startOnLoad: false,
           theme: resolvedTheme === "dark" ? "dark" : "default",

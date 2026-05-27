@@ -1,4 +1,4 @@
-import React, { useMemo, memo, Component, type ReactNode } from "react";
+import React, { Suspense, useMemo, memo, Component, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { Components } from "react-markdown";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -9,11 +9,18 @@ import { CodeBlock } from "./CodeBlock";
 import { OpenUIRenderer } from "../OpenUIRenderer";
 import { ReasoningBlock } from "./ReasoningBlock";
 import { SmoothMarkdown } from "./SmoothMarkdown";
-import { MermaidDiagram } from "./MermaidDiagram";
-import { ChartBlock } from "./ChartBlock";
 import { FileTree } from "./FileTree";
 import { splitMarkdownIntoBlocks, type MarkdownBlock } from "./markdown-utils";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
+
+const MermaidDiagram = React.lazy(() => import("./MermaidDiagram").then(m => ({ default: m.MermaidDiagram })));
+const ChartBlock = React.lazy(() => import("./ChartBlock").then(m => ({ default: m.ChartBlock })));
+
+const RichBlockFallback = () => (
+  <div className="my-6 flex items-center justify-center rounded-xl border border-border/30 bg-card/20 p-6 text-xs text-muted-foreground">
+    Loading renderer...
+  </div>
+);
 
 /**
 /**
@@ -125,10 +132,18 @@ const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
       );
     }
     if (lang === 'mermaid') {
-      return <MermaidDiagram code={codeStr} isStreaming={isStreaming} />;
+      return (
+        <Suspense fallback={<RichBlockFallback />}>
+          <MermaidDiagram code={codeStr} isStreaming={isStreaming} />
+        </Suspense>
+      );
     }
     if (lang === 'chart') {
-      return <ChartBlock content={codeStr} isStreaming={isStreaming} />;
+      return (
+        <Suspense fallback={<RichBlockFallback />}>
+          <ChartBlock content={codeStr} isStreaming={isStreaming} />
+        </Suspense>
+      );
     }
     if (lang === 'tree') {
       return <FileTree content={codeStr} />;
@@ -213,10 +228,18 @@ export function MarkdownContent({
           );
         }
         if (lang === "mermaid") {
-          return <MermaidDiagram code={codeStr} isStreaming={isStreaming} />;
+          return (
+            <Suspense fallback={<RichBlockFallback />}>
+              <MermaidDiagram code={codeStr} isStreaming={isStreaming} />
+            </Suspense>
+          );
         }
         if (lang === "chart") {
-          return <ChartBlock content={codeStr} isStreaming={isStreaming} />;
+          return (
+            <Suspense fallback={<RichBlockFallback />}>
+              <ChartBlock content={codeStr} isStreaming={isStreaming} />
+            </Suspense>
+          );
         }
         if (lang === "tree") {
           return <FileTree content={codeStr} />;
