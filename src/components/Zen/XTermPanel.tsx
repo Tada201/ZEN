@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { 
-    Terminal, Trash2, CircleDot, Send, History, Cpu, HardDrive, 
-    ArrowDownUp, X, Plus, Copy, Check, Sliders
+    Terminal, CircleDot, Send, X, Plus, Sliders
 } from 'lucide-react';
 import { cn } from '@/lib/utils/style';
 import { terminalApi } from '@/api';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { Switch } from '@/components/ui/switch';
-import { Progress } from '@/components/ui/progress';
+import { XTermStatusFooter } from './XTermStatusFooter';
+import { XTermTelemetryDrawer } from './XTermTelemetryDrawer';
+import { renderFormattedTerminalLine } from './terminalLineFormatting';
 
 const DEFAULT_COLS = 80;
 const DEFAULT_ROWS = 24;
@@ -275,55 +275,6 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
         }));
     }, [activeSessionId]);
 
-    // Format individual log lines with tactical syntax coloring
-    const renderFormattedLine = (line: string) => {
-        if (line.startsWith('[SYSTEM]')) {
-            return (
-                <span className="text-primary font-mono tracking-wider font-semibold">
-                    {line}
-                </span>
-            );
-        }
-        if (line.startsWith('[ERROR]')) {
-            return (
-                <span className="text-destructive font-mono font-semibold">
-                    {line}
-                </span>
-            );
-        }
-        if (line.startsWith('$ ')) {
-            const cmd = line.slice(2);
-            return (
-                <span className="font-mono">
-                    <span className="text-primary/70 font-semibold">$</span>{' '}
-                    <span className="text-foreground font-bold">{cmd}</span>
-                </span>
-            );
-        }
-
-        // Tokenize and colorize common developer terms
-        const words = line.split(/(\s+)/);
-        return words.map((word, idx) => {
-            const lword = word.toLowerCase();
-            if (lword.includes('success') || lword.includes('succeeded') || lword.includes('stable')) {
-                return <span key={idx} className="text-success font-bold">{word}</span>;
-            }
-            if (lword.includes('fail') || lword.includes('failed') || lword.includes('error')) {
-                return <span key={idx} className="text-destructive font-bold">{word}</span>;
-            }
-            if (lword.includes('warn') || lword.includes('warning') || lword.includes('alert')) {
-                return <span key={idx} className="text-warning font-semibold">{word}</span>;
-            }
-            if (lword.includes('info') || lword.includes('debug')) {
-                return <span key={idx} className="text-muted-foreground/80">{word}</span>;
-            }
-            if (lword.startsWith('http://') || lword.startsWith('https://')) {
-                return <span key={idx} className="text-primary underline cursor-pointer hover:opacity-85">{word}</span>;
-            }
-            return <span key={idx} className="text-foreground/80">{word}</span>;
-        });
-    };
-
     // Format active uptime clock
     const uptimeStr = useMemo(() => {
         if (!activeSession) return '00:00:00';
@@ -446,7 +397,7 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
                             )}>
                                 {activeSession.output.map((line, idx) => (
                                     <div key={idx} className="transition-all hover:bg-muted/10 px-1.5 py-[1px] rounded">
-                                        {renderFormattedLine(line)}
+                                        {renderFormattedTerminalLine(line)}
                                     </div>
                                 ))}
                                 {activeSession.connected && (
@@ -520,146 +471,28 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
                     </div>
                 </div>
 
-                {/* Right Side: Collapsible Tuning & Telemetry Control Drawer */}
                 {showDrawer && (
-                    <div className="w-56 shrink-0 h-full border-l border-border bg-card/95 backdrop-blur-md flex flex-col overflow-y-auto select-none scrollbar-none z-10">
-                        {/* Drawer Header */}
-                        <div className="px-4 py-3 border-b border-border flex items-center justify-between bg-muted/20">
-                            <div className="flex items-center gap-1.5">
-                                <Sliders size={11} className="text-primary" />
-                                <span className="text-[9px] font-black uppercase tracking-wider text-muted-foreground">TELEMETRY & CTRL</span>
-                            </div>
-                            <button 
-                                onClick={() => setShowDrawer(false)}
-                                className="text-muted-foreground/60 hover:text-foreground p-0.5 rounded-full hover:bg-muted transition-all"
-                            >
-                                <X size={11} />
-                            </button>
-                        </div>
-
-                        {/* Telemetry & Metrics block */}
-                        <div className="p-4 space-y-4 border-b border-border">
-                            <span className="text-[8px] font-bold text-muted-foreground/50 uppercase tracking-widest block select-none">SYSTEM TELEMETRY</span>
-                            
-                            {/* CPU Load Indicator */}
-                            <div className="space-y-2 select-none">
-                                <div className="flex justify-between text-[8px] font-mono text-muted-foreground/80">
-                                     <span className="flex items-center gap-1"><Cpu size={9} /> CPU LOAD</span>
-                                    <span className="text-primary font-bold">{simulatedMetrics.cpu}%</span>
-                                </div>
-                                <Progress value={simulatedMetrics.cpu} className="h-1.5 bg-muted" />
-                            </div>
-
-                            {/* MEM footprint Indicator */}
-                            <div className="space-y-2 select-none">
-                                <div className="flex justify-between text-[8px] font-mono text-muted-foreground/80">
-                                    <span className="flex items-center gap-1"><HardDrive size={9} /> SHELL MEM</span>
-                                    <span className="text-primary font-bold">{simulatedMetrics.mem} MB</span>
-                                </div>
-                                <Progress value={(simulatedMetrics.mem / 256) * 100} className="h-1.5 bg-muted" />
-                            </div>
-
-                            {/* Network Speed Indicators */}
-                            <div className="flex items-center justify-between text-[8px] font-mono text-muted-foreground/80 select-none">
-                                <span className="flex items-center gap-1"><ArrowDownUp size={9} /> SPEED NET</span>
-                                <span className="text-muted-foreground/60">
-                                    RX <strong className="text-success font-semibold">{simulatedMetrics.rx} KB/s</strong> | TX <strong className="text-primary font-semibold">{simulatedMetrics.tx} KB/s</strong>
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* Interactive Console Controls */}
-                        <div className="p-4 space-y-3.5 border-b border-border select-none">
-                            <span className="text-[8px] font-bold text-muted-foreground/50 uppercase tracking-widest block">CONSOLE ACTIONS</span>
-                            
-                            {/* Word Wrap Toggle */}
-                            <div className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-muted/20 border border-border text-[9px] font-mono text-muted-foreground transition-all">
-                                <span>Word Wrap Logs</span>
-                                <Switch checked={wordWrap} onCheckedChange={setWordWrap} />
-                            </div>
-
-                            {/* Scroll Lock Toggle */}
-                            <div className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-muted/20 border border-border text-[9px] font-mono text-muted-foreground transition-all">
-                                <span>Scroll Lock Alert</span>
-                                <Switch checked={scrollLock} onCheckedChange={setScrollLock} />
-                            </div>
-
-                            {/* Copy All Logs Button */}
-                            <button
-                                onClick={handleCopyLogs}
-                                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-full bg-muted/30 hover:bg-muted/60 border border-border text-[9px] font-mono text-muted-foreground hover:text-foreground transition-all press"
-                            >
-                                <span>Export Log History</span>
-                                {copiedActive ? (
-                                    <Check size={11} className="text-success" />
-                                ) : (
-                                    <Copy size={11} className="text-muted-foreground/60" />
-                                )}
-                            </button>
-
-                            {/* Clear Log Buffer */}
-                            <button
-                                onClick={handleClear}
-                                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-full bg-muted/30 hover:bg-destructive/5 hover:border-destructive/20 border border-border text-[9px] font-mono text-muted-foreground hover:text-destructive transition-all press"
-                            >
-                                <span>Clear Screen Buffer</span>
-                                <Trash2 size={11} className="text-muted-foreground/60 group-hover:text-destructive" />
-                            </button>
-                        </div>
-
-                        {/* Recent Command History */}
-                        <div className="p-4 space-y-3 select-none flex-grow bg-card/10">
-                            <div className="flex items-center gap-1.5">
-                                <History size={11} className="text-muted-foreground/60" />
-                                <span className="text-[8px] font-bold text-muted-foreground/50 uppercase tracking-widest block">COMMAND HISTORY</span>
-                            </div>
-                            
-                            <div className="space-y-1.5 max-h-[220px] overflow-y-auto scrollbar-none pr-1">
-                                {commandHistory.length > 0 ? (
-                                    commandHistory.map((cmd, idx) => (
-                                        <button
-                                            key={idx}
-                                            onClick={() => setInput(cmd)}
-                                            className="w-full text-left truncate px-3.5 py-2 rounded-full bg-muted/20 hover:bg-primary/10 hover:border-primary/30 border border-border text-[9.5px] font-mono text-muted-foreground hover:text-primary transition-all select-none press"
-                                            title="Click to load command"
-                                        >
-                                            {cmd}
-                                        </button>
-                                    ))
-                                ) : (
-                                    <div className="text-[8px] font-mono text-muted-foreground/40 italic select-none text-center py-4">
-                                        No recent commands
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
+                    <XTermTelemetryDrawer
+                        metrics={simulatedMetrics}
+                        wordWrap={wordWrap}
+                        scrollLock={scrollLock}
+                        copiedActive={copiedActive}
+                        commandHistory={commandHistory}
+                        onWordWrapChange={setWordWrap}
+                        onScrollLockChange={setScrollLock}
+                        onCopyLogs={handleCopyLogs}
+                        onClear={handleClear}
+                        onLoadCommand={setInput}
+                        onClose={() => setShowDrawer(false)}
+                    />
                 )}
             </div>
 
-            {/* Bottom Status Telemetry Footer Bar */}
-            <div className="h-6 flex items-center justify-between px-4 bg-background border-t border-border shrink-0 select-none">
-                <div className="flex items-center gap-3">
-                    <span className="text-[7.5px] font-mono text-muted-foreground/50 uppercase tracking-widest">
-                        ENCODE: UTF-8
-                    </span>
-                    <div className="w-[1px] h-2.5 bg-border" />
-                    <span className="text-[7.5px] font-mono text-muted-foreground/50 uppercase tracking-widest">
-                        BAUD: 115200 BD
-                    </span>
-                    {activeSession && (
-                        <>
-                            <div className="w-[1px] h-2.5 bg-border" />
-                            <span className="text-[7.5px] font-mono text-muted-foreground/75 uppercase tracking-widest">
-                                GRID: {lastResizeRef.current.cols}x{lastResizeRef.current.rows}
-                            </span>
-                        </>
-                    )}
-                </div>
-                <span className="text-[7.5px] font-mono text-muted-foreground/50 uppercase tracking-widest">
-                    SHELL CORE v1.2-TAURI
-                </span>
-            </div>
+            <XTermStatusFooter
+                hasActiveSession={Boolean(activeSession)}
+                cols={lastResizeRef.current.cols}
+                rows={lastResizeRef.current.rows}
+            />
         </div>
     );
 }

@@ -108,10 +108,4 @@ Reason: Drawing state, rendering, tools, and interactions are colocated.
 Split or Fix Plan: Split tool state, canvas renderer, selection, and export helpers.
 Expires: Phase 4/5
 
-File: src/components/Zen/XTermPanel.tsx
-Owner: frontend/terminal
-Rule Exempted: TS/TSX hard file-size limit
-Reason: Terminal rendering, process lifecycle UI, and input handling are colocated.
-Split or Fix Plan: Split terminal session hook, toolbar, panel, and event handling.
-Expires: Phase 4
 ```
