@@ -30,7 +30,8 @@ export function WorkspaceLayout({
   rightPanel,
   showStatusBar = true
 }: WorkspaceLayoutProps) {
-  const { sidebarOpen, rightPanelOpen } = useUIStore();
+  const { sidebarOpen, rightPanelOpen, setSidebarOpen } = useUIStore();
+  const [isMobile, setIsMobile] = useState(false);
   
   // Custom right panel resizer state
   const [rightPanelWidth, setRightPanelWidth] = useState(() => {
@@ -47,6 +48,19 @@ export function WorkspaceLayout({
   useEffect(() => {
     localStorage.setItem("zen_right_panel_width", String(rightPanelWidth));
   }, [rightPanelWidth]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const syncMobileLayout = () => {
+      const nextIsMobile = media.matches;
+      setIsMobile(nextIsMobile);
+      if (nextIsMobile) setSidebarOpen(false);
+    };
+
+    syncMobileLayout();
+    media.addEventListener("change", syncMobileLayout);
+    return () => media.removeEventListener("change", syncMobileLayout);
+  }, [setSidebarOpen]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -94,9 +108,28 @@ export function WorkspaceLayout({
         */}
 
         {/* Sidebar Area: Rail or Expanded */}
+        {sidebar && isMobile && sidebarOpen && (
+          <>
+            <button
+              type="button"
+              aria-label="Close sidebar"
+              className="fixed inset-0 z-[59] bg-black/60 md:hidden"
+              onClick={() => setSidebarOpen(false)}
+            />
+            <aside
+              className="fixed inset-y-0 left-0 z-[60] w-[min(82vw,260px)] glass-panel overflow-hidden md:hidden"
+            >
+              {React.cloneElement(sidebar as React.ReactElement<any>, {
+                isCollapsed: false,
+                onToggleSidebar: () => setSidebarOpen(false),
+              })}
+            </aside>
+          </>
+        )}
+
         {sidebar && (
           <aside 
-            className="h-full glass-panel shrink-0 overflow-hidden z-50"
+            className="hidden h-full glass-panel shrink-0 overflow-hidden z-50 md:block"
             style={{ width: sidebarOpen ? `${SIDEBAR_EXPANDED_WIDTH}px` : `${SIDEBAR_COLLAPSED_WIDTH}px` }}
           >
             {React.cloneElement(sidebar as React.ReactElement<any>, { isCollapsed: !sidebarOpen })}
@@ -109,7 +142,7 @@ export function WorkspaceLayout({
         </div>
 
         {/* Resizer Handle */}
-        {rightPanelOpen && rightPanel && (
+        {!isMobile && rightPanelOpen && rightPanel && (
           <div 
             onMouseDown={handleMouseDown}
             className={`w-1 cursor-col-resize bg-transparent hover:bg-white/10 transition-colors duration-200 z-50 relative flex items-center justify-center select-none group ${isResizing ? "bg-white/15" : ""}`}
@@ -123,23 +156,23 @@ export function WorkspaceLayout({
 
         {/* Right Sidebar Panel: Stays permanently mounted but scales width */}
         <div 
-          style={{ width: rightPanelOpen && rightPanel ? `${rightPanelWidth}px` : "0px" }}
+          style={{ width: !isMobile && rightPanelOpen && rightPanel ? `${rightPanelWidth}px` : "0px" }}
           className={`h-full relative overflow-hidden shrink-0 ${isResizing ? "transition-none" : "transition-[width] duration-300 ease-in-out"}`}
         >
           <div className="h-full" style={{ width: `${rightPanelWidth}px` }}>
-            {rightPanel}
+            {!isMobile && rightPanel}
           </div>
         </div>
 
         {/* Secondary Activity Bar Rail (Far Right) */}
-        <aside className="w-[var(--activity-bar-width)] glass-panel-activity flex flex-col py-4 z-50 shrink-0">
+        <aside className="hidden w-[var(--activity-bar-width)] glass-panel-activity flex-col py-4 z-50 shrink-0 md:flex">
           <SecondaryActivityBar />
         </aside>
       </div>
 
       {/* Status Bar Footer */}
       {showStatusBar && (
-        <footer className="h-7 glass-panel-strong shrink-0 z-50">
+        <footer className="hidden h-7 glass-panel-strong shrink-0 z-50 sm:block">
           <StatusBar />
         </footer>
       )}

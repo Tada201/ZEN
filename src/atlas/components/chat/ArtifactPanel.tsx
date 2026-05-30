@@ -1,15 +1,22 @@
-import { useState, useEffect } from "react";
+import React, { Suspense, useState, useEffect } from "react";
 import { 
   X, Copy, Check, Download, Code2, PanelRight, Eye 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { ArtifactData } from "./types";
-import { MarkdownContent } from "./MarkdownContent";
-import { OpenUIRenderer } from "../OpenUIRenderer";
+import type { ArtifactData } from "./types";
 import { SandboxedIframe } from "../SandboxedIframe";
 import { useCopy } from "./CodeBlock";
+
+const MarkdownContent = React.lazy(() => import("./MarkdownContent").then(m => ({ default: m.MarkdownContent })));
+const OpenUIRenderer = React.lazy(() => import("../OpenUIRenderer").then(m => ({ default: m.OpenUIRenderer })));
+
+const PreviewFallback = () => (
+  <div className="flex h-full items-center justify-center p-4 text-xs text-muted-foreground">
+    Loading preview...
+  </div>
+);
 
 export function ArtifactPanel({ 
   artifact, 
@@ -169,7 +176,9 @@ export function ArtifactPanel({
           <div className="h-full animate-fade-in bg-[#1e1e24]">
             {artifact.type === "markdown" ? (
               <div className="p-5 text-xs max-w-none prose prose-slate dark:prose-invert">
-                <MarkdownContent content={artifact.content} />
+                <Suspense fallback={<PreviewFallback />}>
+                  <MarkdownContent content={artifact.content} />
+                </Suspense>
               </div>
             ) : isHtml ? (
               <div className="h-full bg-white">
@@ -177,7 +186,9 @@ export function ArtifactPanel({
               </div>
             ) : artifact.type === "openui" ? (
               <div className="h-full p-0">
-                <OpenUIRenderer content={artifact.content} isStreaming={isStreaming} chatId={artifact.chatId} />
+                <Suspense fallback={<PreviewFallback />}>
+                  <OpenUIRenderer content={artifact.content} isStreaming={isStreaming} chatId={artifact.chatId} />
+                </Suspense>
               </div>
             ) : isSvg ? (
               <div className="flex h-full items-center justify-center p-4 bg-[#1e1e24]">

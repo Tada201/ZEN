@@ -25,6 +25,7 @@ const PROVIDER_COLORS: Record<string, string> = {
   mistral:    "bg-orange-600/10 text-orange-600 border-orange-600/20",
   deepseek:   "bg-blue-600/10 text-blue-600 border-blue-600/20",
   openrouter: "bg-purple-500/10 text-purple-500 border-purple-500/20",
+  opencode:   "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
   together:   "bg-blue-400/10 text-blue-400 border-blue-400/20",
   perplexity: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20",
   ollama:     "bg-zinc-400/10 text-zinc-400 border-zinc-400/20",

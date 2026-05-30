@@ -1,13 +1,185 @@
-use crate::db::models::{ChatMessage, ChatResponse};
+use crate::db::models::{ChatMessage, ChatResponse, ReasoningBlock};
 use crate::error::{ZenError, ZenResult};
 use crate::llm::openai_compat::types::*;
 use crate::llm::openai_compat::OpenAiCompatProvider;
 use futures::StreamExt;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::RwLock;
 use tracing::{debug, error, info};
 
 impl OpenAiCompatProvider {
+    fn provider_key(&self) -> String {
+        self.provider_name.to_lowercase()
+    }
+
+    fn is_openrouter(&self) -> bool {
+        self.provider_key() == "openrouter"
+    }
+
+    fn is_gemini_compat(&self) -> bool {
+        matches!(self.provider_key().as_str(), "google" | "gemini")
+    }
+
+    fn should_request_stream_usage(&self) -> bool {
+        let provider = self.provider_key();
+        matches!(
+            provider.as_str(),
+            "openai"
+                | "openrouter"
+                | "groq"
+                | "mistral"
+                | "deepseek"
+                | "qwen"
+                | "xai"
+                | "together"
+                | "kilocode"
+                | "nine_router"
+                | "nine-router"
+                | "n9router"
+                | "9router"
+                | "opencode"
+                | "opencode_free"
+                | "aihubmix"
+                | "nvidia"
+        )
+    }
+
+    fn openrouter_reasoning_from_config(
+        config: &crate::llm::ChatRequestConfig,
+    ) -> Option<serde_json::Value> {
+        if config.reasoning_effort.is_none() && config.thinking_budget.is_none() {
+            return None;
+        }
+
+        let mut reasoning = serde_json::Map::new();
+        if let Some(effort) = &config.reasoning_effort {
+            reasoning.insert("effort".to_string(), Value::String(effort.clone()));
+        }
+        if let Some(budget) = config.thinking_budget {
+            reasoning.insert("max_tokens".to_string(), Value::Number(budget.into()));
+        }
+
+        Some(Value::Object(reasoning))
+    }
+
+    fn gemini_extra_body_from_config(
+        config: &crate::llm::ChatRequestConfig,
+    ) -> Option<serde_json::Value> {
+        if config.reasoning_effort.is_none() && config.thinking_budget.is_none() {
+            return None;
+        }
+
+        let mut thinking_config = serde_json::Map::new();
+        thinking_config.insert("include_thoughts".to_string(), Value::Bool(true));
+        if let Some(budget) = config.thinking_budget {
+            thinking_config.insert("thinking_budget".to_string(), Value::Number(budget.into()));
+        }
+
+        Some(serde_json::json!({
+            "google": {
+                "thinking_config": Value::Object(thinking_config)
+            }
+        }))
+    }
+
+    fn reasoning_value_to_string(value: &Value) -> Option<String> {
+        match value {
+            Value::String(text) if !text.is_empty() => Some(text.clone()),
+            Value::Array(items) => {
+                let text = items
+                    .iter()
+                    .filter_map(Self::reasoning_value_to_string)
+                    .collect::<String>();
+                (!text.is_empty()).then_some(text)
+            }
+            Value::Object(map) => [
+                "content",
+                "text",
+                "reasoning",
+                "reasoning_content",
+                "thinking",
+            ]
+            .iter()
+            .find_map(|key| map.get(*key).and_then(Self::reasoning_value_to_string)),
+            _ => None,
+        }
+    }
+
+    fn reasoning_block_from_value(
+        &self,
+        block_type: &str,
+        value: &Value,
+    ) -> Option<ReasoningBlock> {
+        let text = Self::reasoning_value_to_string(value);
+        if text.is_none() && value.is_null() {
+            return None;
+        }
+
+        Some(ReasoningBlock {
+            provider: self.provider_name.clone(),
+            block_type: block_type.to_string(),
+            text,
+            raw: Some(value.clone()),
+        })
+    }
+
+    fn emit_reasoning_value(
+        &self,
+        block_type: &str,
+        value: Option<&Value>,
+        on_chunk: &(dyn Fn(crate::llm::LlmChunk) + Send),
+    ) -> Option<ReasoningBlock> {
+        let block = value.and_then(|value| self.reasoning_block_from_value(block_type, value));
+        if let Some(thought) = block.as_ref().and_then(|block| block.text.as_ref()) {
+            on_chunk(crate::llm::LlmChunk::Thought(thought.clone()));
+        }
+        block
+    }
+
+    fn emit_reasoning_delta(
+        &self,
+        delta: &OpenAiDelta,
+        on_chunk: &(dyn Fn(crate::llm::LlmChunk) + Send),
+        reasoning_details: &mut Vec<ReasoningBlock>,
+    ) {
+        for block in [
+            self.emit_reasoning_value("reasoning", delta.reasoning.as_ref(), on_chunk),
+            self.emit_reasoning_value(
+                "reasoning_content",
+                delta.reasoning_content.as_ref(),
+                on_chunk,
+            ),
+            self.emit_reasoning_value("thinking", delta.thinking.as_ref(), on_chunk),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            reasoning_details.push(block);
+        }
+    }
+
+    fn emit_reasoning_message(
+        &self,
+        message: &OpenAiStreamMessage,
+        on_chunk: &(dyn Fn(crate::llm::LlmChunk) + Send),
+        reasoning_details: &mut Vec<ReasoningBlock>,
+    ) {
+        for block in [
+            self.emit_reasoning_value("reasoning", message.reasoning.as_ref(), on_chunk),
+            self.emit_reasoning_value(
+                "reasoning_content",
+                message.reasoning_content.as_ref(),
+                on_chunk,
+            ),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            reasoning_details.push(block);
+        }
+    }
+
     pub async fn do_chat_stream(
         &self,
         model: &str,
@@ -53,9 +225,24 @@ impl OpenAiCompatProvider {
                         Some(OpenAiContent::Text(m.content))
                     };
 
+                let reasoning_details = m.reasoning_details.map(|blocks| {
+                    blocks
+                        .into_iter()
+                        .map(|block| {
+                            block.raw.unwrap_or_else(|| {
+                                serde_json::json!({
+                                    "type": block.block_type,
+                                    "text": block.text.unwrap_or_default()
+                                })
+                            })
+                        })
+                        .collect()
+                });
+
                 OpenAiMessage {
                     role: m.role,
                     content: oauth_content,
+                    reasoning_details,
                     tool_calls: tool_calls_out,
                     tool_call_id: m.tool_call_id,
                 }
@@ -86,7 +273,7 @@ impl OpenAiCompatProvider {
                 (config.max_tokens, None)
             };
 
-        let response_format = config.json_schema.map(|s| {
+        let response_format = config.json_schema.clone().map(|s| {
             serde_json::json!({
                 "type": "json_schema",
                 "json_schema": {
@@ -96,6 +283,19 @@ impl OpenAiCompatProvider {
                 }
             })
         });
+
+        let is_openrouter = self.is_openrouter();
+        let is_gemini_compat = self.is_gemini_compat();
+        let reasoning = if is_openrouter {
+            Self::openrouter_reasoning_from_config(&config)
+        } else {
+            None
+        };
+        let extra_body = if is_gemini_compat {
+            Self::gemini_extra_body_from_config(&config)
+        } else {
+            None
+        };
 
         let request = OpenAiChatRequest {
             model: model.to_string(),
@@ -108,11 +308,29 @@ impl OpenAiCompatProvider {
             presence_penalty: config.presence_penalty,
             frequency_penalty: config.frequency_penalty,
             seed: config.seed,
-            stop: config.stop,
+            stop: config.stop.clone(),
             tools: oai_tools,
             response_format,
-            reasoning_effort: config.reasoning_effort,
+            reasoning_effort: if is_openrouter {
+                None
+            } else {
+                config.reasoning_effort.clone()
+            },
+            reasoning: None,
+            extra_body: None,
         };
+        let mut request_body = serde_json::to_value(&request)?;
+        if let Some(reasoning) = reasoning {
+            request_body["reasoning"] = reasoning;
+        }
+        if let Some(extra_body) = extra_body {
+            request_body["extra_body"] = extra_body;
+        }
+        if self.should_request_stream_usage() {
+            request_body["stream_options"] = serde_json::to_value(OpenAiStreamOptions {
+                include_usage: true,
+            })?;
+        }
 
         info!(
             provider = %self.provider_name,
@@ -123,7 +341,7 @@ impl OpenAiCompatProvider {
         let resp = self
             .send_with_retry(
                 self.auth_post(&url)
-                    .json(&request)
+                    .json(&request_body)
                     .timeout(std::time::Duration::from_secs(600)),
             )
             .await?;
@@ -140,6 +358,7 @@ impl OpenAiCompatProvider {
 
         let mut full_content = String::new();
         let mut results_tool_calls: Vec<ToolCallAccumulator> = Vec::new();
+        let mut reasoning_details: Vec<ReasoningBlock> = Vec::new();
         let mut tokens_in: Option<i64> = None;
         let mut tokens_out: Option<i64> = None;
         let mut stream = resp.bytes_stream();
@@ -180,10 +399,31 @@ impl OpenAiCompatProvider {
                     Ok(chunk) => {
                         // Extract content delta
                         for choice in &chunk.choices {
+                            self.emit_reasoning_delta(
+                                &choice.delta,
+                                on_chunk.as_ref(),
+                                &mut reasoning_details,
+                            );
+                            if let Some(message) = &choice.message {
+                                self.emit_reasoning_message(
+                                    message,
+                                    on_chunk.as_ref(),
+                                    &mut reasoning_details,
+                                );
+                            }
+
                             if let Some(content) = &choice.delta.content {
                                 if !content.is_empty() {
                                     on_chunk(crate::llm::LlmChunk::Text(content.clone()));
                                     full_content.push_str(content);
+                                }
+                            }
+                            if let Some(message) = &choice.message {
+                                if let Some(content) = &message.content {
+                                    if !content.is_empty() {
+                                        on_chunk(crate::llm::LlmChunk::Text(content.clone()));
+                                        full_content.push_str(content);
+                                    }
                                 }
                             }
 
@@ -255,6 +495,11 @@ impl OpenAiCompatProvider {
         Ok(ChatResponse {
             content: full_content,
             model: model.to_string(),
+            reasoning_details: if reasoning_details.is_empty() {
+                None
+            } else {
+                Some(reasoning_details)
+            },
             tokens_in,
             tokens_out,
             tool_calls: final_tool_calls,
@@ -354,8 +599,8 @@ impl OpenAiCompatProvider {
         match p.as_str() {
             // Curated / official catalogs — all models support tools
             "openai" | "groq" | "mistral" | "gemini" | "google" | "deepseek" | "qwen" | "xai"
-            | "kilocode" | "nine_router" | "nine-router" | "n9router" | "9router" | "aihubmix"
-            | "nvidia" => true,
+            | "kilocode" | "nine_router" | "nine-router" | "n9router" | "9router" | "opencode"
+            | "opencode_free" | "aihubmix" | "nvidia" => true,
 
             // Mixed catalogs — many models lack tool support
             "openrouter" | "together" | "perplexity" => false,
@@ -376,7 +621,10 @@ pub struct ToolCallAccumulator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::models::ChatMessage;
+    use crate::llm::LlmChunk;
     use crate::llm::LlmProvider;
+    use std::sync::{Arc, Mutex};
     use wiremock::{
         matchers::{method, path},
         Mock, MockServer, ResponseTemplate,
@@ -386,6 +634,17 @@ mod tests {
         let server = MockServer::start().await;
         let provider = OpenAiCompatProvider::new(&server.uri(), "test-key-123", "openai");
         (provider, server)
+    }
+
+    fn user_message(content: &str) -> ChatMessage {
+        ChatMessage {
+            role: "user".to_string(),
+            content: content.to_string(),
+            reasoning_details: None,
+            images: None,
+            tool_calls: None,
+            tool_call_id: None,
+        }
     }
 
     const OPENAI_MODELS_RESPONSE: &str = r#"{
@@ -623,6 +882,285 @@ mod tests {
         assert!(provider.supports_tools("gpt-4o"));
         // davinci-002 should also support tools (OpenAI provider)
         assert!(provider.supports_tools("davinci-002"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_openrouter_capabilities_come_from_supported_parameters() -> ZenResult<()> {
+        let server = MockServer::start().await;
+        let provider = OpenAiCompatProvider::new(&server.uri(), "test-key", "openrouter");
+
+        Mock::given(method("GET"))
+            .and(path("/v1/models"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": [
+                    {
+                        "id": "anthropic/claude-sonnet-4",
+                        "supported_parameters": ["tools", "tool_choice", "reasoning"]
+                    },
+                    {
+                        "id": "openai/gpt-4o-mini",
+                        "supported_parameters": ["temperature", "max_tokens"]
+                    },
+                    {
+                        "id": "deepseek/deepseek-r1",
+                        "supported_parameters": ["include_reasoning"]
+                    }
+                ]
+            })))
+            .mount(&server)
+            .await;
+
+        let models = provider.list_models().await?;
+        let claude = models
+            .iter()
+            .find(|model| model.id == "anthropic/claude-sonnet-4")
+            .unwrap();
+        assert_eq!(claude.supports_tools, Some(true));
+        assert_eq!(claude.supports_reasoning, Some(true));
+        assert_eq!(claude.reasoning_config_type.as_deref(), Some("budget"));
+
+        let gpt = models
+            .iter()
+            .find(|model| model.id == "openai/gpt-4o-mini")
+            .unwrap();
+        assert_eq!(gpt.supports_tools, Some(false));
+        assert_eq!(gpt.supports_reasoning, Some(false));
+        assert_eq!(gpt.reasoning_config_type, None);
+
+        let r1 = models
+            .iter()
+            .find(|model| model.id == "deepseek/deepseek-r1")
+            .unwrap();
+        assert_eq!(r1.supports_reasoning, Some(true));
+        assert_eq!(r1.reasoning_config_type.as_deref(), Some("none"));
+
+        assert!(provider.supports_tools("anthropic/claude-sonnet-4"));
+        assert!(!provider.supports_tools("openai/gpt-4o-mini"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_mixed_router_without_metadata_stays_conservative() -> ZenResult<()> {
+        let server = MockServer::start().await;
+        let provider = OpenAiCompatProvider::new(&server.uri(), "test-key", "openrouter");
+
+        Mock::given(method("GET"))
+            .and(path("/v1/models"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": [{"id": "unknown/router-model"}]
+            })))
+            .mount(&server)
+            .await;
+
+        let models = provider.list_models().await?;
+        assert_eq!(models[0].supports_tools, Some(false));
+        assert_eq!(models[0].supports_reasoning, None);
+        assert!(!provider.supports_tools("unknown/router-model"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_stream_usage_option_is_guarded_by_provider() {
+        let openai = OpenAiCompatProvider::new("https://api.openai.com", "key", "openai");
+        let openrouter =
+            OpenAiCompatProvider::new("https://openrouter.ai/api", "key", "openrouter");
+        let google =
+            OpenAiCompatProvider::new("https://generativelanguage.googleapis.com", "key", "google");
+        let custom = OpenAiCompatProvider::new("https://example.test", "key", "custom");
+
+        assert!(openai.should_request_stream_usage());
+        assert!(openrouter.should_request_stream_usage());
+        assert!(!google.should_request_stream_usage());
+        assert!(!custom.should_request_stream_usage());
+    }
+
+    #[tokio::test]
+    async fn test_openrouter_sends_top_level_reasoning_object() -> ZenResult<()> {
+        let server = MockServer::start().await;
+        let provider = OpenAiCompatProvider::new(&server.uri(), "test-key", "openrouter");
+
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: [DONE]\n\n",
+                "text/event-stream",
+            ))
+            .mount(&server)
+            .await;
+
+        provider
+            .chat_stream(
+                "anthropic/claude-sonnet-4",
+                vec![user_message("think")],
+                None,
+                crate::llm::ChatRequestConfig {
+                    reasoning_effort: Some("high".to_string()),
+                    thinking_budget: Some(4096),
+                    ..crate::llm::ChatRequestConfig::default()
+                },
+                Box::new(|_| {}),
+                tokio_util::sync::CancellationToken::new(),
+            )
+            .await?;
+
+        let requests = server.received_requests().await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&requests[0].body)?;
+        assert_eq!(body["reasoning"]["effort"], "high");
+        assert_eq!(body["reasoning"]["max_tokens"], 4096);
+        assert!(body.get("reasoning_effort").is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_gemini_sends_include_thoughts_extra_body() -> ZenResult<()> {
+        let server = MockServer::start().await;
+        let provider = OpenAiCompatProvider::new(&server.uri(), "test-key", "google");
+
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: [DONE]\n\n",
+                "text/event-stream",
+            ))
+            .mount(&server)
+            .await;
+
+        provider
+            .chat_stream(
+                "gemini-2.5-pro",
+                vec![user_message("think")],
+                None,
+                crate::llm::ChatRequestConfig {
+                    thinking_budget: Some(2048),
+                    ..crate::llm::ChatRequestConfig::default()
+                },
+                Box::new(|_| {}),
+                tokio_util::sync::CancellationToken::new(),
+            )
+            .await?;
+
+        let requests = server.received_requests().await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&requests[0].body)?;
+        assert_eq!(
+            body["extra_body"]["google"]["thinking_config"]["include_thoughts"],
+            true
+        );
+        assert_eq!(
+            body["extra_body"]["google"]["thinking_config"]["thinking_budget"],
+            2048
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_openai_compat_streams_reasoning_fields_as_thoughts() -> ZenResult<()> {
+        let (provider, server) = mock_provider().await;
+        let sse = concat!(
+            "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"deepseek \",\"content\":\"\"}}]}\n\n",
+            "data: {\"choices\":[{\"delta\":{\"reasoning\":\"generic \",\"content\":\"\"}}]}\n\n",
+            "data: {\"choices\":[{\"delta\":{\"thinking\":\"gemini \",\"content\":\"\"}}]}\n\n",
+            "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"lookup\",\"arguments\":\"{\\\"q\\\":\"}}]}}]}\n\n",
+            "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"zen\\\"}\"}}]}}]}\n\n",
+            "data: {\"choices\":[{\"delta\":{\"content\":\"answer\"}}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":5}}\n\n",
+            "data: [DONE]\n\n",
+        );
+
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(sse, "text/event-stream"))
+            .mount(&server)
+            .await;
+
+        let chunks = Arc::new(Mutex::new(Vec::new()));
+        let chunks_for_callback = chunks.clone();
+        let response = provider
+            .chat_stream(
+                "reasoning-model",
+                vec![user_message("think")],
+                None,
+                crate::llm::ChatRequestConfig::default(),
+                Box::new(move |chunk| {
+                    chunks_for_callback.lock().unwrap().push(chunk);
+                }),
+                tokio_util::sync::CancellationToken::new(),
+            )
+            .await?;
+
+        assert_eq!(response.content, "answer");
+        assert_eq!(response.tokens_in, Some(3));
+        assert_eq!(response.tokens_out, Some(5));
+        let reasoning_details = response
+            .reasoning_details
+            .as_ref()
+            .expect("reasoning details should be preserved");
+        assert_eq!(reasoning_details.len(), 3);
+        assert_eq!(reasoning_details[0].block_type, "reasoning_content");
+        assert_eq!(reasoning_details[0].text.as_deref(), Some("deepseek "));
+        let tool_calls = response.tool_calls.expect("tool call should be preserved");
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].id, "call_1");
+        assert_eq!(tool_calls[0].name, "lookup");
+        assert_eq!(tool_calls[0].args, serde_json::json!({"q": "zen"}));
+
+        let chunks = chunks.lock().unwrap();
+        assert_eq!(
+            chunks
+                .iter()
+                .filter_map(|chunk| match chunk {
+                    LlmChunk::Thought(text) => Some(text.as_str()),
+                    LlmChunk::Text(_) => None,
+                })
+                .collect::<Vec<_>>(),
+            vec!["deepseek ", "generic ", "gemini "]
+        );
+        assert!(matches!(chunks.last(), Some(LlmChunk::Text(text)) if text == "answer"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_openai_compat_streams_final_message_reasoning() -> ZenResult<()> {
+        let (provider, server) = mock_provider().await;
+        let sse = concat!(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"answer\"}}]}\n\n",
+            "data: {\"choices\":[{\"delta\":{},\"message\":{\"reasoning_content\":\"final reasoning\"}}]}\n\n",
+            "data: [DONE]\n\n",
+        );
+
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(sse, "text/event-stream"))
+            .mount(&server)
+            .await;
+
+        let chunks = Arc::new(Mutex::new(Vec::new()));
+        let chunks_for_callback = chunks.clone();
+        let response = provider
+            .chat_stream(
+                "reasoning-model",
+                vec![user_message("think")],
+                None,
+                crate::llm::ChatRequestConfig::default(),
+                Box::new(move |chunk| {
+                    chunks_for_callback.lock().unwrap().push(chunk);
+                }),
+                tokio_util::sync::CancellationToken::new(),
+            )
+            .await?;
+
+        assert_eq!(response.content, "answer");
+        assert_eq!(
+            response
+                .reasoning_details
+                .as_ref()
+                .and_then(|blocks| blocks.first())
+                .and_then(|block| block.text.as_deref()),
+            Some("final reasoning")
+        );
+        let chunks = chunks.lock().unwrap();
+        assert!(chunks
+            .iter()
+            .any(|chunk| matches!(chunk, LlmChunk::Thought(text) if text == "final reasoning")));
         Ok(())
     }
 }

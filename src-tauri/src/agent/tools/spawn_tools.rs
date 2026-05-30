@@ -230,6 +230,7 @@ This task was delegated to you by the main agent. Focus on completing this speci
                     .map(|m| ChatMessage {
                         role: m.role,
                         content: m.content,
+                        reasoning_details: None,
                         images: m.images.as_ref().and_then(|s| serde_json::from_str(s).ok()),
                         tool_calls: m
                             .tool_calls
@@ -246,6 +247,7 @@ This task was delegated to you by the main agent. Focus on completing this speci
         child_messages.push(ChatMessage {
             role: "user".to_string(),
             content: delegation_prompt,
+            reasoning_details: None,
             images: None,
             tool_calls: None,
             tool_call_id: None,
@@ -439,6 +441,10 @@ This task was delegated to you by the main agent. Focus on completing this speci
                         "spawn_id": spawn_id,
                         "agent_id": agent.id, // Use consistent canonical ID
                         "chat_id": chat_id,
+                        "parent_agent": "parent",
+                        "child_agent_id": agent.id,
+                        "child_agent_name": agent.name,
+                        "task": task,
                         "status": "completed",
                         "result": structured_result,
                         "duration_ms": spawn_duration_ms,
@@ -499,6 +505,10 @@ This task was delegated to you by the main agent. Focus on completing this speci
                         "spawn_id": spawn_id,
                         "agent_id": agent.id, // Use consistent canonical ID
                         "chat_id": chat_id,
+                        "parent_agent": "parent",
+                        "child_agent_id": agent.id,
+                        "child_agent_name": agent.name,
+                        "task": task,
                         "status": "failed",
                         "error": e.to_string(),
                         "duration_ms": spawn_duration_ms,

@@ -1,4 +1,14 @@
-import { invoke, type InvokeArgs } from "@tauri-apps/api/core";
+import type { InvokeArgs } from "@tauri-apps/api/core";
+
+/**
+ * Detect whether the app is running inside the Tauri native webview.
+ * When false, we are in Browser-Only Dummy Dev Mode and route IPC
+ * calls to the mock client instead.
+ */
+export const IS_TAURI =
+  typeof window !== "undefined" &&
+  // Tauri v2 injects __TAURI_INTERNALS__ on the global scope
+  typeof (window as any).__TAURI_INTERNALS__ !== "undefined";
 
 export type IpcErrorCode =
   | "IPC_COMMAND_ERROR"
@@ -84,7 +94,14 @@ export async function callCommand<Response>(
   command: string,
   args?: InvokeArgs,
 ): Promise<Response> {
+  // Browser-Only Dummy Dev Mode: route to mock client
+  if (!IS_TAURI) {
+    const { executeMockCommand } = await import("./mockClient");
+    return executeMockCommand(command, args) as Response;
+  }
+
   try {
+    const { invoke } = await import("@tauri-apps/api/core");
     return await invoke<Response>(command, args);
   } catch (error) {
     throw normalizeIpcError(command, error);

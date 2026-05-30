@@ -209,6 +209,7 @@ You are {}, a specialized AI agent.
                     .map(|m| ChatMessage {
                         role: m.role,
                         content: m.content,
+                        reasoning_details: None,
                         images: m.images.as_ref().and_then(|s| serde_json::from_str(s).ok()),
                         tool_calls: m
                             .tool_calls
@@ -224,6 +225,7 @@ You are {}, a specialized AI agent.
         child_messages.push(ChatMessage {
             role: "user".to_string(),
             content: delegation_content,
+            reasoning_details: None,
             images: None,
             tool_calls: None,
             tool_call_id: None,
@@ -383,6 +385,11 @@ You are {}, a specialized AI agent.
                     json!({
                         "spawn_id": spawn_id,
                         "agent_id": agent_id,
+                        "chat_id": chat_id,
+                        "parent_agent": "delegator",
+                        "child_agent_id": agent_id,
+                        "child_agent_name": agent.name,
+                        "task": task,
                         "status": "completed",
                         "result": structured_result,
                         "duration_ms": spawn_duration_ms,
@@ -409,6 +416,11 @@ You are {}, a specialized AI agent.
                     json!({
                         "spawn_id": spawn_id,
                         "agent_id": agent_id,
+                        "chat_id": chat_id,
+                        "parent_agent": "delegator",
+                        "child_agent_id": agent_id,
+                        "child_agent_name": agent.name,
+                        "task": task,
                         "status": "failed",
                         "error": e.to_string(),
                         "duration_ms": spawn_duration_ms,

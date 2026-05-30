@@ -1,8 +1,9 @@
 import React, { useCallback } from 'react';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { ModelInPageSelector } from '@/components/settings/ui/ModelInPageSelector';
+import type { ModelInfo } from '@/lib/types/provider';
 
-const EMPTY_ARRAY: any[] = [];
+const EMPTY_ARRAY: ModelInfo[] = [];
 
 interface ModelConfigProps {
     providerKey: string;
@@ -43,7 +44,7 @@ export const ModelConfig = React.memo(({ providerKey, displayName, requiresKey, 
             </div>
             <div className="w-full max-w-lg">
                 <ModelInPageSelector
-                    models={providerModels as any[]}
+                    models={providerModels}
                     selectedModelId={activeModel}
                     onModelSelect={handleModelChange}
                     fetching={fetchingModels}

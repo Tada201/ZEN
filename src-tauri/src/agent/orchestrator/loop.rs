@@ -275,6 +275,7 @@ impl Orchestrator {
                             all_messages.push(ChatMessage {
                                 role: "assistant".to_string(),
                                 content: format!("[Task {} complete] {}", agent_id, result_content),
+                                reasoning_details: None,
                                 images: None,
                                 tool_calls: None,
                                 tool_call_id: None,

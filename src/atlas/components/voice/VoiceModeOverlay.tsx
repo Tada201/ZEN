@@ -11,6 +11,7 @@ import { listenAppEvent } from '@/api/events';
 import { VoiceDiagnosticsPanel } from './VoiceDiagnosticsPanel';
 import { VoiceSubtitleBox } from './VoiceSubtitleBox';
 import { stripMarkdown } from './voiceTextUtils';
+import { useAppUptime } from '@/hooks/useAppUptime';
 
 type VoiceState = 'initializing' | 'listening' | 'processing' | 'speaking' | 'idle';
 const SILENCE_THRESHOLD = 0.015;
@@ -37,7 +38,7 @@ export function VoiceModeOverlay({
     const voiceInputMode = useSettingsStore(s => s.voiceInputMode);
     const aiSpeaking = useUIStore(s => s.aiSpeaking);
     const setAiSpeaking = useUIStore(s => s.setAiSpeaking);
-    const appUptimeSecs = useUIStore(s => s.appUptimeSecs);
+    const appUptimeSecs = useAppUptime();
 
     const sttEngine = userSttEngine || 'web';
     const metrics = useSystemStore(s => s.metrics);

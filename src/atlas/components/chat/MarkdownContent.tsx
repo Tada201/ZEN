@@ -4,16 +4,17 @@ import type { Components } from "react-markdown";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { ArtifactData } from "./types";
+import type { ArtifactData } from "./types";
 import { CodeBlock } from "./CodeBlock";
-import { OpenUIRenderer } from "../OpenUIRenderer";
 import { ReasoningBlock } from "./ReasoningBlock";
 import { FileTree } from "./FileTree";
 import { splitMarkdownIntoBlocks, type MarkdownBlock } from "./markdown-utils";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
+import { isSafeGeneratedHref } from "@/lib/security/generatedLinks";
 
 const MermaidDiagram = React.lazy(() => import("./MermaidDiagram").then(m => ({ default: m.MermaidDiagram })));
 const ChartBlock = React.lazy(() => import("./ChartBlock").then(m => ({ default: m.ChartBlock })));
+const OpenUIRenderer = React.lazy(() => import("../OpenUIRenderer").then(m => ({ default: m.OpenUIRenderer })));
 const SmoothMarkdown = React.lazy(() => import("./SmoothMarkdown").then(m => ({ default: m.SmoothMarkdown })));
 
 const RichBlockFallback = () => (
@@ -131,7 +132,9 @@ const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
     if (lang === 'openui') {
       return (
         <div className="my-6 overflow-visible">
-          <OpenUIRenderer content={codeStr} isStreaming={isStreaming} chatId={chatId} />
+          <Suspense fallback={<RichBlockFallback />}>
+            <OpenUIRenderer content={codeStr} isStreaming={isStreaming} chatId={chatId} />
+          </Suspense>
         </div>
       );
     }
@@ -158,6 +161,7 @@ const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
   }
 
   const chatPlugins = useSettingsStore(useShallow(s => s.chatPlugins));
+  const streamingSpeed = useSettingsStore(s => s.streamingSpeed ?? 'instant');
 
   // Text blocks: render through ReactMarkdown via SmoothMarkdown
   return (
@@ -169,6 +173,7 @@ const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
             isStreaming={isStreaming}
             components={components}
             chatPlugins={chatPlugins}
+            streamingSpeed={streamingSpeed}
           />
         </Suspense>
       </div>
@@ -229,7 +234,9 @@ export function MarkdownContent({
         if (lang === "openui") {
           return (
             <div className="my-6 overflow-visible">
-              <OpenUIRenderer content={codeStr} isStreaming={isStreaming} chatId={chatId} />
+              <Suspense fallback={<RichBlockFallback />}>
+                <OpenUIRenderer content={codeStr} isStreaming={isStreaming} chatId={chatId} />
+              </Suspense>
             </div>
           );
         }
@@ -270,6 +277,9 @@ export function MarkdownContent({
             {children}
           </span>
         );
+      }
+      if (!isSafeGeneratedHref(href)) {
+        return <span>{children}</span>;
       }
       return (
         <a href={href} target="_blank" rel="noreferrer"

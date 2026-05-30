@@ -1,10 +1,15 @@
 import { useEffect, useRef, memo, useCallback, useMemo } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { Bot } from "lucide-react";
 import { Message, ArtifactData } from "./types";
+import type { SettingsTabId } from "@/lib/features/frontendFeatures";
 import { MessageItem } from "./MessageItem";
+import { buildMessageListStreamSignature } from "./messageListStreamSignature";
 
 const MemoizedMessageItem = memo(MessageItem);
+const LIST_TOP_PADDING = 16;
+const LIST_BOTTOM_PADDING = 192;
 
 export const MessageList = memo(function MessageList({
   messages,
@@ -18,13 +23,14 @@ export const MessageList = memo(function MessageList({
   onOpenArtifact: (a: ArtifactData) => void;
   isStreaming?: boolean;
   onRetry?: (id: string) => void;
-  onOpenSettings?: (tab: any, provider?: string) => void;
+  onOpenSettings?: (tab: SettingsTabId, provider?: string) => void;
   compact?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const isAutoScrolling = useRef(true);
   // Fix #3: Throttle scroll updates to max 20/sec
   const lastScrollTime = useRef(0);
+  const resizeObservers = useRef(new Map<Element, ResizeObserver>());
 
   // Get the actual scrollable element from Radix ScrollArea
   const getViewport = useCallback(() => scrollRef.current?.querySelector("[data-radix-scroll-area-viewport]") as HTMLElement, []);
@@ -36,13 +42,15 @@ export const MessageList = memo(function MessageList({
     return messages.filter(m => m.kind !== "tool_call" && m.kind !== "tool_result");
   }, [messages]);
 
+  const messageOrderSignature = useMemo(
+    () => filteredMessages.map((message) => message.id).join("|"),
+    [filteredMessages],
+  );
+
   const activeMessageSignature = useMemo(() => {
     const last = filteredMessages[filteredMessages.length - 1];
     if (!last) return "";
-    const stepFingerprint = (last.steps || [])
-      .map((s) => `${s.type}:${s.status || ""}:${s.content?.length || 0}:${s.toolCall?.status || ""}:${s.toolCall?.output?.length || 0}`)
-      .join("|");
-    return `${last.id}:${last.status}:${last.content.length}:${last.reasoning?.length || 0}:${stepFingerprint}`;
+    return buildMessageListStreamSignature(last);
   }, [filteredMessages]);
 
   const rowVirtualizer = useVirtualizer({
@@ -60,8 +68,31 @@ export const MessageList = memo(function MessageList({
       if (!isNaN(index) && el.offsetHeight > 0) {
         sizeCache.current.set(index, el.offsetHeight);
       }
+      if (!resizeObservers.current.has(el)) {
+        const observer = new ResizeObserver(() => {
+          rowVirtualizer.measureElement(el);
+          const nextIndex = Number(el.dataset.index);
+          if (!isNaN(nextIndex) && el.offsetHeight > 0) {
+            sizeCache.current.set(nextIndex, el.offsetHeight);
+          }
+        });
+        observer.observe(el);
+        resizeObservers.current.set(el, observer);
+      }
     }
   }, [rowVirtualizer]);
+
+  useEffect(() => {
+    sizeCache.current.clear();
+    rowVirtualizer.measure();
+  }, [messageOrderSignature, rowVirtualizer]);
+
+  useEffect(() => {
+    return () => {
+      resizeObservers.current.forEach((observer) => observer.disconnect());
+      resizeObservers.current.clear();
+    };
+  }, []);
 
   // Track if the user manually scrolled up
   useEffect(() => {
@@ -105,13 +136,13 @@ export const MessageList = memo(function MessageList({
       <div 
         className="relative w-full"
         style={{
-          height: `${rowVirtualizer.getTotalSize() + 192}px`, // Add 192px (12rem) padding to total size
+          height: `${rowVirtualizer.getTotalSize() + LIST_TOP_PADDING + LIST_BOTTOM_PADDING}px`,
         }}
       >
         {filteredMessages.length === 0 ? (
           <div className="flex flex-col items-center justify-center pt-32 text-center px-6">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/5 text-primary mb-6 animate-pulse">
-              <BotIcon className="h-8 w-8" />
+              <Bot className="h-8 w-8" />
             </div>
             <h2 className="text-xl font-bold tracking-tight mb-2">How can I help you today?</h2>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
@@ -129,7 +160,7 @@ export const MessageList = memo(function MessageList({
                 ref={measureElementWithCache}
                 className="absolute top-0 left-0 w-full"
                 style={{
-                  transform: `translateY(${virtualItem.start}px)`,
+                  transform: `translateY(${virtualItem.start + LIST_TOP_PADDING}px)`,
                 }}
               >
                 <MemoizedMessageItem
@@ -147,28 +178,3 @@ export const MessageList = memo(function MessageList({
     </ScrollArea>
   );
 });
-
-function BotIcon(props: any) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 8V4H8" />
-      <rect width="16" height="12" x="4" y="8" rx="2" />
-      <path d="M2 14h2" />
-      <path d="M20 14h2" />
-      <path d="M15 13v2" />
-      <path d="M9 13v2" />
-    </svg>
-  );
-}
-

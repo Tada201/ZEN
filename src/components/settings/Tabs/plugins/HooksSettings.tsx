@@ -74,7 +74,9 @@ export const HooksSettings = memo(({ embedded }: { embedded?: boolean }) => {
     const [hookDetails, setHookDetails] = useState<Hook[]>(FALLBACK_HOOKS);
 
     const loadHooks = useCallback(async () => {
-        // Backend list_hooks not yet implemented — use fallback
+        // TODO(config-wireup): src-tauri has DB query helpers for hooks, but no exposed
+        // list_hooks/set_hook_enabled Tauri command bridge yet. Keep fallback-only until
+        // hook registry state can be loaded and toggled through backend IPC.
         setHookDetails(FALLBACK_HOOKS);
         setLoading(false);
     }, []);
@@ -86,7 +88,8 @@ export const HooksSettings = memo(({ embedded }: { embedded?: boolean }) => {
     useEffect(() => {
         if (!showLogs) return;
         const fetchLogs = async () => {
-            // Backend get_hook_logs not yet implemented
+            // TODO(config-wireup): expose get_hook_logs through Tauri before polling real
+            // hook activity here; otherwise this must stay empty to avoid fake telemetry.
             setLogs([]);
         };
         fetchLogs();

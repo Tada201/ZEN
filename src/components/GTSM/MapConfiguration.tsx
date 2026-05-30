@@ -5,6 +5,9 @@ import { SettingsSection } from '@/components/settings/SettingsSection';
 import { Map } from 'lucide-react';
 
 export const MapConfiguration: React.FC = () => {
+    // TODO(config-wireup): this hidden prototype writes only to the frontend GTSM store.
+    // Persist map defaults and connect overlay/API toggles to the backend gtsm_* settings
+    // and secret service before exposing it as a durable configuration page.
     const viewportCenter = useGTSMStore(state => state.viewportCenter);
     const imageryProvider = useGTSMStore(state => state.imageryProvider);
     const setImageryProvider = useGTSMStore(state => state.setImageryProvider);

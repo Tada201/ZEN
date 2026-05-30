@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Message, ArtifactData, normalizeVercelMessage } from "./types";
+import type { SettingsTabId } from "@/lib/features/frontendFeatures";
 import { UserMessage } from "./UserMessage";
 import { AssistantMessage } from "./AssistantMessage";
 import { DeepResearchMessage } from "./DeepResearchMessage";
@@ -14,7 +15,7 @@ export function MessageItem({
   message: Message;
   onOpenArtifact: (a: ArtifactData) => void;
   onRetry?: (id: string) => void;
-  onOpenSettings?: (tab: any, provider?: string) => void;
+  onOpenSettings?: (tab: SettingsTabId, provider?: string) => void;
   compact?: boolean;
 }) {
   const message = useMemo(() => normalizeVercelMessage(rawMessage), [rawMessage]);

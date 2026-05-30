@@ -61,7 +61,9 @@ export const CommandsSettings = memo(({ embedded }: { embedded?: boolean }) => {
     const loadCommands = useCallback(async () => {
         setLoading(true);
         try {
-            // Backend list_commands not yet implemented — use fallback
+            // TODO(config-wireup): src-tauri has DB query helpers for commands, but no
+            // exposed Tauri command bridge yet. Replace fallback data with list/toggle
+            // IPC commands before this leaves labs/prototype mode.
             setCmdDetails(FALLBACK_COMMANDS);
         } finally {
             setLoading(false);

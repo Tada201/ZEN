@@ -3,14 +3,12 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
-import rehypeHighlight from 'rehype-highlight';
 import type { Components } from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGemoji from 'remark-gemoji';
 import remarkSupersub from 'remark-supersub';
 import rehypeSlug from 'rehype-slug';
 import 'katex/dist/katex.min.css';
-import 'highlight.js/styles/github-dark.css';
 
 interface SmoothMarkdownProps {
   content: string;
@@ -20,10 +18,26 @@ interface SmoothMarkdownProps {
   baseSpeed?: number; // chars per tick
   tickMs?: number;
   chatPlugins?: Record<string, boolean>;
+  streamingSpeed?: 'instant' | 'typewriter';
 }
 
-const IMMEDIATE_STREAM_LAG_CHARS = 96;
+const INSTANT_IMMEDIATE_LAG_CHARS = 96;
+const TYPEWRITER_IMMEDIATE_LAG_CHARS = 16;
 const MAX_ANIMATED_LAG_CHARS = 1800;
+
+function normalizeMathMarkdown(content: string): string {
+  return content
+    .replace(/\\\[((?:.|\n)*?)\\\]/g, (_match, math) => `\n$$\n${math.trim()}\n$$\n`)
+    .replace(/\\\(((?:.|\n)*?)\\\)/g, (_match, math) => `$${math.trim()}$`)
+    .replace(
+      /(^|\n)\s*\[\s*\n([\s\S]*?\\begin\{(?:aligned|align|equation|gather|matrix|pmatrix|bmatrix|cases)\}[\s\S]*?)\n\s*\]\s*(?=\n|$)/g,
+      (_match, prefix, math) => `${prefix}$$\n${math.trim()}\n$$`,
+    )
+    .replace(
+      /\$\$\n([\s\S]*?)\n\$\$/g,
+      (_match, math) => `$$\n${math.replace(/\\\s*\n/g, "\\\\\n").trim()}\n$$`,
+    );
+}
 
 export function SmoothMarkdown({ 
   content, 
@@ -32,7 +46,8 @@ export function SmoothMarkdown({
   onComplete,
   baseSpeed = 1,
   tickMs = 20,
-  chatPlugins = {}
+  chatPlugins = {},
+  streamingSpeed = 'instant',
 }: SmoothMarkdownProps) {
   const [displayedContent, setDisplayedContent] = useState('');
   const targetContentRef = useRef(content);
@@ -41,6 +56,9 @@ export function SmoothMarkdown({
   const lastTickTimeRef = useRef(0);
 
   const deferredContent = useDeferredValue(displayedContent);
+  const immediateLagChars = streamingSpeed === 'typewriter'
+    ? TYPEWRITER_IMMEDIATE_LAG_CHARS
+    : INSTANT_IMMEDIATE_LAG_CHARS;
 
   // Performance Fix #4: Memoize plugin arrays so ReactMarkdown doesn't
   // re-create its processing pipeline on every render tick.
@@ -54,17 +72,25 @@ export function SmoothMarkdown({
 
   const rehypePlugins = useMemo(() => [
     rehypeKatex, 
-    rehypeHighlight, 
     rehypeSlug
   ] as any, []);
 
   // Sync target content
   useEffect(() => {
     targetContentRef.current = content;
-    
-    // CRITICAL: If not actively streaming, jump to the end immediately
-    // This prevents "re-typing" on page reload or session switch
+
+    const displayed = displayedContent;
+    const hasPartialStreamingReveal = currentPosRef.current > 0
+      && currentPosRef.current < content.length
+      && content.startsWith(displayed);
+
+    // If this is a stable historical message, show it immediately. If a live
+    // stream just completed, keep revealing the remaining provider burst so
+    // the UI does not jump from partial text to the final answer.
     if (!isStreaming) {
+      if (hasPartialStreamingReveal) {
+        return;
+      }
       currentPosRef.current = content.length;
       setDisplayedContent(content);
       return;
@@ -72,14 +98,13 @@ export function SmoothMarkdown({
 
     const lag = content.length - currentPosRef.current;
 
-    // For normal-speed providers, do not add artificial typewriter latency.
-    // Smooth only when the provider/UI backlog is large enough to cause chunky
-    // markdown reparse/render bursts.
-    if (lag > 0 && lag <= IMMEDIATE_STREAM_LAG_CHARS) {
+    // For normal-speed providers, do not add artificial latency. Smooth only
+    // when the provider/UI backlog is large enough to cause chunky jumps.
+    if (lag > 0 && lag <= immediateLagChars) {
       currentPosRef.current = content.length;
       setDisplayedContent(content);
     }
-  }, [content, isStreaming]);
+  }, [content, displayedContent, immediateLagChars, isStreaming]);
 
   useEffect(() => {
     const tick = (timestamp: number) => {
@@ -96,10 +121,13 @@ export function SmoothMarkdown({
       if (current < target.length) {
         const remaining = target.length - current;
 
-        if (remaining <= IMMEDIATE_STREAM_LAG_CHARS) {
+        if (remaining <= immediateLagChars) {
           currentPosRef.current = target.length;
           setDisplayedContent(target);
           rafRef.current = null;
+          if (!isStreaming) {
+            onComplete?.();
+          }
           return;
         }
 
@@ -117,13 +145,22 @@ export function SmoothMarkdown({
 
         // 2. Determine increment — more aggressive catch-up to reduce
         //    the number of intermediate ReactMarkdown re-parses
-        let baseIncrement = Math.random() > 0.85 ? 2 : 1; 
+        let baseIncrement = streamingSpeed === 'typewriter'
+          ? 2
+          : (Math.random() > 0.85 ? 2 : 1);
         
         let speedMultiplier = 1;
-        if (remaining > 2000) speedMultiplier = 40;
-        else if (remaining > 1000) speedMultiplier = 25;
-        else if (remaining > 400) speedMultiplier = 12;
-        else if (remaining > 100) speedMultiplier = 6;
+        if (streamingSpeed === 'typewriter') {
+          if (remaining > 2000) speedMultiplier = 24;
+          else if (remaining > 1000) speedMultiplier = 14;
+          else if (remaining > 400) speedMultiplier = 7;
+          else if (remaining > 100) speedMultiplier = 3;
+        } else {
+          if (remaining > 2000) speedMultiplier = 40;
+          else if (remaining > 1000) speedMultiplier = 25;
+          else if (remaining > 400) speedMultiplier = 12;
+          else if (remaining > 100) speedMultiplier = 6;
+        }
 
         let increment = inCodeBlock ? 50 : Math.max(1, baseIncrement * speedMultiplier);
 
@@ -152,7 +189,12 @@ export function SmoothMarkdown({
         rafRef.current = null;
       }
     };
-  }, [content, isStreaming, baseSpeed, tickMs, onComplete]);
+  }, [content, immediateLagChars, isStreaming, baseSpeed, tickMs, onComplete, streamingSpeed]);
+
+  const normalizedContent = useMemo(
+    () => normalizeMathMarkdown(deferredContent),
+    [deferredContent],
+  );
 
   return (
     <div className="smooth-markdown text-sm leading-relaxed prose prose-invert max-w-none">
@@ -161,7 +203,7 @@ export function SmoothMarkdown({
         rehypePlugins={rehypePlugins}
         components={components}
       >
-        {deferredContent}
+        {normalizedContent}
       </ReactMarkdown>
     </div>
   );

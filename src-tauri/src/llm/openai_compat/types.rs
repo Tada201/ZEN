@@ -27,6 +27,15 @@ pub struct OpenAiChatRequest {
     pub response_format: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extra_body: Option<serde_json::Value>,
+}
+
+#[derive(Serialize)]
+pub struct OpenAiStreamOptions {
+    pub include_usage: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -34,6 +43,8 @@ pub struct OpenAiMessage {
     pub role: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<OpenAiContent>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_details: Option<Vec<serde_json::Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<OpenAiToolCallOut>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -85,17 +96,36 @@ pub struct OpenAiStreamChunk {
 
 #[derive(Deserialize, Debug)]
 pub struct OpenAiStreamChoice {
+    #[serde(default)]
     pub delta: OpenAiDelta,
     #[serde(default)]
     pub finish_reason: Option<String>,
+    #[serde(default)]
+    pub message: Option<OpenAiStreamMessage>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Default)]
 pub struct OpenAiDelta {
     #[serde(default)]
     pub content: Option<String>,
     #[serde(default)]
+    pub reasoning: Option<serde_json::Value>,
+    #[serde(default)]
+    pub reasoning_content: Option<serde_json::Value>,
+    #[serde(default)]
+    pub thinking: Option<serde_json::Value>,
+    #[serde(default)]
     pub tool_calls: Option<Vec<OpenAiToolCallDelta>>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct OpenAiStreamMessage {
+    #[serde(default)]
+    pub content: Option<String>,
+    #[serde(default)]
+    pub reasoning: Option<serde_json::Value>,
+    #[serde(default)]
+    pub reasoning_content: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -140,6 +170,8 @@ pub struct OpenAiModelEntry {
     pub owned_by: Option<String>,
     #[serde(default)]
     pub created: Option<i64>,
+    #[serde(default)]
+    pub supported_parameters: Option<Vec<String>>,
 }
 
 /// Embeddings types.

@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { RightPanelTabId, SettingsTabId, WorkspaceModeId } from '@/lib/features/frontendFeatures';
 
 interface UIState {
   sidebarOpen: boolean;
   sidebarWidth: number;
-  activeTab: string;
+  activeTab: WorkspaceModeId;
   activeSidebarPanel: string;
   isCommandPaletteOpen: boolean;
   artifactPanelOpen: boolean;
@@ -13,25 +14,24 @@ interface UIState {
   settingsOpen: boolean;
   chatManagerOpen: boolean;
   aboutModalOpen: boolean;
-  activeSettingsTab: string;
+  activeSettingsTab: SettingsTabId;
   operationalParams: { lat: number; lon: number; label: string; zoom?: number } | null;
   solarMode: boolean;
   activeModel: string;
   activeProvider: string;
   voiceModeOpen: boolean;
   aiSpeaking: boolean;
-  appUptimeSecs: number;
   toggleVoiceMode: () => void;
   theme: 'dark' | 'light' | 'tactical';
   styleMode: 'glass' | 'flat' | 'bordered';
   density: 'normal' | 'compact';
   rightPanelOpen: boolean;
-  activeRightTab: 'metrics' | 'analytics' | 'agents' | 'workflows' | 'space' | 'drawing' | 'artifacts' | 'terminal' | 'map' | 'memory';
+  activeRightTab: RightPanelTabId;
   
   // Actions
   setSidebarOpen: (open: boolean) => void;
   setSidebarWidth: (width: number) => void;
-  setActiveTab: (tab: string) => void;
+  setActiveTab: (tab: WorkspaceModeId) => void;
   setActiveSidebarPanel: (panel: string) => void;
   setCommandPaletteOpen: (open: boolean) => void;
   setArtifactPanelOpen: (open: boolean) => void;
@@ -41,7 +41,7 @@ interface UIState {
   setChatManagerOpen: (open: boolean) => void;
   setAboutModalOpen: (open: boolean) => void;
   toggleAboutModal: () => void;
-  setActiveSettingsTab: (tab: string) => void;
+  setActiveSettingsTab: (tab: SettingsTabId) => void;
   toggleSettings: () => void;
   setOperationalParams: (params: { lat: number; lon: number; label: string; zoom?: number } | null) => void;
   setSolarMode: (solar: boolean) => void;
@@ -53,7 +53,7 @@ interface UIState {
   setStyleMode: (mode: 'glass' | 'flat' | 'bordered') => void;
   setDensity: (density: 'normal' | 'compact') => void;
   setRightPanelOpen: (open: boolean) => void;
-  setActiveRightTab: (tab: 'metrics' | 'analytics' | 'agents' | 'workflows' | 'space' | 'drawing' | 'artifacts' | 'terminal' | 'map' | 'memory') => void;
+  setActiveRightTab: (tab: RightPanelTabId) => void;
   toggleSidebar: () => void;
   toggleRightPanel: () => void;
 }
@@ -79,11 +79,10 @@ export const useUIStore = create<UIState>()(
       activeProvider: 'openai',
       voiceModeOpen: false,
       aiSpeaking: false,
-      appUptimeSecs: 0,
       theme: 'dark',
       styleMode: 'glass',
       density: 'normal',
-      rightPanelOpen: true,
+      rightPanelOpen: false,
       activeRightTab: 'metrics',
 
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
@@ -125,7 +124,6 @@ export const useUIStore = create<UIState>()(
           aboutModalOpen,
           voiceModeOpen,
           aiSpeaking,
-          appUptimeSecs,
           ...rest
         } = state;
         return rest;

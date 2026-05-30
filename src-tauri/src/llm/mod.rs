@@ -104,6 +104,7 @@ pub fn default_base_url(provider: &str) -> String {
         "nvidia" => "https://integrate.api.nvidia.com/v1".to_string(),
         "lmstudio" => "http://localhost:1234".to_string(),
         "nine_router" | "vx" => "http://localhost:20128/v1".to_string(),
+        "opencode" | "opencode_free" => "https://opencode.ai/zen/v1".to_string(),
         "aihubmix" => "https://aihubmix.com/v1".to_string(),
         "google" | "gemini" => {
             "https://generativelanguage.googleapis.com/v1beta/openai".to_string()

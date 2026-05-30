@@ -1,6 +1,7 @@
 import { useCallback, useRef, useEffect } from "react";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { Message } from "../../components/chat/types";
+import { findWritableAssistantIndex } from "./messageTarget";
 
 const STREAM_HEARTBEAT_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -23,13 +24,14 @@ export function useStreamHeartbeat() {
       useChatStore.getState().setStreamingForChat(chatId, false);
       
       useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-        const last = prev[prev.length - 1];
-        if (!last || last.role !== "assistant") return prev;
-        if (last.status === "sent" || last.status === "failed") return prev;
+        const assistantIdx = findWritableAssistantIndex(prev);
+        if (assistantIdx === -1) return prev;
+        const assistant = prev[assistantIdx];
+        if (assistant.status === "sent" || assistant.status === "failed") return prev;
 
         const next = [...prev];
-        next[next.length - 1] = {
-          ...last,
+        next[assistantIdx] = {
+          ...assistant,
           status: "failed",
           error: "Connection interrupted. No response from model for 5 minutes."
         };

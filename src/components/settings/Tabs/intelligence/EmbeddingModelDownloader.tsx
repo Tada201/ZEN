@@ -62,7 +62,8 @@ export const EmbeddingModelDownloader = memo(({
     const serviceUrl = isOllama ? 'https://ollama.com/download' : 'https://lmstudio.ai/';
 
     useEffect(() => {
-        // Backend check_ollama_status / check_lmstudio_status not yet implemented
+        // TODO(config-wireup): add check_ollama_status/check_lmstudio_status Tauri
+        // commands before showing real local embedding engine readiness.
         setOllamaStatus({
             installed: false,
             running: false,
@@ -82,7 +83,8 @@ export const EmbeddingModelDownloader = memo(({
     }, []);
 
     const checkStatus = async () => {
-        // Backend check not available — rely on default disconnected state
+        // TODO(config-wireup): call the backend status command once it exists; the
+        // default disconnected state is intentional for the current prototype tab.
         setCheckingStatus(false);
     };
 
@@ -97,7 +99,8 @@ export const EmbeddingModelDownloader = memo(({
         setDownloadComplete(false);
         setError(null);
 
-        // Backend download_embedding_model not yet implemented
+        // TODO(config-wireup): add a download_embedding_model Tauri command with progress
+        // events before enabling one-click model installation from this panel.
         setDownloadComplete(false);
         setDownloadingModel(null);
         setError(`Automated download not available from frontend. Use ${provider} CLI directly.`);

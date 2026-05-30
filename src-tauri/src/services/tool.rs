@@ -18,6 +18,17 @@ pub struct ToolService {
     pending_approvals: Arc<Mutex<HashMap<String, tokio::sync::oneshot::Sender<bool>>>>,
 }
 
+pub struct ToolApprovalExecutionContext {
+    pub run_id: Option<String>,
+    pub parent_agent_id: Option<String>,
+    pub execution_id: Option<String>,
+    pub batch_id: Option<String>,
+    pub tool_batch_id: Option<String>,
+    pub agent_id: Option<String>,
+    pub agent_name: Option<String>,
+    pub iteration: Option<usize>,
+}
+
 impl ToolService {
     pub fn new(
         registry: GlobalToolRegistry,
@@ -85,6 +96,7 @@ impl ToolService {
                         &chat_id,
                         &tool_call,
                         context,
+                        None,
                     )
                     .await;
                 if approved {
@@ -156,6 +168,7 @@ impl ToolService {
         chat_id: &str,
         tool_call: &ToolCall,
         context: crate::tools::permission::PermissionContext,
+        execution_context: Option<ToolApprovalExecutionContext>,
     ) -> bool {
         self.audit(
             SecurityDecision::Ask,
@@ -171,7 +184,7 @@ impl ToolService {
             approvals.insert(tool_call.id.clone(), tx);
         }
 
-        self.emit_approval_request(&app, chat_id, tool_call, context);
+        self.emit_approval_request(&app, chat_id, tool_call, context, execution_context);
 
         let approved = match tokio::time::timeout(tokio::time::Duration::from_secs(120), rx).await {
             Ok(Ok(approved)) => approved,
@@ -478,7 +491,30 @@ impl ToolService {
         chat_id: &str,
         tool_call: &ToolCall,
         context: crate::tools::permission::PermissionContext,
+        execution_context: Option<ToolApprovalExecutionContext>,
     ) {
+        let run_id = execution_context
+            .as_ref()
+            .and_then(|ctx| ctx.run_id.as_deref());
+        let parent_agent_id = execution_context
+            .as_ref()
+            .and_then(|ctx| ctx.parent_agent_id.as_deref());
+        let execution_id = execution_context
+            .as_ref()
+            .and_then(|ctx| ctx.execution_id.as_deref());
+        let batch_id = execution_context
+            .as_ref()
+            .and_then(|ctx| ctx.batch_id.as_deref());
+        let tool_batch_id = execution_context
+            .as_ref()
+            .and_then(|ctx| ctx.tool_batch_id.as_deref());
+        let agent_id = execution_context
+            .as_ref()
+            .and_then(|ctx| ctx.agent_id.as_deref());
+        let agent_name = execution_context
+            .as_ref()
+            .and_then(|ctx| ctx.agent_name.as_deref());
+        let iteration = execution_context.as_ref().and_then(|ctx| ctx.iteration);
         let _ = app.emit(
             "tool:authorization_request",
             serde_json::json!({
@@ -486,6 +522,14 @@ impl ToolService {
                 "tool_call_id": tool_call.id,
                 "tool_name": tool_call.name,
                 "arguments": tool_call.arguments,
+                "run_id": run_id,
+                "parent_agent_id": parent_agent_id,
+                "execution_id": execution_id,
+                "batch_id": batch_id,
+                "tool_batch_id": tool_batch_id,
+                "agent_id": agent_id,
+                "agent_name": agent_name,
+                "iteration": iteration,
                 "model": "default",
                 "context": context
             }),
@@ -508,7 +552,15 @@ impl ToolService {
                         "arguments": tool_call.arguments,
                         "chat_id": chat_id,
                         "context": context
-                    }
+                    },
+                    "runId": run_id,
+                    "parentAgentId": parent_agent_id,
+                    "executionId": execution_id,
+                    "batchId": batch_id,
+                    "toolBatchId": tool_batch_id,
+                    "agentId": agent_id,
+                    "agentName": agent_name,
+                    "iteration": iteration
                 }
             }),
         );

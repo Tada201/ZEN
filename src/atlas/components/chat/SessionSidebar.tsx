@@ -1,4 +1,4 @@
-import { useState, useMemo, memo, useDeferredValue } from "react";
+import { useState, useMemo, memo, useDeferredValue, useRef } from "react";
 import { type TabId } from "../SettingsModal";
 import { 
   Plus, Search, Trash2, Settings2,
@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { Session, ChatFolder } from "./types";
 import { SessionSidebarItem, type SearchResult } from "./SessionSidebarItem";
 import { SIDEBAR_COLLAPSED_WIDTH } from "@/lib/constants/design";
+import type { WorkspaceModeId } from "@/lib/features/frontendFeatures";
 
 interface SessionSidebarProps {
   sessions: Session[];
@@ -37,23 +38,26 @@ interface SessionSidebarProps {
   onSearchChange: (val: string) => void;
   setSettingsTab: (tab: TabId) => void;
   setShowSettingsModal: (val: boolean) => void;
+  onPreloadSettings?: () => void;
   onToggleSidebar: () => void;
   isCollapsed?: boolean;
-  activeTab?: string;
-  onTabChange?: (tab: string) => void;
+  activeTab?: WorkspaceModeId;
+  onTabChange?: (tab: WorkspaceModeId) => void;
+  workspaceModes?: { id: WorkspaceModeId; label: string }[];
 }
 
 export const SessionSidebar = memo(({
   sessions, archivedSessions = [], folders, currentId, onSelect, onCreate, onDelete, onRename,
   onPin, onArchive, onUnarchive, onCreateFolder, onMoveToFolder,
   search, searchResults = [], onSearchChange, onExport, onDeleteAll,
-  setSettingsTab, setShowSettingsModal, onToggleSidebar,
-  isCollapsed = false, activeTab = "chat", onTabChange
+  setSettingsTab, setShowSettingsModal, onPreloadSettings, onToggleSidebar,
+  isCollapsed = false, activeTab = "chat", onTabChange, workspaceModes = [{ id: "chat", label: "Chat" }]
 }: SessionSidebarProps) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const deferredSearch = useDeferredValue(search);
 
@@ -156,6 +160,8 @@ export const SessionSidebar = memo(({
           size="icon" 
           className="h-9 w-9 text-zinc-500 hover:text-white hover:bg-white/5"
           onClick={onToggleSidebar}
+          aria-label="Open sidebar"
+          title="Open sidebar"
         >
           <PanelLeftOpen size={18} />
         </Button>
@@ -167,6 +173,7 @@ export const SessionSidebar = memo(({
           size="icon" 
           className="h-9 w-9 text-zinc-400 hover:text-white hover:bg-white/5"
           onClick={onCreate}
+          aria-label="New chat"
           title="New chat"
         >
           <Plus size={18} />
@@ -177,6 +184,7 @@ export const SessionSidebar = memo(({
           size="icon" 
           className="h-9 w-9 text-zinc-500 hover:text-white hover:bg-white/5"
           onClick={() => setShowArchived(!showArchived)} 
+          aria-label={showArchived ? "Back to chats" : "Archive"}
           title={showArchived ? "Back to chats" : "Archive"}
         >
           {showArchived ? <History size={18} /> : <Archive size={18} />}
@@ -192,7 +200,10 @@ export const SessionSidebar = memo(({
             setSettingsTab("ai-config");
             setShowSettingsModal(true);
           }}
+          aria-label="Settings"
           title="Settings"
+          onPointerEnter={onPreloadSettings}
+          onFocus={onPreloadSettings}
         >
           <Settings2 size={18} />
         </Button>
@@ -214,6 +225,7 @@ export const SessionSidebar = memo(({
               size="icon" 
               className={cn("h-7 w-7 text-zinc-500 hover:text-white hover:bg-white/5", showArchived && "text-primary")}
               onClick={() => setShowArchived(!showArchived)}
+              aria-label={showArchived ? "Hide archived" : "Show archived"}
               title={showArchived ? "Hide archived" : "Show archived"}
             >
               <Archive size={14} />
@@ -223,6 +235,8 @@ export const SessionSidebar = memo(({
               size="icon" 
               className="h-7 w-7 text-zinc-500 hover:text-white hover:bg-white/5"
               onClick={onToggleSidebar}
+              aria-label="Close sidebar"
+              title="Close sidebar"
             >
               <PanelLeftClose size={15} />
             </Button>
@@ -233,7 +247,9 @@ export const SessionSidebar = memo(({
         <div className="relative group px-1">
           <Search size={11} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-primary transition-colors" />
           <input
+            ref={searchInputRef}
             placeholder="Search chats..."
+            aria-label="Search chats"
             className="w-full h-8 pl-8 pr-3 bg-zinc-900/20 border border-white/5 rounded text-[10px] text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:border-primary/20 transition-all"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
@@ -325,30 +341,24 @@ export const SessionSidebar = memo(({
       <div className="mt-auto flex flex-col border-t border-white/5 bg-zinc-950 shrink-0 font-sans">
         <div className="h-10 flex items-center justify-between px-2">
           {/* Segmented Mode Controller */}
-          <div className="flex items-center gap-0.5 bg-white/5 p-0.5 rounded-lg border border-white/5 ml-1">
-            <button
-              className={cn(
-                "px-2.5 py-1 text-[11px] font-medium rounded-md transition-all duration-200 select-none",
-                activeTab === "chat" 
-                  ? "bg-white/10 text-white shadow-sm" 
-                  : "text-zinc-500 hover:text-zinc-300"
-              )}
-              onClick={() => onTabChange?.("chat")}
-            >
-              Chat
-            </button>
-            <button
-              className={cn(
-                "px-2.5 py-1 text-[11px] font-medium rounded-md transition-all duration-200 select-none",
-                activeTab === "openui" 
-                  ? "bg-white/10 text-primary shadow-sm" 
-                  : "text-zinc-500 hover:text-zinc-300"
-              )}
-              onClick={() => onTabChange?.("openui")}
-            >
-              Canvas
-            </button>
-          </div>
+          {workspaceModes.length > 1 && (
+            <div className="flex items-center gap-0.5 bg-white/5 p-0.5 rounded-lg border border-white/5 ml-1">
+              {workspaceModes.map((mode) => (
+                <button
+                  key={mode.id}
+                  className={cn(
+                    "px-2.5 py-1 text-[11px] font-medium rounded-md transition-all duration-200 select-none",
+                    activeTab === mode.id
+                      ? "bg-white/10 text-white shadow-sm"
+                      : "text-zinc-500 hover:text-zinc-300"
+                  )}
+                  onClick={() => onTabChange?.(mode.id)}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+          )}
           
           <div className="flex items-center gap-0.5">
             <DropdownMenu>
@@ -363,11 +373,20 @@ export const SessionSidebar = memo(({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48 bg-zinc-950 border-white/10">
-                <DropdownMenuItem onClick={() => {}} className="text-xs">
-                  <Search className="mr-2 h-3.5 w-3.5" /> Search all chats
+                <DropdownMenuItem
+                  onClick={() => searchInputRef.current?.focus()}
+                  className="text-xs"
+                >
+                  <Search className="mr-2 h-3.5 w-3.5" /> Focus search
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => {}} className="text-xs">
-                  <FolderPlus className="mr-2 h-3.5 w-3.5" /> New Folder
+                <DropdownMenuItem
+                  onClick={() => {
+                    const name = window.prompt("Folder name:");
+                    if (name?.trim()) onCreateFolder(name.trim());
+                  }}
+                  className="text-xs"
+                >
+                  <FolderPlus className="mr-2 h-3.5 w-3.5" /> New folder
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-white/5" />
                 <DropdownMenuItem 
@@ -383,6 +402,8 @@ export const SessionSidebar = memo(({
               variant="ghost" 
               size="sm" 
               className="h-8 px-2 gap-1.5 text-zinc-500 hover:text-white hover:bg-white/5"
+              onPointerEnter={onPreloadSettings}
+              onFocus={onPreloadSettings}
               onClick={() => {
                 setSettingsTab("ai-config");
                 setShowSettingsModal(true);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { memo, useState, useEffect, useMemo, useDeferredValue } from 'react';
 import { ChevronDown, Search, Check, Sliders } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils/style';
@@ -16,7 +16,7 @@ interface ModelSearchDropdownProps {
   isCompact?: boolean;
 }
 
-export const ModelSearchDropdown = ({
+export const ModelSearchDropdown = memo(({
   isOpen, setIsOpen,
   models,
   selectedModelId,
@@ -27,13 +27,43 @@ export const ModelSearchDropdown = ({
 }: ModelSearchDropdownProps) => {
   const [modelSearch, setModelSearch] = useState('');
   const [focusedModelIndex, setFocusedModelIndex] = useState(0);
+  const deferredModelSearch = useDeferredValue(modelSearch);
 
-  const filteredModels = models.filter(m => 
-    m.name.toLowerCase().includes(modelSearch.toLowerCase()) || 
-    m.provider.toLowerCase().includes(modelSearch.toLowerCase())
-  );
+  const filteredModels = useMemo(() => {
+    if (!isOpen) return [];
+    const query = deferredModelSearch.toLowerCase();
+    return models.filter(m =>
+      m.name.toLowerCase().includes(query) ||
+      m.provider.toLowerCase().includes(query)
+    );
+  }, [isOpen, deferredModelSearch, models]);
+
+  const groupedVisibleModels = useMemo(() => {
+    return filteredModels.reduce((acc, m) => {
+      if (!acc[m.provider]) acc[m.provider] = [];
+      acc[m.provider].push(m);
+      return acc;
+    }, {} as Record<string, Model[]>);
+  }, [filteredModels]);
+
+  const providerFilters = useMemo(() => {
+    if (!isOpen) return [];
+    return Array.from(new Set(models.map(m => m.provider)));
+  }, [isOpen, models]);
+
+  const selectedModelInfo = useMemo(() => (
+    models.find(m => m.id === selectedModelId && m.provider === selectedProvider)
+      || models.find(m => m.id === selectedModelId)
+      || models[0]
+      || { id: 'default', name: selectedModelId || 'No Model', provider: selectedProvider || 'default' }
+  ), [models, selectedModelId, selectedProvider]);
 
   const handleModelKeyDown = (e: React.KeyboardEvent) => {
+    if (filteredModels.length === 0) {
+      if (e.key === 'Escape') setIsOpen(false);
+      return;
+    }
+
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setFocusedModelIndex(prev => (prev + 1) % filteredModels.length);
@@ -54,15 +84,13 @@ export const ModelSearchDropdown = ({
     setFocusedModelIndex(0);
   }, [modelSearch]);
 
-  const selectedModelInfo = models.find(m => m.id === selectedModelId && m.provider === selectedProvider) 
-    || models.find(m => m.id === selectedModelId) 
-    || models[0] 
-    || { id: 'default', name: selectedModelId || 'No Model', provider: selectedProvider || 'default' };
-
   return (
     <div className="relative">
       <button 
         onClick={() => setIsOpen(!isOpen)}
+        type="button"
+        aria-label={`Select model: ${selectedModelInfo.name}`}
+        title={`Select model: ${selectedModelInfo.name}`}
         className={cn(
           "flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-[13px] font-semibold text-zinc-600 dark:text-zinc-400 shrink-0",
           isCompact ? "max-w-[40px] min-w-0" : "max-w-[160px] min-w-[100px]"
@@ -100,6 +128,7 @@ export const ModelSearchDropdown = ({
                   <input 
                     type="text"
                     placeholder="Search models..."
+                    aria-label="Search models"
                     value={modelSearch}
                     onChange={(e) => setModelSearch(e.target.value)}
                     onKeyDown={handleModelKeyDown}
@@ -120,7 +149,7 @@ export const ModelSearchDropdown = ({
                   >
                     All
                   </button>
-                  {Array.from(new Set(models.map(m => m.provider))).map(p => {
+                  {providerFilters.map(p => {
                     const isSelected = modelSearch.toLowerCase() === p.toLowerCase();
                     return (
                       <button
@@ -146,13 +175,7 @@ export const ModelSearchDropdown = ({
                     No models found matching "{modelSearch}"
                   </div>
                 ) : (
-                  Object.entries(
-                    filteredModels.reduce((acc, m) => {
-                      if (!acc[m.provider]) acc[m.provider] = [];
-                      acc[m.provider].push(m);
-                      return acc;
-                    }, {} as Record<string, Model[]>)
-                  ).map(([provider, providerModels]) => (
+                  Object.entries(groupedVisibleModels).map(([provider, providerModels]) => (
                     <div key={provider} className="mb-2 font-sans text-xs">
                       <div className="px-3 py-1 text-[10px] font-semibold capitalize text-zinc-500 flex items-center gap-2">
                         {provider}
@@ -164,7 +187,7 @@ export const ModelSearchDropdown = ({
                           const isSelected = selectedModelId === model.id && selectedProvider === model.provider;
                           return (
                             <button
-                              key={model.id}
+                              key={`${provider}:${model.id}`}
                               onClick={() => { 
                                 onSelectModel(model.id, model.provider); 
                                 setIsOpen(false); 
@@ -222,4 +245,4 @@ export const ModelSearchDropdown = ({
       </AnimatePresence>
     </div>
   );
-};
+});

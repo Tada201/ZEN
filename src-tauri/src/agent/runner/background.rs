@@ -215,6 +215,7 @@ impl Runner {
                  Keep the summary brief and under 3-4 sentences.\n\nConversation:\n{}",
                 text
             ),
+            reasoning_details: None,
             images: None,
             tool_calls: None,
             tool_call_id: None,
@@ -261,6 +262,7 @@ async fn perform_background_compaction(
         .map(|m| ChatMessage {
             role: m.role.clone(),
             content: m.content.clone(),
+            reasoning_details: None,
             images: None,
             tool_calls: m
                 .tool_calls

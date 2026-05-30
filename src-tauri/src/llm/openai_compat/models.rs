@@ -8,6 +8,49 @@ use std::sync::RwLock;
 use tracing::{info, warn};
 
 impl OpenAiCompatProvider {
+    fn provider_is_mixed_router(provider: &str) -> bool {
+        matches!(provider, "openrouter" | "together" | "perplexity")
+    }
+
+    fn parameter_supported(parameters: &[String], name: &str) -> bool {
+        parameters
+            .iter()
+            .any(|parameter| parameter.eq_ignore_ascii_case(name))
+    }
+
+    fn tools_metadata(
+        provider_lower: &str,
+        supported_parameters: Option<&[String]>,
+        fallback: bool,
+    ) -> bool {
+        if let Some(parameters) = supported_parameters {
+            return Self::parameter_supported(parameters, "tools");
+        }
+
+        if Self::provider_is_mixed_router(provider_lower) {
+            return false;
+        }
+
+        fallback
+    }
+
+    fn reasoning_metadata_from_parameters(
+        supported_parameters: Option<&[String]>,
+    ) -> Option<(Option<bool>, Option<String>)> {
+        let parameters = supported_parameters?;
+        if Self::parameter_supported(parameters, "reasoning_effort") {
+            return Some((Some(true), Some("effort".to_string())));
+        }
+        if Self::parameter_supported(parameters, "reasoning") {
+            return Some((Some(true), Some("budget".to_string())));
+        }
+        if Self::parameter_supported(parameters, "include_reasoning") {
+            return Some((Some(true), Some("none".to_string())));
+        }
+
+        Some((Some(false), None))
+    }
+
     pub async fn do_list_models(&self) -> ZenResult<Vec<ModelInfo>> {
         let url = self.url("/models");
         info!(provider = %self.provider_name, url = %url, "Fetching model list");
@@ -66,9 +109,53 @@ impl OpenAiCompatProvider {
 
         let body: OpenAiModelsResponse = resp.json().await?;
 
+        let provider_lower = self.provider_name.to_lowercase();
+        let opencode_free_model = |id: &str| {
+            let id = id.to_lowercase();
+            id.ends_with("-free") || id == "big-pickle" || id.contains("/big-pickle")
+        };
+        let reasoning_metadata = |id: &str| -> (Option<bool>, Option<String>) {
+            let id = id.to_lowercase();
+            match provider_lower.as_str() {
+                "openai" => {
+                    if id.starts_with("o1")
+                        || id.starts_with("o3")
+                        || id.starts_with("o4")
+                        || id.starts_with("gpt-5")
+                    {
+                        (Some(true), Some("effort".to_string()))
+                    } else {
+                        (Some(false), None)
+                    }
+                }
+                "google" | "gemini" => {
+                    if id.contains("gemini-2.5") || id.contains("gemini-3") {
+                        (Some(true), Some("budget".to_string()))
+                    } else {
+                        (Some(false), None)
+                    }
+                }
+                "deepseek" => {
+                    if id.contains("reasoner") || id.contains("r1") {
+                        (Some(true), Some("none".to_string()))
+                    } else {
+                        (Some(false), None)
+                    }
+                }
+                _ => (None, None),
+            }
+        };
+
         let mut models: Vec<ModelInfo> = body
             .data
             .into_iter()
+            .filter(|m| {
+                if provider_lower == "opencode" || provider_lower == "opencode_free" {
+                    opencode_free_model(&m.id)
+                } else {
+                    true
+                }
+            })
             .map(|m| {
                 let model_id_lower = m.id.to_lowercase();
 
@@ -95,14 +182,25 @@ impl OpenAiCompatProvider {
 
                 let supports_vision = has_vision_keyword || is_multimodal_family;
 
-                // Modern multimodal models usually support tools too.
-                // We only disable tools if it's explicitly marked as a vision-only model.
-                let supports_tools = !model_id_lower.contains("vision-only");
+                let supported_parameters = m.supported_parameters.as_deref();
+
+                // Modern direct-provider multimodal models usually support tools too.
+                // Mixed routers expose heterogeneous catalogs, so require metadata there.
+                let supports_tools = Self::tools_metadata(
+                    &provider_lower,
+                    supported_parameters,
+                    !model_id_lower.contains("vision-only"),
+                );
 
                 // Populate capability cache for runtime lookups
                 if let Ok(mut cache) = self.model_capabilities.write() {
                     cache.insert(m.id.clone(), ModelCapabilities { supports_tools });
                 }
+                let (supports_reasoning, reasoning_config_type) =
+                    match Self::reasoning_metadata_from_parameters(supported_parameters) {
+                        Some(metadata) => metadata,
+                        None => reasoning_metadata(&m.id),
+                    };
 
                 ModelInfo {
                     id: m.id.clone(),
@@ -119,6 +217,8 @@ impl OpenAiCompatProvider {
                     state: None,
                     supports_vision: Some(supports_vision),
                     supports_tools: Some(supports_tools),
+                    supports_reasoning,
+                    reasoning_config_type,
                 }
             })
             .collect();

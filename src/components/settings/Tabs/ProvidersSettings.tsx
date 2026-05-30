@@ -17,7 +17,7 @@ import { ProviderGallery } from './providers/ProviderGallery';
 import { providersApi } from '@/api';
 
 const CATEGORIES = [
-    { id: 'cloud', label: 'Cloud Intelligence', providers: ['openai', 'anthropic', 'google', 'xai', 'mistral', 'groq', 'perplexity', 'deepseek', 'openrouter', 'together', 'kilo', 'aihubmix'] },
+    { id: 'cloud', label: 'Cloud Intelligence', providers: ['opencode', 'openai', 'anthropic', 'google', 'xai', 'mistral', 'groq', 'perplexity', 'deepseek', 'openrouter', 'together', 'kilo', 'aihubmix'] },
     { id: 'local', label: 'Local & Private', providers: ['ollama', 'lmstudio', 'nine_router'] },
     { id: 'custom', label: 'Custom Nodes', providers: [] },
 ];

@@ -1,4 +1,4 @@
-import { Globe, Terminal, FileText, Code2 } from "lucide-react";
+import { Globe, Terminal, FileText, Code2, type LucideIcon } from "lucide-react";
 
 /* ── Types ─────────────────────────────────────────────────── */
 
@@ -44,7 +44,7 @@ export interface ToolResultMeta {
   durationMs: number;
   contentSummary: string;
   files?: FileChange[];
-  rawResult?: any;
+  rawResult?: unknown;
   args?: Record<string, unknown>;
 }
 
@@ -88,12 +88,52 @@ export interface ClarificationRequestMeta {
 }
 
 export interface ActionMeta {
+  runId?: string;
+  messageId?: string;
+  parentAgentId?: string;
+  executionId?: string;
+  batchId?: string;
+  toolBatchId?: string;
   agentId?: string;
   agentName?: string;
   iteration?: number;
   depth?: number;
   phase?: string;
   message?: string;
+  provider?: string;
+  model?: string;
+  toolCount?: number;
+  parallel?: boolean;
+  tools?: string[];
+  workflowId?: string;
+  totalTasks?: number;
+  tasksCompleted?: number;
+  durationMs?: number;
+  taskId?: string;
+  assignedTo?: string;
+  tasks?: Array<{
+    id?: string;
+    task_id?: string;
+    description?: string;
+    status?: string;
+    assigned_to?: string;
+    assignedTo?: string;
+    [key: string]: unknown;
+  }>;
+  tier?: string;
+  battlePlan?: {
+    steps?: string[];
+    agents_needed?: string[];
+    [key: string]: unknown;
+  };
+  updates?: Record<string, unknown>;
+  taskResult?: {
+    success?: boolean;
+    output?: string;
+    error?: string;
+    durationMs?: number;
+  };
+  resultSummary?: string;
   progressPercent?: number;
   toolCall?: ToolCallMeta;
   toolResult?: ToolResultMeta;
@@ -102,7 +142,7 @@ export interface ActionMeta {
   approvalRequest?: ApprovalRequestMeta;
   clarificationRequest?: ClarificationRequestMeta;
   researchSteps?: Array<{ text: string; status: 'pending' | 'running' | 'completed' | 'error' }>;
-  status?: 'running' | 'completed' | 'error';
+  status?: 'running' | 'completed' | 'error' | 'cancelled';
 }
 
 export interface ActiveTool {
@@ -157,8 +197,25 @@ export type ToolCall = {
   input: Record<string, unknown> | string;
   output: string;
   durationMs?: number;
+  runId?: string;
+  messageId?: string;
+  parentAgentId?: string;
+  executionId?: string;
+  toolBatchId?: string;
+  approvalContext?: {
+    riskLevel?: "low" | "medium" | "high" | "critical" | string;
+    description?: string;
+    argumentsPreview?: string;
+    suggestedPatterns?: string[];
+  };
+  agentId?: string;
+  agentName?: string;
+  iteration?: number;
+  batchId?: string;
   retries?: number;
   startTime?: number;
+  completedAt?: number;
+  lastUpdatedAt?: number;
   attempts?: Array<{
     status: "running" | "awaiting_approval" | "completed" | "error";
     error?: string;
@@ -183,8 +240,8 @@ export interface ToolInvocation {
   state: 'call' | 'result';
   toolCallId: string;
   toolName: string;
-  args: any;
-  result?: any;
+  args: Record<string, unknown>;
+  result?: unknown;
   step?: number;
 }
 
@@ -232,21 +289,67 @@ export type Message = {
   toolInvocations?: ToolInvocation[];
 };
 
-export function normalizeVercelMessage(msg: any): Message {
-  if (!msg) return msg;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
 
-  const normalized = {
-    ...msg,
-    sessionId: msg.sessionId || "",
-    attachments: msg.attachments || [],
-    toolCalls: msg.toolCalls || [],
-    artifact: msg.artifact || null,
-    createdAt: msg.createdAt || Date.now(),
+function toAttachmentArray(value: unknown): Attachment[] {
+  return Array.isArray(value) ? value as Attachment[] : [];
+}
+
+function toToolCallArray(value: unknown): ToolCall[] {
+  return Array.isArray(value) ? value as ToolCall[] : [];
+}
+
+function toToolInvocationArray(value: unknown): ToolInvocation[] {
+  return Array.isArray(value) ? value.filter(isToolInvocation) : [];
+}
+
+function isToolInvocation(value: unknown): value is ToolInvocation {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.toolCallId === "string" &&
+    typeof value.toolName === "string" &&
+    (value.state === "call" || value.state === "result")
+  );
+}
+
+export function normalizeVercelMessage(msg: unknown): Message {
+  if (!isRecord(msg)) return msg as Message;
+
+  const role = msg.role === "user" || msg.role === "assistant" || msg.role === "system" || msg.role === "tool"
+    ? msg.role
+    : "assistant";
+
+  const normalized: Message = {
+    id: typeof msg.id === "string" ? msg.id : `message-${Date.now()}`,
+    sessionId: typeof msg.sessionId === "string" ? msg.sessionId : "",
+    role,
+    content: typeof msg.content === "string" ? msg.content : "",
+    reasoning: typeof msg.reasoning === "string" ? msg.reasoning : undefined,
+    attachments: toAttachmentArray(msg.attachments),
+    toolCalls: toToolCallArray(msg.toolCalls),
+    artifact: isRecord(msg.artifact) ? msg.artifact as ArtifactData : null,
+    createdAt: typeof msg.createdAt === "number" ? msg.createdAt : Date.now(),
+    model: typeof msg.model === "string" ? msg.model : undefined,
+    provider: typeof msg.provider === "string" ? msg.provider : undefined,
+    webSearch: typeof msg.webSearch === "boolean" ? msg.webSearch : undefined,
+    thinking: isRecord(msg.thinking) ? msg.thinking as ThinkingConfig : undefined,
+    deepResearch: typeof msg.deepResearch === "boolean" ? msg.deepResearch : undefined,
+    status: msg.status === "sending" || msg.status === "sent" || msg.status === "failed" || msg.status === "cancelled" ? msg.status : undefined,
+    error: typeof msg.error === "string" ? msg.error : undefined,
+    isThinking: typeof msg.isThinking === "boolean" ? msg.isThinking : undefined,
+    generativeUI: typeof msg.generativeUI === "number" ? msg.generativeUI : undefined,
+    kind: typeof msg.kind === "string" ? msg.kind as MessageKind : undefined,
+    metadata: isRecord(msg.metadata) ? msg.metadata as ActionMeta : undefined,
+    toolInvocations: toToolInvocationArray(msg.toolInvocations),
+    steps: Array.isArray(msg.steps) ? msg.steps as Step[] : undefined,
   };
 
   // If toolInvocations is present, populate toolCalls and steps
-  if (msg.toolInvocations && Array.isArray(msg.toolInvocations)) {
-    const toolCalls: ToolCall[] = msg.toolInvocations.map((ti: any) => {
+  const toolInvocations = toToolInvocationArray(msg.toolInvocations);
+  if (toolInvocations.length > 0) {
+    const toolCalls: ToolCall[] = toolInvocations.map((ti) => {
       const isCompleted = ti.state === 'result';
       return {
         id: ti.toolCallId,
@@ -257,12 +360,12 @@ export function normalizeVercelMessage(msg: any): Message {
       };
     });
 
-    normalized.toolCalls = [...normalized.toolCalls, ...toolCalls];
+    normalized.toolCalls = [...(normalized.toolCalls || []), ...toolCalls];
 
     // If steps is empty, reconstruct steps from content and toolCalls
-    if (!normalized.steps || normalized.steps.length === 0) {
+    if (!Array.isArray(normalized.steps) || normalized.steps.length === 0) {
       const steps: Step[] = [];
-      if (normalized.content) {
+      if (typeof normalized.content === "string" && normalized.content) {
         steps.push({ type: 'text', content: normalized.content });
       }
       toolCalls.forEach((tc) => {
@@ -273,17 +376,17 @@ export function normalizeVercelMessage(msg: any): Message {
   }
 
   // Fallback: If steps is still empty, reconstruct it from existing toolCalls and content for history messages
-  if (!normalized.steps || normalized.steps.length === 0) {
+  if (!Array.isArray(normalized.steps) || normalized.steps.length === 0) {
     const steps: Step[] = [];
-    if (normalized.reasoning) {
+    if (typeof normalized.reasoning === "string" && normalized.reasoning) {
       steps.push({ type: 'reasoning', content: normalized.reasoning });
     }
-    if (normalized.toolCalls && normalized.toolCalls.length > 0) {
-      normalized.toolCalls.forEach((tc: ToolCall) => {
+    if (Array.isArray(normalized.toolCalls) && normalized.toolCalls.length > 0) {
+      normalized.toolCalls.forEach((tc) => {
         steps.push({ type: 'tool-call', toolCall: tc });
       });
     }
-    if (normalized.content) {
+    if (typeof normalized.content === "string" && normalized.content) {
       steps.push({ type: 'text', content: normalized.content });
     }
     normalized.steps = steps;
@@ -314,13 +417,14 @@ export const PROVIDERS = [
   { id: "perplexity", label: "Perplexity", placeholder: "pplx-...", docsUrl: "https://www.perplexity.ai/settings/api" },
   { id: "deepseek", label: "DeepSeek", placeholder: "sk-...", docsUrl: "https://platform.deepseek.com/" },
   { id: "openrouter", label: "OpenRouter", placeholder: "sk-or-...", docsUrl: "https://openrouter.ai/keys" },
+  { id: "opencode", label: "OpenCode Free", placeholder: "Not required", docsUrl: "https://opencode.ai/docs/zen" },
   { id: "together", label: "Together AI", placeholder: "API Key...", docsUrl: "https://api.together.xyz/" },
   { id: "ollama", label: "Ollama (Local)", placeholder: "Not required", docsUrl: "https://ollama.com/" },
   { id: "lmstudio", label: "LM Studio (Local)", placeholder: "Not required", docsUrl: "https://lmstudio.ai/" },
   { id: "custom", label: "Custom OpenAI", placeholder: "sk-...", docsUrl: "" },
 ];
 
-export const TOOL_ICONS: Record<string, any> = {
+export const TOOL_ICONS: Record<string, LucideIcon> = {
   web_search: Globe,
   googleSearch: Globe,
   run_code: Terminal,

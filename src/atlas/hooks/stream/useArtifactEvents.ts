@@ -3,6 +3,8 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import { listenAppEvent } from "@/api/events";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { Message } from "../../components/chat/types";
+import { findWritableAssistantIndex } from "./messageTarget";
+import { applyArtifactDeltaToMessages, applyArtifactStartToMessages } from "./artifactStreamBuffer";
 
 interface UseArtifactEventsProps {
   resetHeartbeatTimeout: (chatId: string) => void;
@@ -10,6 +12,23 @@ interface UseArtifactEventsProps {
 
 export function useArtifactEvents({ resetHeartbeatTimeout }: UseArtifactEventsProps) {
   const unlistenRefs = useRef<UnlistenFn[]>([]);
+  const deltaBuffersRef = useRef<Record<string, string>>({});
+  const deltaRafRef = useRef<number | null>(null);
+
+  const flushArtifactDeltas = () => {
+    const buffers = deltaBuffersRef.current;
+    const chatIds = Object.keys(buffers);
+    deltaRafRef.current = null;
+    if (chatIds.length === 0) return;
+
+    const { setSessionMessages } = useChatStore.getState();
+    for (const chatId of chatIds) {
+      const delta = buffers[chatId];
+      delete buffers[chatId];
+      if (!delta) continue;
+      setSessionMessages(chatId, (prev: Message[]) => applyArtifactDeltaToMessages(prev, delta));
+    }
+  };
 
   useEffect(() => {
     const setupListeners = async () => {
@@ -21,22 +40,14 @@ export function useArtifactEvents({ resetHeartbeatTimeout }: UseArtifactEventsPr
         if (!chatId) return;
 
         resetHeartbeatTimeout(chatId);
-        useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-          const last = prev[prev.length - 1];
-          if (!last || last.role !== "assistant") return prev;
-
-          const updated = { ...last };
-          updated.artifact = {
+        useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) =>
+          applyArtifactStartToMessages(prev, {
             type: event.payload.artifact_type,
             title: event.payload.title,
             language: event.payload.language,
             content: ""
-          };
-
-          const next = [...prev];
-          next[next.length - 1] = updated;
-          return next;
-        });
+          })
+        );
       });
 
       const unlistenArtifactDelta = await listenAppEvent("artifact:delta", (event) => {
@@ -44,20 +55,12 @@ export function useArtifactEvents({ resetHeartbeatTimeout }: UseArtifactEventsPr
         if (!chatId) return;
 
         resetHeartbeatTimeout(chatId);
-        useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-          const last = prev[prev.length - 1];
-          if (!last || last.role !== "assistant" || !last.artifact) return prev;
-
-          const updated = { ...last };
-          updated.artifact = {
-            ...last.artifact,
-            content: last.artifact.content + event.payload.delta
-          };
-
-          const next = [...prev];
-          next[next.length - 1] = updated;
-          return next;
-        });
+        const delta = event.payload.delta || "";
+        if (!delta) return;
+        deltaBuffersRef.current[chatId] = `${deltaBuffersRef.current[chatId] || ""}${delta}`;
+        if (!deltaRafRef.current) {
+          deltaRafRef.current = requestAnimationFrame(flushArtifactDeltas);
+        }
       });
 
       const unlistenArtifactComplete = await listenAppEvent("artifact:complete", (event) => {
@@ -65,12 +68,17 @@ export function useArtifactEvents({ resetHeartbeatTimeout }: UseArtifactEventsPr
         if (!chatId) return;
 
         resetHeartbeatTimeout(chatId);
+        const pending = deltaBuffersRef.current[chatId];
+        if (pending) {
+          delete deltaBuffersRef.current[chatId];
+          useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => applyArtifactDeltaToMessages(prev, pending));
+        }
         useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-          const last = prev[prev.length - 1];
-          if (!last || last.role !== "assistant" || !last.artifact) return prev;
+          const assistantIdx = findWritableAssistantIndex(prev);
+          if (assistantIdx === -1 || !prev[assistantIdx].artifact) return prev;
 
           const next = [...prev];
-          next[next.length - 1] = { ...last };
+          next[assistantIdx] = { ...prev[assistantIdx] };
           return next;
         });
       });
@@ -83,6 +91,11 @@ export function useArtifactEvents({ resetHeartbeatTimeout }: UseArtifactEventsPr
     return () => {
       unlistenRefs.current.forEach(u => u());
       unlistenRefs.current = [];
+      if (deltaRafRef.current) {
+        cancelAnimationFrame(deltaRafRef.current);
+        deltaRafRef.current = null;
+      }
+      flushArtifactDeltas();
     };
   }, [resetHeartbeatTimeout]);
 }

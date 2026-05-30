@@ -64,6 +64,11 @@ impl Runner {
                         message: "⚠️ Model doesn't support tools — retrying in text mode"
                             .to_string(),
                         iteration: Some(0),
+                        phase: Some("tool_mode_retry".to_string()),
+                        metadata: Some(json!({
+                            "model": model,
+                            "toolsEnabled": false,
+                        })),
                     }));
 
                     match self
@@ -116,6 +121,10 @@ impl Runner {
                         message: "⚡ Local model unavailable - escalating to cloud model"
                             .to_string(),
                         iteration: Some(0),
+                        phase: Some("model_escalating".to_string()),
+                        metadata: Some(json!({
+                            "model": model,
+                        })),
                     }));
 
                     match self.get_cloud_provider_config(app).await {
@@ -131,6 +140,10 @@ impl Runner {
                                     cloud_config.display_name
                                 ),
                                 iteration: Some(0),
+                                phase: Some("provider_ready".to_string()),
+                                metadata: Some(json!({
+                                    "provider": cloud_config.display_name,
+                                })),
                             }));
 
                             let cloud_provider = crate::llm::make_provider(&cloud_config);
@@ -161,6 +174,10 @@ impl Runner {
                                         chat_id: chat_id.to_string(),
                                         message: "✅ Cloud provider succeeded".to_string(),
                                         iteration: Some(0),
+                                        phase: Some("model_escalated".to_string()),
+                                        metadata: Some(json!({
+                                            "model": fallback_model,
+                                        })),
                                     }));
                                     Ok(response)
                                 }
@@ -181,6 +198,8 @@ impl Runner {
                                 chat_id: chat_id.to_string(),
                                 message: "⚠️ No cloud provider configured - add API key in Settings > Providers".to_string(),
                                 iteration: Some(0),
+                                phase: Some("provider_missing".to_string()),
+                                metadata: None,
                             }));
                             self.emit(AgentEvent::ChatError(ChatErrorPayload {
                                 chat_id: chat_id.to_string(),
@@ -222,30 +241,37 @@ impl Runner {
         let on_event_clone = self.on_event.clone();
         let chat_id_clone = chat_id.to_string();
 
-        // 1. Create placeholder message in SQLite if not already present
+        // Allocate the assistant id synchronously, but do not block first token on
+        // SQLite placeholder persistence.
+        let mut placeholder_insert = None;
         let msg_id = match assistant_message_id {
             Some(id) => id.clone(),
             None => {
                 let id = uuid::Uuid::new_v4().to_string();
-                if let Some(ref db) = self.db_pool {
-                    let _ = queries::add_message(
-                        db,
-                        chat_id,
-                        Some(&id),
-                        "assistant",
-                        "",
-                        Some(model),
-                        false,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                    )
-                    .await;
+                if let Some(db) = self.db_pool.clone() {
+                    let chat_id = chat_id.to_string();
+                    let model = model.to_string();
+                    let id_for_insert = id.clone();
+                    placeholder_insert = Some(tokio::spawn(async move {
+                        let _ = queries::add_message(
+                            &db,
+                            &chat_id,
+                            Some(&id_for_insert),
+                            "assistant",
+                            "",
+                            Some(&model),
+                            false,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                        )
+                        .await;
+                    }));
                 }
                 *assistant_message_id = Some(id.clone());
                 id
@@ -343,13 +369,13 @@ impl Runner {
                         }
                     }
 
-                    if chunk_type == "text"
-                        && !chunk_text.is_empty()
+                    if !chunk_text.is_empty()
                         && !first_chunk_sent_clone.swap(true, std::sync::atomic::Ordering::SeqCst)
                     {
                         AgentEvent::ChatChunkFirst(ChatChunkFirstPayload {
                             chat_id: chat_id_clone.clone(),
                             delta: chunk_text.clone(),
+                            r#type: chunk_type.to_string(),
                         })
                         .emit_via(&app_clone, &on_event_clone);
                     }
@@ -397,27 +423,33 @@ impl Runner {
             .await;
 
         // Final flush
-        let mut data = match buffer.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => {
-                error!("[runner] buffer mutex poisoned during final flush");
-                poisoned.into_inner()
+        {
+            let mut data = match buffer.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => {
+                    error!("[runner] buffer mutex poisoned during final flush");
+                    poisoned.into_inner()
+                }
+            };
+            if !data.0.is_empty() {
+                let text = std::mem::take(&mut data.0);
+                let current_type = data.2;
+                AgentEvent::ChatChunk(ChatChunkPayload {
+                    chat_id: chat_id.to_string(),
+                    delta: text,
+                    r#type: current_type.to_string(),
+                    done: false,
+                })
+                .emit_via(app, &self.on_event);
             }
-        };
-        if !data.0.is_empty() {
-            let text = std::mem::take(&mut data.0);
-            let current_type = data.2;
-            AgentEvent::ChatChunk(ChatChunkPayload {
-                chat_id: chat_id.to_string(),
-                delta: text,
-                r#type: current_type.to_string(),
-                done: false,
-            })
-            .emit_via(app, &self.on_event);
         }
 
         if let Ok(mut det) = detector.lock() {
             det.flush();
+        }
+
+        if let Some(handle) = placeholder_insert.take() {
+            let _ = handle.await;
         }
 
         result.map_err(|e| e.into())

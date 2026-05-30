@@ -73,6 +73,7 @@ impl Orchestrator {
         task_messages.push(ChatMessage {
             role: "user".to_string(),
             content: task_prompt,
+            reasoning_details: None,
             images: None,
             tool_calls: None,
             tool_call_id: None,
@@ -304,6 +305,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
             ChatMessage {
                 role: "system".to_string(),
                 content: system_prompt.to_string(),
+                reasoning_details: None,
                 images: None,
                 tool_calls: None,
                 tool_call_id: None,
@@ -311,6 +313,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
             ChatMessage {
                 role: "user".to_string(),
                 content: user_content,
+                reasoning_details: None,
                 images: None,
                 tool_calls: None,
                 tool_call_id: None,
@@ -370,17 +373,14 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
             }
 
             // ── FIRST CHUNK IMMEDIATE EMISSION (A2) ──
-            // Emit ChatChunkFirst for TTFT diagnostics, then let the chunk
-            // fall through to the normal chat:chunk buffered path so the
-            // frontend renders it (the frontend does not yet consume the
-            // chat:chunk:first event directly).
-            if chunk_type == "text"
-                && !chunk_text.is_empty()
-                && !first_chunk_sent_clone.swap(true, Ordering::SeqCst)
-            {
+            // Emit ChatChunkFirst for TTFT diagnostics and immediate first
+            // render, then let the chunk fall through to the normal buffered
+            // chat:chunk path. The frontend de-duplicates the first delta.
+            if !chunk_text.is_empty() && !first_chunk_sent_clone.swap(true, Ordering::SeqCst) {
                 AgentEvent::ChatChunkFirst(ChatChunkFirstPayload {
                     chat_id: chat_id_owned_2.clone(),
                     delta: chunk_text.clone(),
+                    r#type: chunk_type.to_string(),
                 })
                 .emit_via(&app_clone_2, &maybe_channel_clone);
             }

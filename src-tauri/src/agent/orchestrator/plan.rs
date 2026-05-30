@@ -60,6 +60,7 @@ Be specific in task descriptions. Include all necessary context for the assigned
         let mut task_messages = vec![ChatMessage {
             role: "system".to_string(),
             content: system_prompt.to_string(),
+            reasoning_details: None,
             images: None,
             tool_calls: None,
             tool_call_id: None,
@@ -74,6 +75,7 @@ Be specific in task descriptions. Include all necessary context for the assigned
         task_messages.push(ChatMessage {
             role: "user".to_string(),
             content: user_content,
+            reasoning_details: None,
             images: None,
             tool_calls: None,
             tool_call_id: None,

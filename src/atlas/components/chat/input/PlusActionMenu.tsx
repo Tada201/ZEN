@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { memo, useRef } from 'react';
 import { Plus, Paperclip, Camera, ImageIcon, Lightbulb, Compass, Globe, Layout, Zap, ShieldOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -27,7 +27,7 @@ interface PlusActionMenuProps {
   supportsImageGen?: boolean;
 }
 
-export const PlusActionMenu = ({
+export const PlusActionMenu = memo(({
   isOpen, setIsOpen,
   onFileSelect,
   pinnedActions, togglePin,
@@ -54,6 +54,9 @@ export const PlusActionMenu = ({
       />
       <button 
         onClick={() => setIsOpen(!isOpen)}
+        type="button"
+        aria-label={isOpen ? "Close add menu" : "Open add menu"}
+        title={isOpen ? "Close add menu" : "Open add menu"}
         className={cn(
           "mt-0.5 p-1.5 rounded-md transition-all border flex items-center justify-center",
           isOpen 
@@ -158,4 +161,4 @@ export const PlusActionMenu = ({
       </AnimatePresence>
     </div>
   );
-};
+});

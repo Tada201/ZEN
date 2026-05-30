@@ -164,6 +164,8 @@ pub struct ChatChunkPayload {
 pub struct ChatChunkFirstPayload {
     pub chat_id: String,
     pub delta: String,
+    #[serde(rename = "type")]
+    pub r#type: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -184,6 +186,8 @@ pub struct ChatStatusPayload {
     pub chat_id: String,
     pub message: String,
     pub iteration: Option<usize>,
+    pub phase: Option<String>,
+    pub metadata: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -213,6 +217,16 @@ pub struct ToolStartPayload {
     pub tool_name: String,
     pub tool_call_id: String,
     pub arguments: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_agent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub batch_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_batch_id: Option<String>,
     pub agent_id: String,
     pub agent_name: String,
     pub chat_id: String,
@@ -223,6 +237,16 @@ pub struct ToolStartPayload {
 pub struct ToolCompletePayload {
     pub tool_name: String,
     pub tool_call_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_agent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub batch_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_batch_id: Option<String>,
     pub agent_id: String,
     pub agent_name: String,
     pub chat_id: String,
@@ -238,6 +262,22 @@ pub struct ToolAuthorizationPayload {
     pub tool_call_id: String,
     pub tool_name: String,
     pub arguments: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_agent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub batch_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_batch_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub iteration: Option<usize>,
     pub model: Option<String>,
     pub context: serde_json::Value,
 }
@@ -326,15 +366,12 @@ impl<F: Fn(AgentEvent)> StreamingArtifactDetector<F> {
                     None => {
                         // No opening tag found — keep only a trailing window
                         // in case the tag spans chunk boundaries.
-                        let tag = "<nexus_artifact";
-                        if self.partial.len() > tag.len() {
-                            let keep = &self.partial[self.partial.len() - tag.len()..];
-                            if !keep.contains('<') {
-                                self.partial.clear();
-                            } else {
-                                let last_lt = self.partial.rfind('<').unwrap_or(0);
+                        if let Some(last_lt) = self.partial.rfind('<') {
+                            if last_lt > 0 {
                                 self.partial.drain(..last_lt);
                             }
+                        } else {
+                            self.partial.clear();
                         }
                         return;
                     }
@@ -431,7 +468,7 @@ impl<F: Fn(AgentEvent)> StreamingArtifactDetector<F> {
                         // Keep only a trailing window in case </nexus_artifact> crosses a chunk boundary
                         let keep_window = "</nexus_artifact>".len();
                         if self.partial.len() > body_start + keep_window {
-                            let cutoff = self.partial.len() - keep_window;
+                            let cutoff = self.floor_char_boundary(self.partial.len() - keep_window);
                             self.partial.drain(body_start..cutoff);
                         }
                     }
@@ -451,6 +488,13 @@ impl<F: Fn(AgentEvent)> StreamingArtifactDetector<F> {
 
     fn find_tag_open(&self) -> Option<usize> {
         self.partial.find("<nexus_artifact")
+    }
+
+    fn floor_char_boundary(&self, mut index: usize) -> usize {
+        while index > 0 && !self.partial.is_char_boundary(index) {
+            index -= 1;
+        }
+        index
     }
 
     fn parse_artifact_attrs(&self) -> Option<ArtifactAttrs> {
@@ -633,6 +677,7 @@ impl EventBus {
                             AgentEvent::OrchestratorStart(p) => serde_json::to_value(p),
                             AgentEvent::OrchestratorProgress(p) => Ok(p.clone()),
                             AgentEvent::ChatChunk(p) => serde_json::to_value(p),
+                            AgentEvent::ChatChunkFirst(p) => serde_json::to_value(p),
                             AgentEvent::ChatMessage(p) => serde_json::to_value(p),
                             AgentEvent::ChatStatus(p) => serde_json::to_value(p),
                             AgentEvent::ChatError(p) => serde_json::to_value(p),

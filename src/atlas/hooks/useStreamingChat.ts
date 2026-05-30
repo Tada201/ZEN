@@ -36,6 +36,22 @@ export function useStreamingChat(
     // Clear streaming flag immediately for responsive UI
     if (chatId) {
       useChatStore.getState().setStreamingForChat(chatId, false);
+      useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
+        for (let i = prev.length - 1; i >= 0; i--) {
+          const message = prev[i];
+          if (message.role === "assistant" && message.status === "sending") {
+            const next = [...prev];
+            next[i] = {
+              ...message,
+              status: "cancelled",
+              isThinking: false,
+              error: message.content?.trim() ? undefined : "Response stopped.",
+            };
+            return next;
+          }
+        }
+        return prev;
+      });
     }
   }, [chatId]);
 

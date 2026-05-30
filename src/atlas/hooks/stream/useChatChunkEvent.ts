@@ -1,10 +1,12 @@
 import { useEffect, useRef, useCallback } from "react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { listenAppEvent } from "@/api/events";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { Message, Step } from "../../components/chat/types";
-import { ttftMark } from "@/lib/ttft";
+import { ttftMark, ttftReport } from "@/lib/ttft";
+import { findWritableAssistantIndex } from "./messageTarget";
 
 interface UseChatChunkEventProps {
   resetHeartbeatTimeout: (chatId: string) => void;
@@ -14,6 +16,14 @@ interface UseChatChunkEventProps {
 interface ChunkBuffer {
   delta: string;
   type: string; // "text" | "thought"
+}
+
+export function normalizeChatChunkType(type?: string): string {
+  return type === "reasoning" ? "thought" : type || "text";
+}
+
+export function firstChunkTypeSentKey(chatId: string, chunkType: string): string {
+  return `${chatId}\u0000${chunkType}`;
 }
 
 function applyBufferedDelta(message: Message, delta: string, chunkType: string, options?: { isThinking?: boolean }): Message {
@@ -78,11 +88,11 @@ function replaceTextStepsWithContent(message: Message, content: string): Message
 
 function applyBufferedDeltaToChat(chatId: string, delta: string, chunkType: string, options?: { isThinking?: boolean }) {
   useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-    const last = prev[prev.length - 1];
-    if (!last || last.role !== "assistant") return prev;
+    const assistantIdx = findWritableAssistantIndex(prev);
+    if (assistantIdx === -1) return prev;
 
     const next = [...prev];
-    next[next.length - 1] = applyBufferedDelta(last, delta, chunkType, options);
+    next[assistantIdx] = applyBufferedDelta(next[assistantIdx], delta, chunkType, options);
     return next;
   });
 }
@@ -93,8 +103,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
   const chunkBuffersRef = useRef<Record<string, ChunkBuffer>>({});
   const chunkRafRef = useRef<number | null>(null);
   const firstChunkDeltas = useRef<Record<string, ChunkBuffer>>({});
-  const firstStreamChunkSent = useRef<Set<string>>(new Set());
-  const firstTextChunkSent = useRef<Set<string>>(new Set());
+  const firstChunkTypesSent = useRef<Set<string>>(new Set());
 
   const flushAllChunkBuffers = useCallback(() => {
     const buffers = chunkBuffersRef.current;
@@ -126,17 +135,19 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
       delete buffers[chatId];
 
       setSessionMessages(chatId, (prev: Message[]) => {
-        const last = prev[prev.length - 1];
-        if (!last || last.role !== "assistant") return prev;
+        const assistantIdx = findWritableAssistantIndex(prev);
+        if (assistantIdx === -1) return prev;
 
         const next = [...prev];
-        next[next.length - 1] = applyBufferedDelta(last, delta, chunkType);
+        next[assistantIdx] = applyBufferedDelta(next[assistantIdx], delta, chunkType);
         return next;
       });
     }
   }, []);
 
   useEffect(() => {
+    let didCancel = false;
+
     const setupListeners = async () => {
       unlistenRefs.current.forEach(u => u());
       unlistenRefs.current = [];
@@ -147,30 +158,32 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
 
         const delta = event.payload.delta;
         if (!delta) return;
+        const chunkType = normalizeChatChunkType(event.payload.type);
 
         // Guard: if the first chat:chunk already flushed before this event
         // arrived (Tauri events across names are unordered), skip merging
         // to avoid double-rendering the first delta.
-        if (firstTextChunkSent.current.has(chatId)) {
-          firstChunkDeltas.current[chatId] = { delta, type: "text" };
+        if (firstChunkTypesSent.current.has(firstChunkTypeSentKey(chatId, chunkType))) {
+          firstChunkDeltas.current[chatId] = { delta, type: chunkType };
           return;
         }
-        firstStreamChunkSent.current.add(chatId);
-        firstTextChunkSent.current.add(chatId);
+        firstChunkTypesSent.current.add(firstChunkTypeSentKey(chatId, chunkType));
 
         useChatStore.getState().setStreamingForChat(chatId, true);
         resetHeartbeatTimeout(chatId);
 
         const existing = chunkBuffersRef.current[chatId];
-        if (existing && existing.type !== "text" && existing.delta) {
+        if (existing && existing.type !== chunkType && existing.delta) {
           applyBufferedDeltaToChat(chatId, existing.delta, existing.type);
           delete chunkBuffersRef.current[chatId];
         }
 
-        firstChunkDeltas.current[chatId] = { delta, type: "text" };
+        firstChunkDeltas.current[chatId] = { delta, type: chunkType };
 
         // Immediately merge the first delta into chat state — no buffering
-        applyBufferedDeltaToChat(chatId, delta, "text");
+        applyBufferedDeltaToChat(chatId, delta, chunkType, {
+          isThinking: chunkType === "thought",
+        });
 
         ttftMark(chatId, 'firstChunk');
         requestAnimationFrame(() => {
@@ -185,15 +198,17 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         useChatStore.getState().setStreamingForChat(chatId, true);
         resetHeartbeatTimeout(chatId);
 
-        const incomingType: string = event.payload.type || "text";
+        const incomingType = normalizeChatChunkType(event.payload.type);
         const delta: string = event.payload.delta || "";
+        if (!delta) return;
 
-        const isFirstChunk = !chunkBuffersRef.current[chatId];
         const existing = chunkBuffersRef.current[chatId];
+        const isFirstChunk = !existing;
+        const canAppendToExisting = existing?.type === incomingType;
         
         // If the incoming chunk type differs from what's already buffered,
         // flush the old buffer first so text/thought boundaries are clean.
-        if (existing && existing.type !== incomingType && existing.delta) {
+        if (existing && !canAppendToExisting && existing.delta) {
           const oldDelta = existing.delta;
           const oldType = existing.type;
           delete chunkBuffersRef.current[chatId];
@@ -203,15 +218,12 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
 
         // Accumulate into buffer
         chunkBuffersRef.current[chatId] = {
-          delta: ((existing?.delta) || "") + delta,
+          delta: (canAppendToExisting ? existing.delta : "") + delta,
           type: incomingType,
         };
 
         if (isFirstChunk) {
-          firstStreamChunkSent.current.add(chatId);
-          if (incomingType === "text") {
-            firstTextChunkSent.current.add(chatId);
-          }
+          firstChunkTypesSent.current.add(firstChunkTypeSentKey(chatId, incomingType));
           ttftMark(chatId, 'firstChunk');
           flushAllChunkBuffers();
 
@@ -239,19 +251,22 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         }
         delete chunkBuffersRef.current[chatId];
         delete firstChunkDeltas.current[chatId];
-        firstStreamChunkSent.current.delete(chatId);
-        firstTextChunkSent.current.delete(chatId);
+        firstChunkTypesSent.current.forEach((key) => {
+          if (key.startsWith(`${chatId}\u0000`)) {
+            firstChunkTypesSent.current.delete(key);
+          }
+        });
 
         if (finalDelta) {
           applyBufferedDeltaToChat(chatId, finalDelta, buf?.type || "text", { isThinking: false });
         } else {
           // No pending text, but still clear the thinking flag
           useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-            const last = prev[prev.length - 1];
-            if (!last || last.role !== "assistant") return prev;
+            const assistantIdx = findWritableAssistantIndex(prev);
+            if (assistantIdx === -1) return prev;
 
             const next = [...prev];
-            next[next.length - 1] = { ...last, isThinking: false };
+            next[assistantIdx] = { ...next[assistantIdx], isThinking: false };
             return next;
           });
         }
@@ -262,18 +277,19 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         const isCancelled = reason === "cancelled";
 
         useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-          const last = prev[prev.length - 1];
-          if (!last || last.role !== "assistant") return prev;
+          const assistantIdx = findWritableAssistantIndex(prev);
+          if (assistantIdx === -1) return prev;
+          const assistant = prev[assistantIdx];
 
           const finalContent = isCancelled && event.payload.content
-            ? last.content
-            : (event.payload.content || last.content);
+            ? assistant.content
+            : (event.payload.content || assistant.content);
           const finalized = event.payload.content && !isCancelled
-            ? replaceTextStepsWithContent(last, finalContent)
-            : { ...last, content: finalContent };
+            ? replaceTextStepsWithContent(assistant, finalContent)
+            : { ...assistant, content: finalContent };
 
           const next = [...prev];
-          next[next.length - 1] = {
+          next[assistantIdx] = {
             ...finalized,
             status: isCancelled ? "cancelled" : "sent",
             isThinking: false,
@@ -282,6 +298,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         });
 
         queryClient.invalidateQueries({ queryKey: ["messages", chatId] });
+        ttftReport(chatId, reason);
       });
 
       const unlistenError = await listenAppEvent("chat:error", (event) => {
@@ -289,15 +306,18 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         if (!chatId) return;
 
         clearHeartbeatTimeout(chatId);
-        useChatStore.getState().setStreamingForChat(chatId, false);
+        console.error("[chat:error]", event.payload.error);
+        ttftReport(chatId, "error");
         useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-          const last = prev[prev.length - 1];
-          if (!last || last.role !== "assistant") return prev;
+          const assistantIdx = findWritableAssistantIndex(prev);
+          if (assistantIdx === -1) return prev;
 
           const next = [...prev];
-          next[next.length - 1] = { ...last, status: "failed", error: event.payload.error };
+          next[assistantIdx] = { ...next[assistantIdx], status: "failed", error: event.payload.error };
           return next;
         });
+        useChatStore.getState().setStreamingForChat(chatId, false);
+        toast.error(event.payload.error || "The model stream stopped before returning output.");
       });
 
       const unlistenStreamReset = await listenAppEvent("chat:stream-reset", (event) => {
@@ -306,8 +326,11 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
 
         delete chunkBuffersRef.current[chatId];
         delete firstChunkDeltas.current[chatId];
-        firstStreamChunkSent.current.delete(chatId);
-        firstTextChunkSent.current.delete(chatId);
+        firstChunkTypesSent.current.forEach((key) => {
+          if (key.startsWith(`${chatId}\u0000`)) {
+            firstChunkTypesSent.current.delete(key);
+          }
+        });
         clearHeartbeatTimeout(chatId);
         useChatStore.getState().setStreamingForChat(chatId, false);
       });
@@ -317,30 +340,46 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         if (!chatId) return;
 
         useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-          const last = prev[prev.length - 1];
-          if (!last || last.role !== "assistant") return prev;
+          const assistantIdx = findWritableAssistantIndex(prev);
+          if (assistantIdx === -1) return prev;
+          const assistant = prev[assistantIdx];
 
-          const prevResearchSteps = last.metadata?.researchSteps || [];
+          const prevResearchSteps = assistant.metadata?.researchSteps || [];
           const existingStepIdx = prevResearchSteps.findIndex(s => s.text === event.payload.text);
           const researchSteps = existingStepIdx >= 0
             ? prevResearchSteps.map((s, i) => i === existingStepIdx ? { ...s, status: event.payload.status } : s)
             : [...prevResearchSteps, { text: event.payload.text, status: event.payload.status }];
 
           const next = [...prev];
-          next[next.length - 1] = {
-            ...last,
-            metadata: { ...last.metadata, researchSteps }
+          next[assistantIdx] = {
+            ...assistant,
+            metadata: { ...assistant.metadata, researchSteps }
           };
           return next;
         });
       });
 
-      unlistenRefs.current.push(unlistenChunkFirst, unlistenChunk, unlistenDone, unlistenError, unlistenStreamReset, unlistenResearchStep);
+      const unlisteners = [
+        unlistenChunkFirst,
+        unlistenChunk,
+        unlistenDone,
+        unlistenError,
+        unlistenStreamReset,
+        unlistenResearchStep,
+      ];
+
+      if (didCancel) {
+        unlisteners.forEach(u => u());
+        return;
+      }
+
+      unlistenRefs.current.push(...unlisteners);
     };
 
     setupListeners();
 
     return () => {
+      didCancel = true;
       unlistenRefs.current.forEach(u => u());
       unlistenRefs.current = [];
       if (chunkRafRef.current) {

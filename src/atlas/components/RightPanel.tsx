@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity, Cpu, Box, Terminal as TerminalIcon, Map as MapIcon, Zap, X, Paintbrush, Database
 } from 'lucide-react';
+import { getDefaultRightPanelTab, getRightPanelFeature, isRightPanelFeatureVisible } from "@/lib/features/frontendFeatures";
 // Lazy load heavy components to prevent main thread blocking and high INP
 const SystemDiagnostics = React.lazy(() => import("@/components/shared/SystemDiagnostics").then(m => ({ default: m.SystemDiagnostics })));
 const XTermPanel = React.lazy(() => import("@/components/Zen/XTermPanel").then(m => ({ default: m.XTermPanel })));
@@ -33,15 +34,38 @@ const LoadingFallback = () => (
  * RightPanel - The primary system utility panel.
  */
 export function RightPanel() {
-  const { activeRightTab, setRightPanelOpen, operationalParams } = useUIStore();
+  const { activeRightTab, setActiveRightTab, setRightPanelOpen, operationalParams } = useUIStore();
   const [mapActivated, setMapActivated] = React.useState(false);
   const [canvasMode, setCanvasMode] = React.useState<'draw' | 'mathplot'>('mathplot');
 
   const viewMode = useGTSMStore(state => state.viewMode);
   const setViewMode = useGTSMStore(state => state.setViewMode);
+  const visibleActiveRightTab = isRightPanelFeatureVisible(activeRightTab)
+    ? activeRightTab
+    : getDefaultRightPanelTab();
+
+  React.useEffect(() => {
+    if (visibleActiveRightTab !== activeRightTab) {
+      setActiveRightTab(visibleActiveRightTab);
+    }
+  }, [activeRightTab, setActiveRightTab, visibleActiveRightTab]);
 
   const renderContent = () => {
-    switch (activeRightTab) {
+    if (!isRightPanelFeatureVisible(visibleActiveRightTab)) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full py-32 text-slate-500 italic opacity-40">
+          <Zap size={40} className="mb-4 text-primary/30" />
+          <p className="text-[10px] uppercase tracking-widest font-black">
+            Module Hidden
+          </p>
+          <p className="text-[9px] mt-2 text-center max-w-[180px]">
+            This panel is gated until the feature is mature enough for the primary UI.
+          </p>
+        </div>
+      );
+    }
+
+    switch (visibleActiveRightTab) {
       case 'metrics':
         return (
           <div className="space-y-6">
@@ -81,8 +105,8 @@ export function RightPanel() {
         return (
           <div className="flex flex-col items-center justify-center h-full py-32 text-slate-500 italic opacity-40">
             <Zap size={40} className="mb-4 text-primary/30" />
-            <p className="text-[10px] uppercase tracking-widest font-black">
-              Module "{activeRightTab}" Locked
+          <p className="text-[10px] uppercase tracking-widest font-black">
+              Module "{visibleActiveRightTab}" Locked
             </p>
             <p className="text-[9px] mt-2 text-center max-w-[180px]">
               This feature is currently under high-priority initialization.
@@ -93,6 +117,9 @@ export function RightPanel() {
   };
 
   const getTitle = () => {
+    const feature = getRightPanelFeature(visibleActiveRightTab);
+    if (feature) return feature.label;
+
     const titles: Record<string, string> = {
       metrics: 'System Health',
       agents: 'Active Agents',
@@ -102,10 +129,16 @@ export function RightPanel() {
       drawing: 'Canvas Workspace',
       memory: 'Memory Stats'
     };
-    return titles[activeRightTab] || 'Utility';
+    return titles[visibleActiveRightTab] || 'Utility';
   };
 
   const getIcon = () => {
+    const feature = getRightPanelFeature(visibleActiveRightTab);
+    if (feature?.icon) {
+      const IconComp = feature.icon;
+      return <IconComp size={16} className="text-primary" />;
+    }
+
     const icons: Record<string, any> = {
       metrics: Activity,
       agents: Cpu,
@@ -115,7 +148,7 @@ export function RightPanel() {
       drawing: Paintbrush,
       memory: Database
     };
-    const IconComp = icons[activeRightTab] || Activity;
+    const IconComp = icons[visibleActiveRightTab] || Activity;
     return <IconComp size={16} className="text-primary" />;
   };
 
@@ -125,7 +158,7 @@ export function RightPanel() {
         <div className="flex items-center gap-2.5">
           {getIcon()}
           <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-zinc-300">{getTitle()}</span>
-          {activeRightTab === 'map' && mapActivated && (
+          {visibleActiveRightTab === 'map' && mapActivated && (
             <div className="flex bg-black/60 border border-white/5 p-0.5 rounded ml-4 font-mono select-none">
               <button
                 type="button"
@@ -152,7 +185,7 @@ export function RightPanel() {
         </button>
       </header>
 
-      {activeRightTab === 'map' ? (
+      {visibleActiveRightTab === 'map' ? (
         <div className="flex-1 flex flex-col relative overflow-hidden bg-black select-none">
           <div className="flex-1 relative w-full h-full flex flex-col">
             {mapActivated ? (
@@ -182,11 +215,11 @@ export function RightPanel() {
             <span className="truncate max-w-[180px]">Target: {operationalParams?.label || "Active Search"}</span>
           </div>
         </div>
-      ) : activeRightTab === 'drawing' || activeRightTab === 'agents' || activeRightTab === 'terminal' || activeRightTab === 'artifacts' || activeRightTab === 'memory' ? (
+      ) : visibleActiveRightTab === 'drawing' || visibleActiveRightTab === 'agents' || visibleActiveRightTab === 'terminal' || visibleActiveRightTab === 'artifacts' || visibleActiveRightTab === 'memory' ? (
         <div className="flex-grow flex-1 relative overflow-hidden bg-black flex flex-col">
           <AnimatePresence mode="wait">
             <motion.div
-              key={activeRightTab}
+              key={visibleActiveRightTab}
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
@@ -203,7 +236,7 @@ export function RightPanel() {
         <ScrollArea className="flex-1 p-4">
           <AnimatePresence mode="wait">
             <motion.div
-              key={activeRightTab}
+              key={visibleActiveRightTab}
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}

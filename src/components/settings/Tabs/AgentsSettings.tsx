@@ -18,6 +18,9 @@ const REGISTERED_AGENTS = [
 ];
 
 export function AgentsSettings({ settings, onUpdate }: AgentsSettingsProps) {
+  // TODO(config-wireup): this page uses static agent rows and unmapped agents.*
+  // dot-keys. Wire it to agentsApi/AgentConfigManager save commands before these
+  // controls are treated as runtime orchestration configuration.
   return (
     <div className="space-y-8">
       <div className="space-y-1">

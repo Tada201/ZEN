@@ -29,7 +29,14 @@ pub async fn add_message(
     let mut tx = pool.begin().await?;
 
     sqlx::query(
-        "INSERT INTO messages (id, chat_id, role, content, model, is_complete, tool_calls, tool_call_id, images, attachments, tokens_in, tokens_out, kind, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        r#"
+        INSERT INTO messages (
+            id, chat_id, role, content, model, is_complete, tool_calls,
+            tool_call_id, images, attachments, tokens_in, tokens_out, kind,
+            metadata, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        "#,
     )
     .bind(&id)
     .bind(chat_id)

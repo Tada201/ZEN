@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 interface StreamingSkeletonProps {
   className?: string;
   compact?: boolean;
+  label?: string;
 }
 
 /**
@@ -11,7 +12,11 @@ interface StreamingSkeletonProps {
  *
  * Uses ZEN's existing shadcn design tokens for consistent theming.
  */
-export function StreamingSkeleton({ className, compact }: StreamingSkeletonProps) {
+export function StreamingSkeleton({
+  className,
+  compact,
+  label = "Waiting for first token",
+}: StreamingSkeletonProps) {
   return (
     <div className={cn("flex flex-col gap-3 py-2", className)}>
       {/* Shimmer lines */}
@@ -42,7 +47,7 @@ export function StreamingSkeleton({ className, compact }: StreamingSkeletonProps
           <div className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce" />
         </div>
         <span className="text-[10px] font-mono tracking-widest text-muted-foreground/50 uppercase">
-          Preparing Intelligence Stream
+          {label}
         </span>
       </div>
     </div>

@@ -6,10 +6,10 @@ import { useChatStore } from '../../lib/stores/useChatStore';
 import { useUIStore } from '../../lib/stores/useUIStore';
 import { cn } from '@/lib/utils/style';
 import { SandboxedIframe } from '@/atlas/components/SandboxedIframe';
-import { MarkdownContent } from '@/atlas/components/chat/MarkdownContent';
 import { X, PanelLeft, RotateCw, Copy, Check, Download, Maximize2, Minimize2, Search, Archive, ExternalLink } from 'lucide-react';
 
 const MermaidDiagram = React.lazy(() => import('@/atlas/components/chat/MermaidDiagram').then(m => ({ default: m.MermaidDiagram })));
+const MarkdownContent = React.lazy(() => import('@/atlas/components/chat/MarkdownContent').then(m => ({ default: m.MarkdownContent })));
 
 const ArtifactActionButton: React.FC<{ 
     icon: React.ReactNode; 
@@ -164,7 +164,9 @@ export function ArtifactPanel({ isEmbedded = false }: { isEmbedded?: boolean }) 
             return (
               <div className="flex-1 p-10 overflow-auto bg-[#020617]">
                 <div className="max-w-4xl mx-auto">
-                  <MarkdownContent content={activeArtifact.content} />
+                  <Suspense fallback={<div className="p-4 text-xs text-muted-foreground">Loading markdown renderer...</div>}>
+                    <MarkdownContent content={activeArtifact.content} />
+                  </Suspense>
                 </div>
               </div>
             );

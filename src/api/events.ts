@@ -1,21 +1,86 @@
 import { listen, type Event, type UnlistenFn } from "@tauri-apps/api/event";
+import { IS_TAURI } from "./tauriClient";
 import type { ActionMeta, ArtifactData, Message, MessageKind, ToolCall } from "@/atlas/components/chat/types";
 
 type ResearchStep = NonNullable<ActionMeta["researchSteps"]>[number];
 
 export interface ToolStartEventPayload {
   chat_id?: string | null;
+  chatId?: string | null;
+  run_id?: string;
+  runId?: string;
+  message_id?: string;
+  messageId?: string;
+  parent_agent?: string;
+  parentAgent?: string;
+  parent_agent_id?: string;
+  parentAgentId?: string;
+  execution_id?: string;
+  executionId?: string;
+  batch_id?: string;
+  batchId?: string;
+  tool_batch_id?: string;
+  toolBatchId?: string;
   tool_call_id: string;
   tool_name: string;
   arguments: ToolCall["input"];
+  agent_id?: string;
+  agent_name?: string;
+  iteration?: number;
 }
 
 export interface ToolCompleteEventPayload {
   chat_id?: string | null;
+  chatId?: string | null;
+  run_id?: string;
+  runId?: string;
+  message_id?: string;
+  messageId?: string;
+  parent_agent?: string;
+  parentAgent?: string;
+  parent_agent_id?: string;
+  parentAgentId?: string;
+  execution_id?: string;
+  executionId?: string;
+  batch_id?: string;
+  batchId?: string;
+  tool_batch_id?: string;
+  toolBatchId?: string;
   tool_call_id: string;
+  tool_name: string;
   status: string;
   output: string;
   duration_ms?: number;
+  agent_id?: string;
+  agent_name?: string;
+  iteration?: number;
+}
+
+export interface ToolAuthorizationRequestEventPayload {
+  chat_id?: string | null;
+  chatId?: string | null;
+  run_id?: string;
+  runId?: string;
+  message_id?: string;
+  messageId?: string;
+  parent_agent?: string;
+  parentAgent?: string;
+  parent_agent_id?: string;
+  parentAgentId?: string;
+  execution_id?: string;
+  executionId?: string;
+  batch_id?: string;
+  batchId?: string;
+  tool_batch_id?: string;
+  toolBatchId?: string;
+  tool_call_id: string;
+  tool_name: string;
+  arguments: ToolCall["input"];
+  model?: string;
+  context?: Record<string, unknown>;
+  agent_id?: string;
+  agent_name?: string;
+  iteration?: number;
 }
 
 export interface ArtifactStartEventPayload {
@@ -104,15 +169,28 @@ export interface AgentActionEventPayload {
   content?: string;
   metadata?: AgentActionMetadata;
   message_id?: string;
+  messageId?: string;
   message?: string;
   status?: string;
   tool_name?: string;
   tool_call_id?: string;
   iteration?: string | number;
   run_id?: string;
+  runId?: string;
+  batch_id?: string;
+  batchId?: string;
+  tool_batch_id?: string;
+  toolBatchId?: string;
+  execution_id?: string;
+  executionId?: string;
   spawn_id?: string;
   task_id?: string;
+  taskId?: string;
+  assigned_to?: string;
+  assignedTo?: string;
   workflow_id?: string;
+  total_tasks?: number;
+  tasks_completed?: number;
   phase?: string;
   description?: string;
   error?: string;
@@ -122,7 +200,10 @@ export interface AgentActionEventPayload {
   childAgent?: string;
   parent_agent?: string;
   parentAgent?: string;
+  parent_agent_id?: string;
+  parentAgentId?: string;
   agent_id?: string;
+  agent_name?: string;
   result?: unknown;
   duration_ms?: number;
   from_agent?: string;
@@ -133,6 +214,19 @@ export interface AgentActionEventPayload {
   progress?: number;
   progress_percent?: number;
   progressPercent?: number;
+  provider?: string;
+  model?: string;
+  toolCount?: number;
+  parallel?: boolean;
+  tools?: string[];
+  tasks?: TaskEventPayload[];
+  tier?: string;
+  battle_plan?: {
+    steps?: string[];
+    agents_needed?: string[];
+    [key: string]: unknown;
+  };
+  updates?: Partial<TaskEventPayload>;
 }
 
 export interface ChatMessageEventPayload extends AgentActionEventPayload {
@@ -151,6 +245,14 @@ export interface ChatContextDriftEventPayload {
 export interface ChatStatusEventPayload {
   message?: string;
   chat_id?: string | null;
+  iteration?: number;
+  phase?: string;
+  metadata?: AgentActionMetadata;
+  provider?: string;
+  model?: string;
+  toolCount?: number;
+  parallel?: boolean;
+  tools?: string[];
 }
 
 export type EmptyEventPayload = Record<string, never>;
@@ -201,6 +303,7 @@ export interface TaskComplexityAnalyzedEventPayload {
 export interface AppEventPayloadMap {
   "tool:start": ToolStartEventPayload;
   "tool:complete": ToolCompleteEventPayload;
+  "tool:authorization_request": ToolAuthorizationRequestEventPayload;
   "artifact:start": ArtifactStartEventPayload;
   "artifact:delta": ArtifactDeltaEventPayload;
   "artifact:complete": ArtifactCompleteEventPayload;
@@ -242,5 +345,12 @@ export function listenAppEvent<TEventName extends AppEventName>(
   eventName: TEventName,
   handler: (event: AppEvent<TEventName>) => void,
 ): Promise<UnlistenFn> {
+  // Browser-Only Dummy Dev Mode: route to mock pub/sub
+  if (!IS_TAURI) {
+    return import("./mockClient").then(({ mockListen }) => {
+      return mockListen(eventName, handler as (payload: unknown) => void);
+    });
+  }
+
   return listen<AppEventPayloadMap[TEventName]>(eventName, handler);
 }

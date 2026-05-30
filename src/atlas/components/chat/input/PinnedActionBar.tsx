@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Brain, Globe, Compass, Layout, PinOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -30,7 +30,7 @@ interface PinnedActionBarProps {
 
 import { useOverflow } from '@/atlas/hooks/useOverflow';
 
-export const PinnedActionBar = ({
+export const PinnedActionBar = memo(({
   pinnedActions, togglePin,
   supportsReasoning, isThinking, setIsThinking,
   reasoningConfigType, thinkingEffort, setThinkingEffort,
@@ -57,6 +57,9 @@ export const PinnedActionBar = ({
                   <Popover>
                     <PopoverTrigger asChild>
                       <button 
+                        type="button"
+                        aria-label="Configure thinking"
+                        title="Configure thinking"
                         className={cn(
                           "flex items-center gap-1.5 px-2 py-1 rounded-md transition-all text-[13px] font-medium group relative",
                           isThinking 
@@ -95,6 +98,9 @@ export const PinnedActionBar = ({
                   layoutId="search"
                   initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
                   onClick={() => setIsWebSearch(!isWebSearch)}
+                  type="button"
+                  aria-label={isWebSearch ? "Disable web search" : "Enable web search"}
+                  title={isWebSearch ? "Disable web search" : "Enable web search"}
                   className={cn(
                     "flex items-center gap-1.5 px-2 py-1 rounded-md transition-all text-[13px] font-medium group relative",
                     isWebSearch 
@@ -118,6 +124,9 @@ export const PinnedActionBar = ({
                   layoutId="research"
                   initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
                   onClick={() => setIsDeepResearch(!isDeepResearch)}
+                  type="button"
+                  aria-label={isDeepResearch ? "Disable deep research" : "Enable deep research"}
+                  title={isDeepResearch ? "Disable deep research" : "Enable deep research"}
                   className={cn(
                     "flex items-center gap-1.5 px-2 py-1 rounded-md transition-all text-[13px] font-medium group relative",
                     isDeepResearch 
@@ -141,6 +150,9 @@ export const PinnedActionBar = ({
                   layoutId="genui"
                   initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
                   onClick={() => setGenerativeUI(!generativeUI)}
+                  type="button"
+                  aria-label={generativeUI ? "Disable generative UI" : "Enable generative UI"}
+                  title={generativeUI ? "Disable generative UI" : "Enable generative UI"}
                   className={cn(
                     "flex items-center gap-1.5 px-2 py-1 rounded-md transition-all text-[13px] font-medium group relative",
                     generativeUI 
@@ -171,6 +183,6 @@ export const PinnedActionBar = ({
       )}
     </div>
   );
-};
+});
 
 

@@ -8,6 +8,11 @@ const isLocalUrl = (url: string) => url.includes('localhost') || url.includes('1
 
 const customProviderApiKeySetting = (id: string) => `${id}_api_key`;
 const customProviderBaseUrlSetting = (id: string) => `${id}_base_url`;
+type BackendModelInfo = ModelInfo & {
+    maxContextLength?: number;
+    supportsVision?: boolean;
+    supportsTools?: boolean;
+};
 
 function metadataApiKey(value: string | undefined): string {
     return value && value.trim() ? SECRET_PRESENT_VALUE : "";
@@ -26,6 +31,27 @@ function syncCustomProviderBackendSettings(id: string, baseUrl?: string, apiKey?
     });
 }
 
+function normalizeModelInfo(model: BackendModelInfo): ModelInfo {
+    const capabilities = new Set(model.capabilities?.length ? model.capabilities : ["text"]);
+    if (model.supportsVision) capabilities.add("vision");
+    if (model.supportsTools) capabilities.add("tools");
+    if (model.supportsReasoning) capabilities.add("reasoning");
+
+    return {
+        ...model,
+        contextWindow: model.contextWindow ?? model.maxContextLength,
+        capabilities: Array.from(capabilities),
+    };
+}
+
+function groupModelsByProvider(models: ModelInfo[]): Record<string, ModelInfo[]> {
+    return models.reduce<Record<string, ModelInfo[]>>((grouped, model) => {
+        const provider = model.provider || "custom";
+        grouped[provider] = [...(grouped[provider] || []), model];
+        return grouped;
+    }, {});
+}
+
 export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSlice> = (set, get) => ({
   openaiApiKey: "",
   anthropicApiKey: "",
@@ -42,6 +68,7 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
   kilocodeApiKey: "",
   nvidiaApiKey: "",
   nineRouterBaseUrl: "http://localhost:20128/v1",
+  opencodeBaseUrl: "https://opencode.ai/zen/v1",
   nineRouterApiKey: "",
   aihubmixApiKey: "",
   ollamaBaseUrl: "http://localhost:11434",
@@ -74,30 +101,24 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
     set({ fetchingModels: true });
     try {
         const backendModels = (await providersApi.getAllAvailableModels(providerOverride || null))
-          .map(m => ({ ...m, source: m.source || 'local' }));
+          .map(m => normalizeModelInfo({ ...m, source: m.source || 'local' }));
         
         const customModels: ModelInfo[] = [];
         (get().customProviders || []).forEach(cp => {
             if (cp.enabled) {
                 cp.customModels.forEach(m => {
-                    customModels.push({
+                    customModels.push(normalizeModelInfo({
                         ...m,
                         provider: cp.id,
                         source: 'direct',
                         state: 'unloaded' as const
-                    });
+                    }));
                 });
             }
         });
 
         const allModels = [...backendModels, ...customModels];
-        const groupedModels: Record<string, ModelInfo[]> = {};
-        
-        allModels.forEach(m => {
-            const p = m.provider || 'custom';
-            if (!groupedModels[p]) groupedModels[p] = [];
-            groupedModels[p].push(m);
-        });
+        const groupedModels = groupModelsByProvider(allModels);
 
         // Provider-specific filtered view (for per-provider settings tabs)
         const perProvider = groupedModels[provider] || [];
@@ -166,9 +187,9 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
         return;
     }
 
-    if (isSecretPresentValue(apiKey)) {
+        if (isSecretPresentValue(apiKey)) {
         try {
-            const models = await providersApi.getAllAvailableModels(provider);
+            const models = (await providersApi.getAllAvailableModels(provider)).map(normalizeModelInfo);
             set(s => ({
                 availableModelsByProvider: { ...s.availableModelsByProvider, [provider]: models },
                 connectionStatuses: { ...s.connectionStatuses, [provider]: models.length > 0 ? 'success' : 'error' },
@@ -192,7 +213,7 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
     };
     
     try {
-        const models = await providersApi.testProviderConnection(config);
+        const models = (await providersApi.testProviderConnection(config)).map(normalizeModelInfo);
         
         if (customProvider && models && models.length > 0) {
             const updatedCustomProviders = state.customProviders.map(cp =>
@@ -303,5 +324,11 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
   setConnectionStatus: (provider: string, status: any) => set(s => ({
     connectionStatuses: { ...s.connectionStatuses, [provider]: status.status as any }
   })),
-  setAvailableModels: (models: ModelInfo[]) => set({ availableModels: models }),
+  setAvailableModels: (models: ModelInfo[]) => {
+    const normalizedModels = models.map(normalizeModelInfo);
+    set({
+        availableModels: normalizedModels,
+        availableModelsByProvider: groupModelsByProvider(normalizedModels),
+    });
+  },
 });

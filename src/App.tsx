@@ -1,5 +1,3 @@
-import { useEffect } from "react";
-import { useUIStore } from "./lib/stores/useUIStore";
 import { ZenProvider } from "./atlas/ZenContext";
 import { WorkspaceApp } from "./atlas/sections/WorkspaceSection";
 import { Toaster } from "sonner";
@@ -13,14 +11,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 function App() {
   // Mount the global Tauri event listeners so they survive chat session transitions
   useGlobalStreamListener();
-
-  // Tick the global app uptime timer every second
-  useEffect(() => {
-    const timer = setInterval(() => {
-      useUIStore.setState((state) => ({ appUptimeSecs: state.appUptimeSecs + 1 }));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   return (
     <ZenProvider>

@@ -7,6 +7,7 @@ import {
   DropdownMenuTrigger, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Session } from "./types";
+import type { SettingsTabId } from "@/lib/features/frontendFeatures";
 
 export function ChatHeader({
   session,
@@ -23,7 +24,7 @@ export function ChatHeader({
   onPin: (id: string, pinned: boolean) => void;
   onDelete: (id: string) => void;
   onExport: (id: string) => void;
-  onOpenSettings: (tab: any) => void;
+  onOpenSettings: (tab: SettingsTabId) => void;
 }) {
   if (!session) return null;
 
@@ -31,7 +32,7 @@ export function ChatHeader({
     <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/40 bg-background/50 px-4 backdrop-blur-md">
       <div className="flex items-center gap-3 overflow-hidden">
         {!isSidebarOpen && (
-          <Button size="icon" variant="ghost" className="h-9 w-9 lg:hidden" onClick={onToggleSidebar}>
+          <Button size="icon" variant="ghost" type="button" className="h-9 w-9 lg:hidden" onClick={onToggleSidebar}>
             <Menu className="h-5 w-5" />
           </Button>
         )}
@@ -56,6 +57,7 @@ export function ChatHeader({
         <Button 
           size="sm" 
           variant="outline" 
+          type="button"
           className="h-8 gap-2 rounded-lg border-primary/10 bg-primary/5 text-primary hover:bg-primary/10"
           onClick={() => onOpenSettings("ai-config")}
         >
@@ -66,6 +68,7 @@ export function ChatHeader({
         <Button 
           size="sm" 
           variant="outline" 
+          type="button"
           className="h-8 gap-2 rounded-lg bg-muted/30 border-border/40 text-muted-foreground"
           onClick={() => onOpenSettings("capabilities")}
         >
@@ -75,7 +78,7 @@ export function ChatHeader({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg text-muted-foreground">
+            <Button size="icon" variant="ghost" type="button" className="h-8 w-8 rounded-lg text-muted-foreground">
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>

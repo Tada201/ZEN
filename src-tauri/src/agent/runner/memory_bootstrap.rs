@@ -94,6 +94,7 @@ pub(super) async fn load_initial_conversation(
             .map(|m| ChatMessage {
                 role: m.role,
                 content: m.content,
+                reasoning_details: None,
                 images: None,
                 tool_calls: m
                     .tool_calls
@@ -115,7 +116,10 @@ pub(super) async fn cached_recall_context(
     }
 
     let state = app.try_state::<crate::commands::AppState>()?;
-    let guard = state.recall_cache.lock().await;
+    let Ok(guard) = state.recall_cache.try_lock() else {
+        tracing::debug!(chat_id = %chat_id, "Recall cache busy; skipping recall on TTFT path");
+        return None;
+    };
     guard.get(chat_id).map(|(block, _)| block.clone())
 }
 

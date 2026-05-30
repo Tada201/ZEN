@@ -8,6 +8,8 @@ export interface ModelInfo {
     contextWindow?: number;
     maxTokens?: number;
     capabilities?: string[];
+    supportsReasoning?: boolean;
+    reasoningConfigType?: 'none' | 'effort' | 'budget';
     state?: 'ready' | 'loading' | 'missing' | 'unloaded';
 }
 
@@ -59,6 +61,7 @@ export const PROVIDER_BASE_URL_MAP: Record<string, string> = {
     ollama: 'ollamaBaseUrl',
     lmstudio: 'lmstudioBaseUrl',
     nine_router: 'nineRouterBaseUrl',
+    opencode: 'opencodeBaseUrl',
 };
 
 
@@ -93,6 +96,16 @@ export const providerOrder: ProviderInfo[] = [
         baseUrl: 'http://localhost:20128/v1',
         category: 'local',
         icon: 'lucide:router'
+    },
+    {
+        key: 'opencode',
+        name: 'OpenCode Free',
+        description: 'Direct OpenCode Zen free-model endpoint. No 9Router proxy and no account key required for discovery.',
+        isLocal: false,
+        requiresKey: false,
+        baseUrl: 'https://opencode.ai/zen/v1',
+        category: 'cloud',
+        icon: 'lucide:code-2'
     },
     {
         key: 'openai',

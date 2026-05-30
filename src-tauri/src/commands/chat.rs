@@ -5,7 +5,8 @@ use crate::db::models::{Chat, ChatMessage, ChatTag, Message};
 use crate::db::queries;
 use crate::error::ZenResult;
 use crate::llm::ChatRequestConfig;
-use tauri::{AppHandle, State};
+use serde_json::json;
+use tauri::{AppHandle, Emitter, State};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -139,6 +140,15 @@ pub async fn send_message(
         deep_research = ?deep_research,
         "Received send_message command"
     );
+    let _ = app.emit(
+        "chat:status",
+        json!({
+            "chat_id": chat_id.clone(),
+            "message": "Request accepted",
+            "phase": "accepted",
+            "iteration": 0
+        }),
+    );
     let db = state.db().await?;
 
     // 1. Add user message to DB
@@ -162,6 +172,15 @@ pub async fn send_message(
     )
     .await?;
     info!(chat_id = %chat_id, "User message successfully saved to database");
+    let _ = app.emit(
+        "chat:status",
+        json!({
+            "chat_id": chat_id.clone(),
+            "message": "Message saved",
+            "phase": "persisted",
+            "iteration": 0
+        }),
+    );
 
     // 2. Get active provider and model
     let resolved_provider_name = match provider.as_deref() {
@@ -201,6 +220,17 @@ pub async fn send_message(
         history_count = %history.len(),
         resolved_provider = %resolved_provider_name,
         "Retrieved provider, chat history, and settings in parallel"
+    );
+    let _ = app.emit(
+        "chat:status",
+        json!({
+            "chat_id": chat_id.clone(),
+            "message": format!("Provider ready: {}", resolved_provider_name),
+            "phase": "provider_ready",
+            "provider": resolved_provider_name.clone(),
+            "model": active_model.clone(),
+            "iteration": 0
+        }),
     );
 
     // 3. Prepare config
@@ -253,6 +283,7 @@ pub async fn send_message(
             Some(ChatMessage {
                 role,
                 content: m.content,
+                reasoning_details: None,
                 images: m
                     .images
                     .as_deref()
@@ -269,7 +300,8 @@ pub async fn send_message(
         tool_ids.push("web_search".to_string());
     }
 
-    // If specific tools were requested, use them. Otherwise default to a few core tools if enabled and supported.
+    // If specific tools were requested, use them. Otherwise only attach core
+    // tools when the user asks for tool-like work. Simple chat stays lean.
     if let Some(requested_tools) = tools {
         tool_ids.extend(requested_tools);
     } else {
@@ -277,7 +309,8 @@ pub async fn send_message(
             .map(|s| s.trim() == "true")
             .unwrap_or(true);
 
-        if tools_enabled && llm_provider.supports_tools(&active_model) {
+        if tools_enabled && llm_provider.supports_tools(&active_model) && has_tool_intent(&content)
+        {
             tool_ids.extend(vec![
                 "write_todos".to_string(),
                 "read_document_content".to_string(),
@@ -305,12 +338,16 @@ Always use these specialized code blocks for visual scenarios:
 - **MERMAID BLOCKS**: The content of ```mermaid MUST be strictly valid Mermaid syntax. Double check all bracket matchups, parentheses, arrow combinations, and diagram definitions (e.g. use standard flowcharts, sequence diagrams). Do NOT invent invalid keywords like `graph0]}}` or bad punctuation inside node definitions.
 - **NEVER** write prefix markdown or metadata tags inside the code blocks. The code block opening tag (e.g. ```chart) must be immediately followed by the content (JSON/Mermaid code) and nothing else.".to_string();
 
-    let mut instructions = match system_prompt {
+    let base_instructions = match custom_prompt_setting {
         Some(p) if !p.trim().is_empty() => p,
-        _ => match custom_prompt_setting {
-            Some(p) if !p.trim().is_empty() => p,
-            _ => default_instructions,
-        },
+        _ => default_instructions,
+    };
+    let mut instructions = match system_prompt {
+        Some(p) if !p.trim().is_empty() && !base_instructions.trim().is_empty() => {
+            format!("{}\n\n{}", base_instructions, p)
+        }
+        Some(p) if !p.trim().is_empty() => p,
+        _ => base_instructions,
     };
 
     // Inject state watcher directive to prevent LLM context confusion
@@ -343,6 +380,15 @@ Always use these specialized code blocks for visual scenarios:
         let db_clone = db.clone();
 
         info!(chat_id = %chat_id, "Routing request to Deep Research Orchestrator");
+        let _ = app.emit(
+            "chat:status",
+            json!({
+                "chat_id": chat_id.clone(),
+                "message": "Starting deep research",
+                "phase": "agent_invoked",
+                "iteration": 0
+            }),
+        );
         tokio::spawn(async move {
             crate::agent::deep_research::run_deep_research(
                 app.clone(),
@@ -362,9 +408,10 @@ Always use these specialized code blocks for visual scenarios:
         return Ok(());
     }
 
-    // 6. Check if we should use Orchestrator (Phase 3)
-    let use_orchestrator =
-        web_search.unwrap_or(false) || (content.len() > 3000 && has_complexity_markers(&content));
+    // 6. Check if we should use Orchestrator (Phase 3). Orchestration is
+    // explicit; web search alone should use the standard runner with the
+    // web_search tool so first response does not wait on planning.
+    let use_orchestrator = should_use_orchestrator(&content);
 
     if use_orchestrator {
         match state.orchestrator.get().await {
@@ -377,7 +424,18 @@ Always use these specialized code blocks for visual scenarios:
                 let token_clone = token.clone();
 
                 info!(chat_id = %chat_id, "Routing request to Orchestrator (multi-agent loop)");
+                let _ = app.emit(
+                    "chat:status",
+                    json!({
+                        "chat_id": chat_id.clone(),
+                        "message": "Starting orchestrator",
+                        "phase": "orchestrator_invoked",
+                        "iteration": 0
+                    }),
+                );
                 let cancel_tokens_clone = cancel_tokens.clone();
+                let app_error = app.clone();
+                let token_for_error = token_clone.clone();
                 tokio::spawn(async move {
                     let result = orchestrator
                         .run_orchestrator_loop(
@@ -396,6 +454,28 @@ Always use these specialized code blocks for visual scenarios:
                     tokens.remove(&chat_id_inner);
                     if let Err(e) = &result {
                         tracing::error!("Orchestrator error: {:?}", e);
+                        if token_for_error.is_cancelled() {
+                            let _ = app_error.emit(
+                                "chat:done",
+                                json!({
+                                    "chat_id": chat_id_inner,
+                                    "content": "Response stopped.",
+                                    "tokens_in": 0,
+                                    "tokens_out": 0,
+                                    "reason": "cancelled",
+                                    "done": true
+                                }),
+                            );
+                        } else {
+                            let _ = app_error.emit(
+                                "chat:error",
+                                json!({
+                                    "chat_id": chat_id_inner,
+                                    "error": format!("Orchestrator failed: {}", e),
+                                    "recoverable": false
+                                }),
+                            );
+                        }
                     }
                 });
                 return Ok(());
@@ -410,6 +490,15 @@ Always use these specialized code blocks for visual scenarios:
     }
     // Fallback to Runner
     info!(chat_id = %chat_id_clone, "Routing request to standard Agent Chat Runner");
+    let _ = app.emit(
+        "chat:status",
+        json!({
+            "chat_id": chat_id_clone.clone(),
+            "message": "Invoking model",
+            "phase": "llm_invoked",
+            "iteration": 0
+        }),
+    );
     let runner = Runner::new(
         app.clone(),
         state.tool_registry_v1.clone(),
@@ -421,6 +510,8 @@ Always use these specialized code blocks for visual scenarios:
     .with_db_pool(db.clone());
 
     let cancel_tokens_runner = cancel_tokens.clone();
+    let app_error = app.clone();
+    let token_for_error = token.clone();
     tokio::spawn(async move {
         let result = runner
             .run(
@@ -438,6 +529,28 @@ Always use these specialized code blocks for visual scenarios:
         tokens.remove(&chat_id_clone);
         if let Err(e) = result {
             tracing::error!("Error in chat runner: {:?}", e);
+            if token_for_error.is_cancelled() {
+                let _ = app_error.emit(
+                    "chat:done",
+                    json!({
+                        "chat_id": chat_id_clone,
+                        "content": "Response stopped.",
+                        "tokens_in": 0,
+                        "tokens_out": 0,
+                        "reason": "cancelled",
+                        "done": true
+                    }),
+                );
+            } else {
+                let _ = app_error.emit(
+                    "chat:error",
+                    json!({
+                        "chat_id": chat_id_clone,
+                        "error": format!("Chat runner failed: {}", e),
+                        "recoverable": false
+                    }),
+                );
+            }
         }
     });
 
@@ -677,33 +790,54 @@ pub async fn import_chat(state: State<'_, AppState>, source_path: String) -> Zen
     Ok(new_chat)
 }
 
-fn has_complexity_markers(content: &str) -> bool {
-    // 1. Check for 3 or more code blocks
-    let code_block_count = content.matches("```").count() / 2;
-    if code_block_count >= 3 {
-        return true;
-    }
-
-    // 2. Check for complex semantic keywords
-    let complex_keywords = [
-        "refactor",
-        "architect",
-        "database schema",
-        "system design",
-        "class diagram",
-        "design pattern",
-        "multi-agent",
-        "orchestrate",
-        "performance optimization",
-        "memory leak",
-        "race condition",
-    ];
+fn has_tool_intent(content: &str) -> bool {
     let lower_content = content.to_lowercase();
-    for keyword in complex_keywords.iter() {
-        if lower_content.contains(keyword) {
-            return true;
-        }
-    }
+    let tool_keywords = [
+        "run command",
+        "run tests",
+        "execute",
+        "terminal",
+        "shell",
+        "read file",
+        "open file",
+        "write file",
+        "edit file",
+        "list files",
+        "search files",
+        "grep",
+        "ripgrep",
+        "cargo",
+        "npm",
+        "pnpm",
+        "yarn",
+        "pytest",
+        "todo",
+        "check the repo",
+        "inspect the code",
+        "modify",
+        "implement",
+        "fix the bug",
+    ];
 
-    false
+    tool_keywords
+        .iter()
+        .any(|keyword| lower_content.contains(keyword))
+}
+
+fn should_use_orchestrator(content: &str) -> bool {
+    let lower_content = content.to_lowercase();
+    let explicit_orchestration_keywords = [
+        "multi-agent",
+        "multi agent",
+        "orchestrate",
+        "delegate",
+        "sub-agent",
+        "subagent",
+        "spawn agents",
+        "parallel agents",
+    ];
+
+    explicit_orchestration_keywords
+        .iter()
+        .any(|keyword| lower_content.contains(keyword))
 }

@@ -26,7 +26,16 @@ struct OllamaChatRequest {
     tools: Option<Vec<serde_json::Value>>,
     stream: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    think: Option<OllamaThink>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     options: Option<OllamaOptions>,
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+enum OllamaThink {
+    Bool(bool),
+    Level(String),
 }
 
 #[derive(Serialize)]
@@ -45,16 +54,15 @@ struct OllamaOptions {
     seed: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     stop: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    reasoning_effort: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    thinking_budget: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize)]
 struct OllamaMessage {
     role: String,
+    #[serde(default)]
     content: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    thinking: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     images: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -83,6 +91,19 @@ struct OllamaChatChunk {
     prompt_eval_count: Option<i64>,
     #[serde(default)]
     eval_count: Option<i64>,
+}
+
+fn ollama_think_from_config(config: &crate::llm::ChatRequestConfig) -> Option<OllamaThink> {
+    if let Some(effort) = config.reasoning_effort.as_deref() {
+        let effort = effort.to_lowercase();
+        if matches!(effort.as_str(), "low" | "medium" | "high") {
+            return Some(OllamaThink::Level(effort));
+        }
+
+        return Some(OllamaThink::Bool(true));
+    }
+
+    config.thinking_budget.map(|_| OllamaThink::Bool(true))
 }
 
 #[derive(Deserialize)]
@@ -169,6 +190,8 @@ impl LlmProvider for OllamaProvider {
                 state: None,
                 supports_vision: None,
                 supports_tools: None,
+                supports_reasoning: None,
+                reasoning_config_type: None,
             })
             .collect();
 
@@ -188,32 +211,43 @@ impl LlmProvider for OllamaProvider {
 
         let ollama_messages: Vec<OllamaMessage> = messages
             .into_iter()
-            .map(|m| OllamaMessage {
-                role: m.role,
-                content: m.content,
-                images: m.images.map(|imgs| {
-                    imgs.into_iter()
-                        .filter_map(|url| {
-                            // Ollama expects raw base64, so strip data URL prefix if present
-                            if let Some(comma_pos) = url.find(',') {
-                                Some(url[comma_pos + 1..].to_string())
-                            } else {
-                                Some(url)
-                            }
-                        })
-                        .collect()
-                }),
-                tool_calls: m.tool_calls.map(|tcs| {
-                    tcs.into_iter()
-                        .map(|tc| OllamaToolCall {
-                            function: OllamaFunctionCall {
-                                name: tc.name,
-                                arguments: tc.args,
-                            },
-                        })
-                        .collect()
-                }),
-                tool_call_id: m.tool_call_id,
+            .map(|m| {
+                let thinking = m.reasoning_details.as_ref().and_then(|blocks| {
+                    let text = blocks
+                        .iter()
+                        .filter_map(|block| block.text.as_deref())
+                        .collect::<String>();
+                    (!text.is_empty()).then_some(text)
+                });
+
+                OllamaMessage {
+                    role: m.role,
+                    content: m.content,
+                    thinking,
+                    images: m.images.map(|imgs| {
+                        imgs.into_iter()
+                            .filter_map(|url| {
+                                // Ollama expects raw base64, so strip data URL prefix if present
+                                if let Some(comma_pos) = url.find(',') {
+                                    Some(url[comma_pos + 1..].to_string())
+                                } else {
+                                    Some(url)
+                                }
+                            })
+                            .collect()
+                    }),
+                    tool_calls: m.tool_calls.map(|tcs| {
+                        tcs.into_iter()
+                            .map(|tc| OllamaToolCall {
+                                function: OllamaFunctionCall {
+                                    name: tc.name,
+                                    arguments: tc.args,
+                                },
+                            })
+                            .collect()
+                    }),
+                    tool_call_id: m.tool_call_id,
+                }
             })
             .collect();
 
@@ -237,6 +271,7 @@ impl LlmProvider for OllamaProvider {
             messages: ollama_messages,
             tools: ollama_tools,
             stream: true,
+            think: ollama_think_from_config(&config),
             options: Some(OllamaOptions {
                 temperature: config.temperature,
                 num_predict: config.max_tokens,
@@ -245,8 +280,6 @@ impl LlmProvider for OllamaProvider {
                 repeat_penalty: config.repeat_penalty,
                 seed: config.seed,
                 stop: config.stop,
-                reasoning_effort: config.reasoning_effort,
-                thinking_budget: config.thinking_budget,
             }),
         };
 
@@ -266,6 +299,7 @@ impl LlmProvider for OllamaProvider {
 
         let mut full_content = String::new();
         let mut tool_calls: Vec<crate::db::models::ToolCall> = Vec::new();
+        let mut reasoning_details: Vec<crate::db::models::ReasoningBlock> = Vec::new();
         let mut tokens_in: Option<i64> = None;
         let mut tokens_out: Option<i64> = None;
         let mut stream = resp.bytes_stream();
@@ -299,6 +333,17 @@ impl LlmProvider for OllamaProvider {
                 match serde_json::from_str::<OllamaChatChunk>(&line) {
                     Ok(chunk) => {
                         if let Some(msg) = &chunk.message {
+                            if let Some(thinking) = &msg.thinking {
+                                if !thinking.is_empty() {
+                                    on_chunk(crate::llm::LlmChunk::Thought(thinking.clone()));
+                                    reasoning_details.push(crate::db::models::ReasoningBlock {
+                                        provider: "ollama".to_string(),
+                                        block_type: "thinking".to_string(),
+                                        text: Some(thinking.clone()),
+                                        raw: None,
+                                    });
+                                }
+                            }
                             if !msg.content.is_empty() {
                                 on_chunk(crate::llm::LlmChunk::Text(msg.content.clone()));
                                 full_content.push_str(&msg.content);
@@ -333,6 +378,11 @@ impl LlmProvider for OllamaProvider {
         Ok(ChatResponse {
             content: full_content,
             model: model.to_string(),
+            reasoning_details: if reasoning_details.is_empty() {
+                None
+            } else {
+                Some(reasoning_details)
+            },
             tool_calls: if tool_calls.is_empty() {
                 None
             } else {
@@ -546,5 +596,66 @@ mod tests {
             .await;
 
         assert!(!provider.health_check().await);
+    }
+
+    #[test]
+    fn test_ollama_request_uses_top_level_think_bool() {
+        let config = crate::llm::ChatRequestConfig {
+            thinking_budget: Some(1024),
+            ..Default::default()
+        };
+        let request = OllamaChatRequest {
+            model: "qwen3".to_string(),
+            messages: vec![OllamaMessage {
+                role: "user".to_string(),
+                content: "think".to_string(),
+                thinking: None,
+                images: None,
+                tool_calls: None,
+                tool_call_id: None,
+            }],
+            tools: None,
+            stream: true,
+            think: ollama_think_from_config(&config),
+            options: Some(OllamaOptions {
+                temperature: None,
+                num_predict: None,
+                top_p: None,
+                top_k: None,
+                repeat_penalty: None,
+                seed: None,
+                stop: None,
+            }),
+        };
+
+        let body = serde_json::to_value(request).unwrap();
+        assert_eq!(body["think"], serde_json::json!(true));
+        assert!(body["options"].get("reasoning_effort").is_none());
+        assert!(body["options"].get("thinking_budget").is_none());
+    }
+
+    #[test]
+    fn test_ollama_request_maps_supported_think_level() {
+        let config = crate::llm::ChatRequestConfig {
+            reasoning_effort: Some("high".to_string()),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            serde_json::to_value(ollama_think_from_config(&config)).unwrap(),
+            serde_json::json!("high")
+        );
+    }
+
+    #[test]
+    fn test_ollama_chunk_parses_message_thinking() {
+        let chunk: OllamaChatChunk = serde_json::from_str(
+            r#"{"message":{"role":"assistant","thinking":"working","content":"answer"},"done":false}"#,
+        )
+        .unwrap();
+
+        let message = chunk.message.unwrap();
+        assert_eq!(message.thinking.as_deref(), Some("working"));
+        assert_eq!(message.content, "answer");
     }
 }

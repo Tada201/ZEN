@@ -73,9 +73,12 @@ export const useChatStore = create<ChatState>()(
         return state.sessionMessages[state.activeSessionId ?? ''] ?? EMPTY_ARRAY;
       },
 
-      setStreamingForChat: (chatId, streaming) => set((state) => ({
-        streamingChats: { ...state.streamingChats, [chatId]: streaming },
-      })),
+      setStreamingForChat: (chatId, streaming) => set((state) => {
+        if (state.streamingChats[chatId] === streaming) return state;
+        return {
+          streamingChats: { ...state.streamingChats, [chatId]: streaming },
+        };
+      }),
 
       getSessionMessages: (chatId) => get().sessionMessages[chatId] ?? EMPTY_ARRAY,
 
@@ -122,9 +125,12 @@ export const useChatStore = create<ChatState>()(
       setIsStreaming: (isStreaming) => {
         const { activeSessionId } = get();
         if (!activeSessionId) return;
-        set((state) => ({
-          streamingChats: { ...state.streamingChats, [activeSessionId]: isStreaming },
-        }));
+        set((state) => {
+          if (state.streamingChats[activeSessionId] === isStreaming) return state;
+          return {
+            streamingChats: { ...state.streamingChats, [activeSessionId]: isStreaming },
+          };
+        });
       },
 
       setActiveSession: (activeSessionId) => set({ activeSessionId }),

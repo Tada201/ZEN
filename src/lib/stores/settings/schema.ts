@@ -145,6 +145,7 @@ export const SettingsSchema = z.object({
   perplexityApiKey: z.string().default(""),
   nvidiaApiKey: z.string().default(""),
   nineRouterBaseUrl: z.string().default("http://localhost:20128/v1"),
+  opencodeBaseUrl: z.string().default("https://opencode.ai/zen/v1"),
   nineRouterApiKey: z.string().default(""),
   aihubmixApiKey: z.string().default(""),
 

@@ -10,15 +10,18 @@ import {
   ListChecks,
   Loader2,
   ShieldAlert,
+  Wrench,
   Workflow,
   XCircle,
 } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toolsApi } from "@/api";
-import { ArtifactData, Step, ToolCall } from "./types";
-import { ToolCallCard } from "./ToolCallCard";
+import { Step } from "./types";
+import type { ExecutionSummary } from "./assistantMessageParts";
+import { AssistantTaskPlanPreview } from "./AssistantTaskPlanPreview";
+import { AgentDelegationLane } from "./AgentDelegationLane";
+import { buildAgentDelegationLaneModel } from "./agentDelegationLaneModel";
 
 export function resolveToolApproval(toolCallId: string | undefined, approved: boolean) {
   if (!toolCallId) return;
@@ -49,7 +52,7 @@ function getActionPresentation(step: Step) {
     return {
       Icon: isError ? XCircle : CheckCircle2,
       label: `${spawn?.childAgent || "Agent"} ${isError ? "failed" : "completed"}`,
-      detail: spawn?.task || step.content,
+      detail: step.metadata?.resultSummary || spawn?.task || step.content,
       iconClass,
     };
   }
@@ -79,28 +82,78 @@ function getActionPresentation(step: Step) {
     };
   }
   if (kind.startsWith("task_")) {
+    const taskLabel = typeof step.metadata?.taskId === "string" ? step.metadata.taskId : undefined;
+    if (kind === "task_list_updated") {
+      const taskCount = Array.isArray(step.metadata?.tasks) ? step.metadata.tasks.length : undefined;
+      return {
+        Icon: ListChecks,
+        label: taskCount ? `${taskCount} tasks planned` : "Task list updated",
+        detail: step.content,
+        iconClass,
+      };
+    }
+    if (kind === "task_complexity_analyzed") {
+      return {
+        Icon: Workflow,
+        label: "Task plan analyzed",
+        detail: step.content,
+        iconClass: "text-blue-300/80",
+      };
+    }
     return {
       Icon: ListChecks,
-      label: kind === "task_started" ? "Task started" : kind === "task_completed" ? "Task completed" : "Task failed",
-      detail: step.content,
+      label:
+        kind === "task_created" ? "Task created" :
+        kind === "task_started" ? "Task started" :
+        kind === "task_updated" ? "Task updated" :
+        kind === "task_completed" ? "Task completed" :
+        "Task failed",
+      detail: [taskLabel, step.content].filter(Boolean).join(": "),
       iconClass,
     };
   }
   if (kind.startsWith("workflow_") || kind === "orchestrator_progress") {
     const phaseLabel = phase ? phase.replace(/_/g, " ") : "Planning";
+    const workflowId = step.metadata?.workflowId;
+    const tasksCompleted = step.metadata?.tasksCompleted;
+    const totalTasks = step.metadata?.totalTasks;
+    const workflowDetail = [
+      typeof tasksCompleted === "number" && typeof totalTasks === "number" ? `${tasksCompleted}/${totalTasks} tasks` : undefined,
+      step.content,
+    ].filter(Boolean).join(": ");
+
     return {
       Icon: Workflow,
       label: kind === "orchestrator_progress" ? phaseLabel : kind.replace(/_/g, " "),
-      detail: step.content,
+      detail: workflowDetail || workflowId,
       iconClass,
     };
   }
   if (kind === "chat_status") {
+    const tools = Array.isArray(step.metadata?.tools) ? step.metadata.tools : [];
+    if (phase === "tool_batch_planned") {
+      return {
+        Icon: Wrench,
+        label: step.metadata?.parallel ? "Parallel tool batch" : "Tool call planned",
+        detail: tools.length > 0 ? tools.join(", ") : step.content || step.metadata?.message,
+        iconClass: "text-blue-300/80",
+      };
+    }
+    if (phase === "provider_ready") {
+      const providerDetail = [step.metadata?.provider, step.metadata?.model].filter(Boolean).join(" / ");
+      return {
+        Icon: CircleDot,
+        label: "Provider ready",
+        detail: providerDetail || step.content || step.metadata?.message,
+        iconClass,
+      };
+    }
+    const phaseLabel = phase ? phase.replace(/_/g, " ") : undefined;
     return {
       Icon: status === "running" ? Loader2 : CircleDot,
-      label: "Agent status",
-      detail: step.content,
-      iconClass,
+      label: phaseLabel || "Agent status",
+      detail: step.content || step.metadata?.message,
+      iconClass: status === "running" ? "text-blue-300/80" : iconClass,
     };
   }
   if (kind === "tool_result") {
@@ -120,29 +173,136 @@ function getActionPresentation(step: Step) {
   };
 }
 
+function hasActionDetails(step: Step) {
+  return Boolean(step.metadata || step.timestamp || step.eventId);
+}
+
+function formatActionTime(timestamp?: number) {
+  if (!timestamp) return null;
+  return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function formatDuration(durationMs?: number) {
+  if (!durationMs || durationMs <= 0) return null;
+  return durationMs < 1000 ? `${durationMs}ms` : `${(durationMs / 1000).toFixed(durationMs < 10_000 ? 1 : 0)}s`;
+}
+
+function serializeActionDetails(step: Step) {
+  return JSON.stringify(
+    {
+      eventId: step.eventId,
+      kind: step.kind,
+      status: step.status,
+      timestamp: step.timestamp,
+      content: step.content,
+      metadata: step.metadata,
+    },
+    null,
+    2,
+  );
+}
+
+function compactValue(value: unknown, maxLength = 120) {
+  if (value === undefined || value === null || value === "") return "";
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return text.replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
+
+function getActionChips(step: Step): Array<{ label: string; tone?: "default" | "warning" | "danger" }> {
+  const chips: Array<{ label: string; tone?: "default" | "warning" | "danger" }> = [];
+  const spawn = step.metadata?.spawn;
+  const approval = step.metadata?.approvalRequest;
+  const durationLabel = formatDuration(spawn?.durationMs);
+
+  if (spawn?.parentAgent && spawn?.childAgent) {
+    chips.push({ label: `${spawn.parentAgent} -> ${spawn.childAgent}` });
+  }
+  if (durationLabel) {
+    chips.push({ label: durationLabel });
+  }
+  if (approval?.context?.risk_level) {
+    const risk = approval.context.risk_level;
+    chips.push({
+      label: `${risk} risk`,
+      tone: risk === "critical" || risk === "high" ? "danger" : risk === "medium" ? "warning" : "default",
+    });
+  }
+  const argsPreview = compactValue(approval?.context?.arguments_preview || approval?.arguments);
+  if (argsPreview) {
+    chips.push({ label: argsPreview });
+  }
+  if (step.metadata?.taskId) {
+    chips.push({ label: String(step.metadata.taskId) });
+  }
+  if (step.metadata?.workflowId) {
+    chips.push({ label: String(step.metadata.workflowId) });
+  }
+  if (typeof step.metadata?.tasksCompleted === "number" && typeof step.metadata?.totalTasks === "number") {
+    chips.push({ label: `${step.metadata.tasksCompleted}/${step.metadata.totalTasks} tasks` });
+  }
+  if (typeof step.metadata?.durationMs === "number") {
+    const workflowDuration = formatDuration(step.metadata.durationMs);
+    if (workflowDuration) chips.push({ label: workflowDuration });
+  }
+  if (step.metadata?.assignedTo) {
+    chips.push({ label: `assigned ${step.metadata.assignedTo}` });
+  }
+  if (step.metadata?.tier) {
+    chips.push({ label: String(step.metadata.tier) });
+  }
+  if (step.metadata?.battlePlan?.agents_needed?.length) {
+    chips.push({ label: `agents ${step.metadata.battlePlan.agents_needed.join(", ")}` });
+  }
+  return chips;
+}
+
 export function AgentActionStep({ step, isStreaming }: { step: Step; isStreaming?: boolean }) {
   const presentation = getActionPresentation(step);
   const Icon = presentation.Icon;
   const isRunning = step.status === "running" && isStreaming;
   const progress = step.metadata?.progressPercent;
   const approval = step.metadata?.approvalRequest;
+  const [isExpanded, setIsExpanded] = useState(false);
+  const canExpand = hasActionDetails(step);
+  const eventTime = formatActionTime(step.timestamp);
+  const chips = getActionChips(step);
+  const delegationLane = buildAgentDelegationLaneModel(step);
+
+  if (delegationLane) {
+    return <AgentDelegationLane lane={delegationLane} />;
+  }
 
   return (
-    <div className="py-1 font-sans">
-      <div className="flex items-start gap-3">
+    <div className="font-sans">
+      <div className="flex min-h-8 items-start gap-2 rounded-md px-1 py-1 transition-colors hover:bg-white/[0.018]">
         <div className={cn("mt-[3px] flex h-4 w-4 shrink-0 items-center justify-center text-zinc-500", presentation.iconClass)}>
           <Icon className={cn("h-3.5 w-3.5", isRunning && "animate-spin")} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={cn("text-[13px] capitalize leading-5 text-zinc-400", isRunning && "text-premium-shimmer")}>
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              disabled={!canExpand}
+              aria-expanded={canExpand ? isExpanded : undefined}
+              onClick={() => canExpand && setIsExpanded(!isExpanded)}
+              className={cn(
+                "flex min-w-0 flex-1 items-center gap-1 text-left",
+                canExpand && "hover:text-zinc-300",
+              )}
+            >
+              {canExpand && (
+                <ChevronRight className={cn("h-3 w-3 shrink-0 text-zinc-600 transition-transform", isExpanded && "rotate-90")} />
+              )}
+              <span className={cn("min-w-0 flex-1 truncate text-[12px] capitalize leading-5 text-zinc-400", isRunning && "text-premium-shimmer")}>
               {presentation.label}
-            </span>
+              </span>
+            </button>
             {step.metadata?.iteration !== undefined && (
               <span className="font-mono text-[11px] text-zinc-600">
                 iter {step.metadata.iteration}
               </span>
             )}
+            {eventTime && <span className="shrink-0 font-mono text-[10px] text-zinc-700">{eventTime}</span>}
             {step.status && (
               <span
                 className={cn(
@@ -157,10 +317,27 @@ export function AgentActionStep({ step, isStreaming }: { step: Step; isStreaming
             )}
           </div>
           {presentation.detail && (
-            <div className="mt-0.5 line-clamp-3 text-[12px] leading-relaxed text-zinc-600">
+            <div className="line-clamp-2 text-[11px] leading-5 text-zinc-600">
               {presentation.detail}
             </div>
           )}
+          {chips.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {chips.map((chip, idx) => (
+                <span
+                  key={`${chip.label}-${idx}`}
+                  className={cn(
+                    "max-w-full truncate rounded bg-white/[0.025] px-1.5 py-0.5 font-mono text-[10px] leading-none text-zinc-600",
+                    chip.tone === "warning" && "bg-amber-400/10 text-amber-300/80",
+                    chip.tone === "danger" && "bg-rose-400/10 text-rose-300/80",
+                  )}
+                >
+                  {chip.label}
+                </span>
+              ))}
+            </div>
+          )}
+          <AssistantTaskPlanPreview step={step} />
           {typeof progress === "number" && (
             <div className="mt-1.5 h-px overflow-hidden bg-zinc-800">
               <div className="h-full bg-zinc-500 transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, progress))}%` }} />
@@ -169,6 +346,67 @@ export function AgentActionStep({ step, isStreaming }: { step: Step; isStreaming
           {approval && (
             <InlineApprovalControls toolCallId={approval.tool_call_id} toolName={approval.tool_name} />
           )}
+          {isExpanded && (
+            <div className="mt-1.5 rounded-md bg-white/[0.018] px-2 py-1.5">
+              <div className="mb-1 text-[10px] uppercase tracking-wider text-zinc-600">Event details</div>
+              <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-zinc-500">
+                {serializeActionDetails(step)}
+              </pre>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ExecutionSummaryBar({ summary }: { summary: ExecutionSummary }) {
+  const phaseLabels = summary.phaseLabels || [];
+
+  return (
+    <div className="font-sans">
+      <div className="flex min-h-8 items-center gap-2 rounded-md px-1 text-zinc-500">
+        <Activity className={cn("h-3.5 w-3.5 shrink-0", summary.running > 0 && "text-blue-300/80")} />
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className={cn("min-w-0 flex-1 truncate text-[12px] font-medium text-zinc-300", summary.running > 0 && "text-premium-shimmer")}>
+              {summary.label}
+            </span>
+            {summary.running > 0 && <span className="shrink-0 text-[11px] text-blue-300/80">{summary.running} running</span>}
+            {summary.errors > 0 && <span className="shrink-0 text-[11px] text-rose-400/80">{summary.errors} failed</span>}
+            {summary.completed > 0 && <span className="shrink-0 text-[11px] text-zinc-500">{summary.completed} done</span>}
+          </div>
+          {phaseLabels.length > 0 && (
+            <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
+              {phaseLabels.map((phase, index) => {
+                const isCurrent = index === phaseLabels.length - 1 && summary.running > 0;
+                const isDone = index < phaseLabels.length - 1 || summary.running === 0;
+                return (
+                  <span
+                    key={`${phase}-${index}`}
+                    className={cn(
+                      "inline-flex h-5 max-w-full items-center gap-1 rounded border px-1.5 text-[10px] leading-none",
+                      isCurrent && "border-blue-400/20 bg-blue-400/10 text-blue-200",
+                      isDone && "border-emerald-400/15 bg-emerald-400/[0.035] text-emerald-100/70",
+                      !isCurrent && !isDone && "border-zinc-700/40 bg-white/[0.018] text-zinc-500",
+                    )}
+                  >
+                    {isCurrent ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <CheckCircle2 className="h-2.5 w-2.5" />}
+                    <span className="truncate">{phase}</span>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          <div className="mt-0.5 flex min-w-0 items-center gap-2">
+            <span className="min-w-0 flex-1 truncate text-[11px] leading-5 text-zinc-600">{summary.detail}</span>
+            <span className="h-1 w-16 shrink-0 overflow-hidden rounded-full bg-white/[0.06]">
+              <span
+                className={cn("block h-full transition-all duration-500", summary.errors > 0 ? "bg-rose-400/70" : "bg-emerald-400/70")}
+                style={{ width: `${summary.progressPercent}%` }}
+              />
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -184,6 +422,7 @@ function InlineApprovalControls({ toolCallId, toolName }: { toolCallId?: string;
       <Button
         size="sm"
         variant="outline"
+        type="button"
         className="h-7 border-zinc-700/80 px-3 text-[11px] text-zinc-300 hover:bg-zinc-800"
         onClick={() => resolveToolApproval(toolCallId, false)}
       >
@@ -191,6 +430,7 @@ function InlineApprovalControls({ toolCallId, toolName }: { toolCallId?: string;
       </Button>
       <Button
         size="sm"
+        type="button"
         className="h-7 bg-zinc-800 px-3 text-[11px] text-zinc-100 hover:bg-zinc-700"
         onClick={() => resolveToolApproval(toolCallId, true)}
       >
@@ -201,100 +441,58 @@ function InlineApprovalControls({ toolCallId, toolName }: { toolCallId?: string;
 }
 
 export function ResearchTimeline({ steps }: { steps: Array<{ text: string; status: "pending" | "running" | "completed" | "error" }> }) {
+  const completedCount = steps.filter((s) => s.status === "completed" || s.status === "error").length;
+  const progressPercent = steps.length > 0 ? Math.round((completedCount / steps.length) * 100) : 0;
+
   return (
-    <div className="py-1 font-sans">
-      <div className="mb-1.5 flex items-center gap-2 text-zinc-500">
-        <Workflow className="h-3.5 w-3.5" />
-        <span className="text-[13px]">Researching</span>
-        <span className="font-mono text-[11px] text-zinc-600">
-          {steps.filter((s) => s.status === "completed" || s.status === "error").length}/{steps.length}
+    <div className="font-sans">
+      <div className="flex items-start gap-2 text-zinc-500">
+        <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
+          {completedCount === steps.length ? (
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400/80" />
+          ) : (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />
+          )}
+        </span>
+        <span className="min-w-0 flex-1">
+            <span className="block text-[12px] font-semibold text-zinc-300">Execution history</span>
+          <span className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
+            <span className="font-mono">{steps.length} planning steps</span>
+            <span>{completedCount} completed</span>
+          </span>
+          <span className="mt-1.5 block h-px overflow-hidden rounded-full bg-white/[0.06]">
+            <span className="block h-full bg-emerald-400/70 transition-all duration-500" style={{ width: `${progressPercent}%` }} />
+          </span>
         </span>
       </div>
-      <div className="ml-1.5 space-y-1 border-l border-zinc-800 pl-4">
+      <div className="relative mt-1 flex flex-col gap-0.5 pl-4 before:absolute before:left-[5px] before:top-1 before:h-[calc(100%-8px)] before:w-px before:bg-zinc-800/80">
         {steps.map((step, idx) => (
-          <div key={`${step.text}-${idx}`} className="flex items-start gap-2 text-[12px] text-zinc-500">
-            {step.status === "running" ? (
-              <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin text-zinc-400" />
-            ) : step.status === "completed" ? (
-              <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-zinc-600" />
-            ) : step.status === "error" ? (
-              <XCircle className="mt-0.5 h-3 w-3 shrink-0 text-rose-400/80" />
-            ) : (
-              <CircleDot className="mt-0.5 h-3 w-3 shrink-0 text-zinc-500" />
-            )}
-            <span className="leading-relaxed">{step.text}</span>
+          <div key={`${step.text}-${idx}`} className="relative">
+            <span className="absolute -left-[15px] top-2.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-black">
+              <span
+                className={cn(
+                  "h-1.5 w-1.5 rounded-full",
+                  step.status === "running" ? "bg-blue-400" :
+                  step.status === "error" ? "bg-rose-400" :
+                  step.status === "completed" ? "bg-emerald-400" : "bg-zinc-600"
+                )}
+              />
+            </span>
+            <div className="flex min-h-8 min-w-0 items-center gap-2 rounded-md px-1 py-1 text-[12px] text-zinc-400 transition-colors hover:bg-white/[0.018]">
+              {step.status === "running" ? (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-blue-300" />
+              ) : step.status === "completed" ? (
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-300" />
+              ) : step.status === "error" ? (
+                <XCircle className="h-3.5 w-3.5 shrink-0 text-rose-400/80" />
+              ) : (
+                <CircleDot className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+              )}
+              <span className="truncate leading-5">{step.text}</span>
+            </div>
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-export function AgentExecutionTrace({
-  toolCalls,
-  sessionId,
-  onOpenArtifact,
-  isStreaming,
-}: {
-  toolCalls: ToolCall[];
-  sessionId?: string;
-  onOpenArtifact: (a: ArtifactData) => void;
-  isStreaming?: boolean;
-}) {
-  const hasActiveTools = toolCalls.some(tc => tc.status === 'running' || tc.status === 'awaiting_approval');
-  const completedCount = toolCalls.filter(tc => tc.status === 'completed').length;
-  const errorCount = toolCalls.filter(tc => tc.status === 'error').length;
-  const runningCount = toolCalls.filter(tc => tc.status === 'running' || tc.status === 'awaiting_approval').length;
-  const [isExpanded, setIsExpanded] = useState(true);
-
-  return (
-    <div className="my-2 font-sans">
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="flex w-full items-center gap-2 rounded py-1 text-left text-zinc-500 transition-colors hover:bg-white/[0.025]"
-      >
-        {hasActiveTools ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : errorCount > 0 ? <XCircle className="h-3.5 w-3.5 text-rose-400/80" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-        <span className={cn("text-[13px]", hasActiveTools && "text-premium-shimmer")}>
-          {hasActiveTools ? "Working with tools" : "Used tools"}
-        </span>
-        <span className="font-mono text-[11px] text-zinc-600">
-          {completedCount + errorCount}/{toolCalls.length}
-        </span>
-        {runningCount > 0 && <span className="text-[11px] text-zinc-600">{runningCount} running</span>}
-        {errorCount > 0 && <span className="text-[11px] text-rose-400/70">{errorCount} failed</span>}
-        <ChevronRight className={cn("ml-auto h-3 w-3 text-zinc-700 transition-transform duration-200", isExpanded && "rotate-90")} />
-      </button>
-
-      <AnimatePresence initial={false}>
-        {isExpanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.15, ease: "easeOut" }}
-            className="ml-1.5 overflow-hidden border-l border-zinc-800 pl-4"
-          >
-            <div className="flex flex-col gap-0.5">
-              {toolCalls.map((tc, idx) => (
-                <ToolCallCard
-                  key={`${tc.id}-${idx}`}
-                  toolCall={tc}
-                  className="w-full min-w-0"
-                  chatId={sessionId}
-                  onViewArtifact={onOpenArtifact}
-                  onCancel={() => resolveToolApproval(tc.id, false)}
-                  onRetry={() => resolveToolApproval(tc.id, true)}
-                />
-              ))}
-            </div>
-            {isStreaming && hasActiveTools && (
-              <div className="py-1 text-[12px] text-zinc-600">
-                Tool output stays in this timeline while the answer continues below.
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

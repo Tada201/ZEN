@@ -1,9 +1,10 @@
 import { useTransition } from 'react';
 import { 
-  Activity, Cpu, Box, Terminal, Map as MapIcon, Paintbrush, Database
+  Activity
 } from 'lucide-react';
 import { useUIStore } from '../../lib/stores/useUIStore';
 import { cn } from '../../lib/utils/style';
+import { getVisibleRightPanelFeatures, type RightPanelTabId } from '@/lib/features/frontendFeatures';
 
 /**
  * Secondary Activity Bar for right-side utility panels.
@@ -18,17 +19,13 @@ export function SecondaryActivityBar() {
     setRightPanelOpen 
   } = useUIStore();
 
-  const navItems = [
-    { id: 'metrics', icon: Activity, label: 'System Metrics' },
-    { id: 'agents', icon: Cpu, label: 'Agent Tasks' },
-    { id: 'drawing', icon: Paintbrush, label: 'Tactical Widgets' },
-    { id: 'artifacts', icon: Box, label: 'Artifacts & Math' },
-    { id: 'memory', icon: Database, label: 'Memory Stats' },
-    { id: 'terminal', icon: Terminal, label: 'Nexus Terminal' },
-    { id: 'map', icon: MapIcon, label: 'Operational Map' },
-  ];
+  const navItems = getVisibleRightPanelFeatures().map((feature) => ({
+    id: feature.rightPanelTabId ?? 'metrics',
+    icon: feature.icon ?? Activity,
+    label: feature.label,
+  }));
 
-  const handleTabClick = (id: any) => {
+  const handleTabClick = (id: RightPanelTabId) => {
     if (activeRightTab === id && rightPanelOpen) {
       startTransition(() => {
         setRightPanelOpen(false);
@@ -57,6 +54,7 @@ export function SecondaryActivityBar() {
               isPending && activeRightTab === item.id && "animate-pulse opacity-60"
             )}
             title={item.label}
+            aria-label={item.label}
           >
             <item.icon size={20} strokeWidth={(activeRightTab === item.id && rightPanelOpen) ? 2.5 : 2} />
             

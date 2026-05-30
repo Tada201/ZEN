@@ -263,6 +263,8 @@ pub struct SystemStatus {
 pub struct ChatMessage {
     pub role: String,
     pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_details: Option<Vec<ReasoningBlock>>,
     /// Base64 encoded images (e.g. "data:image/jpeg;base64,...")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub images: Option<Vec<String>>,
@@ -276,6 +278,18 @@ pub struct ToolCall {
     pub id: String,
     pub name: String,
     pub args: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReasoningBlock {
+    pub provider: String,
+    #[serde(rename = "type")]
+    pub block_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raw: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -295,6 +309,8 @@ pub struct Attachment {
 pub struct ChatResponse {
     pub content: String,
     pub model: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_details: Option<Vec<ReasoningBlock>>,
     pub tool_calls: Option<Vec<ToolCall>>,
     pub tokens_in: Option<i64>,
     pub tokens_out: Option<i64>,
@@ -330,6 +346,10 @@ pub struct ModelInfo {
     pub supports_vision: Option<bool>,
     #[serde(default)]
     pub supports_tools: Option<bool>,
+    #[serde(default)]
+    pub supports_reasoning: Option<bool>,
+    #[serde(default)]
+    pub reasoning_config_type: Option<String>,
 }
 
 // ─── Provider Config (for switching providers via IPC) ───

@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import {
   Dialog, DialogContent,
   DialogTitle, DialogDescription,
@@ -21,30 +21,36 @@ import {
   coerceBridgeValue,
   dotKeyToStoreField,
 } from "@/lib/stores/settings/settingsBridge";
-import { ProvidersSettings } from "@/components/settings/Tabs/ProvidersSettings";
-import { ModelsSettings } from "@/components/settings/Tabs/ModelsSettings";
-import { SkillsSettingsContent } from "./SkillsSettingsContent";
-import { FolderBrowser } from "./FolderBrowser";
 import { useZenTheme } from "../providers/ZenThemeProvider";
-import { AudioSettings } from "@/components/settings/Tabs/AudioSettings";
-import { ChatSettings } from "@/components/settings/Tabs/ChatSettings";
-import { GUISettings } from "@/components/settings/Tabs/GUISettings";
-import { IntelligenceSettings } from "@/components/settings/Tabs/IntelligenceSettings";
-import { SystemSettings } from "@/components/settings/Tabs/SystemSettings";
-import { TerminalSettings } from "@/components/settings/Tabs/TerminalSettings";
-import { WorkspaceSettings } from "@/components/settings/Tabs/WorkspaceSettings";
-import { AgentsSettings } from "@/components/settings/Tabs/AgentsSettings";
-import { UpdatesSettings } from "@/components/settings/Tabs/system/UpdatesSettings";
-import { SkillRegistry } from "@/components/settings/Tabs/skills/SkillRegistry";
-import { MapConfiguration } from "@/components/GTSM/MapConfiguration";
 import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
-import { ToolsSettings } from "@/components/settings/Tabs/ToolsSettings";
-import { MCPSettings } from "@/components/settings/Tabs/plugins/MCPSettings";
-import { EmbeddingModelDownloader } from "@/components/settings/Tabs/intelligence/EmbeddingModelDownloader";
-import { CommandsSettings } from "@/components/settings/Tabs/plugins/CommandsSettings";
-import { HooksSettings } from "@/components/settings/Tabs/plugins/HooksSettings";
+import {
+  getVisibleSettingsFeatures,
+  isSettingsTabVisible,
+  type SettingsTabId,
+} from "@/lib/features/frontendFeatures";
 
-export type TabId = "general" | "appearance" | "chat" | "ai-config" | "providers" | "capabilities" | "intelligence" | "agents" | "skills" | "audio" | "terminal" | "workspace" | "tools" | "system" | "mcp" | "embedding-models" | "commands" | "hooks" | "updates" | "map-config";
+const ProvidersSettings = React.lazy(() => import("@/components/settings/Tabs/ProvidersSettings").then(m => ({ default: m.ProvidersSettings })));
+const ModelsSettings = React.lazy(() => import("@/components/settings/Tabs/ModelsSettings").then(m => ({ default: m.ModelsSettings })));
+const SkillsSettingsContent = React.lazy(() => import("./SkillsSettingsContent").then(m => ({ default: m.SkillsSettingsContent })));
+const FolderBrowser = React.lazy(() => import("./FolderBrowser").then(m => ({ default: m.FolderBrowser })));
+const AudioSettings = React.lazy(() => import("@/components/settings/Tabs/AudioSettings").then(m => ({ default: m.AudioSettings })));
+const ChatSettings = React.lazy(() => import("@/components/settings/Tabs/ChatSettings").then(m => ({ default: m.ChatSettings })));
+const GUISettings = React.lazy(() => import("@/components/settings/Tabs/GUISettings").then(m => ({ default: m.GUISettings })));
+const IntelligenceSettings = React.lazy(() => import("@/components/settings/Tabs/IntelligenceSettings").then(m => ({ default: m.IntelligenceSettings })));
+const SystemSettings = React.lazy(() => import("@/components/settings/Tabs/SystemSettings").then(m => ({ default: m.SystemSettings })));
+const TerminalSettings = React.lazy(() => import("@/components/settings/Tabs/TerminalSettings").then(m => ({ default: m.TerminalSettings })));
+const WorkspaceSettings = React.lazy(() => import("@/components/settings/Tabs/WorkspaceSettings").then(m => ({ default: m.WorkspaceSettings })));
+const AgentsSettings = React.lazy(() => import("@/components/settings/Tabs/AgentsSettings").then(m => ({ default: m.AgentsSettings })));
+const UpdatesSettings = React.lazy(() => import("@/components/settings/Tabs/system/UpdatesSettings").then(m => ({ default: m.UpdatesSettings })));
+const SkillRegistry = React.lazy(() => import("@/components/settings/Tabs/skills/SkillRegistry").then(m => ({ default: m.SkillRegistry })));
+const MapConfiguration = React.lazy(() => import("@/components/GTSM/MapConfiguration").then(m => ({ default: m.MapConfiguration })));
+const ToolsSettings = React.lazy(() => import("@/components/settings/Tabs/ToolsSettings").then(m => ({ default: m.ToolsSettings })));
+const MCPSettings = React.lazy(() => import("@/components/settings/Tabs/plugins/MCPSettings").then(m => ({ default: m.MCPSettings })));
+const EmbeddingModelDownloader = React.lazy(() => import("@/components/settings/Tabs/intelligence/EmbeddingModelDownloader").then(m => ({ default: m.EmbeddingModelDownloader })));
+const CommandsSettings = React.lazy(() => import("@/components/settings/Tabs/plugins/CommandsSettings").then(m => ({ default: m.CommandsSettings })));
+const HooksSettings = React.lazy(() => import("@/components/settings/Tabs/plugins/HooksSettings").then(m => ({ default: m.HooksSettings })));
+
+export type TabId = SettingsTabId;
 
 interface SettingsTabGroup {
   label: string;
@@ -101,6 +107,40 @@ const TAB_GROUPS: SettingsTabGroup[] = [
   },
 ];
 
+const VISIBLE_SETTING_TAB_IDS = new Set(
+  getVisibleSettingsFeatures().map((feature) => feature.settingsTabId)
+);
+
+const VISIBLE_TAB_GROUPS = TAB_GROUPS
+  .map((group) => ({
+    ...group,
+    tabs: group.tabs.filter((tab) => VISIBLE_SETTING_TAB_IDS.has(tab.id)),
+  }))
+  .filter((group) => group.tabs.length > 0);
+
+function SettingsTabFallback() {
+  return (
+    <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.02]">
+      <WorkbenchIcon name="lucide:loader-2" className="h-5 w-5 animate-spin text-primary" />
+    </div>
+  );
+}
+
+function normalizeSettingsTab(tab: string): TabId {
+  return isSettingsTabVisible(tab) ? tab : "general";
+}
+
+export function preloadSettingsTab(tab: TabId) {
+  if (tab === "ai-config") {
+    void import("@/components/settings/Tabs/ModelsSettings");
+    void import("@/components/settings/ui/WorkbenchInput");
+    void import("@/components/settings/ui/WorkbenchSelect");
+  }
+  if (tab === "providers") {
+    void import("@/components/settings/Tabs/ProvidersSettings");
+  }
+}
+
 export function SettingsModal({
   open,
   onOpenChange,
@@ -131,11 +171,11 @@ export function SettingsContent({
   initialTab?: TabId;
   onClose?: () => void;
 }) {
-  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
+  const [activeTab, setActiveTab] = useState<TabId>(() => normalizeSettingsTab(initialTab));
 
   // Sync activeTab when initialTab changes (user clicks different settings button)
   useEffect(() => {
-    setActiveTab(initialTab);
+    setActiveTab(normalizeSettingsTab(initialTab));
   }, [initialTab]);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -247,7 +287,7 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
         </div>
 
         <div className="flex-1 overflow-y-auto py-2 pr-1 custom-scrollbar">
-          {TAB_GROUPS.map((group) => (
+          {VISIBLE_TAB_GROUPS.map((group) => (
             <div key={group.label} className="mb-2">
               <div className="px-3 py-1.5">
                 <span className="text-[9px] font-black uppercase tracking-[0.15em] text-zinc-600">
@@ -301,6 +341,7 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
                 transition={{ duration: 0.15 }}
                 className="space-y-8"
               >
+                <React.Suspense fallback={<SettingsTabFallback />}>
                 {activeTab === "general" && (
                   <section className="space-y-6">
                     <div className="space-y-1">
@@ -315,6 +356,7 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
                           value={settings["workspace.root"] || ""}
                           onChange={(path) => handleUpdate("workspace.root", path)}
                         />
+                        {/* TODO(config-wireup): this persists workspace.root only; add live AppState.workspace_folder update IPC before file tools immediately follow the new root. */}
                         <p className="text-[10px] text-zinc-600">
                           File tools (read, list, bash) are scoped to this folder.
                         </p>
@@ -461,6 +503,7 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
                 {activeTab === "skills" && (
                   <SkillRegistry skills={[]} loading={false} onToggle={() => {}} />
                 )}
+                </React.Suspense>
               </motion.div>
             </AnimatePresence>
           </div>

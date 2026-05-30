@@ -33,8 +33,8 @@ export const DIRECT_PROVIDER_URLS: Record<string, string> = {
     openrouter: 'https://openrouter.ai/api/v1',
     deepseek: 'https://api.deepseek.com',
     groq: 'https://api.groq.com/openai/v1',
-    google: 'https://generativelanguage.googleapis.com/v1beta',
-    gemini: 'https://generativelanguage.googleapis.com/v1beta',
+    google: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    gemini: 'https://generativelanguage.googleapis.com/v1beta/openai',
     mistral: 'https://api.mistral.ai/v1',
     xai: 'https://api.x.ai/v1',
     kilocode: 'https://api.kilo.ai/api/gateway',
@@ -42,6 +42,7 @@ export const DIRECT_PROVIDER_URLS: Record<string, string> = {
     perplexity: 'https://api.perplexity.ai',
     qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     nine_router: 'http://localhost:20128/v1',
+    opencode: 'https://opencode.ai/zen/v1',
     aihubmix: 'https://aihubmix.com/v1',
 };
 
@@ -213,6 +214,7 @@ export interface ProviderSlice {
   nineRouterApiKey: string;
   aihubmixApiKey: string;
   nineRouterBaseUrl: string;
+  opencodeBaseUrl: string;
   // Local providers
   ollamaBaseUrl: string;
   lmstudioBaseUrl: string;
@@ -240,6 +242,7 @@ export interface ProviderSlice {
   syncModelCatalog: () => Promise<void>;
   setDiscoveryMode: (enabled: boolean) => void;
   setProviderError: (error: string | null) => void;
+  setAvailableModels: (models: ModelInfo[]) => void;
 }
 
 export interface SystemSlice {

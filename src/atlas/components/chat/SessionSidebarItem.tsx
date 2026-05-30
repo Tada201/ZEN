@@ -174,6 +174,8 @@ export function SessionSidebarItem({
                 variant="ghost"
                 className="h-6 w-6 text-zinc-600 hover:text-white hover:bg-white/10"
                 onClick={(e) => e.stopPropagation()}
+                aria-label={`Open actions for ${displayTitle}`}
+                title={`Open actions for ${displayTitle}`}
               >
                 <MoreHorizontal size={14} />
               </Button>

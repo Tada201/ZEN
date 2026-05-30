@@ -4,9 +4,12 @@ use super::tool_pipeline::{
     should_write_cache,
 };
 use super::Runner;
-use crate::agent::event_bus::{AgentEvent, ChatStatusPayload, ToolStartPayload};
+use crate::agent::event_bus::{
+    AgentEvent, ChatStatusPayload, ToolCompletePayload, ToolStartPayload,
+};
 use crate::agent::hooks::HookDecision;
 use crate::agent::types::{Agent, ToolCall, ToolResult};
+use crate::services::tool::ToolApprovalExecutionContext;
 use crate::tools::permission::PermissionDecision;
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -14,6 +17,18 @@ use tauri::Manager;
 use tokio_util::sync::CancellationToken;
 
 impl Runner {
+    fn execution_run_id(&self, chat_id: &str) -> String {
+        chat_id.to_string()
+    }
+
+    fn parent_agent_id(&self) -> Option<String> {
+        (self.depth > 0).then(|| "orchestrator".to_string())
+    }
+
+    fn tool_batch_id(&self, chat_id: &str, agent_id: &str, iteration: usize) -> String {
+        format!("{}:{}:{}:{}", chat_id, agent_id, self.depth, iteration)
+    }
+
     pub(super) async fn authorized_tools_for_agent(
         &self,
         current_agent: &Agent,
@@ -54,6 +69,9 @@ impl Runner {
     ) -> Vec<ToolResult> {
         let (mut ordered_results, pipeline_calls) =
             preprocess_tool_calls(&self.tool_manager, tool_calls, authorized_tool_ids).await;
+        let run_id = self.execution_run_id(chat_id);
+        let parent_agent_id = self.parent_agent_id();
+        let tool_batch_id = self.tool_batch_id(chat_id, agent_id, iteration);
 
         // Process pipeline calls (non-meta-tools and transformed tool_exec)
         let mut handles = Vec::new();
@@ -64,6 +82,17 @@ impl Runner {
                 message: format!("Executing: {}", tool_call.name),
                 chat_id: chat_id.to_string(),
                 iteration: Some(iteration),
+                phase: Some("tool_executing".to_string()),
+                metadata: Some(json!({
+                    "toolName": tool_call.name,
+                    "toolCallId": tool_call.id,
+                    "iteration": iteration,
+                    "runId": run_id.clone(),
+                    "parentAgentId": parent_agent_id.clone(),
+                    "executionId": tool_call.id,
+                    "batchId": tool_batch_id.clone(),
+                    "toolBatchId": tool_batch_id.clone(),
+                })),
             }));
 
             emit_tool_call_action(
@@ -113,6 +142,7 @@ impl Runner {
                 handles.push((
                     pipeline_call.index,
                     tc_id_inner,
+                    result_tool_name.clone(),
                     tokio::spawn(async move {
                         normalize_tool_result(
                             tc_id,
@@ -142,6 +172,7 @@ impl Runner {
                     let tc_id_for_handle = tc_id.clone();
                     let result_tool_name = tc_name.clone();
                     let result_args = tc_args.clone();
+                    let event_tool_name = result_tool_name.clone();
                     let handle = tokio::spawn(async move {
                         let started_at = chrono::Utc::now();
                         let result = ToolResult {
@@ -173,7 +204,12 @@ impl Runner {
                             started_at,
                         )
                     });
-                    handles.push((pipeline_call.index, tc_id_for_handle, handle));
+                    handles.push((
+                        pipeline_call.index,
+                        tc_id_for_handle,
+                        event_tool_name,
+                        handle,
+                    ));
                     continue;
                 }
                 HookDecision::Modify { new_args } => {
@@ -181,6 +217,11 @@ impl Runner {
                         tool_name: tc_name.clone(),
                         tool_call_id: tc_id.clone(),
                         arguments: tc_args.clone(),
+                        run_id: Some(run_id.clone()),
+                        parent_agent_id: parent_agent_id.clone(),
+                        execution_id: Some(tc_id.clone()),
+                        batch_id: Some(tool_batch_id.clone()),
+                        tool_batch_id: Some(tool_batch_id.clone()),
                         agent_id: agent_id.to_string(),
                         agent_name: agent_name.to_string(),
                         chat_id: chat_id.to_string(),
@@ -201,6 +242,7 @@ impl Runner {
                     let depth = self.depth;
                     let original_name = pipeline_call.original.name.clone();
                     let result_tool_name = tc_name.clone();
+                    let event_tool_name = result_tool_name.clone();
 
                     let allowed_tools = self.allowed_tools.clone();
                     let handle = tokio::spawn(async move {
@@ -241,7 +283,7 @@ impl Runner {
                             started_at,
                         )
                     });
-                    handles.push((pipeline_call.index, tc_id_inner, handle));
+                    handles.push((pipeline_call.index, tc_id_inner, event_tool_name, handle));
                 }
                 HookDecision::Allow => {
                     // ── Unified Permission Check (YOLO mode, overrides, etc.) ──
@@ -296,6 +338,9 @@ impl Runner {
                                         agent_id,
                                         agent_name,
                                         iteration,
+                                        &run_id,
+                                        parent_agent_id.as_deref(),
+                                        &tool_batch_id,
                                     )
                                     .await;
 
@@ -309,6 +354,7 @@ impl Runner {
                                     let tc_id_for_handle = tc_id.clone();
                                     let result_tool_name = tc_name.clone();
                                     let result_args = tc_args.clone();
+                                    let event_tool_name = result_tool_name.clone();
                                     let handle = tokio::spawn(async move {
                                         let started_at = chrono::Utc::now();
                                         let result = ToolResult {
@@ -340,7 +386,12 @@ impl Runner {
                                             started_at,
                                         )
                                     });
-                                    handles.push((pipeline_call.index, tc_id_for_handle, handle));
+                                    handles.push((
+                                        pipeline_call.index,
+                                        tc_id_for_handle,
+                                        event_tool_name,
+                                        handle,
+                                    ));
                                     continue;
                                 }
                                 tracing::info!("User APPROVED tool '{}' (id: {})", tc_name, tc_id);
@@ -354,6 +405,7 @@ impl Runner {
                             let tc_id_for_handle = tc_id.clone();
                             let result_tool_name = tc_name.clone();
                             let result_args = tc_args.clone();
+                            let event_tool_name = result_tool_name.clone();
                             let handle = tokio::spawn(async move {
                                 let started_at = chrono::Utc::now();
                                 let result = ToolResult {
@@ -385,7 +437,12 @@ impl Runner {
                                     started_at,
                                 )
                             });
-                            handles.push((pipeline_call.index, tc_id_for_handle, handle));
+                            handles.push((
+                                pipeline_call.index,
+                                tc_id_for_handle,
+                                event_tool_name,
+                                handle,
+                            ));
                             continue;
                         }
                         Err(e) => {
@@ -399,6 +456,7 @@ impl Runner {
                             let tc_id_for_handle = tc_id.clone();
                             let result_tool_name = tc_name.clone();
                             let result_args = tc_args.clone();
+                            let event_tool_name = result_tool_name.clone();
                             let handle = tokio::spawn(async move {
                                 let started_at = chrono::Utc::now();
                                 let result = ToolResult {
@@ -429,7 +487,12 @@ impl Runner {
                                     started_at,
                                 )
                             });
-                            handles.push((pipeline_call.index, tc_id_for_handle, handle));
+                            handles.push((
+                                pipeline_call.index,
+                                tc_id_for_handle,
+                                event_tool_name,
+                                handle,
+                            ));
                             continue;
                         }
                     }
@@ -438,6 +501,11 @@ impl Runner {
                         tool_name: tc_name.clone(),
                         tool_call_id: tc_id.clone(),
                         arguments: tc_args.clone(),
+                        run_id: Some(run_id.clone()),
+                        parent_agent_id: parent_agent_id.clone(),
+                        execution_id: Some(tc_id.clone()),
+                        batch_id: Some(tool_batch_id.clone()),
+                        tool_batch_id: Some(tool_batch_id.clone()),
                         agent_id: agent_id.to_string(),
                         agent_name: agent_name.to_string(),
                         chat_id: chat_id.to_string(),
@@ -462,6 +530,7 @@ impl Runner {
                     let depth = self.depth;
                     let result_tool_name = tc_name.clone();
                     let original_name = pipeline_call.original.name.clone();
+                    let event_tool_name = result_tool_name.clone();
 
                     let allowed_tools = self.allowed_tools.clone();
                     let handle = tokio::spawn(async move {
@@ -510,35 +579,26 @@ impl Runner {
                             started_at,
                         )
                     });
-                    handles.push((pipeline_call.index, tc_id_inner, handle));
+                    handles.push((pipeline_call.index, tc_id_inner, event_tool_name, handle));
                 }
             }
         }
 
         // Collect pipeline results by original call index so meta tools and real
-        // tools stay in the exact order the model emitted them.
-        for (index, tc_id, handle) in handles {
-            match handle.await {
-                Ok(result) => ordered_results[index] = Some(result),
-                Err(e) => {
-                    tracing::error!("Tool task panicked for {}: {}", tc_id, e);
-                    let started_at = chrono::Utc::now();
-                    ordered_results[index] = Some(normalize_tool_result(
-                        tc_id,
-                        "unknown",
-                        "Unknown Tool",
-                        json!({}),
-                        json!({
-                            "error": format!("Internal execution panic: {}", e),
-                            "hint": "The tool thread crashed unexpectedly. Please report this if it persists."
-                        }),
-                        true,
-                        0,
-                        started_at,
-                    ))
-                }
-            }
-        }
+        // tools stay in the exact order the model emitted them. Completion events
+        // are emitted as each task resolves so the UI can reveal fast tool output
+        // without waiting for the slowest parallel call.
+        collect_tool_results_as_completed(
+            handles,
+            &mut ordered_results,
+            |tool_name, result| {
+                self.emit_tool_complete_for_result(
+                    chat_id, iteration, agent_id, agent_name, tool_name, result,
+                );
+            },
+            token.clone(),
+        )
+        .await;
 
         ordered_results
             .into_iter()
@@ -564,6 +624,39 @@ impl Runner {
             .collect()
     }
 
+    fn emit_tool_complete_for_result(
+        &self,
+        chat_id: &str,
+        iteration: usize,
+        agent_id: &str,
+        agent_name: &str,
+        tool_name: &str,
+        result: &ToolResult,
+    ) {
+        let output = format_tool_result_output(result);
+
+        self.emit(AgentEvent::ToolComplete(ToolCompletePayload {
+            tool_name: tool_name.to_string(),
+            tool_call_id: result.tool_call_id.clone(),
+            run_id: Some(self.execution_run_id(chat_id)),
+            parent_agent_id: self.parent_agent_id(),
+            execution_id: Some(result.tool_call_id.clone()),
+            batch_id: Some(self.tool_batch_id(chat_id, agent_id, iteration)),
+            tool_batch_id: Some(self.tool_batch_id(chat_id, agent_id, iteration)),
+            agent_id: agent_id.to_string(),
+            agent_name: agent_name.to_string(),
+            chat_id: chat_id.to_string(),
+            duration_ms: result.duration_ms,
+            status: if result.is_error {
+                "error".to_string()
+            } else {
+                "success".to_string()
+            },
+            iteration,
+            output: Some(output),
+        }));
+    }
+
     /// Emit a `tool:authorization_request` event and wait for user response.
     /// Returns `true` if approved, `false` if denied or timed out.
     async fn request_user_confirmation(
@@ -571,14 +664,28 @@ impl Runner {
         tool_call: &crate::tools::ToolCall,
         chat_id: &str,
         context: crate::tools::permission::PermissionContext,
-        _agent_id: &str,
-        _agent_name: &str,
+        agent_id: &str,
+        agent_name: &str,
         iteration: usize,
+        run_id: &str,
+        parent_agent_id: Option<&str>,
+        tool_batch_id: &str,
     ) -> bool {
         let _ = self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
             message: format!("Awaiting approval: {}", tool_call.name),
             chat_id: chat_id.to_string(),
             iteration: Some(iteration),
+            phase: Some("approval_required".to_string()),
+            metadata: Some(json!({
+                "toolName": tool_call.name,
+                "toolCallId": tool_call.id,
+                "iteration": iteration,
+                "runId": run_id,
+                "parentAgentId": parent_agent_id,
+                "executionId": tool_call.id,
+                "batchId": tool_batch_id,
+                "toolBatchId": tool_batch_id,
+            })),
         }));
 
         let state = self.app.state::<crate::commands::AppState>();
@@ -590,7 +697,169 @@ impl Runner {
                 chat_id,
                 tool_call,
                 context,
+                Some(ToolApprovalExecutionContext {
+                    run_id: Some(run_id.to_string()),
+                    parent_agent_id: parent_agent_id.map(str::to_string),
+                    execution_id: Some(tool_call.id.clone()),
+                    batch_id: Some(tool_batch_id.to_string()),
+                    tool_batch_id: Some(tool_batch_id.to_string()),
+                    agent_id: Some(agent_id.to_string()),
+                    agent_name: Some(agent_name.to_string()),
+                    iteration: Some(iteration),
+                }),
             )
             .await
+    }
+}
+
+async fn collect_tool_results_as_completed<F>(
+    handles: Vec<(usize, String, String, tokio::task::JoinHandle<ToolResult>)>,
+    ordered_results: &mut [Option<ToolResult>],
+    mut on_complete: F,
+    token: CancellationToken,
+) where
+    F: FnMut(&str, &ToolResult),
+{
+    let mut join_set = tokio::task::JoinSet::new();
+    let mut abort_handles = Vec::new();
+    for (index, tc_id, tool_name, handle) in handles {
+        abort_handles.push(handle.abort_handle());
+        join_set.spawn(async move {
+            let joined = handle.await;
+            (index, tc_id, tool_name, joined)
+        });
+    }
+
+    loop {
+        let joined = tokio::select! {
+            joined = join_set.join_next() => joined,
+            _ = token.cancelled() => {
+                for abort_handle in abort_handles {
+                    abort_handle.abort();
+                }
+                join_set.abort_all();
+                break;
+            }
+        };
+
+        let Some(joined) = joined else {
+            break;
+        };
+
+        match joined {
+            Ok((index, _tc_id, tool_name, Ok(result))) => {
+                on_complete(&tool_name, &result);
+                ordered_results[index] = Some(result);
+            }
+            Ok((index, tc_id, tool_name, Err(e))) => {
+                tracing::error!("Tool task panicked for {}: {}", tc_id, e);
+                let started_at = chrono::Utc::now();
+                let result = normalize_tool_result(
+                    tc_id,
+                    &tool_name,
+                    &tool_name,
+                    json!({}),
+                    json!({
+                        "error": format!("Internal execution panic: {}", e),
+                        "hint": "The tool thread crashed unexpectedly. Please report this if it persists."
+                    }),
+                    true,
+                    0,
+                    started_at,
+                );
+                on_complete(&tool_name, &result);
+                ordered_results[index] = Some(result);
+            }
+            Err(e) => {
+                tracing::error!("Tool completion collector panicked: {}", e);
+            }
+        }
+    }
+}
+
+fn format_tool_result_output(result: &ToolResult) -> String {
+    match &result.content {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Object(obj) => {
+            if let Some(formatted_result) = obj.get("result") {
+                match formatted_result {
+                    serde_json::Value::String(s) => s.clone(),
+                    _ => formatted_result.to_string(),
+                }
+            } else if let Some(error) = obj.get("error") {
+                format!("Error: {}", error)
+            } else {
+                result.content.to_string()
+            }
+        }
+        _ => result.content.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+    use tokio::time::{sleep, Duration};
+
+    #[tokio::test]
+    async fn emits_tool_completions_as_each_parallel_task_finishes() {
+        let mut ordered_results = vec![None, None];
+        let completion_order = Arc::new(Mutex::new(Vec::new()));
+        let completion_order_for_callback = Arc::clone(&completion_order);
+
+        let slow = tokio::spawn(async {
+            sleep(Duration::from_millis(50)).await;
+            ToolResult {
+                tool_call_id: "slow-id".to_string(),
+                content: json!({ "result": "slow result" }),
+                is_error: false,
+                duration_ms: 50,
+            }
+        });
+        let fast = tokio::spawn(async {
+            sleep(Duration::from_millis(5)).await;
+            ToolResult {
+                tool_call_id: "fast-id".to_string(),
+                content: json!({ "result": "fast result" }),
+                is_error: false,
+                duration_ms: 5,
+            }
+        });
+
+        collect_tool_results_as_completed(
+            vec![
+                (0, "slow-id".to_string(), "slow_tool".to_string(), slow),
+                (1, "fast-id".to_string(), "fast_tool".to_string(), fast),
+            ],
+            &mut ordered_results,
+            |tool_name, _result| {
+                completion_order_for_callback
+                    .lock()
+                    .unwrap()
+                    .push(tool_name.to_string());
+            },
+            CancellationToken::new(),
+        )
+        .await;
+
+        assert_eq!(
+            completion_order.lock().unwrap().as_slice(),
+            ["fast_tool", "slow_tool"]
+        );
+        assert_eq!(ordered_results[0].as_ref().unwrap().tool_call_id, "slow-id");
+        assert_eq!(ordered_results[1].as_ref().unwrap().tool_call_id, "fast-id");
+    }
+
+    #[test]
+    fn formats_tool_result_output_for_preview() {
+        let result = ToolResult {
+            tool_call_id: "tool-id".to_string(),
+            content: json!({ "result": { "summary": "done" } }),
+            is_error: false,
+            duration_ms: 0,
+        };
+
+        assert_eq!(format_tool_result_output(&result), "{\"summary\":\"done\"}");
     }
 }

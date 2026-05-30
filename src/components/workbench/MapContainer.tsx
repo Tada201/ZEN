@@ -1,10 +1,22 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { useGTSMStore } from '@/lib/stores/useGTSMStore';
-import { CesiumMapRenderer } from './CesiumMapRenderer';
-import { MapLibreMapRenderer } from './MapLibreMapRenderer';
 
 // GTSM HUD Panel Components
 import { ViewportHUD, Minimap, NavigationPanel, LayerManager, TargetInspector } from '../GTSM';
+
+const CesiumMapRenderer = React.lazy(() =>
+    import('./CesiumMapRenderer').then((module) => ({ default: module.CesiumMapRenderer }))
+);
+
+const MapLibreMapRenderer = React.lazy(() =>
+    import('./MapLibreMapRenderer').then((module) => ({ default: module.MapLibreMapRenderer }))
+);
+
+const MapRendererFallback = () => (
+    <div className="absolute inset-0 flex items-center justify-center bg-black text-[10px] font-mono uppercase tracking-widest text-zinc-500">
+        Loading map renderer...
+    </div>
+);
 
 export const CesiumCanvas: React.FC = () => {
     // Read state from Zustand store
@@ -20,11 +32,13 @@ export const CesiumCanvas: React.FC = () => {
               - Unmounting cleanly triggers standard cleanup hooks (viewer.destroy() / map.remove())
                 which completely unloads the GPU context and releases RAM/VRAM!
             */}
-            {viewMode !== 'navigation' ? (
-                <CesiumMapRenderer />
-            ) : (
-                <MapLibreMapRenderer />
-            )}
+            <Suspense fallback={<MapRendererFallback />}>
+                {viewMode !== 'navigation' ? (
+                    <CesiumMapRenderer />
+                ) : (
+                    <MapLibreMapRenderer />
+                )}
+            </Suspense>
 
             {/* Tactical eDEX Dashboards overlay grids */}
             <div className="absolute inset-0 z-10 pointer-events-none p-4 flex flex-col justify-between font-mono">

@@ -14,6 +14,7 @@ export function getProviderIconInfo(provider: string) {
     case 'deepseek': return { icon: "simple-icons:deepseek", color: 'text-blue-600' };
     case 'ollama': return { icon: "simple-icons:ollama", color: 'text-zinc-500' };
     case 'lmstudio': return { icon: "simple-icons:lmstudio", color: 'text-purple-500' };
+    case 'opencode': return { icon: "lucide:code-2", color: 'text-emerald-500' };
     default: return { icon: "lucide:zap", color: 'text-zinc-400' };
   }
 }

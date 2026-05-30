@@ -6,6 +6,45 @@ use futures::StreamExt;
 use tracing::{debug, error, info};
 
 impl super::LmStudioProvider {
+    fn emit_reasoning_values<'a>(
+        values: impl IntoIterator<Item = Option<&'a serde_json::Value>>,
+        on_chunk: &(dyn Fn(crate::llm::LlmChunk) + Send),
+    ) {
+        for thought in values
+            .into_iter()
+            .flatten()
+            .filter_map(serde_json::Value::as_str)
+        {
+            if !thought.is_empty() {
+                on_chunk(crate::llm::LlmChunk::Thought(thought.to_string()));
+            }
+        }
+    }
+
+    fn emit_reasoning_delta(delta: &OpenAiDelta, on_chunk: &(dyn Fn(crate::llm::LlmChunk) + Send)) {
+        Self::emit_reasoning_values(
+            [
+                delta.reasoning.as_ref(),
+                delta.reasoning_content.as_ref(),
+                delta.thinking.as_ref(),
+            ],
+            on_chunk,
+        );
+    }
+
+    fn emit_reasoning_message(
+        message: &OpenAiStreamMessage,
+        on_chunk: &(dyn Fn(crate::llm::LlmChunk) + Send),
+    ) {
+        Self::emit_reasoning_values(
+            [
+                message.reasoning.as_ref(),
+                message.reasoning_content.as_ref(),
+            ],
+            on_chunk,
+        );
+    }
+
     pub async fn do_chat_stream(
         &self,
         model: &str,
@@ -43,6 +82,7 @@ impl super::LmStudioProvider {
                 OpenAiMessage {
                     role: m.role,
                     content,
+                    reasoning_details: None,
                     tool_calls: tool_calls_out,
                     tool_call_id: m.tool_call_id,
                 }
@@ -79,6 +119,8 @@ impl super::LmStudioProvider {
             stop: config.stop,
             response_format: None,
             reasoning_effort: None,
+            reasoning: None,
+            extra_body: None,
         };
 
         info!(model = model, "LM Studio chat stream starting");
@@ -143,6 +185,11 @@ impl super::LmStudioProvider {
                 match serde_json::from_str::<OpenAiStreamChunk>(json_str) {
                     Ok(chunk) => {
                         for choice in &chunk.choices {
+                            Self::emit_reasoning_delta(&choice.delta, on_chunk.as_ref());
+                            if let Some(message) = &choice.message {
+                                Self::emit_reasoning_message(message, on_chunk.as_ref());
+                            }
+
                             if let Some(content) = &choice.delta.content {
                                 if !content.is_empty() {
                                     on_chunk(crate::llm::LlmChunk::Text(content.clone()));
@@ -221,6 +268,7 @@ impl super::LmStudioProvider {
         Ok(ChatResponse {
             content: full_content,
             model: model.to_string(),
+            reasoning_details: None,
             tokens_in,
             tokens_out,
             tool_calls: final_tool_calls,
@@ -251,5 +299,48 @@ impl super::LmStudioProvider {
             .next()
             .map(|d| d.embedding)
             .ok_or_else(|| ZenError::Custom("No embedding returned".into()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::llm::LlmChunk;
+    use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn test_lmstudio_stream_delta_parses_reasoning_and_content() {
+        let chunk: OpenAiStreamChunk = serde_json::from_str(
+            r#"{"choices":[{"delta":{"reasoning":"plan ","reasoning_content":"step","content":"answer"}}]}"#,
+        )
+        .unwrap();
+        let emitted = Arc::new(Mutex::new(Vec::new()));
+        let captured = Arc::clone(&emitted);
+        let on_chunk = move |chunk| captured.lock().unwrap().push(chunk);
+
+        let choice = &chunk.choices[0];
+        super::super::LmStudioProvider::emit_reasoning_delta(&choice.delta, &on_chunk);
+
+        assert_eq!(choice.delta.content.as_deref(), Some("answer"));
+        let chunks = emitted.lock().unwrap();
+        assert!(matches!(&chunks[0], LlmChunk::Thought(text) if text == "plan "));
+        assert!(matches!(&chunks[1], LlmChunk::Thought(text) if text == "step"));
+    }
+
+    #[test]
+    fn test_lmstudio_stream_message_parses_reasoning_content() {
+        let chunk: OpenAiStreamChunk = serde_json::from_str(
+            r#"{"choices":[{"delta":{},"message":{"reasoning_content":"done thinking"}}]}"#,
+        )
+        .unwrap();
+        let emitted = Arc::new(Mutex::new(Vec::new()));
+        let captured = Arc::clone(&emitted);
+        let on_chunk = move |chunk| captured.lock().unwrap().push(chunk);
+
+        let message = chunk.choices[0].message.as_ref().unwrap();
+        super::super::LmStudioProvider::emit_reasoning_message(message, &on_chunk);
+
+        let chunks = emitted.lock().unwrap();
+        assert!(matches!(&chunks[0], LlmChunk::Thought(text) if text == "done thinking"));
     }
 }

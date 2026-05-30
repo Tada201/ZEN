@@ -99,6 +99,7 @@ const PROVIDER_SUPPORTED_PARAMS: Record<string, string[]> = {
     lmstudio: ['temperature', 'topP', 'maxTokens', 'stop'],
     xai: ['temperature', 'topP', 'maxTokens', 'stop'],
     openrouter: ['temperature', 'topP', 'maxTokens', 'stop'],
+    opencode: ['temperature', 'topP', 'maxTokens', 'stop'],
     together: ['temperature', 'topP', 'maxTokens', 'stop'],
     perplexity: ['temperature', 'topP', 'maxTokens', 'stop'],
     nine_router: ['temperature', 'topP', 'topK', 'maxTokens', 'repeatPenalty', 'presencePenalty', 'frequencyPenalty', 'stop'],

@@ -2,156 +2,145 @@ import { useEffect, useRef } from "react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { listenAppEvent } from "@/api/events";
 import { useChatStore } from "@/lib/stores/useChatStore";
-import { Message, ToolCall } from "../../components/chat/types";
+import { getToolChatId, rememberToolChat } from "./toolLifecycleRouting";
+import { makeToolCall, upsertTool } from "./toolEventReducer";
+import type { ToolCall } from "../../components/chat/types";
 
 interface UseToolEventsProps {
   resetHeartbeatTimeout: (chatId: string) => void;
 }
 
+type ToolEventMetaPayload = {
+  run_id?: string;
+  runId?: string;
+  message_id?: string;
+  messageId?: string;
+  parent_agent?: string;
+  parentAgent?: string;
+  parent_agent_id?: string;
+  parentAgentId?: string;
+  execution_id?: string;
+  executionId?: string;
+  agent_id?: string;
+  agent_name?: string;
+  iteration?: number;
+  batch_id?: string;
+  batchId?: string;
+  tool_batch_id?: string;
+  toolBatchId?: string;
+  context?: Record<string, unknown>;
+};
+
+function readString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function readStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const values = value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+  return values.length > 0 ? values : undefined;
+}
+
+function normalizeApprovalContext(context?: Record<string, unknown>): ToolCall["approvalContext"] | undefined {
+  if (!context) return undefined;
+  const approvalContext = {
+    riskLevel: readString(context.risk_level) || readString(context.riskLevel),
+    description: readString(context.description),
+    argumentsPreview: readString(context.arguments_preview) || readString(context.argumentsPreview),
+    suggestedPatterns: readStringArray(context.suggested_patterns) || readStringArray(context.suggestedPatterns),
+  };
+  return Object.values(approvalContext).some(Boolean) ? approvalContext : undefined;
+}
+
+function getToolEventMeta(payload: ToolEventMetaPayload) {
+  const toolBatchId = payload.tool_batch_id || payload.toolBatchId;
+  return {
+    runId: payload.run_id || payload.runId,
+    messageId: payload.message_id || payload.messageId,
+    parentAgentId: payload.parent_agent_id || payload.parentAgentId || payload.parent_agent || payload.parentAgent,
+    executionId: payload.execution_id || payload.executionId,
+    agentId: payload.agent_id,
+    agentName: payload.agent_name,
+    iteration: payload.iteration,
+    batchId: payload.batch_id || payload.batchId || toolBatchId,
+    toolBatchId,
+    approvalContext: normalizeApprovalContext(payload.context),
+  };
+}
+
 export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
   const unlistenRefs = useRef<UnlistenFn[]>([]);
+  const toolChatIdsRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     const setupListeners = async () => {
-      unlistenRefs.current.forEach(u => u());
+      unlistenRefs.current.forEach((unlisten) => unlisten());
       unlistenRefs.current = [];
 
-      const unlistenToolStart = await listenAppEvent("tool:start", (event) => {
-        const chatId = event.payload.chat_id;
+      const unlistenAuthorization = await listenAppEvent("tool:authorization_request", (event) => {
+        const chatId = getToolChatId(toolChatIdsRef.current, event.payload, useChatStore.getState());
         if (!chatId) return;
-
+        rememberToolChat(toolChatIdsRef.current, event.payload, chatId);
         useChatStore.getState().setStreamingForChat(chatId, true);
         resetHeartbeatTimeout(chatId);
-        
-        useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-          const existingMessageIdx = prev.findIndex((message) =>
-            message.toolCalls?.some((tc) => tc.id === event.payload.tool_call_id) ||
-            message.steps?.some((step) => step.type === "tool-call" && step.toolCall?.id === event.payload.tool_call_id)
-          );
-          if (existingMessageIdx !== -1) return prev;
+        const tool = makeToolCall(
+          event.payload.tool_call_id,
+          event.payload.tool_name,
+          "awaiting_approval",
+          event.payload.arguments,
+          "",
+          undefined,
+          undefined,
+          getToolEventMeta(event.payload),
+        );
+        useChatStore.getState().setSessionMessages(chatId, (prev) => upsertTool(prev, chatId, tool));
+      });
 
-          let targetIdx = -1;
-          for (let i = prev.length - 1; i >= 0; i--) {
-            if (prev[i].role === "assistant" && prev[i].status === "sending") {
-              targetIdx = i;
-              break;
-            }
-          }
-          const newTool: ToolCall = {
-            id: event.payload.tool_call_id,
-            name: event.payload.tool_name,
-            status: "running",
-            input: event.payload.arguments,
-            output: "",
-            startTime: Date.now(),
-            attempts: [{
-              status: "running",
-              timestamp: Date.now(),
-            }],
-          };
-
-          if (targetIdx === -1) {
-            return [
-              ...prev,
-              {
-                id: `tool-ledger-${event.payload.tool_call_id}`,
-                sessionId: chatId,
-                role: "system",
-                content: "",
-                status: "sent",
-                kind: "system",
-                createdAt: Date.now(),
-                toolCalls: [newTool],
-                steps: [{ type: "tool-call", toolCall: newTool }],
-              } as Message,
-            ];
-          }
-          const target = prev[targetIdx];
-
-          const next = [...prev];
-          next[targetIdx] = {
-            ...target,
-            toolCalls: [...(target.toolCalls || []), newTool],
-            steps: [...(target.steps || []), { type: "tool-call", toolCall: newTool }]
-          };
-          return next;
-        });
+      const unlistenToolStart = await listenAppEvent("tool:start", (event) => {
+        const chatId = getToolChatId(toolChatIdsRef.current, event.payload, useChatStore.getState());
+        if (!chatId) return;
+        rememberToolChat(toolChatIdsRef.current, event.payload, chatId);
+        useChatStore.getState().setStreamingForChat(chatId, true);
+        resetHeartbeatTimeout(chatId);
+        const tool = makeToolCall(
+          event.payload.tool_call_id,
+          event.payload.tool_name,
+          "running",
+          event.payload.arguments,
+          "",
+          undefined,
+          undefined,
+          getToolEventMeta(event.payload),
+        );
+        useChatStore.getState().setSessionMessages(chatId, (prev) => upsertTool(prev, chatId, tool));
       });
 
       const unlistenToolComplete = await listenAppEvent("tool:complete", (event) => {
-        const chatId = event.payload.chat_id;
+        const chatId = getToolChatId(toolChatIdsRef.current, event.payload, useChatStore.getState());
         if (!chatId) return;
-
+        rememberToolChat(toolChatIdsRef.current, event.payload, chatId);
         resetHeartbeatTimeout(chatId);
-        useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-          let targetIdx = -1;
-          for (let i = prev.length - 1; i >= 0; i--) {
-            if (prev[i].toolCalls?.some(tc => tc.id === event.payload.tool_call_id) || prev[i].steps?.some(s => s.type === "tool-call" && s.toolCall?.id === event.payload.tool_call_id)) {
-              targetIdx = i;
-              break;
-            }
-          }
-          if (targetIdx === -1) return prev;
-          const target = prev[targetIdx];
-
-          const updated = { ...target };
-          const toolStatus: ToolCall["status"] = event.payload.status === "success" ? "completed" : "error";
-          updated.toolCalls = (updated.toolCalls || []).map(tc =>
-            tc.id === event.payload.tool_call_id
-              ? {
-                  ...tc,
-                  status: toolStatus,
-                  output: event.payload.output,
-                  durationMs: event.payload.duration_ms,
-                  attempts: [
-                    ...(tc.attempts || []),
-                    {
-                      status: toolStatus,
-                      durationMs: event.payload.duration_ms,
-                      timestamp: Date.now(),
-                    },
-                  ],
-                }
-              : tc
-          );
-
-          if (updated.steps) {
-            updated.steps = updated.steps.map(s =>
-              (s.type === "tool-call" && s.toolCall?.id === event.payload.tool_call_id)
-                ? {
-                    ...s,
-                    toolCall: {
-                      ...s.toolCall!,
-                      status: toolStatus,
-                      output: event.payload.output,
-                      durationMs: event.payload.duration_ms,
-                      attempts: [
-                        ...(s.toolCall!.attempts || []),
-                        {
-                          status: toolStatus,
-                          durationMs: event.payload.duration_ms,
-                          timestamp: Date.now(),
-                        },
-                      ],
-                    }
-                  }
-                : s
-            );
-          }
-
-          const next = [...prev];
-          next[targetIdx] = updated;
-          return next;
-        });
+        const status: ToolCall["status"] = event.payload.status === "success" ? "completed" : "error";
+        const tool = makeToolCall(
+          event.payload.tool_call_id,
+          event.payload.tool_name,
+          status,
+          {},
+          event.payload.output,
+          event.payload.duration_ms,
+          undefined,
+          getToolEventMeta(event.payload),
+        );
+        useChatStore.getState().setSessionMessages(chatId, (prev) => upsertTool(prev, chatId, tool));
       });
 
-      unlistenRefs.current.push(unlistenToolStart, unlistenToolComplete);
+      unlistenRefs.current.push(unlistenAuthorization, unlistenToolStart, unlistenToolComplete);
     };
 
     setupListeners();
 
     return () => {
-      unlistenRefs.current.forEach(u => u());
+      unlistenRefs.current.forEach((unlisten) => unlisten());
       unlistenRefs.current = [];
     };
   }, [resetHeartbeatTimeout]);

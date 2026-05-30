@@ -55,6 +55,8 @@ impl super::LmStudioProvider {
                             state: m.state,
                             supports_vision: Some(is_vlm),
                             supports_tools: Some(has_native_tools),
+                            supports_reasoning: None,
+                            reasoning_config_type: None,
                         }
                     })
                     .collect();
@@ -143,6 +145,8 @@ impl super::LmStudioProvider {
                     state,
                     supports_vision: None, // Pattern based detection in frontend/runner
                     supports_tools: None,  // Inferred via arch in supports_tools()
+                    supports_reasoning: None,
+                    reasoning_config_type: None,
                 }
             })
             .collect();
@@ -182,6 +186,8 @@ impl super::LmStudioProvider {
                 state: None,
                 supports_vision: None,
                 supports_tools: None,
+                supports_reasoning: None,
+                reasoning_config_type: None,
             })
             .collect())
     }

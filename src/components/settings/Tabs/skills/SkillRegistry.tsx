@@ -20,6 +20,9 @@ interface SkillRegistryProps {
 }
 
 export const SkillRegistry = memo(({ skills, loading, onToggle }: SkillRegistryProps) => {
+    // TODO(config-wireup): src-tauri has skill DB query helpers, but this settings tab is
+    // currently rendered with empty props. Add list_skills/set_skill_enabled IPC wiring
+    // before enabling this prototype tab.
     if (loading) {
         return (
             <div className="col-span-full py-20 flex flex-col items-center justify-center gap-4">

@@ -72,7 +72,7 @@ export function OpenUICanvas({ selectedModelId, selectedProvider }: OpenUICanvas
 
         // Listen for the immediate first chunk (bypasses the 40ms buffer)
         const unlistenChunkFirst = await listenAppEvent("chat:chunk:first", (event) => {
-          if (event.payload.chat_id === activeSessionId && event.payload.delta) {
+          if (event.payload.chat_id === activeSessionId && event.payload.delta && event.payload.type !== "thought") {
             firstChunkDelta = event.payload.delta;
             const sseData = {
               choices: [
@@ -90,6 +90,7 @@ export function OpenUICanvas({ selectedModelId, selectedProvider }: OpenUICanvas
         // Register window listeners matching activeSessionId
         const unlistenChunk = await listenAppEvent("chat:chunk", (event) => {
           if (event.payload.chat_id === activeSessionId) {
+            if (event.payload.type === "thought") return;
             let delta = event.payload.delta || "";
 
             // Strip the already-handled first-chunk prefix

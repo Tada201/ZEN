@@ -19,6 +19,24 @@ pub struct AnthropicProvider {
 const ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 
+fn anthropic_reasoning_metadata(model_id: &str) -> (Option<bool>, Option<String>) {
+    let id = model_id.to_lowercase();
+    if id.contains("opus-4-7") || id.contains("4-7-opus") {
+        return (Some(true), Some("none".to_string()));
+    }
+    if id.contains("claude-4") || id.contains("4-6") || id.contains("4-5") || id.contains("3-7") {
+        return (Some(true), Some("budget".to_string()));
+    }
+    (Some(false), None)
+}
+
+fn supports_manual_thinking_budget(model_id: &str) -> bool {
+    matches!(
+        anthropic_reasoning_metadata(model_id).1.as_deref(),
+        Some("budget")
+    )
+}
+
 // ─── Anthropic API Types (Request) ───
 
 #[derive(Serialize)]
@@ -277,6 +295,8 @@ impl LlmProvider for AnthropicProvider {
                             state: None,
                             supports_vision: Some(true),
                             supports_tools: Some(true),
+                            supports_reasoning: anthropic_reasoning_metadata(&item.id).0,
+                            reasoning_config_type: anthropic_reasoning_metadata(&item.id).1,
                         });
                     }
                     if !models.is_empty() {
@@ -306,6 +326,8 @@ impl LlmProvider for AnthropicProvider {
                 state: None,
                 supports_vision: Some(true),
                 supports_tools: Some(true),
+                supports_reasoning: Some(true),
+                reasoning_config_type: Some("none".to_string()),
             },
             ModelInfo {
                 id: "claude-4-6-opus-20260219".to_string(),
@@ -322,6 +344,8 @@ impl LlmProvider for AnthropicProvider {
                 state: None,
                 supports_vision: Some(true),
                 supports_tools: Some(true),
+                supports_reasoning: Some(true),
+                reasoning_config_type: Some("budget".to_string()),
             },
             ModelInfo {
                 id: "claude-4-6-sonnet-20260219".to_string(),
@@ -338,6 +362,8 @@ impl LlmProvider for AnthropicProvider {
                 state: None,
                 supports_vision: Some(true),
                 supports_tools: Some(true),
+                supports_reasoning: Some(true),
+                reasoning_config_type: Some("budget".to_string()),
             },
             ModelInfo {
                 id: "claude-4-5-sonnet-20251210".to_string(),
@@ -354,6 +380,8 @@ impl LlmProvider for AnthropicProvider {
                 state: None,
                 supports_vision: Some(true),
                 supports_tools: Some(true),
+                supports_reasoning: Some(true),
+                reasoning_config_type: Some("budget".to_string()),
             },
             ModelInfo {
                 id: "claude-3-7-sonnet-20250219".to_string(),
@@ -370,6 +398,8 @@ impl LlmProvider for AnthropicProvider {
                 state: None,
                 supports_vision: Some(true),
                 supports_tools: Some(true),
+                supports_reasoning: Some(true),
+                reasoning_config_type: Some("budget".to_string()),
             },
             ModelInfo {
                 id: "claude-3-5-sonnet-20241022".to_string(),
@@ -386,6 +416,8 @@ impl LlmProvider for AnthropicProvider {
                 state: None,
                 supports_vision: Some(true),
                 supports_tools: Some(true),
+                supports_reasoning: Some(false),
+                reasoning_config_type: None,
             },
             ModelInfo {
                 id: "claude-3-5-haiku-20241022".to_string(),
@@ -402,6 +434,8 @@ impl LlmProvider for AnthropicProvider {
                 state: None,
                 supports_vision: None,
                 supports_tools: None,
+                supports_reasoning: Some(false),
+                reasoning_config_type: None,
             },
         ];
         Ok(models)
@@ -554,10 +588,13 @@ impl LlmProvider for AnthropicProvider {
         }
 
         // 4. Thinking budget
-        let thinking = config.thinking_budget.map(|budget| AnthropicThinking {
-            thinking_type: "enabled".to_string(),
-            budget_tokens: budget,
-        });
+        let thinking = config
+            .thinking_budget
+            .filter(|budget| *budget > 0 && supports_manual_thinking_budget(model))
+            .map(|budget| AnthropicThinking {
+                thinking_type: "enabled".to_string(),
+                budget_tokens: budget,
+            });
 
         let request = AnthropicChatRequest {
             model: model.to_string(),
@@ -597,6 +634,7 @@ impl LlmProvider for AnthropicProvider {
 
         let mut full_content = String::new();
         let mut tool_call_accs: Vec<ToolCallAcc> = Vec::new();
+        let mut reasoning_details: Vec<crate::db::models::ReasoningBlock> = Vec::new();
         let mut active_tool_index: Option<usize> = None;
         let mut tokens_in: Option<i64> = None;
         let mut tokens_out: Option<i64> = None;
@@ -682,6 +720,14 @@ impl LlmProvider for AnthropicProvider {
                                                 on_chunk(crate::llm::LlmChunk::Thought(
                                                     thought.clone(),
                                                 ));
+                                                reasoning_details.push(
+                                                    crate::db::models::ReasoningBlock {
+                                                        provider: "anthropic".to_string(),
+                                                        block_type: "thinking".to_string(),
+                                                        text: Some(thought.clone()),
+                                                        raw: None,
+                                                    },
+                                                );
                                             }
                                         }
                                         "input_json_delta" => {
@@ -747,6 +793,11 @@ impl LlmProvider for AnthropicProvider {
         Ok(ChatResponse {
             content: full_content,
             model: model.to_string(),
+            reasoning_details: if reasoning_details.is_empty() {
+                None
+            } else {
+                Some(reasoning_details)
+            },
             tokens_in,
             tokens_out,
             tool_calls: final_tool_calls,
@@ -785,5 +836,32 @@ impl LlmProvider for AnthropicProvider {
             }
             Err(_) => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn latest_native_reasoning_models_do_not_send_manual_thinking_budget() {
+        assert_eq!(
+            anthropic_reasoning_metadata("claude-4-7-opus-20260416"),
+            (Some(true), Some("none".to_string()))
+        );
+        assert!(!supports_manual_thinking_budget("claude-4-7-opus-20260416"));
+    }
+
+    #[test]
+    fn budget_reasoning_models_can_send_manual_thinking_budget() {
+        assert!(supports_manual_thinking_budget(
+            "claude-4-6-sonnet-20260219"
+        ));
+        assert!(supports_manual_thinking_budget(
+            "claude-3-7-sonnet-20250219"
+        ));
+        assert!(!supports_manual_thinking_budget(
+            "claude-3-5-sonnet-20241022"
+        ));
     }
 }

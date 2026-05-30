@@ -96,7 +96,7 @@ export const ModelInPageSelector: React.FC<ModelInPageSelectorProps> = ({
                         return (
                             <button
                               key={`${model.provider || 'prov'}-${model.id || 'mod'}-${index}`}
-                              onClick={() => onModelSelect(fullId)}
+                              onClick={() => onModelSelect(model.id)}
                               className={cn(
                                   "flex items-center justify-between px-4 py-2.5 transition-all hover:bg-white/[0.04] group text-left",
                                   isSelected ? "bg-blue-500/5 border-l-2 border-blue-500" : "border-l-2 border-transparent"

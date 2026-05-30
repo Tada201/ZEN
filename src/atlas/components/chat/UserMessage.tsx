@@ -1,31 +1,11 @@
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, FileText, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Message } from "./types";
 import { useCopy } from "./CodeBlock";
-import { FileText } from "lucide-react";
 
 export function UserMessage({ message, compact }: { message: Message; compact?: boolean }) {
   const { copied, copy } = useCopy();
-
-  function Paperclip(props: any) {
-    return (
-      <svg
-        {...props}
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.51a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-      </svg>
-    );
-  }
 
   return (
     <div
@@ -45,6 +25,7 @@ export function UserMessage({ message, compact }: { message: Message; compact?: 
               <Button
                 size="sm"
                 variant="ghost"
+                type="button"
                 className="h-8 w-8 p-0 text-muted-foreground/40 hover:text-foreground hover:bg-muted/40 opacity-0 group-hover/user:opacity-100 transition-opacity mb-1 shrink-0"
                 onClick={() => copy(message.content)}
                 title="Copy message"

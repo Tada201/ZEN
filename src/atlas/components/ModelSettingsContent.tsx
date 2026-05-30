@@ -18,6 +18,8 @@ export type Model = {
   available: boolean;
   contextWindow?: number;
   inputPricePerMToken?: number;
+  supportsReasoning?: boolean;
+  reasoningConfigType?: "none" | "effort" | "budget";
 };
 
 interface ModelSettingsContentProps {
@@ -39,6 +41,7 @@ const PROVIDER_COLORS: Record<string, string> = {
   perplexity: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20",
   deepseek: "bg-blue-600/10 text-blue-600 border-blue-600/20",
   openrouter: "bg-purple-500/10 text-purple-500 border-purple-500/20",
+  opencode: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
   together: "bg-blue-400/10 text-blue-400 border-blue-400/20",
   nvidia: "bg-emerald-600/10 text-emerald-600 border-emerald-600/20",
   kilocode: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20",

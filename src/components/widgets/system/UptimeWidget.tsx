@@ -1,5 +1,5 @@
-import { useUIStore } from '@/lib/stores/useUIStore';
 import { memo } from "react";
+import { useAppUptime } from '@/hooks/useAppUptime';
 
 function fmt(secs: number): string {
     const h = Math.floor(secs / 3600);
@@ -11,7 +11,7 @@ function fmt(secs: number): string {
 }
 
 export const UptimeWidget = memo(function UptimeWidget() {
-    const appUptimeSecs = useUIStore(s => s.appUptimeSecs);
+    const appUptimeSecs = useAppUptime();
     return (
         <div className="widget-status-card">
             <span className="widget-status-card__value text-xs">{fmt(appUptimeSecs)}</span>

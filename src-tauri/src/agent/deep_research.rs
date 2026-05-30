@@ -182,6 +182,7 @@ pub async fn run_deep_research(
         crate::db::models::ChatMessage {
             role: "system".to_string(),
             content: system_prompt.to_string(),
+            reasoning_details: None,
             images: None,
             tool_calls: None,
             tool_call_id: None,
@@ -189,6 +190,7 @@ pub async fn run_deep_research(
         crate::db::models::ChatMessage {
             role: "user".to_string(),
             content: user_prompt,
+            reasoning_details: None,
             images: None,
             tool_calls: None,
             tool_call_id: None,

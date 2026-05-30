@@ -10,16 +10,11 @@ import {
   Info,
   Sun,
   Moon,
-  MessageSquare,
-  User,
-  Headphones,
   Bot,
-  Sparkles,
-  Layers,
 } from "lucide-react";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { useChatStore } from "@/lib/stores/useChatStore";
-import type { TabId } from "@/components/settings/types";
+import { getVisibleSettingsFeatures } from "@/lib/features/frontendFeatures";
 
 type ItemGroup = "Actions" | "Settings" | "Navigate";
 
@@ -31,19 +26,6 @@ interface PaletteItem {
   icon: React.ComponentType<{ className?: string }>;
   run: () => void;
 }
-
-const SETTINGS_TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { id: "providers" as TabId, label: "Providers", icon: Bot },
-  { id: "models" as TabId, label: "Models", icon: Sparkles },
-  { id: "chat" as TabId, label: "Chat", icon: MessageSquare },
-  { id: "audio" as TabId, label: "Audio", icon: Headphones },
-  { id: "appearance" as TabId, label: "Appearance", icon: Sun },
-  { id: "intelligence" as TabId, label: "Intelligence", icon: Layers },
-  { id: "system" as TabId, label: "System", icon: Info },
-  { id: "terminal" as TabId, label: "Terminal", icon: User },
-  { id: "workspace" as TabId, label: "Workspace", icon: Layers },
-  { id: "agents" as TabId, label: "Agents", icon: Bot },
-];
 
 export function CommandPalette() {
   const {
@@ -142,16 +124,17 @@ export function CommandPalette() {
     });
 
     // ⚙️ Settings group
-    SETTINGS_TABS.forEach((tab) => {
-      const TabIcon = tab.icon;
+    getVisibleSettingsFeatures().forEach((tab) => {
+      if (!tab.settingsTabId) return;
+      const TabIcon = tab.icon ?? Bot;
       out.push({
-        id: `s-${tab.id}`,
+        id: `s-${tab.settingsTabId}`,
         label: `Settings: ${tab.label}`,
         hint: `Open ${tab.label} settings`,
         group: "Settings",
         icon: TabIcon,
         run: () => {
-          setActiveSettingsTab(tab.id);
+          setActiveSettingsTab(tab.settingsTabId);
           toggleSettings();
         },
       });

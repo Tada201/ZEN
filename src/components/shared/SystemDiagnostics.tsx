@@ -5,6 +5,7 @@ import { useSysMetrics } from '@/hooks/useSysMetrics';
 import { useUIStore } from '@/lib/stores/useUIStore';
 import { useChatStore } from '@/lib/stores/useChatStore';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
+import { useAppUptime } from '@/hooks/useAppUptime';
 
 // Widget component imports
 import { ClockWidget } from '@/components/widgets/system/ClockWidget';
@@ -65,7 +66,9 @@ const WIDGET_GROUPS = [
 
 export function SystemDiagnostics() {
     const metrics = useSysMetrics(2000);
-    const { activeModel, activeProvider, appUptimeSecs } = useUIStore();
+    const activeModel = useUIStore(s => s.activeModel);
+    const activeProvider = useUIStore(s => s.activeProvider);
+    const appUptimeSecs = useAppUptime();
     const messages = useChatStore((s) => s.messages) || [];
     const isStreaming = useChatStore((s) => s.isStreaming) || false;
     const { data: sessions = [] } = useQuery({

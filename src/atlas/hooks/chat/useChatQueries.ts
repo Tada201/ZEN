@@ -7,6 +7,8 @@ import { useShallow } from "zustand/react/shallow";
 import type { ModelInfo } from "@/lib/types/provider";
 import { Session, Message, ChatFolder, ToolCall, Step } from "../../components/chat/types";
 import { type Model } from "../../components/ModelSettingsContent";
+import { toolResultMetaToOutput } from "../../components/chat/assistantMessageParts";
+import { findLiveAssistantForFetched, mergeLiveToolState } from "./liveLedgerMerge";
 
 const ACTION_MESSAGE_KINDS = new Set([
   "tool_call",
@@ -33,6 +35,12 @@ function normalizeActionMetadata(metadata: any) {
   if (!metadata || typeof metadata !== "object") return metadata;
   return {
     ...metadata,
+    runId: metadata.runId || metadata.run_id,
+    messageId: metadata.messageId || metadata.message_id,
+    parentAgentId: metadata.parentAgentId || metadata.parent_agent_id || metadata.parentAgent || metadata.parent_agent,
+    executionId: metadata.executionId || metadata.execution_id,
+    batchId: metadata.batchId || metadata.batch_id,
+    toolBatchId: metadata.toolBatchId || metadata.tool_batch_id,
     approvalRequest: metadata.approvalRequest || metadata.approval_request,
     toolResult: metadata.toolResult || metadata.tool_result,
     toolCall: metadata.toolCall || metadata.tool_call,
@@ -97,9 +105,65 @@ function actionMessageToStep(message: Message): Step {
   };
 }
 
+function getToolCallIdFromMetadata(metadata: any): string | undefined {
+  return (
+    metadata?.toolCall?.toolCallId ||
+    metadata?.toolCall?.tool_call_id ||
+    metadata?.tool_call?.toolCallId ||
+    metadata?.tool_call?.tool_call_id ||
+    metadata?.toolResult?.toolCallId ||
+    metadata?.toolResult?.tool_call_id ||
+    metadata?.tool_result?.toolCallId ||
+    metadata?.tool_result?.tool_call_id
+  );
+}
+
+function toolActionMessageToToolCall(message: Message): ToolCall | null {
+  const metadata = normalizeActionMetadata(message.metadata);
+  const toolCall = metadata?.toolCall || metadata?.tool_call;
+  const toolResult = metadata?.toolResult || metadata?.tool_result;
+  const id = getToolCallIdFromMetadata(metadata) || message.id;
+  const name = toolResult?.toolName || toolResult?.tool_name || toolCall?.toolName || toolCall?.tool_name;
+
+  if (!name) return null;
+
+  const status: ToolCall["status"] =
+    message.kind === "tool_result"
+      ? toolResult?.status === "error" || toolResult?.status === "timeout"
+        ? "error"
+        : "completed"
+      : toolCall?.status === "error"
+        ? "error"
+        : "running";
+
+  const output = toolResult ? toolResultMetaToOutput(toolResult, message.content) : "";
+
+  return {
+    id,
+    name,
+    status,
+    input: toolCall?.args || toolResult?.args || toolResult?.input || {},
+    output,
+    durationMs: toolResult?.durationMs ?? toolResult?.duration_ms,
+    runId: metadata?.runId,
+    messageId: metadata?.messageId,
+    parentAgentId: metadata?.parentAgentId,
+    executionId: metadata?.executionId,
+    agentId: metadata?.agentId || metadata?.agent_id,
+    agentName: metadata?.agentName || metadata?.agent_name,
+    iteration: typeof metadata?.iteration === "number" ? metadata.iteration : undefined,
+    batchId: toolResult?.batchId || toolResult?.batch_id || toolCall?.batchId || toolCall?.batch_id || metadata?.batchId || metadata?.toolBatchId,
+    toolBatchId: toolResult?.toolBatchId || toolResult?.tool_batch_id || toolCall?.toolBatchId || toolCall?.tool_batch_id || metadata?.toolBatchId,
+    startTime: message.createdAt,
+    completedAt: status === "completed" || status === "error" ? message.createdAt : undefined,
+    lastUpdatedAt: message.createdAt,
+  };
+}
+
 function coalesceTimelineMessages(messages: Message[]): Message[] {
   const output: Message[] = [];
   let pendingSteps: Step[] = [];
+  let pendingTools = new Map<string, ToolCall>();
 
   const mergePendingStep = (step: Step) => {
     const existingIdx = pendingSteps.findIndex((pending) => pending.eventId && pending.eventId === step.eventId);
@@ -110,102 +174,97 @@ function coalesceTimelineMessages(messages: Message[]): Message[] {
     }
   };
 
+  const mergePendingTool = (toolCall: ToolCall) => {
+    const previous = pendingTools.get(toolCall.id);
+    const merged = { ...previous, ...toolCall };
+    pendingTools.set(toolCall.id, merged);
+
+    const existingStepIdx = pendingSteps.findIndex(
+      (pending) => pending.type === "tool-call" && pending.toolCall?.id === toolCall.id
+    );
+    const toolStep: Step = { type: "tool-call", toolCall: merged };
+    if (existingStepIdx === -1) {
+      pendingSteps.push(toolStep);
+    } else {
+      pendingSteps[existingStepIdx] = toolStep;
+    }
+  };
+
+  const flushPendingIntoMessage = (message: Message): Message => {
+    const toolCalls = Array.from(pendingTools.values());
+    const next = {
+      ...message,
+      toolCalls: [...toolCalls, ...(message.toolCalls || [])],
+      steps: [...pendingSteps, ...(message.steps || [])],
+      metadata: {
+        ...(message.metadata || {}),
+        ...(pendingSteps.length > 0 ? { timelineActionCount: pendingSteps.length } : {}),
+      } as any,
+    };
+    pendingSteps = [];
+    pendingTools = new Map();
+    return next;
+  };
+
   for (const message of messages) {
     if (isTimelineActionMessage(message)) {
+      if (message.kind === "tool_call" || message.kind === "tool_result") {
+        const toolCall = toolActionMessageToToolCall(message);
+        if (toolCall) {
+          mergePendingTool(toolCall);
+        }
+        continue;
+      }
       mergePendingStep(actionMessageToStep(message));
       continue;
     }
 
-    if (message.role === "assistant" && pendingSteps.length > 0) {
-      output.push({
-        ...message,
-        steps: [...pendingSteps, ...(message.steps || [])],
-        metadata: {
-          ...(message.metadata || {}),
-          timelineActionCount: pendingSteps.length,
-        } as any,
-      });
-      pendingSteps = [];
+    if (message.role === "assistant" && (pendingSteps.length > 0 || pendingTools.size > 0)) {
+      output.push(flushPendingIntoMessage(message));
       continue;
     }
 
-    if (message.role === "user" && pendingSteps.length > 0) {
+    if (message.role === "user" && (pendingSteps.length > 0 || pendingTools.size > 0)) {
+      const toolCalls = Array.from(pendingTools.values());
       output.push({
-        id: `timeline-${pendingSteps[0]?.eventId || Date.now()}`,
+        id: `timeline-${pendingSteps[0]?.eventId || toolCalls[0]?.id || Date.now()}`,
         sessionId: message.sessionId,
         role: "system",
         content: "",
         kind: "system",
         status: "sent",
-        createdAt: pendingSteps[0]?.timestamp || message.createdAt,
+        createdAt: pendingSteps[0]?.timestamp || message.createdAt || Date.now(),
+        toolCalls,
         steps: pendingSteps,
       });
       pendingSteps = [];
+      pendingTools = new Map();
     }
 
     output.push(message);
   }
 
-  if (pendingSteps.length > 0) {
+  if (pendingSteps.length > 0 || pendingTools.size > 0) {
     const last = output[output.length - 1];
     if (last?.role === "assistant") {
-      output[output.length - 1] = {
-        ...last,
-        steps: [...(last.steps || []), ...pendingSteps],
-      };
+      output[output.length - 1] = flushPendingIntoMessage(last);
     } else {
+      const toolCalls = Array.from(pendingTools.values());
       output.push({
-        id: `timeline-${pendingSteps[0]?.eventId || Date.now()}`,
+        id: `timeline-${pendingSteps[0]?.eventId || toolCalls[0]?.id || Date.now()}`,
         sessionId: last?.sessionId,
         role: "system",
         content: "",
         kind: "system",
         status: "sent",
         createdAt: pendingSteps[0]?.timestamp || Date.now(),
+        toolCalls,
         steps: pendingSteps,
       });
     }
   }
 
   return output;
-}
-
-function mergeLiveToolState(fetched: Message, existing?: Message): Message {
-  if (!existing?.toolCalls?.length && !existing?.steps?.length) {
-    return fetched;
-  }
-
-  const liveTools = new Map<string, ToolCall>();
-  existing.toolCalls?.forEach((tool) => liveTools.set(tool.id, tool));
-  existing.steps?.forEach((step) => {
-    if (step.type === "tool-call" && step.toolCall) {
-      liveTools.set(step.toolCall.id, step.toolCall);
-    }
-  });
-
-  if (liveTools.size === 0) return fetched;
-
-  const mergeTool = (tool: ToolCall): ToolCall => {
-    const live = liveTools.get(tool.id);
-    if (!live) return { ...tool, output: tool.output || "" };
-    return {
-      ...tool,
-      status: live.status || tool.status,
-      output: live.output || tool.output || "",
-      durationMs: live.durationMs ?? tool.durationMs,
-      attempts: live.attempts || tool.attempts,
-      startTime: live.startTime ?? tool.startTime,
-    };
-  };
-
-  const toolCalls = fetched.toolCalls?.map(mergeTool) || fetched.toolCalls;
-  const steps = fetched.steps?.map((step) =>
-    step.type === "tool-call" && step.toolCall
-      ? { ...step, toolCall: mergeTool(step.toolCall) }
-      : step
-  );
-
-  return { ...fetched, toolCalls, steps };
 }
 
 export const mapChatToSession = (chat: BackendChat): Session => ({
@@ -240,21 +299,41 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
   }
   let parsedToolCalls: ToolCall[] = [];
   if (msg.toolCalls) {
-    try {
-      parsedToolCalls = JSON.parse(msg.toolCalls);
-    } catch (e) {
-      console.error("Failed to parse tool calls JSON:", e);
+    if (Array.isArray(msg.toolCalls)) {
+      parsedToolCalls = msg.toolCalls;
+    } else {
+      try {
+        parsedToolCalls = JSON.parse(msg.toolCalls);
+      } catch (e) {
+        console.error("Failed to parse tool calls JSON:", e);
+      }
     }
   }
 
-  const steps: Step[] = [];
-  if (parsedToolCalls.length > 0) {
-    parsedToolCalls.forEach((toolCall) => {
-      steps.push({ type: "tool-call", toolCall });
-    });
+  let parsedSteps: Step[] = [];
+  const rawSteps = (msg as any).steps ?? parsedMetadata?.executionSteps;
+  if (rawSteps) {
+    if (Array.isArray(rawSteps)) {
+      parsedSteps = rawSteps;
+    } else {
+      try {
+        parsedSteps = JSON.parse(rawSteps);
+      } catch (e) {
+        console.error("Failed to parse message steps JSON:", e);
+      }
+    }
   }
-  if (msg.content) {
-    steps.push({ type: "text", content: msg.content });
+
+  const steps: Step[] = parsedSteps.length > 0 ? parsedSteps : [];
+  if (steps.length === 0) {
+    if (parsedToolCalls.length > 0) {
+      parsedToolCalls.forEach((toolCall) => {
+        steps.push({ type: "tool-call", toolCall });
+      });
+    }
+    if (msg.content) {
+      steps.push({ type: "text", content: msg.content });
+    }
   }
 
   return {
@@ -274,18 +353,66 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
 };
 
 const EMPTY_ARRAY: Message[] = [];
+const MODEL_CATALOG_CACHE_KEY = "zen_model_catalog_cache_v1";
+type BackendModelInfo = ModelInfo & {
+  maxContextLength?: number;
+  supportsVision?: boolean;
+  supportsTools?: boolean;
+};
 
 function modelInfoToModel(model: ModelInfo): Model {
+  const backendModel = model as BackendModelInfo;
+  const capabilities = new Set(backendModel.capabilities?.length ? backendModel.capabilities : ["text"]);
+  if (backendModel.supportsVision) capabilities.add("vision");
+  if (backendModel.supportsTools) capabilities.add("tools");
+  if (backendModel.supportsReasoning) capabilities.add("reasoning");
+
   return {
     id: model.id,
     name: model.displayName || model.name || model.id,
     provider: model.provider || "unknown",
     description: model.description || "",
     category: "Balanced",
-    capabilities: model.capabilities || ["text"],
+    capabilities: Array.from(capabilities),
     available: model.state !== "missing",
-    contextWindow: model.contextWindow,
+    contextWindow: backendModel.contextWindow ?? backendModel.maxContextLength,
+    supportsReasoning: model.supportsReasoning,
+    reasoningConfigType: model.reasoningConfigType,
   };
+}
+
+function readCachedModelCatalog(): ModelInfo[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = window.localStorage.getItem(MODEL_CATALOG_CACHE_KEY);
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.models)) return [];
+
+    return parsed.models.filter((model: unknown): model is ModelInfo => {
+      if (!model || typeof model !== "object") return false;
+      const candidate = model as Partial<ModelInfo>;
+      return typeof candidate.id === "string" && typeof candidate.name === "string";
+    });
+  } catch (error) {
+    console.warn("[models] Failed to read cached model catalog:", error);
+    return [];
+  }
+}
+
+function writeCachedModelCatalog(models: ModelInfo[]) {
+  if (typeof window === "undefined" || models.length === 0) return;
+
+  try {
+    window.localStorage.setItem(
+      MODEL_CATALOG_CACHE_KEY,
+      JSON.stringify({ version: 1, updatedAt: Date.now(), models })
+    );
+  } catch (error) {
+    console.warn("[models] Failed to cache model catalog:", error);
+  }
 }
 
 function isMessageSemanticallyEqual(a: Message, b: Message): boolean {
@@ -319,6 +446,15 @@ function isMessageSemanticallyEqual(a: Message, b: Message): boolean {
   }
 
   return true;
+}
+
+function isRecentOptimisticAssistant(message: Message): boolean {
+  return (
+    message.role === "assistant" &&
+    message.id.startsWith("temp-assistant-") &&
+    (message.status === "sending" || message.status === "failed") &&
+    Date.now() - (message.createdAt || 0) < 5 * 60_000
+  );
 }
 
 export function useChatQueries() {
@@ -366,14 +502,31 @@ export function useChatQueries() {
     },
   });
 
-  const customProviders = useSettingsStore(useShallow((s) => s.customProviders));
+  const { customProviders, storeAvailableModels } = useSettingsStore(useShallow((s) => ({
+    customProviders: s.customProviders,
+    storeAvailableModels: s.availableModels,
+  })));
+  const cachedModelCatalog = useMemo(() => readCachedModelCatalog(), []);
   const {
-    data: discoveredModels = [],
+    data: discoveredModels = cachedModelCatalog,
     isFetching: modelsLoading,
     refetch: refetchModels,
   } = useQuery({
     queryKey: ["provider-model-catalog"],
-    queryFn: async () => providersApi.getAllAvailableModels(null),
+    queryFn: async () => {
+      const models = await providersApi.getAllAvailableModels(null);
+      if (models.length > 0) {
+        writeCachedModelCatalog(models);
+        useSettingsStore.getState().setAvailableModels(models);
+        return models;
+      }
+
+      const cached = readCachedModelCatalog();
+      return cached.length > 0 ? cached : models;
+    },
+    initialData: cachedModelCatalog.length > 0 ? cachedModelCatalog : undefined,
+    initialDataUpdatedAt: cachedModelCatalog.length > 0 ? 0 : undefined,
+    refetchOnMount: "always",
     staleTime: 60_000,
   });
 
@@ -390,7 +543,7 @@ export function useChatQueries() {
       );
 
     const seen = new Set<string>();
-    return [...discoveredModels, ...customModels]
+    return [...discoveredModels, ...storeAvailableModels, ...customModels]
       .filter((model) => {
         const key = `${model.provider || "unknown"}:${model.id}`;
         if (seen.has(key)) return false;
@@ -398,7 +551,7 @@ export function useChatQueries() {
         return true;
       })
       .map(modelInfoToModel);
-  }, [discoveredModels, customProviders]);
+  }, [discoveredModels, storeAvailableModels, customProviders]);
 
   const { data: fetchedMessages, isFetching: isMessagesFetching } = useQuery({
     queryKey: ["messages", currentSessionId],
@@ -414,11 +567,24 @@ export function useChatQueries() {
     if (fetchedMessages && currentSessionId && !isSessionStreaming) {
       if (isMessagesFetching) return;
       const currentMessages = useChatStore.getState().sessionMessages[currentSessionId] ?? [];
-      const merged = fetchedMessages.map(msg => {
-        const existing = currentMessages.find(m => m.id === msg.id);
+      const latestFetchedAssistantIndex = fetchedMessages.reduce((latestIndex, message, index) =>
+        message.role === "assistant" ? index : latestIndex,
+      -1);
+      const merged = fetchedMessages.map((msg, index) => {
+        const existing = findLiveAssistantForFetched(msg, currentMessages, {
+          allowLatestFallback: index === latestFetchedAssistantIndex,
+        });
         const withToolState = mergeLiveToolState(msg, existing);
         return existing?.artifact ? { ...withToolState, artifact: existing.artifact } : withToolState;
       });
+
+      const fetchedIds = new Set(merged.map((message) => message.id));
+      const optimisticAssistants = currentMessages.filter((message) =>
+        isRecentOptimisticAssistant(message) && !fetchedIds.has(message.id)
+      );
+      if (optimisticAssistants.length > 0) {
+        merged.push(...optimisticAssistants);
+      }
       
       const hasChanged = merged.length !== currentMessages.length ||
         merged.some((msg, idx) => {

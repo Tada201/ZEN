@@ -14,6 +14,10 @@ interface ThinkingConfigProps {
   provider?: string;
 }
 
+function isThinkingEffort(value: string): value is "low" | "medium" | "high" {
+  return value === "low" || value === "medium" || value === "high";
+}
+
 export const ThinkingConfig = ({
   isThinking, setIsThinking,
   reasoningConfigType,
@@ -64,8 +68,8 @@ export const ThinkingConfig = ({
               type="single" 
               value={thinkingEffort} 
               onValueChange={(v) => {
-                if (v) {
-                  setThinkingEffort(v as any);
+                if (isThinkingEffort(v)) {
+                  setThinkingEffort(v);
                   setIsThinking(true);
                 }
               }}

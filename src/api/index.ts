@@ -2,6 +2,7 @@ export { mcpApi } from "./mcpApi";
 export {
   getIpcErrorMessage,
   IpcCommandError,
+  IS_TAURI,
   isIpcCommandError,
 } from "./tauriClient";
 export type { IpcErrorCode, IpcErrorPayload } from "./tauriClient";

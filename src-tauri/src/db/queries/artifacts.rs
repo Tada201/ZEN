@@ -97,9 +97,9 @@ pub async fn get_messages_page(
         SELECT * FROM (
             SELECT * FROM messages
             WHERE chat_id = ?
-            ORDER BY created_at DESC
+            ORDER BY created_at DESC, rowid DESC
             LIMIT ? OFFSET ?
-        ) ORDER BY created_at ASC
+        ) ORDER BY created_at ASC, rowid ASC
         "#,
     )
     .bind(chat_id)

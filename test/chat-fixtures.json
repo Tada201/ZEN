@@ -1,0 +1,431 @@
+{
+  "test_markdown": {
+    "prompt": "test markdown",
+    "description": "Tests rendering of rich markdown including headers, tables, bold text, blockquotes, lists, and code blocks.",
+    "flow": [
+      {
+        "type": "research-step",
+        "text": "Initializing markdown layout parser...",
+        "status": "running"
+      },
+      {
+        "type": "research-step",
+        "text": "Parsed markdown layout successful.",
+        "status": "completed"
+      },
+      {
+        "type": "chunk:first",
+        "delta": ""
+      },
+      {
+        "type": "chunk",
+        "delta": "# Markdown Test Page\n\nWelcome to the **Zen MD Engine** test page. Here is a verification layout:\n\n"
+      },
+      {
+        "type": "chunk",
+        "delta": "### 1. Typography & Inline Elements\n- **Bold text** and *italicized text*\n- `inline code blocks` for quick code representation\n- ~~strikethrough text~~\n\n"
+      },
+      {
+        "type": "chunk",
+        "delta": "### 2. Formatted Data Tables\n| Feature | Status | Performance |\n| :--- | :---: | :---: |\n| Rich Typography | CSS Custom | 60fps |\n| Code Highlighting | Tree-sitter | High |\n| Custom Theme | Dark / Light | Native |\n\n"
+      },
+      {
+        "type": "chunk",
+        "delta": "### 3. Fenced Code Blocks\n```typescript\nconst testEngine = {\n  speed: 'lightning',\n  beautiful: true,\n  fps: 60,\n};\nconsole.log('Zen UI Active:', testEngine);\n```\n\n"
+      },
+      {
+        "type": "chunk",
+        "delta": "> \"The details are not the details. They make the design.\" - Charles Eames\n\nAll styles verify correctly!"
+      },
+      {
+        "type": "done",
+        "content": "# Markdown Test Page\n\nWelcome to the **Zen MD Engine** test page. Here is a verification layout:\n\n### 1. Typography & Inline Elements\n- **Bold text** and *italicized text*\n- `inline code blocks` for quick code representation\n- ~~strikethrough text~~\n\n### 2. Formatted Data Tables\n| Feature | Status | Performance |\n| :--- | :---: | :---: |\n| Rich Typography | CSS Custom | 60fps |\n| Code Highlighting | Tree-sitter | High |\n| Custom Theme | Dark / Light | Native |\n\n### 3. Fenced Code Blocks\n```typescript\nconst testEngine = {\n  speed: 'lightning',\n  beautiful: true,\n  fps: 60,\n};\nconsole.log('Zen UI Active:', testEngine);\n```\n\n> \"The details are not the details. They make the design.\" - Charles Eames\n\nAll styles verify correctly!"
+      }
+    ]
+  },
+  "test_genui": {
+    "prompt": "test genui",
+    "description": "Tests activation of Generative UI feature with a simulated beautiful dynamic interactive UI component.",
+    "flow": [
+      {
+        "type": "research-step",
+        "text": "Bootstrapping Generative UI sandbox context...",
+        "status": "running"
+      },
+      {
+        "type": "research-step",
+        "text": "Sandbox fully isolated and online.",
+        "status": "completed"
+      },
+      {
+        "type": "chunk:first",
+        "delta": ""
+      },
+      {
+        "type": "chunk",
+        "delta": "Here is the interactive component generated specifically for you to visualize telemetry & hardware load in a sleek futuristic UI block:\n\n"
+      },
+      {
+        "type": "artifact:start",
+        "artifact_type": "openui",
+        "title": "Generative Telemetry Widget"
+      },
+      {
+        "type": "artifact:delta",
+        "delta": "<div class=\"flex flex-col gap-4 p-6 bg-slate-900/90 text-white rounded-2xl border border-indigo-500/30 backdrop-blur-xl shadow-2xl\">\n  <div class=\"flex justify-between items-center\">\n    <h3 class=\"text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-400\">System Matrix Stream</h3>\n    <span class=\"px-3 py-1 text-xs bg-emerald-500/20 text-emerald-400 rounded-full border border-emerald-500/30 animate-pulse\">ACTIVE</span>\n  </div>\n  <div class=\"grid grid-cols-2 gap-4\">\n    <div class=\"p-4 bg-slate-800/50 rounded-xl border border-slate-700\">\n      <div class=\"text-slate-400 text-xs\">COMPUTE POWER</div>\n      <div class=\"text-2xl font-black mt-1 text-cyan-400\">84.2%</div>\n    </div>\n    <div class=\"p-4 bg-slate-800/50 rounded-xl border border-slate-700\">\n      <div class=\"text-slate-400 text-xs\">LATENCY PROFILE</div>\n      <div class=\"text-2xl font-black mt-1 text-indigo-400\">14ms</div>\n    </div>\n  </div>\n</div>"
+      },
+      {
+        "type": "artifact:complete"
+      },
+      {
+        "type": "chunk",
+        "delta": "\n\nThis artifact uses CSS custom styling, glassmorphism, gradients, and micro-animations to create a premium frontend showcase. Give it a spin!"
+      },
+      {
+        "type": "done",
+        "content": "Here is the interactive component generated specifically for you to visualize telemetry & hardware load in a sleek futuristic UI block:\n\nThis artifact uses CSS custom styling, glassmorphism, gradients, and micro-animations to create a premium frontend showcase. Give it a spin!"
+      }
+    ]
+  },
+  "test_toolcall": {
+    "prompt": "test toolcall",
+    "description": "Tests a long chronological agent workflow with multiple persisted tool cards in the chat window.",
+    "flow": [
+      {
+        "type": "research-step",
+        "text": "Planning execution graph for a multi-tool frontend investigation...",
+        "status": "running"
+      },
+      {
+        "type": "research-step",
+        "text": "Plan ready. Running external research, local reads, type checks, and budget validation.",
+        "status": "completed"
+      },
+      {
+        "type": "tool:start",
+        "tool_call_id": "tool-search-vite-001",
+        "tool_name": "web_search",
+        "arguments": {
+          "query": "vite v7 release features and performance improvements"
+        }
+      },
+      {
+        "type": "tool:complete",
+        "tool_call_id": "tool-search-vite-001",
+        "status": "success",
+        "output": "{\n  \"status\": \"success\",\n  \"results\": [\n    {\n      \"title\": \"Vite 7.0 Release Notes\",\n      \"summary\": \"Vite v7 introduces instant server startups, environment API support, and Node 22+ alignment.\"\n    },\n    {\n      \"title\": \"Performance Benchmarks for Vite v7\",\n      \"summary\": \"Benchmarks show faster hot-module replacement and smaller resolved chunks in large TypeScript projects.\"\n    }\n  ]\n}",
+        "duration_ms": 780,
+        "delay_ms": 250
+      },
+      {
+        "type": "chunk:first",
+        "delta": ""
+      },
+      {
+        "type": "chunk",
+        "delta": "I found the release context. Now I am checking the local frontend dependency surface before making a recommendation.\n\n"
+      },
+      {
+        "type": "tool:start",
+        "tool_call_id": "tool-read-package-002",
+        "tool_name": "read_file",
+        "arguments": {
+          "path": "package.json",
+          "reason": "Check frontend scripts and heavy dependencies"
+        }
+      },
+      {
+        "type": "tool:complete",
+        "tool_call_id": "tool-read-package-002",
+        "status": "success",
+        "output": "{\n  \"status\": \"success\",\n  \"content\": \"Scripts include dev, build, perf:budget, and tsc. Frontend stack includes React, Vite, TanStack Query, Zustand, framer-motion, lucide-react, and markdown rendering packages.\"\n}",
+        "duration_ms": 420,
+        "delay_ms": 250
+      },
+      {
+        "type": "chunk",
+        "delta": "The dependency scan is clean enough for the current UI pass. I am reading the Vite config next to verify startup behavior.\n\n"
+      },
+      {
+        "type": "tool:start",
+        "tool_call_id": "tool-read-vite-003",
+        "tool_name": "read_file",
+        "arguments": {
+          "path": "vite.config.ts",
+          "reason": "Inspect dev server and bundling configuration"
+        }
+      },
+      {
+        "type": "tool:complete",
+        "tool_call_id": "tool-read-vite-003",
+        "status": "success",
+        "output": "{\n  \"status\": \"success\",\n  \"content\": \"Vite config keeps frontend startup local and uses normal React plugin behavior. No extra eager visual runtime was detected by this fixture.\"\n}",
+        "duration_ms": 390,
+        "delay_ms": 250
+      },
+      {
+        "type": "chunk",
+        "delta": "Configuration looks normal. I am running the type checker so the workflow can prove the UI changes did not break contracts.\n\n"
+      },
+      {
+        "type": "tool:start",
+        "tool_call_id": "tool-run-tsc-004",
+        "tool_name": "run_command",
+        "arguments": {
+          "command": "npx tsc --noEmit",
+          "purpose": "Validate frontend and shared TypeScript contracts"
+        }
+      },
+      {
+        "type": "tool:complete",
+        "tool_call_id": "tool-run-tsc-004",
+        "status": "success",
+        "output": "{\n  \"status\": \"success\",\n  \"exit_code\": 0,\n  \"stdout\": \"TypeScript completed with no emitted files and no type errors.\"\n}",
+        "duration_ms": 2100,
+        "delay_ms": 350
+      },
+      {
+        "type": "chunk",
+        "delta": "TypeScript passed. I am running the simulated performance budget check before giving the final result.\n\n"
+      },
+      {
+        "type": "tool:start",
+        "tool_call_id": "tool-perf-budget-005",
+        "tool_name": "run_command",
+        "arguments": {
+          "command": "npm run perf:budget",
+          "purpose": "Confirm chat UI budgets remain within target"
+        }
+      },
+      {
+        "type": "tool:complete",
+        "tool_call_id": "tool-perf-budget-005",
+        "status": "success",
+        "output": "{\n  \"status\": \"success\",\n  \"exit_code\": 0,\n  \"stdout\": \"Performance budget passed. Main chunks and lazy renderer boundaries remain within configured limits.\"\n}",
+        "duration_ms": 1700,
+        "delay_ms": 300
+      },
+      {
+        "type": "chunk",
+        "delta": "All checks completed. The workflow ledger above should remain visible after streaming ends so the user can audit each tool call in order.\n\n"
+      },
+      {
+        "type": "done",
+        "content": "The long agent workflow completed successfully.\n\n1. External research found the relevant Vite release context.\n2. Local project reads inspected `package.json` and `vite.config.ts`.\n3. TypeScript validation passed.\n4. The performance budget check passed.\n\nThe chronological tool ledger above remains visible after streaming, which makes the agentic execution auditable instead of disappearing when the final answer arrives."
+      }
+    ]
+  },
+  "test_agentic": {
+    "prompt": "test agentic",
+    "description": "Tests Codebuff-style execution: immediate phases, subagent delegation, parallel tools, approval gating, and result previews.",
+    "flow": [
+      {
+        "type": "chat:status",
+        "payload": {
+          "message": "Research agent selected",
+          "phase": "agent_step",
+          "iteration": 1,
+          "metadata": {
+            "agentName": "Coordinator",
+            "iteration": 1
+          }
+        }
+      },
+      {
+        "type": "agent:spawn",
+        "payload": {
+          "spawn_id": "mock-spawn-research-001",
+          "parent_agent": "Coordinator",
+          "child_agent_id": "researcher",
+          "child_agent_name": "Researcher",
+          "task": "Inspect frontend streaming and execution trace behavior."
+        }
+      },
+      {
+        "type": "chat:status",
+        "payload": {
+          "message": "Planning 3 tool calls",
+          "phase": "tool_batch_planned",
+          "iteration": 1,
+          "metadata": {
+            "toolCount": 4,
+            "parallel": true,
+            "tools": ["write_todos", "read_file", "web_search", "run_command"]
+          }
+        }
+      },
+      {
+        "type": "tool:start",
+        "tool_call_id": "mock-plan-todos-000",
+        "tool_name": "write_todos",
+        "batch_id": "mock-batch-research-001",
+        "agent_id": "researcher",
+        "agent_name": "Researcher",
+        "iteration": 1,
+        "arguments": {
+          "todos": [
+            {
+              "task": "Inspect live execution event routing",
+              "status": "completed"
+            },
+            {
+              "task": "Compare fast coding-agent UX expectations",
+              "status": "completed"
+            },
+            {
+              "task": "Verify approval-gated command preview",
+              "status": "pending"
+            },
+            {
+              "task": "Summarize what changed for the user",
+              "status": "pending"
+            }
+          ]
+        },
+        "delay_ms": 80
+      },
+      {
+        "type": "tool:start",
+        "tool_call_id": "mock-read-trace-001",
+        "tool_name": "read_file",
+        "batch_id": "mock-batch-research-001",
+        "agent_id": "researcher",
+        "agent_name": "Researcher",
+        "iteration": 1,
+        "arguments": {
+          "path": "src/atlas/hooks/stream/useAgentEvents.ts",
+          "reason": "Check trace event normalization"
+        },
+        "delay_ms": 120
+      },
+      {
+        "type": "tool:start",
+        "tool_call_id": "mock-web-codebuff-002",
+        "tool_name": "web_search",
+        "batch_id": "mock-batch-research-001",
+        "agent_id": "researcher",
+        "agent_name": "Researcher",
+        "iteration": 1,
+        "arguments": {
+          "query": "agentic coding CLI execution trace UX patterns"
+        },
+        "delay_ms": 120
+      },
+      {
+        "type": "tool:complete",
+        "tool_call_id": "mock-plan-todos-000",
+        "tool_name": "write_todos",
+        "batch_id": "mock-batch-research-001",
+        "agent_id": "researcher",
+        "agent_name": "Researcher",
+        "iteration": 1,
+        "status": "success",
+        "output": "{\n  \"status\": \"success\",\n  \"message\": \"Task plan updated\",\n  \"total\": 4,\n  \"completed\": 2\n}",
+        "duration_ms": 90,
+        "delay_ms": 120
+      },
+      {
+        "type": "tool:authorization_request",
+        "tool_call_id": "mock-build-approval-003",
+        "tool_name": "run_command",
+        "batch_id": "mock-batch-research-001",
+        "agent_id": "researcher",
+        "agent_name": "Researcher",
+        "iteration": 1,
+        "arguments": {
+          "command": "npm run build",
+          "purpose": "Verify frontend contracts after execution trace changes"
+        },
+        "context": {
+          "risk_level": "medium",
+          "description": "Build command requested by the mock agentic workflow.",
+          "arguments_preview": "npm run build",
+          "suggested_patterns": ["npm run build"]
+        },
+        "delay_ms": 500
+      },
+      {
+        "type": "tool:complete",
+        "tool_call_id": "mock-read-trace-001",
+        "tool_name": "read_file",
+        "batch_id": "mock-batch-research-001",
+        "agent_id": "researcher",
+        "agent_name": "Researcher",
+        "iteration": 1,
+        "status": "success",
+        "output": "{\n  \"status\": \"success\",\n  \"content\": \"Trace hook listens for chat status, agent spawn, agent complete, and tool lifecycle events. Stable event ids keep spawned agents on one row.\"\n}",
+        "duration_ms": 310,
+        "delay_ms": 180
+      },
+      {
+        "type": "tool:complete",
+        "tool_call_id": "mock-web-codebuff-002",
+        "tool_name": "web_search",
+        "batch_id": "mock-batch-research-001",
+        "agent_id": "researcher",
+        "agent_name": "Researcher",
+        "iteration": 1,
+        "status": "success",
+        "output": "{\n  \"status\": \"success\",\n  \"results\": [\n    {\n      \"title\": \"Fast coding agents surface work as it happens\",\n      \"summary\": \"Good execution UX shows delegation, parallel work, command approval, and result summaries without waiting for the final answer.\"\n    }\n  ]\n}",
+        "duration_ms": 640,
+        "delay_ms": 180
+      },
+      {
+        "type": "tool:start",
+        "tool_call_id": "mock-build-approval-003",
+        "tool_name": "run_command",
+        "batch_id": "mock-batch-research-001",
+        "agent_id": "researcher",
+        "agent_name": "Researcher",
+        "iteration": 1,
+        "arguments": {
+          "command": "npm run build",
+          "purpose": "Verify frontend contracts after execution trace changes"
+        },
+        "delay_ms": 120
+      },
+      {
+        "type": "tool:complete",
+        "tool_call_id": "mock-build-approval-003",
+        "tool_name": "run_command",
+        "batch_id": "mock-batch-research-001",
+        "agent_id": "researcher",
+        "agent_name": "Researcher",
+        "iteration": 1,
+        "status": "success",
+        "output": "{\n  \"status\": \"success\",\n  \"exit_code\": 0,\n  \"stdout\": \"Production build completed. Existing large chunk warnings remain.\"\n}",
+        "duration_ms": 1800,
+        "delay_ms": 220
+      },
+      {
+        "type": "agent:complete",
+        "payload": {
+          "spawn_id": "mock-spawn-research-001",
+          "agent_id": "researcher",
+          "child_agent_name": "Researcher",
+          "parent_agent": "Coordinator",
+          "task": "Inspect frontend streaming and execution trace behavior.",
+          "status": "completed",
+          "duration_ms": 2450,
+          "result": {
+            "status": "success",
+            "summary": "Execution trace now shows live phases, parallel tool batches, approval-gated commands, and concise result previews."
+          }
+        },
+        "delay_ms": 250
+      },
+      {
+        "type": "chunk:first",
+        "delta": ""
+      },
+      {
+        "type": "chunk",
+        "delta": "The delegated researcher completed the UI execution audit. The trace above should show the subagent lifecycle, a parallel tool batch, an approval-gated command, and structured previews for each result.\n\n"
+      },
+      {
+        "type": "done",
+        "content": "The mock agentic execution finished successfully.\n\nThe UI should now preserve a Codebuff-style ledger: subagent spawn/completion, parallel tool execution, approval-gated command flow, and readable result previews remain visible after the final answer."
+      }
+    ]
+  }
+}

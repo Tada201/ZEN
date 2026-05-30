@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { sanitizeGeneratedHtml, sanitizeGeneratedSvg } from '@/lib/security/generatedContent';
 
 interface SandboxedIframeProps {
   content: string;
@@ -17,13 +18,17 @@ export function SandboxedIframe({ content, className, title = "Artifact Preview"
     if (!iframeRef.current) return;
 
     const iframe = iframeRef.current;
+    const sanitizedContent = isSvg
+      ? sanitizeGeneratedSvg(content)
+      : sanitizeGeneratedHtml(content);
     
-    let enhancedContent = content;
+    let enhancedContent = sanitizedContent;
     if (isSvg) {
       enhancedContent = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob: https:; style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'">
   <style>
     html, body {
       margin: 0;
@@ -53,11 +58,11 @@ export function SandboxedIframe({ content, className, title = "Artifact Preview"
   </style>
 </head>
 <body>
-  ${content}
+  ${sanitizedContent}
 </body>
 </html>`;
-    } else if (!content.includes('<head>')) {
-      enhancedContent = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;font-family:sans-serif;}</style></head><body>${content}</body></html>`;
+    } else if (!sanitizedContent.includes('<head>')) {
+      enhancedContent = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob: https:; style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'"><style>body{margin:0;font-family:sans-serif;}</style></head><body>${sanitizedContent}</body></html>`;
     }
 
     iframe.srcdoc = enhancedContent;
@@ -68,7 +73,7 @@ export function SandboxedIframe({ content, className, title = "Artifact Preview"
       ref={iframeRef}
       title={title}
       className={className}
-      sandbox="allow-scripts"
+      sandbox=""
       style={{
         width: '100%',
         height: '100%',

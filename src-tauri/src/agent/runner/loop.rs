@@ -8,7 +8,6 @@ use super::memory_bootstrap::{
 use super::turn_persistence::{save_assistant_message, AssistantMessageSave};
 use crate::agent::event_bus::{
     AgentEvent, ChatChunkPayload, ChatDonePayload, ChatErrorPayload, ChatStatusPayload,
-    ToolCompletePayload,
 };
 use crate::agent::middleware::{EnrichmentContext, MiddlewareChain};
 use crate::agent::types::*;
@@ -199,6 +198,13 @@ impl Runner {
                 message: format!("{} – Step {}", current_agent.name, iteration),
                 chat_id: chat_id.clone(),
                 iteration: Some(iteration),
+                phase: Some("agent_step".to_string()),
+                metadata: Some(serde_json::json!({
+                    "agentId": current_agent.id,
+                    "agentName": current_agent.name,
+                    "iteration": iteration,
+                    "depth": self.depth,
+                })),
             }));
 
             // ── Context compaction (token-aware, fixes #23) ──
@@ -231,6 +237,7 @@ impl Runner {
             let mut full_context = vec![ChatMessage {
                 role: "system".to_string(),
                 content: system_content.clone(),
+                reasoning_details: None,
                 images: None,
                 tool_calls: None,
                 tool_call_id: None,
@@ -241,42 +248,52 @@ impl Runner {
                 full_context.push(ChatMessage {
                     role: "system".to_string(),
                     content: msg,
+                    reasoning_details: None,
                     images: None,
                     tool_calls: None,
                     tool_call_id: None,
                 });
             }
 
-            if let Some(ref db) = self.db_pool {
-                // Cold: previous session summaries
-                if let Ok(prev_summaries) = queries::get_previous_summaries(db, &chat_id).await {
-                    for summary in prev_summaries {
+            let needs_summary_context = summarization_enabled
+                && (iteration > 1 || conversation.len() > run_config.compaction_threshold);
+
+            if needs_summary_context {
+                if let Some(ref db) = self.db_pool {
+                    // Cold: previous session summaries
+                    if let Ok(prev_summaries) = queries::get_previous_summaries(db, &chat_id).await
+                    {
+                        for summary in prev_summaries {
+                            full_context.push(ChatMessage {
+                                role: "system".to_string(),
+                                content: format!(
+                                    "[Previous conversation summary]: {}",
+                                    summary.summary
+                                ),
+                                reasoning_details: None,
+                                images: None,
+                                tool_calls: None,
+                                tool_call_id: None,
+                            });
+                        }
+                    }
+
+                    // Warm: current session summary (if compacted)
+                    if let Ok(Some(current_summary)) =
+                        queries::get_current_summary(db, &chat_id).await
+                    {
                         full_context.push(ChatMessage {
                             role: "system".to_string(),
                             content: format!(
-                                "[Previous conversation summary]: {}",
-                                summary.summary
+                                "[Current conversation summary]: {}",
+                                current_summary.summary
                             ),
+                            reasoning_details: None,
                             images: None,
                             tool_calls: None,
                             tool_call_id: None,
                         });
                     }
-                }
-
-                // Warm: current session summary (if compacted)
-                if let Ok(Some(current_summary)) = queries::get_current_summary(db, &chat_id).await
-                {
-                    full_context.push(ChatMessage {
-                        role: "system".to_string(),
-                        content: format!(
-                            "[Current conversation summary]: {}",
-                            current_summary.summary
-                        ),
-                        images: None,
-                        tool_calls: None,
-                        tool_call_id: None,
-                    });
                 }
             }
 
@@ -402,6 +419,7 @@ impl Runner {
                     conversation.push(ChatMessage {
                         role: "assistant".to_string(),
                         content: response.content.clone(),
+                        reasoning_details: response.reasoning_details.clone(),
                         images: None,
                         tool_calls: None,
                         tool_call_id: None,
@@ -416,6 +434,7 @@ impl Runner {
                              Include numbers, names, descriptions, and key facts from the data you received.",
                             if tool_data_hint.is_empty() { "data available in conversation".to_string() } else { tool_data_hint }
                         ),
+                        reasoning_details: None,
                         images: None,
                         tool_calls: None,
                         tool_call_id: None,
@@ -533,10 +552,32 @@ impl Runner {
             conversation.push(ChatMessage {
                 role: "assistant".to_string(),
                 content: response.content.clone(),
+                reasoning_details: response.reasoning_details.clone(),
                 images: None,
                 tool_calls: Some(models_tool_calls),
                 tool_call_id: None,
             });
+
+            self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
+                chat_id: chat_id.clone(),
+                message: format!(
+                    "Planning {} tool {}",
+                    tool_calls.len(),
+                    if tool_calls.len() == 1 {
+                        "call"
+                    } else {
+                        "calls"
+                    }
+                ),
+                iteration: Some(iteration),
+                phase: Some("tool_batch_planned".to_string()),
+                metadata: Some(serde_json::json!({
+                    "toolCount": tool_calls.len(),
+                    "parallel": tool_calls.len() > 1,
+                    "tools": tool_calls.iter().map(|tc| tc.name.clone()).collect::<Vec<_>>(),
+                    "iteration": iteration,
+                })),
+            }));
 
             let results = self
                 .execute_tools_with_hooks(
@@ -549,41 +590,6 @@ impl Runner {
                     token.clone(),
                 )
                 .await;
-
-            // Emit tool:complete event for UI tracking
-            for (tool_call, result) in tool_calls.iter().zip(results.iter()) {
-                let content_str = match &result.content {
-                    serde_json::Value::String(s) => s.clone(),
-                    serde_json::Value::Object(obj) => {
-                        if let Some(formatted_result) = obj.get("result") {
-                            match formatted_result {
-                                serde_json::Value::String(s) => s.clone(),
-                                _ => formatted_result.to_string(),
-                            }
-                        } else if let Some(error) = obj.get("error") {
-                            format!("Error: {}", error)
-                        } else {
-                            result.content.to_string()
-                        }
-                    }
-                    _ => result.content.to_string(),
-                };
-                self.emit(AgentEvent::ToolComplete(ToolCompletePayload {
-                    tool_name: tool_call.name.clone(),
-                    tool_call_id: tool_call.id.clone(),
-                    agent_id: current_agent.id.clone(),
-                    agent_name: current_agent.name.clone(),
-                    chat_id: chat_id.clone(),
-                    duration_ms: result.duration_ms,
-                    status: if result.is_error {
-                        "error".to_string()
-                    } else {
-                        "success".to_string()
-                    },
-                    iteration,
-                    output: Some(content_str),
-                }));
-            }
 
             let mut had_error = false;
             let mut had_success = false;
@@ -616,6 +622,12 @@ impl Runner {
                                 message: format!("Transferring to {}", next_agent.name),
                                 chat_id: chat_id.clone(),
                                 iteration: Some(iteration),
+                                phase: Some("handoff".to_string()),
+                                metadata: Some(serde_json::json!({
+                                    "fromAgent": current_agent.name,
+                                    "toAgent": next_agent.name,
+                                    "iteration": iteration,
+                                })),
                             }));
 
                             // Phase 3.4: Generate handoff summary (context compression)
@@ -718,6 +730,7 @@ impl Runner {
                 conversation.push(ChatMessage {
                     role: "tool".to_string(),
                     content: content_str.clone(),
+                    reasoning_details: None,
                     images: None,
                     tool_calls: None,
                     tool_call_id: Some(result.tool_call_id.clone()),
@@ -832,6 +845,7 @@ impl Runner {
                          If you need more data, call another tool.",
                         if latest_data.is_empty() { "see tool results above".to_string() } else { latest_data }
                     ),
+                    reasoning_details: None,
                     images: None,
                     tool_calls: None,
                     tool_call_id: None,
@@ -855,6 +869,7 @@ impl Runner {
                                   2) Providing a partial answer based on data already gathered. \
                                   3) Explaining what you tried and what failed."
                             .to_string(),
+                        reasoning_details: None,
                         images: None,
                         tool_calls: None,
                         tool_call_id: None,

@@ -12,6 +12,9 @@ interface WorkspaceSettingsProps {
 }
 
 export function WorkspaceSettings({ settings, onUpdate }: WorkspaceSettingsProps) {
+  // TODO(config-wireup): workspace.root persists, but the Rust AppState.workspace_folder
+  // is only initialized at startup. Add a backend command to validate and update the
+  // live workspace root before claiming file tools immediately follow this setting.
   return (
     <div className="space-y-8">
       <div className="space-y-1">

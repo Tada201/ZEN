@@ -28,6 +28,8 @@ export type Model = {
   available: boolean;
   contextWindow?: number;
   inputPricePerMToken?: number;
+  supportsReasoning?: boolean;
+  reasoningConfigType?: "none" | "effort" | "budget";
 };
 
 export interface ApiKey {
@@ -70,6 +72,7 @@ const PROVIDER_COLORS: Record<string, string> = {
   perplexity: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20",
   deepseek: "bg-blue-600/10 text-blue-600 border-blue-600/20",
   openrouter: "bg-purple-500/10 text-purple-500 border-purple-500/20",
+  opencode: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
   together: "bg-blue-400/10 text-blue-400 border-blue-400/20",
   nvidia: "bg-emerald-600/10 text-emerald-600 border-emerald-600/20",
   kilocode: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20",
@@ -99,6 +102,7 @@ const PROVIDERS = [
   { id: "perplexity", label: "Perplexity", placeholder: "pplx-...", docsUrl: "https://www.perplexity.ai/settings/api" },
   { id: "deepseek", label: "DeepSeek", placeholder: "sk-...", docsUrl: "https://platform.deepseek.com/" },
   { id: "openrouter", label: "OpenRouter", placeholder: "sk-or-...", docsUrl: "https://openrouter.ai/keys" },
+  { id: "opencode", label: "OpenCode Free", placeholder: "Not required", docsUrl: "https://opencode.ai/docs/zen", defaultBaseUrl: "https://opencode.ai/zen/v1", isLocal: true },
   { id: "together", label: "Together AI", placeholder: "API Key...", docsUrl: "https://api.together.xyz/" },
   { id: "kilocode", label: "Kilocode", placeholder: "API Key...", docsUrl: "https://kilo.ai", defaultBaseUrl: "https://api.kilo.ai/api/gateway" },
   { id: "nvidia", label: "NVIDIA", placeholder: "nvapi-...", docsUrl: "https://build.nvidia.com/", defaultBaseUrl: "https://integrate.api.nvidia.com/v1" },
@@ -176,7 +180,7 @@ export function ModelSelector({
   const activeKey = providerKeys[0];
 
   const handleAddKey = async () => {
-    const isLocal = activeProvider === 'ollama' || activeProvider === 'lmstudio';
+    const isLocal = activeProvider === 'ollama' || activeProvider === 'lmstudio' || activeProvider === 'opencode';
     if (!addingKeyStr.trim() && !isLocal) {
       toast.error("API Key is required for this provider");
       return;
@@ -299,7 +303,7 @@ export function ModelSelector({
                         onKeyDown={(e) => e.key === 'Enter' && handleAddKey()}
                       />
                     </div>
-                    <Button size="sm" onClick={handleAddKey} disabled={isAddingKey || (!addingKeyStr && activeProvider !== 'ollama' && activeProvider !== 'lmstudio')} className="h-9 gap-2">
+                    <Button size="sm" onClick={handleAddKey} disabled={isAddingKey || (!addingKeyStr && activeProvider !== 'ollama' && activeProvider !== 'lmstudio' && activeProvider !== 'opencode')} className="h-9 gap-2">
                       {isAddingKey ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
                       Save Key
                     </Button>

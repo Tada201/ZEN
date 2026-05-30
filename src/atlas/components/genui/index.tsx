@@ -1,6 +1,5 @@
 import { z } from "zod/v4";
 import { defineComponent, createLibrary } from "@openuidev/react-lang";
-import { openuiLibrary } from "@openuidev/react-ui/genui-lib";
 import { cn } from "@/lib/utils";
 
 import { Stack } from "./Stack";
@@ -143,17 +142,7 @@ const coreComponents = [
   defineComponent({ name: "Icon", description: "Renders an icon.", props: z.object({ name: z.string() }) as any, component: ({ props }: any) => <Icon name={props.name} /> }),
 ];
 
-// Combine base openui components with our core layout components
-const baseComponents = Array.isArray((openuiLibrary as any)?.components) 
-  ? (openuiLibrary as any).components 
-  : Object.values((openuiLibrary as any)?.components || {});
-
-const customNames = new Set(coreComponents.filter(c => c && c.name).map(c => c.name));
-
-const mergedComponents = [
-  ...baseComponents.filter((c: any) => c && c.name && !customNames.has(c.name)),
-  ...coreComponents
-].filter(c => c && c.name && c.props) as any[];
+const mergedComponents = coreComponents.filter(c => c && c.name && c.props) as any[];
 
 const baseLibrary = createLibrary({ components: mergedComponents || [] });
 

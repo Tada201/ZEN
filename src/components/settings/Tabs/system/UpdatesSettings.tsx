@@ -26,6 +26,8 @@ export const UpdatesSettings = memo(() => {
   const error: string | null = null;
 
   const handleCheckForUpdates = async () => {
+    // TODO(config-wireup): replace this no-op with a Tauri updater command after native
+    // package verification, channel selection, and installer rollback are implemented.
     console.info('[UpdatesSettings] Manual update check requested');
   };
 

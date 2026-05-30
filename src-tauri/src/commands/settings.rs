@@ -105,6 +105,7 @@ pub async fn get_all_available_models(
             "ollama",
             "lmstudio",
             "nine_router",
+            "opencode",
             "openai",
             "anthropic",
             "google",
@@ -140,12 +141,13 @@ pub async fn get_all_available_models(
                 .map(|v| !v.is_empty())
                 .unwrap_or(false);
             let is_local = p_name == "ollama" || p_name == "lmstudio";
+            let is_no_key_builtin = p_name == "opencode";
             let is_active = all_settings
                 .get("active_provider")
                 .map(|v| v == p_name)
                 .unwrap_or(false);
 
-            if is_local || is_active || has_key || has_url {
+            if is_local || is_no_key_builtin || is_active || has_key || has_url {
                 if let Ok(provider_instance) = state.provider_by_name(p_name, &db).await {
                     match provider_instance.list_models().await {
                         Ok(models) => all_models.extend(models),

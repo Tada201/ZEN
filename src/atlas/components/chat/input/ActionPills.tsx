@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Layout, Lightbulb, Compass, Globe, Paperclip } from 'lucide-react';
 
 interface ActionPillsProps {
@@ -13,7 +14,7 @@ interface ActionPillsProps {
   removeFile: (index: number) => void;
 }
 
-export const ActionPills = ({
+export const ActionPills = memo(({
   generativeUI, setGenerativeUI,
   isThinking, setIsThinking,
   isDeepResearch, setIsDeepResearch,
@@ -93,4 +94,4 @@ export const ActionPills = ({
       ))}
     </div>
   );
-};
+});

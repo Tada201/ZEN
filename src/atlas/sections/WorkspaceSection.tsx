@@ -4,20 +4,27 @@ import { WorkspaceLayout } from "../layouts/WorkspaceLayout";
 import { MessageList } from "../components/chat/MessageList";
 import { PremiumChatInput } from "../components/PremiumChatInput";
 import type { TabId } from "../components/SettingsModal";
-import { ArtifactData } from "../components/chat/types";
-import { ArtifactPanel } from "../components/chat/ArtifactPanel";
+import type { ArtifactData } from "../components/chat/types";
 import { SessionSidebar } from "../components/chat/SessionSidebar";
-import { MessageSquare, Settings, Hammer } from "lucide-react";
+import { MessageSquare, Settings, Hammer, PanelLeftOpen } from "lucide-react";
 import { useUIStore } from "@/lib/stores/useUIStore";
+import { getVisibleWorkspaceModeFeatures, isWorkspaceModeVisible } from "@/lib/features/frontendFeatures";
 
-import { RightPanel } from "../components/RightPanel";
 import { MainArea } from "@/components/workbench/MainArea";
 
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 
-const SettingsModal = React.lazy(() => import("../components/SettingsModal").then(m => ({ default: m.SettingsModal })));
+const loadSettingsModal = () => import("../components/SettingsModal");
+const preloadSettingsModal = () => {
+  void loadSettingsModal().then((module) => {
+    module.preloadSettingsTab("ai-config");
+  });
+};
+const SettingsModal = React.lazy(() => loadSettingsModal().then(m => ({ default: m.SettingsModal })));
 const CommandPalette = React.lazy(() => import("@/atlas/CommandPalette").then(m => ({ default: m.CommandPalette })));
 const VoiceModeOverlay = React.lazy(() => import("../components/voice/VoiceModeOverlay").then(m => ({ default: m.VoiceModeOverlay })));
+const ArtifactPanel = React.lazy(() => import("../components/chat/ArtifactPanel").then(m => ({ default: m.ArtifactPanel })));
+const RightPanel = React.lazy(() => import("../components/RightPanel").then(m => ({ default: m.RightPanel })));
 
 const DeferredOverlayFallback = () => null;
 
@@ -40,7 +47,7 @@ export function WorkspaceApp() {
   }, [messages]);
 
   const [activeArtifact, setActiveArtifact] = useState<ArtifactData | null>(null);
-  const [generativeUI, setGenerativeUI] = useState(true);
+  const [generativeUI, setGenerativeUI] = useState(false);
 
   const {
     settingsOpen,
@@ -53,6 +60,8 @@ export function WorkspaceApp() {
     setActiveTab,
     isCommandPaletteOpen,
   } = useUIStore();
+  const visibleWorkspaceModes = getVisibleWorkspaceModeFeatures();
+  const currentWorkspaceTab = isWorkspaceModeVisible(activeTab) ? activeTab : "chat";
 
   const handleSendMessageInternal = useCallback(async (data: any) => {
     handleSendMessage({
@@ -85,6 +94,18 @@ export function WorkspaceApp() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if ("requestIdleCallback" in window) {
+        window.requestIdleCallback(preloadSettingsModal, { timeout: 2500 });
+      } else {
+        preloadSettingsModal();
+      }
+    }, 2500);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
   return (
     <div className="h-screen w-screen bg-background overflow-hidden">
       <WorkspaceLayout
@@ -110,13 +131,18 @@ export function WorkspaceApp() {
             onSearchChange={setSearch}
             setSettingsTab={setActiveSettingsTab}
             setShowSettingsModal={setSettingsOpen}
+            onPreloadSettings={preloadSettingsModal}
             onToggleSidebar={() => useUIStore.getState().setSidebarOpen(!useUIStore.getState().sidebarOpen)} 
-            activeTab={activeTab}
+            activeTab={currentWorkspaceTab}
             onTabChange={(tab) => startTransition(() => setActiveTab(tab))}
+            workspaceModes={visibleWorkspaceModes.map((feature) => ({
+              id: feature.workspaceModeId ?? "chat",
+              label: feature.label,
+            }))}
           />
         }
         main={
-          activeTab === "openui" ? (
+          currentWorkspaceTab === "openui" ? (
             <div className="flex-1 h-full flex flex-col items-center justify-center bg-[#09090b] p-6 text-center select-none font-sans">
               <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-white/5 flex items-center justify-center mb-6">
                 <Hammer className="w-7 h-7 text-zinc-400" />
@@ -133,6 +159,15 @@ export function WorkspaceApp() {
               {/* Chat Header */}
               <div className="h-14 px-6 flex items-center justify-between border-b border-border/10 bg-[#09090b]/80">
                 <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => useUIStore.getState().setSidebarOpen(true)}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-white/[0.06] md:hidden"
+                    title="Open sidebar"
+                    aria-label="Open sidebar"
+                  >
+                    <PanelLeftOpen className="h-4 w-4 text-zinc-500" />
+                  </button>
                   <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
                     <MessageSquare className="w-5 h-5 text-primary" />
                   </div>
@@ -143,11 +178,14 @@ export function WorkspaceApp() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
-                      setActiveSettingsTab("models");
+                      setActiveSettingsTab("ai-config");
                       setSettingsOpen(true);
                     }}
                     className="h-8 w-8 rounded-lg hover:bg-white/[0.06] flex items-center justify-center transition-colors"
                     title="Settings"
+                    aria-label="Settings"
+                    onPointerEnter={preloadSettingsModal}
+                    onFocus={preloadSettingsModal}
                   >
                     <Settings className="h-4 w-4 text-zinc-500" />
                   </button>
@@ -162,7 +200,6 @@ export function WorkspaceApp() {
                       <MessageList
                         messages={chatMessages}
                         onOpenArtifact={setActiveArtifact}
-                        onRetry={() => {}} 
                         onOpenSettings={() => setSettingsOpen(true)}
                       />
                       <div className="w-full border-t border-border/15 bg-[#09090b]/85 rounded-t-2xl shrink-0">
@@ -202,7 +239,6 @@ export function WorkspaceApp() {
                           <MessageList
                             messages={chatMessages}
                             onOpenArtifact={setActiveArtifact}
-                            onRetry={() => {}} 
                             onOpenSettings={() => setSettingsOpen(true)}
                           />
                           <div className="w-full border-t border-border/15 bg-[#09090b]/85 rounded-t-2xl shrink-0">
@@ -239,12 +275,14 @@ export function WorkspaceApp() {
                     <ResizableHandle withHandle />
 
                     <ResizablePanel defaultSize={40} minSize={20} collapsible className="h-full bg-background border-l border-border shadow-2xl flex flex-col relative z-40">
-                      <ArtifactPanel
-                        artifact={activeArtifact}
-                        onClose={() => setActiveArtifact(null)}
-                        isStreaming={isStreaming}
-                        embedded
-                      />
+                      <Suspense fallback={<DeferredOverlayFallback />}>
+                        <ArtifactPanel
+                          artifact={activeArtifact}
+                          onClose={() => setActiveArtifact(null)}
+                          isStreaming={isStreaming}
+                          embedded
+                        />
+                      </Suspense>
                     </ResizablePanel>
                   </ResizablePanelGroup>
                 )}
@@ -252,7 +290,11 @@ export function WorkspaceApp() {
             </MainArea>
           )
         }
-        rightPanel={<RightPanel />}
+        rightPanel={
+          <Suspense fallback={<DeferredOverlayFallback />}>
+            <RightPanel />
+          </Suspense>
+        }
         showStatusBar={true}
       />
 

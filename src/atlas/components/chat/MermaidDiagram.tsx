@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { CodeBlock } from "./CodeBlock";
+import { sanitizeMermaidSvg } from "@/lib/security/generatedContent";
 
 type MermaidApi = typeof import("mermaid").default;
 
@@ -70,7 +71,7 @@ export function MermaidDiagram({ code, isStreaming }: { code: string; isStreamin
         const { svg: renderedSvg } = await mermaid.render(id, code);
 
         if (isMounted) {
-          setSvg(renderedSvg);
+          setSvg(sanitizeMermaidSvg(renderedSvg));
           setError(null);
         }
       } catch (err) {
@@ -140,7 +141,7 @@ export function MermaidDiagram({ code, isStreaming }: { code: string; isStreamin
     <div
       ref={containerRef}
       className="my-6 overflow-hidden flex justify-center bg-card/30 p-6 rounded-xl border border-border/40 shadow-sm min-h-[128px] transition-[height,opacity] duration-300 ease-in-out"
-      // Mermaid renders SVG from a fenced code block with `securityLevel: "strict"`.
+      // Mermaid is strict-mode rendered and then DOMPurify-sanitized before SVG injection.
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );

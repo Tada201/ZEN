@@ -15,7 +15,6 @@ import { cn } from "@/lib/utils";
 import { extendedLibrary } from "./genui";
 export { extendedLibrary };
 import { SourceEditor } from "./SourceEditor";
-import { getIpcErrorMessage, toolsApi } from "@/api";
 
 import "@openuidev/react-ui/components.css";
 import "@openuidev/react-ui/styles/index.css";
@@ -26,32 +25,6 @@ import "@openuidev/react-ui/styles/index.css";
  * Creates a function-map toolProvider that proxies tool calls
  * to the backend API via Tauri IPC.
  */
-function createToolProvider(chatId?: string | null): Record<
-  string,
-  (args: Record<string, unknown>) => Promise<unknown>
-> {
-  return new Proxy(
-    {} as Record<string, (args: Record<string, unknown>) => Promise<unknown>>,
-    {
-      get(_target, toolName: string) {
-        return async (args: Record<string, unknown>) => {
-          try {
-            const result = await toolsApi.runToolCommand({
-              toolName,
-              args,
-              chatId,
-            });
-            return result;
-          } catch (err: unknown) {
-            console.error(`[OpenUI] Tauri Tool "${toolName}" failed:`, err);
-            throw new Error(getIpcErrorMessage(err, "Tauri Tool execution failed"));
-          }
-        };
-      },
-    }
-  );
-}
-
 /* ── Custom Loading Spinner ───────────────────────────────── */
 
 function QueryLoader() {
@@ -70,11 +43,11 @@ interface OpenUIRendererProps {
   content: string;
   /** Whether the LLM is still streaming */
   isStreaming?: boolean;
-  /** Custom tool provider (function map). Falls back to API proxy. */
+  /** Custom tool provider for trusted callers only. Model-generated UI gets no backend tool bridge by default. */
   toolProvider?: RendererProps["toolProvider"];
   /** Callback when a component triggers an action */
   onAction?: RendererProps["onAction"];
-  /** The unique session id for this chat thread */
+  /** The unique session id for this chat thread. Kept for caller compatibility; never grants tool access. */
   chatId?: string;
 }
 
@@ -83,7 +56,6 @@ export function OpenUIRenderer({
   isStreaming = false,
   toolProvider,
   onAction,
-  chatId,
 }: OpenUIRendererProps) {
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview");
   const [renderErrors, setRenderErrors] = useState<any[]>([]);
@@ -92,8 +64,6 @@ export function OpenUIRenderer({
   useEffect(() => {
     setRenderErrors([]);
   }, [content]);
-
-  const defaultToolProvider = useMemo(() => createToolProvider(chatId), [chatId]);
 
   const { extractedCode, chatterText } = useMemo(() => {
     // 1. Try to find code inside markdown blocks first (if the model ignored instructions)
@@ -145,9 +115,6 @@ export function OpenUIRenderer({
       extractedCode += `\nroot = Stack([${assignedVars.join(', ')}], 4)`;
     }
 
-    console.log("[OpenUI] Extracted Code:", extractedCode);
-    console.log("[OpenUI] Library Components:", Object.keys(extendedLibrary.catalog || {}));
-    
     return { extractedCode, chatterText };
   }, [content]);
 
@@ -208,7 +175,7 @@ export function OpenUIRenderer({
                       response={extractedCode}
                       library={extendedLibrary}
                       isStreaming={isStreaming}
-                      toolProvider={toolProvider ?? defaultToolProvider}
+                      toolProvider={toolProvider}
                       onAction={onAction}
                       queryLoader={<QueryLoader />}
                       onError={(errors) => setRenderErrors(errors)}

@@ -11,6 +11,9 @@ interface TerminalSettingsProps {
 }
 
 export function TerminalSettings({ settings, onUpdate }: TerminalSettingsProps) {
+  // TODO(config-wireup): these values persist through settings, but terminal_spawn still
+  // uses the backend default shell/explicit cwd and does not consume shell, scrollback,
+  // confirmation, auto-execute, or shell-integration settings yet.
   return (
     <div className="space-y-8">
       <div className="space-y-1">

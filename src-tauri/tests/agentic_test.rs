@@ -29,6 +29,7 @@ impl LlmProvider for MockProvider {
         Ok(ChatResponse {
             content: "Mocked response content".to_string(),
             model: "mock-model".to_string(),
+            reasoning_details: None,
             tool_calls: None,
             tokens_in: Some(5),
             tokens_out: Some(10),

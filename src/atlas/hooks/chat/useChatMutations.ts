@@ -26,7 +26,6 @@ export function useChatMutations({
       selectedModelId === "No Model" ? null : selectedModelId,
     ),
     onSuccess: (chat) => {
-      console.log("[useChat] Session created successfully:", chat);
       const session = mapChatToSession(chat);
       queryClient.setQueryData<Session[]>(["sessions"], (prev) => [session, ...(prev || [])]);
       setCurrentSessionId(session.id);
@@ -123,7 +122,7 @@ export function useChatMutations({
   });
 
   return {
-    handleCreateSession: async (title?: string | any): Promise<string> => {
+    handleCreateSession: async (title?: string | unknown): Promise<string> => {
       const cleanTitle = typeof title === "string" ? title : undefined;
       const chat = await createSessionMutation.mutateAsync(cleanTitle);
       return chat.id;
