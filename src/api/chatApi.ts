@@ -32,6 +32,7 @@ export interface BackendMessage {
   isComplete?: number;
   kind?: string;
   metadata?: string;
+  reasoningDetails?: string;
 }
 
 export interface BackendChatTag {

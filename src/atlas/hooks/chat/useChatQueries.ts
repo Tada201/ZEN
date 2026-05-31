@@ -288,6 +288,14 @@ export const mapChatFolderToFolder = (f: BackendFolder): ChatFolder => ({
   updatedAt: new Date(f.updatedAt).getTime(),
 });
 
+type ReasoningBlock = {
+  provider?: string;
+  type?: string;
+  blockType?: string;
+  text?: string;
+  raw?: unknown;
+};
+
 export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
   let parsedMetadata = undefined;
   if (msg.metadata) {
@@ -310,6 +318,21 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
     }
   }
 
+  let reasoning = "";
+  if (msg.reasoningDetails) {
+    try {
+      const parsedReasoning = JSON.parse(msg.reasoningDetails) as ReasoningBlock[];
+      if (Array.isArray(parsedReasoning)) {
+        reasoning = parsedReasoning
+          .map((block) => typeof block?.text === "string" ? block.text : "")
+          .filter(Boolean)
+          .join("");
+      }
+    } catch (e) {
+      console.error("Failed to parse reasoning details JSON:", e);
+    }
+  }
+
   let parsedSteps: Step[] = [];
   const rawSteps = (msg as any).steps ?? parsedMetadata?.executionSteps;
   if (rawSteps) {
@@ -326,6 +349,9 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
 
   const steps: Step[] = parsedSteps.length > 0 ? parsedSteps : [];
   if (steps.length === 0) {
+    if (reasoning) {
+      steps.push({ type: "reasoning", content: reasoning });
+    }
     if (parsedToolCalls.length > 0) {
       parsedToolCalls.forEach((toolCall) => {
         steps.push({ type: "tool-call", toolCall });
@@ -341,6 +367,7 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
     sessionId: msg.chatId,
     role: msg.role as Message["role"],
     content: msg.content,
+    reasoning: reasoning || undefined,
     attachments: [],
     toolCalls: parsedToolCalls,
     steps,
@@ -419,6 +446,7 @@ function isMessageSemanticallyEqual(a: Message, b: Message): boolean {
   if (a.id !== b.id) return false;
   if (a.role !== b.role) return false;
   if (a.content !== b.content) return false;
+  if (a.reasoning !== b.reasoning) return false;
   if (a.status !== b.status) return false;
   
   if (JSON.stringify(a.metadata) !== JSON.stringify(b.metadata)) return false;

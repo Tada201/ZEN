@@ -271,6 +271,10 @@ pub async fn send_message(
                 .tool_calls
                 .as_deref()
                 .and_then(|tc_str| serde_json::from_str(tc_str).ok());
+            let reasoning_details = m
+                .reasoning_details
+                .as_deref()
+                .and_then(|rd_str| serde_json::from_str(rd_str).ok());
 
             if role == "tool" && m.tool_call_id.as_deref().unwrap_or("").is_empty() {
                 tracing::warn!(
@@ -284,7 +288,7 @@ pub async fn send_message(
             Some(ChatMessage {
                 role,
                 content: m.content,
-                reasoning_details: None,
+                reasoning_details,
                 images: m
                     .images
                     .as_deref()
