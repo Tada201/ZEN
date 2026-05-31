@@ -54,6 +54,7 @@ pub async fn persist_and_emit_action(
         None,                    // tokens_out
         Some(&kind.to_string()),
         Some(&metadata_json),
+        None, // reasoning_details
     )
     .await
     {

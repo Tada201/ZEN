@@ -53,6 +53,7 @@ pub async fn run_deep_research(
         None,
         Some("deep_research"),
         None,
+        None,
     )
     .await
     {
@@ -252,6 +253,7 @@ pub async fn run_deep_research(
         None,
         None,
         None, // tool_calls
+        None, // reasoning_details
     )
     .await
     {

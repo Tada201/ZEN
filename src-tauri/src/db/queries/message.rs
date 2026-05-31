@@ -21,6 +21,7 @@ pub async fn add_message(
     tokens_out: Option<i64>,
     kind: Option<&str>,
     metadata: Option<&str>,
+    reasoning_details: Option<&str>,
 ) -> ZenResult<Message> {
     let id = id
         .map(|s| s.to_string())
@@ -33,9 +34,9 @@ pub async fn add_message(
         INSERT INTO messages (
             id, chat_id, role, content, model, is_complete, tool_calls,
             tool_call_id, images, attachments, tokens_in, tokens_out, kind,
-            metadata, created_at
+            metadata, reasoning_details, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
         "#,
     )
     .bind(&id)
@@ -52,6 +53,7 @@ pub async fn add_message(
     .bind(tokens_out)
     .bind(kind)
     .bind(metadata)
+    .bind(reasoning_details)
     .execute(&mut *tx)
     .await?;
 

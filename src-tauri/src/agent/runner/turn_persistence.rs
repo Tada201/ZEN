@@ -11,6 +11,7 @@ pub(super) struct AssistantMessageSave<'a> {
     pub tokens_in: Option<i64>,
     pub tokens_out: Option<i64>,
     pub tool_calls: Option<&'a str>,
+    pub reasoning_details: Option<&'a str>,
     pub error_context: &'static str,
 }
 
@@ -25,6 +26,7 @@ pub(super) async fn save_assistant_message(params: AssistantMessageSave<'_>) -> 
             params.tokens_in,
             params.tokens_out,
             params.tool_calls,
+            params.reasoning_details,
         )
         .await
     } else {
@@ -44,6 +46,7 @@ pub(super) async fn save_assistant_message(params: AssistantMessageSave<'_>) -> 
             params.tokens_out,
             None,
             None,
+            params.reasoning_details,
         )
         .await
         .map(|msg| {

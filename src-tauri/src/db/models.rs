@@ -98,6 +98,7 @@ pub struct Message {
     pub kind: Option<String>,
     pub metadata: Option<String>,
     pub is_compacted: Option<i32>,
+    pub reasoning_details: Option<String>,
     pub created_at: String,
 }
 

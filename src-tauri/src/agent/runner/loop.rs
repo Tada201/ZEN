@@ -98,6 +98,7 @@ impl Runner {
                         tokens_in: Some(total_tokens_in),
                         tokens_out: Some(total_tokens_out),
                         tool_calls: None,
+                        reasoning_details: None,
                         error_context: "Failed to save partial assistant message to SQLite",
                     })
                     .await;
@@ -160,6 +161,7 @@ impl Runner {
                         tokens_in: Some(total_tokens_in),
                         tokens_out: Some(total_tokens_out),
                         tool_calls: None,
+                        reasoning_details: None,
                         error_context: "Failed to save max iterations assistant message to SQLite",
                     })
                     .await;
@@ -452,6 +454,10 @@ impl Runner {
 
                 // Save final completed assistant response to SQLite database
                 if let Some(ref db) = self.db_pool {
+                    let serialized_reasoning = response
+                        .reasoning_details
+                        .as_ref()
+                        .and_then(|rd| serde_json::to_string(rd).ok());
                     message_persisted |= save_assistant_message(AssistantMessageSave {
                         db,
                         chat_id: &chat_id,
@@ -462,6 +468,7 @@ impl Runner {
                         tokens_in: Some(total_tokens_in),
                         tokens_out: Some(total_tokens_out),
                         tool_calls: None,
+                        reasoning_details: serialized_reasoning.as_deref(),
                         error_context: "Failed to save final assistant message to SQLite",
                     })
                     .await;
@@ -534,6 +541,10 @@ impl Runner {
 
             // Save intermediate commentary & tool calls to DB (fixes #22)
             if let Some(ref db) = self.db_pool {
+                let serialized_reasoning = response
+                    .reasoning_details
+                    .as_ref()
+                    .and_then(|rd| serde_json::to_string(rd).ok());
                 message_persisted |= save_assistant_message(AssistantMessageSave {
                     db,
                     chat_id: &chat_id,
@@ -544,6 +555,7 @@ impl Runner {
                     tokens_in: None,
                     tokens_out: None,
                     tool_calls: serialized_tool_calls.as_deref(),
+                    reasoning_details: serialized_reasoning.as_deref(),
                     error_context: "Failed to save intermediate assistant message to SQLite",
                 })
                 .await;

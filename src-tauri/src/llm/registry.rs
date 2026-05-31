@@ -43,10 +43,13 @@ impl ProviderRegistry {
 
     /// Return the settings key used for the provider's API key.
     fn api_key_key(provider: &str) -> String {
-        match provider {
-            "google" | "gemini" => "gemini_api_key".to_string(),
-            other => format!("{}_api_key", other),
-        }
+        let lower = provider.to_lowercase();
+        crate::llm::provider_meta::PROVIDER_CATALOG
+            .iter()
+            .find(|p| p.name == lower)
+            .and_then(|p| p.api_key_key)
+            .map(|k| k.to_string())
+            .unwrap_or_else(|| format!("{}_api_key", lower))
     }
 
     /// Build a [`ProviderConfig`] from the in-memory settings cache.

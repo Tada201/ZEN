@@ -2,6 +2,7 @@ pub mod anthropic;
 pub mod lmstudio;
 pub mod ollama;
 pub mod openai_compat;
+pub mod provider_meta;
 pub mod registry;
 
 pub use registry::ProviderRegistry;
@@ -92,29 +93,12 @@ pub trait LlmProvider: Send + Sync {
 
 /// Centralized mapping for default provider URLs.
 pub fn default_base_url(provider: &str) -> String {
-    match provider.to_lowercase().as_str() {
-        "ollama" => "http://localhost:11434".to_string(),
-        "openai" => "https://api.openai.com/v1".to_string(),
-        "openrouter" => "https://openrouter.ai/api/v1".to_string(),
-        "anthropic" => "https://api.anthropic.com".to_string(),
-        "groq" => "https://api.groq.com/openai/v1".to_string(),
-        "together" => "https://api.together.xyz/v1".to_string(),
-        "mistral" => "https://api.mistral.ai/v1".to_string(),
-        "perplexity" => "https://api.perplexity.ai".to_string(),
-        "nvidia" => "https://integrate.api.nvidia.com/v1".to_string(),
-        "lmstudio" => "http://localhost:1234".to_string(),
-        "nine_router" | "vx" => "http://localhost:20128/v1".to_string(),
-        "opencode" | "opencode_free" => "https://opencode.ai/zen/v1".to_string(),
-        "aihubmix" => "https://aihubmix.com/v1".to_string(),
-        "google" | "gemini" => {
-            "https://generativelanguage.googleapis.com/v1beta/openai".to_string()
-        }
-        "deepseek" => "https://api.deepseek.com".to_string(),
-        "qwen" => "https://dashscope.aliyuncs.com/compatible-mode/v1".to_string(),
-        "xai" => "https://api.x.ai/v1".to_string(),
-        "kilocode" | "kilo" | "kilo.ai" => "https://api.kilo.ai/api/gateway".to_string(),
-        _ => String::new(),
-    }
+    let lower = provider.to_lowercase();
+    provider_meta::PROVIDER_CATALOG
+        .iter()
+        .find(|p| p.name == lower)
+        .map(|p| p.default_base_url.to_string())
+        .unwrap_or_default()
 }
 
 /// Provides a reliable "standard" model for a given provider, used during auto-escalation.
@@ -133,31 +117,18 @@ pub fn make_provider(config: &ProviderConfig) -> Arc<dyn LlmProvider> {
         "anthropic" => Arc::new(AnthropicProvider::new(&config.api_key)),
         "lmstudio" => Arc::new(LmStudioProvider::new(&config.base_url)),
         _ => {
-            // Detect OpenRouter for extra headers
-            let extra_headers = if p_type == "openrouter"
-                || config.display_name.to_lowercase().contains("openrouter")
+            let mut extra_headers = vec![];
+            if let Some(p) = provider_meta::PROVIDER_CATALOG
+                .iter()
+                .find(|p| p.name == p_type)
             {
-                vec![
-                    ("HTTP-Referer".to_string(), "https://zen.local".to_string()),
-                    ("X-Title".to_string(), "Zen AI".to_string()),
-                ]
-            } else if p_type == "kilocode"
-                || p_type == "kilo"
-                || p_type == "kilo.ai"
-                || config.display_name.to_lowercase().contains("kilocode")
-                || config.display_name.to_lowercase().contains("kilo.ai")
-            {
-                vec![
-                    ("HTTP-Referer".to_string(), "https://kilo.ai".to_string()),
-                    ("X-Title".to_string(), "Kilo AI".to_string()),
-                    (
-                        "X-KILOCODE-EDITORNAME".to_string(),
-                        "Zen Workbench".to_string(),
-                    ),
-                ]
-            } else {
-                vec![]
-            };
+                if let Some(referer) = p.http_referer {
+                    extra_headers.push(("HTTP-Referer".to_string(), referer.to_string()));
+                }
+                for &(k, v) in p.extra_headers {
+                    extra_headers.push((k.to_string(), v.to_string()));
+                }
+            }
             Arc::new(OpenAiCompatProvider::with_headers(
                 &config.base_url,
                 &config.api_key,

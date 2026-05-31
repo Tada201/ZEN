@@ -169,6 +169,7 @@ pub async fn send_message(
         None,
         None,
         None,
+        None,
     )
     .await?;
     info!(chat_id = %chat_id, "User message successfully saved to database");
@@ -783,6 +784,7 @@ pub async fn import_chat(state: State<'_, AppState>, source_path: String) -> Zen
             msg.tokens_out,
             None,
             None,
+            msg.reasoning_details.as_deref(),
         )
         .await?;
     }

@@ -140,6 +140,7 @@ pub async fn update_message(
     tokens_in: Option<i64>,
     tokens_out: Option<i64>,
     tool_calls: Option<&str>,
+    reasoning_details: Option<&str>,
 ) -> ZenResult<()> {
     use sqlx::Row;
 
@@ -189,13 +190,14 @@ pub async fn update_message(
 
     // 2. Update message
     sqlx::query(
-        "UPDATE messages SET content = ?, is_complete = ?, tokens_in = ?, tokens_out = ?, tool_calls = ? WHERE id = ?"
+        "UPDATE messages SET content = ?, is_complete = ?, tokens_in = ?, tokens_out = ?, tool_calls = ?, reasoning_details = COALESCE(?, reasoning_details) WHERE id = ?"
     )
     .bind(content)
     .bind(is_complete as i32)
     .bind(tokens_in)
     .bind(tokens_out)
     .bind(merged_tool_calls)
+    .bind(reasoning_details)
     .bind(id)
     .execute(&mut *tx)
     .await?;

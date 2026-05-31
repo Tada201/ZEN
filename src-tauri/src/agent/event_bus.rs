@@ -624,17 +624,17 @@ impl AgentEvent {
         let payload = self.payload();
 
         if let Some(ref ch) = channel {
-            // For channels, we keep the {type, payload} structure
-            let _ = ch.send(payload);
-        } else {
-            // For global emit, we use the event name and flat payload
-            let event_name = self.event_name();
-            let flat_payload = match payload.get("payload") {
-                Some(p) => p.clone(),
-                None => payload,
-            };
-            let _ = app.emit(event_name, flat_payload);
+            // Send direct channel event
+            let _ = ch.send(payload.clone());
         }
+
+        // Always broadcast globally to keep existing UI event listeners in sync
+        let event_name = self.event_name();
+        let flat_payload = match payload.get("payload") {
+            Some(p) => p.clone(),
+            None => payload,
+        };
+        let _ = app.emit(event_name, flat_payload);
     }
 }
 

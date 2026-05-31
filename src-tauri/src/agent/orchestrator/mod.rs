@@ -119,4 +119,21 @@ impl Orchestrator {
         self.db_pool = Some(db_pool);
         self
     }
+
+    /// Create a clone of the orchestrator with a custom direct IPC channel
+    pub fn clone_with_channel(
+        &self,
+        channel: Option<tauri::ipc::Channel<serde_json::Value>>,
+    ) -> Self {
+        Self {
+            app: self.app.clone(),
+            agent_registry: self.agent_registry.clone(),
+            tool_registry: self.tool_registry.clone(),
+            hook_registry: self.hook_registry.clone(),
+            permissions: self.permissions.clone(),
+            tool_manager: self.tool_manager.clone(),
+            db_pool: self.db_pool.clone(),
+            on_event: channel,
+        }
+    }
 }

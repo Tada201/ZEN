@@ -262,7 +262,8 @@ export const PremiumChatInput = memo(({
       return;
     }
     if (!message.trim() && selectedFiles.length === 0) return;
-    if (!selectedModelInfo) return;
+    const modelId = selectedModelInfo?.id || selectedModelId || "No Model";
+    const providerId = selectedModelInfo?.provider || selectedProvider || "ollama";
 
     const attachments = await Promise.all(selectedFiles.map(async (file) => {
       return new Promise((resolve, reject) => {
@@ -282,7 +283,7 @@ export const PremiumChatInput = memo(({
 
     onSend({
       message,
-      model: selectedModelInfo.id,
+      model: modelId,
       webSearch: isWebSearch,
       deepResearch: isDeepResearch,
       generativeUI: internalGenerativeUI,
@@ -290,12 +291,11 @@ export const PremiumChatInput = memo(({
       attachments: attachments as Attachment[],
       thinking: buildThinkingPayload(),
       tools: isToolsDisabled ? [] : undefined,
-      provider: selectedModelInfo.provider,
+      provider: providerId,
     });
 
     setMessage('');
     setSelectedFiles([]);
-    // Special modes are now sticky - no longer resetting them to false here
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }

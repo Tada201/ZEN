@@ -813,6 +813,11 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         .execute(pool)
         .await;
 
+    // Reasoning persistence: store Vec<ReasoningBlock> as JSON
+    let _ = sqlx::query("ALTER TABLE messages ADD COLUMN reasoning_details TEXT;")
+        .execute(pool)
+        .await;
+
     info!("Database migrations complete");
     Ok(())
 }
