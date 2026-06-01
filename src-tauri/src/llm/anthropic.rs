@@ -213,6 +213,7 @@ struct ToolCallAcc {
     id: String,
     name: String,
     input_json: String,
+    ready_emitted: bool,
 }
 
 impl AnthropicProvider {
@@ -688,6 +689,7 @@ impl LlmProvider for AnthropicProvider {
                                                 id: block.id.clone().unwrap_or_default(),
                                                 name: block.name.clone().unwrap_or_default(),
                                                 input_json: String::new(),
+                                                ready_emitted: false,
                                             };
                                             tool_call_accs.push(acc);
                                             active_tool_index = Some(tool_call_accs.len() - 1);
@@ -758,6 +760,25 @@ impl LlmProvider for AnthropicProvider {
                                                             arguments_delta: json_fragment.clone(),
                                                             arguments_snapshot: acc.input_json.clone(),
                                                         });
+                                                        if !acc.ready_emitted && !acc.name.is_empty() {
+                                                            if let Ok(arguments) =
+                                                                serde_json::from_str::<serde_json::Value>(
+                                                                    &acc.input_json,
+                                                                )
+                                                            {
+                                                                acc.ready_emitted = true;
+                                                                on_chunk(crate::llm::LlmChunk::ToolCallReady {
+                                                                    index: idx,
+                                                                    id: if acc.id.is_empty() {
+                                                                        None
+                                                                    } else {
+                                                                        Some(acc.id.clone())
+                                                                    },
+                                                                    name: acc.name.clone(),
+                                                                    arguments,
+                                                                });
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }

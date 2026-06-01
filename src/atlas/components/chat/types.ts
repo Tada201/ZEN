@@ -141,7 +141,8 @@ export interface ActionMeta {
     toolCallId?: string;
     toolName?: string;
     argumentsDelta?: string;
-    argumentsPreview?: string;
+    argumentsPreview?: string | Record<string, unknown>;
+    ready?: boolean;
   };
   toolResult?: ToolResultMeta;
   handoff?: HandoffMeta;

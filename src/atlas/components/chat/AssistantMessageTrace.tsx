@@ -130,9 +130,20 @@ function getActionPresentation(step: Step) {
   }
   if (kind === "chat_status") {
     const tools = Array.isArray(step.metadata?.tools) ? step.metadata.tools : [];
+    if (phase === "tool_call_ready") {
+      const preview = step.metadata?.toolCallPreview;
+      const args = preview?.argumentsPreview;
+      const detail = typeof args === "string" ? args : args ? JSON.stringify(args) : step.content || step.metadata?.message;
+      return {
+        Icon: Wrench,
+        label: `${preview?.toolName || "Tool call"} ready`,
+        detail: detail?.slice(0, 180),
+        iconClass: "text-emerald-300/80",
+      };
+    }
     if (phase === "tool_call_streaming") {
       const preview = step.metadata?.toolCallPreview;
-      const args = preview?.argumentsPreview?.trim();
+      const args = typeof preview?.argumentsPreview === "string" ? preview.argumentsPreview.trim() : "";
       return {
         Icon: Wrench,
         label: `Preparing ${preview?.toolName || "tool call"}`,

@@ -61,4 +61,5 @@ pub struct ToolCallAccumulator {
     pub id: String,
     pub name: String,
     pub arguments: String,
+    pub ready_emitted: bool,
 }

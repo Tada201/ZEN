@@ -468,6 +468,23 @@ impl OpenAiCompatProvider {
                                             .unwrap_or_default(),
                                         arguments_snapshot: acc.arguments.clone(),
                                     });
+                                    if !acc.ready_emitted && !acc.name.is_empty() {
+                                        if let Ok(arguments) =
+                                            serde_json::from_str::<serde_json::Value>(&acc.arguments)
+                                        {
+                                            acc.ready_emitted = true;
+                                            on_chunk(crate::llm::LlmChunk::ToolCallReady {
+                                                index: idx,
+                                                id: if acc.id.is_empty() {
+                                                    None
+                                                } else {
+                                                    Some(acc.id.clone())
+                                                },
+                                                name: acc.name.clone(),
+                                                arguments,
+                                            });
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -635,6 +652,7 @@ pub struct ToolCallAccumulator {
     id: String,
     name: String,
     arguments: String,
+    ready_emitted: bool,
 }
 
 #[cfg(test)]
@@ -1130,6 +1148,7 @@ mod tests {
                     LlmChunk::Thought(text) => Some(text.as_str()),
                     LlmChunk::Text(_) => None,
                     LlmChunk::ToolCallDelta { .. } => None,
+                    LlmChunk::ToolCallReady { .. } => None,
                 })
                 .collect::<Vec<_>>(),
             vec!["deepseek ", "generic ", "gemini "]

@@ -50,7 +50,7 @@ export function getActionEventId(payload: AgentActionEventPayload, kind: string)
     const preview = payload.metadata?.toolCallPreview as Record<string, unknown> | undefined;
     const previewId = stringValue(preview?.toolCallId, preview?.tool_call_id);
     const previewIndex = preview?.index;
-    if ((payload.phase || payload.metadata?.phase) === "tool_call_streaming") {
+    if ((payload.phase || payload.metadata?.phase) === "tool_call_streaming" || (payload.phase || payload.metadata?.phase) === "tool_call_ready") {
       return `tool-preview:${previewId || previewIndex || "active"}`;
     }
     return `status:${payload.chat_id || payload.chatId || "active"}:${payload.phase || payload.metadata?.phase}`;
@@ -111,7 +111,11 @@ export function summarizeAction(payload: AgentActionEventPayload, kind: string):
   if (kind === "chat_status") {
     const preview = payload.metadata?.toolCallPreview as Record<string, unknown> | undefined;
     const toolName = stringValue(preview?.toolName, preview?.tool_name, payload.metadata?.toolCall?.toolName);
-    if ((payload.phase || payload.metadata?.phase) === "tool_call_streaming" && toolName) {
+    const phase = payload.phase || payload.metadata?.phase;
+    if (phase === "tool_call_ready" && toolName) {
+      return `${toolName} ready`;
+    }
+    if (phase === "tool_call_streaming" && toolName) {
       return `Preparing ${toolName}`;
     }
     return payload.message || "Agent status updated";

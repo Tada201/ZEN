@@ -364,6 +364,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                 LlmChunk::Text(t) => (t, "text"),
                 LlmChunk::Thought(t) => (t, "thought"),
                 LlmChunk::ToolCallDelta { .. } => return,
+                LlmChunk::ToolCallReady { .. } => return,
             };
 
             // Feed text chunks to the artifact detector

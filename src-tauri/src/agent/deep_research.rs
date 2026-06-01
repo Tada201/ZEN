@@ -206,6 +206,7 @@ pub async fn run_deep_research(
             crate::llm::LlmChunk::Text(t) => t,
             crate::llm::LlmChunk::Thought(t) => t,
             crate::llm::LlmChunk::ToolCallDelta { .. } => return,
+            crate::llm::LlmChunk::ToolCallReady { .. } => return,
         };
         if !text.is_empty() {
             let _ = app_clone2.emit(

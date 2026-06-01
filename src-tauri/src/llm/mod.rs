@@ -54,6 +54,13 @@ pub enum LlmChunk {
         arguments_delta: String,
         arguments_snapshot: String,
     },
+    /// A streamed tool call whose arguments have become valid JSON.
+    ToolCallReady {
+        index: usize,
+        id: Option<String>,
+        name: String,
+        arguments: serde_json::Value,
+    },
 }
 
 /// LLM provider abstraction — decoupled from any specific backend.

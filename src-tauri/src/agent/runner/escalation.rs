@@ -393,6 +393,37 @@ impl Runner {
                             .emit_via(&app_clone, &on_event_clone);
                             return;
                         }
+                        LlmChunk::ToolCallReady {
+                            index,
+                            id,
+                            name,
+                            arguments,
+                        } => {
+                            AgentEvent::ChatStatus(ChatStatusPayload {
+                                chat_id: chat_id_clone.clone(),
+                                message: format!("{} is ready", name),
+                                iteration: None,
+                                phase: Some("tool_call_ready".to_string()),
+                                metadata: Some(serde_json::json!({
+                                    "status": "running",
+                                    "toolCall": {
+                                        "toolName": name,
+                                        "toolCallId": id,
+                                        "args": arguments,
+                                        "status": "running"
+                                    },
+                                    "toolCallPreview": {
+                                        "index": index,
+                                        "toolCallId": id,
+                                        "toolName": name,
+                                        "argumentsPreview": arguments,
+                                        "ready": true,
+                                    }
+                                })),
+                            })
+                            .emit_via(&app_clone, &on_event_clone);
+                            return;
+                        }
                     };
 
                     if chunk_type == "text" && !chunk_text.is_empty() {
