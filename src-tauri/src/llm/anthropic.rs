@@ -691,6 +691,14 @@ impl LlmProvider for AnthropicProvider {
                                             };
                                             tool_call_accs.push(acc);
                                             active_tool_index = Some(tool_call_accs.len() - 1);
+                                            let idx = tool_call_accs.len() - 1;
+                                            on_chunk(crate::llm::LlmChunk::ToolCallDelta {
+                                                index: idx,
+                                                id: block.id.clone(),
+                                                name: block.name.clone(),
+                                                arguments_delta: String::new(),
+                                                arguments_snapshot: String::new(),
+                                            });
                                         }
                                         "text" => {
                                             active_tool_index = None;
@@ -735,6 +743,21 @@ impl LlmProvider for AnthropicProvider {
                                                 if let Some(idx) = active_tool_index {
                                                     if let Some(acc) = tool_call_accs.get_mut(idx) {
                                                         acc.input_json.push_str(json_fragment);
+                                                        on_chunk(crate::llm::LlmChunk::ToolCallDelta {
+                                                            index: idx,
+                                                            id: if acc.id.is_empty() {
+                                                                None
+                                                            } else {
+                                                                Some(acc.id.clone())
+                                                            },
+                                                            name: if acc.name.is_empty() {
+                                                                None
+                                                            } else {
+                                                                Some(acc.name.clone())
+                                                            },
+                                                            arguments_delta: json_fragment.clone(),
+                                                            arguments_snapshot: acc.input_json.clone(),
+                                                        });
                                                     }
                                                 }
                                             }

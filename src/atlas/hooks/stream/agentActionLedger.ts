@@ -47,6 +47,12 @@ export function getActionEventId(payload: AgentActionEventPayload, kind: string)
     return `orchestrator:${payload.run_id || payload.chat_id || payload.chatId || "active"}`;
   }
   if (kind === "chat_status" && (payload.phase || payload.metadata?.phase)) {
+    const preview = payload.metadata?.toolCallPreview as Record<string, unknown> | undefined;
+    const previewId = stringValue(preview?.toolCallId, preview?.tool_call_id);
+    const previewIndex = preview?.index;
+    if ((payload.phase || payload.metadata?.phase) === "tool_call_streaming") {
+      return `tool-preview:${previewId || previewIndex || "active"}`;
+    }
     return `status:${payload.chat_id || payload.chatId || "active"}:${payload.phase || payload.metadata?.phase}`;
   }
   if (kind.startsWith("workflow_")) {
@@ -102,7 +108,14 @@ function getActiveAssistantIndex(messages: Message[], preferredMessageId?: strin
 
 export function summarizeAction(payload: AgentActionEventPayload, kind: string): string {
   if (payload.content) return payload.content;
-  if (kind === "chat_status") return payload.message || "Agent status updated";
+  if (kind === "chat_status") {
+    const preview = payload.metadata?.toolCallPreview as Record<string, unknown> | undefined;
+    const toolName = stringValue(preview?.toolName, preview?.tool_name, payload.metadata?.toolCall?.toolName);
+    if ((payload.phase || payload.metadata?.phase) === "tool_call_streaming" && toolName) {
+      return `Preparing ${toolName}`;
+    }
+    return payload.message || "Agent status updated";
+  }
   if (kind === "orchestrator_progress") return payload.message || payload.phase || payload.status || "Orchestrator progress";
   if (kind.startsWith("workflow_")) return payload.workflow_id ? `Workflow ${payload.workflow_id}` : "Workflow update";
   if (kind === "task_created") return payload.description || payload.task_id || payload.taskId || "Task created";

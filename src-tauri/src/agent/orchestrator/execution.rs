@@ -363,6 +363,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
             let (chunk_text, chunk_type) = match chunk {
                 LlmChunk::Text(t) => (t, "text"),
                 LlmChunk::Thought(t) => (t, "thought"),
+                LlmChunk::ToolCallDelta { .. } => return,
             };
 
             // Feed text chunks to the artifact detector

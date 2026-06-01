@@ -62,12 +62,12 @@ export function AssistantMessage({
 
   const executionActionSteps = useMemo<Step[]>(() => {
     return groupedSteps
-      .filter((step) => step.type === "action" && step.kind !== "chat_status")
+      .filter((step) => step.type === "action" && (step.kind !== "chat_status" || step.metadata?.phase === "tool_call_streaming"))
       .map((step) => step as Step);
   }, [groupedSteps]);
 
   const visibleGroupedSteps = useMemo(() => {
-    return groupedSteps.filter((step) => step.type !== "action" || step.kind !== "chat_status");
+    return groupedSteps.filter((step) => step.type !== "action" || step.kind !== "chat_status" || step.metadata?.phase === "tool_call_streaming");
   }, [groupedSteps]);
 
   const hasVisibleAnswer = Boolean(

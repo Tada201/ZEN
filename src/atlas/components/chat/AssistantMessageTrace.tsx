@@ -130,6 +130,16 @@ function getActionPresentation(step: Step) {
   }
   if (kind === "chat_status") {
     const tools = Array.isArray(step.metadata?.tools) ? step.metadata.tools : [];
+    if (phase === "tool_call_streaming") {
+      const preview = step.metadata?.toolCallPreview;
+      const args = preview?.argumentsPreview?.trim();
+      return {
+        Icon: Wrench,
+        label: `Preparing ${preview?.toolName || "tool call"}`,
+        detail: args ? args.slice(0, 180) : step.content || step.metadata?.message,
+        iconClass: "text-blue-300/80",
+      };
+    }
     if (phase === "tool_batch_planned") {
       return {
         Icon: Wrench,

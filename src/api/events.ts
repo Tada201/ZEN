@@ -148,12 +148,14 @@ type FlexibleSpawnMeta = Partial<NonNullable<ActionMeta["spawn"]>> & {
   spawn_id?: string;
 };
 
-export interface AgentActionMetadata extends Omit<ActionMeta, "approvalRequest" | "spawn" | "toolCall" | "toolResult"> {
+export interface AgentActionMetadata extends Omit<ActionMeta, "approvalRequest" | "spawn" | "toolCall" | "toolResult" | "toolCallPreview"> {
   approvalRequest?: FlexibleApprovalRequestMeta;
   approval_request?: FlexibleApprovalRequestMeta;
   spawn?: FlexibleSpawnMeta;
   toolCall?: FlexibleToolCallMeta;
   tool_call?: FlexibleToolCallMeta;
+  toolCallPreview?: ActionMeta["toolCallPreview"];
+  tool_call_preview?: ActionMeta["toolCallPreview"];
   toolResult?: FlexibleToolResultMeta;
   tool_result?: FlexibleToolResultMeta;
   [key: string]: unknown;

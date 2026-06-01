@@ -357,6 +357,42 @@ impl Runner {
                     let (chunk_text, chunk_type) = match chunk {
                         LlmChunk::Text(t) => (t, "text"),
                         LlmChunk::Thought(t) => (t, "thought"),
+                        LlmChunk::ToolCallDelta {
+                            index,
+                            id,
+                            name,
+                            arguments_delta,
+                            arguments_snapshot,
+                        } => {
+                            let tool_label = name
+                                .as_deref()
+                                .filter(|value| !value.is_empty())
+                                .unwrap_or("tool call");
+                            AgentEvent::ChatStatus(ChatStatusPayload {
+                                chat_id: chat_id_clone.clone(),
+                                message: format!("Preparing {}", tool_label),
+                                iteration: None,
+                                phase: Some("tool_call_streaming".to_string()),
+                                metadata: Some(serde_json::json!({
+                                    "status": "running",
+                                    "toolCall": {
+                                        "toolName": tool_label,
+                                        "toolCallId": id,
+                                        "args": {},
+                                        "status": "running"
+                                    },
+                                    "toolCallPreview": {
+                                        "index": index,
+                                        "toolCallId": id,
+                                        "toolName": name,
+                                        "argumentsDelta": arguments_delta,
+                                        "argumentsPreview": arguments_snapshot,
+                                    }
+                                })),
+                            })
+                            .emit_via(&app_clone, &on_event_clone);
+                            return;
+                        }
                     };
 
                     if chunk_type == "text" && !chunk_text.is_empty() {

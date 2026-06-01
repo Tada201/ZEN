@@ -136,6 +136,13 @@ export interface ActionMeta {
   resultSummary?: string;
   progressPercent?: number;
   toolCall?: ToolCallMeta;
+  toolCallPreview?: {
+    index?: number;
+    toolCallId?: string;
+    toolName?: string;
+    argumentsDelta?: string;
+    argumentsPreview?: string;
+  };
   toolResult?: ToolResultMeta;
   handoff?: HandoffMeta;
   spawn?: SpawnMeta;

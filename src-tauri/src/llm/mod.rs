@@ -46,6 +46,14 @@ pub enum LlmChunk {
     Text(String),
     /// Thinking/reasoning block (e.g. Anthropic thinking)
     Thought(String),
+    /// Incremental structured tool-call data while the provider is still streaming.
+    ToolCallDelta {
+        index: usize,
+        id: Option<String>,
+        name: Option<String>,
+        arguments_delta: String,
+        arguments_snapshot: String,
+    },
 }
 
 /// LLM provider abstraction — decoupled from any specific backend.

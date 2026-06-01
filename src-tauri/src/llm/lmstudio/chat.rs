@@ -214,6 +214,25 @@ impl super::LmStudioProvider {
                                             acc.arguments.push_str(args);
                                         }
                                     }
+                                    on_chunk(crate::llm::LlmChunk::ToolCallDelta {
+                                        index: idx,
+                                        id: if acc.id.is_empty() {
+                                            None
+                                        } else {
+                                            Some(acc.id.clone())
+                                        },
+                                        name: if acc.name.is_empty() {
+                                            None
+                                        } else {
+                                            Some(acc.name.clone())
+                                        },
+                                        arguments_delta: delta
+                                            .function
+                                            .as_ref()
+                                            .and_then(|func| func.arguments.clone())
+                                            .unwrap_or_default(),
+                                        arguments_snapshot: acc.arguments.clone(),
+                                    });
                                 }
                             }
                         }
