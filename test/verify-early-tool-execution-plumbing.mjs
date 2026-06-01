@@ -5,6 +5,10 @@ const escalation = readFileSync(new URL("../src-tauri/src/agent/runner/escalatio
 assert.match(escalation, /struct EarlyToolExecutionContext/);
 assert.match(escalation, /struct EarlyToolExecutionState/);
 assert.match(escalation, /mark_started/);
+assert.match(escalation, /clear_pending/);
+assert.match(escalation, /early_token\.cancel\(\)/);
+assert.match(escalation, /token\.child_token\(\)/);
+assert.match(escalation, /early_token_for_callback/);
 assert.match(escalation, /execute_tools_with_hooks/);
 assert.match(escalation, /LlmChunk::ToolCallReady/);
 assert.match(escalation, /tokio::spawn\(async move/);

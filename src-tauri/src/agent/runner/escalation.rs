@@ -72,6 +72,12 @@ impl EarlyToolExecutionState {
         self.started.lock().await.contains(key)
     }
 
+    pub async fn clear_pending(&self) {
+        self.started.lock().await.clear();
+        self.results.lock().await.clear();
+        self.notify.notify_waiters();
+    }
+
     pub async fn wait_for_result(
         &self,
         key: &str,
@@ -326,7 +332,8 @@ impl Runner {
         let chat_id_clone = chat_id.to_string();
         let early_runner = self.clone();
         let early_tools_clone = early_tools.clone();
-        let early_token = token.clone();
+        let early_token = token.child_token();
+        let early_token_for_callback = early_token.clone();
 
         // Allocate the assistant id synchronously, but do not block first token on
         // SQLite placeholder persistence.
@@ -516,7 +523,7 @@ impl Runner {
                                     id.as_deref(),
                                 );
                                 let runner = early_runner.clone();
-                                let token = early_token.clone();
+                                let token = early_token_for_callback.clone();
                                 tokio::spawn(async move {
                                     if !ctx.state.mark_started(&key).await {
                                         return;
@@ -640,6 +647,13 @@ impl Runner {
 
         if let Some(handle) = placeholder_insert.take() {
             let _ = handle.await;
+        }
+
+        if result.is_err() {
+            early_token.cancel();
+            if let Some(ctx) = &early_tools {
+                ctx.state.clear_pending().await;
+            }
         }
 
         result.map_err(|e| e.into())
