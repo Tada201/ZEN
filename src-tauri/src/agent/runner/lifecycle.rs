@@ -26,6 +26,25 @@ pub struct Runner {
     pub(super) on_event: Option<tauri::ipc::Channel<serde_json::Value>>,
 }
 
+impl Clone for Runner {
+    fn clone(&self) -> Self {
+        Self {
+            app: self.app.clone(),
+            tool_registry: self.tool_registry.clone(),
+            agent_registry: self.agent_registry.clone(),
+            hook_registry: self.hook_registry.clone(),
+            permissions: self.permissions.clone(),
+            tool_manager: self.tool_manager.clone(),
+            config: self.config.clone(),
+            db_pool: self.db_pool.clone(),
+            depth: self.depth,
+            cache: self.cache.clone(),
+            allowed_tools: self.allowed_tools.clone(),
+            on_event: self.on_event.clone(),
+        }
+    }
+}
+
 impl Runner {
     pub fn new(
         app: AppHandle,

@@ -1,6 +1,7 @@
 use super::actions::{emit_action_only, persist_and_emit_action};
 use super::helpers::{generate_handoff_summary, parse_file_changes, parse_text_tool_calls};
 use super::lifecycle::Runner;
+use super::escalation::{EarlyToolExecutionContext, EarlyToolExecutionState};
 use super::memory_bootstrap::{
     cached_recall_context, compact_context_if_needed, load_initial_conversation,
     load_memory_run_settings,
@@ -16,6 +17,7 @@ use crate::db::queries;
 use crate::llm::LlmProvider;
 use anyhow::{Context, Result};
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
 /// Maximum recursion depth for sub-agent spawning (prevents infinite loops)
@@ -65,6 +67,7 @@ impl Runner {
         let mut message_persisted = false;
         let mut assistant_message_id: Option<String> = None;
         let mut accumulated_commentary = String::new();
+        let early_tool_state = Arc::new(EarlyToolExecutionState::new());
 
         // ── P1: Check if provider supports structured tool calling ──
         let tools_supported = provider.supports_tools(&model);
@@ -310,6 +313,14 @@ impl Runner {
             } else {
                 None
             };
+            let early_tools = tools_arg.as_ref().map(|_| EarlyToolExecutionContext {
+                chat_id: chat_id_inner.clone(),
+                iteration,
+                agent_id: current_agent.id.clone(),
+                agent_name: current_agent.name.clone(),
+                authorized_tool_ids: authorized_tool_ids.clone(),
+                state: early_tool_state.clone(),
+            });
 
             // Auto-escalation: try current model, fallback to cloud if local fails
             let response = match self
@@ -324,6 +335,7 @@ impl Runner {
                     &chat_id_inner,
                     &mut assistant_message_id,
                     None,
+                    early_tools,
                 )
                 .await
             {
@@ -591,9 +603,35 @@ impl Runner {
                 })),
             }));
 
-            let results = self
-                .execute_tools_with_hooks(
-                    &tool_calls,
+            let mut ordered_results: Vec<Option<ToolResult>> = vec![None; tool_calls.len()];
+            let mut remaining_calls: Vec<ToolCall> = Vec::new();
+            let mut remaining_indexes: Vec<usize> = Vec::new();
+
+            for (index, tool_call) in tool_calls.iter().enumerate() {
+                let id_key =
+                    EarlyToolExecutionState::key_for(&tool_call.name, &tool_call.args, Some(&tool_call.id));
+                let sig_key = EarlyToolExecutionState::key_for(&tool_call.name, &tool_call.args, None);
+                let key = if early_tool_state.was_started(&id_key).await {
+                    id_key
+                } else {
+                    sig_key
+                };
+                if early_tool_state.was_started(&key).await {
+                    ordered_results[index] =
+                        early_tool_state.wait_for_result(&key, token.clone()).await;
+                }
+
+                if ordered_results[index].is_none() {
+                    remaining_indexes.push(index);
+                    remaining_calls.push(tool_call.clone());
+                }
+            }
+
+            let remaining_results = if remaining_calls.is_empty() {
+                Vec::new()
+            } else {
+                self.execute_tools_with_hooks(
+                    &remaining_calls,
                     &chat_id,
                     iteration,
                     &current_agent.id,
@@ -601,7 +639,28 @@ impl Runner {
                     &authorized_tool_ids,
                     token.clone(),
                 )
-                .await;
+                .await
+            };
+
+            for (index, result) in remaining_indexes.into_iter().zip(remaining_results.into_iter()) {
+                ordered_results[index] = Some(result);
+            }
+
+            let results: Vec<ToolResult> = ordered_results
+                .into_iter()
+                .enumerate()
+                .map(|(index, maybe_result)| {
+                    maybe_result.unwrap_or_else(|| ToolResult {
+                        tool_call_id: tool_calls[index].id.clone(),
+                        content: serde_json::json!({
+                            "error": "Tool call did not produce a result.",
+                            "tool": tool_calls[index].name,
+                        }),
+                        is_error: true,
+                        duration_ms: 0,
+                    })
+                })
+                .collect();
 
             let mut had_error = false;
             let mut had_success = false;

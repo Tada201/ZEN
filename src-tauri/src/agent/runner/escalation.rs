@@ -9,9 +9,88 @@ use crate::db::models::ChatMessage;
 use crate::db::queries;
 use anyhow::Result;
 use serde_json::json;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
+use tokio::sync::{Mutex, Notify};
 use tokio_util::sync::CancellationToken;
 use tracing::error;
+
+use crate::agent::types::{ToolCall, ToolResult};
+
+#[derive(Clone)]
+pub(super) struct EarlyToolExecutionContext {
+    pub chat_id: String,
+    pub iteration: usize,
+    pub agent_id: String,
+    pub agent_name: String,
+    pub authorized_tool_ids: Vec<String>,
+    pub state: Arc<EarlyToolExecutionState>,
+}
+
+pub(super) struct EarlyToolExecutionState {
+    started: Mutex<HashSet<String>>,
+    results: Mutex<HashMap<String, ToolResult>>,
+    notify: Notify,
+}
+
+impl EarlyToolExecutionState {
+    pub fn new() -> Self {
+        Self {
+            started: Mutex::new(HashSet::new()),
+            results: Mutex::new(HashMap::new()),
+            notify: Notify::new(),
+        }
+    }
+
+    pub fn key_for(name: &str, args: &serde_json::Value, id: Option<&str>) -> String {
+        if let Some(id) = id.filter(|value| !value.is_empty()) {
+            format!("id:{id}")
+        } else {
+            format!("sig:{name}:{}", args)
+        }
+    }
+
+    pub async fn mark_started(&self, key: &str) -> bool {
+        self.started.lock().await.insert(key.to_string())
+    }
+
+    pub async fn insert_result(&self, key: String, result: ToolResult) {
+        self.results.lock().await.insert(key, result);
+        self.notify.notify_waiters();
+    }
+
+    pub async fn take_result(&self, key: &str) -> Option<ToolResult> {
+        let result = self.results.lock().await.remove(key);
+        if result.is_some() {
+            self.started.lock().await.remove(key);
+        }
+        result
+    }
+
+    pub async fn was_started(&self, key: &str) -> bool {
+        self.started.lock().await.contains(key)
+    }
+
+    pub async fn wait_for_result(
+        &self,
+        key: &str,
+        token: CancellationToken,
+    ) -> Option<ToolResult> {
+        loop {
+            if let Some(result) = self.take_result(key).await {
+                return Some(result);
+            }
+            if !self.was_started(key).await {
+                return None;
+            }
+            tokio::select! {
+                _ = self.notify.notified() => {}
+                _ = token.cancelled() => return None,
+            }
+        }
+    }
+}
 
 impl Runner {
     /// Call LLM with auto-escalation from local to cloud models.
@@ -28,6 +107,7 @@ impl Runner {
         chat_id: &str,
         assistant_message_id: &mut Option<String>,
         _stream_channel: Option<tauri::ipc::Channel<ChatChunkPayload>>,
+        early_tools: Option<EarlyToolExecutionContext>,
     ) -> Result<crate::db::models::ChatResponse, anyhow::Error> {
         match self
             .call_llm_with_callback(
@@ -40,6 +120,7 @@ impl Runner {
                 app,
                 chat_id,
                 assistant_message_id,
+                early_tools.clone(),
             )
             .await
         {
@@ -82,6 +163,7 @@ impl Runner {
                             app,
                             chat_id,
                             assistant_message_id,
+                            None,
                         )
                         .await
                     {
@@ -162,6 +244,7 @@ impl Runner {
                                     app,
                                     chat_id,
                                     assistant_message_id,
+                                    early_tools,
                                 )
                                 .await
                             {
@@ -236,10 +319,14 @@ impl Runner {
         app: &AppHandle,
         chat_id: &str,
         assistant_message_id: &mut Option<String>,
+        early_tools: Option<EarlyToolExecutionContext>,
     ) -> Result<crate::db::models::ChatResponse, anyhow::Error> {
         let app_clone = app.clone();
         let on_event_clone = self.on_event.clone();
         let chat_id_clone = chat_id.to_string();
+        let early_runner = self.clone();
+        let early_tools_clone = early_tools.clone();
+        let early_token = token.clone();
 
         // Allocate the assistant id synchronously, but do not block first token on
         // SQLite placeholder persistence.
@@ -422,6 +509,41 @@ impl Runner {
                                 })),
                             })
                             .emit_via(&app_clone, &on_event_clone);
+                            if let Some(ctx) = early_tools_clone.clone() {
+                                let key = EarlyToolExecutionState::key_for(
+                                    &name,
+                                    &arguments,
+                                    id.as_deref(),
+                                );
+                                let runner = early_runner.clone();
+                                let token = early_token.clone();
+                                tokio::spawn(async move {
+                                    if !ctx.state.mark_started(&key).await {
+                                        return;
+                                    }
+                                    let call = ToolCall {
+                                        id: id.unwrap_or_else(|| {
+                                            format!("early_tool_{}_{}", index, uuid::Uuid::new_v4())
+                                        }),
+                                        name,
+                                        args: arguments,
+                                    };
+                                    let mut results = runner
+                                        .execute_tools_with_hooks(
+                                            std::slice::from_ref(&call),
+                                            &ctx.chat_id,
+                                            ctx.iteration,
+                                            &ctx.agent_id,
+                                            &ctx.agent_name,
+                                            &ctx.authorized_tool_ids,
+                                            token,
+                                        )
+                                        .await;
+                                    if let Some(result) = results.pop() {
+                                        ctx.state.insert_result(key, result).await;
+                                    }
+                                });
+                            }
                             return;
                         }
                     };
