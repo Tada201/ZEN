@@ -19,6 +19,8 @@ export type AgentExecutionTraceModel = {
   ownerSummary: string;
   runningToolNames: string[];
   approvalToolNames: string[];
+  runningToolSummaries: string[];
+  approvalToolSummaries: string[];
   completionSummary: string;
   latestFinishedTool?: ToolCall;
   completionOrder: ToolCall[];
@@ -44,6 +46,8 @@ export type ToolExecutionBatchLane = {
   ownerSummary: string;
   runningToolNames: string[];
   approvalToolNames: string[];
+  runningToolSummaries: string[];
+  approvalToolSummaries: string[];
   resultSummary: string;
 };
 
@@ -61,6 +65,48 @@ function isFinishedTool(toolCall: ToolCall) {
 
 function getToolOwnerLabel(toolCall: ToolCall) {
   return toolCall.agentName || toolCall.agentId || "main";
+}
+
+function compactText(value: unknown, maxLength = 90): string {
+  if (value === undefined || value === null || value === "") return "";
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return text.replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value) return {};
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function firstInputLabel(input: ToolCall["input"]) {
+  const record = asRecord(input);
+  return compactText(
+    record.command ||
+      record.cmd ||
+      record.script ||
+      record.query ||
+      record.url ||
+      record.path ||
+      record.file ||
+      record.filePath ||
+      record.targetPath ||
+      record.title ||
+      record.name ||
+      record.task
+  );
+}
+
+function getToolActivitySummary(toolCall: ToolCall) {
+  const label = firstInputLabel(toolCall.input);
+  return label ? `${toolCall.name}: ${label}` : toolCall.name;
 }
 
 function getStartedTogether(toolCalls: ToolCall[]) {
@@ -201,6 +247,8 @@ function getBatchLanes(toolCalls: ToolCall[], startedTogether: boolean, ledger: 
       ownerSummary: getOwnerSummary(lane.toolCalls),
       runningToolNames: lane.toolCalls.filter(isRunningTool).map((tc) => tc.name).slice(0, 3),
       approvalToolNames: lane.toolCalls.filter(isAwaitingApprovalTool).map((tc) => tc.name).slice(0, 3),
+      runningToolSummaries: lane.toolCalls.filter(isRunningTool).map(getToolActivitySummary).slice(0, 3),
+      approvalToolSummaries: lane.toolCalls.filter(isAwaitingApprovalTool).map(getToolActivitySummary).slice(0, 3),
       resultSummary: getResultSummary(lane.toolCalls),
     };
   });
@@ -243,8 +291,8 @@ function getActiveLaneSummary(batchLanes: ToolExecutionBatchLane[]) {
     .filter((lane) => lane.runningCount > 0 || lane.approvalCount > 0)
     .slice(0, 3)
     .map((lane) => {
-      const runningTools = lane.runningToolNames.length > 0 ? `running ${lane.runningToolNames.join(", ")}` : "";
-      const approvalTools = lane.approvalToolNames.length > 0 ? `waiting approval ${lane.approvalToolNames.join(", ")}` : "";
+      const runningTools = lane.runningToolSummaries.length > 0 ? `running ${lane.runningToolSummaries.join(", ")}` : "";
+      const approvalTools = lane.approvalToolSummaries.length > 0 ? `waiting approval ${lane.approvalToolSummaries.join(", ")}` : "";
       const activeTools = [runningTools, approvalTools].filter(Boolean).join(", ");
       return `${lane.label}${activeTools ? `: ${activeTools}` : ""}`;
     })
@@ -295,6 +343,8 @@ export function buildAgentExecutionTraceModel(toolCalls: ToolCall[], steps: Step
     ownerSummary: getOwnerSummary(toolCalls),
     runningToolNames: toolCalls.filter(isRunningTool).map((tc) => tc.name).slice(0, 4),
     approvalToolNames: toolCalls.filter(isAwaitingApprovalTool).map((tc) => tc.name).slice(0, 4),
+    runningToolSummaries: toolCalls.filter(isRunningTool).map(getToolActivitySummary).slice(0, 4),
+    approvalToolSummaries: toolCalls.filter(isAwaitingApprovalTool).map(getToolActivitySummary).slice(0, 4),
     completionSummary: getCompletionSummary(completionOrder),
     latestFinishedTool,
     completionOrder,

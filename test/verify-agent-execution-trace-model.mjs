@@ -106,6 +106,7 @@ assert.equal(parallelTrace.completedCount, 2, "completed count should include fi
 assert.equal(parallelTrace.progressPercent, 67, "progress should reflect finished tools");
 assert.equal(parallelTrace.ownerSummary, "Researcher x2, Verifier", "owner summary should show subagent lanes and counts");
 assert.deepEqual(parallelTrace.runningToolNames, ["web_search"], "active tool names should be scan-friendly");
+assert.deepEqual(parallelTrace.runningToolSummaries, ["web_search: codebuff"], "active tool summaries should include exact query/command/path previews");
 assert.equal(parallelTrace.latestFinishedTool.name, "read_file", "latest finished tool should use completion timestamp, not array order");
 assert.equal(parallelTrace.completionSummary, "run_command -> read_file", "completion summary should expose as-finished order");
 assert.equal(parallelTrace.resultSummary, "passed", "batch result summary should preserve explicit command success previews");
@@ -115,7 +116,8 @@ assert.equal(parallelTrace.batchLanes[0].label, "Parallel batch 1", "timing-infe
 assert.equal(parallelTrace.batchLanes[0].runningCount, 1, "lane should preserve running tool count");
 assert.equal(parallelTrace.batchLanes[0].ownerSummary, "Researcher x2, Verifier", "lane should summarize owners");
 assert.deepEqual(parallelTrace.batchLanes[0].runningToolNames, ["web_search"], "lane should expose active tool names");
-assert.equal(parallelTrace.activeLaneSummary, "Parallel batch 1: running web_search", "trace should expose the active batch lane and running tool for collapsed status");
+assert.deepEqual(parallelTrace.batchLanes[0].runningToolSummaries, ["web_search: codebuff"], "lane should expose active tool summaries with exact input previews");
+assert.equal(parallelTrace.activeLaneSummary, "Parallel batch 1: running web_search: codebuff", "trace should expose the active batch lane and exact running tool target for collapsed status");
 assert.deepEqual(
   parallelTrace.completionOrder.map((tool) => tool.name),
   ["run_command", "read_file"],
@@ -180,8 +182,10 @@ assert.equal(approvalTrace.approvalCount, 1, "approval-needed tools should get t
 assert.equal(approvalTrace.batchLanes[0].approvalCount, 1, "batch lanes should expose approval-needed tools separately");
 assert.deepEqual(approvalTrace.runningToolNames, [], "approval-needed tools should not appear as running tool names");
 assert.deepEqual(approvalTrace.approvalToolNames, ["run_command"], "approval-needed tool names should be exposed separately");
+assert.deepEqual(approvalTrace.approvalToolSummaries, ["run_command: npm run build"], "approval-needed summaries should include exact command previews");
 assert.deepEqual(approvalTrace.batchLanes[0].approvalToolNames, ["run_command"], "batch lanes should expose approval-needed tool names separately");
-assert.equal(approvalTrace.activeLaneSummary, "Batch approval-batch: waiting approval run_command", "active lane summary should label approval-needed tools clearly");
+assert.deepEqual(approvalTrace.batchLanes[0].approvalToolSummaries, ["run_command: npm run build"], "batch lanes should expose approval-needed exact command previews");
+assert.equal(approvalTrace.activeLaneSummary, "Batch approval-batch: waiting approval run_command: npm run build", "active lane summary should label approval-needed tools clearly with exact target");
 
 const lifecycleTrace = buildAgentExecutionTraceModel(
   [

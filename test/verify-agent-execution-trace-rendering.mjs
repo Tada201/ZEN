@@ -35,23 +35,23 @@ assert(
   "trace UI should render grouped batch lanes",
 );
 assert(
-  traceSource.includes("lane.ownerSummary") &&
-    traceSource.includes("lane.runningToolNames.join") &&
+    traceSource.includes("lane.ownerSummary") &&
+    traceSource.includes("lane.runningToolSummaries.join") &&
     traceSource.includes("lane.resultSummary") &&
     traceSource.includes("lane.approvalCount") &&
-    traceSource.includes("lane.approvalToolNames.join"),
-  "batch lanes should expose owners, active tools, approval-needed tool names, and result summaries",
+    traceSource.includes("lane.approvalToolSummaries.join"),
+  "batch lanes should expose owners, active tool input previews, approval-needed tool input previews, and result summaries",
 );
 assert(
   traceSource.includes("trace.approvalCount") &&
-    traceSource.includes("trace.approvalToolNames.join") &&
+    traceSource.includes("trace.approvalToolSummaries.join") &&
     traceSource.includes("{lane.approvalCount} waiting approval"),
-  "execution traces should separate approval-needed tool names from actively running tools",
+  "execution traces should separate approval-needed tool previews from actively running tools",
 );
 assert(
   traceSource.includes("collapsedSummary") &&
     traceSource.includes("!isExpanded && collapsedSummary") &&
-    traceSource.includes('trace.runningToolNames.join(", ")') &&
+    traceSource.includes('trace.runningToolSummaries.join(", ")') &&
     traceSource.includes("trace.resultSummary") &&
     traceSource.includes("trace.activeLaneSummary") &&
     traceSource.includes("trace.agentHierarchySummary") &&
@@ -64,6 +64,12 @@ assert(
     modelSource.includes("parentId") &&
     traceSource.includes("delegation {trace.agentHierarchySummary}"),
   "execution traces should expose parent-to-child agent hierarchy",
+);
+assert(
+  modelSource.includes("getToolActivitySummary") &&
+    modelSource.includes("runningToolSummaries") &&
+    modelSource.includes("approvalToolSummaries"),
+  "trace model should expose exact running/approval tool input previews for collapsed Codebuff-like scanning",
 );
 assert(
   traceSource.includes("ToolTraceRow") &&

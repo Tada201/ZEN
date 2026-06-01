@@ -22,8 +22,8 @@ export function AgentExecutionTrace({
   const shouldDefaultOpen = trace.active || trace.errorCount > 0 || toolCalls.length <= 8;
   const collapsedSummary = [
     trace.activeLaneSummary ? `active batch ${trace.activeLaneSummary}` : "",
-    trace.runningToolNames.length > 0 ? `active ${trace.runningToolNames.join(", ")}` : "",
-    trace.approvalToolNames.length > 0 ? `waiting approval ${trace.approvalToolNames.join(", ")}` : "",
+    trace.runningToolSummaries.length > 0 ? `active ${trace.runningToolSummaries.join(", ")}` : "",
+    trace.approvalToolSummaries.length > 0 ? `waiting approval ${trace.approvalToolSummaries.join(", ")}` : "",
     trace.resultSummary ? `results ${trace.resultSummary}` : "",
     trace.completionSummary && trace.completionOrder.length > 1 ? `completed ${trace.completionSummary}` : "",
     trace.agentHierarchySummary ? `delegation ${trace.agentHierarchySummary}` : "",
@@ -98,8 +98,8 @@ export function AgentExecutionTrace({
               {trace.handoffSummary && <span>handoff {trace.handoffSummary}</span>}
               {trace.ownerSummary && <span>agents {trace.ownerSummary}</span>}
               {trace.activeLaneSummary && <span>active batch {trace.activeLaneSummary}</span>}
-              {trace.runningToolNames.length > 0 && <span>active {trace.runningToolNames.join(", ")}</span>}
-              {trace.approvalToolNames.length > 0 && <span>waiting approval {trace.approvalToolNames.join(", ")}</span>}
+              {trace.runningToolSummaries.length > 0 && <span>active {trace.runningToolSummaries.join(", ")}</span>}
+              {trace.approvalToolSummaries.length > 0 && <span>waiting approval {trace.approvalToolSummaries.join(", ")}</span>}
             </div>
           )}
           <div
@@ -204,8 +204,8 @@ function ToolBatchLane({
         {lane.runningCount > 0 && <span>{lane.runningCount} running</span>}
         {lane.approvalCount > 0 && <span className="text-amber-300/80">{lane.approvalCount} waiting approval</span>}
         {lane.ownerSummary && <span>agents {lane.ownerSummary}</span>}
-        {lane.runningToolNames.length > 0 && <span>active {lane.runningToolNames.join(", ")}</span>}
-        {lane.approvalToolNames.length > 0 && <span className="text-amber-300/80">waiting approval {lane.approvalToolNames.join(", ")}</span>}
+        {lane.runningToolSummaries.length > 0 && <span>active {lane.runningToolSummaries.join(", ")}</span>}
+        {lane.approvalToolSummaries.length > 0 && <span className="text-amber-300/80">waiting approval {lane.approvalToolSummaries.join(", ")}</span>}
         {lane.resultSummary && <span>results {lane.resultSummary}</span>}
         <span className="h-1 w-12 overflow-hidden rounded-full bg-white/[0.06]">
           <span
