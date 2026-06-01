@@ -140,7 +140,7 @@ const { executeMockCommand, mockListen } = await loadMockClient();
 
 const { appendActionStepToMessages } = ledgerModule;
 const { makeToolCall, upsertTool } = toolReducerModule;
-const { groupAssistantSteps, summarizeExecutionSteps } = partsModule;
+const { groupAssistantSteps } = partsModule;
 const { buildAgentDelegationLaneModel } = delegationModule;
 const { buildAgentExecutionTraceModel } = traceModelModule;
 const { buildToolOutputPreview } = outputPreviewModule;
@@ -246,7 +246,6 @@ assert(assistant.toolCalls.every((tool) => tool.batchId === "mock-batch-research
 assert(assistant.toolCalls.every((tool) => tool.agentName === "Researcher"), "UI pipeline should preserve subagent owner labels");
 
 const grouped = groupAssistantSteps(assistant.steps);
-const summary = summarizeExecutionSteps(grouped);
 const delegationStep = grouped.find((step) => step.type === "action" && step.kind === "agent_complete");
 const delegationLane = buildAgentDelegationLaneModel(delegationStep);
 const toolGroup = grouped.find((step) => step.type === "tool-group");
@@ -255,7 +254,6 @@ const approvalTool = toolGroup.toolCalls.find((tool) => tool.status === "complet
 const todoTool = toolGroup.toolCalls.find((tool) => tool.name === "write_todos");
 const searchTool = toolGroup.toolCalls.find((tool) => tool.name === "web_search");
 
-assert(summary?.detail.includes("parallel batch"), "execution summary should expose parallel batch");
 assert(delegationLane, "agent lifecycle should render as a delegation lane");
 assert.equal(delegationLane.agentName, "Researcher", "delegation lane should show child agent");
 assert(delegationLane.resultSummary.includes("Execution trace"), "delegation lane should preserve result summary");

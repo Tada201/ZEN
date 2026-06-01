@@ -96,7 +96,7 @@ const { getAgentChatId, rememberAgentChat } = agentRoutingModule;
 const { getToolChatId, rememberToolChat } = toolRoutingModule;
 const { appendActionStepToMessages } = ledgerModule;
 const { makeToolCall, upsertTool } = toolReducerModule;
-const { groupAssistantSteps, summarizeExecutionSteps } = partsModule;
+const { groupAssistantSteps } = partsModule;
 const { buildAgentExecutionTraceModel } = traceModelModule;
 
 const chatId = "chat-live-sparse";
@@ -256,13 +256,10 @@ assert(assistant, "assistant message should remain present");
 assert.equal(assistant.toolCalls.length, 2, "parallel sparse tools should attach to the assistant");
 
 const grouped = groupAssistantSteps(assistant.steps);
-const summary = summarizeExecutionSteps(grouped);
 const toolGroup = grouped.find((step) => step.type === "tool-group");
 const lifecycle = grouped.find((step) => step.type === "action" && step.kind === "agent_complete");
 const trace = buildAgentExecutionTraceModel(toolGroup.toolCalls);
 
-assert(summary, "sparse stream should produce an execution summary");
-assert.equal(summary.label, "Agent execution", "sparse mixed agent/tool stream should summarize as agent execution");
 assert(toolGroup, "sparse parallel tools should render as a tool group");
 assert.equal(toolGroup.toolCalls.length, 2, "tool group should contain both sparse parallel tools");
 assert(toolGroup.toolCalls.every((tool) => tool.status === "completed"), "sparse tools should finish completed");

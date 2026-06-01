@@ -14,7 +14,7 @@ const transpiled = ts.transpileModule(source, {
 });
 
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(transpiled.outputText).toString("base64")}`;
-const { groupAssistantSteps, groupToolCalls, legacyMessageToActionStep, parseCardTags, summarizeExecutionSteps, toolResultMetaToOutput } = await import(moduleUrl);
+const { groupAssistantSteps, groupToolCalls, legacyMessageToActionStep, parseCardTags, toolResultMetaToOutput } = await import(moduleUrl);
 
 const parsed = parseCardTags('Before <card>{"type":"metric","data":{"value":42}}</card> After');
 assert.equal(parsed.cards.length, 1, "card tags should be extracted");
@@ -337,38 +337,6 @@ assert.equal(legacyApproval.type, "action", "legacy approval messages should ren
 assert.equal(legacyApproval.kind, "approval_request", "legacy action should keep the message kind");
 assert.equal(legacyApproval.eventId, "legacy:approval-1", "legacy action should have a stable event id");
 assert.equal(legacyApproval.metadata.approvalRequest.tool_name, "run_command", "legacy action should preserve approval metadata");
-
-const summary = summarizeExecutionSteps([
-  { type: "action", kind: "agent_spawn", status: "running", metadata: { spawn: { childAgent: "Researcher" } } },
-  { type: "action", kind: "task_list_updated", status: "running", metadata: { tasks: [{ task_id: "t1" }, { task_id: "t2" }] } },
-  { type: "tool-group", toolCalls: [
-    { id: "tool-1", name: "read_file", status: "completed", input: {}, output: "ok" },
-    { id: "tool-2", name: "run_command", status: "running", input: {}, output: "" },
-  ] },
-  { type: "action", kind: "approval_request", status: "running", metadata: { approvalRequest: { tool_call_id: "tool-3", tool_name: "write_file", arguments: {} } } },
-]);
-assert.equal(summary.label, "Agent execution", "mixed agent/tool execution should produce a scan-friendly label");
-assert.equal(summary.running, 4, "summary should count running agent/task/tool/approval work");
-assert.equal(summary.completed, 1, "summary should count completed tools");
-assert.equal(summary.total, 5, "summary should count execution work only");
-assert(summary.detail.includes("1 agent event"), "summary should mention agent work");
-assert(summary.detail.includes("2 tool calls"), "summary should mention tool work");
-assert(summary.detail.includes("1 approval"), "summary should mention approvals");
-assert(summary.detail.includes("agents Researcher"), "summary should identify delegated agent owners");
-assert(summary.detail.includes("1 parallel batch"), "summary should surface parallel tool execution");
-assert(summary.detail.includes("active run_command"), "summary should show active tool names during streaming");
-
-const pipelineSummary = summarizeExecutionSteps([
-  { type: "action", kind: "chat_status", status: "running", metadata: { phase: "accepted" } },
-  { type: "action", kind: "chat_status", status: "running", metadata: { phase: "persisted" } },
-  { type: "action", kind: "chat_status", status: "running", metadata: { phase: "provider_ready" } },
-  { type: "action", kind: "chat_status", status: "running", metadata: { phase: "llm_invoked" } },
-]);
-assert.equal(pipelineSummary.label, "Request pipeline", "status-only streaming should still produce a visible pipeline summary");
-assert.equal(pipelineSummary.phaseSummary, "accepted -> saved -> provider -> model", "pipeline summary should translate backend phases");
-assert.deepEqual(pipelineSummary.phaseLabels, ["accepted", "saved", "provider", "model"], "pipeline summary should expose phase labels for visible progress chips");
-assert(pipelineSummary.detail.includes("pipeline accepted -> saved -> provider -> model"), "pipeline detail should be visible without devtools");
-assert.equal(pipelineSummary.running, 1, "pipeline summary should leave the latest phase visibly active");
 
 const retried = groupToolCalls([
   { id: "tool-a1", name: "run_command", status: "error", input: { command: "npm test" }, output: "failed" },

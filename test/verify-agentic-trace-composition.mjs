@@ -38,7 +38,7 @@ const inputPreviewModule = await loadTsModule("../src/atlas/components/chat/tool
 
 const { appendActionStepToMessages } = ledgerModule;
 const { makeToolCall, upsertTool } = toolReducerModule;
-const { groupAssistantSteps, summarizeExecutionSteps } = partsModule;
+const { groupAssistantSteps } = partsModule;
 const { buildToolChecklistPreview } = inputPreviewModule;
 
 const fixtures = JSON.parse(readFileSync(new URL("./chat-fixtures.json", import.meta.url), "utf8"));
@@ -140,7 +140,6 @@ assert(assistant, "composition should keep one live assistant message");
 assert.equal(assistant.toolCalls.length, 4, "all fixture tools should attach to the assistant");
 
 const grouped = groupAssistantSteps(assistant.steps);
-const summary = summarizeExecutionSteps(grouped);
 const toolGroups = grouped.filter((step) => step.type === "tool-group");
 const actionSteps = grouped.filter((step) => step.type === "action");
 const completedSpawn = actionSteps.find((step) => step.kind === "agent_complete" || step.kind === "agent_spawn");
@@ -148,9 +147,6 @@ const parallelGroup = toolGroups.find((step) => step.toolCalls.length >= 3);
 const approvalTool = assistant.toolCalls.find((tool) => tool.id === "mock-build-approval-003");
 const todoTool = assistant.toolCalls.find((tool) => tool.id === "mock-plan-todos-000");
 
-assert(summary, "agentic composition should produce an execution summary");
-assert.equal(summary.label, "Agent execution", "mixed agent/tool flow should summarize as agent execution");
-assert(summary.detail.includes("tool call"), "summary should mention tool calls");
 assert(completedSpawn, "spawn and completion should merge into one lifecycle action");
 assert.equal(completedSpawn.status, "completed", "agent lifecycle row should finish completed");
 assert.equal(completedSpawn.metadata.spawn.task, "Inspect frontend streaming and execution trace behavior.", "completion should preserve original delegated task");

@@ -18,7 +18,6 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toolsApi } from "@/api";
 import { Step } from "./types";
-import type { ExecutionSummary } from "./assistantMessageParts";
 import { AssistantTaskPlanPreview } from "./AssistantTaskPlanPreview";
 import { AgentDelegationLane } from "./AgentDelegationLane";
 import { buildAgentDelegationLaneModel } from "./agentDelegationLaneModel";
@@ -354,59 +353,6 @@ export function AgentActionStep({ step, isStreaming }: { step: Step; isStreaming
               </pre>
             </div>
           )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function ExecutionSummaryBar({ summary }: { summary: ExecutionSummary }) {
-  const phaseLabels = summary.phaseLabels || [];
-
-  return (
-    <div className="font-sans">
-      <div className="flex min-h-8 items-center gap-2 rounded-md px-1 text-zinc-500">
-        <Activity className={cn("h-3.5 w-3.5 shrink-0", summary.running > 0 && "text-blue-300/80")} />
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className={cn("min-w-0 flex-1 truncate text-[12px] font-medium text-zinc-300", summary.running > 0 && "text-premium-shimmer")}>
-              {summary.label}
-            </span>
-            {summary.running > 0 && <span className="shrink-0 text-[11px] text-blue-300/80">{summary.running} running</span>}
-            {summary.errors > 0 && <span className="shrink-0 text-[11px] text-rose-400/80">{summary.errors} failed</span>}
-            {summary.completed > 0 && <span className="shrink-0 text-[11px] text-zinc-500">{summary.completed} done</span>}
-          </div>
-          {phaseLabels.length > 0 && (
-            <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
-              {phaseLabels.map((phase, index) => {
-                const isCurrent = index === phaseLabels.length - 1 && summary.running > 0;
-                const isDone = index < phaseLabels.length - 1 || summary.running === 0;
-                return (
-                  <span
-                    key={`${phase}-${index}`}
-                    className={cn(
-                      "inline-flex h-5 max-w-full items-center gap-1 rounded border px-1.5 text-[10px] leading-none",
-                      isCurrent && "border-blue-400/20 bg-blue-400/10 text-blue-200",
-                      isDone && "border-emerald-400/15 bg-emerald-400/[0.035] text-emerald-100/70",
-                      !isCurrent && !isDone && "border-zinc-700/40 bg-white/[0.018] text-zinc-500",
-                    )}
-                  >
-                    {isCurrent ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <CheckCircle2 className="h-2.5 w-2.5" />}
-                    <span className="truncate">{phase}</span>
-                  </span>
-                );
-              })}
-            </div>
-          )}
-          <div className="mt-0.5 flex min-w-0 items-center gap-2">
-            <span className="min-w-0 flex-1 truncate text-[11px] leading-5 text-zinc-600">{summary.detail}</span>
-            <span className="h-1 w-16 shrink-0 overflow-hidden rounded-full bg-white/[0.06]">
-              <span
-                className={cn("block h-full transition-all duration-500", summary.errors > 0 ? "bg-rose-400/70" : "bg-emerald-400/70")}
-                style={{ width: `${summary.progressPercent}%` }}
-              />
-            </span>
-          </div>
         </div>
       </div>
     </div>

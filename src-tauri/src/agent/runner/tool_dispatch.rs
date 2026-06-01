@@ -329,34 +329,78 @@ impl Runner {
                                     );
                                 }
                             } else {
-                                // User confirmation required
-                                let approved = self
-                                    .request_user_confirmation(
-                                        &v2_tool_call,
-                                        chat_id,
-                                        context,
-                                        agent_id,
-                                        agent_name,
-                                        iteration,
-                                        &run_id,
-                                        parent_agent_id.as_deref(),
-                                        &tool_batch_id,
-                                    )
-                                    .await;
+                                // Schedule the approval wait inside this tool task so
+                                // one high-risk tool does not block the rest of the
+                                // parallel batch from starting.
+                                let _ = self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
+                                    message: format!("Awaiting approval: {}", v2_tool_call.name),
+                                    chat_id: chat_id.to_string(),
+                                    iteration: Some(iteration),
+                                    phase: Some("approval_required".to_string()),
+                                    metadata: Some(json!({
+                                        "toolName": v2_tool_call.name,
+                                        "toolCallId": v2_tool_call.id,
+                                        "iteration": iteration,
+                                        "runId": run_id,
+                                        "parentAgentId": parent_agent_id,
+                                        "executionId": v2_tool_call.id,
+                                        "batchId": tool_batch_id,
+                                        "toolBatchId": tool_batch_id,
+                                    })),
+                                }));
 
-                                if !approved {
-                                    tracing::info!(
-                                        "User DENIED tool '{}' (id: {})",
-                                        tc_name,
-                                        tc_id
-                                    );
-                                    let hook_reg = self.hook_registry.clone();
-                                    let tc_id_for_handle = tc_id.clone();
-                                    let result_tool_name = tc_name.clone();
-                                    let result_args = tc_args.clone();
-                                    let event_tool_name = result_tool_name.clone();
-                                    let handle = tokio::spawn(async move {
-                                        let started_at = chrono::Utc::now();
+                                let tool = self.tool_registry.read().await.get(&tc_name);
+                                let state = self.app.state::<crate::commands::AppState>();
+                                let tool_service = state.tool_service.clone();
+                                let app = self.app.clone();
+                                let channel = self.on_event.clone();
+                                let hook_reg = self.hook_registry.clone();
+                                let cache = self.cache.clone();
+                                let cache_key_clone = cache_key.clone();
+                                let allowed_tools = self.allowed_tools.clone();
+                                let chat_id_inner = chat_id.to_string();
+                                let tc_id_inner = tc_id.clone();
+                                let tc_args_inner = tc_args.clone();
+                                let result_tool_name = tc_name.clone();
+                                let event_tool_name = result_tool_name.clone();
+                                let original_name = pipeline_call.original.name.clone();
+                                let run_id_inner = run_id.clone();
+                                let parent_agent_id_inner = parent_agent_id.clone();
+                                let tool_batch_id_inner = tool_batch_id.clone();
+                                let agent_id_inner = agent_id.to_string();
+                                let agent_name_inner = agent_name.to_string();
+                                let token_inner = token.clone();
+                                let depth = self.depth;
+                                let v2_tool_call_inner = v2_tool_call.clone();
+
+                                let handle = tokio::spawn(async move {
+                                    let started_at = chrono::Utc::now();
+                                    let approved = tool_service
+                                        .request_interactive_approval(
+                                            app.clone(),
+                                            "agent_runner",
+                                            &chat_id_inner,
+                                            &v2_tool_call_inner,
+                                            context,
+                                            Some(ToolApprovalExecutionContext {
+                                                run_id: Some(run_id_inner.clone()),
+                                                parent_agent_id: parent_agent_id_inner.clone(),
+                                                execution_id: Some(v2_tool_call_inner.id.clone()),
+                                                batch_id: Some(tool_batch_id_inner.clone()),
+                                                tool_batch_id: Some(tool_batch_id_inner.clone()),
+                                                agent_id: Some(agent_id_inner.clone()),
+                                                agent_name: Some(agent_name_inner.clone()),
+                                                iteration: Some(iteration),
+                                            }),
+                                        )
+                                        .await;
+
+                                    if !approved {
+                                        tracing::info!(
+                                            "User DENIED tool '{}' (id: {})",
+                                            v2_tool_call_inner.name,
+                                            v2_tool_call_inner.id
+                                        );
                                         let result = ToolResult {
                                             tool_call_id: tc_id.clone(),
                                             content: json!({
@@ -375,28 +419,96 @@ impl Runner {
                                             },
                                             &result,
                                         );
-                                        normalize_tool_result(
+                                        return normalize_tool_result(
                                             result.tool_call_id,
                                             &result_tool_name,
                                             &result_tool_name,
-                                            result_args,
+                                            tc_args_inner,
                                             result.content,
                                             true,
                                             result.duration_ms,
                                             started_at,
+                                        );
+                                    }
+
+                                    tracing::info!(
+                                        "User APPROVED tool '{}' (id: {})",
+                                        v2_tool_call_inner.name,
+                                        v2_tool_call_inner.id
+                                    );
+                                    allowed_tools
+                                        .lock()
+                                        .await
+                                        .insert(v2_tool_call_inner.name.clone());
+
+                                    AgentEvent::ToolStart(ToolStartPayload {
+                                        tool_name: v2_tool_call_inner.name.clone(),
+                                        tool_call_id: v2_tool_call_inner.id.clone(),
+                                        arguments: v2_tool_call_inner.arguments.clone(),
+                                        run_id: Some(run_id_inner),
+                                        parent_agent_id: parent_agent_id_inner,
+                                        execution_id: Some(v2_tool_call_inner.id.clone()),
+                                        batch_id: Some(tool_batch_id_inner.clone()),
+                                        tool_batch_id: Some(tool_batch_id_inner),
+                                        agent_id: agent_id_inner,
+                                        agent_name: agent_name_inner,
+                                        chat_id: chat_id_inner.clone(),
+                                        iteration,
+                                    })
+                                    .emit_via(&app, &channel);
+
+                                    let start = std::time::Instant::now();
+                                    let mut result = tool_service
+                                        .execute_agent_tool(
+                                            tool,
+                                            app,
+                                            chat_id_inner,
+                                            ToolCall {
+                                                id: tc_id.clone(),
+                                                name: tc_name.clone(),
+                                                args: tc_args_inner.clone(),
+                                            },
+                                            token_inner,
+                                            depth,
+                                            Some(allowed_tools),
                                         )
-                                    });
-                                    handles.push((
-                                        pipeline_call.index,
-                                        tc_id_for_handle,
-                                        event_tool_name,
-                                        handle,
-                                    ));
-                                    continue;
-                                }
-                                tracing::info!("User APPROVED tool '{}' (id: {})", tc_name, tc_id);
-                                // Capture approval for inheritance (Comment 12)
-                                self.allowed_tools.lock().await.insert(tc_name.clone());
+                                        .await;
+                                    result.duration_ms = start.elapsed().as_millis() as u64;
+
+                                    if should_write_cache(&tc_name, result.is_error) {
+                                        cache
+                                            .lock()
+                                            .await
+                                            .set(cache_key_clone, result.content.clone());
+                                    }
+
+                                    hook_reg.post_tool_use(
+                                        &ToolCall {
+                                            id: tc_id,
+                                            name: tc_name,
+                                            args: tc_args,
+                                        },
+                                        &result,
+                                    );
+                                    normalize_tool_result(
+                                        result.tool_call_id,
+                                        &result_tool_name,
+                                        &result_tool_name,
+                                        json!({ "via": original_name }),
+                                        result.content,
+                                        result.is_error,
+                                        result.duration_ms,
+                                        started_at,
+                                    )
+                                });
+
+                                handles.push((
+                                    pipeline_call.index,
+                                    tc_id_inner,
+                                    event_tool_name,
+                                    handle,
+                                ));
+                                continue;
                             }
                         }
                         Ok(PermissionDecision::Deny { reason }) => {
@@ -655,60 +767,6 @@ impl Runner {
             iteration,
             output: Some(output),
         }));
-    }
-
-    /// Emit a `tool:authorization_request` event and wait for user response.
-    /// Returns `true` if approved, `false` if denied or timed out.
-    async fn request_user_confirmation(
-        &self,
-        tool_call: &crate::tools::ToolCall,
-        chat_id: &str,
-        context: crate::tools::permission::PermissionContext,
-        agent_id: &str,
-        agent_name: &str,
-        iteration: usize,
-        run_id: &str,
-        parent_agent_id: Option<&str>,
-        tool_batch_id: &str,
-    ) -> bool {
-        let _ = self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
-            message: format!("Awaiting approval: {}", tool_call.name),
-            chat_id: chat_id.to_string(),
-            iteration: Some(iteration),
-            phase: Some("approval_required".to_string()),
-            metadata: Some(json!({
-                "toolName": tool_call.name,
-                "toolCallId": tool_call.id,
-                "iteration": iteration,
-                "runId": run_id,
-                "parentAgentId": parent_agent_id,
-                "executionId": tool_call.id,
-                "batchId": tool_batch_id,
-                "toolBatchId": tool_batch_id,
-            })),
-        }));
-
-        let state = self.app.state::<crate::commands::AppState>();
-        state
-            .tool_service
-            .request_interactive_approval(
-                self.app.clone(),
-                "agent_runner",
-                chat_id,
-                tool_call,
-                context,
-                Some(ToolApprovalExecutionContext {
-                    run_id: Some(run_id.to_string()),
-                    parent_agent_id: parent_agent_id.map(str::to_string),
-                    execution_id: Some(tool_call.id.clone()),
-                    batch_id: Some(tool_batch_id.to_string()),
-                    tool_batch_id: Some(tool_batch_id.to_string()),
-                    agent_id: Some(agent_id.to_string()),
-                    agent_name: Some(agent_name.to_string()),
-                    iteration: Some(iteration),
-                }),
-            )
-            .await
     }
 }
 

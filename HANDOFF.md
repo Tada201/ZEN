@@ -8,7 +8,7 @@ Last updated: 2026-05-31
 - Remote tracking: `origin/main`
 - Latest committed checkpoint: see `git log --oneline -n 3`
 - Working tree expectation after this handoff is committed: clean
-- Published checkpoint before this handoff update: `ddb4c0d Stabilize streaming agent workflow`
+- Published checkpoint before this handoff update: `c6aba73 Replay persisted reasoning in chat history`
 - Removed local stale branch: `001-integrated-workbench`
 - Remaining remote-only branch: `origin/001-integrated-workbench`
 
@@ -36,6 +36,7 @@ Use CodeGraph first for architecture/symbol tracing when it works. In this sessi
 - Stop button now immediately marks the visible assistant row as cancelled.
 - Backend cancellation emits terminal `chat:done` for cancelled runner/orchestrator paths.
 - Parallel tool-result collection now listens to cancellation and aborts pending tool tasks.
+- Approval-required tools no longer block scheduling safe sibling tools in the same parallel batch; approval waits now run inside that tool task.
 
 ### Message Ordering And Reload Stability
 
@@ -62,8 +63,9 @@ Use CodeGraph first for architecture/symbol tracing when it works. In this sessi
 - OpenRouter sends top-level `reasoning` object from effort/budget settings.
 - Gemini/Google sends `extra_body.google.thinking_config.include_thoughts` and optional `thinking_budget`.
 - Reasoning blocks are preserved in-memory across tool-loop turns via `reasoning_details`.
+- Persisted `reasoning_details` are loaded back into backend LLM context and replayed into frontend history as reasoning steps.
 
-Known limitation: reasoning details are not fully persisted to DB yet. Anthropic signed/redacted thinking is not replayed as signed Anthropic blocks.
+Known limitation: Anthropic signed/redacted thinking is not replayed as signed Anthropic blocks.
 
 ### Markdown, Math, And Render Pacing
 
@@ -79,6 +81,7 @@ Known limitation: reasoning details are not fully persisted to DB yet. Anthropic
 ### Agent Execution UI
 
 - Removed the low-value request pipeline card from normal assistant display.
+- Removed the unused request-pipeline summary helper and stale `ExecutionSummaryBar` display path.
 - Added richer execution trace model/components:
   - agent lifecycle routing
   - tool lifecycle routing
@@ -87,6 +90,7 @@ Known limitation: reasoning details are not fully persisted to DB yet. Anthropic
   - compact tool previews
   - task plan preview model
 - Tool call/result events are correlated more consistently with run/batch/execution ids.
+- Parallel batches now keep moving when one tool is awaiting approval, so the execution trace can show safe tools running while approval is pending.
 - Deleted legacy preview components:
   - `src/atlas/components/chat/tool/ArtifactPreview.tsx`
   - `src/atlas/components/chat/tool/SearchResults.tsx`
@@ -109,6 +113,14 @@ Passed:
 - `node test/verify-stream-completion-and-abort.mjs`
 - `node test/verify-agent-execution-trace-rendering.mjs`
 - `node test/verify-stream-reveal-pacing.mjs`
+- `node test/verify-reasoning-persistence-replay.mjs`
+- `node test/verify-assistant-message-parts.mjs`
+- `node test/verify-agentic-trace-composition.mjs`
+- `node test/verify-mock-agentic-ui-pipeline.mjs`
+- `node test/verify-sparse-agentic-stream-composition.mjs`
+- `node test/verify-parallel-approval-scheduling.mjs`
+- `node test/verify-tool-lifecycle-routing.mjs`
+- `node test/verify-tool-event-reducer.mjs`
 
 Earlier related checks also passed during the session:
 
@@ -167,13 +179,12 @@ Tests:
 ## Remaining High-Value Work
 
 1. Early tool execution:
-   - Current behavior waits for provider stream completion before executing tool calls.
+   - Current behavior still waits for provider stream completion before executing tool calls.
    - Codebuff-like CLIs often begin acting as soon as a complete tool call argument object is available.
-   - This is the biggest remaining gap for CLI-like task execution speed.
+   - Approval waits no longer block unrelated safe tools in the same batch, but true streaming-time tool start still requires provider delta-level tool-call execution.
 
-2. Full reasoning persistence:
-   - Add DB migration/typed JSON storage for `reasoning_details`.
-   - Reload historical reasoning blocks cleanly.
+2. Provider-specific signed reasoning replay:
+   - Historical reasoning blocks now reload and render.
    - Provider-specific replay for Anthropic signed/redacted thinking remains unresolved.
 
 3. Direct IPC channel path:
