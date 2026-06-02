@@ -9,6 +9,7 @@ export interface McpStatus {
   http_enabled: boolean;
   http_bind_host: string;
   http_port: number;
+  http_auth_required?: boolean;
 }
 
 export interface McpTool {
@@ -22,6 +23,7 @@ export type McpConfig = Record<string, unknown>;
 
 export const mcpApi = {
   getStatus: () => callCommand<McpStatus>("mcp_get_status"),
+  getHttpToken: () => callCommand<string>("mcp_get_http_token"),
   listTools: () => callCommand<McpTool[]>("mcp_list_tools"),
   getConfig: () => callCommand<McpConfig>("mcp_get_config"),
   startServer: () => callCommand<void>("mcp_start_server"),

@@ -75,6 +75,24 @@ pub(super) async fn preprocess_tool_calls(
             }
             "tool_exec" => {
                 if let Some((real_id, real_args)) = tool_manager.resolve_tool_exec(&tc.args).await {
+                    if !authorized_tool_ids.is_empty()
+                        && !authorized_tool_ids.iter().any(|id| id == &real_id)
+                    {
+                        ordered_results[index] = Some(normalize_tool_result(
+                            tc.id.clone(),
+                            "tool_exec",
+                            "Tool Exec",
+                            tc.args.clone(),
+                            json!({
+                                "error": format!("Tool '{}' is not authorized for the current agent.", real_id),
+                                "hint": "Call tool_list to see the tools available to this agent."
+                            }),
+                            true,
+                            0,
+                            chrono::Utc::now(),
+                        ));
+                        continue;
+                    }
                     pipeline_calls.push(PipelineCall {
                         index,
                         original: tc.clone(),

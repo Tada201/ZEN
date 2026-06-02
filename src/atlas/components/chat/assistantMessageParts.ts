@@ -17,13 +17,15 @@ export function parseCardTags(text: string): { cards: ParsedCard[]; cleanText: s
     return { cards, cleanText: text || "" };
   }
 
-  const regex = /<card>\s*([\s\S]*?)\s*<\/card>/gi;
+  const regex = /<card(?:\s[^>]*)?>\s*([\s\S]*?)\s*<\/card>/gi;
   let match;
   const replacements: { start: number; end: number }[] = [];
+  const placeholders: Array<{ start: number; end: number; text: string }> = [];
 
   while ((match = regex.exec(text)) !== null) {
     const rawTag = match[0];
     const jsonContent = match[1];
+    let replacementText = "";
 
     try {
       const parsed = JSON.parse(jsonContent.trim()) as Record<string, unknown>;
@@ -32,10 +34,13 @@ export function parseCardTags(text: string): { cards: ParsedCard[]; cleanText: s
           type: typeof parsed.type === "string" ? parsed.type : typeof parsed.card === "string" ? parsed.card : "unknown",
           data: parsed.data || parsed,
         });
-        replacements.push({ start: match.index, end: match.index + rawTag.length });
       }
     } catch {
-      // Partial JSON during streaming is expected; keep the placeholder text.
+      replacementText = "_Unable to render generated card._";
+    }
+    replacements.push({ start: match.index, end: match.index + rawTag.length });
+    if (replacementText) {
+      placeholders.push({ start: match.index, end: match.index + rawTag.length, text: replacementText });
     }
   }
 
@@ -45,6 +50,8 @@ export function parseCardTags(text: string): { cards: ParsedCard[]; cleanText: s
     let lastEnd = 0;
     for (const { start, end } of replacements) {
       parts.push(text.slice(lastEnd, start));
+      const placeholder = placeholders.find((item) => item.start === start && item.end === end);
+      if (placeholder) parts.push(`\n\n${placeholder.text}\n\n`);
       lastEnd = end;
     }
     parts.push(text.slice(lastEnd));
@@ -53,15 +60,17 @@ export function parseCardTags(text: string): { cards: ParsedCard[]; cleanText: s
     cleanText = text;
   }
 
-  if (cleanText.includes("<card>")) {
-    const idx = cleanText.indexOf("<card>");
-    const afterCard = cleanText.substring(idx + 6).trimStart();
+  const partialCardMatch = /<card(?:\s[^>]*)?>/i.exec(cleanText);
+  if (partialCardMatch) {
+    const idx = partialCardMatch.index;
+    const afterCard = cleanText.substring(idx + partialCardMatch[0].length).trimStart();
     if (afterCard.startsWith("{") || afterCard.startsWith("[")) {
       cleanText = `${cleanText.substring(0, idx).trim()}\n\n_Generating card..._`.trim();
     } else {
-      cleanText = cleanText.replace("<card>", "");
+      cleanText = cleanText.replace(/<card(?:\s[^>]*)?>/i, "");
     }
   }
+  cleanText = cleanText.replace(/<\/card>/gi, "").trim();
 
   return { cards, cleanText };
 }
@@ -317,6 +326,41 @@ function findOpenToolGroup(grouped: MutableGroupedStep[], incoming: ToolCall): {
   return undefined;
 }
 
+function mergeChatStatus(grouped: MutableGroupedStep[], incoming: Step) {
+  if (incoming.type !== "action" || incoming.kind !== "chat_status") return false;
+
+  for (let i = grouped.length - 1; i >= 0; i -= 1) {
+    const item = grouped[i];
+    if (item.type === "tool-group") continue;
+    if (item.kind !== "chat_status") continue;
+    
+    const incomingPhase = incoming.metadata?.phase;
+    const existingPhase = item.metadata?.phase;
+    
+    if (incomingPhase === existingPhase) {
+      if (incomingPhase === "agent_streaming") {
+        const incomingAgent = incoming.metadata?.agentName || incoming.metadata?.agentId;
+        const existingAgent = item.metadata?.agentName || item.metadata?.agentId;
+        if (incomingAgent === existingAgent) {
+          grouped[i] = { ...item, ...incoming };
+          return true;
+        }
+      } else if (incomingPhase === "tool_call_streaming" || incomingPhase === "tool_call_ready") {
+        const incomingTool = incoming.metadata?.toolCallPreview?.toolName;
+        const existingTool = item.metadata?.toolCallPreview?.toolName;
+        if (incomingTool === existingTool) {
+          grouped[i] = { ...item, ...incoming };
+          return true;
+        }
+      } else {
+        grouped[i] = { ...item, ...incoming };
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function pushGroupedStep(grouped: MutableGroupedStep[], step: Step) {
   const last = grouped[grouped.length - 1];
   if (last && last.type === "text" && step.type === "text") {
@@ -335,7 +379,7 @@ function pushGroupedStep(grouped: MutableGroupedStep[], step: Step) {
     } else {
       grouped.push({ type: "tool-group", toolCalls: [step.toolCall] });
     }
-  } else if (mergeOpenAgentLifecycle(grouped, step)) {
+  } else if (mergeOpenAgentLifecycle(grouped, step) || mergeChatStatus(grouped, step)) {
     return;
   } else {
     grouped.push({ ...step });

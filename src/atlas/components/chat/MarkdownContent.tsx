@@ -89,16 +89,23 @@ function stripCodeFence(content: string): string {
 // Helper to remove the [!TYPE] text from the React element tree
 function removeAlertTag(children: React.ReactNode): React.ReactNode {
   return React.Children.map(children, (child) => {
-    if (React.isValidElement(child) && child.type === "p") {
-      const element = child as React.ReactElement<{ children?: React.ReactNode }>;
-      const pChildren = React.Children.toArray(element.props.children);
-      if (pChildren.length > 0 && typeof pChildren[0] === "string") {
-        const firstStr = pChildren[0];
+    if (React.isValidElement(child)) {
+      const element = child as React.ReactElement<any>;
+      const elementChildren = React.Children.toArray(element.props.children);
+      if (elementChildren.length > 0 && typeof elementChildren[0] === "string") {
+        const firstStr = elementChildren[0];
         const match = firstStr.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i);
         if (match) {
-          pChildren[0] = firstStr.replace(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i, "").trimStart();
-          return React.cloneElement(element, element.props, ...pChildren);
+          const newChildren = [...elementChildren];
+          newChildren[0] = firstStr.replace(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i, "").trimStart();
+          return React.cloneElement(element, element.props, ...newChildren);
         }
+      }
+      if (element.props.children) {
+        return React.cloneElement(element, {
+          ...element.props,
+          children: removeAlertTag(element.props.children),
+        });
       }
     }
     return child;
@@ -200,19 +207,23 @@ export function MarkdownContent({
   onOpenArtifact?: (a: ArtifactData) => void;
   chatId?: string;
 }) {
-  // 1. Extract thought blocks (handles both reasoning prop and <thought> tags)
+  // 1. Extract thought blocks (handles both native reasoning and inline tags).
   let thought: string | null = reasoning || null;
   let mainContent = content;
 
   if (!thought) {
-    const thoughtMatch = /<thought>([\s\S]*?)<\/thought>/.exec(content);
+    const thoughtMatch = /<(?:thought|think)>([\s\S]*?)<\/(?:thought|think)>/i.exec(content);
     if (thoughtMatch) {
       thought = thoughtMatch[1];
-      mainContent = content.replace(/<thought>[\s\S]*?<\/thought>/, "").trim();
-    } else if (content.includes("<thought>")) {
-      const index = content.indexOf("<thought>");
-      thought = content.slice(index + 9);
-      mainContent = content.slice(0, index).trim();
+      mainContent = content.replace(/<(?:thought|think)>[\s\S]*?<\/(?:thought|think)>/ig, "").trim();
+    } else {
+      const openMatch = /<(?:thought|think)>/i.exec(content);
+      if (openMatch) {
+        const tag = openMatch[0];
+        const index = openMatch.index;
+        thought = content.slice(index + tag.length);
+        mainContent = content.slice(0, index).trim();
+      }
     }
   }
 

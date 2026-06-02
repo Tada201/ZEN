@@ -17,6 +17,7 @@ import {
   rememberTaskListChats,
   rememberWorkflowChat,
 } from "./taskWorkflowRouting";
+import { focusActiveAgentsPanel } from "./agentPanelFocus";
 
 const INLINE_ACTION_KINDS = new Set([
   "agent_handoff",
@@ -157,15 +158,37 @@ export function useAgentEvents() {
       });
 
       const unlistenAgentSpawn = await listenAppEvent("agent:spawn", (event) => {
+        focusActiveAgentsPanel({ force: true });
         appendAgentActionStep(event.payload, "agent_spawn");
       });
 
       const unlistenAgentComplete = await listenAppEvent("agent:complete", (event) => {
+        focusActiveAgentsPanel();
         appendAgentActionStep(event.payload, "agent_complete");
       });
 
       const unlistenAgentHandoff = await listenAppEvent("agent:handoff", (event) => {
+        focusActiveAgentsPanel({ force: true });
         appendAgentActionStep(event.payload, "agent_handoff");
+      });
+
+      const unlistenAgentChunk = await listenAppEvent("agent:chunk", (event) => {
+        focusActiveAgentsPanel({ force: true });
+        const payload = event.payload;
+        const actionPayload = {
+          ...payload,
+          agent_id: payload.agent_id,
+          agent_name: payload.agent_name || payload.agentName,
+          parent_agent: payload.parent_agent || payload.parentAgent,
+          content: payload.delta,
+        } as AgentActionEventPayload;
+        const chatId =
+          payload.chat_id ||
+          payload.chatId ||
+          getAgentChatId(agentChatIdsRef.current, actionPayload, useChatStore.getState());
+        if (!chatId) return;
+        rememberAgentChat(agentChatIdsRef.current, actionPayload, chatId);
+        appendActionStep(chatId, { ...actionPayload, chat_id: chatId }, "agent_chunk");
       });
 
       const unlistenWorkflowStarted = await listenAppEvent("workflow:started", (event) => {
@@ -257,6 +280,7 @@ export function useAgentEvents() {
         unlistenAgentSpawn,
         unlistenAgentComplete,
         unlistenAgentHandoff,
+        unlistenAgentChunk,
         unlistenWorkflowStarted,
         unlistenWorkflowCompleted,
         unlistenWorkflowFailed,

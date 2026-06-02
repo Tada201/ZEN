@@ -23,6 +23,9 @@ pub enum AgentEvent {
     #[serde(rename = "agent:handoff")]
     AgentHandoff(AgentHandoffPayload),
 
+    #[serde(rename = "agent:chunk")]
+    AgentChunk(AgentChunkPayload),
+
     #[serde(rename = "orchestrator:start")]
     OrchestratorStart(OrchestratorStartPayload),
 
@@ -142,6 +145,16 @@ pub struct AgentHandoffPayload {
     pub reason: String,
     pub chat_id: String,
     pub timestamp: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentChunkPayload {
+    pub chat_id: String,
+    pub agent_id: String,
+    pub agent_name: String,
+    pub delta: String,
+    #[serde(rename = "type")]
+    pub r#type: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -585,6 +598,7 @@ impl AgentEvent {
             AgentEvent::AgentComplete(_) => "agent:complete",
             AgentEvent::AgentTerminated { .. } => "agent:terminated",
             AgentEvent::AgentHandoff(_) => "agent:handoff",
+            AgentEvent::AgentChunk(_) => "agent:chunk",
             AgentEvent::OrchestratorStart(_) => "orchestrator:start",
             AgentEvent::OrchestratorProgress(_) => "orchestrator:progress",
             AgentEvent::ChatChunk(_) => "chat:chunk",

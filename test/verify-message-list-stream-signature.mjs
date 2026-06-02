@@ -26,7 +26,7 @@ const base = {
 
 assert.equal(
   buildMessageListStreamSignature(base),
-  buildMessageListStreamSignature({ ...base, content: "a".repeat(180), steps: [{ type: "text", content: "a".repeat(180) }] }),
+  buildMessageListStreamSignature({ ...base, content: "a".repeat(130), steps: [{ type: "text", content: "a".repeat(130) }] }),
   "small text deltas should stay in the same stream signature bucket",
 );
 

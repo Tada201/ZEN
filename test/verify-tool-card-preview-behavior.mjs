@@ -37,7 +37,7 @@ assert(
   "small completed tool batches with output should show previews without an extra click",
 );
 assert(
-  agentExecutionTraceSource.includes("Batch started in parallel") && agentExecutionTraceSource.includes("agents {trace.ownerSummary}") && agentExecutionTraceSource.includes("active {trace.runningToolNames.join"),
+  agentExecutionTraceSource.includes("Batch started in parallel") && agentExecutionTraceSource.includes("agents {trace.ownerSummary}") && agentExecutionTraceSource.includes("active {trace.runningToolSummaries.join"),
   "parallel tool batches should expose batch mode, owners, and active tools",
 );
 assert(
@@ -47,8 +47,13 @@ assert(
 assert(
   agentExecutionTraceSource.includes("trace.shouldShowBatchLanes") &&
     agentExecutionTraceSource.includes("ToolBatchLane") &&
-    agentExecutionTraceSource.includes("lane.runningToolNames.join"),
+    agentExecutionTraceSource.includes("lane.runningToolSummaries.join"),
   "parallel tool batches should render grouped batch lanes with active tool previews",
+);
+assert(
+  agentExecutionTraceSource.includes("preferCompact ? importantToolCalls : toolCalls") &&
+    agentExecutionTraceSource.includes("Full tool and agent telemetry is shown in the Active Agents panel"),
+  "chat compact mode should keep normal tool telemetry in the Active Agents panel while preserving approval/error rows",
 );
 assert(traceSource.includes("getActionChips"), "action rows should expose important agent/approval metadata inline");
 assert(traceSource.includes("spawn.parentAgent") && traceSource.includes("spawn.childAgent"), "subagent rows should show parent-to-child delegation");

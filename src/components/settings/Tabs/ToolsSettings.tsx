@@ -205,6 +205,10 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
   const globalDefault = settings["tools.global-default"] || "confirm";
   const visibleTools = showAllTools ? tools : tools.slice(0, 3);
   const hiddenCount = Math.max(0, tools.length - 3);
+  const confirmYoloEnable = () =>
+    window.confirm(
+      "Enable YOLO mode? This auto-approves tool calls except hardcoded security blocks. Use only in a trusted workspace."
+    );
 
   return (
     <div className="space-y-8">
@@ -243,7 +247,10 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
             control={
               <WorkbenchSwitch
                 checked={yoloMode}
-                onCheckedChange={(v) => onUpdate("tools.yolo-mode", String(v))}
+                onCheckedChange={(v) => {
+                  if (v && !confirmYoloEnable()) return;
+                  onUpdate("tools.yolo-mode", String(v));
+                }}
               />
             }
             icon="lucide:rocket"
@@ -367,6 +374,7 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
             <button
               type="button"
               onClick={() => {
+                if (!confirmYoloEnable()) return;
                 onUpdate("tools.global-default", "always_allow");
                 onUpdate("tools.yolo-mode", "true");
                 onUpdate("tools.auto-approve-low-risk", "true");

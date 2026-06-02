@@ -1,5 +1,6 @@
 import type { StateCreator } from "zustand";
 import type { SettingsState } from "./types";
+import { settingsApi } from "@/api";
 
 export interface AiSlice {
   activeProvider: string;
@@ -89,6 +90,19 @@ export const createAISlice: StateCreator<SettingsState, [], [], AiSlice> = (set,
     set({ activeProvider: provider });
     if (model) {
       set({ activeModel: model });
+    }
+
+    // Persist changes to SQLite backend (best-effort)
+    try {
+      const updates: Record<string, string> = {
+        active_provider: provider,
+      };
+      if (model) {
+        updates.active_model = model;
+      }
+      await settingsApi.setSettings(updates);
+    } catch (e) {
+      console.warn("[AISlice] Failed to persist active model/provider to SQLite:", e);
     }
   },
 

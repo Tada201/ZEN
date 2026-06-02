@@ -170,7 +170,7 @@ export function OpenUIRenderer({
               
               <div className="space-y-6">
                 {extractedCode ? (
-                  <div className="relative min-h-[100px]">
+                  <div className="relative min-h-[100px] overflow-x-auto w-full max-w-full rounded-lg">
                     <Renderer
                       response={extractedCode}
                       library={extendedLibrary}

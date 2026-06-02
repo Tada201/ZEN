@@ -5,7 +5,7 @@ import { useChatStore } from "@/lib/stores/useChatStore";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import { ttftBegin, ttftReport } from "@/lib/ttft";
 import type { Message, Attachment } from "../../components/chat/types";
-import { findWritableAssistantIndex } from "../stream/messageTarget";
+import { findWritableAssistantIndex, markMessageAsFailed } from "../stream/messageTarget";
 import { createOptimisticChatMessages } from "./optimisticChatMessages";
 import { preloadOpenUISystemPrompt } from "../../components/genui/promptLoader";
 
@@ -93,7 +93,7 @@ export function useSendMessage(currentSessionId: string | null) {
         const next = [...prev];
         const assistantIdx = findWritableAssistantIndex(next);
         if (assistantIdx !== -1) {
-          next[assistantIdx] = { ...next[assistantIdx], status: "failed", error: errorMessage };
+          next[assistantIdx] = markMessageAsFailed(next[assistantIdx], errorMessage);
         }
         return next;
       });

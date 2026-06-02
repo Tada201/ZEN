@@ -3,7 +3,7 @@
    Sessions · Markdown · Code blocks · Tool calls · Artifact panel
    Image attachments · API key management · SQLite persistence
  ═══════════════════════════════════════════════════════════════ */
-import { useState, useCallback, useEffect, useTransition } from "react";
+import { useState, useCallback, useEffect, useTransition, useMemo } from "react";
 import { PanelLeftOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useChat } from "@/atlas/hooks/useChat";
@@ -14,6 +14,7 @@ import {
   ArtifactData
 } from "../components/chat/types";
 import { SessionSidebar } from "../components/chat/SessionSidebar";
+import { AgentActionStep } from "../components/chat/AssistantMessageTrace";
 import { MessageList } from "../components/chat/MessageList";
 import { PremiumChatInput } from "../components/PremiumChatInput";
 import { SettingsModal, type TabId } from "../components/SettingsModal";
@@ -123,6 +124,19 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
   }, [setSelectedModelId, setSelectedProvider]);
 
   const onToggleSidebar = useCallback(() => setIsSidebarOpen(false), []);
+
+  const latestStatusStep = useMemo(() => {
+    const lastMessage = messages[messages.length - 1];
+    if (!isStreaming || lastMessage?.role !== "assistant" || !lastMessage.steps) return null;
+    
+    for (let i = lastMessage.steps.length - 1; i >= 0; i--) {
+      const step = lastMessage.steps[i];
+      if (step.type === "action" && step.kind === "chat_status") {
+        return step;
+      }
+    }
+    return null;
+  }, [messages, isStreaming]);
 
   // Auto-collapse sidebar on mobile
   useEffect(() => {
@@ -240,8 +254,13 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
             onOpenSettings={onOpenSettings}
           />
 
-          <div className="absolute bottom-0 left-0 right-0 p-4 pb-8 bg-gradient-to-t from-background via-background/80 to-transparent pointer-events-none">
+          <div className="absolute bottom-0 left-0 right-0 z-30 p-4 pb-8 bg-gradient-to-t from-background via-background/80 to-transparent pointer-events-none">
             <div className="mx-auto max-w-[700px] w-full pointer-events-auto">
+              {latestStatusStep && (
+                <div className="mb-2 w-full animate-in fade-in slide-in-from-bottom-2 duration-300 pointer-events-none bg-background/50 backdrop-blur-md rounded-lg shadow-sm border border-border/50">
+                  <AgentActionStep step={latestStatusStep} isStreaming={true} />
+                </div>
+              )}
               <PremiumChatInput
                 activeChatId={currentSessionId}
                 onSend={handleSendMessageInternal}

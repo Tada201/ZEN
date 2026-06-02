@@ -218,6 +218,7 @@ pub async fn resolve_tool_approval(
     state: State<'_, AppState>,
     tool_call_id: String,
     approved: bool,
+    remember_exact: Option<bool>,
 ) -> ZenResult<()> {
     let sender = {
         let mut map = state.pending_tool_approvals.lock().await;
@@ -226,8 +227,27 @@ pub async fn resolve_tool_approval(
 
     match sender {
         Some(tx) => {
+            if approved && remember_exact.unwrap_or(false) {
+                let cache_key = format!("{}:{}", tx.tool_name, tx.args_hash);
+                let mut session_permissions = state.session_permissions.lock().await;
+                session_permissions
+                    .entry(tx.chat_id.clone())
+                    .or_default()
+                    .insert(cache_key.clone(), true);
+                tracing::info!(
+                    tool_call_id = %tool_call_id,
+                    chat_id = %tx.chat_id,
+                    tool_name = %tx.tool_name,
+                    permission_key = %cache_key,
+                    "Remembered exact tool approval for this session"
+                );
+            }
             // It is OK if the receiving end was already dropped (runner cancelled).
-            let _ = tx.send(approved);
+            let args_hash = tx.args_hash.clone();
+            let _ = tx.sender.send(crate::services::tool::ToolApprovalDecision {
+                approved,
+                args_hash,
+            });
             tracing::info!(
                 tool_call_id = %tool_call_id,
                 approved = %approved,

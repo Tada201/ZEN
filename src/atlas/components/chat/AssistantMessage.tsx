@@ -25,6 +25,30 @@ const CardFallback = () => (
   <div className="h-24 w-64 rounded-xl border border-border/30 bg-card/20" aria-hidden="true" />
 );
 
+const VISIBLE_CHAT_STATUS_PHASES = new Set([
+  "agent_streaming",
+  "tool_call_streaming",
+  "tool_call_ready",
+]);
+
+function isVisibleChatStatusStep(step: Step) {
+  return step.kind !== "chat_status" || VISIBLE_CHAT_STATUS_PHASES.has(String(step.metadata?.phase || ""));
+}
+
+function isVisibleChatActionStep(step: Step) {
+  if (step.type !== "action") return true;
+  if (!isVisibleChatStatusStep(step)) return false;
+  
+  if (step.kind === "chat_status") {
+    return false;
+  }
+
+  return (
+    step.kind === "approval_request" ||
+    step.kind === "clarification_request"
+  );
+}
+
 function RenderPremiumCard({ card }: { card: ParsedCard }) {
   return (
     <Suspense fallback={<CardFallback />}>
@@ -62,12 +86,12 @@ export function AssistantMessage({
 
   const executionActionSteps = useMemo<Step[]>(() => {
     return groupedSteps
-      .filter((step) => step.type === "action" && (step.kind !== "chat_status" || step.metadata?.phase === "tool_call_streaming" || step.metadata?.phase === "tool_call_ready"))
+      .filter((step) => step.type === "action" && isVisibleChatStatusStep(step as Step))
       .map((step) => step as Step);
   }, [groupedSteps]);
 
   const visibleGroupedSteps = useMemo(() => {
-    return groupedSteps.filter((step) => step.type !== "action" || step.kind !== "chat_status" || step.metadata?.phase === "tool_call_streaming" || step.metadata?.phase === "tool_call_ready");
+    return groupedSteps.filter((step) => step.type !== "action" || isVisibleChatActionStep(step as Step));
   }, [groupedSteps]);
 
   const hasVisibleAnswer = Boolean(
@@ -88,13 +112,11 @@ export function AssistantMessage({
     !hasVisibleAnswer &&
     groupedSteps.length > 0 &&
     groupedSteps.every((step) =>
-      step.type === "action" &&
-      (step.kind === "orchestrator_progress" || step.kind === "chat_status")
+      step.type === "action" && !isVisibleChatActionStep(step as Step)
     );
 
   const showMessageActions = hasVisibleAnswer && !hasOnlyLiveProgress;
   const hasResearchProgress = Boolean(message.metadata?.researchSteps?.length);
-
   return (
     <div
       className={cn(
@@ -134,8 +156,15 @@ export function AssistantMessage({
               <>
                 {visibleGroupedSteps.length > 0 ? (
                   <div className={cn("space-y-4", compact && "space-y-2")}>
-                    {visibleGroupedSteps.map((step, idx) => (
-                      <div key={idx} className="animate-in fade-in slide-in-from-top-1 duration-300">
+                    {visibleGroupedSteps.map((step, idx) => {
+                      const stepKey = step.type === "tool-group" 
+                        ? `tool-group-${idx}-${step.toolCalls.map(t => t.id).join("-")}`
+                        : step.type === "action" 
+                          ? `action-${step.eventId || idx}`
+                          : `${step.type}-${idx}`;
+                      
+                      return (
+                      <div key={stepKey} className="animate-in fade-in slide-in-from-top-1 duration-300">
                       {step.type === "text" ? (
                         <div className="prose-frontier">
                             <div className="flex flex-col gap-4">
@@ -169,12 +198,14 @@ export function AssistantMessage({
                             sessionId={message.sessionId}
                             onOpenArtifact={onOpenArtifact}
                             isStreaming={message.status === "sending"}
+                            preferCompact
                           />
                         ) : step.type === "action" ? (
                           <AgentActionStep step={step} isStreaming={message.status === "sending"} />
                         ) : null}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className={cn("space-y-4", compact && "space-y-2")}>
@@ -185,6 +216,7 @@ export function AssistantMessage({
                         sessionId={message.sessionId}
                         onOpenArtifact={onOpenArtifact}
                         isStreaming={message.status === "sending"}
+                        preferCompact
                       />
                     )}
 

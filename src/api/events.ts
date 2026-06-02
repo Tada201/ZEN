@@ -83,6 +83,27 @@ export interface ToolAuthorizationRequestEventPayload {
   iteration?: number;
 }
 
+export interface ToolAuthorizationTimeoutEventPayload {
+  chat_id?: string | null;
+  chatId?: string | null;
+  run_id?: string;
+  runId?: string;
+  parent_agent_id?: string;
+  parentAgentId?: string;
+  execution_id?: string;
+  executionId?: string;
+  batch_id?: string;
+  batchId?: string;
+  tool_batch_id?: string;
+  toolBatchId?: string;
+  tool_call_id: string;
+  tool_name: string;
+  arguments?: ToolCall["input"];
+  agent_id?: string;
+  agent_name?: string;
+  iteration?: number;
+}
+
 export interface ArtifactStartEventPayload {
   chat_id?: string | null;
   artifact_type: ArtifactData["type"];
@@ -125,6 +146,18 @@ export interface ChatResearchStepEventPayload {
   message_id?: string;
   text: string;
   status: ResearchStep["status"];
+}
+
+export interface AgentChunkEventPayload {
+  chat_id?: string | null;
+  chatId?: string | null;
+  agent_id: string;
+  agent_name?: string;
+  agentName?: string;
+  parent_agent?: string;
+  parentAgent?: string;
+  delta: string;
+  type?: string;
 }
 
 type FlexibleToolCallMeta = Partial<NonNullable<ActionMeta["toolCall"]>> & {
@@ -170,9 +203,11 @@ export interface AgentActionEventPayload {
   kind?: MessageKind | string;
   content?: string;
   metadata?: AgentActionMetadata;
+  type?: string;
   message_id?: string;
   messageId?: string;
   message?: string;
+  delta?: string;
   status?: string;
   tool_name?: string;
   tool_call_id?: string;
@@ -306,6 +341,7 @@ export interface AppEventPayloadMap {
   "tool:start": ToolStartEventPayload;
   "tool:complete": ToolCompleteEventPayload;
   "tool:authorization_request": ToolAuthorizationRequestEventPayload;
+  "tool:authorization_timeout": ToolAuthorizationTimeoutEventPayload;
   "artifact:start": ArtifactStartEventPayload;
   "artifact:delta": ArtifactDeltaEventPayload;
   "artifact:complete": ArtifactCompleteEventPayload;
@@ -328,6 +364,7 @@ export interface AppEventPayloadMap {
   "agent:spawn": AgentActionEventPayload;
   "agent:complete": AgentActionEventPayload;
   "agent:handoff": AgentActionEventPayload;
+  "agent:chunk": AgentChunkEventPayload;
   "workflow:started": AgentActionEventPayload;
   "workflow:completed": AgentActionEventPayload;
   "workflow:failed": AgentActionEventPayload;

@@ -4,6 +4,11 @@ import { useChatStore } from '@/lib/stores/useChatStore';
 import { useAgentActivityStore, type ActiveAgentTask, type AgentActivity } from '@/lib/stores/agentActivityStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MarkdownContent } from '@/atlas/components/chat/MarkdownContent';
+import { AgentDelegationLane } from '@/atlas/components/chat/AgentDelegationLane';
+import { buildAgentDelegationLaneModel, type AgentDelegationLaneModel } from '@/atlas/components/chat/agentDelegationLaneModel';
+import { buildAgentExecutionTraceModel } from '@/atlas/components/chat/agentExecutionTraceModel';
+import { groupToolCalls } from '@/atlas/components/chat/assistantMessageParts';
+import type { Message, Step, ToolCall } from '@/atlas/components/chat/types';
 import './agent-orchestrator.css';
 import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
 
@@ -23,9 +28,77 @@ const AGENT_ICONS: Record<string, string> = {
     space_observer: 'codicon:telescope',
 };
 
+const EMPTY_MESSAGES: Message[] = [];
+
+type LiveAgentPanelModel = {
+    message?: Message;
+    actionSteps: Step[];
+    toolCalls: ToolCall[];
+    lanes: AgentDelegationLaneModel[];
+    runningAgents: number;
+    runningTools: number;
+    approvals: number;
+    completedAgents: number;
+    activeSummary: string;
+};
+
+function isLiveAssistantMessage(message: Message) {
+    if (message.role !== 'assistant') return false;
+    if (message.status === 'sending') return true;
+    return Boolean(message.steps?.length || message.toolCalls?.length);
+}
+
+function agentLaneKey(step: Step) {
+    const spawn = step.metadata?.spawn;
+    return [
+        spawn?.parentAgent || step.metadata?.parentAgentId || 'main',
+        spawn?.childAgent || step.metadata?.agentName || step.metadata?.agentId || 'agent',
+        step.metadata?.iteration ?? '',
+    ].join('::');
+}
+
+function buildLiveAgentPanelModel(messages: Message[]): LiveAgentPanelModel {
+    const assistantMessages = messages.filter(isLiveAssistantMessage);
+    const message = [...assistantMessages].reverse().find((candidate: Message) => candidate.status === 'sending')
+        || assistantMessages[assistantMessages.length - 1];
+    const actionSteps = (message?.steps || []).filter((step: Step) => step?.type === 'action');
+    const toolCalls = groupToolCalls(message?.toolCalls || []);
+    const trace = buildAgentExecutionTraceModel(toolCalls, actionSteps);
+    const laneSteps = actionSteps.filter((step: Step) => (
+        step.kind === 'agent_spawn' ||
+        step.kind === 'agent_chunk' ||
+        step.kind === 'agent_complete'
+    ));
+    const latestLaneSteps = new Map<string, Step>();
+
+    laneSteps.forEach((step: Step) => {
+        latestLaneSteps.set(agentLaneKey(step), step);
+    });
+
+    const lanes = Array.from(latestLaneSteps.values())
+        .map(buildAgentDelegationLaneModel)
+        .filter((lane): lane is AgentDelegationLaneModel => Boolean(lane));
+
+    return {
+        message,
+        actionSteps,
+        toolCalls,
+        lanes,
+        runningAgents: lanes.filter((lane) => lane.status === 'running').length,
+        runningTools: toolCalls.filter((tool) => tool.status === 'running').length,
+        approvals: toolCalls.filter((tool) => tool.status === 'awaiting_approval').length,
+        completedAgents: lanes.filter((lane) => lane.status === 'completed').length,
+        activeSummary: trace.activeLaneSummary || (message?.status === 'sending' ? 'Assistant is streaming' : 'No active run'),
+    };
+}
+
 export function AgentOrchestratorPanel() {
     const activeSessionId = useChatStore(s => s.activeSessionId);
+    const sessionMessages = useChatStore(s => activeSessionId ? s.sessionMessages[activeSessionId] ?? EMPTY_MESSAGES : EMPTY_MESSAGES);
+    const isSessionStreaming = useChatStore(s => activeSessionId ? s.streamingChats[activeSessionId] ?? false : false);
     const { activeTasks, selectedTaskId, setSelectedTaskId, clearTasks, removeTask, cancelTask, activities } = useAgentActivityStore();
+
+    const liveModel = useMemo(() => buildLiveAgentPanelModel(sessionMessages), [sessionMessages]);
 
     const selectedTask = useMemo(() => 
         activeTasks.find(t => t.id === selectedTaskId), 
@@ -78,13 +151,17 @@ export function AgentOrchestratorPanel() {
                 </div>
             </div>
 
-            {activeTasks.length === 0 ? (
+            {!liveModel.message && activeTasks.length === 0 ? (
                 <div className="flex-grow flex flex-col items-center justify-center opacity-25 pointer-events-none p-6 text-center">
                     <WorkbenchIcon name="codicon:git-branch" size={48} className="text-zinc-500" />
                     <div className="mt-4 text-[10px] uppercase tracking-widest font-mono text-zinc-400">NO_ACTIVE_NODES</div>
                 </div>
             ) : (
                 <div className="agent-birds-eye__grid pb-10">
+                    {liveModel.message && (
+                        <LiveSessionExecution model={liveModel} isStreaming={isSessionStreaming} />
+                    )}
+
                     {/* Active Cluster */}
                     {runningTasks.length > 0 && (
                         <div className="border-b border-white/5">
@@ -272,6 +349,76 @@ export function AgentOrchestratorPanel() {
             <AnimatePresence mode="wait">
                 {selectedTaskId ? renderWorkspace() : renderBirdsEye()}
             </AnimatePresence>
+        </div>
+    );
+}
+
+function LiveSessionExecution({ model, isStreaming }: { model: LiveAgentPanelModel; isStreaming: boolean }) {
+    const recentTools = model.toolCalls.slice(-6).reverse();
+
+    return (
+        <div className="live-agent-panel border-b border-white/5">
+            <div className="live-agent-panel__header">
+                <div className="flex min-w-0 items-center gap-2">
+                    <WorkbenchIcon name="codicon:run-all" size={13} className={isStreaming ? "text-[#00ff9f]" : "text-white/40"} />
+                    <div className="min-w-0">
+                        <div className="live-agent-panel__title">Live session execution</div>
+                        <div className="live-agent-panel__summary truncate">{model.activeSummary}</div>
+                    </div>
+                </div>
+                <div className={`live-agent-panel__state ${isStreaming ? 'live-agent-panel__state--running' : ''}`}>
+                    {isStreaming ? 'streaming' : 'idle'}
+                </div>
+            </div>
+
+            <div className="live-agent-panel__metrics">
+                <MetricCell label="agents" value={model.runningAgents} tone={model.runningAgents > 0 ? 'active' : undefined} />
+                <MetricCell label="tools" value={model.runningTools} tone={model.runningTools > 0 ? 'active' : undefined} />
+                <MetricCell label="approval" value={model.approvals} tone={model.approvals > 0 ? 'warn' : undefined} />
+                <MetricCell label="done" value={model.completedAgents} />
+            </div>
+
+            {model.lanes.length > 0 && (
+                <div className="live-agent-panel__section">
+                    <div className="live-agent-panel__section-title">Agent lanes</div>
+                    <div className="space-y-2">
+                        {model.lanes.map((lane) => (
+                            <AgentDelegationLane
+                                key={`${lane.parentName}:${lane.agentName}:${lane.iteration ?? 'root'}`}
+                                lane={lane}
+                            />
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {recentTools.length > 0 && (
+                <div className="live-agent-panel__section">
+                    <div className="live-agent-panel__section-title">Recent tools</div>
+                    <div className="live-agent-panel__tools">
+                        {recentTools.map((tool) => {
+                            const status = tool.status || 'running';
+                            return (
+                                <div key={tool.id || `${tool.name || 'tool'}-${status}`} className="live-agent-panel__tool-row">
+                                    <span className={`live-agent-panel__tool-status live-agent-panel__tool-status--${status}`} />
+                                    <span className="min-w-0 flex-1 truncate text-zinc-300">{tool.name || 'Tool'}</span>
+                                    {tool.agentName && <span className="max-w-[96px] truncate text-white/30">{tool.agentName}</span>}
+                                    <span className="uppercase text-white/35">{status.replace('_', ' ')}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function MetricCell({ label, value, tone }: { label: string; value: number; tone?: 'active' | 'warn' }) {
+    return (
+        <div className={`live-agent-panel__metric ${tone ? `live-agent-panel__metric--${tone}` : ''}`}>
+            <span>{value}</span>
+            <span>{label}</span>
         </div>
     );
 }

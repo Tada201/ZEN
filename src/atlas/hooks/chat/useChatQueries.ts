@@ -16,6 +16,7 @@ const ACTION_MESSAGE_KINDS = new Set([
   "agent_handoff",
   "agent_spawn",
   "agent_complete",
+  "agent_chunk",
   "approval_request",
   "clarification_request",
   "deep_research",
@@ -26,7 +27,11 @@ const ACTION_MESSAGE_KINDS = new Set([
   "workflow_started",
   "workflow_completed",
   "workflow_failed",
+  "task_created",
   "task_started",
+  "task_updated",
+  "task_list_updated",
+  "task_complexity_analyzed",
   "task_completed",
   "task_failed",
 ]);
@@ -44,6 +49,7 @@ function normalizeActionMetadata(metadata: any) {
     approvalRequest: metadata.approvalRequest || metadata.approval_request,
     toolResult: metadata.toolResult || metadata.tool_result,
     toolCall: metadata.toolCall || metadata.tool_call,
+    agentStream: metadata.agentStream || metadata.agent_stream,
   };
 }
 
@@ -71,6 +77,10 @@ function getActionEventId(message: Message): string {
   }
   if (message.kind === "orchestrator_progress") {
     return `orchestrator:${message.sessionId || "history"}`;
+  }
+  if (message.kind === "agent_chunk") {
+    const agentId = meta.agentId || meta.agent_id || meta.agentName || meta.agent_name || meta.spawn?.childAgent;
+    return `agent-chunk:${message.sessionId || "history"}:${agentId || "agent"}`;
   }
   const stable =
     toolCallId ||
@@ -102,6 +112,75 @@ function actionMessageToStep(message: Message): Step {
     status,
     timestamp: message.createdAt,
     eventId: getActionEventId({ ...message, metadata }),
+  };
+}
+
+function isEmptyToolInput(input: ToolCall["input"] | undefined) {
+  return input === undefined ||
+    input === null ||
+    input === "" ||
+    (typeof input === "object" && !Array.isArray(input) && Object.keys(input).length === 0);
+}
+
+function mergeReplayToolCall(previous: ToolCall | undefined, incoming: ToolCall): ToolCall {
+  if (!previous) return incoming;
+  const keepTerminalStatus = (previous.status === "completed" || previous.status === "error") && incoming.status === "running";
+  return {
+    ...previous,
+    ...incoming,
+    status: keepTerminalStatus ? previous.status : incoming.status,
+    input: isEmptyToolInput(incoming.input) ? previous.input : incoming.input,
+    output: incoming.output || previous.output,
+    durationMs: incoming.durationMs ?? previous.durationMs,
+    approvalContext: incoming.approvalContext || previous.approvalContext,
+    runId: incoming.runId || previous.runId,
+    messageId: incoming.messageId || previous.messageId,
+    parentAgentId: incoming.parentAgentId || previous.parentAgentId,
+    executionId: incoming.executionId || previous.executionId,
+    agentId: incoming.agentId || previous.agentId,
+    agentName: incoming.agentName || previous.agentName,
+    iteration: incoming.iteration ?? previous.iteration,
+    batchId: incoming.batchId || previous.batchId,
+    toolBatchId: incoming.toolBatchId || previous.toolBatchId,
+    startTime: previous.startTime || incoming.startTime,
+    completedAt: incoming.completedAt ?? previous.completedAt,
+    lastUpdatedAt: incoming.lastUpdatedAt ?? previous.lastUpdatedAt,
+  };
+}
+
+function mergeReplayActionStep(previous: Step, incoming: Step): Step {
+  const metadata: any = {
+    ...(previous.metadata || {}),
+    ...(incoming.metadata || {}),
+  };
+  if (previous.metadata?.spawn || incoming.metadata?.spawn) {
+    metadata.spawn = {
+      ...(previous.metadata?.spawn || {}),
+      ...(incoming.metadata?.spawn || {}),
+      task: incoming.metadata?.spawn?.task || previous.metadata?.spawn?.task || incoming.content || previous.content || "",
+    };
+  }
+  if (previous.metadata?.agentStream || incoming.metadata?.agentStream) {
+    const previousContent = previous.metadata?.agentStream?.content || "";
+    const incomingContent = incoming.metadata?.agentStream?.content || "";
+    metadata.agentStream = {
+      ...(previous.metadata?.agentStream || {}),
+      ...(incoming.metadata?.agentStream || {}),
+      content: incomingContent && previousContent.endsWith(incomingContent)
+        ? previousContent
+        : previousContent + incomingContent,
+    };
+  }
+  if (
+    (previous.status === "completed" || previous.status === "error" || previous.status === "cancelled") &&
+    incoming.status === "running"
+  ) {
+    return { ...previous, metadata };
+  }
+  return {
+    ...previous,
+    ...incoming,
+    metadata,
   };
 }
 
@@ -170,13 +249,13 @@ function coalesceTimelineMessages(messages: Message[]): Message[] {
     if (existingIdx === -1) {
       pendingSteps.push(step);
     } else {
-      pendingSteps[existingIdx] = { ...pendingSteps[existingIdx], ...step };
+      pendingSteps[existingIdx] = mergeReplayActionStep(pendingSteps[existingIdx], step);
     }
   };
 
   const mergePendingTool = (toolCall: ToolCall) => {
     const previous = pendingTools.get(toolCall.id);
-    const merged = { ...previous, ...toolCall };
+    const merged = mergeReplayToolCall(previous, toolCall);
     pendingTools.set(toolCall.id, merged);
 
     const existingStepIdx = pendingSteps.findIndex(
@@ -333,6 +412,22 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
     }
   }
 
+  let finalContent = msg.content || "";
+  if (!reasoning && finalContent && /<\/?(?:think|thought)>/i.test(finalContent)) {
+    const thinkMatch = /<(?:thought|think)>([\s\S]*?)<\/(?:thought|think)>/i.exec(finalContent);
+    if (thinkMatch) {
+      reasoning = thinkMatch[1].trim();
+      finalContent = finalContent.replace(/<(?:thought|think)>[\s\S]*?<\/(?:thought|think)>/ig, "").trim();
+    } else {
+      const openMatch = /<(?:thought|think)>/i.exec(finalContent);
+      if (openMatch) {
+        const idx = openMatch.index;
+        reasoning = finalContent.slice(idx + openMatch[0].length).trim();
+        finalContent = finalContent.slice(0, idx).trim();
+      }
+    }
+  }
+
   let parsedSteps: Step[] = [];
   const rawSteps = (msg as any).steps ?? parsedMetadata?.executionSteps;
   if (rawSteps) {
@@ -357,8 +452,8 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
         steps.push({ type: "tool-call", toolCall });
       });
     }
-    if (msg.content) {
-      steps.push({ type: "text", content: msg.content });
+    if (finalContent) {
+      steps.push({ type: "text", content: finalContent });
     }
   }
 
@@ -366,7 +461,7 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
     id: msg.id,
     sessionId: msg.chatId,
     role: msg.role as Message["role"],
-    content: msg.content,
+    content: finalContent,
     reasoning: reasoning || undefined,
     attachments: [],
     toolCalls: parsedToolCalls,

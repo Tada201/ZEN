@@ -133,6 +133,12 @@ export const PremiumChatInput = memo(({
   }, [toolYoloMode]);
 
   const handleSetIsAuto = useCallback(async (val: boolean) => {
+    if (val) {
+      const confirmed = window.confirm(
+        "Enable YOLO mode? This auto-approves tool calls except hardcoded security blocks. Use only in a trusted workspace."
+      );
+      if (!confirmed) return;
+    }
     try {
       await toolsApi.setYoloMode(val);
       useSettingsStore.setState({ toolYoloMode: val });
@@ -209,7 +215,6 @@ export const PremiumChatInput = memo(({
 
   const selectedModelInfo = useMemo(() => (
     models.find(m => m.id === selectedModelId && m.provider === selectedProvider)
-      || models.find(m => m.id === selectedModelId)
       || null
   ), [models, selectedModelId, selectedProvider]);
 
@@ -262,8 +267,8 @@ export const PremiumChatInput = memo(({
       return;
     }
     if (!message.trim() && selectedFiles.length === 0) return;
-    const modelId = selectedModelInfo?.id || selectedModelId || "No Model";
-    const providerId = selectedModelInfo?.provider || selectedProvider || "ollama";
+    const modelId = selectedModelId || selectedModelInfo?.id || "No Model";
+    const providerId = selectedProvider || selectedModelInfo?.provider || "ollama";
 
     const attachments = await Promise.all(selectedFiles.map(async (file) => {
       return new Promise((resolve, reject) => {
@@ -345,13 +350,15 @@ export const PremiumChatInput = memo(({
 
   const handleSuggestedClick = (promptText: string) => {
     if (isLoading) return;
-    if (!selectedModelInfo) return;
+    const modelId = selectedModelId || selectedModelInfo?.id;
+    const providerId = selectedProvider || selectedModelInfo?.provider;
+    if (!modelId || !providerId) return;
     if (promptText.includes("genui") || internalGenerativeUI) {
       void preloadOpenUISystemPrompt();
     }
     onSend({
       message: promptText,
-      model: selectedModelInfo.id,
+      model: modelId,
       webSearch: isWebSearch,
       deepResearch: isDeepResearch,
       generativeUI: promptText.includes("genui") || internalGenerativeUI,
@@ -359,7 +366,7 @@ export const PremiumChatInput = memo(({
       attachments: [],
       thinking: buildThinkingPayload(),
       tools: isToolsDisabled ? [] : undefined,
-      provider: selectedModelInfo.provider,
+      provider: providerId,
     });
   };
 
@@ -489,6 +496,14 @@ export const PremiumChatInput = memo(({
                   onOpenModelSelector={onOpenModelSelector}
                   isCompact={isCompact}
                 />
+              )}
+              {isAuto && (
+                <span
+                  className="shrink-0 rounded border border-rose-400/25 bg-rose-400/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none text-rose-300"
+                  title="YOLO mode is enabled: tool confirmations are auto-approved except hardcoded security blocks."
+                >
+                  YOLO
+                </span>
               )}
 
               <PinnedActionBar

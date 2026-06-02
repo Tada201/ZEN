@@ -38,6 +38,7 @@ assert.equal(running.parentName, "Coordinator", "lane should preserve parent age
 assert.equal(running.status, "running", "spawn lane should start running");
 assert.equal(running.task, "Inspect frontend streaming and execution trace behavior.", "lane should preserve delegated task");
 assert.equal(running.iteration, 2, "lane should preserve iteration");
+assert.equal(running.hasTranscript, false, "plain spawn should not claim to have transcript content");
 
 const completed = buildAgentDelegationLaneModel({
   type: "action",
@@ -78,6 +79,28 @@ const failed = buildAgentDelegationLaneModel({
   },
 });
 assert.equal(failed.status, "error", "failed spawn metadata should render as an error lane");
+
+const streamed = buildAgentDelegationLaneModel({
+  type: "action",
+  kind: "agent_chunk",
+  status: "running",
+  metadata: {
+    agentName: "Researcher",
+    agentStream: {
+      content: "Reading files...\nFound the stream hook.",
+      type: "text",
+    },
+    spawn: {
+      parentAgent: "Coordinator",
+      childAgent: "Researcher",
+      task: "Inspect streaming",
+      status: "spawned",
+    },
+  },
+});
+assert.equal(streamed.liveContent, "Reading files...\nFound the stream hook.", "lane should preserve full live transcript");
+assert.equal(streamed.compactLivePreview, "Reading files... Found the stream hook.", "lane should expose compact transcript preview");
+assert.equal(streamed.hasTranscript, true, "streamed content should make lane expandable");
 
 const ignored = buildAgentDelegationLaneModel({
   type: "action",

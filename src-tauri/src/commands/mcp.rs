@@ -41,6 +41,12 @@ pub async fn mcp_get_status(state: State<'_, AppState>) -> ZenResult<Value> {
 }
 
 #[tauri::command]
+pub async fn mcp_get_http_token(state: State<'_, AppState>) -> ZenResult<String> {
+    let server = state.mcp_server.read().await;
+    Ok(server.http_auth_token().to_string())
+}
+
+#[tauri::command]
 pub async fn mcp_start_server(state: State<'_, AppState>) -> ZenResult<()> {
     let server_arc = state.mcp_server.clone();
     let mut server = state.mcp_server.write().await;
@@ -64,6 +70,6 @@ pub async fn mcp_stop_server(state: State<'_, AppState>) -> ZenResult<()> {
 #[tauri::command]
 pub async fn mcp_list_tools(state: State<'_, AppState>) -> ZenResult<Value> {
     let registry = state.tools.read().await;
-    let tools = registry.list_definitions();
+    let tools = registry.list_direct_definitions();
     Ok(serde_json::to_value(tools)?)
 }

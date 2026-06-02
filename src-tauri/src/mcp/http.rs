@@ -9,7 +9,7 @@
 /// - WS /mcp/ws - WebSocket for bidirectional communication
 use axum::{
     extract::State,
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::Json,
     routing::{get, post},
     Router,
@@ -40,11 +40,31 @@ pub fn create_mcp_router(state: HttpState) -> Router {
 /// Handle POST /mcp - JSON-RPC request
 async fn handle_mcp_request(
     State(state): State<HttpState>,
+    headers: HeaderMap,
     Json(request): Json<JsonRpcRequest>,
 ) -> Json<JsonRpcResponse> {
     debug!("Received HTTP MCP request: {}", request.method);
 
-    let server = state.mcp_server.read().await;
+    let mut server = state.mcp_server.write().await;
+    let provided_token = headers
+        .get("x-zen-mcp-token")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("");
+
+    if provided_token != server.http_auth_token() {
+        return Json(JsonRpcResponse::failure(
+            crate::mcp::types::JsonRpcError::invalid_params("Missing or invalid MCP auth token"),
+            request.id,
+        ));
+    }
+
+    if !server.check_http_rate_limit() {
+        return Json(JsonRpcResponse::failure(
+            crate::mcp::types::JsonRpcError::internal_error("MCP rate limit exceeded"),
+            request.id,
+        ));
+    }
+
     let response = server.handle_request(request).await;
 
     Json(response)

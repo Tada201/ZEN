@@ -22,7 +22,7 @@ function isStructurallyComplete(type: MarkdownBlock['type'], content: string): b
     return !!match;
   }
   if (type === 'thought') {
-    return trimmed.startsWith('<thought>') && trimmed.endsWith('</thought>');
+    return /^<(?:thought|think)>/i.test(trimmed) && /<\/(?:thought|think)>$/i.test(trimmed);
   }
   return true;
 }
@@ -74,7 +74,7 @@ export function splitMarkdownIntoBlocks(content: string, isStreaming: boolean): 
     }
 
     // 2. Detect Thought Blocks
-    if (line.includes('<thought>') && !inCodeBlock) {
+    if (/<(?:thought|think)>/i.test(line) && !inCodeBlock) {
       if (currentBlock.length > 0) {
         blocks.push(createBlock('text', currentBlock.join('\n'), true, blocks.length));
         currentBlock = [];
@@ -82,7 +82,7 @@ export function splitMarkdownIntoBlocks(content: string, isStreaming: boolean): 
       inThoughtBlock = true;
     }
 
-    if (line.includes('</thought>') && inThoughtBlock) {
+    if (/<\/(?:thought|think)>/i.test(line) && inThoughtBlock) {
       currentBlock.push(line);
       blocks.push(createBlock('thought', currentBlock.join('\n'), true, blocks.length));
       currentBlock = [];
@@ -117,7 +117,7 @@ export function splitMarkdownIntoBlocks(content: string, isStreaming: boolean): 
     }
     // For streaming thought blocks, auto-close for parser stability
     if (inThoughtBlock && isStreaming) {
-      blockContent += '\n</thought>';
+      blockContent += '\n</think>';
     }
 
     const isComplete = !isStreaming && isStructurallyComplete(type, blockContent);

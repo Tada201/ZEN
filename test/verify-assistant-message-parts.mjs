@@ -24,6 +24,16 @@ assert.equal(parsed.cleanText, "Before  After", "card markup should be removed f
 const partial = parseCardTags('Start <card>{"type":"metric"');
 assert(partial.cleanText.includes("Generating card"), "partial card JSON should show a generation placeholder");
 
+const malformedCompleteCard = parseCardTags('Before <card>{"type":</card> After');
+assert.equal(malformedCompleteCard.cards.length, 0, "malformed complete card JSON should not create a card");
+assert(!malformedCompleteCard.cleanText.includes("<card>"), "malformed complete card JSON should not leak raw opening tags");
+assert(!malformedCompleteCard.cleanText.includes("</card>"), "malformed complete card JSON should not leak raw closing tags");
+assert(malformedCompleteCard.cleanText.includes("Unable to render generated card"), "malformed complete card JSON should show a bounded fallback");
+
+const cardWithAttributes = parseCardTags('Before <card data-kind="metric">{"card":"metric","data":{"value":7}}</card> After');
+assert.equal(cardWithAttributes.cards.length, 1, "card tags with attributes should be extracted");
+assert.equal(cardWithAttributes.cards[0].type, "metric", "card attribute form should preserve card type");
+
 const steps = groupAssistantSteps([
   { type: "action", kind: "chat_status", content: "Planning tools", status: "running" },
   { type: "action", kind: "tool_call", content: "hidden duplicate", status: "running" },

@@ -15,7 +15,45 @@ use crate::tools::{GlobalToolRegistry, ToolCall, ToolError};
 pub struct ToolService {
     registry: GlobalToolRegistry,
     security: Arc<SecurityService>,
-    pending_approvals: Arc<Mutex<HashMap<String, tokio::sync::oneshot::Sender<bool>>>>,
+    pending_approvals: Arc<Mutex<HashMap<String, PendingToolApproval>>>,
+}
+
+pub struct PendingToolApproval {
+    pub sender: tokio::sync::oneshot::Sender<ToolApprovalDecision>,
+    pub chat_id: String,
+    pub tool_name: String,
+    pub args_hash: String,
+    pub args_snapshot: serde_json::Value,
+}
+
+pub struct ToolApprovalDecision {
+    pub approved: bool,
+    pub args_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ToolApprovalOutcome {
+    Approved,
+    Denied,
+    TimedOut,
+    Cancelled,
+    ArgumentMismatch,
+}
+
+impl ToolApprovalOutcome {
+    pub fn approved(&self) -> bool {
+        matches!(self, Self::Approved)
+    }
+
+    pub fn error_message(&self) -> &'static str {
+        match self {
+            Self::Approved => "",
+            Self::Denied => "Tool execution denied by user.",
+            Self::TimedOut => "Tool approval timed out.",
+            Self::Cancelled => "Tool approval was cancelled before the user responded.",
+            Self::ArgumentMismatch => "Tool approval rejected because arguments changed after approval was requested.",
+        }
+    }
 }
 
 pub struct ToolApprovalExecutionContext {
@@ -33,7 +71,7 @@ impl ToolService {
     pub fn new(
         registry: GlobalToolRegistry,
         security: Arc<SecurityService>,
-        pending_approvals: Arc<Mutex<HashMap<String, tokio::sync::oneshot::Sender<bool>>>>,
+        pending_approvals: Arc<Mutex<HashMap<String, PendingToolApproval>>>,
     ) -> Self {
         Self {
             registry,
@@ -89,7 +127,7 @@ impl ToolService {
                     .await
             }
             Ok(crate::tools::permission::PermissionDecision::Confirm { context }) => {
-                let approved = self
+                let approval_outcome = self
                     .request_interactive_approval(
                         app.clone(),
                         caller,
@@ -99,11 +137,11 @@ impl ToolService {
                         None,
                     )
                     .await;
-                if approved {
+                if approval_outcome.approved() {
                     self.execute_v2_authorized(app, chat_id, tool_call, "allow")
                         .await
                 } else {
-                    Err("Tool execution denied by user".to_string())
+                    Err(approval_outcome.error_message().to_string())
                 }
             }
             Ok(crate::tools::permission::PermissionDecision::Deny { reason }) => {
@@ -169,7 +207,7 @@ impl ToolService {
         tool_call: &ToolCall,
         context: crate::tools::permission::PermissionContext,
         execution_context: Option<ToolApprovalExecutionContext>,
-    ) -> bool {
+    ) -> ToolApprovalOutcome {
         self.audit(
             SecurityDecision::Ask,
             caller,
@@ -178,29 +216,55 @@ impl ToolService {
         )
         .await;
 
-        let (tx, rx) = tokio::sync::oneshot::channel::<bool>();
+        let (tx, rx) = tokio::sync::oneshot::channel::<ToolApprovalDecision>();
+        let args_hash = approval_args_hash(&tool_call.arguments);
         {
             let mut approvals = self.pending_approvals.lock().await;
-            approvals.insert(tool_call.id.clone(), tx);
+            approvals.insert(
+                tool_call.id.clone(),
+                PendingToolApproval {
+                    sender: tx,
+                    chat_id: chat_id.to_string(),
+                    tool_name: tool_call.name.clone(),
+                    args_hash: args_hash.clone(),
+                    args_snapshot: tool_call.arguments.clone(),
+                },
+            );
         }
 
-        self.emit_approval_request(&app, chat_id, tool_call, context, execution_context);
+        self.emit_approval_request(
+            &app,
+            chat_id,
+            tool_call,
+            context,
+            execution_context.as_ref(),
+            &args_hash,
+        );
 
-        let approved = match tokio::time::timeout(tokio::time::Duration::from_secs(120), rx).await {
-            Ok(Ok(approved)) => approved,
+        let outcome = match tokio::time::timeout(tokio::time::Duration::from_secs(120), rx).await {
+            Ok(Ok(decision)) => {
+                if !decision.approved {
+                    ToolApprovalOutcome::Denied
+                } else if decision.args_hash == args_hash {
+                    ToolApprovalOutcome::Approved
+                } else {
+                    ToolApprovalOutcome::ArgumentMismatch
+                }
+            }
             Ok(Err(_)) => {
                 let mut approvals = self.pending_approvals.lock().await;
                 approvals.remove(&tool_call.id);
-                false
+                ToolApprovalOutcome::Cancelled
             }
             Err(_) => {
                 let mut approvals = self.pending_approvals.lock().await;
                 approvals.remove(&tool_call.id);
-                false
+                self.emit_approval_timeout(&app, chat_id, tool_call, execution_context.as_ref());
+                ToolApprovalOutcome::TimedOut
             }
         };
 
-        if approved {
+        if outcome.approved() {
             self.audit(
                 SecurityDecision::Allow,
                 caller,
@@ -213,12 +277,20 @@ impl ToolService {
                 SecurityDecision::Deny,
                 caller,
                 &tool_call.name,
-                "user denied or timed out tool execution",
+                match outcome {
+                    ToolApprovalOutcome::Denied => "user denied tool execution",
+                    ToolApprovalOutcome::TimedOut => "tool approval timed out",
+                    ToolApprovalOutcome::Cancelled => "tool approval channel closed",
+                    ToolApprovalOutcome::ArgumentMismatch => {
+                        "tool approval rejected because arguments changed"
+                    }
+                    ToolApprovalOutcome::Approved => "user approved tool execution",
+                },
             )
             .await;
         }
 
-        approved
+        outcome
     }
 
     pub async fn execute_non_interactive(
@@ -235,6 +307,26 @@ impl ToolService {
                 "non-interactive tool execution requested",
             )
             .await;
+
+        let tool_risk = {
+            let registry = self.registry.read().await;
+            registry
+                .get(&tool_call.name)
+                .map(|tool| tool.risk_level())
+                .or_else(|| registry.known_tool_risk(&tool_call.name))
+                .unwrap_or(crate::tools::permission::RiskLevel::Critical)
+        };
+
+        if matches!(tool_risk, crate::tools::permission::RiskLevel::Critical) {
+            self.audit(
+                SecurityDecision::Ask,
+                caller,
+                &tool_call.name,
+                "critical tool requires interactive approval",
+            )
+            .await;
+            return Err("Critical tools require interactive approval and cannot run through non-interactive MCP.".to_string());
+        }
 
         if security_decision != SecurityDecision::Allow {
             return Err(format!(
@@ -410,14 +502,115 @@ impl ToolService {
                 },
             }
         } else {
-            crate::agent::types::ToolResult {
-                tool_call_id: tool_call.id,
-                content: serde_json::json!({
-                    "error": format!("Tool '{}' not found", tool_call.name),
-                    "available_tools": "Use handoff_to_agent if you need a specialized expert."
-                }),
-                is_error: true,
-                duration_ms: 0,
+            let v2_tool_call = ToolCall {
+                id: tool_call.id.clone(),
+                name: tool_call.name.clone(),
+                arguments: tool_call.args.clone(),
+            };
+            let v2_exists = {
+                let registry = self.registry.read().await;
+                registry.get(&v2_tool_call.name).is_some()
+            };
+
+            if v2_exists {
+                let permission_decision = self.check_permission("agent_tool", &v2_tool_call).await;
+                match permission_decision {
+                    Ok(crate::tools::permission::PermissionDecision::Allow) => {
+                        match self
+                            .execute_v2_authorized(app, chat_id, v2_tool_call, "agent_tool")
+                            .await
+                        {
+                            Ok(content) => crate::agent::types::ToolResult {
+                                tool_call_id: tool_call.id,
+                                content,
+                                is_error: false,
+                                duration_ms: 0,
+                            },
+                            Err(e) => crate::agent::types::ToolResult {
+                                tool_call_id: tool_call.id,
+                                content: serde_json::json!({
+                                    "error": e,
+                                    "tool": tool_call.name,
+                                    "hint": "This v2 tool failed during execution."
+                                }),
+                                is_error: true,
+                                duration_ms: 0,
+                            },
+                        }
+                    }
+                    Ok(crate::tools::permission::PermissionDecision::Confirm { .. }) => {
+                        let already_allowed = if let Some(allowed_tools) = &allowed_tools {
+                            allowed_tools.lock().await.contains(&tool_call.name)
+                        } else {
+                            false
+                        };
+
+                        if already_allowed {
+                            match self
+                                .execute_v2_authorized(app, chat_id, v2_tool_call, "agent_tool")
+                                .await
+                            {
+                                Ok(content) => crate::agent::types::ToolResult {
+                                    tool_call_id: tool_call.id,
+                                    content,
+                                    is_error: false,
+                                    duration_ms: 0,
+                                },
+                                Err(e) => crate::agent::types::ToolResult {
+                                    tool_call_id: tool_call.id,
+                                    content: serde_json::json!({
+                                        "error": e,
+                                        "tool": tool_call.name,
+                                        "hint": "This v2 tool failed during execution."
+                                    }),
+                                    is_error: true,
+                                    duration_ms: 0,
+                                },
+                            }
+                        } else {
+                            crate::agent::types::ToolResult {
+                                tool_call_id: tool_call.id,
+                                content: serde_json::json!({
+                                    "error": "Tool execution requires user confirmation.",
+                                    "tool": tool_call.name,
+                                    "hint": "Execution was blocked because this code path cannot approve confirmation prompts."
+                                }),
+                                is_error: true,
+                                duration_ms: 0,
+                            }
+                        }
+                    }
+                    Ok(crate::tools::permission::PermissionDecision::Deny { reason }) => {
+                        crate::agent::types::ToolResult {
+                            tool_call_id: tool_call.id,
+                            content: serde_json::json!({
+                                "error": format!("Tool execution denied by security policy: {}", reason),
+                                "tool": tool_call.name,
+                            }),
+                            is_error: true,
+                            duration_ms: 0,
+                        }
+                    }
+                    Err(e) => crate::agent::types::ToolResult {
+                        tool_call_id: tool_call.id,
+                        content: serde_json::json!({
+                            "error": format!("Tool permission check failed: {}", e),
+                            "tool": tool_call.name,
+                        }),
+                        is_error: true,
+                        duration_ms: 0,
+                    },
+                }
+            } else {
+                crate::agent::types::ToolResult {
+                    tool_call_id: tool_call.id,
+                    content: serde_json::json!({
+                        "error": format!("Tool '{}' not found", tool_call.name),
+                        "available_tools": "Use handoff_to_agent if you need a specialized expert."
+                    }),
+                    is_error: true,
+                    duration_ms: 0,
+                }
             }
         }
     }
@@ -440,16 +633,56 @@ impl ToolService {
             registry.record_execution(&tool_call, true, decision);
         }
 
-        tool.execute(app, chat_id, tool_call.arguments)
+        self.audit(
+            SecurityDecision::Allow,
+            "tool_service",
+            &tool_call.name,
+            "tool execution started",
+        )
+        .await;
+
+        let tool_name = tool_call.name.clone();
+        let result = tool
+            .execute(app, chat_id, tool_call.arguments)
             .await
             .map(|output| output.content)
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string());
+
+        self.audit(
+            if result.is_ok() {
+                SecurityDecision::Allow
+            } else {
+                SecurityDecision::Deny
+            },
+            "tool_service",
+            &tool_name,
+            if result.is_ok() {
+                "tool execution succeeded"
+            } else {
+                "tool execution failed"
+            },
+        )
+        .await;
+
+        result
     }
 
     async fn audit(&self, decision: SecurityDecision, caller: &str, target: &str, reason: &str) {
+        self.audit_operation(decision, map_tool_operation(target), caller, target, reason)
+            .await;
+    }
+
+    async fn audit_operation(
+        &self,
+        decision: SecurityDecision,
+        operation: PrivilegedOperation,
+        caller: &str,
+        target: &str,
+        reason: &str,
+    ) {
         self.security
             .record_audit(AuditEvent {
-                operation: PrivilegedOperation::McpToolCall,
+                operation,
                 decision,
                 caller: caller.to_string(),
                 target: Some(target.to_string()),
@@ -473,7 +706,7 @@ impl ToolService {
         };
 
         let decision = self.security.evaluate(&PermissionRequest {
-            operation: PrivilegedOperation::McpToolCall,
+            operation: map_tool_operation(&tool_call.name),
             risk: tool_risk,
             caller: caller.to_string(),
             target: Some(tool_call.name.clone()),
@@ -491,30 +724,20 @@ impl ToolService {
         chat_id: &str,
         tool_call: &ToolCall,
         context: crate::tools::permission::PermissionContext,
-        execution_context: Option<ToolApprovalExecutionContext>,
+        execution_context: Option<&ToolApprovalExecutionContext>,
+        args_hash: &str,
     ) {
-        let run_id = execution_context
-            .as_ref()
-            .and_then(|ctx| ctx.run_id.as_deref());
+        let run_id = execution_context.and_then(|ctx| ctx.run_id.as_deref());
         let parent_agent_id = execution_context
-            .as_ref()
             .and_then(|ctx| ctx.parent_agent_id.as_deref());
         let execution_id = execution_context
-            .as_ref()
             .and_then(|ctx| ctx.execution_id.as_deref());
-        let batch_id = execution_context
-            .as_ref()
-            .and_then(|ctx| ctx.batch_id.as_deref());
+        let batch_id = execution_context.and_then(|ctx| ctx.batch_id.as_deref());
         let tool_batch_id = execution_context
-            .as_ref()
             .and_then(|ctx| ctx.tool_batch_id.as_deref());
-        let agent_id = execution_context
-            .as_ref()
-            .and_then(|ctx| ctx.agent_id.as_deref());
-        let agent_name = execution_context
-            .as_ref()
-            .and_then(|ctx| ctx.agent_name.as_deref());
-        let iteration = execution_context.as_ref().and_then(|ctx| ctx.iteration);
+        let agent_id = execution_context.and_then(|ctx| ctx.agent_id.as_deref());
+        let agent_name = execution_context.and_then(|ctx| ctx.agent_name.as_deref());
+        let iteration = execution_context.and_then(|ctx| ctx.iteration);
         let _ = app.emit(
             "tool:authorization_request",
             serde_json::json!({
@@ -531,6 +754,7 @@ impl ToolService {
                 "agent_name": agent_name,
                 "iteration": iteration,
                 "model": "default",
+                "args_hash": args_hash,
                 "context": context
             }),
         );
@@ -551,6 +775,7 @@ impl ToolService {
                         "tool_name": tool_call.name,
                         "arguments": tool_call.arguments,
                         "chat_id": chat_id,
+                        "args_hash": args_hash,
                         "context": context
                     },
                     "runId": run_id,
@@ -565,6 +790,69 @@ impl ToolService {
             }),
         );
     }
+
+    fn emit_approval_timeout(
+        &self,
+        app: &AppHandle,
+        chat_id: &str,
+        tool_call: &ToolCall,
+        execution_context: Option<&ToolApprovalExecutionContext>,
+    ) {
+        let _ = app.emit(
+            "tool:authorization_timeout",
+            serde_json::json!({
+                "chat_id": chat_id,
+                "tool_call_id": tool_call.id,
+                "tool_name": tool_call.name,
+                "arguments": tool_call.arguments,
+                "run_id": execution_context.and_then(|ctx| ctx.run_id.as_deref()),
+                "parent_agent_id": execution_context.and_then(|ctx| ctx.parent_agent_id.as_deref()),
+                "execution_id": execution_context.and_then(|ctx| ctx.execution_id.as_deref()),
+                "batch_id": execution_context.and_then(|ctx| ctx.batch_id.as_deref()),
+                "tool_batch_id": execution_context.and_then(|ctx| ctx.tool_batch_id.as_deref()),
+                "agent_id": execution_context.and_then(|ctx| ctx.agent_id.as_deref()),
+                "agent_name": execution_context.and_then(|ctx| ctx.agent_name.as_deref()),
+                "iteration": execution_context.and_then(|ctx| ctx.iteration),
+            }),
+        );
+    }
+}
+
+pub fn approval_args_hash(args: &serde_json::Value) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(args.to_string()))
+}
+
+fn map_tool_operation(name: &str) -> PrivilegedOperation {
+    let normalized = name.to_ascii_lowercase();
+    if normalized.contains("command")
+        || normalized.contains("terminal")
+        || normalized.contains("shell")
+        || normalized.contains("bash")
+    {
+        return PrivilegedOperation::ShellCommand;
+    }
+    if normalized.contains("write") || normalized.contains("edit") || normalized.contains("patch") {
+        return PrivilegedOperation::FileWrite;
+    }
+    if normalized.contains("read")
+        || normalized.contains("grep")
+        || normalized.contains("list_document")
+        || normalized.contains("vector_search")
+    {
+        return PrivilegedOperation::FileRead;
+    }
+    if normalized.contains("web")
+        || normalized.contains("fetch")
+        || normalized.contains("search")
+        || normalized.contains("geocode")
+        || normalized.contains("route")
+        || normalized.contains("weather")
+        || normalized.contains("earthquake")
+    {
+        return PrivilegedOperation::NetworkFetch;
+    }
+    PrivilegedOperation::McpToolCall
 }
 
 fn map_tool_risk(risk: crate::tools::permission::RiskLevel) -> SecurityRiskLevel {

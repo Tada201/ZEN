@@ -9,6 +9,7 @@ export type MessageKind =
   | 'agent_handoff'
   | 'agent_spawn'
   | 'agent_complete'
+  | 'agent_chunk'
   | 'error'
   | 'system'
   | 'approval_request'
@@ -134,6 +135,13 @@ export interface ActionMeta {
     durationMs?: number;
   };
   resultSummary?: string;
+  agentStream?: {
+    content: string;
+    type?: "text" | "thought" | string;
+    lastUpdatedAt?: number;
+  };
+  inlineThinkOpen?: boolean;
+  inlineThinkPending?: string;
   progressPercent?: number;
   toolCall?: ToolCallMeta;
   toolCallPreview?: {
@@ -386,16 +394,36 @@ export function normalizeVercelMessage(msg: unknown): Message {
   // Fallback: If steps is still empty, reconstruct it from existing toolCalls and content for history messages
   if (!Array.isArray(normalized.steps) || normalized.steps.length === 0) {
     const steps: Step[] = [];
-    if (typeof normalized.reasoning === "string" && normalized.reasoning) {
-      steps.push({ type: 'reasoning', content: normalized.reasoning });
+    let reasoning = normalized.reasoning || "";
+    let finalContent = normalized.content || "";
+
+    if (!reasoning && finalContent && /<\/?(?:think|thought)>/i.test(finalContent)) {
+      const thinkMatch = /<(?:thought|think)>([\s\S]*?)<\/(?:thought|think)>/i.exec(finalContent);
+      if (thinkMatch) {
+        reasoning = thinkMatch[1].trim();
+        finalContent = finalContent.replace(/<(?:thought|think)>[\s\S]*?<\/(?:thought|think)>/ig, "").trim();
+      } else {
+        const openMatch = /<(?:thought|think)>/i.exec(finalContent);
+        if (openMatch) {
+          const idx = openMatch.index;
+          reasoning = finalContent.slice(idx + openMatch[0].length).trim();
+          finalContent = finalContent.slice(0, idx).trim();
+        }
+      }
+    }
+
+    if (reasoning) {
+      steps.push({ type: 'reasoning', content: reasoning });
+      normalized.reasoning = reasoning;
     }
     if (Array.isArray(normalized.toolCalls) && normalized.toolCalls.length > 0) {
       normalized.toolCalls.forEach((tc) => {
         steps.push({ type: 'tool-call', toolCall: tc });
       });
     }
-    if (typeof normalized.content === "string" && normalized.content) {
-      steps.push({ type: 'text', content: normalized.content });
+    if (finalContent) {
+      steps.push({ type: 'text', content: finalContent });
+      normalized.content = finalContent;
     }
     normalized.steps = steps;
   }

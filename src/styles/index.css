@@ -55,6 +55,20 @@
   --activity-bar-width: 48px;
   --sidebar-collapsed-width: 48px;
   --sidebar-expanded-width: 260px;
+
+  /* Premium animations */
+  --animate-premium-fade-up: premium-fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+
+  @keyframes premium-fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }
 
 body {

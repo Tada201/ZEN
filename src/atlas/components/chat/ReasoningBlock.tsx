@@ -1,7 +1,12 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { ChevronDown } from "lucide-react";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 
 interface ReasoningBlockProps {
   content: string;
@@ -10,92 +15,122 @@ interface ReasoningBlockProps {
   defaultOpen?: boolean;
 }
 
+function normalizeMathMarkdown(content: string): string {
+  return content
+    .replace(/\\\[((?:.|\n)*?)\\\]/g, (_match, math) => `\n$$\n${math.trim()}\n$$\n`)
+    .replace(/\\\(((?:.|\n)*?)\\\)/g, (_match, math) => `$${math.trim()}$`)
+    .replace(
+      /(^|\n)\s*\[\s*\n([\s\S]*?\\begin\{(?:aligned|align|equation|gather|matrix|pmatrix|bmatrix|cases)\}[\s\S]*?)\n\s*\]\s*(?=\n|$)/g,
+      (_match, prefix, math) => `${prefix}$$\n${math.trim()}\n$$`,
+    )
+    .replace(
+      /\$\$\n([\s\S]*?)\n\$\$/g,
+      (_match, math) => `$$\n${math.replace(/\\\s*\n/g, "\\\\\n").trim()}\n$$`,
+    );
+}
+
 export function ReasoningBlock({ content, isThinking, className, defaultOpen = false }: ReasoningBlockProps) {
   const [expanded, setExpanded] = useState(defaultOpen);
-  const thoughts = content.split('\n').filter(t => t.trim().length > 0).map(t => t.trim().replace(/^[•\-\*]\s*/, ''));
+  const [userToggled, setUserToggled] = useState(false);
+  const thoughts = content.split('\n').filter(t => t.trim().length > 0);
+  const stepsCount = thoughts.length;
+  const charCount = content.trim().length;
+  const statusLabel = isThinking ? "Thinking..." : "Reasoning complete";
+  const detailLabel = stepsCount > 1
+    ? `${stepsCount} notes`
+    : charCount > 0
+      ? `${Math.max(1, Math.ceil(charCount / 280))} note`
+      : "No details";
   
+  const normalizedContent = useMemo(() => normalizeMathMarkdown(content.trim()), [content]);
+
+  const remarkPlugins = useMemo(() => [remarkGfm, remarkMath], []);
+  const rehypePlugins = useMemo(() => [rehypeKatex] as any, []);
+
+  useEffect(() => {
+    if (!isThinking && !defaultOpen && !userToggled) {
+      setExpanded(false);
+    }
+  }, [defaultOpen, isThinking, userToggled]);
+
   if (!content) return null;
 
   return (
-    <div className={cn("thought-block group/thought border-none bg-transparent p-0 my-4", className)}>
-      <Collapsible open={expanded} onOpenChange={setExpanded}>
-        <CollapsibleTrigger className="w-full text-left outline-none group">
-          <div className="flex items-center gap-3 py-1">
-            {/* Ping / Status Dot */}
-            <div className="relative flex items-center justify-center shrink-0">
+    <div className={cn("thought-block my-2 max-w-full", className)}>
+      <Collapsible
+        open={expanded}
+        onOpenChange={(next) => {
+          setUserToggled(true);
+          setExpanded(next);
+        }}
+      >
+        <CollapsibleTrigger
+          aria-label={expanded ? "Collapse reasoning details" : "Expand reasoning details"}
+          className={cn(
+            "group/reasoning flex min-h-8 w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left outline-none transition-colors",
+            "border-border/45 bg-muted/20 hover:bg-muted/35 focus-visible:ring-2 focus-visible:ring-ring/50",
+          )}
+        >
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <div className="relative flex h-4 w-4 shrink-0 items-center justify-center">
               <div className={cn(
-                "w-2 h-2 rounded-full transition-colors duration-500",
-                isThinking ? "bg-primary/80" : "bg-muted-foreground/30"
+                "w-1.5 h-1.5 rounded-full transition-colors duration-500",
+                isThinking ? "bg-primary/80 animate-pulse" : "bg-muted-foreground/30"
               )} />
             </div>
 
-            <span className={cn(
-              "text-sm font-medium tracking-tight",
-              isThinking ? "text-premium-shimmer" : "text-muted-foreground/60"
-            )}>
-              {isThinking ? "Thinking..." : "Reasoning process"}
-            </span>
-
-            <ElapsedTimer running={isThinking} />
-
-            <div className="ml-auto flex items-center gap-3">
-              <span className="font-mono text-[10px] text-muted-foreground/20 uppercase tracking-[0.2em]">
-                {thoughts.length} steps
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className={cn(
+                  "truncate text-[12.5px] font-medium tracking-tight",
+                  isThinking ? "text-foreground" : "text-muted-foreground/85"
+                )}>
+                  {statusLabel}
+                </span>
+                <ElapsedTimer running={isThinking} />
+              </div>
+              <span className="block truncate text-[10.5px] leading-4 text-muted-foreground/55">
+                {isThinking ? "Preparing the answer" : detailLabel}
               </span>
-              <ChevronDown className={cn(
-                "w-4 h-4 text-muted-foreground/30 transition-transform duration-300",
-                !expanded && "-rotate-90"
-              )} />
             </div>
           </div>
+
+          <ChevronDown className={cn(
+            "h-3.5 w-3.5 shrink-0 text-muted-foreground/55 transition-transform duration-200",
+            !expanded && "-rotate-90"
+          )} />
         </CollapsibleTrigger>
         
         <CollapsibleContent>
-          <div className="relative mt-4 space-y-0.5">
-            {thoughts.map((thought, index) => (
-              <ThoughtItem
-                key={index}
-                text={thought}
-                index={index}
-                isLast={index === thoughts.length - 1}
-              />
-            ))}
+          <div className="mt-1.5 overflow-hidden rounded-lg border border-border/35 bg-card/35">
+            <div className="flex items-center justify-between border-b border-border/25 px-3 py-2">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/60">
+                Reasoning
+              </span>
+              <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground/45">
+                {isThinking ? "live" : "complete"}
+              </span>
+            </div>
+            <div className="max-h-[260px] overflow-y-auto px-3 py-2">
+              <div className="font-mono text-[12px] leading-[1.65] text-muted-foreground prose prose-invert max-w-none prose-p:my-2 prose-p:first:mt-0 prose-p:last:mb-0 prose-pre:my-2 prose-pre:bg-muted/20 prose-pre:p-2 prose-code:px-1 prose-code:bg-muted/40 prose-code:rounded-sm prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-a:text-muted-foreground/80 prose-a:underline">
+                <ReactMarkdown
+                  remarkPlugins={remarkPlugins}
+                  rehypePlugins={rehypePlugins}
+                  components={{
+                    img: () => null,
+                    code({ className, children }) {
+                      const isBlock = /language-/.test(className || '');
+                      return <code className={cn("font-mono bg-muted/40 rounded px-1 py-0.5", isBlock ? "block my-2 p-2" : "")}>{children}</code>;
+                    }
+                  }}
+                >
+                  {normalizedContent}
+                </ReactMarkdown>
+              </div>
+            </div>
           </div>
         </CollapsibleContent>
       </Collapsible>
-    </div>
-  );
-}
-
-function ThoughtItem({ text, index, isLast }: { text: string; index: number; isLast: boolean }) {
-  return (
-    <div
-      className="animate-premium-fade-up flex gap-3 items-stretch"
-      style={{
-        animationDelay: `${index * 100}ms`,
-        animationFillMode: "forwards",
-        opacity: 0,
-      }}
-    >
-      {/* Left column: dot + connecting line */}
-      <div className="flex flex-col items-center shrink-0 w-1.5">
-        <div
-          className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-[14px] shrink-0"
-          style={{ animationDelay: `${index * 200}ms` }}
-        />
-        {!isLast && (
-          <div className="flex-1 w-[1px] min-h-[8px] mt-1 bg-gradient-to-b from-muted-foreground/20 to-transparent" />
-        )}
-      </div>
-
-      {/* Right column: thought text */}
-      <div className={cn(
-        "font-mono text-[13px] leading-relaxed py-2",
-        isLast ? "pb-0" : "pb-2",
-        "text-muted-foreground/50"
-      )}>
-        {text}
-      </div>
     </div>
   );
 }

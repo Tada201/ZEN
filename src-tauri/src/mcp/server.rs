@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 /// - Tool execution with result formatting
 /// - stdio and HTTP transport layers
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, error, info};
 use uuid::Uuid;
@@ -27,6 +28,9 @@ pub struct McpServerConfig {
     pub http_enabled: bool,
     pub http_bind_host: String,
     pub http_port: u16,
+    pub http_auth_token: String,
+    pub http_window_started_at: Instant,
+    pub http_window_requests: u32,
 }
 
 impl Default for McpServerConfig {
@@ -38,6 +42,9 @@ impl Default for McpServerConfig {
             http_enabled: true,
             http_bind_host: "127.0.0.1".to_string(),
             http_port: 8989,
+            http_auth_token: Uuid::new_v4().to_string(),
+            http_window_started_at: Instant::now(),
+            http_window_requests: 0,
         }
     }
 }
@@ -280,7 +287,25 @@ impl McpServer {
             "http_enabled": self.config.http_enabled,
             "http_bind_host": self.config.http_bind_host,
             "http_port": self.config.http_port,
+            "http_auth_required": true,
         })
+    }
+
+    pub fn http_auth_token(&self) -> &str {
+        &self.config.http_auth_token
+    }
+
+    pub fn check_http_rate_limit(&mut self) -> bool {
+        const MAX_REQUESTS_PER_MINUTE: u32 = 60;
+        if self.config.http_window_started_at.elapsed() >= Duration::from_secs(60) {
+            self.config.http_window_started_at = Instant::now();
+            self.config.http_window_requests = 0;
+        }
+        if self.config.http_window_requests >= MAX_REQUESTS_PER_MINUTE {
+            return false;
+        }
+        self.config.http_window_requests += 1;
+        true
     }
 
     /// Subscribe to server events
@@ -357,7 +382,7 @@ impl McpServer {
     /// Handle tools/list request
     async fn handle_tools_list(&self, id: Option<Value>) -> JsonRpcResponse {
         let tool_registry = self.tool_registry.read().await;
-        let tools = tool_registry.list();
+        let tools = tool_registry.list_direct_definitions();
 
         let mcp_tools: Vec<McpToolDefinition> = tools
             .into_iter()

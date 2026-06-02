@@ -45,6 +45,152 @@
     margin: 0;
 }
 
+.live-agent-panel {
+    background: #1b1b20;
+}
+
+.live-agent-panel__header {
+    display: flex;
+    min-height: 42px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 12px;
+    background: #18181c;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.live-agent-panel__title {
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.live-agent-panel__summary {
+    max-width: 245px;
+    color: rgba(255, 255, 255, 0.34);
+    font-size: 9px;
+    line-height: 1.35;
+}
+
+.live-agent-panel__state {
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(255, 255, 255, 0.38);
+    padding: 3px 6px;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.live-agent-panel__state--running {
+    border-color: rgba(0, 255, 159, 0.25);
+    background: rgba(0, 255, 159, 0.08);
+    color: rgba(0, 255, 159, 0.8);
+}
+
+.live-agent-panel__metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.live-agent-panel__metric {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 1px;
+    padding: 7px 10px;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.live-agent-panel__metric:last-child {
+    border-right: 0;
+}
+
+.live-agent-panel__metric span:first-child {
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.live-agent-panel__metric span:last-child {
+    color: rgba(255, 255, 255, 0.34);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.live-agent-panel__metric--active span:first-child {
+    color: rgba(0, 255, 159, 0.82);
+}
+
+.live-agent-panel__metric--warn span:first-child {
+    color: rgba(245, 158, 11, 0.9);
+}
+
+.live-agent-panel__section {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.live-agent-panel__section-title {
+    margin-bottom: 6px;
+    color: rgba(255, 255, 255, 0.38);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.live-agent-panel__tools {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.live-agent-panel__tool-row {
+    display: flex;
+    min-height: 24px;
+    min-width: 0;
+    align-items: center;
+    gap: 7px;
+    background: rgba(255, 255, 255, 0.02);
+    padding: 4px 7px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 10px;
+}
+
+.live-agent-panel__tool-status {
+    width: 6px;
+    height: 6px;
+    flex-shrink: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.22);
+}
+
+.live-agent-panel__tool-status--running {
+    background: #00ff9f;
+}
+
+.live-agent-panel__tool-status--awaiting_approval {
+    background: #f59e0b;
+}
+
+.live-agent-panel__tool-status--completed {
+    background: #34d399;
+}
+
+.live-agent-panel__tool-status--error {
+    background: #fb7185;
+}
+
 /* VS Code Flat List Card */
 .agent-card {
     background: #1e1e24;

@@ -335,6 +335,7 @@ pub fn run() {
             commands::mcp::mcp_get_config,
             commands::mcp::mcp_save_config,
             commands::mcp::mcp_get_status,
+            commands::mcp::mcp_get_http_token,
             commands::mcp::mcp_start_server,
             commands::mcp::mcp_stop_server,
             commands::mcp::mcp_list_tools,

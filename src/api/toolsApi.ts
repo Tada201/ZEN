@@ -64,6 +64,6 @@ export const toolsApi = {
   syncPermissions: () =>
     callCommand<void>("sync_tool_permissions"),
 
-  resolveApproval: (toolCallId: string, approved: boolean) =>
-    callCommand<void>("resolve_tool_approval", { toolCallId, approved }),
+  resolveApproval: (toolCallId: string, approved: boolean, rememberExact = false) =>
+    callCommand<void>("resolve_tool_approval", { toolCallId, approved, rememberExact }),
 };

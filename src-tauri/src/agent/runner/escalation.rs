@@ -3,7 +3,8 @@
 use super::helpers::is_tool_capability_error;
 use super::Runner;
 use crate::agent::event_bus::{
-    AgentEvent, ChatChunkFirstPayload, ChatChunkPayload, ChatErrorPayload, ChatStatusPayload,
+    AgentChunkPayload, AgentEvent, ChatChunkFirstPayload, ChatChunkPayload, ChatErrorPayload,
+    ChatStatusPayload,
 };
 use crate::db::models::ChatMessage;
 use crate::db::queries;
@@ -114,6 +115,7 @@ impl Runner {
         assistant_message_id: &mut Option<String>,
         _stream_channel: Option<tauri::ipc::Channel<ChatChunkPayload>>,
         early_tools: Option<EarlyToolExecutionContext>,
+        agent_stream: Option<(String, String)>,
     ) -> Result<crate::db::models::ChatResponse, anyhow::Error> {
         match self
             .call_llm_with_callback(
@@ -127,6 +129,7 @@ impl Runner {
                 chat_id,
                 assistant_message_id,
                 early_tools.clone(),
+                agent_stream.clone(),
             )
             .await
         {
@@ -170,6 +173,7 @@ impl Runner {
                             chat_id,
                             assistant_message_id,
                             None,
+                            agent_stream.clone(),
                         )
                         .await
                     {
@@ -251,6 +255,7 @@ impl Runner {
                                     chat_id,
                                     assistant_message_id,
                                     early_tools,
+                                    agent_stream,
                                 )
                                 .await
                             {
@@ -326,10 +331,12 @@ impl Runner {
         chat_id: &str,
         assistant_message_id: &mut Option<String>,
         early_tools: Option<EarlyToolExecutionContext>,
+        agent_stream: Option<(String, String)>,
     ) -> Result<crate::db::models::ChatResponse, anyhow::Error> {
         let app_clone = app.clone();
         let on_event_clone = self.on_event.clone();
         let chat_id_clone = chat_id.to_string();
+        let agent_stream_clone = agent_stream.clone();
         let early_runner = self.clone();
         let early_tools_clone = early_tools.clone();
         let early_token = token.child_token();
@@ -558,6 +565,18 @@ impl Runner {
                     if chunk_type == "text" && !chunk_text.is_empty() {
                         if let Ok(mut acc) = accumulated_text_clone.lock() {
                             acc.push_str(&chunk_text);
+                        }
+                    }
+                    if !chunk_text.is_empty() {
+                        if let Some((agent_id, agent_name)) = agent_stream_clone.as_ref() {
+                            AgentEvent::AgentChunk(AgentChunkPayload {
+                                chat_id: chat_id_clone.clone(),
+                                agent_id: agent_id.clone(),
+                                agent_name: agent_name.clone(),
+                                delta: chunk_text.clone(),
+                                r#type: chunk_type.to_string(),
+                            })
+                            .emit_via(&app_clone, &on_event_clone);
                         }
                     }
                     if chunk_type == "text" && !chunk_text.is_empty() {

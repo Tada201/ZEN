@@ -11,15 +11,23 @@ export function AgentExecutionTrace({
   executionSteps,
   sessionId,
   onOpenArtifact,
+  preferCompact = false,
 }: {
   toolCalls: ToolCall[];
   executionSteps?: Step[];
   sessionId?: string;
   onOpenArtifact: (a: ArtifactData) => void;
   isStreaming?: boolean;
+  preferCompact?: boolean;
 }) {
   const trace = useMemo(() => buildAgentExecutionTraceModel(toolCalls, executionSteps), [toolCalls, executionSteps]);
-  const shouldDefaultOpen = trace.active || trace.errorCount > 0 || toolCalls.length <= 8;
+  const importantToolCalls = useMemo(
+    () => toolCalls.filter((tool) => tool.status === "awaiting_approval" || tool.status === "error"),
+    [toolCalls],
+  );
+  const shouldDefaultOpen = preferCompact
+    ? importantToolCalls.length > 0
+    : trace.active || trace.errorCount > 0 || toolCalls.length <= 8;
   const collapsedSummary = [
     trace.activeLaneSummary ? `active batch ${trace.activeLaneSummary}` : "",
     trace.runningToolSummaries.length > 0 ? `active ${trace.runningToolSummaries.join(", ")}` : "",
@@ -83,6 +91,12 @@ export function AgentExecutionTrace({
         </div>
       )}
 
+      {preferCompact && !isExpanded && (
+        <div className="ml-8 mr-2 -mt-0.5 text-[11px] leading-5 text-zinc-600">
+          Details are live in the Active Agents panel.
+        </div>
+      )}
+
       {isExpanded && (
         <div className="mt-1 overflow-hidden">
           {toolCalls.length > 1 && (
@@ -102,32 +116,38 @@ export function AgentExecutionTrace({
               {trace.approvalToolSummaries.length > 0 && <span>waiting approval {trace.approvalToolSummaries.join(", ")}</span>}
             </div>
           )}
-          <div
-            className={cn(
-              "relative pl-4 before:absolute before:left-[5px] before:top-1 before:h-[calc(100%-8px)] before:w-px before:bg-zinc-800/80",
-              trace.shouldShowBatchLanes ? "flex flex-col gap-2" : toolCalls.length > 1 ? "grid gap-1.5 md:grid-cols-2" : "flex flex-col gap-0.5",
-            )}
-          >
-            {trace.shouldShowBatchLanes
-              ? trace.batchLanes.map((lane) => (
-                  <ToolBatchLane
-                    key={lane.id}
-                    lane={lane}
-                    sessionId={sessionId}
-                    onOpenArtifact={onOpenArtifact}
-                    totalToolCount={toolCalls.length}
-                  />
-                ))
-              : toolCalls.map((tc, idx) => (
-                  <ToolTraceRow
-                    key={`${tc.id}-${idx}`}
-                    toolCall={tc}
-                    sessionId={sessionId}
-                    onOpenArtifact={onOpenArtifact}
-                    totalToolCount={toolCalls.length}
-                  />
-                ))}
-          </div>
+          {preferCompact && importantToolCalls.length === 0 ? (
+            <div className="ml-1 rounded-md border border-zinc-800/70 bg-white/[0.012] px-2 py-1.5 text-[11px] leading-5 text-zinc-500">
+              Full tool and agent telemetry is shown in the Active Agents panel.
+            </div>
+          ) : (
+            <div
+              className={cn(
+                "relative pl-4 before:absolute before:left-[5px] before:top-1 before:h-[calc(100%-8px)] before:w-px before:bg-zinc-800/80",
+                trace.shouldShowBatchLanes && !preferCompact ? "flex flex-col gap-2" : toolCalls.length > 1 ? "grid gap-1.5 md:grid-cols-2" : "flex flex-col gap-0.5",
+              )}
+            >
+              {trace.shouldShowBatchLanes && !preferCompact
+                ? trace.batchLanes.map((lane) => (
+                    <ToolBatchLane
+                      key={lane.id}
+                      lane={lane}
+                      sessionId={sessionId}
+                      onOpenArtifact={onOpenArtifact}
+                      totalToolCount={toolCalls.length}
+                    />
+                  ))
+                : (preferCompact ? importantToolCalls : toolCalls).map((tc, idx) => (
+                    <ToolTraceRow
+                      key={`${tc.id}-${idx}`}
+                      toolCall={tc}
+                      sessionId={sessionId}
+                      onOpenArtifact={onOpenArtifact}
+                      totalToolCount={toolCalls.length}
+                    />
+                  ))}
+            </div>
+          )}
         </div>
       )}
     </div>

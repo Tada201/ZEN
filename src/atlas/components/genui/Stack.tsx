@@ -12,7 +12,7 @@ export function Stack({ children, direction = "column", gap = 4, className }: St
   return (
     <div 
       className={cn(
-        "flex",
+        "flex flex-wrap w-full",
         direction === "column" ? "flex-col" : "flex-row",
         className
       )}

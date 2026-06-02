@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import { defineComponent, createLibrary } from "@openuidev/react-lang";
 import { cn } from "@/lib/utils";
+import { openuiLibrary } from "@openuidev/react-ui/genui-lib";
 
 import { Stack } from "./Stack";
 import { Card } from "./Card";
@@ -15,12 +16,12 @@ export const RootDef = defineComponent({
   description: "The root container for the UI.",
   props: z.object({
     children: z.any().describe("The components to display"),
-    gap: z.coerce.number().optional().default(6),
+    gap: z.coerce.number().optional().default(4),
     className: z.string().optional()
   }) as any,
   component: ({ props, renderNode }: any) => (
-    <div className={cn("w-full min-h-full bg-background p-4 sm:p-6 lg:p-8 flex flex-col", props.className)}>
-      <Stack gap={props.gap} direction="column" className="w-full h-full max-w-6xl mx-auto">
+    <div className={cn("w-full flex flex-col bg-[#0a0a0c] border border-white/10 rounded-2xl p-5 shadow-2xl overflow-hidden", props.className)}>
+      <Stack gap={props.gap} direction="column" className="w-full">
         {renderNode(props.children)}
       </Stack>
     </div>
@@ -142,9 +143,16 @@ const coreComponents = [
   defineComponent({ name: "Icon", description: "Renders an icon.", props: z.object({ name: z.string() }) as any, component: ({ props }: any) => <Icon name={props.name} /> }),
 ];
 
-const mergedComponents = coreComponents.filter(c => c && c.name && c.props) as any[];
+const customNames = new Set(coreComponents.map(c => c?.name));
+const filteredBase = Object.values(openuiLibrary.components || {})
+  .filter((c: any) => !customNames.has(c?.name));
 
-const baseLibrary = createLibrary({ components: mergedComponents || [] });
+const mergedComponents = [
+  ...filteredBase,
+  ...coreComponents.filter(c => c && c.name && c.props)
+] as any[];
+
+const baseLibrary = createLibrary({ components: mergedComponents });
 
 export const extendedLibrary = {
   ...baseLibrary,

@@ -19,6 +19,21 @@ function stringValue(...values: unknown[]): string | undefined {
   return undefined;
 }
 
+function compactNormalizedText(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function stripDuplicateResultSummary(resultSummary: string | undefined, streamContent: string | undefined): string | undefined {
+  const result = compactNormalizedText(resultSummary);
+  const stream = compactNormalizedText(streamContent);
+  if (!result) return undefined;
+  if (!stream) return result;
+  if (stream.includes(result) || result.includes(stream)) return undefined;
+  return result;
+}
+
 export function getActionEventId(payload: AgentActionEventPayload, kind: string): string {
   const metadata = payload.metadata || {};
   const toolName =
@@ -47,13 +62,18 @@ export function getActionEventId(payload: AgentActionEventPayload, kind: string)
     return `orchestrator:${payload.run_id || payload.chat_id || payload.chatId || "active"}`;
   }
   if (kind === "chat_status" && (payload.phase || payload.metadata?.phase)) {
+    const phase = payload.phase || payload.metadata?.phase;
     const preview = payload.metadata?.toolCallPreview as Record<string, unknown> | undefined;
     const previewId = stringValue(preview?.toolCallId, preview?.tool_call_id);
     const previewIndex = preview?.index;
-    if ((payload.phase || payload.metadata?.phase) === "tool_call_streaming" || (payload.phase || payload.metadata?.phase) === "tool_call_ready") {
+    if (phase === "tool_call_streaming" || phase === "tool_call_ready") {
       return `tool-preview:${previewId || previewIndex || "active"}`;
     }
-    return `status:${payload.chat_id || payload.chatId || "active"}:${payload.phase || payload.metadata?.phase}`;
+    if (phase === "agent_streaming") {
+      const agentId = stringValue(payload.agent_id, payload.metadata?.agentId, payload.metadata?.agentName);
+      return `agent-stream:${payload.chat_id || payload.chatId || "active"}:${agentId || "agent"}:${payload.iteration ?? payload.metadata?.iteration ?? "active"}`;
+    }
+    return `status:${payload.chat_id || payload.chatId || "active"}:${phase}`;
   }
   if (kind.startsWith("workflow_")) {
     return `workflow:${payload.workflow_id || payload.id || payload.chat_id || payload.chatId || "active"}`;
@@ -74,6 +94,10 @@ export function getActionEventId(payload: AgentActionEventPayload, kind: string)
       getNestedValue(metadata, ["spawn", "spawnId"]) ||
       getNestedValue(metadata, ["spawn", "spawn_id"]);
     if (spawnId) return `agent:${spawnId}`;
+  }
+  if (kind === "agent_chunk") {
+    const agentId = stringValue(payload.agent_id, payload.agent_name, payload.child_agent_id, payload.child_agent_name);
+    return `agent-chunk:${payload.chat_id || payload.chatId || "active"}:${agentId || "agent"}`;
   }
 
   const stable =
@@ -112,6 +136,10 @@ export function summarizeAction(payload: AgentActionEventPayload, kind: string):
     const preview = payload.metadata?.toolCallPreview as Record<string, unknown> | undefined;
     const toolName = stringValue(preview?.toolName, preview?.tool_name, payload.metadata?.toolCall?.toolName);
     const phase = payload.phase || payload.metadata?.phase;
+    const agentName = stringValue(payload.agent_name, payload.metadata?.agentName, payload.agent_id, payload.metadata?.agentId);
+    if (phase === "agent_streaming" && agentName) {
+      return `${agentName} is working`;
+    }
     if (phase === "tool_call_ready" && toolName) {
       return `${toolName} ready`;
     }
@@ -138,6 +166,7 @@ export function summarizeAction(payload: AgentActionEventPayload, kind: string):
   if (kind.startsWith("task_")) return payload.description || payload.error || payload.task_id || payload.taskId || "Task update";
   if (kind === "agent_spawn") return payload.task || `Spawned ${payload.child_agent_name || payload.child_agent_id || "agent"}`;
   if (kind === "agent_complete") return payload.error || `Agent ${payload.agent_id || "worker"} completed`;
+  if (kind === "agent_chunk") return `${payload.agent_name || payload.agent_id || "Agent"} is responding`;
   if (kind === "agent_handoff") return payload.reason || "Agent handoff";
   return kind.replace(/_/g, " ");
 }
@@ -152,21 +181,22 @@ export function inferStatus(kind: string, payload: AgentActionEventPayload): Ste
   if (toolResultStatus === "ok") return "completed";
   if (kind === "task_created" || kind === "task_updated" || kind === "task_list_updated" || kind === "task_complexity_analyzed") return "running";
   if (kind.endsWith("_failed") || kind === "error") return "error";
+  if (kind === "agent_chunk") return "running";
   if (kind.endsWith("_completed") || kind === "agent_complete" || kind === "tool_result") return "completed";
   return "running";
 }
 
 function summarizeUnknownResult(value: unknown): string | undefined {
   if (value === undefined || value === null) return undefined;
-  if (typeof value === "string") return value.replace(/\s+/g, " ").trim().slice(0, 220);
+  if (typeof value === "string") return compactNormalizedText(value).slice(0, 220);
   if (typeof value !== "object") return String(value);
 
   const record = value as Record<string, unknown>;
   const candidate = record.summary || record.result || record.full_content || record.content || record.output;
   if (typeof candidate === "string" && candidate.trim()) {
-    return candidate.replace(/\s+/g, " ").trim().slice(0, 220);
+    return compactNormalizedText(candidate).slice(0, 220);
   }
-  return JSON.stringify(value).replace(/\s+/g, " ").trim().slice(0, 220);
+  return compactNormalizedText(value).slice(0, 220);
 }
 
 function normalizeTaskResult(value: unknown, durationMs?: number): ActionMeta["taskResult"] | undefined {
@@ -236,6 +266,23 @@ export function normalizeMetadata(kind: string, payload: AgentActionEventPayload
       fromAgent: payload.from_agent || payload.fromAgent || "agent",
       toAgent: payload.to_agent || payload.toAgent || "agent",
       reason: payload.reason || "",
+    };
+  }
+  if (kind === "agent_chunk") {
+    const agentId = stringValue(payload.agent_id, payload.child_agent_id, payload.agent_name, payload.child_agent_name) || "agent";
+    const agentName = stringValue(payload.agent_name, payload.child_agent_name, payload.agent_id) || agentId;
+    metadata.agentId = agentId;
+    metadata.agentName = agentName;
+    metadata.spawn = {
+      parentAgent: payload.parent_agent || payload.parentAgent || "parent",
+      childAgent: agentName,
+      task: payload.task || "",
+      status: "spawned",
+    };
+    metadata.agentStream = {
+      content: typeof payload.delta === "string" ? payload.delta : "",
+      type: typeof payload.type === "string" ? payload.type : "text",
+      lastUpdatedAt: Date.now(),
     };
   }
   if (payload.iteration !== undefined) metadata.iteration = payload.iteration;
@@ -324,6 +371,21 @@ function mergeActionMetadata(existing: ActionMeta | undefined, incoming: ActionM
   } else {
     merged.spawn = incoming?.spawn || existing?.spawn;
   }
+  if (existing?.agentStream || incoming?.agentStream) {
+    const existingContent = existing?.agentStream?.content || "";
+    const incomingContent = incoming?.agentStream?.content || "";
+    const nextContent = incomingContent && existingContent.endsWith(incomingContent)
+      ? existingContent
+      : existingContent + incomingContent;
+    merged.agentStream = {
+      ...existing?.agentStream,
+      ...incoming?.agentStream,
+      content: nextContent,
+    };
+  }
+  if (merged.resultSummary && merged.agentStream?.content) {
+    merged.resultSummary = stripDuplicateResultSummary(merged.resultSummary, merged.agentStream.content);
+  }
   return merged;
 }
 
@@ -348,6 +410,37 @@ function mergeActionStep(existing: Step, incoming: Step): Step {
   };
 }
 
+function getStepAgentIdentity(step: Step): string {
+  const spawn = step.metadata?.spawn;
+  return stringValue(step.metadata?.agentId, step.metadata?.agentName, spawn?.childAgent) || "";
+}
+
+function completeMatchingAgentChunkSteps(messages: Message[], incoming: Step): Message[] {
+  if (incoming.kind !== "agent_complete") return messages;
+  const incomingAgent = getStepAgentIdentity(incoming);
+  if (!incomingAgent) return messages;
+
+  return messages.map((message) => {
+    if (!message.steps?.length) return message;
+    let changed = false;
+    const steps = message.steps.map((step) => {
+      if (step.type !== "action" || step.kind !== "agent_chunk" || getStepAgentIdentity(step) !== incomingAgent) {
+        return step;
+      }
+      changed = true;
+      return {
+        ...step,
+        status: incoming.status,
+        metadata: mergeActionMetadata(step.metadata, {
+          ...incoming.metadata,
+          agentStream: step.metadata?.agentStream,
+        }),
+      };
+    });
+    return changed ? { ...message, steps } : message;
+  });
+}
+
 export function appendActionStepToMessages(
   prev: Message[],
   chatId: string,
@@ -370,7 +463,7 @@ export function appendActionStepToMessages(
       ),
       metadata: mergeActionMetadata(existingMessage.metadata, actionStep.metadata),
     };
-    return next;
+    return completeMatchingAgentChunkSteps(next, actionStep);
   }
 
   const targetIdx = getActiveAssistantIndex(prev, payload.message_id);
@@ -382,10 +475,10 @@ export function appendActionStepToMessages(
       steps: [...(target.steps || []), actionStep],
       metadata: { ...(target.metadata || {}), ...(actionStep.metadata || {}) },
     };
-    return next;
+    return completeMatchingAgentChunkSteps(next, actionStep);
   }
 
-  return [
+  return completeMatchingAgentChunkSteps([
     ...prev,
     {
       id: eventId || `${kind}-${Date.now()}`,
@@ -398,5 +491,5 @@ export function appendActionStepToMessages(
       metadata: actionStep.metadata,
       steps: [actionStep],
     },
-  ];
+  ], actionStep);
 }

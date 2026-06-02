@@ -375,7 +375,7 @@ impl Runner {
 
                                 let handle = tokio::spawn(async move {
                                     let started_at = chrono::Utc::now();
-                                    let approved = tool_service
+                                    let approval_outcome = tool_service
                                         .request_interactive_approval(
                                             app.clone(),
                                             "agent_runner",
@@ -395,18 +395,19 @@ impl Runner {
                                         )
                                         .await;
 
-                                    if !approved {
+                                    if !approval_outcome.approved() {
                                         tracing::info!(
-                                            "User DENIED tool '{}' (id: {})",
+                                            "Tool approval did not allow '{}' (id: {}, outcome: {:?})",
                                             v2_tool_call_inner.name,
-                                            v2_tool_call_inner.id
+                                            v2_tool_call_inner.id,
+                                            approval_outcome
                                         );
                                         let result = ToolResult {
                                             tool_call_id: tc_id.clone(),
                                             content: json!({
-                                                "error": "Tool execution denied by user.",
+                                                "error": approval_outcome.error_message(),
                                                 "tool": tc_name,
-                                                "hint": "The user chose not to allow this command. Try a different approach or ask the user for guidance."
+                                                "hint": "The tool did not receive approval. Try a safer approach or ask the user before retrying."
                                             }),
                                             is_error: true,
                                             duration_ms: 0,

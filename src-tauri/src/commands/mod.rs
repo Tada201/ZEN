@@ -129,7 +129,7 @@ pub struct AppState {
     pub session_memory: Arc<RwLock<Arc<crate::rag::session_memory::SessionMemoryManager>>>,
     pub mcp_server: Arc<RwLock<crate::mcp::McpServer>>,
     pub pending_tool_approvals:
-        Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<bool>>>>,
+        Arc<tokio::sync::Mutex<HashMap<String, crate::services::tool::PendingToolApproval>>>,
     pub pending_orchestrator_approvals:
         Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<bool>>>>,
     pub subagent_cancellation_tokens: Arc<tokio::sync::Mutex<HashMap<String, CancellationToken>>>,
@@ -202,6 +202,31 @@ impl AppState {
                 hook_registry.clone(),
                 tool_registry_v2.clone(),
             );
+        }
+        {
+            let v1_guard = tool_registry_v1.blocking_read();
+            let mut v2_guard = tool_registry_v2.blocking_write();
+            if let Some(prog_arc) = v1_guard.progressive() {
+                let prog = prog_arc.blocking_read();
+                for meta in prog.get_metadata() {
+                    if let Some(tool) = prog.get_or_load_tool(&meta.id) {
+                        v2_guard.register_known_tool_definition(
+                            tool.id(),
+                            tool.description().to_string(),
+                            tool.input_schema(),
+                            crate::tools::default_tool_risk(tool.id()),
+                        );
+                    }
+                }
+            }
+            for tool in v1_guard.list() {
+                v2_guard.register_known_tool_definition(
+                    tool.id(),
+                    tool.description().to_string(),
+                    tool.input_schema(),
+                    crate::tools::default_tool_risk(tool.id()),
+                );
+            }
         }
 
         let default_workspace = crate::workspace::get_default_workspace();

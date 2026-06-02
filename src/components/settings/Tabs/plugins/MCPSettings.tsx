@@ -13,6 +13,9 @@ export const MCPSettings = memo((_props: { embedded?: boolean }) => {
     const [syncing, setSyncing] = useState<boolean>(false);
     const [savingConfig, setSavingConfig] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
+    const [httpToken, setHttpToken] = useState<string | null>(null);
+    const [revealingToken, setRevealingToken] = useState<boolean>(false);
+    const [copiedToken, setCopiedToken] = useState<boolean>(false);
 
     const fetchMcpState = async () => {
         try {
@@ -69,6 +72,36 @@ export const MCPSettings = memo((_props: { embedded?: boolean }) => {
         }
     };
 
+    const revealHttpToken = async () => {
+        setRevealingToken(true);
+        try {
+            const token = await mcpApi.getHttpToken();
+            setHttpToken(token);
+            setError(null);
+        } catch (e: any) {
+            setError(String(e));
+        } finally {
+            setRevealingToken(false);
+        }
+    };
+
+    const copyText = async (text: string, onCopied?: () => void) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            onCopied?.();
+        } catch (e: any) {
+            setError(`Failed to copy MCP value: ${e.message || e}`);
+        }
+    };
+
+    const copyHttpToken = async () => {
+        if (!httpToken) return;
+        await copyText(httpToken, () => {
+            setCopiedToken(true);
+            window.setTimeout(() => setCopiedToken(false), 1600);
+        });
+    };
+
     if (loading) {
         return (
             <SettingsCard
@@ -86,6 +119,7 @@ export const MCPSettings = memo((_props: { embedded?: boolean }) => {
     }
 
     const isRunning = status?.state === 'running';
+    const mcpEndpoint = status ? `http://${status.http_bind_host}:${status.http_port}/mcp` : "";
 
     return (
         <SettingsCard
@@ -160,7 +194,65 @@ export const MCPSettings = memo((_props: { embedded?: boolean }) => {
                     </div>
 
                     {isRunning && (
-                        <div className="space-y-3 pl-2">
+                        <div className="space-y-4 pl-2">
+                            <div className="rounded-xl border border-white/[0.06] bg-zinc-950/30 p-3 space-y-3">
+                                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                                    <div>
+                                        <h4 className="text-[11px] font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                                            <WorkbenchIcon name="lucide:key-round" size={13} className="text-zinc-400" />
+                                            HTTP Client Access
+                                        </h4>
+                                        <p className="text-[10px] text-zinc-500 mt-1 leading-relaxed">
+                                            External clients must send the token in the <code className="bg-white/5 px-1 py-0.5 rounded text-[9px]">x-zen-mcp-token</code> header.
+                                        </p>
+                                    </div>
+                                    <Badge variant="outline" className="h-5 text-[8px] font-mono border-emerald-500/20 text-emerald-300 bg-emerald-500/5 shrink-0">
+                                        Auth Required
+                                    </Badge>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 items-center">
+                                    <code className="min-w-0 rounded-lg border border-white/[0.06] bg-black/20 px-2.5 py-2 text-[10px] text-zinc-300 font-mono truncate">
+                                        {mcpEndpoint}
+                                    </code>
+                                    <WorkbenchButton
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => copyText(mcpEndpoint)}
+                                        className="h-8 text-[10px] px-3"
+                                    >
+                                        <WorkbenchIcon name="lucide:copy" size={12} className="mr-1" />
+                                        Copy URL
+                                    </WorkbenchButton>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_auto] gap-2 items-center">
+                                    <code className="min-w-0 rounded-lg border border-white/[0.06] bg-black/20 px-2.5 py-2 text-[10px] text-zinc-300 font-mono truncate">
+                                        {httpToken || "Token hidden until revealed"}
+                                    </code>
+                                    <WorkbenchButton
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={revealHttpToken}
+                                        disabled={revealingToken}
+                                        className="h-8 text-[10px] px-3"
+                                    >
+                                        <WorkbenchIcon name="lucide:eye" size={12} className="mr-1" />
+                                        {revealingToken ? "Loading..." : "Reveal"}
+                                    </WorkbenchButton>
+                                    <WorkbenchButton
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={copyHttpToken}
+                                        disabled={!httpToken}
+                                        className="h-8 text-[10px] px-3"
+                                    >
+                                        <WorkbenchIcon name={copiedToken ? "lucide:check" : "lucide:copy"} size={12} className="mr-1" />
+                                        {copiedToken ? "Copied" : "Copy Token"}
+                                    </WorkbenchButton>
+                                </div>
+                            </div>
+
                             <div className="flex items-center justify-between border-b border-white/5 pb-1">
                                 <h4 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
                                     <WorkbenchIcon name="lucide:cpu" size={13} className="text-zinc-400" />

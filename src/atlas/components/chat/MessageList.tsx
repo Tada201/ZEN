@@ -8,7 +8,7 @@ import { MessageItem } from "./MessageItem";
 import { buildMessageListStreamSignature } from "./messageListStreamSignature";
 
 const MemoizedMessageItem = memo(MessageItem);
-const LIST_TOP_PADDING = 16;
+const LIST_TOP_PADDING = 96;
 const LIST_BOTTOM_PADDING = 192;
 
 export const MessageList = memo(function MessageList({
@@ -153,14 +153,16 @@ export const MessageList = memo(function MessageList({
           virtualItems.map((virtualItem) => {
             const m = filteredMessages[virtualItem.index];
             if (!m) return null;
+            const isActiveStreamingRow = m.status === "sending" || (isStreaming && virtualItem.index === filteredMessages.length - 1);
             return (
               <div
                 key={virtualItem.key}
                 data-index={virtualItem.index}
                 ref={measureElementWithCache}
-                className="absolute top-0 left-0 w-full"
+                className="absolute top-0 left-0 w-full isolate"
                 style={{
                   transform: `translateY(${virtualItem.start + LIST_TOP_PADDING}px)`,
+                  zIndex: isActiveStreamingRow ? 30 : 1,
                 }}
               >
                 <MemoizedMessageItem

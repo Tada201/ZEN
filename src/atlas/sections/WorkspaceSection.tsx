@@ -156,38 +156,38 @@ export function WorkspaceApp() {
             </div>
           ) : (
             <MainArea className="flex flex-col h-full relative">
-              {/* Chat Header */}
-              <div className="h-14 px-6 flex items-center justify-between border-b border-border/10 bg-[#09090b]/80">
-                <div className="flex items-center gap-3">
+              {/* Floating Chat Header */}
+              <div className="absolute top-0 left-0 w-full h-14 px-4 sm:px-6 flex items-center justify-between z-20 pointer-events-none">
+                <div className="flex items-center gap-3 pointer-events-auto">
                   <button
                     type="button"
                     onClick={() => useUIStore.getState().setSidebarOpen(true)}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-white/[0.06] md:hidden"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-white/[0.06] md:hidden backdrop-blur-md"
                     title="Open sidebar"
                     aria-label="Open sidebar"
                   >
                     <PanelLeftOpen className="h-4 w-4 text-zinc-500" />
                   </button>
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <MessageSquare className="w-5 h-5 text-primary" />
+                  <div className="w-8 h-8 rounded-lg bg-primary/20 backdrop-blur-md flex items-center justify-center shadow-lg border border-white/5">
+                    <MessageSquare className="w-4 h-4 text-primary" />
                   </div>
-                  <span className="text-sm font-semibold tracking-tight text-foreground font-sans">
+                  <span className="text-sm font-semibold tracking-tight text-foreground/90 font-sans drop-shadow-md">
                     Zen Investigation
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 pointer-events-auto">
                   <button
                     onClick={() => {
                       setActiveSettingsTab("ai-config");
                       setSettingsOpen(true);
                     }}
-                    className="h-8 w-8 rounded-lg hover:bg-white/[0.06] flex items-center justify-center transition-colors"
+                    className="h-8 w-8 rounded-lg hover:bg-white/[0.1] backdrop-blur-md flex items-center justify-center transition-colors"
                     title="Settings"
                     aria-label="Settings"
                     onPointerEnter={preloadSettingsModal}
                     onFocus={preloadSettingsModal}
                   >
-                    <Settings className="h-4 w-4 text-zinc-500" />
+                    <Settings className="h-4 w-4 text-zinc-400" />
                   </button>
                 </div>
               </div>

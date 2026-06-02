@@ -5,6 +5,7 @@ import { useChatStore } from "@/lib/stores/useChatStore";
 import { getToolChatId, rememberToolChat } from "./toolLifecycleRouting";
 import { makeToolCall, upsertTool } from "./toolEventReducer";
 import type { ToolCall } from "../../components/chat/types";
+import { focusActiveAgentsPanel, shouldFocusAgentsForTool } from "./agentPanelFocus";
 
 interface UseToolEventsProps {
   resetHeartbeatTimeout: (chatId: string) => void;
@@ -80,6 +81,7 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
       const unlistenAuthorization = await listenAppEvent("tool:authorization_request", (event) => {
         const chatId = getToolChatId(toolChatIdsRef.current, event.payload, useChatStore.getState());
         if (!chatId) return;
+        focusActiveAgentsPanel({ force: true });
         rememberToolChat(toolChatIdsRef.current, event.payload, chatId);
         useChatStore.getState().setStreamingForChat(chatId, true);
         resetHeartbeatTimeout(chatId);
@@ -99,6 +101,9 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
       const unlistenToolStart = await listenAppEvent("tool:start", (event) => {
         const chatId = getToolChatId(toolChatIdsRef.current, event.payload, useChatStore.getState());
         if (!chatId) return;
+        if (shouldFocusAgentsForTool(event.payload)) {
+          focusActiveAgentsPanel();
+        }
         rememberToolChat(toolChatIdsRef.current, event.payload, chatId);
         useChatStore.getState().setStreamingForChat(chatId, true);
         resetHeartbeatTimeout(chatId);
@@ -118,6 +123,9 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
       const unlistenToolComplete = await listenAppEvent("tool:complete", (event) => {
         const chatId = getToolChatId(toolChatIdsRef.current, event.payload, useChatStore.getState());
         if (!chatId) return;
+        if (event.payload.status !== "success" || shouldFocusAgentsForTool(event.payload)) {
+          focusActiveAgentsPanel();
+        }
         rememberToolChat(toolChatIdsRef.current, event.payload, chatId);
         resetHeartbeatTimeout(chatId);
         const status: ToolCall["status"] = event.payload.status === "success" ? "completed" : "error";
@@ -134,7 +142,29 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
         useChatStore.getState().setSessionMessages(chatId, (prev) => upsertTool(prev, chatId, tool));
       });
 
-      unlistenRefs.current.push(unlistenAuthorization, unlistenToolStart, unlistenToolComplete);
+      const unlistenAuthorizationTimeout = await listenAppEvent("tool:authorization_timeout", (event) => {
+        const chatId = getToolChatId(toolChatIdsRef.current, event.payload, useChatStore.getState());
+        if (!chatId) return;
+        focusActiveAgentsPanel({ force: true });
+        rememberToolChat(toolChatIdsRef.current, event.payload, chatId);
+        resetHeartbeatTimeout(chatId);
+        const tool = makeToolCall(
+          event.payload.tool_call_id,
+          event.payload.tool_name,
+          "error",
+          event.payload.arguments || {},
+          JSON.stringify({
+            error: "Tool approval timed out.",
+            hint: "Review the request and send the message again if you still want the tool to run.",
+          }),
+          undefined,
+          undefined,
+          getToolEventMeta(event.payload),
+        );
+        useChatStore.getState().setSessionMessages(chatId, (prev) => upsertTool(prev, chatId, tool));
+      });
+
+      unlistenRefs.current.push(unlistenAuthorization, unlistenToolStart, unlistenToolComplete, unlistenAuthorizationTimeout);
     };
 
     setupListeners();

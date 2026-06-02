@@ -15,6 +15,7 @@ pub struct ToolDescriptor {
     pub description: String,
     pub category: String,
     pub tags: Vec<String>,
+    pub risk_level: Option<String>,
 }
 
 /// Full detail returned by tool_info
@@ -135,6 +136,54 @@ impl ToolManager {
         }
     }
 
+    /// Hydrate the canonical registry with schemas/descriptions from the legacy
+    /// AgentTool registry. This is the compatibility bridge while execution is
+    /// being migrated to v2: there is still one discovery/validation catalog,
+    /// even when the concrete executor is still an AgentTool.
+    pub async fn sync_legacy_tool_definitions(&self) {
+        let mut definitions: Vec<(String, String, serde_json::Value, crate::tools::permission::RiskLevel)> =
+            Vec::new();
+
+        {
+            let v1_guard = self.v1.read().await;
+            if let Some(prog_arc) = v1_guard.progressive() {
+                let prog = prog_arc.read().await;
+                for meta in prog.get_metadata() {
+                    if let Some(tool) = prog.get_or_load_tool(&meta.id) {
+                        definitions.push((
+                            tool.id().to_string(),
+                            tool.description().to_string(),
+                            tool.input_schema(),
+                            crate::tools::default_tool_risk(tool.id()),
+                        ));
+                    }
+                }
+            }
+
+            for tool in v1_guard.list() {
+                if !definitions.iter().any(|(id, _, _, _)| id == tool.id()) {
+                    definitions.push((
+                        tool.id().to_string(),
+                        tool.description().to_string(),
+                        tool.input_schema(),
+                        crate::tools::default_tool_risk(tool.id()),
+                    ));
+                }
+            }
+        }
+
+        match self.v2.try_write() {
+            Ok(mut v2_guard) => {
+                for (id, description, schema, risk) in definitions {
+                    v2_guard.register_known_tool_definition(&id, description, schema, risk);
+                }
+            }
+            Err(_) => eprintln!(
+                "[ToolManager] Failed to acquire v2 registry write lock - legacy schema sync skipped"
+            ),
+        }
+    }
+
     /// Build a ToolPermissions struct from flat key-value settings (e.g. from UI).
     /// Accepts both legacy dot-notation keys and the canonical snake_case keys
     /// produced by the frontend settingsMapper.  Dynamic `tools.permission.*`
@@ -220,6 +269,10 @@ impl ToolManager {
         query: Option<&str>,
     ) -> Vec<ToolDescriptor> {
         let allowed: HashSet<String> = allowed_ids.iter().cloned().collect();
+        let executable_tool_names = {
+            let v2_guard = self.v2.read().await;
+            v2_guard.executable_tool_names()
+        };
         let mut seen = HashSet::new();
         let mut descriptors = Vec::new();
 
@@ -231,8 +284,12 @@ impl ToolManager {
                 let prog = prog_arc.read().await;
                 for meta in prog.get_metadata() {
                     let id = meta.id.clone();
-                    if (allowed.is_empty() || allowed.contains(&id)) && seen.insert(id.clone()) {
+                    if executable_tool_names.contains(&id)
+                        && (allowed.is_empty() || allowed.contains(&id))
+                        && seen.insert(id.clone())
+                    {
                         descriptors.push(ToolDescriptor {
+                            risk_level: Some(id_to_risk_label(&id)),
                             id,
                             name: meta.name,
                             description: meta.description,
@@ -244,9 +301,13 @@ impl ToolManager {
             } else {
                 for tool in v1_guard.list() {
                     let id = tool.id().to_string();
-                    if (allowed.is_empty() || allowed.contains(&id)) && seen.insert(id.clone()) {
+                    if executable_tool_names.contains(&id)
+                        && (allowed.is_empty() || allowed.contains(&id))
+                        && seen.insert(id.clone())
+                    {
                         descriptors.push(ToolDescriptor {
                             name: id_to_display_name(&id),
+                            risk_level: Some(id_to_risk_label(&id)),
                             id,
                             description: tool.description().to_string(),
                             category: "agent".to_string(),
@@ -270,6 +331,7 @@ impl ToolManager {
                     let id = info.name;
                     descriptors.push(ToolDescriptor {
                         name: id_to_display_name(&id),
+                        risk_level: Some(id_to_risk_label(&id)),
                         id,
                         description: info.description,
                         category: "tool".to_string(),
@@ -417,7 +479,7 @@ impl ToolManager {
                     id: id.to_string(),
                     description: tool.description().to_string(),
                     schema: tool.input_schema(),
-                    risk_level: None,
+                    risk_level: Some(id_to_risk_label(id)),
                     examples: Vec::new(),
                 });
             }
@@ -496,7 +558,8 @@ pub fn meta_tool_definitions() -> Vec<crate::tools::ToolInfo> {
                         "description": "Optional intent/search phrase such as 'web fetch', 'read documents', 'map route', or 'delegate task'. Use this to find specialized tools without loading every schema."
                     }
                 },
-                "required": []
+                "required": [],
+                "additionalProperties": false
             }),
         },
         crate::tools::ToolInfo {
@@ -510,7 +573,8 @@ pub fn meta_tool_definitions() -> Vec<crate::tools::ToolInfo> {
                         "description": "The ID/name of the tool to get detailed information about, as returned by tool_list"
                     }
                 },
-                "required": ["tool_id"]
+                "required": ["tool_id"],
+                "additionalProperties": false
             }),
         },
         crate::tools::ToolInfo {
@@ -528,7 +592,8 @@ pub fn meta_tool_definitions() -> Vec<crate::tools::ToolInfo> {
                         "description": "A JSON object containing the arguments to pass to the tool, following the schema returned by tool_info for this tool"
                     }
                 },
-                "required": ["tool_id", "arguments"]
+                "required": ["tool_id", "arguments"],
+                "additionalProperties": false
             }),
         },
     ]

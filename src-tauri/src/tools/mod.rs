@@ -157,6 +157,10 @@ pub struct ToolRegistry {
     /// Risk levels for tools that exist in the AgentTool registry but not here.
     /// Prevents unknown-tool fallback to RiskLevel::Critical.
     known_tool_risks: HashMap<String, RiskLevel>,
+    /// Schema/description metadata for AgentTool-only tools. These tools still
+    /// execute through the legacy AgentTool adapter, but discovery, permission,
+    /// schema validation, and MCP listing can use the same canonical catalog.
+    known_tool_definitions: HashMap<String, ToolDefinition>,
 }
 
 impl ToolRegistry {
@@ -166,6 +170,7 @@ impl ToolRegistry {
             permissions: ToolPermissions::default(),
             execution_history: Vec::new(),
             known_tool_risks: HashMap::new(),
+            known_tool_definitions: HashMap::new(),
         }
     }
 
@@ -175,6 +180,7 @@ impl ToolRegistry {
             permissions,
             execution_history: Vec::new(),
             known_tool_risks: HashMap::new(),
+            known_tool_definitions: HashMap::new(),
         }
     }
 
@@ -190,18 +196,75 @@ impl ToolRegistry {
         self.known_tool_risks.insert(name.to_string(), risk);
     }
 
+    pub fn register_known_tool_definition(
+        &mut self,
+        name: &str,
+        description: String,
+        parameters: serde_json::Value,
+        risk: RiskLevel,
+    ) {
+        self.known_tool_risks.insert(name.to_string(), risk);
+        self.known_tool_definitions.insert(
+            name.to_string(),
+            ToolDefinition {
+                name: name.to_string(),
+                description,
+                parameters,
+                risk_level: Some(risk),
+            },
+        );
+    }
+
+    pub fn known_tool_risk(&self, name: &str) -> Option<RiskLevel> {
+        self.known_tool_risks.get(name).copied()
+    }
+
+    pub fn executable_tool_names(&self) -> std::collections::HashSet<String> {
+        self.tools
+            .keys()
+            .chain(self.known_tool_risks.keys())
+            .cloned()
+            .collect()
+    }
+
     pub fn get(&self, name: &str) -> Option<Arc<dyn Tool>> {
         self.tools.get(name).cloned()
     }
 
     /// List tool definitions (for sending to LLM as available tools)
     pub fn list(&self) -> Vec<ToolInfo> {
-        self.tools.values().map(|t| t.info()).collect()
+        let mut infos: Vec<ToolInfo> = self.tools.values().map(|t| t.info()).collect();
+        for def in self.known_tool_definitions.values() {
+            if !self.tools.contains_key(&def.name) {
+                infos.push(ToolInfo {
+                    name: def.name.clone(),
+                    description: def.description.clone(),
+                    parameters: def.parameters.clone(),
+                });
+            }
+        }
+        infos.sort_by(|a, b| a.name.cmp(&b.name));
+        infos
     }
 
     /// List with risk metadata
     pub fn list_definitions(&self) -> Vec<ToolDefinition> {
-        self.tools.values().map(|t| t.definition()).collect()
+        let mut defs: Vec<ToolDefinition> = self.tools.values().map(|t| t.definition()).collect();
+        for def in self.known_tool_definitions.values() {
+            if !self.tools.contains_key(&def.name) {
+                defs.push(def.clone());
+            }
+        }
+        defs.sort_by(|a, b| a.name.cmp(&b.name));
+        defs
+    }
+
+    /// List only tools that the v2 registry can execute directly.
+    /// AgentTool-only compatibility definitions are excluded.
+    pub fn list_direct_definitions(&self) -> Vec<ToolDefinition> {
+        let mut defs: Vec<ToolDefinition> = self.tools.values().map(|t| t.definition()).collect();
+        defs.sort_by(|a, b| a.name.cmp(&b.name));
+        defs
     }
 
     /// Check permission for a tool call WITHOUT executing it.
@@ -211,6 +274,8 @@ impl ToolRegistry {
         tool_call: &ToolCall,
         overrides: Option<&ToolPermissions>,
     ) -> Result<PermissionDecision, ToolError> {
+        self.validate_arguments(tool_call)?;
+
         // If the tool exists in our local registry, use its specific risk level.
         // Then check known_tool_risks for AgentTool-only tools.
         // Otherwise, assume Critical risk for truly unknown tools.
@@ -228,6 +293,33 @@ impl ToolRegistry {
         );
 
         Ok(decision)
+    }
+
+    pub fn validate_arguments(&self, tool_call: &ToolCall) -> Result<(), ToolError> {
+        let schema = self
+            .get(&tool_call.name)
+            .map(|tool| tool.parameters_schema())
+            .or_else(|| {
+                self.known_tool_definitions
+                    .get(&tool_call.name)
+                    .map(|def| def.parameters.clone())
+            });
+
+        let Some(schema) = schema else {
+            return Ok(());
+        };
+
+        let validator = jsonschema::validator_for(&schema).map_err(|e| ToolError::InvalidArguments {
+            details: format!("Invalid schema for '{}': {}", tool_call.name, e),
+        })?;
+
+        if let Err(error) = validator.validate(&tool_call.arguments) {
+            return Err(ToolError::InvalidArguments {
+                details: format!("{} arguments do not match schema: {}", tool_call.name, error),
+            });
+        }
+
+        Ok(())
     }
 
     /// Execute a tool call that has ALREADY been authorized.

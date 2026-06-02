@@ -93,3 +93,4 @@ ISSUE.md
 *.bak
 
 EXAMPLE_NO_EDITS/
+test/

@@ -6,12 +6,16 @@ export type AgentDelegationLaneModel = {
   status: "running" | "completed" | "error" | "cancelled";
   task: string;
   resultSummary: string;
+  liveContent: string;
+  compactLivePreview: string;
+  hasTranscript: boolean;
+  liveContentType?: string;
   durationMs?: number;
   iteration?: number;
 };
 
 export function buildAgentDelegationLaneModel(step: Step): AgentDelegationLaneModel | undefined {
-  if (step.type !== "action" || (step.kind !== "agent_spawn" && step.kind !== "agent_complete")) return undefined;
+  if (step.type !== "action" || (step.kind !== "agent_spawn" && step.kind !== "agent_complete" && step.kind !== "agent_chunk")) return undefined;
   const spawn = step.metadata?.spawn;
   if (!spawn) return undefined;
 
@@ -23,13 +27,20 @@ export function buildAgentDelegationLaneModel(step: Step): AgentDelegationLaneMo
         : step.status === "cancelled"
           ? "cancelled"
           : "running";
+  const liveContent = step.metadata?.agentStream?.content || "";
+  const compactLivePreview = liveContent.replace(/\s+/g, " ").trim();
+  const resultSummary = step.metadata?.resultSummary || "";
 
   return {
     agentName: spawn.childAgent || step.metadata?.agentName || step.metadata?.agentId || "agent",
     parentName: spawn.parentAgent || "main",
     status,
     task: spawn.task || step.content || "",
-    resultSummary: step.metadata?.resultSummary || "",
+    resultSummary,
+    liveContent,
+    compactLivePreview,
+    hasTranscript: Boolean(compactLivePreview || resultSummary),
+    liveContentType: step.metadata?.agentStream?.type,
     durationMs: spawn.durationMs,
     iteration: step.metadata?.iteration,
   };

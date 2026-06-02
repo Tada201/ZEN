@@ -22,9 +22,9 @@ import { AssistantTaskPlanPreview } from "./AssistantTaskPlanPreview";
 import { AgentDelegationLane } from "./AgentDelegationLane";
 import { buildAgentDelegationLaneModel } from "./agentDelegationLaneModel";
 
-export function resolveToolApproval(toolCallId: string | undefined, approved: boolean) {
+export function resolveToolApproval(toolCallId: string | undefined, approved: boolean, rememberExact = false) {
   if (!toolCallId) return;
-  toolsApi.resolveApproval(toolCallId, approved).catch((e) =>
+  toolsApi.resolveApproval(toolCallId, approved, rememberExact).catch((e) =>
     console.error("resolve_tool_approval failed:", e)
   );
 }
@@ -156,6 +156,14 @@ function getActionPresentation(step: Step) {
         Icon: Wrench,
         label: step.metadata?.parallel ? "Parallel tool batch" : "Tool call planned",
         detail: tools.length > 0 ? tools.join(", ") : step.content || step.metadata?.message,
+        iconClass: "text-blue-300/80",
+      };
+    }
+    if (phase === "agent_streaming") {
+      return {
+        Icon: Bot,
+        label: `${step.metadata?.agentName || step.metadata?.agentId || "Agent"} is working`,
+        detail: step.content || step.metadata?.message,
         iconClass: "text-blue-300/80",
       };
     }
@@ -363,9 +371,7 @@ export function AgentActionStep({ step, isStreaming }: { step: Step; isStreaming
               <div className="h-full bg-zinc-500 transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, progress))}%` }} />
             </div>
           )}
-          {approval && (
-            <InlineApprovalControls toolCallId={approval.tool_call_id} toolName={approval.tool_name} />
-          )}
+          {approval && <InlineApprovalControls approval={approval} metadata={step.metadata} />}
           {isExpanded && (
             <div className="mt-1.5 rounded-md bg-white/[0.018] px-2 py-1.5">
               <div className="mb-1 text-[10px] uppercase tracking-wider text-zinc-600">Event details</div>
@@ -380,29 +386,79 @@ export function AgentActionStep({ step, isStreaming }: { step: Step; isStreaming
   );
 }
 
-function InlineApprovalControls({ toolCallId, toolName }: { toolCallId?: string; toolName?: string }) {
+type ApprovalRequest = NonNullable<NonNullable<Step["metadata"]>["approvalRequest"]>;
+type ActionMetadata = NonNullable<Step["metadata"]>;
+
+function InlineApprovalControls({ approval, metadata }: { approval: ApprovalRequest; metadata?: ActionMetadata }) {
+  const toolCallId = approval.tool_call_id;
+  const toolName = approval.tool_name || "tool";
+  const context = approval.context;
+  const risk = context?.risk_level;
+  const argsPreview = compactValue(context?.arguments_preview || approval.arguments, 360);
+  const agentLabel = [
+    metadata?.agentName || metadata?.agentId,
+    metadata?.iteration !== undefined ? `iter ${metadata.iteration}` : undefined,
+  ].filter(Boolean).join(" ");
+
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-2">
-      <span className="text-[11px] text-zinc-500">
-        Permission needed for <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-300">{toolName || "tool"}</code>
-      </span>
-      <Button
-        size="sm"
-        variant="outline"
-        type="button"
-        className="h-7 border-zinc-700/80 px-3 text-[11px] text-zinc-300 hover:bg-zinc-800"
-        onClick={() => resolveToolApproval(toolCallId, false)}
-      >
-        Deny
-      </Button>
-      <Button
-        size="sm"
-        type="button"
-        className="h-7 bg-zinc-800 px-3 text-[11px] text-zinc-100 hover:bg-zinc-700"
-        onClick={() => resolveToolApproval(toolCallId, true)}
-      >
-        Approve
-      </Button>
+    <div className="mt-3 rounded-lg border border-amber-400/15 bg-amber-400/[0.035] p-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <span className="min-w-0 flex-1 text-[11px] leading-5 text-amber-100/80">
+          Permission needed for <code className="rounded bg-black/20 px-1.5 py-0.5 text-amber-100">{toolName}</code>
+        </span>
+        {risk && (
+          <span
+            className={cn(
+              "rounded border px-1.5 py-0.5 text-[10px] uppercase leading-none",
+              risk === "critical" || risk === "high"
+                ? "border-rose-400/25 bg-rose-400/10 text-rose-200"
+                : risk === "medium"
+                  ? "border-amber-400/25 bg-amber-400/10 text-amber-200"
+                  : "border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
+            )}
+          >
+            {risk} risk
+          </span>
+        )}
+      </div>
+      {context?.description && (
+        <div className="mt-1 text-[11px] leading-relaxed text-zinc-400">{context.description}</div>
+      )}
+      {agentLabel && (
+        <div className="mt-1 font-mono text-[10px] leading-5 text-zinc-600">{agentLabel}</div>
+      )}
+      {argsPreview && (
+        <pre className="mt-1 max-h-20 overflow-y-auto whitespace-pre-wrap break-words rounded bg-black/20 px-2 py-1 font-mono text-[10px] leading-relaxed text-zinc-500">
+          {argsPreview}
+        </pre>
+      )}
+      <div className="mt-2 flex flex-wrap justify-end gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          type="button"
+          className="h-7 border-zinc-700/80 px-3 text-[11px] text-zinc-300 hover:bg-zinc-800"
+          onClick={() => resolveToolApproval(toolCallId, false)}
+        >
+          Deny
+        </Button>
+        <Button
+          size="sm"
+          type="button"
+          className="h-7 bg-amber-500/20 px-3 text-[11px] text-amber-100 hover:bg-amber-500/30"
+          onClick={() => resolveToolApproval(toolCallId, true)}
+        >
+          Approve
+        </Button>
+        <Button
+          size="sm"
+          type="button"
+          className="h-7 bg-zinc-800 px-3 text-[11px] text-zinc-100 hover:bg-zinc-700"
+          onClick={() => resolveToolApproval(toolCallId, true, true)}
+        >
+          Always allow exact
+        </Button>
+      </div>
     </div>
   );
 }

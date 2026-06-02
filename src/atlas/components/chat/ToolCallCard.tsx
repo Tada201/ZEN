@@ -44,6 +44,32 @@ function getToolIcon(name: string) {
   return Wrench;
 }
 
+function humanizeToolName(name: string) {
+  return name.replace(/[_-]+/g, ' ').trim() || 'tool';
+}
+
+function getToolActionVerb(name: string, status: ToolCall['status']) {
+  if (status === 'awaiting_approval') return 'Needs approval';
+  if (status === 'error') return 'Failed';
+  if (status === 'completed') return 'Complete';
+
+  const normalized = name.toLowerCase();
+  if (normalized.includes('search') || normalized.includes('web')) return 'Searching';
+  if (normalized.includes('read') || normalized.includes('grep') || normalized.includes('list') || normalized.includes('file')) return 'Reading';
+  if (normalized.includes('write') || normalized.includes('edit') || normalized.includes('patch') || normalized.includes('create')) return 'Writing';
+  if (normalized.includes('bash') || normalized.includes('shell') || normalized.includes('command') || normalized.includes('test') || normalized.includes('npm') || normalized.includes('cargo')) return 'Running';
+  return 'Using tool';
+}
+
+function getStatusLabel(status: ToolCall['status']) {
+  return {
+    running: 'Running',
+    awaiting_approval: 'Needs approval',
+    completed: 'Complete',
+    error: 'Failed',
+  }[status];
+}
+
 function formatDuration(durationMs?: number) {
   if (!durationMs || durationMs <= 0) return null;
   return durationMs < 1000 ? `${durationMs}ms` : `${(durationMs / 1000).toFixed(durationMs < 10_000 ? 1 : 0)}s`;
@@ -71,12 +97,15 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
     [checklistPreview, name, outputSummary, safeInput, status]
   );
 
+  const statusLabel = getStatusLabel(status);
+  const toolActionVerb = getToolActionVerb(name, status);
   const actionText = useMemo(() => {
-    if (status === 'running') return argPreview ? `Running ${argPreview}` : 'Running';
-    if (status === 'awaiting_approval') return argPreview ? `Approve ${argPreview}` : 'Approval required';
-    if (status === 'error') return outputSummary || 'Failed';
-    return outputSummary || 'Completed';
-  }, [argPreview, outputSummary, status]);
+    if (status === 'running' || status === 'awaiting_approval') {
+      return argPreview ? `${toolActionVerb} ${argPreview}` : toolActionVerb;
+    }
+    if (status === 'error') return outputSummary || `${humanizeToolName(name)} failed`;
+    return outputSummary || `${humanizeToolName(name)} completed`;
+  }, [argPreview, name, outputSummary, status, toolActionVerb]);
 
   const copyValue = (value: unknown, label: string) => {
     navigator.clipboard.writeText(typeof value === 'string' ? value : JSON.stringify(value, null, 2));
@@ -138,7 +167,7 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
           setIsExpanded(!isExpanded);
         }}
         className={cn(
-          'group flex min-h-8 w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors',
+          'group flex min-h-9 w-full min-w-0 items-center gap-2 rounded-lg border border-zinc-800/70 bg-white/[0.012] px-2 py-1.5 text-left transition-colors',
           'hover:bg-white/[0.025]'
         )}
       >
@@ -150,8 +179,8 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
         </span>
 
         <span className="flex min-w-0 flex-1 items-center gap-2">
-            <ToolIcon className="h-3.5 w-3.5 shrink-0 opacity-75" />
-          <code className="shrink-0 rounded bg-white/[0.035] px-1.5 py-0.5 font-mono text-[11px] text-zinc-300">
+          <ToolIcon className="h-3.5 w-3.5 shrink-0 opacity-75" />
+          <code className="max-w-[11rem] shrink truncate rounded bg-white/[0.035] px-1.5 py-0.5 font-mono text-[11px] text-zinc-300">
             {name}
           </code>
           <span className={cn(
@@ -161,30 +190,11 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
           )}>
             {actionText}
           </span>
+          {status === 'running' && <ToolTimer startTime={startTime} />}
+          {status !== 'running' && durationLabel && <span className="shrink-0 text-[11px] text-zinc-600">{durationLabel}</span>}
           <span className={cn('shrink-0 rounded border px-1.5 py-0.5 text-[10px] uppercase leading-none', statusStyle)}>
-            {status === 'awaiting_approval' ? 'waiting approval' : status}
+            {statusLabel}
           </span>
-            {approvalContext?.riskLevel && (
-              <span className={cn('shrink-0 rounded border px-1.5 py-0.5 text-[10px] uppercase leading-none', riskStyle)}>
-                {approvalContext.riskLevel}
-              </span>
-            )}
-            {agentLabel && (
-              <span className="shrink-0 truncate rounded bg-white/[0.025] px-1.5 py-0.5 font-mono text-[10px] leading-none text-zinc-600">
-                {agentLabel}
-              </span>
-            )}
-            {iteration !== undefined && (
-              <span className="shrink-0 font-mono text-[10px] text-zinc-600">iter {iteration}</span>
-            )}
-            {batchId && (
-              <span className="shrink-0 truncate rounded bg-white/[0.025] px-1.5 py-0.5 font-mono text-[10px] leading-none text-zinc-600">
-                batch {batchId}
-              </span>
-            )}
-            {status === 'running' && <ToolTimer startTime={startTime} />}
-            {status !== 'running' && durationLabel && <span className="shrink-0">{durationLabel}</span>}
-            {attempts && attempts.length > 1 && <span className="shrink-0">{attempts.length} attempts</span>}
         </span>
 
         {status === 'awaiting_approval' && (
@@ -234,6 +244,24 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
 
       {isExpanded && (
         <div className="ml-2 border-l border-zinc-800/80 py-1 pl-3">
+          <div className="mb-1.5 rounded-md bg-white/[0.018] px-2 py-1.5">
+            <div className="mb-1 text-[10px] uppercase tracking-wider text-zinc-600">Tool</div>
+            <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] leading-5">
+              <ToolIcon className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+              <code className="min-w-0 max-w-full truncate rounded bg-white/[0.035] px-1.5 py-0.5 font-mono text-zinc-300">
+                {name}
+              </code>
+              <span className={cn('shrink-0 rounded border px-1.5 py-0.5 text-[10px] uppercase leading-none', statusStyle)}>
+                {statusLabel}
+              </span>
+              {approvalContext?.riskLevel && (
+                <span className={cn('shrink-0 rounded border px-1.5 py-0.5 text-[10px] uppercase leading-none', riskStyle)}>
+                  {approvalContext.riskLevel} risk
+                </span>
+              )}
+            </div>
+          </div>
+
           {status === 'awaiting_approval' && approvalContext && (
             <div className="mb-1.5 rounded-md border border-amber-400/10 bg-amber-400/[0.035] px-2 py-1.5">
               <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-wider text-amber-300/80">
@@ -387,6 +415,19 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
           ) : (
             <div className="rounded-md bg-white/[0.018] px-2 py-1.5 text-[11px] text-zinc-600">
               {status === "running" ? "Waiting for tool output..." : "No output returned."}
+            </div>
+          )}
+          {(status === 'running' || durationLabel || agentLabel || iteration !== undefined || batchId || (attempts && attempts.length > 1)) && (
+            <div className="mt-1.5 rounded-md bg-white/[0.018] px-2 py-1.5">
+              <div className="mb-1 text-[10px] uppercase tracking-wider text-zinc-600">Runtime</div>
+              <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] leading-5 text-zinc-500">
+                {status === 'running' && <ToolTimer startTime={startTime} />}
+                {status !== 'running' && durationLabel && <span>{durationLabel}</span>}
+                {agentLabel && <span className="min-w-0 max-w-full truncate font-mono">agent {agentLabel}</span>}
+                {iteration !== undefined && <span className="font-mono">iter {iteration}</span>}
+                {batchId && <span className="min-w-0 max-w-full truncate font-mono">batch {batchId}</span>}
+                {attempts && attempts.length > 1 && <span>{attempts.length} attempts</span>}
+              </div>
             </div>
           )}
           <div className="mt-1.5 flex items-center gap-3 text-[11px] text-zinc-600">

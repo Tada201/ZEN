@@ -203,8 +203,13 @@ impl Runner {
                 message: format!("{} – Step {}", current_agent.name, iteration),
                 chat_id: chat_id.clone(),
                 iteration: Some(iteration),
-                phase: Some("agent_step".to_string()),
+                phase: Some(if current_agent.id == "generalist" {
+                    "agent_step".to_string()
+                } else {
+                    "agent_streaming".to_string()
+                }),
                 metadata: Some(serde_json::json!({
+                    "status": "running",
                     "agentId": current_agent.id,
                     "agentName": current_agent.name,
                     "iteration": iteration,
@@ -321,6 +326,11 @@ impl Runner {
                 authorized_tool_ids: authorized_tool_ids.clone(),
                 state: early_tool_state.clone(),
             });
+            let agent_stream = if current_agent.id == "generalist" {
+                None
+            } else {
+                Some((current_agent.id.clone(), current_agent.name.clone()))
+            };
 
             // Auto-escalation: try current model, fallback to cloud if local fails
             let response = match self
@@ -336,6 +346,7 @@ impl Runner {
                     &mut assistant_message_id,
                     None,
                     early_tools,
+                    agent_stream,
                 )
                 .await
             {
