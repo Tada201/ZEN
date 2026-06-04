@@ -1,14 +1,16 @@
 use super::tool_actions::{emit_cached_tool_result_action, emit_tool_call_action};
 use super::tool_pipeline::{
     cache_key_for, normalize_tool_result, preprocess_tool_calls, should_read_cache,
-    should_write_cache,
+    should_write_cache, PipelineCall,
 };
 use super::Runner;
 use crate::agent::event_bus::{
     AgentEvent, ChatStatusPayload, ToolCompletePayload, ToolStartPayload,
 };
+use crate::agent::chat_status::ChatStatusPhase;
 use crate::agent::hooks::HookDecision;
 use crate::agent::types::{Agent, ToolCall, ToolResult};
+use crate::db::queries;
 use crate::services::tool::ToolApprovalExecutionContext;
 use crate::tools::permission::PermissionDecision;
 use serde_json::json;
@@ -77,12 +79,62 @@ impl Runner {
         let mut handles = Vec::new();
 
         for pipeline_call in &pipeline_calls {
+            let mut effective_pipeline_call: Option<PipelineCall> = None;
+            if pipeline_call.original.name == "tool_exec" {
+                match self.hook_registry.pre_tool_use(&pipeline_call.original) {
+                    HookDecision::Deny { reason } => {
+                        tracing::info!("Hook DENIED tool_exec envelope: {}", reason);
+                        ordered_results[pipeline_call.index] = Some(normalize_tool_result(
+                            pipeline_call.original.id.clone(),
+                            "tool_exec",
+                            "Tool Exec",
+                            pipeline_call.original.args.clone(),
+                            json!({
+                                "error": format!("Tool execution denied by safety hook: {}", reason),
+                                "tool": "tool_exec",
+                                "hint": "The requested tool envelope was blocked before execution."
+                            }),
+                            true,
+                            0,
+                            chrono::Utc::now(),
+                        ));
+                        continue;
+                    }
+                    HookDecision::Modify { new_args } => {
+                        let modified = ToolCall {
+                            id: pipeline_call.original.id.clone(),
+                            name: "tool_exec".to_string(),
+                            args: new_args,
+                        };
+                        let (modified_results, modified_calls) = preprocess_tool_calls(
+                            &self.tool_manager,
+                            std::slice::from_ref(&modified),
+                            authorized_tool_ids,
+                        )
+                        .await;
+                        if let Some(Some(result)) = modified_results.into_iter().next() {
+                            ordered_results[pipeline_call.index] = Some(result);
+                            continue;
+                        }
+                        if let Some(modified_call) = modified_calls.into_iter().next() {
+                            effective_pipeline_call = Some(PipelineCall {
+                                index: pipeline_call.index,
+                                original: modified,
+                                resolved: modified_call.resolved,
+                            });
+                        }
+                    }
+                    HookDecision::Allow => {}
+                }
+            }
+
+            let pipeline_call = effective_pipeline_call.as_ref().unwrap_or(pipeline_call);
             let tool_call = &pipeline_call.resolved;
             let _ = self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
                 message: format!("Executing: {}", tool_call.name),
                 chat_id: chat_id.to_string(),
                 iteration: Some(iteration),
-                phase: Some("tool_executing".to_string()),
+                phase: Some(ChatStatusPhase::TOOL_EXECUTING.to_string()),
                 metadata: Some(json!({
                     "toolName": tool_call.name,
                     "toolCallId": tool_call.id,
@@ -227,7 +279,7 @@ impl Runner {
                         chat_id: chat_id.to_string(),
                         iteration,
                     }));
-                    let tool = self.tool_registry.read().await.get(&tc_name);
+                    let tool = None;
                     let tool_service = self
                         .app
                         .state::<crate::commands::AppState>()
@@ -310,13 +362,38 @@ impl Runner {
                             // Phase 3.3: Check session-scoped permission memory first
                             let cache_key =
                                 format!("{}:{:x}", tc_name, Sha256::digest(&tc_args.to_string()));
-                            let session_perms = state.session_permissions.lock().await;
-                            let always_allow = session_perms
-                                .get(chat_id)
-                                .and_then(|chat_perms| chat_perms.get(&cache_key))
-                                .copied()
-                                .unwrap_or(false);
-                            drop(session_perms);
+                            let always_allow = {
+                                let mut session_perms = state.session_permissions.lock().await;
+                                if !session_perms.contains_key(chat_id) {
+                                    drop(session_perms);
+                                    if let Ok(db) = state.db().await {
+                                        match queries::load_session_permission_map(&db, chat_id)
+                                            .await
+                                        {
+                                            Ok(map) => {
+                                                let mut session_perms =
+                                                    state.session_permissions.lock().await;
+                                                session_perms
+                                                    .entry(chat_id.to_string())
+                                                    .or_insert(map);
+                                            }
+                                            Err(e) => {
+                                                tracing::warn!(
+                                                    chat_id = %chat_id,
+                                                    error = %e,
+                                                    "Failed to load persisted session tool permissions"
+                                                );
+                                            }
+                                        }
+                                    }
+                                    session_perms = state.session_permissions.lock().await;
+                                }
+                                session_perms
+                                    .get(chat_id)
+                                    .and_then(|chat_perms| chat_perms.get(&cache_key))
+                                    .copied()
+                                    .unwrap_or(false)
+                            };
 
                             if is_inherited || always_allow {
                                 // Proceed without asking
@@ -336,7 +413,7 @@ impl Runner {
                                     message: format!("Awaiting approval: {}", v2_tool_call.name),
                                     chat_id: chat_id.to_string(),
                                     iteration: Some(iteration),
-                                    phase: Some("approval_required".to_string()),
+                                    phase: Some(ChatStatusPhase::APPROVAL_REQUIRED.to_string()),
                                     metadata: Some(json!({
                                         "toolName": v2_tool_call.name,
                                         "toolCallId": v2_tool_call.id,
@@ -349,7 +426,7 @@ impl Runner {
                                     })),
                                 }));
 
-                                let tool = self.tool_registry.read().await.get(&tc_name);
+                                let tool = None;
                                 let state = self.app.state::<crate::commands::AppState>();
                                 let tool_service = state.tool_service.clone();
                                 let app = self.app.clone();
@@ -625,7 +702,7 @@ impl Runner {
                         iteration,
                     }));
 
-                    let tool = self.tool_registry.read().await.get(&tc_name);
+                    let tool = None;
                     let tool_service = self
                         .app
                         .state::<crate::commands::AppState>()

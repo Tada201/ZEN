@@ -15,6 +15,14 @@ const camelToSnake = (str: string): string =>
 
 const SNAKE_OVERRIDES: Record<string, string> = {
   // If frontend key doesn't match the SQLite column name, add override here
+  workspacePath: "workspace.root",
+  dataDirectory: "workspace.data-dir",
+  sandboxEnabled: "workspace.sandbox",
+  workspaceConfirmWrites: "workspace.confirm-writes",
+  workspaceAllowExternalPaths: "workspace.allow-external-paths",
+  workspaceMaxFileSize: "workspace.max-file-size",
+  workspaceAutoStage: "workspace.auto-stage",
+  workspaceCommitConfirmation: "workspace.commit-confirmation",
   memoryEnabled: "memory.enabled",
   memoryMaxTurns: "memory.max-turns",
   memorySummarizationEnabled: "memory.summarization_enabled",

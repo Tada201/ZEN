@@ -55,7 +55,6 @@ export interface AgentActivityState {
     setSelectedTaskId: (id: string | null) => void;
     clearTasks: () => void;
     removeTask: (id: string) => void;
-    cancelTask: (id: string) => Promise<void>;
 
     pendingPlan: OrchestratorPlan | null;
     setPendingPlan: (plan: OrchestratorPlan | null) => void;
@@ -93,10 +92,19 @@ export const useAgentActivityStore = create<AgentActivityState>()(
 
         addTask: (task) => {
             set((state) => ({
-                activeTasks: [
-                    { ...task, startedAt: task.startedAt || Date.now(), progress: 0 },
-                    ...state.activeTasks
-                ].slice(0, 50)
+                activeTasks: state.activeTasks.some(t => t.id === task.id)
+                    ? state.activeTasks.map(t => t.id === task.id
+                        ? {
+                            ...t,
+                            ...task,
+                            startedAt: t.startedAt || task.startedAt || Date.now(),
+                            progress: t.progress ?? 0,
+                        }
+                        : t)
+                    : [
+                        { ...task, startedAt: task.startedAt || Date.now(), progress: 0 },
+                        ...state.activeTasks
+                    ].slice(0, 50)
             }));
         },
 
@@ -134,15 +142,6 @@ export const useAgentActivityStore = create<AgentActivityState>()(
             activeTasks: state.activeTasks.filter(t => t.id !== id),
             selectedTaskId: state.selectedTaskId === id ? null : state.selectedTaskId
         })),
-        
-        cancelTask: async (id) => {
-            try {
-                // Backend cancel_subagent not yet implemented
-                console.log(`Task ${id} cancellation requested but backend command not available`);
-            } catch (err) {
-                console.error('Failed to cancel subagent:', err);
-            }
-        },
 
         pendingPlan: null,
         setPendingPlan: (plan) => set({ pendingPlan: plan }),

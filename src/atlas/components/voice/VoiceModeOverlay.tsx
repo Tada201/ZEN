@@ -1,19 +1,13 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useUIStore, useSystemStore, useSettingsStore } from '@/atlas/lib/store';
 import { type UnlistenFn } from '@tauri-apps/api/event';
-import { VoiceOscilloscope } from './VoiceOscilloscope';
-import { motion, AnimatePresence } from 'framer-motion';
-import { cn } from "@/lib/utils";
-import { Mic, X, Terminal, Sparkles, Volume2 } from 'lucide-react';
 import { stopSpeech } from '@/atlas/lib/webSpeech';
 import { voiceApi } from '@/api';
 import { listenAppEvent } from '@/api/events';
-import { VoiceDiagnosticsPanel } from './VoiceDiagnosticsPanel';
-import { VoiceSubtitleBox } from './VoiceSubtitleBox';
 import { stripMarkdown } from './voiceTextUtils';
 import { useAppUptime } from '@/hooks/useAppUptime';
+import { VoiceModePanel, type VoiceState } from './VoiceModePanel';
 
-type VoiceState = 'initializing' | 'listening' | 'processing' | 'speaking' | 'idle';
 const SILENCE_THRESHOLD = 0.015;
 const SILENCE_DURATION_MS = 2000;
 
@@ -405,112 +399,28 @@ export function VoiceModeOverlay({
 
     if (!voiceModeOpen) return null;
 
-    // UI Status definitions
-    const stateColors = {
-        initializing: 'text-amber-400 bg-amber-400/10 border-amber-500/20',
-        listening: 'text-purple-400 bg-purple-400/10 border-purple-500/20',
-        processing: 'text-blue-400 bg-blue-400/10 border-blue-500/20',
-        speaking: 'text-emerald-400 bg-emerald-400/10 border-emerald-500/20',
-        idle: 'text-zinc-400 bg-zinc-400/10 border-zinc-500/20',
-    };
-
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-2xl transition-all duration-300">
-            {/* Ambient Background Glow Orb */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-gradient-to-tr from-purple-500/10 to-cyan-500/10 blur-[80px] pointer-events-none animate-pulse duration-[8000ms]" />
-            
-            {/* Main Floating Glass Capsule Card */}
-            <div className="relative w-full max-w-lg bg-white/[0.02] dark:bg-black/35 backdrop-blur-xl border border-white/10 dark:border-white/5 rounded-3xl p-8 shadow-[0_24px_80px_rgba(0,0,0,0.5)] flex flex-col items-center gap-8 overflow-hidden transition-all duration-300">
-                
-                {/* Header Top Bar */}
-                <header className="w-full flex items-center justify-between z-10 border-b border-white/5 pb-4">
-                    <div className="flex items-center gap-3">
-                        <Mic className="w-4 h-4 text-[#00FF9F]" />
-                        <span className="font-mono font-bold tracking-[0.25em] text-[10px] text-zinc-400 uppercase">Voice Mode v2.0</span>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                        {/* Dynamic Status Pill */}
-                        <div className={cn("text-[9px] font-bold tracking-widest px-2.5 py-0.5 rounded border uppercase transition-colors duration-200", stateColors[voiceState])}>
-                            {voiceState}
-                        </div>
-
-                        {/* Collapsible Diagnostics Toggle */}
-                        <button 
-                            onClick={() => setShowDiagnostics(!showDiagnostics)}
-                            className="p-1 rounded bg-white/5 border border-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
-                            title="Diagnostics Console"
-                        >
-                            <Terminal size={13} />
-                        </button>
-
-                        {/* Custom Rounded Close Button */}
-                        <button 
-                            onClick={toggleVoiceMode}
-                            className="p-1 rounded-full bg-white/5 border border-white/10 hover:bg-red-500/20 hover:border-red-500/30 text-zinc-400 hover:text-red-400 transition-all"
-                            title="Close Overlay"
-                        >
-                            <X size={14} />
-                        </button>
-                    </div>
-                </header>
-
-                {/* Minimal Telemetry Ribbon */}
-                <div className="w-full flex justify-between items-center px-2 py-1 text-[9px] font-mono text-zinc-500 z-10">
-                    <span>MODE: {voiceInputMode ? 'PUSH-TO-TALK' : 'VAD'}</span>
-                    <span className="truncate max-w-[150px]">SYS: {activeModel || 'Zen Core'}</span>
-                    <span>MEM: {memoryUsage ? `${Number(memoryUsage).toFixed(1)}GB` : '---'}</span>
-                </div>
-
-                {/* Visualizer Core Area */}
-                <div className="relative w-full h-32 flex items-center justify-center my-4 overflow-visible z-10">
-                    <div className="absolute inset-0 bg-radial-gradient from-[#06b6d4]/5 to-transparent blur-md pointer-events-none" />
-                    <VoiceOscilloscope analyserRef={analyserRef} isAiSpeaking={aiSpeaking} isActive={voiceModeOpen} />
-                </div>
-
-                {/* Cognitive Actions HUD overlay inside capsule */}
-                <AnimatePresence mode="wait">
-                    {toolAction && (
-                        <motion.div 
-                            initial={{ opacity: 0, y: -4 }} 
-                            animate={{ opacity: 1, y: 0 }} 
-                            exit={{ opacity: 0, y: -4 }} 
-                            className="flex items-center gap-2 px-3 py-1 rounded bg-orange-500/10 border border-orange-500/20 text-orange-400 font-mono text-[9px] tracking-wider uppercase animate-pulse"
-                        >
-                            <Sparkles size={10} />
-                            <span>AGENT ACTION: {toolAction}</span>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                {/* Double Panel details (Visible when diagnostics is toggled) */}
-                <AnimatePresence>
-                    {showDiagnostics && (
-                        <motion.div 
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                        >
-                            <VoiceDiagnosticsPanel
-                                appUptimeSecs={appUptimeSecs}
-                                sttEngine={sttEngine}
-                                micStatus={micStatus}
-                                amplitude={amplitude}
-                                tokensPerSec={tokensPerSec}
-                                logLines={logLines}
-                            />
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                {/* VAD / PTT Toggle Control */}
-                <div className="w-full flex items-center justify-between border-t border-white/5 pt-4 text-[10px] text-zinc-500 z-10">
-                    <span className="flex items-center gap-1"><Volume2 size={12} /> Master Link Volume</span>
-                    <span className="font-mono text-zinc-300">80%</span>
-                </div>
-            </div>
-
-            <VoiceSubtitleBox speaker={subtitleSpeaker} userText={userSpeechText} aiText={aiSpeechText} />
-        </div>
+        <VoiceModePanel
+            activeModel={activeModel}
+            aiSpeaking={aiSpeaking}
+            amplitude={amplitude}
+            analyserRef={analyserRef}
+            appUptimeSecs={appUptimeSecs}
+            logLines={logLines}
+            memoryUsage={memoryUsage}
+            micStatus={micStatus}
+            onClose={toggleVoiceMode}
+            onToggleDiagnostics={() => setShowDiagnostics((value) => !value)}
+            showDiagnostics={showDiagnostics}
+            sttEngine={sttEngine}
+            subtitleSpeaker={subtitleSpeaker}
+            tokensPerSec={tokensPerSec}
+            toolAction={toolAction}
+            userSpeechText={userSpeechText}
+            aiSpeechText={aiSpeechText}
+            voiceInputMode={voiceInputMode}
+            voiceModeOpen={voiceModeOpen}
+            voiceState={voiceState}
+        />
     );
 }

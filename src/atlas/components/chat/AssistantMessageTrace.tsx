@@ -17,10 +17,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toolsApi } from "@/api";
+import { CHAT_STATUS_PHASES } from "@/api/chatStatus";
 import { Step } from "./types";
 import { AssistantTaskPlanPreview } from "./AssistantTaskPlanPreview";
 import { AgentDelegationLane } from "./AgentDelegationLane";
 import { buildAgentDelegationLaneModel } from "./agentDelegationLaneModel";
+export { ResearchTimeline } from "./ResearchTimeline";
 
 export function resolveToolApproval(toolCallId: string | undefined, approved: boolean, rememberExact = false) {
   if (!toolCallId) return;
@@ -28,13 +30,21 @@ export function resolveToolApproval(toolCallId: string | undefined, approved: bo
     console.error("resolve_tool_approval failed:", e)
   );
 }
+function redactTracePreview(value: unknown, maxLength = 360): string {
+  const text = typeof value === "string" ? value : value === undefined || value === null ? "" : JSON.stringify(value);
+  if (!text.trim()) return "";
+  if (/(api[_-]?key|authorization|bearer|credential|password|secret|token)/i.test(text)) {
+    return "[redacted sensitive tool arguments]";
+  }
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+}
 
 function getActionPresentation(step: Step) {
   const kind = step.kind || "system";
   const status = step.status || "running";
   const isError = status === "error";
   const isDone = status === "completed";
-  const iconClass = isError ? "text-rose-400/80" : isDone ? "text-zinc-600" : "text-zinc-500";
+  const iconClass = isError ? "text-rose-400/80" : isDone ? "text-zinc-400" : "text-zinc-500";
   const phase = typeof step.metadata?.phase === "string" ? step.metadata.phase : undefined;
 
   if (kind === "agent_spawn") {
@@ -130,28 +140,28 @@ function getActionPresentation(step: Step) {
   }
   if (kind === "chat_status") {
     const tools = Array.isArray(step.metadata?.tools) ? step.metadata.tools : [];
-    if (phase === "tool_call_ready") {
+    if (phase === CHAT_STATUS_PHASES.ToolCallReady) {
       const preview = step.metadata?.toolCallPreview;
       const args = preview?.argumentsPreview;
-      const detail = typeof args === "string" ? args : args ? JSON.stringify(args) : step.content || step.metadata?.message;
+      const detail = args ? redactTracePreview(args, 180) : step.content || step.metadata?.message;
       return {
         Icon: Wrench,
         label: `${preview?.toolName || "Tool call"} ready`,
-        detail: detail?.slice(0, 180),
+        detail,
         iconClass: "text-emerald-300/80",
       };
     }
-    if (phase === "tool_call_streaming") {
+    if (phase === CHAT_STATUS_PHASES.ToolCallStreaming) {
       const preview = step.metadata?.toolCallPreview;
-      const args = typeof preview?.argumentsPreview === "string" ? preview.argumentsPreview.trim() : "";
+      const args = redactTracePreview(preview?.argumentsPreview, 180);
       return {
         Icon: Wrench,
         label: `Preparing ${preview?.toolName || "tool call"}`,
-        detail: args ? args.slice(0, 180) : step.content || step.metadata?.message,
+        detail: args || step.content || step.metadata?.message,
         iconClass: "text-blue-300/80",
       };
     }
-    if (phase === "tool_batch_planned") {
+    if (phase === CHAT_STATUS_PHASES.ToolBatchPlanned) {
       return {
         Icon: Wrench,
         label: step.metadata?.parallel ? "Parallel tool batch" : "Tool call planned",
@@ -159,7 +169,7 @@ function getActionPresentation(step: Step) {
         iconClass: "text-blue-300/80",
       };
     }
-    if (phase === "agent_streaming") {
+    if (phase === CHAT_STATUS_PHASES.AgentStreaming) {
       return {
         Icon: Bot,
         label: `${step.metadata?.agentName || step.metadata?.agentId || "Agent"} is working`,
@@ -167,7 +177,7 @@ function getActionPresentation(step: Step) {
         iconClass: "text-blue-300/80",
       };
     }
-    if (phase === "provider_ready") {
+    if (phase === CHAT_STATUS_PHASES.ProviderReady) {
       const providerDetail = [step.metadata?.provider, step.metadata?.model].filter(Boolean).join(" / ");
       return {
         Icon: CircleDot,
@@ -230,12 +240,6 @@ function serializeActionDetails(step: Step) {
   );
 }
 
-function compactValue(value: unknown, maxLength = 120) {
-  if (value === undefined || value === null || value === "") return "";
-  const text = typeof value === "string" ? value : JSON.stringify(value);
-  return text.replace(/\s+/g, " ").trim().slice(0, maxLength);
-}
-
 function getActionChips(step: Step): Array<{ label: string; tone?: "default" | "warning" | "danger" }> {
   const chips: Array<{ label: string; tone?: "default" | "warning" | "danger" }> = [];
   const spawn = step.metadata?.spawn;
@@ -255,7 +259,7 @@ function getActionChips(step: Step): Array<{ label: string; tone?: "default" | "
       tone: risk === "critical" || risk === "high" ? "danger" : risk === "medium" ? "warning" : "default",
     });
   }
-  const argsPreview = compactValue(approval?.context?.arguments_preview || approval?.arguments);
+  const argsPreview = redactTracePreview(approval?.context?.arguments_preview || approval?.arguments, 120);
   if (argsPreview) {
     chips.push({ label: argsPreview });
   }
@@ -304,7 +308,7 @@ export function AgentActionStep({ step, isStreaming }: { step: Step; isStreaming
     <div className="font-sans">
       <div className="flex min-h-8 items-start gap-2 rounded-md px-1 py-1 transition-colors hover:bg-white/[0.018]">
         <div className={cn("mt-[3px] flex h-4 w-4 shrink-0 items-center justify-center text-zinc-500", presentation.iconClass)}>
-          <Icon className={cn("h-3.5 w-3.5", isRunning && "animate-spin")} />
+          <Icon className={cn("h-3.5 w-3.5", isRunning && "motion-safe:animate-spin")} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
@@ -319,25 +323,25 @@ export function AgentActionStep({ step, isStreaming }: { step: Step; isStreaming
               )}
             >
               {canExpand && (
-                <ChevronRight className={cn("h-3 w-3 shrink-0 text-zinc-600 transition-transform", isExpanded && "rotate-90")} />
+                <ChevronRight className={cn("h-3 w-3 shrink-0 text-zinc-400 transition-transform", isExpanded && "rotate-90")} />
               )}
               <span className={cn("min-w-0 flex-1 truncate text-[12px] capitalize leading-5 text-zinc-400", isRunning && "text-premium-shimmer")}>
               {presentation.label}
               </span>
             </button>
             {step.metadata?.iteration !== undefined && (
-              <span className="font-mono text-[11px] text-zinc-600">
+              <span className="font-mono text-[11px] text-zinc-400">
                 iter {step.metadata.iteration}
               </span>
             )}
-            {eventTime && <span className="shrink-0 font-mono text-[10px] text-zinc-700">{eventTime}</span>}
+            {eventTime && <span className="shrink-0 font-mono text-[11px] text-zinc-500">{eventTime}</span>}
             {step.status && (
               <span
                 className={cn(
                   "text-[11px]",
                   step.status === "error" && "text-rose-400/80",
-                  step.status === "completed" && "text-zinc-600",
-                  step.status === "running" && "text-zinc-500",
+                  step.status === "completed" && "text-zinc-400",
+                  step.status === "running" && "text-zinc-400",
                 )}
               >
                 {step.status}
@@ -345,7 +349,7 @@ export function AgentActionStep({ step, isStreaming }: { step: Step; isStreaming
             )}
           </div>
           {presentation.detail && (
-            <div className="line-clamp-2 text-[11px] leading-5 text-zinc-600">
+            <div className="line-clamp-2 text-[12px] leading-5 text-zinc-400">
               {presentation.detail}
             </div>
           )}
@@ -355,7 +359,7 @@ export function AgentActionStep({ step, isStreaming }: { step: Step; isStreaming
                 <span
                   key={`${chip.label}-${idx}`}
                   className={cn(
-                    "max-w-full truncate rounded bg-white/[0.025] px-1.5 py-0.5 font-mono text-[10px] leading-none text-zinc-600",
+                    "max-w-full truncate rounded bg-white/[0.025] px-1.5 py-0.5 font-mono text-[11px] leading-none text-zinc-400",
                     chip.tone === "warning" && "bg-amber-400/10 text-amber-300/80",
                     chip.tone === "danger" && "bg-rose-400/10 text-rose-300/80",
                   )}
@@ -374,8 +378,8 @@ export function AgentActionStep({ step, isStreaming }: { step: Step; isStreaming
           {approval && <InlineApprovalControls approval={approval} metadata={step.metadata} />}
           {isExpanded && (
             <div className="mt-1.5 rounded-md bg-white/[0.018] px-2 py-1.5">
-              <div className="mb-1 text-[10px] uppercase tracking-wider text-zinc-600">Event details</div>
-              <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-zinc-500">
+              <div className="mb-1 text-[11px] uppercase tracking-wider text-zinc-400">Event details</div>
+              <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-zinc-400">
                 {serializeActionDetails(step)}
               </pre>
             </div>
@@ -385,7 +389,6 @@ export function AgentActionStep({ step, isStreaming }: { step: Step; isStreaming
     </div>
   );
 }
-
 type ApprovalRequest = NonNullable<NonNullable<Step["metadata"]>["approvalRequest"]>;
 type ActionMetadata = NonNullable<Step["metadata"]>;
 
@@ -394,7 +397,7 @@ function InlineApprovalControls({ approval, metadata }: { approval: ApprovalRequ
   const toolName = approval.tool_name || "tool";
   const context = approval.context;
   const risk = context?.risk_level;
-  const argsPreview = compactValue(context?.arguments_preview || approval.arguments, 360);
+  const argsPreview = redactTracePreview(context?.arguments_preview || approval.arguments, 360);
   const agentLabel = [
     metadata?.agentName || metadata?.agentId,
     metadata?.iteration !== undefined ? `iter ${metadata.iteration}` : undefined,
@@ -409,7 +412,7 @@ function InlineApprovalControls({ approval, metadata }: { approval: ApprovalRequ
         {risk && (
           <span
             className={cn(
-              "rounded border px-1.5 py-0.5 text-[10px] uppercase leading-none",
+              "rounded border px-1.5 py-0.5 text-[11px] uppercase leading-none",
               risk === "critical" || risk === "high"
                 ? "border-rose-400/25 bg-rose-400/10 text-rose-200"
                 : risk === "medium"
@@ -425,10 +428,10 @@ function InlineApprovalControls({ approval, metadata }: { approval: ApprovalRequ
         <div className="mt-1 text-[11px] leading-relaxed text-zinc-400">{context.description}</div>
       )}
       {agentLabel && (
-        <div className="mt-1 font-mono text-[10px] leading-5 text-zinc-600">{agentLabel}</div>
+        <div className="mt-1 font-mono text-[11px] leading-5 text-zinc-400">{agentLabel}</div>
       )}
       {argsPreview && (
-        <pre className="mt-1 max-h-20 overflow-y-auto whitespace-pre-wrap break-words rounded bg-black/20 px-2 py-1 font-mono text-[10px] leading-relaxed text-zinc-500">
+        <pre className="mt-1 max-h-20 overflow-y-auto whitespace-pre-wrap break-words rounded bg-black/20 px-2 py-1 font-mono text-[12px] leading-relaxed text-zinc-400">
           {argsPreview}
         </pre>
       )}
@@ -458,63 +461,6 @@ function InlineApprovalControls({ approval, metadata }: { approval: ApprovalRequ
         >
           Always allow exact
         </Button>
-      </div>
-    </div>
-  );
-}
-
-export function ResearchTimeline({ steps }: { steps: Array<{ text: string; status: "pending" | "running" | "completed" | "error" }> }) {
-  const completedCount = steps.filter((s) => s.status === "completed" || s.status === "error").length;
-  const progressPercent = steps.length > 0 ? Math.round((completedCount / steps.length) * 100) : 0;
-
-  return (
-    <div className="font-sans">
-      <div className="flex items-start gap-2 text-zinc-500">
-        <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
-          {completedCount === steps.length ? (
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400/80" />
-          ) : (
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />
-          )}
-        </span>
-        <span className="min-w-0 flex-1">
-            <span className="block text-[12px] font-semibold text-zinc-300">Execution history</span>
-          <span className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
-            <span className="font-mono">{steps.length} planning steps</span>
-            <span>{completedCount} completed</span>
-          </span>
-          <span className="mt-1.5 block h-px overflow-hidden rounded-full bg-white/[0.06]">
-            <span className="block h-full bg-emerald-400/70 transition-all duration-500" style={{ width: `${progressPercent}%` }} />
-          </span>
-        </span>
-      </div>
-      <div className="relative mt-1 flex flex-col gap-0.5 pl-4 before:absolute before:left-[5px] before:top-1 before:h-[calc(100%-8px)] before:w-px before:bg-zinc-800/80">
-        {steps.map((step, idx) => (
-          <div key={`${step.text}-${idx}`} className="relative">
-            <span className="absolute -left-[15px] top-2.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-black">
-              <span
-                className={cn(
-                  "h-1.5 w-1.5 rounded-full",
-                  step.status === "running" ? "bg-blue-400" :
-                  step.status === "error" ? "bg-rose-400" :
-                  step.status === "completed" ? "bg-emerald-400" : "bg-zinc-600"
-                )}
-              />
-            </span>
-            <div className="flex min-h-8 min-w-0 items-center gap-2 rounded-md px-1 py-1 text-[12px] text-zinc-400 transition-colors hover:bg-white/[0.018]">
-              {step.status === "running" ? (
-                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-blue-300" />
-              ) : step.status === "completed" ? (
-                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-300" />
-              ) : step.status === "error" ? (
-                <XCircle className="h-3.5 w-3.5 shrink-0 text-rose-400/80" />
-              ) : (
-                <CircleDot className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
-              )}
-              <span className="truncate leading-5">{step.text}</span>
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );

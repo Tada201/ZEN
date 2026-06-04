@@ -20,10 +20,53 @@ export interface AgentConfig {
   system_prompt_override?: string;
 }
 
+export interface AgentConfigFileData {
+  agent_id: string;
+  model_name: string;
+  max_iterations: number;
+  enabled_tools: string[];
+  system_prompt_override?: string;
+  description?: string;
+}
+
+export interface AgentConfigFileInfo {
+  agent_id: string;
+  has_custom_config: boolean;
+}
+
+export interface ToolMetadataItem {
+  id: string;
+  name: string;
+  description: string;
+  risk_level: string;
+}
+
 export const agentsApi = {
   listAgents: () => callCommand<AgentInfo[]>("list_agents"),
   listAgentsWithConfigs: () =>
     callCommand<AgentConfig[]>("list_agents_with_configs"),
   spawnAgent: (agentId: string, message: string, options: Record<string, unknown> = {}) =>
     callCommand<string>("spawn_agent", { agentId, message, options }),
+
+  // Config file management
+  getAgentConfigFile: (agentId: string) =>
+    callCommand<AgentConfigFileData>("get_agent_config_file", { agentId }),
+
+  saveAgentConfigFile: (agentId: string, config: AgentConfigFileData) =>
+    callCommand<void>("save_agent_config_file", { agentId, config }),
+
+  deleteAgentConfigFile: (agentId: string) =>
+    callCommand<void>("delete_agent_config_file", { agentId }),
+
+  listAgentConfigFiles: () =>
+    callCommand<AgentConfigFileInfo[]>("list_agent_config_files"),
+
+  exportAgentConfigFile: (agentId: string, exportPath: string) =>
+    callCommand<void>("export_agent_config_file", { agentId, exportPath }),
+
+  importAgentConfigFile: (importPath: string, targetAgentId?: string) =>
+    callCommand<AgentConfigFileData>("import_agent_config_file", { importPath, targetAgentId }),
+
+  listToolsForConfig: () =>
+    callCommand<ToolMetadataItem[]>("list_tools_for_config"),
 };

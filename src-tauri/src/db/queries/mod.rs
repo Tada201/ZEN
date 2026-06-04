@@ -22,3 +22,5 @@ pub mod settings;
 pub use settings::*;
 pub mod session_memory;
 pub use session_memory::*;
+pub mod session_permissions;
+pub use session_permissions::*;

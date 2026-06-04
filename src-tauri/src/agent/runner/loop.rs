@@ -10,6 +10,7 @@ use super::turn_persistence::{save_assistant_message, AssistantMessageSave};
 use crate::agent::event_bus::{
     AgentEvent, ChatChunkPayload, ChatDonePayload, ChatErrorPayload, ChatStatusPayload,
 };
+use crate::agent::chat_status::ChatStatusPhase;
 use crate::agent::middleware::{EnrichmentContext, MiddlewareChain};
 use crate::agent::types::*;
 use crate::db::models::ChatMessage;
@@ -204,9 +205,9 @@ impl Runner {
                 chat_id: chat_id.clone(),
                 iteration: Some(iteration),
                 phase: Some(if current_agent.id == "generalist" {
-                    "agent_step".to_string()
+                    ChatStatusPhase::AGENT_STEP.to_string()
                 } else {
-                    "agent_streaming".to_string()
+                    ChatStatusPhase::AGENT_STREAMING.to_string()
                 }),
                 metadata: Some(serde_json::json!({
                     "status": "running",
@@ -605,7 +606,7 @@ impl Runner {
                     }
                 ),
                 iteration: Some(iteration),
-                phase: Some("tool_batch_planned".to_string()),
+                phase: Some(ChatStatusPhase::TOOL_BATCH_PLANNED.to_string()),
                 metadata: Some(serde_json::json!({
                     "toolCount": tool_calls.len(),
                     "parallel": tool_calls.len() > 1,
@@ -620,8 +621,8 @@ impl Runner {
 
             for (index, tool_call) in tool_calls.iter().enumerate() {
                 let id_key =
-                    EarlyToolExecutionState::key_for(&tool_call.name, &tool_call.args, Some(&tool_call.id));
-                let sig_key = EarlyToolExecutionState::key_for(&tool_call.name, &tool_call.args, None);
+                    EarlyToolExecutionState::key_for(&tool_call.name, &tool_call.args, Some(&tool_call.id), Some(index));
+                let sig_key = EarlyToolExecutionState::key_for(&tool_call.name, &tool_call.args, None, Some(index));
                 let key = if early_tool_state.was_started(&id_key).await {
                     id_key
                 } else {
@@ -704,7 +705,7 @@ impl Runner {
                                 message: format!("Transferring to {}", next_agent.name),
                                 chat_id: chat_id.clone(),
                                 iteration: Some(iteration),
-                                phase: Some("handoff".to_string()),
+                                phase: Some(ChatStatusPhase::HANDOFF.to_string()),
                                 metadata: Some(serde_json::json!({
                                     "fromAgent": current_agent.name,
                                     "toAgent": next_agent.name,

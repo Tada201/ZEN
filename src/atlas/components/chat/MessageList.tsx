@@ -31,6 +31,8 @@ export const MessageList = memo(function MessageList({
   // Fix #3: Throttle scroll updates to max 20/sec
   const lastScrollTime = useRef(0);
   const resizeObservers = useRef(new Map<Element, ResizeObserver>());
+  const lastViewportWidth = useRef(0);
+  const measureFrame = useRef<number | null>(null);
 
   // Get the actual scrollable element from Radix ScrollArea
   const getViewport = useCallback(() => scrollRef.current?.querySelector("[data-radix-scroll-area-viewport]") as HTMLElement, []);
@@ -60,6 +62,21 @@ export const MessageList = memo(function MessageList({
     overscan: 5,
   });
 
+  const scheduleFullMeasure = useCallback(() => {
+    if (measureFrame.current !== null) return;
+    measureFrame.current = window.requestAnimationFrame(() => {
+      measureFrame.current = null;
+      sizeCache.current.clear();
+      rowVirtualizer.measure();
+      if (isAutoScrolling.current && filteredMessages.length > 0) {
+        rowVirtualizer.scrollToIndex(filteredMessages.length - 1, {
+          align: "end",
+          behavior: "auto",
+        });
+      }
+    });
+  }, [filteredMessages.length, rowVirtualizer]);
+
   // Callback for caching measured sizes from the virtualizer
   const measureElementWithCache = useCallback((el: HTMLElement | null) => {
     if (el) {
@@ -88,7 +105,27 @@ export const MessageList = memo(function MessageList({
   }, [messageOrderSignature, rowVirtualizer]);
 
   useEffect(() => {
+    const viewport = getViewport();
+    if (!viewport) return;
+
+    lastViewportWidth.current = viewport.clientWidth;
+    const observer = new ResizeObserver((entries) => {
+      const width = Math.round(entries[0]?.contentRect.width ?? viewport.clientWidth);
+      if (!width || Math.abs(width - lastViewportWidth.current) < 2) return;
+      lastViewportWidth.current = width;
+      scheduleFullMeasure();
+    });
+
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [getViewport, scheduleFullMeasure]);
+
+  useEffect(() => {
     return () => {
+      if (measureFrame.current !== null) {
+        window.cancelAnimationFrame(measureFrame.current);
+        measureFrame.current = null;
+      }
       resizeObservers.current.forEach((observer) => observer.disconnect());
       resizeObservers.current.clear();
     };

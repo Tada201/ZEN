@@ -3,7 +3,16 @@ import { strict as assert } from "node:assert";
 import ts from "typescript";
 
 const sourcePath = new URL("../src/atlas/components/chat/assistantMessageParts.ts", import.meta.url);
-const source = readFileSync(sourcePath, "utf8");
+const parserSourcePath = new URL("../src/atlas/components/chat/assistantCardParser.ts", import.meta.url);
+const parserSource = readFileSync(parserSourcePath, "utf8")
+  .replace(/export interface ParsedCard \{[\s\S]*?\n\}/, "")
+  .replace(/export function parseCardTags/, "export function parseCardTags");
+const source = `${parserSource}\n${readFileSync(sourcePath, "utf8")
+  .replace('import { parseCardTags, type ParsedCard } from "./assistantCardParser";\n', "")
+  .replace('export { parseCardTags, type ParsedCard } from "./assistantCardParser";\n', "")}`.replace(
+  'import { CHAT_STATUS_PHASES } from "@/api/chatStatus";',
+  'const CHAT_STATUS_PHASES = { AgentStreaming: "agent_streaming", ToolCallStreaming: "tool_call_streaming", ToolCallReady: "tool_call_ready" };',
+);
 const transpiled = ts.transpileModule(source, {
   compilerOptions: {
     module: ts.ModuleKind.ES2022,
@@ -15,6 +24,22 @@ const transpiled = ts.transpileModule(source, {
 
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(transpiled.outputText).toString("base64")}`;
 const { groupAssistantSteps, groupToolCalls, legacyMessageToActionStep, parseCardTags, toolResultMetaToOutput } = await import(moduleUrl);
+
+const typesSourcePath = new URL("../src/atlas/components/chat/types.ts", import.meta.url);
+const typesSource = readFileSync(typesSourcePath, "utf8").replace(
+  'import { Globe, Terminal, FileText, Code2, type LucideIcon } from "lucide-react";',
+  'const Globe = "Globe"; const Terminal = "Terminal"; const FileText = "FileText"; const Code2 = "Code2";',
+);
+const transpiledTypes = ts.transpileModule(typesSource, {
+  compilerOptions: {
+    module: ts.ModuleKind.ES2022,
+    target: ts.ScriptTarget.ES2022,
+    importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
+  },
+  fileName: "types.ts",
+});
+const typesModuleUrl = `data:text/javascript;base64,${Buffer.from(transpiledTypes.outputText).toString("base64")}`;
+const { extractInlineThoughtBlocks } = await import(typesModuleUrl);
 
 const parsed = parseCardTags('Before <card>{"type":"metric","data":{"value":42}}</card> After');
 assert.equal(parsed.cards.length, 1, "card tags should be extracted");
@@ -33,6 +58,19 @@ assert(malformedCompleteCard.cleanText.includes("Unable to render generated card
 const cardWithAttributes = parseCardTags('Before <card data-kind="metric">{"card":"metric","data":{"value":7}}</card> After');
 assert.equal(cardWithAttributes.cards.length, 1, "card tags with attributes should be extracted");
 assert.equal(cardWithAttributes.cards[0].type, "metric", "card attribute form should preserve card type");
+
+const cardWithClosingTagInJsonString = parseCardTags('Before <card>{"type":"metric","data":{"text":"literal </card> marker","value":9}}</card> After');
+assert.equal(cardWithClosingTagInJsonString.cards.length, 1, "card parser should ignore closing tags inside JSON strings");
+assert.equal(cardWithClosingTagInJsonString.cards[0].data.text, "literal </card> marker", "card parser should preserve JSON string content");
+assert.equal(cardWithClosingTagInJsonString.cleanText, "Before  After", "card parser should remove the full card wrapper");
+
+const multiThought = extractInlineThoughtBlocks("A <think>first</think> B <thought>second</thought> C");
+assert.equal(multiThought.reasoning, "first\n\nsecond", "all closed think/thought blocks should be preserved");
+assert.equal(multiThought.content, "A  B  C", "all closed think/thought blocks should be removed from visible content");
+
+const openThought = extractInlineThoughtBlocks("Visible <think>still streaming");
+assert.equal(openThought.content, "Visible", "open think tag should keep preceding visible content");
+assert.equal(openThought.reasoning, "still streaming", "open think tag should preserve streaming reasoning");
 
 const steps = groupAssistantSteps([
   { type: "action", kind: "chat_status", content: "Planning tools", status: "running" },

@@ -1,0 +1,186 @@
+import { readFileSync } from "node:fs";
+import { strict as assert } from "node:assert";
+
+const mcpServer = readFileSync(new URL("../src-tauri/src/mcp/server.rs", import.meta.url), "utf8");
+const mcpHttp = readFileSync(new URL("../src-tauri/src/mcp/http.rs", import.meta.url), "utf8");
+const toolsMod = readFileSync(new URL("../src-tauri/src/tools/mod.rs", import.meta.url), "utf8");
+const fsTools = readFileSync(new URL("../src-tauri/src/tools/fs_tools.rs", import.meta.url), "utf8");
+const toolManager = readFileSync(new URL("../src-tauri/src/tools/manager.rs", import.meta.url), "utf8");
+const agentMiddleware = readFileSync(new URL("../src-tauri/src/agent/middleware.rs", import.meta.url), "utf8");
+const toolService = readFileSync(new URL("../src-tauri/src/services/tool.rs", import.meta.url), "utf8");
+const terminalService = readFileSync(new URL("../src-tauri/src/services/terminal.rs", import.meta.url), "utf8");
+const terminalTool = readFileSync(new URL("../src-tauri/src/tools/terminal_tools.rs", import.meta.url), "utf8");
+const workspaceMod = readFileSync(new URL("../src-tauri/src/workspace.rs", import.meta.url), "utf8");
+const toolDispatch = readFileSync(new URL("../src-tauri/src/agent/runner/tool_dispatch.rs", import.meta.url), "utf8");
+const toolPipeline = readFileSync(new URL("../src-tauri/src/agent/runner/tool_pipeline.rs", import.meta.url), "utf8");
+const dbQueries = readFileSync(new URL("../src-tauri/src/db/queries/mod.rs", import.meta.url), "utf8");
+const dbMod = readFileSync(new URL("../src-tauri/src/db/mod.rs", import.meta.url), "utf8");
+const mcpCommands = readFileSync(new URL("../src-tauri/src/commands/mcp.rs", import.meta.url), "utf8");
+const tauriLib = readFileSync(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
+const commandsMod = readFileSync(new URL("../src-tauri/src/commands/mod.rs", import.meta.url), "utf8");
+const settingsCommands = readFileSync(new URL("../src-tauri/src/commands/settings.rs", import.meta.url), "utf8");
+const chatCommands = readFileSync(new URL("../src-tauri/src/commands/chat.rs", import.meta.url), "utf8");
+const agentCommands = readFileSync(new URL("../src-tauri/src/commands/agent.rs", import.meta.url), "utf8");
+const escalation = readFileSync(new URL("../src-tauri/src/agent/runner/escalation.rs", import.meta.url), "utf8");
+const mcpApi = readFileSync(new URL("../src/api/mcpApi.ts", import.meta.url), "utf8");
+const mcpSettings = readFileSync(new URL("../src/components/settings/Tabs/plugins/MCPSettings.tsx", import.meta.url), "utf8");
+const mockClient = readFileSync(new URL("../src/api/mockClient.ts", import.meta.url), "utf8");
+const chatInput = readFileSync(new URL("../src/atlas/components/PremiumChatInput.tsx", import.meta.url), "utf8");
+const toolsSettings = readFileSync(new URL("../src/components/settings/Tabs/ToolsSettings.tsx", import.meta.url), "utf8");
+const workspaceSettings = readFileSync(new URL("../src/components/settings/Tabs/WorkspaceSettings.tsx", import.meta.url), "utf8");
+const folderBrowser = readFileSync(new URL("../src/atlas/components/FolderBrowser.tsx", import.meta.url), "utf8");
+const settingsMapper = readFileSync(new URL("../src/lib/stores/settingsMapper.ts", import.meta.url), "utf8");
+const workspaceApi = readFileSync(new URL("../src/api/workspaceApi.ts", import.meta.url), "utf8");
+const events = readFileSync(new URL("../src/api/events.ts", import.meta.url), "utf8");
+const useToolEvents = readFileSync(new URL("../src/atlas/hooks/stream/useToolEvents.ts", import.meta.url), "utf8");
+const toolCallCard = readFileSync(new URL("../src/atlas/components/chat/ToolCallCard.tsx", import.meta.url), "utf8");
+const generalistAgent = readFileSync(new URL("../src-tauri/resources/agents/generalist.json", import.meta.url), "utf8");
+const researcherAgent = readFileSync(new URL("../src-tauri/resources/agents/researcher.json", import.meta.url), "utf8");
+const operationalAgent = readFileSync(new URL("../src-tauri/resources/agents/operational_expert.json", import.meta.url), "utf8");
+
+assert(mcpServer.includes("http_auth_token") && mcpServer.includes("Uuid::new_v4()"), "MCP should create a per-launch HTTP auth token");
+assert(mcpHttp.includes("x-zen-mcp-token") && mcpHttp.includes("Missing or invalid MCP auth token"), "MCP HTTP should require the auth token");
+assert(mcpServer.includes("check_http_rate_limit") && mcpHttp.includes("MCP rate limit exceeded"), "MCP HTTP should rate-limit requests");
+assert(!mcpCommands.includes("mcp_get_http_token") && !tauriLib.includes("commands::mcp::mcp_get_http_token"), "MCP bearer token must not be exposed through renderer IPC");
+assert(!mcpApi.includes("getHttpToken") && mcpSettings.includes("HTTP Client Access") && mcpSettings.includes("x-zen-mcp-token"), "MCP settings should show endpoint/header guidance without revealing the bearer");
+assert(!mockClient.includes("mcp_get_http_token") && mockClient.includes("http_auth_required"), "mock MCP API should not expose a token command");
+assert(mockClient.includes("redactMockValue") && mockClient.includes("console.log(`[Mock IPC] ${command}`, redactMockValue(args))"), "mock IPC logging should redact command arguments");
+assert(toolService.includes("Critical tools require interactive approval") && toolService.includes("execute_non_interactive"), "non-interactive MCP should not execute critical tools");
+assert(
+  toolService.includes("audit_execution_result") &&
+    (toolService.includes("\"event\":\"tool_execution_result\"") || toolService.includes('"event": "tool_execution_result"')),
+  "tool execution should emit final audit result rows"
+);
+assert(toolService.includes("output_hash") && toolService.includes("duration_ms") && toolService.includes("resolved_name"), "tool execution audit should include resolved name, duration, and output hash");
+assert(
+  toolService.includes("let start = std::time::Instant::now();") &&
+    toolService.includes("execute_v2_authorized(app, chat_id, v2_tool_call, \"agent_tool\")") &&
+    toolService.includes("duration_ms: start.elapsed().as_millis() as u64"),
+  "agent v2 fallback tool results should preserve measured duration for frontend telemetry",
+);
+assert(
+  toolService.includes("security_risk_for_tool") &&
+    toolService.includes(".or_else(|| registry.known_tool_risk(tool_name))"),
+  "ToolService security evaluation should use canonical known-tool risk metadata, not native-v2-only lookup"
+);
+assert(toolsMod.includes("pub fn validate_arguments") && toolsMod.includes("jsonschema::validator_for") && toolsMod.includes("self.validate_arguments(tool_call)?"), "tool args should be schema validated before permission/execution");
+assert(toolsMod.includes("known_tool_definitions") && toolsMod.includes("register_known_tool_definition"), "v1 compatibility tools should have canonical schema definitions");
+assert(toolsMod.includes("legacy_tools") && toolsMod.includes("register_legacy_tool") && toolsMod.includes("get_legacy"), "canonical registry should own legacy executor handles during migration");
+assert(toolService.includes("registry.get_legacy(&tool_call.name)") && !toolDispatch.includes("self.tool_registry.read().await.get(&tc_name)"), "agent runner execution should resolve tools through ToolService/canonical registry");
+assert(toolManager.includes("sync_legacy_tool_definitions") && commandsMod.includes("register_legacy_tool"), "startup/tool manager should sync legacy executors into the canonical registry");
+assert(toolPipeline.includes("enforce_tool_allowlist(&allowlist, &real_id, \"agent\")") && toolPipeline.includes("enforce_tool_allowlist(&allowlist, tool_id, \"agent\")"), "tool_exec and tool_info should use the shared allowlist helper");
+assert(toolManager.includes("sanitize_tool_info_schema") && toolManager.includes("TOOL_INFO_MAX_SCHEMA_BYTES"), "tool_info schemas should be capped before model exposure");
+assert(toolsMod.includes("list_direct_definitions") && mcpCommands.includes("list_direct_definitions") && mcpServer.includes("list_direct_definitions"), "MCP should only advertise directly executable v2 tools");
+assert(
+  toolsMod.includes("pub mod terminal_tools") &&
+    toolsMod.includes("registry.register(Arc::new(RunCommandTool))") &&
+    terminalTool.includes("impl Tool for RunCommandTool") &&
+    terminalTool.includes('RiskLevel::Critical') &&
+    terminalTool.includes("execute_command("),
+  "run_command should be a direct v2 tool while preserving critical risk and terminal-manager execution"
+);
+assert(
+  toolsMod.includes("registry.register(Arc::new(fs_tools::WriteFileTool))") &&
+    toolsMod.includes("registry.register(Arc::new(fs_tools::EditFileTool))") &&
+    fsTools.includes("impl Tool for WriteFileTool") &&
+    fsTools.includes("impl Tool for EditFileTool") &&
+    fsTools.includes("crate::workspace::resolve_workspace_path") &&
+    fsTools.includes("RiskLevel::High"),
+  "write_file and edit_file should be direct high-risk v2 tools with workspace-contained paths"
+);
+assert(
+  commandsMod.includes("pub async fn set_workspace_folder") &&
+    settingsCommands.includes('key == "workspace.root"') &&
+    settingsCommands.includes('key == "workspace_path"') &&
+    settingsCommands.includes("state.set_workspace_folder") &&
+    tauriLib.includes('settings_manager.get("workspace.root")') &&
+    tauriLib.includes('settings_manager.get("workspace_path")') &&
+    tauriLib.includes("commands::system::browse_folder") &&
+    workspaceApi.includes('"browse_folder"') &&
+    settingsMapper.includes('workspacePath: "workspace.root"') &&
+    workspaceMod.includes("canonicalize_workspace_root") &&
+    workspaceMod.includes("find_project_workspace_from_current_dir") &&
+    workspaceMod.includes("Component::ParentDir") &&
+    workspaceMod.includes("test_nonexistent_nested_path_traversal_blocked"),
+  "workspace.root settings should validate, hydrate, default to the project root when available, and update the live workspace used by file tools"
+);
+assert(
+  fsTools.includes("workspace_max_file_bytes") &&
+    fsTools.includes('"workspace.max-file-size"') &&
+    fsTools.includes("enforce_existing_file_size") &&
+    fsTools.includes("enforce_content_size") &&
+    workspaceSettings.includes("FolderBrowser") &&
+    folderBrowser.includes("entries?: FolderEntry[]") &&
+    folderBrowser.includes("vscode-icons:file-type-typescript") &&
+    folderBrowser.includes("entryType(entry)") &&
+    workspaceSettings.includes("Workspace sandbox enforced") &&
+    workspaceSettings.includes("Git automation is not enabled") &&
+    !workspaceSettings.includes("Allow External Paths"),
+  "workspace file tools should enforce max file size and the UI should expose a working workspace folder picker without unenforced toggles"
+);
+assert(
+  chatCommands.includes("default_yolo_tool_ids") &&
+    chatCommands.includes('state.settings_manager.get("tool_yolo_mode")') &&
+    chatCommands.includes('state.settings_manager.get("tools.yolo-mode")') &&
+    chatCommands.includes('"write_file"') &&
+    chatCommands.includes('"edit_file"') &&
+    chatCommands.includes('"grep_documents"') &&
+    chatCommands.includes('"run_command"') &&
+    chatCommands.includes("tool_ids.sort()") &&
+    chatCommands.includes("tool_ids.dedup()"),
+  "YOLO chat turns should expand the backend tool allowlist beyond web_search and normal tool-intent turns should include coding tools"
+);
+assert(mcpServer.includes("direct_tool_risk") && mcpServer.includes("Tool not available through non-interactive MCP"), "MCP tools/call should enforce direct low/medium tool exposure");
+assert(agentCommands.includes("renderer_allowed") && agentCommands.includes("not available through renderer-initiated execution"), "renderer tool command IPC should enforce direct low/medium tool exposure");
+assert(escalation.includes("Sha256::digest(args.to_string())") && !escalation.includes("format!(\"sig:{name}:{}\", args)"), "early tool dedupe keys should hash args instead of storing full JSON");
+assert(escalation.includes("sig:{index}:{name}") && escalation.includes("Some(index)"), "early tool dedupe keys should not collide when providers omit tool-call ids");
+assert(terminalService.includes("decision != PermissionDecision::Allow") && terminalService.includes("requires explicit approval"), "terminal spawn must not treat Ask as an allow decision");
+assert(escalation.includes("redact_tool_preview_string") && escalation.includes("redact_tool_preview_args"), "streamed tool-call previews should be redacted before reaching the renderer");
+assert(chatInput.includes("Enable YOLO mode?") && chatInput.includes("YOLO mode is enabled") && chatInput.includes("YOLO"), "chat input should confirm and visibly indicate YOLO mode");
+assert(toolsSettings.includes("confirmYoloEnable") && toolsSettings.includes("Enable YOLO mode?"), "settings should confirm YOLO/full-auto activation");
+assert(
+  dbQueries.includes("pub mod session_permissions") &&
+    dbMod.includes("init_session_permissions(pool)") &&
+    agentCommands.includes("upsert_session_permission") &&
+    toolDispatch.includes("load_session_permission_map"),
+  "exact session tool approvals should persist to SQLite and hydrate before approval checks"
+);
+assert(
+  toolService.includes("redacted_arguments_for_display(&tool_call.arguments)") &&
+    toolPermissionRedactionIsPresent(),
+  "approval and timeout events should expose display-safe arguments only"
+);
+assert(events.includes("arguments?: ToolCall[\"input\"]") && useToolEvents.includes("event.payload.arguments || {}"), "frontend timeout card should retain original timed-out input");
+assert(toolCallCard.includes("_previewError") && !toolCallCard.includes("exec(value)") && toolCallCard.includes("redactDisplayValue"), "tool cards should not regex-parse malformed args and should redact copied/displayed input");
+assert(
+  agentMiddleware.includes("Required Tool Protocol") &&
+    agentMiddleware.includes("tool_list") &&
+    agentMiddleware.includes("tool_info") &&
+    agentMiddleware.includes("tool_exec") &&
+    agentMiddleware.includes("Do Not Guess Tools"),
+  "runtime prompt should require the tool_list -> tool_info -> tool_exec protocol"
+);
+assert(
+  toolManager.includes("Always use this first") &&
+    toolManager.includes("before the first tool_exec") &&
+    toolManager.includes("use only documented arguments"),
+  "meta-tool descriptions should tell models to list tools, read descriptions/schemas, then execute"
+);
+for (const [name, agent] of [
+  ["generalist", generalistAgent],
+  ["researcher", researcherAgent],
+  ["operational_expert", operationalAgent],
+]) {
+  const parsed = JSON.parse(agent);
+  assert(parsed.instructions.includes("Tool Use Protocol"), `${name} should include the shared tool protocol`);
+  assert(parsed.instructions.includes("tool_list") && parsed.instructions.includes("tool_info") && parsed.instructions.includes("tool_exec"), `${name} should teach all three meta-tools`);
+  assert(!parsed.instructions.includes("tools_search") && !parsed.instructions.includes("list_tools"), `${name} should not teach stale progressive discovery tools`);
+}
+assert(!JSON.parse(generalistAgent).tool_ids.includes("tools_search") && !JSON.parse(generalistAgent).tool_ids.includes("list_tools"), "generalist allowlist should not include stale progressive discovery tools");
+
+console.log("tool system final hardening ok");
+
+function toolPermissionRedactionIsPresent() {
+  const permission = readFileSync(new URL("../src-tauri/src/tools/permission.rs", import.meta.url), "utf8");
+  return permission.includes("pub fn redacted_arguments_for_display") && permission.includes("[redacted]");
+}

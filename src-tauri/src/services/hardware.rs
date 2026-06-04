@@ -3,6 +3,15 @@ use serde::{Deserialize, Serialize};
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GpuInfo {
+    pub name: String,
+    pub vendor: String,
+    pub vram_mb: Option<u64>,
+    pub driver_version: Option<String>,
+    pub cuda_capable: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DiskInfo {
     pub name: String,
     pub mount_point: String,
@@ -20,6 +29,7 @@ pub struct HardwareInfo {
     pub os: String,
     pub hostname: String,
     pub has_cuda: bool,
+    pub gpus: Vec<GpuInfo>,
     pub disks: Vec<DiskInfo>,
 }
 
@@ -30,8 +40,7 @@ pub struct HardwareService {
 
 impl HardwareService {
     pub fn new() -> Self {
-        // Simple CUDA check (could be improved by checking with a crate or searching for nvml)
-        let has_cuda = std::path::Path::new("C:\\Windows\\System32\\nvcuda.dll").exists();
+        let has_cuda = detect_cuda_driver();
 
         Self {
             sys: System::new_with_specifics(
@@ -69,6 +78,7 @@ impl HardwareService {
             os: System::long_os_version().unwrap_or_else(|| "Unknown".to_string()),
             hostname: System::host_name().unwrap_or_else(|| "Unknown".to_string()),
             has_cuda: self.has_cuda,
+            gpus: detect_gpus(self.has_cuda),
             disks,
         }
     }
@@ -88,4 +98,134 @@ impl HardwareService {
             net_down: 0.0,
         }
     }
+}
+
+fn detect_cuda_driver() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        std::path::Path::new("C:\\Windows\\System32\\nvcuda.dll").exists()
+            || std::path::Path::new("C:\\Windows\\SysWOW64\\nvcuda.dll").exists()
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        std::process::Command::new("nvidia-smi")
+            .arg("--query-gpu=name")
+            .arg("--format=csv,noheader")
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false)
+    }
+}
+
+fn gpu_vendor(name: &str) -> String {
+    let lower = name.to_lowercase();
+    if lower.contains("nvidia") || lower.contains("geforce") || lower.contains("quadro") || lower.contains("rtx") {
+        "NVIDIA".to_string()
+    } else if lower.contains("amd") || lower.contains("radeon") {
+        "AMD".to_string()
+    } else if lower.contains("intel") || lower.contains("iris") || lower.contains("uhd") {
+        "Intel".to_string()
+    } else if lower.contains("apple") {
+        "Apple".to_string()
+    } else {
+        "Unknown".to_string()
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn detect_gpus(has_cuda: bool) -> Vec<GpuInfo> {
+    use std::os::windows::process::CommandExt;
+
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+    let script = "Get-CimInstance Win32_VideoController | Select-Object Name,AdapterRAM,DriverVersion,PNPDeviceID | ConvertTo-Json -Compress";
+    let output = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    let Ok(output) = output else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap_or(serde_json::Value::Null);
+    let controllers: Vec<serde_json::Value> = if let Some(items) = parsed.as_array() {
+        items.clone()
+    } else if parsed.is_object() {
+        vec![parsed]
+    } else {
+        Vec::new()
+    };
+
+    controllers
+        .into_iter()
+        .filter_map(|item| {
+            let name = item.get("Name")?.as_str()?.trim().to_string();
+            if name.is_empty() {
+                return None;
+            }
+            let vendor = gpu_vendor(&name);
+            let pnp = item
+                .get("PNPDeviceID")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_lowercase();
+            let vram_mb = item
+                .get("AdapterRAM")
+                .and_then(|v| v.as_u64())
+                .filter(|bytes| *bytes > 0)
+                .map(|bytes| bytes / 1024 / 1024);
+            let driver_version = item
+                .get("DriverVersion")
+                .and_then(|v| v.as_str())
+                .filter(|value| !value.trim().is_empty())
+                .map(|value| value.to_string());
+            let cuda_capable = has_cuda && (vendor == "NVIDIA" || pnp.contains("ven_10de"));
+
+            Some(GpuInfo {
+                name,
+                vendor,
+                vram_mb,
+                driver_version,
+                cuda_capable,
+            })
+        })
+        .collect()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn detect_gpus(has_cuda: bool) -> Vec<GpuInfo> {
+    let output = std::process::Command::new("nvidia-smi")
+        .args(["--query-gpu=name,memory.total,driver_version", "--format=csv,noheader,nounits"])
+        .output();
+
+    let Ok(output) = output else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split(',').map(str::trim).collect();
+            let name = parts.first()?.to_string();
+            if name.is_empty() {
+                return None;
+            }
+            Some(GpuInfo {
+                vendor: gpu_vendor(&name),
+                name,
+                vram_mb: parts.get(1).and_then(|value| value.parse::<u64>().ok()),
+                driver_version: parts.get(2).map(|value| value.to_string()).filter(|value| !value.is_empty()),
+                cuda_capable: has_cuda,
+            })
+        })
+        .collect()
 }

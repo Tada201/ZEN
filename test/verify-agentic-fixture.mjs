@@ -3,7 +3,7 @@ import { strict as assert } from "node:assert";
 
 const fixtures = JSON.parse(readFileSync(new URL("./chat-fixtures.json", import.meta.url), "utf8"));
 const fixture = fixtures.test_agentic;
-const mockClientSource = readFileSync(new URL("../src/api/mockClient.ts", import.meta.url), "utf8");
+const mockStreamingSource = readFileSync(new URL("../src/api/mockStreaming.ts", import.meta.url), "utf8");
 
 assert(fixture, "test_agentic fixture must exist");
 assert(Array.isArray(fixture.flow), "test_agentic.flow must be an array");
@@ -95,7 +95,7 @@ const firstChunkIndex = types.indexOf("chunk:first");
 const doneIndex = types.indexOf("done");
 assert(firstChunkIndex !== -1 && doneIndex > firstChunkIndex, "done must occur after first streamed chunk");
 assert(
-  mockClientSource.includes("batch_id: step.batch_id") && mockClientSource.includes("batchId: toolStart.batch_id"),
+  mockStreamingSource.includes("batch_id: step.batch_id") && mockStreamingSource.includes("batchId: toolStart.batch_id"),
   "mock client must emit and persist explicit batch identity for in-browser agentic verification",
 );
 

@@ -3,16 +3,25 @@ import { strict as assert } from "node:assert";
 import ts from "typescript";
 
 const sourcePath = new URL("../src/atlas/hooks/stream/agentActionLedger.ts", import.meta.url);
-const source = readFileSync(sourcePath, "utf8").replace(
-  'import { findWritableAssistantIndex } from "./messageTarget";',
-  `function findWritableAssistantIndex(messages) {
+const chatStatusSource = readFileSync(new URL("../src/api/chatStatus.ts", import.meta.url), "utf8");
+const chatStatusMatch = chatStatusSource.match(/export const CHAT_STATUS_PHASES = (\{[\s\S]*?\}) as const;/);
+assert(chatStatusMatch, "CHAT_STATUS_PHASES export should be readable by the verifier");
+
+const source = readFileSync(sourcePath, "utf8")
+  .replace(
+    /import \{ CHAT_STATUS_PHASES \} from ["'][^"']+chatStatus["'];/,
+    `const CHAT_STATUS_PHASES = ${chatStatusMatch[1]};`,
+  )
+  .replace(
+    'import { findWritableAssistantIndex } from "./messageTarget";',
+    `function findWritableAssistantIndex(messages) {
     for (let i = messages.length - 1; i >= 0; i--) {
       const message = messages[i];
       if (message.role === "assistant" && message.status === "sending") return i;
     }
     return -1;
   }`,
-);
+  );
 
 const transpiled = ts.transpileModule(source, {
   compilerOptions: {

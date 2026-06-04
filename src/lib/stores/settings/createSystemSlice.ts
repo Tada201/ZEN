@@ -126,11 +126,14 @@ export const createSystemSlice: StateCreator<SettingsState, [], [], SystemSlice>
   fetchHardwareInfo: async () => {
     try {
       const info = await systemApi.getHardwareInfo();
+      const primaryGpu = info.gpus?.[0];
       set({
         hardwareInfo: {
           cpu: info.cpu,
-          memory: `${info.memory_gb} GB`,
-          gpu: info.has_cuda ? "CUDA available" : undefined,
+          memory: `${info.memory_gb.toFixed(1)} GB`,
+          gpu: primaryGpu
+            ? `${primaryGpu.name}${primaryGpu.vram_mb ? ` (${(primaryGpu.vram_mb / 1024).toFixed(1)} GB VRAM)` : ""}`
+            : info.has_cuda ? "CUDA driver available" : undefined,
           vendor: info.os,
         },
       });

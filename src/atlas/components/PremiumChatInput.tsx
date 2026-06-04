@@ -4,8 +4,7 @@ import {
   Mic
 } from 'lucide-react';
 import { cn } from '@/lib/utils/style';
-import type { Model } from './ModelSelector';
-import { Attachment } from './chat/types';
+import type { Attachment } from './chat/types';
 import { useUIStore } from '@/lib/stores/useUIStore';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { useTaskStore } from '@/lib/stores/taskStore';
@@ -18,46 +17,9 @@ import { PlusActionMenu } from './chat/input/PlusActionMenu';
 import { ModelSearchDropdown } from './chat/input/ModelSearchDropdown';
 import { PinnedActionBar } from './chat/input/PinnedActionBar';
 import { TaskChecklistPanel } from './chat/input/TaskChecklistPanel';
-
-interface PremiumChatInputProps {
-  onSend: (data: {
-    message: string;
-    model: string;
-    webSearch: boolean;
-    thinking: {
-      enabled: boolean;
-      effort?: "low" | "medium" | "high";
-      budgetTokens?: number;
-    };
-    deepResearch: boolean;
-    generativeUI: boolean;
-    files: File[];
-    attachments?: Attachment[];
-    tools?: string[];
-    provider?: string;
-  }) => void;
-  onAbort?: () => void;
-  isLoading?: boolean;
-  models: Model[];
-  selectedModelId: string;
-  selectedProvider: string;
-  onSelectModel: (id: string, provider: string) => void;
-  onOpenModelSelector?: () => void;
-  onOpenSkills?: () => void;
-  onOpenSettings?: () => void;
-  activeChatId?: string | null;
-  input?: string;
-  onInputChange?: (value: string) => void;
-  generativeUI?: boolean;
-  onGenerativeUIChange?: (value: boolean) => void;
-  isSidebar?: boolean;
-}
-
-type ThinkingPayload = PremiumChatInputProps['onSend'] extends (data: infer Data) => void
-  ? Data extends { thinking: infer Thinking }
-    ? Thinking
-    : never
-  : never;
+import { SuggestedPromptStrip } from './chat/input/SuggestedPromptStrip';
+import type { PremiumChatInputProps, ThinkingPayload } from './chat/input/PremiumChatInputTypes';
+import { fileToAttachment } from './chat/input/fileAttachments';
 
 export const PremiumChatInput = memo(({
   onSend,
@@ -270,21 +232,7 @@ export const PremiumChatInput = memo(({
     const modelId = selectedModelId || selectedModelInfo?.id || "No Model";
     const providerId = selectedProvider || selectedModelInfo?.provider || "ollama";
 
-    const attachments = await Promise.all(selectedFiles.map(async (file) => {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          resolve({
-            name: file.name,
-            type: file.type.startsWith('image/') ? 'image' : 'file',
-            data: reader.result as string,
-            mimeType: file.type
-          });
-        };
-        reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
-        reader.readAsDataURL(file);
-      });
-    }));
+    const attachments = await Promise.all(selectedFiles.map(fileToAttachment));
 
     onSend({
       message,
@@ -342,12 +290,6 @@ export const PremiumChatInput = memo(({
     };
   }, [message]);
 
-  const suggestedPrompts = [
-    { label: "Test Markdown", prompt: "test markdown", description: "Rich formatting check", icon: "📝" },
-    { label: "Test GenUI", prompt: "test genui", description: "Interactive widget check", icon: "✨" },
-    { label: "Test ToolCall", prompt: "test toolcall", description: "Mock tool call execution", icon: "🔧" }
-  ];
-
   const handleSuggestedClick = (promptText: string) => {
     if (isLoading) return;
     const modelId = selectedModelId || selectedModelInfo?.id;
@@ -374,23 +316,7 @@ export const PremiumChatInput = memo(({
     <div className="flex flex-col gap-2.5 w-full relative">
       {/* Premade Suggested Test Prompts (Only outside Tauri for easy dummy mode validation) */}
       {!IS_TAURI && (
-        <div className="flex flex-wrap gap-2 px-1 pb-1 animate-fade-in">
-          {suggestedPrompts.map((item) => (
-            <button
-              key={item.prompt}
-              onClick={() => handleSuggestedClick(item.prompt)}
-              disabled={isLoading}
-              aria-label={item.label}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium bg-zinc-50/80 dark:bg-zinc-900/60 border border-zinc-200/40 dark:border-zinc-800/60 hover:bg-zinc-100 dark:hover:bg-indigo-950/20 hover:border-zinc-300 dark:hover:border-indigo-500/30 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 active:scale-95 shadow-[0_1px_2px_rgba(0,0,0,0.01)]"
-            >
-              <span className="text-sm leading-none">{item.icon}</span>
-              <div className="flex flex-col items-start leading-tight">
-                <span className="font-semibold">{item.label}</span>
-                <span className="text-[9px] text-zinc-400 dark:text-zinc-500 font-normal">{item.description}</span>
-              </div>
-            </button>
-          ))}
-        </div>
+        <SuggestedPromptStrip isLoading={isLoading} onSelect={handleSuggestedClick} />
       )}
 
       <div

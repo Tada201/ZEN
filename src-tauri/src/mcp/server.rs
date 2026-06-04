@@ -382,7 +382,17 @@ impl McpServer {
     /// Handle tools/list request
     async fn handle_tools_list(&self, id: Option<Value>) -> JsonRpcResponse {
         let tool_registry = self.tool_registry.read().await;
-        let tools = tool_registry.list_direct_definitions();
+        let tools: Vec<_> = tool_registry
+            .list_direct_definitions()
+            .into_iter()
+            .filter(|tool| {
+                matches!(
+                    tool.risk_level,
+                    Some(crate::tools::permission::RiskLevel::Low)
+                        | Some(crate::tools::permission::RiskLevel::Medium)
+                )
+            })
+            .collect();
 
         let mcp_tools: Vec<McpToolDefinition> = tools
             .into_iter()
@@ -416,9 +426,21 @@ impl McpServer {
         };
 
         let tool_name = params.name.clone();
-        if self.tool_registry.read().await.get(&tool_name).is_none() {
+        let mcp_allowed = {
+            let registry = self.tool_registry.read().await;
+            registry.is_direct_tool(&tool_name)
+                && matches!(
+                    registry.direct_tool_risk(&tool_name),
+                    Some(crate::tools::permission::RiskLevel::Low)
+                        | Some(crate::tools::permission::RiskLevel::Medium)
+                )
+        };
+        if !mcp_allowed {
             return JsonRpcResponse::failure(
-                JsonRpcError::invalid_params(format!("Tool not found: {}", tool_name)),
+                JsonRpcError::invalid_params(format!(
+                    "Tool not available through non-interactive MCP: {}",
+                    tool_name
+                )),
                 id,
             );
         }

@@ -110,6 +110,9 @@ impl AgentTool for SpawnAgentTool {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
+        // Load agent config file for model, max_iterations, and enabled_tools
+        let agent_config_file = crate::agent::config_file::load_agent_config(agent_id).ok();
+
         // Look up the agent
         let agent = self.agent_registry.get(agent_id).cloned().ok_or_else(|| {
             anyhow::anyhow!(
@@ -123,20 +126,37 @@ impl AgentTool for SpawnAgentTool {
             )
         })?;
 
-        // Determine model to use (priority: explicit override > agent override > active setting)
+        // Determine model to use (priority: explicit override > config file > agent override > active setting)
         let state = app.state::<crate::commands::AppState>();
-        let model = if let Some(m) = model_override.or(agent.model_override.clone()) {
+        let model = if let Some(m) = model_override.clone() {
             m
         } else {
-            crate::db::queries::get_setting(
-                &state
-                    .db()
-                    .await
-                    .map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?,
-                "model_name",
-            )
-            .await?
-            .unwrap_or_else(|| "gemini-1.5-flash".to_string())
+            let config_file_model = agent_config_file
+                .as_ref()
+                .and_then(|c| if c.model_name.is_empty() { None } else { Some(c.model_name.clone()) });
+
+            if let Some(m) = config_file_model.or(agent.model_override.clone()) {
+                m
+            } else {
+                crate::db::queries::get_setting(
+                    &state
+                        .db()
+                        .await
+                        .map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?,
+                    "model_name",
+                )
+                .await?
+                .unwrap_or_default()
+            }
+        };
+
+        // Use config file max_iterations if no explicit max_steps override in input
+        let effective_max_steps = if input.get("max_steps").is_some() {
+            max_steps
+        } else if let Some(ref cfg) = agent_config_file {
+            cfg.max_iterations.max(1) as usize
+        } else {
+            max_steps
         };
 
         // Check depth limit before spawning (prevents infinite recursion)
@@ -159,10 +179,16 @@ impl AgentTool for SpawnAgentTool {
             tool_manager,
         )
         .with_depth(depth + 1)
-        .with_max_iterations(max_steps);
+        .with_max_iterations(effective_max_steps);
 
         if let Some(allowed) = allowed_tools {
             child_runner = child_runner.with_allowed_tools(allowed);
+        } else if let Some(ref cfg) = agent_config_file {
+            if !cfg.enabled_tools.is_empty() {
+                child_runner = child_runner.with_allowed_tools(Arc::new(
+                    tokio::sync::Mutex::new(cfg.enabled_tools.iter().cloned().collect()),
+                ));
+            }
         }
 
         // Create unique memory scope for this subagent task

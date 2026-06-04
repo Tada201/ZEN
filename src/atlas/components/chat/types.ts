@@ -330,6 +330,35 @@ function isToolInvocation(value: unknown): value is ToolInvocation {
   );
 }
 
+export function extractInlineThoughtBlocks(content: string): { content: string; reasoning: string } {
+  if (!content || !/<\/?(?:think|thought)>/i.test(content)) {
+    return { content, reasoning: "" };
+  }
+
+  const reasoningParts: string[] = [];
+  const closedBlockRegex = /<(?:thought|think)>([\s\S]*?)<\/(?:thought|think)>/ig;
+  let match: RegExpExecArray | null;
+  while ((match = closedBlockRegex.exec(content)) !== null) {
+    const text = match[1]?.trim();
+    if (text) reasoningParts.push(text);
+  }
+
+  if (reasoningParts.length > 0) {
+    return {
+      content: content.replace(/<(?:thought|think)>[\s\S]*?<\/(?:thought|think)>/ig, "").trim(),
+      reasoning: reasoningParts.join("\n\n"),
+    };
+  }
+
+  const openMatch = /<(?:thought|think)>/i.exec(content);
+  if (!openMatch) return { content, reasoning: "" };
+
+  return {
+    content: content.slice(0, openMatch.index).trim(),
+    reasoning: content.slice(openMatch.index + openMatch[0].length).trim(),
+  };
+}
+
 export function normalizeVercelMessage(msg: unknown): Message {
   if (!isRecord(msg)) return msg as Message;
 
@@ -397,19 +426,10 @@ export function normalizeVercelMessage(msg: unknown): Message {
     let reasoning = normalized.reasoning || "";
     let finalContent = normalized.content || "";
 
-    if (!reasoning && finalContent && /<\/?(?:think|thought)>/i.test(finalContent)) {
-      const thinkMatch = /<(?:thought|think)>([\s\S]*?)<\/(?:thought|think)>/i.exec(finalContent);
-      if (thinkMatch) {
-        reasoning = thinkMatch[1].trim();
-        finalContent = finalContent.replace(/<(?:thought|think)>[\s\S]*?<\/(?:thought|think)>/ig, "").trim();
-      } else {
-        const openMatch = /<(?:thought|think)>/i.exec(finalContent);
-        if (openMatch) {
-          const idx = openMatch.index;
-          reasoning = finalContent.slice(idx + openMatch[0].length).trim();
-          finalContent = finalContent.slice(0, idx).trim();
-        }
-      }
+    if (!reasoning && finalContent) {
+      const extracted = extractInlineThoughtBlocks(finalContent);
+      reasoning = extracted.reasoning;
+      finalContent = extracted.content;
     }
 
     if (reasoning) {

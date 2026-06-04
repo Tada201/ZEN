@@ -31,6 +31,12 @@ export type AgentExecutionTraceModel = {
   agentSummary: string;
   agentHierarchySummary: string;
   handoffSummary: string;
+  /** Brief label for collapsed compact mode, e.g. "read_file — src/utils.ts" */
+  compactLabel: string;
+  /** Deduplicated tool names in this trace */
+  compactToolNames: string[];
+  /** Category breakdown, e.g. "3 file reads, 2 commands" */
+  compactCategoryLabel: string;
 };
 
 export type ToolExecutionBatchLane = {
@@ -70,6 +76,9 @@ function getToolOwnerLabel(toolCall: ToolCall) {
 function compactText(value: unknown, maxLength = 90): string {
   if (value === undefined || value === null || value === "") return "";
   const text = typeof value === "string" ? value : JSON.stringify(value);
+  if (/(api[_-]?key|authorization|bearer|credential|password|secret|token)/i.test(text)) {
+    return "[redacted]";
+  }
   return text.replace(/\s+/g, " ").trim().slice(0, maxLength);
 }
 
@@ -299,6 +308,81 @@ function getActiveLaneSummary(batchLanes: ToolExecutionBatchLane[]) {
     .join(" / ");
 }
 
+type ToolCategory = "file" | "command" | "search" | "other";
+
+function classifyTool(name: string): ToolCategory {
+  const n = name.toLowerCase();
+  if (n.includes("search") || n.includes("web") || n.includes("grep") || n.includes("find")) return "search";
+  if (n.includes("bash") || n.includes("shell") || n.includes("command") || n.includes("test") || n.includes("npm") || n.includes("cargo") || n.includes("terminal")) return "command";
+  if (n.includes("file") || n.includes("read") || n.includes("write") || n.includes("edit") || n.includes("create") || n.includes("patch") || n.includes("list_dir")) return "file";
+  return "other";
+}
+
+const CATEGORY_LABELS: Record<ToolCategory, [string, string]> = {
+  file: ["file op", "file ops"],
+  command: ["command", "commands"],
+  search: ["search", "searches"],
+  other: ["tool", "tools"],
+};
+
+function getToolCategoryCounts(toolCalls: ToolCall[]): string {
+  const counts = new Map<ToolCategory, number>();
+  toolCalls.forEach((tc) => {
+    const cat = classifyTool(tc.name);
+    counts.set(cat, (counts.get(cat) || 0) + 1);
+  });
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([cat, count]) => {
+      const [singular, plural] = CATEGORY_LABELS[cat];
+      return `${count} ${count === 1 ? singular : plural}`;
+    })
+    .join(", ");
+}
+
+function getCompactLabel(
+  toolCalls: ToolCall[],
+  categoryLabel: string,
+  runningCount: number,
+  approvalCount: number,
+  errorCount: number,
+): string {
+  if (toolCalls.length === 0) return "No tools";
+
+  if (toolCalls.length === 1) {
+    const tc = toolCalls[0];
+    const inputLabel = firstInputLabel(tc.input);
+    const suffix = inputLabel ? ` — ${inputLabel}` : "";
+    if (tc.status === "running") return `${tc.name}${suffix}`;
+    if (tc.status === "awaiting_approval") return `${tc.name} — needs approval`;
+    if (tc.status === "error") {
+      const preview = buildToolOutputPreview(tc.output || "");
+      const errMsg = preview.summary || "failed";
+      return `${tc.name} — ${errMsg}`;
+    }
+    // completed
+    const preview = buildToolOutputPreview(tc.output || "");
+    return preview.summary
+      ? `${tc.name} — ${preview.summary}`
+      : `${tc.name}${suffix}`;
+  }
+
+  // Multi-tool
+  const total = toolCalls.length;
+  const parts: string[] = [`${total} tools`];
+
+  if (runningCount > 0) {
+    parts.push(`${runningCount} running`);
+  } else if (approvalCount > 0) {
+    parts.push(`${approvalCount} awaiting approval`);
+  } else if (errorCount > 0) {
+    parts.push(`${errorCount} failed`);
+  }
+
+  if (categoryLabel) parts.push(categoryLabel);
+  return parts.join(" — ");
+}
+
 export function buildAgentExecutionTraceModel(toolCalls: ToolCall[], steps: Step[] = []): AgentExecutionTraceModel {
   const ledger = buildExecutionLedger({ steps, toolCalls });
   const completedCount = toolCalls.filter((tc) => tc.status === "completed").length;
@@ -325,6 +409,9 @@ export function buildAgentExecutionTraceModel(toolCalls: ToolCall[], steps: Step
   const shouldShowBatchLanes =
     toolCalls.length > 1 &&
     (explicitBatch || startedTogether || batchLanes.some((lane) => lane.toolCount > 1));
+  const compactToolNames = Array.from(new Set(toolCalls.map((tc) => tc.name))).slice(0, 6);
+  const compactCategoryLabel = getToolCategoryCounts(toolCalls);
+  const compactLabel = getCompactLabel(toolCalls, compactCategoryLabel, runningCount, approvalCount, errorCount);
 
   return {
     active: runningCount > 0 || approvalCount > 0,
@@ -355,5 +442,8 @@ export function buildAgentExecutionTraceModel(toolCalls: ToolCall[], steps: Step
     agentSummary: getAgentSummary(ledger),
     agentHierarchySummary: getAgentHierarchySummary(ledger),
     handoffSummary: getHandoffSummary(ledger),
+    compactLabel,
+    compactToolNames,
+    compactCategoryLabel,
   };
 }

@@ -76,8 +76,11 @@ assert(
 );
 
 assert(
-  openAiStreamSource.includes("reasoning_effort: config.reasoning_effort") &&
-    anthropicSource.includes("let thinking = config.thinking_budget.map"),
+  openAiStreamSource.includes("config.reasoning_effort.clone()") &&
+    anthropicSource.includes("let thinking = config") &&
+    anthropicSource.includes(".thinking_budget") &&
+    anthropicSource.includes("supports_manual_thinking_budget(model)") &&
+    anthropicSource.includes("thinking: Option<AnthropicThinking>"),
   "provider adapters should forward supported reasoning config fields",
 );
 

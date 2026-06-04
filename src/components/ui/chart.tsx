@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const;
+const CSS_IDENTIFIER_SAFE_RE = /^[a-zA-Z_][a-zA-Z0-9_-]*$/;
 
 export type ChartConfig = {
   [k in string]: {
@@ -59,24 +60,30 @@ const ChartContainer = React.forwardRef<
 ChartContainer.displayName = "Chart";
 
 const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
-  const colorConfig = Object.entries(config).filter(([_, config]) => config.theme || config.color);
+  const chartId = sanitizeCssIdentifier(id);
+  const colorConfig = Object.entries(config)
+    .map(([key, itemConfig]) => [sanitizeCssIdentifier(key), itemConfig] as const)
+    .filter(([key, config]) => key && (config.theme || config.color));
 
-  if (!colorConfig.length) {
+  if (!chartId || !colorConfig.length) {
     return null;
   }
 
   return (
     <style
+      // Chart styles are built from validated CSS identifiers and CSS.supports("color")-checked values only.
       dangerouslySetInnerHTML={{
         __html: Object.entries(THEMES)
           .map(
             ([theme, prefix]) => `
-${prefix} [data-chart=${id}] {
+${prefix} [data-chart=${chartId}] {
 ${colorConfig
   .map(([key, itemConfig]) => {
     const color = itemConfig.theme?.[theme as keyof typeof itemConfig.theme] || itemConfig.color;
-    return color ? `  --color-${key}: ${color};` : null;
+    const safeColor = sanitizeCssColor(color);
+    return key && safeColor ? `  --color-${key}: ${safeColor};` : null;
   })
+  .filter(Boolean)
   .join("\n")}
 }
 `,
@@ -88,6 +95,17 @@ ${colorConfig
 };
 
 const ChartTooltip = RechartsPrimitive.Tooltip;
+
+function sanitizeCssIdentifier(value: string): string | null {
+  return CSS_IDENTIFIER_SAFE_RE.test(value) ? value : null;
+}
+
+function sanitizeCssColor(value: string | undefined): string | null {
+  if (!value || typeof window === "undefined" || typeof CSS === "undefined" || typeof CSS.supports !== "function") {
+    return null;
+  }
+  return CSS.supports("color", value) ? value : null;
+}
 
 const ChartTooltipContent = React.forwardRef<
   HTMLDivElement,

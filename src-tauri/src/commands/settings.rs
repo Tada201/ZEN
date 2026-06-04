@@ -20,10 +20,19 @@ pub async fn get_setting(state: State<'_, AppState>, key: String) -> AppResult<O
 
 #[tauri::command]
 pub async fn set_setting(state: State<'_, AppState>, key: String, value: String) -> AppResult<()> {
+    if is_workspace_root_key(&key) {
+        crate::workspace::canonicalize_workspace_root(std::path::Path::new(&value))
+            .map_err(|e| crate::error::ZenError::Custom(format!("Invalid workspace root: {}", e)))?;
+    }
+
     if is_secret_key(&key) {
-        state.secret_manager.set_secret(key.clone(), value).await?;
+        state.secret_manager.set_secret(key.clone(), value.clone()).await?;
     } else {
-        state.settings_manager.set(key.clone(), value).await?;
+        state.settings_manager.set(key.clone(), value.clone()).await?;
+    }
+
+    if is_workspace_root_key(&key) {
+        state.set_workspace_folder(value).await?;
     }
 
     invalidate_provider_cache_if_needed(&state, std::iter::once(key.as_str())).await;
@@ -37,12 +46,24 @@ pub async fn set_settings(
     settings: HashMap<String, String>,
 ) -> AppResult<()> {
     let should_invalidate_provider_cache = settings.keys().any(|key| is_provider_setting_key(key));
+    let workspace_root = settings
+        .get("workspace.root")
+        .or_else(|| settings.get("workspace_path"))
+        .cloned();
+    if let Some(workspace_root) = workspace_root.as_deref() {
+        crate::workspace::canonicalize_workspace_root(std::path::Path::new(workspace_root))
+            .map_err(|e| crate::error::ZenError::Custom(format!("Invalid workspace root: {}", e)))?;
+    }
     let (secret_settings, public_settings): (HashMap<_, _>, HashMap<_, _>) = settings
         .into_iter()
         .partition(|(key, _)| is_secret_key(key));
 
     state.settings_manager.set_many(public_settings).await?;
     state.secret_manager.set_secrets(secret_settings).await?;
+
+    if let Some(workspace_root) = workspace_root {
+        state.set_workspace_folder(workspace_root).await?;
+    }
 
     if should_invalidate_provider_cache {
         clear_provider_cache(&state).await;
@@ -147,7 +168,11 @@ pub async fn get_all_available_models(
                 .map(|v| v == p_name)
                 .unwrap_or(false);
 
-            if is_local || is_no_key_builtin || is_active || has_key || has_url {
+            // Global catalog refreshes are used by the chat UI and can happen on
+            // mount. Do not wake local servers unless the user selected that
+            // local provider. Explicit provider refreshes still call the branch
+            // above with provider=Some(...), so Settings/manual checks work.
+            if (is_local && is_active) || is_no_key_builtin || is_active || has_key || has_url {
                 if let Ok(provider_instance) = state.provider_by_name(p_name, &db).await {
                     match provider_instance.list_models().await {
                         Ok(models) => all_models.extend(models),
@@ -209,4 +234,8 @@ async fn clear_provider_cache(state: &State<'_, AppState>) {
 
 fn is_provider_setting_key(key: &str) -> bool {
     key.ends_with("_base_url") || key.ends_with("_api_key") || key == "active_provider"
+}
+
+fn is_workspace_root_key(key: &str) -> bool {
+    key == "workspace.root" || key == "workspace_path"
 }

@@ -152,7 +152,8 @@ fn build_context(
     args: &serde_json::Value,
     risk_level: RiskLevel,
 ) -> PermissionContext {
-    let preview = serde_json::to_string_pretty(args).unwrap_or_else(|_| "{}".to_string());
+    let preview = serde_json::to_string_pretty(&redacted_arguments_for_display(args))
+        .unwrap_or_else(|_| "{}".to_string());
 
     // Generate suggested always-allow patterns
     let mut suggested = Vec::new();
@@ -172,6 +173,88 @@ fn build_context(
         risk_level,
         suggested_patterns: suggested,
     }
+}
+
+pub fn redacted_arguments_for_display(args: &serde_json::Value) -> serde_json::Value {
+    fn should_redact_key(key: &str) -> bool {
+        let key = key.to_ascii_lowercase();
+        [
+            "api_key",
+            "apikey",
+            "authorization",
+            "bearer",
+            "credential",
+            "password",
+            "secret",
+            "token",
+        ]
+        .iter()
+        .any(|marker| key.contains(marker))
+    }
+
+    fn should_redact_string(value: &str) -> bool {
+        let value = value.to_ascii_lowercase();
+        [
+            "api_key",
+            "apikey",
+            "authorization",
+            "bearer",
+            "credential",
+            "password",
+            "secret",
+            "token",
+        ]
+        .iter()
+        .any(|marker| value.contains(marker))
+    }
+
+    fn redact(value: &serde_json::Value, depth: usize) -> serde_json::Value {
+        const MAX_DEPTH: usize = 6;
+        const MAX_ITEMS: usize = 24;
+        const MAX_STRING_CHARS: usize = 2_000;
+
+        if depth > MAX_DEPTH {
+            return serde_json::json!("[truncated]");
+        }
+
+        match value {
+            serde_json::Value::String(s) => {
+                if should_redact_string(s) {
+                    serde_json::json!("[redacted]")
+                } else if s.chars().count() > MAX_STRING_CHARS {
+                    let mut out: String = s.chars().take(MAX_STRING_CHARS).collect();
+                    out.push_str("...");
+                    serde_json::Value::String(out)
+                } else {
+                    serde_json::Value::String(s.clone())
+                }
+            }
+            serde_json::Value::Array(items) => serde_json::Value::Array(
+                items
+                    .iter()
+                    .take(MAX_ITEMS)
+                    .map(|item| redact(item, depth + 1))
+                    .collect(),
+            ),
+            serde_json::Value::Object(map) => {
+                let mut next = serde_json::Map::new();
+                for (key, value) in map.iter().take(MAX_ITEMS) {
+                    next.insert(
+                        key.clone(),
+                        if should_redact_key(key) {
+                            serde_json::json!("[redacted]")
+                        } else {
+                            redact(value, depth + 1)
+                        },
+                    );
+                }
+                serde_json::Value::Object(next)
+            }
+            other => other.clone(),
+        }
+    }
+
+    redact(args, 0)
 }
 
 // ========== USER PERMISSION SETTINGS ==========

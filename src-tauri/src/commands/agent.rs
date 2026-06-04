@@ -201,6 +201,22 @@ pub async fn run_tool_command(
         arguments: args.clone(),
     };
 
+    let renderer_allowed = {
+        let registry = state.tools.read().await;
+        registry.is_direct_tool(&tool_name)
+            && matches!(
+                registry.direct_tool_risk(&tool_name),
+                Some(crate::tools::permission::RiskLevel::Low)
+                    | Some(crate::tools::permission::RiskLevel::Medium)
+            )
+    };
+    if !renderer_allowed {
+        return Err(format!(
+            "Tool '{}' is not available through renderer-initiated execution.",
+            tool_name
+        ));
+    }
+
     state
         .tool_service
         .execute_interactive(app, "run_tool_command", chat_id, tool_call)
@@ -229,11 +245,33 @@ pub async fn resolve_tool_approval(
         Some(tx) => {
             if approved && remember_exact.unwrap_or(false) {
                 let cache_key = format!("{}:{}", tx.tool_name, tx.args_hash);
-                let mut session_permissions = state.session_permissions.lock().await;
-                session_permissions
-                    .entry(tx.chat_id.clone())
-                    .or_default()
-                    .insert(cache_key.clone(), true);
+                {
+                    let mut session_permissions = state.session_permissions.lock().await;
+                    session_permissions
+                        .entry(tx.chat_id.clone())
+                        .or_default()
+                        .insert(cache_key.clone(), true);
+                }
+                if let Ok(db) = state.db().await {
+                    let perm = crate::db::queries::SessionPermission {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        chat_id: tx.chat_id.clone(),
+                        tool_name: tx.tool_name.clone(),
+                        args_hash: tx.args_hash.clone(),
+                        pattern: Some("exact".to_string()),
+                        granted_at: chrono::Utc::now().to_rfc3339(),
+                    };
+                    if let Err(e) = crate::db::queries::upsert_session_permission(&db, &perm).await
+                    {
+                        tracing::warn!(
+                            tool_call_id = %tool_call_id,
+                            chat_id = %tx.chat_id,
+                            tool_name = %tx.tool_name,
+                            error = %e,
+                            "Failed to persist exact session tool approval; in-memory grant remains active"
+                        );
+                    }
+                }
                 tracing::info!(
                     tool_call_id = %tool_call_id,
                     chat_id = %tx.chat_id,

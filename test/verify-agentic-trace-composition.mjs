@@ -22,6 +22,14 @@ function loadTsModule(relativePath, replacements = []) {
 
 const ledgerModule = await loadTsModule("../src/atlas/hooks/stream/agentActionLedger.ts", [
   [
+    'import { CHAT_STATUS_PHASES } from "../../../api/chatStatus";',
+    `const CHAT_STATUS_PHASES = {
+      AgentStreaming: "agent_streaming",
+      ToolCallStreaming: "tool_call_streaming",
+      ToolCallReady: "tool_call_ready",
+    };`,
+  ],
+  [
     'import { findWritableAssistantIndex } from "./messageTarget";',
     `function findWritableAssistantIndex(messages) {
       for (let i = messages.length - 1; i >= 0; i--) {
@@ -33,7 +41,23 @@ const ledgerModule = await loadTsModule("../src/atlas/hooks/stream/agentActionLe
   ],
 ]);
 const toolReducerModule = await loadTsModule("../src/atlas/hooks/stream/toolEventReducer.ts");
-const partsModule = await loadTsModule("../src/atlas/components/chat/assistantMessageParts.ts");
+const partsModule = await loadTsModule("../src/atlas/components/chat/assistantMessageParts.ts", [
+  [
+    'import { CHAT_STATUS_PHASES } from "@/api/chatStatus";',
+    `const CHAT_STATUS_PHASES = {
+      AgentStreaming: "agent_streaming",
+      ToolCallStreaming: "tool_call_streaming",
+      ToolCallReady: "tool_call_ready",
+    };`,
+  ],
+  [
+    'import { parseCardTags, type ParsedCard } from "./assistantCardParser";',
+    `function parseCardTags(text) {
+      return { cards: [], cleanText: text || "" };
+    }`,
+  ],
+  ['export { parseCardTags, type ParsedCard } from "./assistantCardParser";', 'export { parseCardTags };'],
+]);
 const inputPreviewModule = await loadTsModule("../src/atlas/components/chat/tool/toolInputPreview.ts");
 
 const { appendActionStepToMessages } = ledgerModule;

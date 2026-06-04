@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 use tokio_util::sync::CancellationToken;
 
 use crate::services::{
@@ -16,6 +16,7 @@ pub struct ToolService {
     registry: GlobalToolRegistry,
     security: Arc<SecurityService>,
     pending_approvals: Arc<Mutex<HashMap<String, PendingToolApproval>>>,
+    execution_limit: Arc<Semaphore>,
 }
 
 pub struct PendingToolApproval {
@@ -77,6 +78,7 @@ impl ToolService {
             registry,
             security,
             pending_approvals,
+            execution_limit: Arc::new(Semaphore::new(16)),
         }
     }
 
@@ -87,13 +89,7 @@ impl ToolService {
         chat_id: String,
         tool_call: ToolCall,
     ) -> Result<serde_json::Value, String> {
-        let tool_risk = {
-            let registry = self.registry.read().await;
-            registry
-                .get(&tool_call.name)
-                .map(|tool| map_tool_risk(tool.risk_level()))
-                .unwrap_or(SecurityRiskLevel::Critical)
-        };
+        let tool_risk = self.security_risk_for_tool(&tool_call.name).await;
 
         let security_decision = self.security.evaluate(&PermissionRequest {
             operation: PrivilegedOperation::McpToolCall,
@@ -386,6 +382,13 @@ impl ToolService {
         depth: u32,
         allowed_tools: Option<Arc<Mutex<HashSet<String>>>>,
     ) -> crate::agent::types::ToolResult {
+        let tool = if tool.is_some() {
+            tool
+        } else {
+            let registry = self.registry.read().await;
+            registry.get_legacy(&tool_call.name)
+        };
+
         if let Some(tool) = tool {
             let v2_tool_call = ToolCall {
                 id: tool_call.id.clone(),
@@ -441,6 +444,20 @@ impl ToolService {
             }
 
             let timeout_seconds = tool.timeout_seconds();
+            let permit = match self.acquire_execution_permit("agent_tool", &tool_call.name).await {
+                Ok(permit) => permit,
+                Err(e) => {
+                    return crate::agent::types::ToolResult {
+                        tool_call_id: tool_call.id.clone(),
+                        content: serde_json::json!({
+                            "error": e,
+                            "tool": tool_call.name,
+                        }),
+                        is_error: true,
+                        duration_ms: 0,
+                    };
+                }
+            };
             let tool_run_future = tool.run(
                 app.clone(),
                 chat_id,
@@ -450,6 +467,7 @@ impl ToolService {
                 token.clone(),
             );
 
+            let start = std::time::Instant::now();
             let result_outcome = tokio::select! {
                 res = tokio::time::timeout(std::time::Duration::from_secs(timeout_seconds), tool_run_future) => {
                     match res {
@@ -482,24 +500,51 @@ impl ToolService {
                     Err("Tool execution cancelled by user".to_string())
                 }
             };
+            drop(permit);
+            let duration_ms = start.elapsed().as_millis() as u64;
 
             match result_outcome {
-                Ok(val) => crate::agent::types::ToolResult {
-                    tool_call_id: tool_call.id,
-                    content: val,
-                    is_error: false,
-                    duration_ms: 0,
-                },
-                Err(e) => crate::agent::types::ToolResult {
-                    tool_call_id: tool_call.id.clone(),
-                    content: serde_json::json!({
+                Ok(val) => {
+                    self.audit_execution_result(
+                        "agent_tool",
+                        &tool_call.name,
+                        &tool_call.id,
+                        true,
+                        duration_ms,
+                        Some(&val),
+                        None,
+                    )
+                    .await;
+                    crate::agent::types::ToolResult {
+                        tool_call_id: tool_call.id,
+                        content: val,
+                        is_error: false,
+                        duration_ms,
+                    }
+                }
+                Err(e) => {
+                    let content = serde_json::json!({
                         "error": e,
                         "tool": tool_call.name,
                         "hint": "This tool call failed or was interrupted. You may retry with different arguments or approach."
-                    }),
-                    is_error: true,
-                    duration_ms: 0,
-                },
+                    });
+                    self.audit_execution_result(
+                        "agent_tool",
+                        &tool_call.name,
+                        &tool_call.id,
+                        false,
+                        duration_ms,
+                        Some(&content),
+                        content.get("error").and_then(|v| v.as_str()),
+                    )
+                    .await;
+                    crate::agent::types::ToolResult {
+                        tool_call_id: tool_call.id.clone(),
+                        content,
+                        is_error: true,
+                        duration_ms,
+                    }
+                }
             }
         } else {
             let v2_tool_call = ToolCall {
@@ -516,6 +561,7 @@ impl ToolService {
                 let permission_decision = self.check_permission("agent_tool", &v2_tool_call).await;
                 match permission_decision {
                     Ok(crate::tools::permission::PermissionDecision::Allow) => {
+                        let start = std::time::Instant::now();
                         match self
                             .execute_v2_authorized(app, chat_id, v2_tool_call, "agent_tool")
                             .await
@@ -524,7 +570,7 @@ impl ToolService {
                                 tool_call_id: tool_call.id,
                                 content,
                                 is_error: false,
-                                duration_ms: 0,
+                                duration_ms: start.elapsed().as_millis() as u64,
                             },
                             Err(e) => crate::agent::types::ToolResult {
                                 tool_call_id: tool_call.id,
@@ -534,7 +580,7 @@ impl ToolService {
                                     "hint": "This v2 tool failed during execution."
                                 }),
                                 is_error: true,
-                                duration_ms: 0,
+                                duration_ms: start.elapsed().as_millis() as u64,
                             },
                         }
                     }
@@ -546,6 +592,7 @@ impl ToolService {
                         };
 
                         if already_allowed {
+                            let start = std::time::Instant::now();
                             match self
                                 .execute_v2_authorized(app, chat_id, v2_tool_call, "agent_tool")
                                 .await
@@ -554,7 +601,7 @@ impl ToolService {
                                     tool_call_id: tool_call.id,
                                     content,
                                     is_error: false,
-                                    duration_ms: 0,
+                                    duration_ms: start.elapsed().as_millis() as u64,
                                 },
                                 Err(e) => crate::agent::types::ToolResult {
                                     tool_call_id: tool_call.id,
@@ -564,7 +611,7 @@ impl ToolService {
                                         "hint": "This v2 tool failed during execution."
                                     }),
                                     is_error: true,
-                                    duration_ms: 0,
+                                    duration_ms: start.elapsed().as_millis() as u64,
                                 },
                             }
                         } else {
@@ -642,11 +689,17 @@ impl ToolService {
         .await;
 
         let tool_name = tool_call.name.clone();
+        let tool_call_id = tool_call.id.clone();
+        let _permit = self
+            .acquire_execution_permit("tool_service", &tool_name)
+            .await?;
+        let start = std::time::Instant::now();
         let result = tool
             .execute(app, chat_id, tool_call.arguments)
             .await
             .map(|output| output.content)
             .map_err(|e| e.to_string());
+        let duration_ms = start.elapsed().as_millis() as u64;
 
         self.audit(
             if result.is_ok() {
@@ -661,6 +714,16 @@ impl ToolService {
             } else {
                 "tool execution failed"
             },
+        )
+        .await;
+        self.audit_execution_result(
+            "tool_service",
+            &tool_name,
+            &tool_call_id,
+            result.is_ok(),
+            duration_ms,
+            result.as_ref().ok(),
+            result.as_ref().err().map(String::as_str),
         )
         .await;
 
@@ -691,19 +754,48 @@ impl ToolService {
             .await;
     }
 
+    async fn audit_execution_result(
+        &self,
+        caller: &str,
+        resolved_name: &str,
+        tool_call_id: &str,
+        success: bool,
+        duration_ms: u64,
+        output: Option<&serde_json::Value>,
+        error: Option<&str>,
+    ) {
+        let reason = serde_json::json!({
+            "event": "tool_execution_result",
+            "resolved_name": resolved_name,
+            "tool_call_id": tool_call_id,
+            "outcome": if success { "success" } else { "failure" },
+            "duration_ms": duration_ms,
+            "output_hash": output.map(output_hash),
+            "error": error,
+        })
+        .to_string();
+
+        self.audit_operation(
+            if success {
+                SecurityDecision::Allow
+            } else {
+                SecurityDecision::Deny
+            },
+            map_tool_operation(resolved_name),
+            caller,
+            resolved_name,
+            &reason,
+        )
+        .await;
+    }
+
     async fn evaluate_security(
         &self,
         caller: &str,
         tool_call: &ToolCall,
         reason: &str,
     ) -> SecurityDecision {
-        let tool_risk = {
-            let registry = self.registry.read().await;
-            registry
-                .get(&tool_call.name)
-                .map(|tool| map_tool_risk(tool.risk_level()))
-                .unwrap_or(SecurityRiskLevel::Critical)
-        };
+        let tool_risk = self.security_risk_for_tool(&tool_call.name).await;
 
         let decision = self.security.evaluate(&PermissionRequest {
             operation: map_tool_operation(&tool_call.name),
@@ -716,6 +808,36 @@ impl ToolService {
 
         self.audit(decision, caller, &tool_call.name, reason).await;
         decision
+    }
+
+    async fn security_risk_for_tool(&self, tool_name: &str) -> SecurityRiskLevel {
+        let registry = self.registry.read().await;
+        registry
+            .get(tool_name)
+            .map(|tool| tool.risk_level())
+            .or_else(|| registry.known_tool_risk(tool_name))
+            .map(map_tool_risk)
+            .unwrap_or(SecurityRiskLevel::Critical)
+    }
+
+    async fn acquire_execution_permit(
+        &self,
+        caller: &str,
+        tool_name: &str,
+    ) -> Result<OwnedSemaphorePermit, String> {
+        match self.execution_limit.clone().acquire_owned().await {
+            Ok(permit) => Ok(permit),
+            Err(_) => {
+                self.audit(
+                    SecurityDecision::Deny,
+                    caller,
+                    tool_name,
+                    "tool execution rejected because concurrency limiter is closed",
+                )
+                .await;
+                Err("Tool execution is temporarily unavailable because the concurrency limiter is closed.".to_string())
+            }
+        }
     }
 
     fn emit_approval_request(
@@ -738,13 +860,15 @@ impl ToolService {
         let agent_id = execution_context.and_then(|ctx| ctx.agent_id.as_deref());
         let agent_name = execution_context.and_then(|ctx| ctx.agent_name.as_deref());
         let iteration = execution_context.and_then(|ctx| ctx.iteration);
+        let display_arguments =
+            crate::tools::permission::redacted_arguments_for_display(&tool_call.arguments);
         let _ = app.emit(
             "tool:authorization_request",
             serde_json::json!({
                 "chat_id": chat_id,
                 "tool_call_id": tool_call.id,
                 "tool_name": tool_call.name,
-                "arguments": tool_call.arguments,
+                "arguments": display_arguments,
                 "run_id": run_id,
                 "parent_agent_id": parent_agent_id,
                 "execution_id": execution_id,
@@ -770,13 +894,13 @@ impl ToolService {
                 "kind": "approval_request",
                 "metadata": {
                     "kind": "approval_request",
-                    "approval_request": {
-                        "tool_call_id": tool_call.id,
-                        "tool_name": tool_call.name,
-                        "arguments": tool_call.arguments,
-                        "chat_id": chat_id,
-                        "args_hash": args_hash,
-                        "context": context
+                        "approval_request": {
+                            "tool_call_id": tool_call.id,
+                            "tool_name": tool_call.name,
+                            "arguments": display_arguments,
+                            "chat_id": chat_id,
+                            "args_hash": args_hash,
+                            "context": context
                     },
                     "runId": run_id,
                     "parentAgentId": parent_agent_id,
@@ -798,13 +922,15 @@ impl ToolService {
         tool_call: &ToolCall,
         execution_context: Option<&ToolApprovalExecutionContext>,
     ) {
+        let display_arguments =
+            crate::tools::permission::redacted_arguments_for_display(&tool_call.arguments);
         let _ = app.emit(
             "tool:authorization_timeout",
             serde_json::json!({
                 "chat_id": chat_id,
                 "tool_call_id": tool_call.id,
                 "tool_name": tool_call.name,
-                "arguments": tool_call.arguments,
+                "arguments": display_arguments,
                 "run_id": execution_context.and_then(|ctx| ctx.run_id.as_deref()),
                 "parent_agent_id": execution_context.and_then(|ctx| ctx.parent_agent_id.as_deref()),
                 "execution_id": execution_context.and_then(|ctx| ctx.execution_id.as_deref()),
@@ -821,6 +947,11 @@ impl ToolService {
 pub fn approval_args_hash(args: &serde_json::Value) -> String {
     use sha2::{Digest, Sha256};
     format!("{:x}", Sha256::digest(args.to_string()))
+}
+
+fn output_hash(output: &serde_json::Value) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(output.to_string()))
 }
 
 fn map_tool_operation(name: &str) -> PrivilegedOperation {

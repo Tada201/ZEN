@@ -210,10 +210,12 @@ pub async fn send_message(
         active_model = %active_model,
         "Fetching provider, history, and settings in parallel"
     );
-    let (llm_provider, history, tools_enabled_str, custom_prompt_setting) = tokio::try_join!(
+    let (llm_provider, history, tools_enabled_str, tool_yolo_mode_str, tools_yolo_mode_str, custom_prompt_setting) = tokio::try_join!(
         state.provider_registry.create(&resolved_provider_name),
         queries::get_messages(&db, &chat_id),
         state.settings_manager.get("tools_enabled"),
+        state.settings_manager.get("tool_yolo_mode"),
+        state.settings_manager.get("tools.yolo-mode"),
         async { queries::get_setting(&db, "system_prompt").await },
     )?;
     info!(
@@ -313,17 +315,22 @@ pub async fn send_message(
         let tools_enabled = tools_enabled_str
             .map(|s| s.trim() == "true")
             .unwrap_or(true);
+        let yolo_mode = tool_yolo_mode_str
+            .or(tools_yolo_mode_str)
+            .map(|s| s.trim() == "true")
+            .unwrap_or(false);
 
-        if tools_enabled && llm_provider.supports_tools(&active_model) && has_tool_intent(&content)
-        {
-            tool_ids.extend(vec![
-                "write_todos".to_string(),
-                "read_document_content".to_string(),
-                "list_documents".to_string(),
-                "run_command".to_string(),
-            ]);
+        if tools_enabled && llm_provider.supports_tools(&active_model) {
+            if yolo_mode {
+                tool_ids.extend(default_yolo_tool_ids());
+            } else if has_tool_intent(&content) {
+                tool_ids.extend(default_tool_intent_ids());
+            }
         }
     }
+
+    tool_ids.sort();
+    tool_ids.dedup();
 
     // (custom_prompt_setting was already fetched in parallel above)
 
@@ -828,6 +835,44 @@ fn has_tool_intent(content: &str) -> bool {
     tool_keywords
         .iter()
         .any(|keyword| lower_content.contains(keyword))
+}
+
+fn default_tool_intent_ids() -> Vec<String> {
+    [
+        "write_todos",
+        "read_document_content",
+        "list_documents",
+        "grep_documents",
+        "write_file",
+        "edit_file",
+        "run_command",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .collect()
+}
+
+fn default_yolo_tool_ids() -> Vec<String> {
+    [
+        "web_search",
+        "web_fetch",
+        "vector_search",
+        "list_documents",
+        "read_document_content",
+        "grep_documents",
+        "write_file",
+        "edit_file",
+        "run_command",
+        "write_todos",
+        "system_metrics",
+        "get_system_metrics",
+        "spawn_agent",
+        "delegate_to_agent",
+        "handoff_to_agent",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .collect()
 }
 
 fn should_use_orchestrator(content: &str) -> bool {

@@ -51,13 +51,23 @@ assert(
   "parallel tool batches should render grouped batch lanes with active tool previews",
 );
 assert(
-  agentExecutionTraceSource.includes("preferCompact ? importantToolCalls : toolCalls") &&
-    agentExecutionTraceSource.includes("Full tool and agent telemetry is shown in the Active Agents panel"),
+  agentExecutionTraceSource.includes("preferCompact ? importantToolCalls : toolCalls") || agentExecutionTraceSource.includes("preferCompact ? importantToolCalls : normalizedToolCalls"),
   "chat compact mode should keep normal tool telemetry in the Active Agents panel while preserving approval/error rows",
+);
+assert(
+  agentExecutionTraceSource.includes("preferCompact && importantToolCalls.length === 0") &&
+    agentExecutionTraceSource.includes("normalizedToolCalls.map"),
+  "chat compact mode should summarize normal tool telemetry while preserving approval/error rows",
 );
 assert(traceSource.includes("getActionChips"), "action rows should expose important agent/approval metadata inline");
 assert(traceSource.includes("spawn.parentAgent") && traceSource.includes("spawn.childAgent"), "subagent rows should show parent-to-child delegation");
 assert(traceSource.includes("risk_level") && traceSource.includes("arguments_preview"), "approval rows should show risk and argument preview metadata");
+assert(
+  traceSource.includes("redactTracePreview") &&
+    traceSource.includes("redactTracePreview(preview?.argumentsPreview") &&
+    traceSource.includes("redactTracePreview(context?.arguments_preview || approval.arguments"),
+  "trace approval and tool-call previews should be defensively redacted before display",
+);
 assert(traceSource.includes("AssistantTaskPlanPreview"), "action rows should render planned task details inline");
 assert(taskPlanSource.includes("Planned tasks") && taskPlanSource.includes("Battle plan"), "task planning events should expose readable task and plan previews");
 assert(taskPlanSource.includes("preview.tasks.map") && taskPlanSource.includes("preview.battlePlanSteps.map"), "task plan previews should render bounded model output");
@@ -71,6 +81,12 @@ assert(
 );
 assert(cardSource.includes("approvalContext") && cardSource.includes("Approval context"), "approval tool cards should show approval context details");
 assert(cardSource.includes("riskLevel") && cardSource.includes("argumentsPreview") && cardSource.includes("suggestedPatterns"), "approval tool cards should show risk, argument preview, and suggested patterns");
+assert(
+  cardSource.includes("redactPreviewDetail") &&
+    cardSource.includes("approvalArgumentsPreview") &&
+    !cardSource.includes("{approvalContext.argumentsPreview}"),
+  "approval argument previews should be defensively redacted before display",
+);
 assert(cardSource.includes("buildToolChecklistPreview") && cardSource.includes("checklistPreview.map"), "checklist tools should render todo items instead of only raw JSON");
 assert(cardSource.includes("file.diff") && cardSource.includes("slice(0, 1200)"), "file previews should render bounded diff snippets when available");
 

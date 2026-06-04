@@ -4,7 +4,7 @@ import type { Components } from "react-markdown";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import type { ArtifactData } from "./types";
+import { extractInlineThoughtBlocks, type ArtifactData } from "./types";
 import { CodeBlock } from "./CodeBlock";
 import { ReasoningBlock } from "./ReasoningBlock";
 import { FileTree } from "./FileTree";
@@ -212,19 +212,9 @@ export function MarkdownContent({
   let mainContent = content;
 
   if (!thought) {
-    const thoughtMatch = /<(?:thought|think)>([\s\S]*?)<\/(?:thought|think)>/i.exec(content);
-    if (thoughtMatch) {
-      thought = thoughtMatch[1];
-      mainContent = content.replace(/<(?:thought|think)>[\s\S]*?<\/(?:thought|think)>/ig, "").trim();
-    } else {
-      const openMatch = /<(?:thought|think)>/i.exec(content);
-      if (openMatch) {
-        const tag = openMatch[0];
-        const index = openMatch.index;
-        thought = content.slice(index + tag.length);
-        mainContent = content.slice(0, index).trim();
-      }
-    }
+    const extracted = extractInlineThoughtBlocks(content);
+    thought = extracted.reasoning || null;
+    mainContent = extracted.content;
   }
 
   // 2. Split main content into memoizable blocks

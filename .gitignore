@@ -29,6 +29,9 @@ continue.md
 c.txt
 tsc-errors.tmp
 scripts/scan-packages.ps1
+IDEA.md
+ISSUE2.md
+.agents/rules/design.md
 
 
 # Logs
@@ -93,4 +96,4 @@ ISSUE.md
 *.bak
 
 EXAMPLE_NO_EDITS/
-test/
+mockup-web/

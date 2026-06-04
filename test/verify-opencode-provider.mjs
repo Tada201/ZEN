@@ -5,7 +5,7 @@ const providerTypes = readFileSync(new URL("../src/lib/types/provider.ts", impor
 const providerSlice = readFileSync(new URL("../src/lib/stores/settings/createProviderSlice.ts", import.meta.url), "utf8");
 const settingsTypes = readFileSync(new URL("../src/lib/stores/settings/types.ts", import.meta.url), "utf8");
 const settingsSchema = readFileSync(new URL("../src/lib/stores/settings/schema.ts", import.meta.url), "utf8");
-const backendMod = readFileSync(new URL("../src-tauri/src/llm/mod.rs", import.meta.url), "utf8");
+const backendProviderMeta = readFileSync(new URL("../src-tauri/src/llm/provider_meta.rs", import.meta.url), "utf8");
 const backendSettings = readFileSync(new URL("../src-tauri/src/commands/settings.rs", import.meta.url), "utf8");
 const openAiModels = readFileSync(new URL("../src-tauri/src/llm/openai_compat/models.rs", import.meta.url), "utf8");
 const openAiStream = readFileSync(new URL("../src-tauri/src/llm/openai_compat/stream.rs", import.meta.url), "utf8");
@@ -32,10 +32,12 @@ assert(
 );
 
 assert(
-  backendMod.includes('"opencode" | "opencode_free" => "https://opencode.ai/zen/v1"') &&
+  backendProviderMeta.includes('name: "opencode"') &&
+    backendProviderMeta.includes('name: "opencode_free"') &&
+    backendProviderMeta.includes('default_base_url: "https://opencode.ai/zen/v1"') &&
     backendSettings.includes('"opencode"') &&
     backendSettings.includes('let is_no_key_builtin = p_name == "opencode";') &&
-    backendSettings.includes("if is_local || is_no_key_builtin || is_active || has_key || has_url"),
+    backendSettings.includes("(is_local && is_active) || is_no_key_builtin || is_active || has_key || has_url"),
   "Backend provider registry must include native OpenCode defaults and discovery",
 );
 

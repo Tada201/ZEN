@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { SettingsSection } from "../SettingsSection";
 import { SettingsRow } from "../SettingsRow";
 import { WorkbenchSwitch } from "../ui/WorkbenchSwitch";
@@ -5,6 +6,7 @@ import { WorkbenchSelect } from "../ui/WorkbenchSelect";
 import { WorkbenchSlider } from "../ui/WorkbenchSlider";
 import { WorkbenchButton } from "@/components/ui/WorkbenchButton";
 import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
+import { systemApi, type HardwareInfo } from "@/api";
 
 interface SystemSettingsProps {
   settings: Record<string, string>;
@@ -12,6 +14,38 @@ interface SystemSettingsProps {
 }
 
 export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
+  const [hardware, setHardware] = useState<HardwareInfo | null>(null);
+  const [hardwareError, setHardwareError] = useState<string | null>(null);
+  const [loadingHardware, setLoadingHardware] = useState(false);
+
+  const loadHardware = async () => {
+    setLoadingHardware(true);
+    setHardwareError(null);
+    try {
+      setHardware(await systemApi.getHardwareInfo());
+    } catch (error) {
+      setHardwareError(error instanceof Error ? error.message : "Failed to detect hardware");
+    } finally {
+      setLoadingHardware(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadHardware();
+  }, []);
+
+  const primaryGpu = hardware?.gpus?.[0];
+  const totalDiskGb = useMemo(() => {
+    const bytes = hardware?.disks?.reduce((total, disk) => total + (disk.total_space || 0), 0) || 0;
+    return bytes > 0 ? bytes / 1024 / 1024 / 1024 : 0;
+  }, [hardware?.disks]);
+  const maxThreads = Math.max(2, hardware?.threads || 16);
+  const threadOptions = Array.from(new Set([2, 4, 8, 16, maxThreads].filter((value) => value <= maxThreads))).map((n) => ({
+    value: String(n),
+    label: `${n} Threads`,
+  }));
+  const memoryMax = Math.max(2, Math.ceil(hardware?.memory_gb || 32));
+
   return (
     <div className="space-y-8">
       <div className="space-y-1">
@@ -22,21 +56,59 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
       <SettingsSection title="Hardware Resources" icon="lucide:server" description="Detected system capabilities">
         <div className="grid grid-cols-2 gap-2 px-3 py-2">
           {[
-            { label: "CPU", value: "8 Cores", icon: "lucide:cpu" },
-            { label: "Memory", value: "32 GB", icon: "lucide:hard-drive" },
-            { label: "GPU", value: "8 GB VRAM", icon: "lucide:monitor" },
-            { label: "Platform", value: "Windows", icon: "lucide:wifi" },
+            {
+              label: "CPU",
+              value: hardware ? `${hardware.cores || "?"}C / ${hardware.threads || "?"}T` : loadingHardware ? "Detecting..." : "Unknown",
+              detail: hardware?.cpu,
+              icon: "lucide:cpu",
+            },
+            {
+              label: "Memory",
+              value: hardware ? `${hardware.memory_gb.toFixed(1)} GB` : loadingHardware ? "Detecting..." : "Unknown",
+              detail: totalDiskGb > 0 ? `${totalDiskGb.toFixed(0)} GB disk total` : undefined,
+              icon: "lucide:hard-drive",
+            },
+            {
+              label: "GPU",
+              value: primaryGpu ? primaryGpu.name : loadingHardware ? "Detecting..." : "Not detected",
+              detail: primaryGpu?.vram_mb ? `${(primaryGpu.vram_mb / 1024).toFixed(1)} GB VRAM / ${primaryGpu.vendor}` : primaryGpu?.vendor,
+              icon: "lucide:monitor",
+            },
+            {
+              label: "Platform",
+              value: hardware?.os || (loadingHardware ? "Detecting..." : "Unknown"),
+              detail: hardware?.hostname,
+              icon: "lucide:wifi",
+            },
           ].map(item => {
             return (
               <div key={item.label} className="flex items-center gap-2.5 p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06]">
                 <WorkbenchIcon name={item.icon} size={16} className="text-muted-foreground shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] font-medium text-muted-foreground">{item.label}</p>
-                  <p className="text-[13px] font-bold text-foreground">{item.value}</p>
+                  <p className="truncate text-[13px] font-bold text-foreground">{item.value}</p>
+                  {item.detail && <p className="truncate text-[10px] text-muted-foreground/70">{item.detail}</p>}
                 </div>
               </div>
             );
           })}
+        </div>
+        <div className="mx-3 mb-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium text-foreground/80">
+                Detection source: sysinfo + platform GPU probe
+              </p>
+              <p className="mt-0.5 text-[10px] leading-4 text-muted-foreground/70">
+                CPU, RAM, OS, and disks are queried from the OS. GPU/VRAM is best-effort and may be missing on restricted drivers or virtual adapters.
+              </p>
+              {hardwareError && <p className="mt-1 text-[10px] text-destructive">{hardwareError}</p>}
+            </div>
+            <WorkbenchButton variant="outline" size="sm" className="h-7 shrink-0 text-[11px]" onClick={() => void loadHardware()} disabled={loadingHardware}>
+              <WorkbenchIcon name={loadingHardware ? "lucide:loader-2" : "lucide:refresh-cw"} size={12} className={loadingHardware ? "animate-spin" : ""} />
+              Refresh
+            </WorkbenchButton>
+          </div>
         </div>
       </SettingsSection>
 
@@ -60,7 +132,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
             <WorkbenchSelect
               value={settings["system.max-cpu-threads"] || "8"}
               onValueChange={v => onUpdate("system.max-cpu-threads", v)}
-              options={[2, 4, 8, 16].map(n => ({ value: String(n), label: `${n} Threads` }))}
+              options={threadOptions}
               width={100}
             />
           }
@@ -74,6 +146,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
             <WorkbenchSwitch
               checked={settings["system.gpu-offloading"] !== "false"}
               onCheckedChange={v => onUpdate("system.gpu-offloading", String(v))}
+              disabled={!hardware?.has_cuda && !primaryGpu}
             />
           }
           icon="lucide:zap"
@@ -88,7 +161,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
                 value={[parseInt(settings["system.max-memory"] || "8")]}
                 onValueChange={([v]) => onUpdate("system.max-memory", String(v))}
                 min={2}
-                max={32}
+                max={memoryMax}
                 step={2}
                 className="flex-1"
               />

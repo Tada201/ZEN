@@ -14,5 +14,5 @@ export interface BrowseFolderResult {
 
 export const workspaceApi = {
   browseFolder: (path?: string | null) =>
-    callCommand<BrowseFolderResult>("browseFolder", { path: path ?? null }),
+    callCommand<BrowseFolderResult>("browse_folder", { path: path ?? null }),
 };

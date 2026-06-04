@@ -2,6 +2,7 @@ pub mod document;
 pub mod gtsm;
 pub mod hardware;
 pub mod logging;
+pub mod permissions;
 pub mod process_manager;
 pub mod runtime_resource;
 pub mod secret;

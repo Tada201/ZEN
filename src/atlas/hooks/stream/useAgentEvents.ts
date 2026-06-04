@@ -18,6 +18,12 @@ import {
   rememberWorkflowChat,
 } from "./taskWorkflowRouting";
 import { focusActiveAgentsPanel } from "./agentPanelFocus";
+import {
+  syncAgentCompleteToActivity,
+  syncAgentHandoffToActivity,
+  syncAgentSpawnToActivity,
+  syncTaskToActivity,
+} from "./agentActivitySync";
 
 const INLINE_ACTION_KINDS = new Set([
   "agent_handoff",
@@ -75,6 +81,8 @@ export function useAgentEvents() {
   const taskChatIdsRef = useRef<Map<string, string>>(new Map());
   const agentChatIdsRef = useRef<Map<string, string>>(new Map());
   const workflowChatIdsRef = useRef<Map<string, string>>(new Map());
+  const agentChunkBufferRef = useRef<Array<{ chatId: string; payload: AgentActionEventPayload }>>([]);
+  const agentChunkFrameRef = useRef<number | null>(null);
 
   const appendTaskActionStep = (payload: AgentActionEventPayload, kind: string) => {
     const chatId = getTaskChatId(taskChatIdsRef.current, useChatStore.getState(), payload);
@@ -95,6 +103,33 @@ export function useAgentEvents() {
     if (!chatId) return;
     rememberAgentChat(agentChatIdsRef.current, payload, chatId);
     appendActionStep(chatId, { ...payload, chat_id: chatId }, kind);
+  };
+
+  const flushAgentChunkBuffer = () => {
+    agentChunkFrameRef.current = null;
+    const buffered = agentChunkBufferRef.current;
+    if (buffered.length === 0) return;
+    agentChunkBufferRef.current = [];
+
+    const byChat = new Map<string, AgentActionEventPayload[]>();
+    buffered.forEach(({ chatId, payload }) => {
+      byChat.set(chatId, [...(byChat.get(chatId) || []), payload]);
+    });
+
+    byChat.forEach((payloads, chatId) => {
+      useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) =>
+        payloads.reduce(
+          (messages, payload) => appendActionStepToMessages(messages, chatId, payload, "agent_chunk"),
+          prev,
+        )
+      );
+    });
+  };
+
+  const bufferAgentChunk = (chatId: string, payload: AgentActionEventPayload) => {
+    agentChunkBufferRef.current.push({ chatId, payload });
+    if (agentChunkFrameRef.current !== null) return;
+    agentChunkFrameRef.current = window.requestAnimationFrame(flushAgentChunkBuffer);
   };
 
   useEffect(() => {
@@ -159,16 +194,22 @@ export function useAgentEvents() {
 
       const unlistenAgentSpawn = await listenAppEvent("agent:spawn", (event) => {
         focusActiveAgentsPanel({ force: true });
+        const chatId = getAgentChatId(agentChatIdsRef.current, event.payload, useChatStore.getState());
+        if (chatId) syncAgentSpawnToActivity(chatId, event.payload);
         appendAgentActionStep(event.payload, "agent_spawn");
       });
 
       const unlistenAgentComplete = await listenAppEvent("agent:complete", (event) => {
         focusActiveAgentsPanel();
+        const chatId = getAgentChatId(agentChatIdsRef.current, event.payload, useChatStore.getState());
+        if (chatId) syncAgentCompleteToActivity(chatId, event.payload);
         appendAgentActionStep(event.payload, "agent_complete");
       });
 
       const unlistenAgentHandoff = await listenAppEvent("agent:handoff", (event) => {
         focusActiveAgentsPanel({ force: true });
+        const chatId = getAgentChatId(agentChatIdsRef.current, event.payload, useChatStore.getState());
+        if (chatId) syncAgentHandoffToActivity(chatId, event.payload);
         appendAgentActionStep(event.payload, "agent_handoff");
       });
 
@@ -188,7 +229,7 @@ export function useAgentEvents() {
           getAgentChatId(agentChatIdsRef.current, actionPayload, useChatStore.getState());
         if (!chatId) return;
         rememberAgentChat(agentChatIdsRef.current, actionPayload, chatId);
-        appendActionStep(chatId, { ...actionPayload, chat_id: chatId }, "agent_chunk");
+        bufferAgentChunk(chatId, { ...actionPayload, chat_id: chatId });
       });
 
       const unlistenWorkflowStarted = await listenAppEvent("workflow:started", (event) => {
@@ -204,22 +245,41 @@ export function useAgentEvents() {
       });
 
       const unlistenTaskStarted = await listenAppEvent("task:started", (event) => {
+        const chatId = getTaskChatId(taskChatIdsRef.current, useChatStore.getState(), event.payload);
+        if (chatId) syncTaskToActivity(chatId, event.payload, "in_progress");
         appendTaskActionStep(event.payload, "task_started");
       });
 
       const unlistenTaskCreated = await listenAppEvent("task:created", (event) => {
+        const chatId = getTaskChatId(taskChatIdsRef.current, useChatStore.getState(), event.payload);
+        if (chatId) syncTaskToActivity(chatId, event.payload, "pending");
         appendTaskActionStep(event.payload, "task_created");
       });
 
       const unlistenTaskUpdated = await listenAppEvent("task:updated", (event) => {
+        const chatId = getTaskChatId(taskChatIdsRef.current, useChatStore.getState(), event.payload);
+        if (chatId) {
+          const normalizedStatus = event.payload.status === "completed"
+            ? "completed"
+            : event.payload.status === "failed" || event.payload.status === "error"
+              ? "failed"
+              : event.payload.status === "pending"
+                ? "pending"
+                : "in_progress";
+          syncTaskToActivity(chatId, event.payload, normalizedStatus);
+        }
         appendTaskActionStep(event.payload, "task_updated");
       });
 
       const unlistenTaskCompleted = await listenAppEvent("task:completed", (event) => {
+        const chatId = getTaskChatId(taskChatIdsRef.current, useChatStore.getState(), event.payload);
+        if (chatId) syncTaskToActivity(chatId, event.payload, "completed");
         appendTaskActionStep(event.payload, "task_completed");
       });
 
       const unlistenTaskFailed = await listenAppEvent("task:failed", (event) => {
+        const chatId = getTaskChatId(taskChatIdsRef.current, useChatStore.getState(), event.payload);
+        if (chatId) syncTaskToActivity(chatId, event.payload, "failed");
         appendTaskActionStep(event.payload, "task_failed");
       });
 
@@ -228,6 +288,15 @@ export function useAgentEvents() {
         const chatId = getTaskPlanChatId(useChatStore.getState(), payload);
         if (!chatId) return;
         rememberTaskListChats(taskChatIdsRef.current, payload.tasks, chatId);
+        (payload.tasks || []).forEach((task) => {
+          syncTaskToActivity(chatId, task, task.status === "completed"
+            ? "completed"
+            : task.status === "failed" || task.status === "error"
+              ? "failed"
+              : task.status === "running" || task.status === "in_progress"
+                ? "in_progress"
+                : "pending");
+        });
         appendActionStep(chatId, { ...payload, chat_id: chatId }, "task_list_updated");
       });
 
@@ -299,6 +368,11 @@ export function useAgentEvents() {
     setupListeners();
 
     return () => {
+      if (agentChunkFrameRef.current !== null) {
+        window.cancelAnimationFrame(agentChunkFrameRef.current);
+        agentChunkFrameRef.current = null;
+      }
+      flushAgentChunkBuffer();
       unlistenRefs.current.forEach(u => u());
       unlistenRefs.current = [];
     };

@@ -1,4 +1,5 @@
 import type { AgentActionEventPayload } from "@/api/events";
+import { CHAT_STATUS_PHASES } from "../../../api/chatStatus";
 import type { ActionMeta, Message, MessageKind, Step } from "../../components/chat/types";
 import { findWritableAssistantIndex } from "./messageTarget";
 
@@ -34,23 +35,38 @@ function stripDuplicateResultSummary(resultSummary: string | undefined, streamCo
   return result;
 }
 
+function normalizeIncomingMetadata(metadata: AgentActionEventPayload["metadata"]): AgentActionEventPayload["metadata"] {
+  if (!metadata) return metadata;
+  const normalized = { ...metadata };
+  if (normalized.approval_request && !normalized.approvalRequest) {
+    normalized.approvalRequest = normalized.approval_request;
+  }
+  if (normalized.tool_call && !normalized.toolCall) {
+    normalized.toolCall = normalized.tool_call;
+  }
+  if (normalized.tool_call_preview && !normalized.toolCallPreview) {
+    normalized.toolCallPreview = normalized.tool_call_preview;
+  }
+  if (normalized.tool_result && !normalized.toolResult) {
+    normalized.toolResult = normalized.tool_result;
+  }
+  return normalized;
+}
+
 export function getActionEventId(payload: AgentActionEventPayload, kind: string): string {
-  const metadata = payload.metadata || {};
+  const metadata = normalizeIncomingMetadata(payload.metadata) || {};
   const toolName =
     metadata.toolCall?.toolName ||
-    metadata.tool_call?.tool_name ||
     metadata.toolResult?.toolName ||
-    metadata.tool_result?.tool_name ||
+    metadata.toolResult?.tool_name ||
     payload.tool_name;
 
   const toolCallId =
     payload.tool_call_id ||
     metadata.toolCall?.toolCallId ||
     metadata.toolCall?.tool_call_id ||
-    metadata.tool_call?.tool_call_id ||
     metadata.toolResult?.toolCallId ||
-    metadata.toolResult?.tool_call_id ||
-    metadata.tool_result?.tool_call_id;
+    metadata.toolResult?.tool_call_id;
 
   if ((kind === "tool_call" || kind === "tool_result") && toolName) {
     if (toolCallId) {
@@ -62,14 +78,14 @@ export function getActionEventId(payload: AgentActionEventPayload, kind: string)
     return `orchestrator:${payload.run_id || payload.chat_id || payload.chatId || "active"}`;
   }
   if (kind === "chat_status" && (payload.phase || payload.metadata?.phase)) {
-    const phase = payload.phase || payload.metadata?.phase;
-    const preview = payload.metadata?.toolCallPreview as Record<string, unknown> | undefined;
+    const phase = payload.phase || metadata.phase;
+    const preview = metadata.toolCallPreview as Record<string, unknown> | undefined;
     const previewId = stringValue(preview?.toolCallId, preview?.tool_call_id);
     const previewIndex = preview?.index;
-    if (phase === "tool_call_streaming" || phase === "tool_call_ready") {
+    if (phase === CHAT_STATUS_PHASES.ToolCallStreaming || phase === CHAT_STATUS_PHASES.ToolCallReady) {
       return `tool-preview:${previewId || previewIndex || "active"}`;
     }
-    if (phase === "agent_streaming") {
+    if (phase === CHAT_STATUS_PHASES.AgentStreaming) {
       const agentId = stringValue(payload.agent_id, payload.metadata?.agentId, payload.metadata?.agentName);
       return `agent-stream:${payload.chat_id || payload.chatId || "active"}:${agentId || "agent"}:${payload.iteration ?? payload.metadata?.iteration ?? "active"}`;
     }
@@ -108,7 +124,6 @@ export function getActionEventId(payload: AgentActionEventPayload, kind: string)
     payload.workflow_id ||
     getNestedValue(metadata, ["approvalRequest", "tool_call_id"]) ||
     getNestedValue(metadata, ["approvalRequest", "toolCallId"]) ||
-    getNestedValue(metadata, ["approval_request", "tool_call_id"]) ||
     getNestedValue(metadata, ["spawn", "spawnId"]) ||
     getNestedValue(metadata, ["spawn", "spawn_id"]);
 
@@ -133,17 +148,18 @@ function getActiveAssistantIndex(messages: Message[], preferredMessageId?: strin
 export function summarizeAction(payload: AgentActionEventPayload, kind: string): string {
   if (payload.content) return payload.content;
   if (kind === "chat_status") {
-    const preview = payload.metadata?.toolCallPreview as Record<string, unknown> | undefined;
-    const toolName = stringValue(preview?.toolName, preview?.tool_name, payload.metadata?.toolCall?.toolName);
-    const phase = payload.phase || payload.metadata?.phase;
-    const agentName = stringValue(payload.agent_name, payload.metadata?.agentName, payload.agent_id, payload.metadata?.agentId);
-    if (phase === "agent_streaming" && agentName) {
+    const metadata = normalizeIncomingMetadata(payload.metadata);
+    const preview = metadata?.toolCallPreview as Record<string, unknown> | undefined;
+    const toolName = stringValue(preview?.toolName, preview?.tool_name, metadata?.toolCall?.toolName);
+    const phase = payload.phase || metadata?.phase;
+    const agentName = stringValue(payload.agent_name, metadata?.agentName, payload.agent_id, metadata?.agentId);
+    if (phase === CHAT_STATUS_PHASES.AgentStreaming && agentName) {
       return `${agentName} is working`;
     }
-    if (phase === "tool_call_ready" && toolName) {
+    if (phase === CHAT_STATUS_PHASES.ToolCallReady && toolName) {
       return `${toolName} ready`;
     }
-    if (phase === "tool_call_streaming" && toolName) {
+    if (phase === CHAT_STATUS_PHASES.ToolCallStreaming && toolName) {
       return `Preparing ${toolName}`;
     }
     return payload.message || "Agent status updated";
@@ -172,8 +188,9 @@ export function summarizeAction(payload: AgentActionEventPayload, kind: string):
 }
 
 export function inferStatus(kind: string, payload: AgentActionEventPayload): Step["status"] {
-  const explicit = payload.metadata?.status || payload.status;
-  const toolResultStatus = payload.metadata?.toolResult?.status || payload.metadata?.tool_result?.status;
+  const metadata = normalizeIncomingMetadata(payload.metadata);
+  const explicit = metadata?.status || payload.status;
+  const toolResultStatus = metadata?.toolResult?.status;
   if (explicit === "error" || explicit === "failed") return "error";
   if (explicit === "completed" || explicit === "complete" || explicit === "ok" || explicit === "success") return "completed";
   if (explicit === "cancelled" || explicit === "canceled") return "cancelled";
@@ -223,25 +240,13 @@ function normalizeTaskResult(value: unknown, durationMs?: number): ActionMeta["t
 }
 
 export function normalizeMetadata(kind: string, payload: AgentActionEventPayload): ActionMeta {
-  const metadata = { ...(payload.metadata || {}) } as Record<string, unknown> & {
+  const metadata = { ...(normalizeIncomingMetadata(payload.metadata) || {}) } as Record<string, unknown> & {
     approvalRequest?: unknown;
-    approval_request?: unknown;
     spawn?: unknown;
     status?: unknown;
     toolCall?: unknown;
-    tool_call?: unknown;
     toolResult?: unknown;
-    tool_result?: unknown;
   };
-  if (metadata.approval_request && !metadata.approvalRequest) {
-    metadata.approvalRequest = metadata.approval_request;
-  }
-  if (metadata.tool_result && !metadata.toolResult) {
-    metadata.toolResult = metadata.tool_result;
-  }
-  if (metadata.tool_call && !metadata.toolCall) {
-    metadata.toolCall = metadata.tool_call;
-  }
   if (kind === "agent_spawn" && !metadata.spawn) {
     metadata.spawn = {
       parentAgent: payload.parent_agent || payload.parentAgent || "main",

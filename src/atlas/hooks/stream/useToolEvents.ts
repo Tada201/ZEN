@@ -36,6 +36,14 @@ function readString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
+function redactPreview(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  if (/(api[_-]?key|authorization|bearer|credential|password|secret|token)/i.test(value)) {
+    return "[redacted sensitive tool arguments]";
+  }
+  return value.length > 2000 ? `${value.slice(0, 2000)}...` : value;
+}
+
 function readStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const values = value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
@@ -47,7 +55,7 @@ function normalizeApprovalContext(context?: Record<string, unknown>): ToolCall["
   const approvalContext = {
     riskLevel: readString(context.risk_level) || readString(context.riskLevel),
     description: readString(context.description),
-    argumentsPreview: readString(context.arguments_preview) || readString(context.argumentsPreview),
+    argumentsPreview: redactPreview(readString(context.arguments_preview) || readString(context.argumentsPreview)),
     suggestedPatterns: readStringArray(context.suggested_patterns) || readStringArray(context.suggestedPatterns),
   };
   return Object.values(approvalContext).some(Boolean) ? approvalContext : undefined;

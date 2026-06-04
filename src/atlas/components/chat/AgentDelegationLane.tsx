@@ -22,7 +22,7 @@ export function AgentDelegationLane({ lane }: { lane: AgentDelegationLaneModel }
     <div className="font-sans">
       <div className="rounded-md border border-zinc-800/80 bg-white/[0.012] px-2.5 py-2">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-white/[0.025] text-zinc-500">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-white/[0.025] text-zinc-400">
             <Bot className="h-3.5 w-3.5" />
           </span>
           <button
@@ -36,17 +36,17 @@ export function AgentDelegationLane({ lane }: { lane: AgentDelegationLaneModel }
             )}
           >
             {canExpand && (
-              <ChevronRight className={cn("h-3 w-3 shrink-0 text-zinc-600 transition-transform", isExpanded && "rotate-90")} />
+              <ChevronRight className={cn("h-3 w-3 shrink-0 text-zinc-400 transition-transform", isExpanded && "rotate-90")} />
             )}
             <span className="min-w-0 flex-1 truncate">Delegated to {lane.agentName}</span>
           </button>
-          <span className="shrink-0 rounded bg-white/[0.025] px-1.5 py-0.5 font-mono text-[10px] leading-none text-zinc-600">
+          <span className="shrink-0 rounded bg-white/[0.025] px-1.5 py-0.5 font-mono text-[11px] leading-none text-zinc-400">
             {lane.parentName} -&gt; {lane.agentName}
           </span>
           {lane.iteration !== undefined && (
-            <span className="shrink-0 font-mono text-[10px] text-zinc-600">iter {lane.iteration}</span>
+            <span className="shrink-0 font-mono text-[11px] text-zinc-400">iter {lane.iteration}</span>
           )}
-          {durationLabel && <span className="shrink-0 font-mono text-[10px] text-zinc-600">{durationLabel}</span>}
+          {durationLabel && <span className="shrink-0 font-mono text-[11px] text-zinc-400">{durationLabel}</span>}
           <span
             className={cn(
               "flex shrink-0 items-center gap-1 text-[11px]",
@@ -56,37 +56,37 @@ export function AgentDelegationLane({ lane }: { lane: AgentDelegationLaneModel }
               lane.status === "cancelled" && "text-zinc-500",
             )}
           >
-            <StatusIcon className={cn("h-3.5 w-3.5", isRunning && "animate-spin")} />
+            <StatusIcon className={cn("h-3.5 w-3.5", isRunning && "motion-safe:animate-spin")} />
             {lane.status}
           </span>
         </div>
 
         {lane.task && (
-          <div className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-zinc-500">
+          <div className="mt-1.5 line-clamp-2 text-[12px] leading-relaxed text-zinc-400">
             {lane.task}
           </div>
         )}
         {lane.resultSummary && (
-          <div className="mt-1.5 rounded bg-white/[0.018] px-2 py-1.5 text-[11px] leading-relaxed text-zinc-400">
+          <div className="mt-1.5 rounded bg-white/[0.018] px-2 py-1.5 text-[12px] leading-relaxed text-zinc-300">
             {lane.resultSummary}
           </div>
         )}
         {livePreview && !isExpanded && (
           <div className="mt-1.5 rounded border border-zinc-800/60 bg-black/20 px-2 py-1.5">
-            <div className="mb-1 font-mono text-[10px] uppercase leading-none text-zinc-600">
+            <div className="mb-1 font-mono text-[11px] uppercase leading-none text-zinc-400">
               {transcriptLabel}
             </div>
-            <div className="line-clamp-4 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-zinc-400">
+            <div className="line-clamp-4 whitespace-pre-wrap break-words text-[12px] leading-relaxed text-zinc-300">
               {livePreview}
             </div>
           </div>
         )}
         {isExpanded && livePreview && (
           <div className="mt-1.5 rounded border border-zinc-800/60 bg-black/20 px-2 py-1.5">
-            <div className="mb-1 font-mono text-[10px] uppercase leading-none text-zinc-600">
+            <div className="mb-1 font-mono text-[11px] uppercase leading-none text-zinc-400">
               {transcriptLabel}
             </div>
-            <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap break-words font-sans text-[11px] leading-relaxed text-zinc-400">
+            <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap break-words font-sans text-[12px] leading-relaxed text-zinc-300">
               {lane.liveContent}
             </pre>
           </div>

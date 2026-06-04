@@ -7,6 +7,11 @@ type FocusOptions = {
 export function focusActiveAgentsPanel({ force = false }: FocusOptions = {}) {
   const ui = useUIStore.getState();
 
+  // If the user explicitly closed/dismissed the agents panel during the current run, respect that decision.
+  if (ui.agentsPanelDismissed) {
+    return;
+  }
+
   if (!force && ui.rightPanelOpen && ui.activeRightTab !== "agents") {
     return;
   }

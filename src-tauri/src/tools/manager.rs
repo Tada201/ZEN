@@ -29,6 +29,12 @@ pub struct ToolSchema {
     pub examples: Vec<String>,
 }
 
+const TOOL_INFO_MAX_SCHEMA_BYTES: usize = 24_000;
+const TOOL_INFO_MAX_DESCRIPTION_CHARS: usize = 1_200;
+const TOOL_INFO_MAX_STRING_CHARS: usize = 2_000;
+const TOOL_INFO_MAX_ARRAY_ITEMS: usize = 32;
+const TOOL_INFO_MAX_OBJECT_KEYS: usize = 64;
+
 /// Unified tool manager that wraps both v1 and v2 tool registries.
 /// Provides listing, info, existence checks, and permission management.
 /// The Runner still uses the v1 registry directly for execution; this
@@ -141,8 +147,7 @@ impl ToolManager {
     /// being migrated to v2: there is still one discovery/validation catalog,
     /// even when the concrete executor is still an AgentTool.
     pub async fn sync_legacy_tool_definitions(&self) {
-        let mut definitions: Vec<(String, String, serde_json::Value, crate::tools::permission::RiskLevel)> =
-            Vec::new();
+        let mut legacy_tools: Vec<Arc<dyn crate::agent::tools::AgentTool>> = Vec::new();
 
         {
             let v1_guard = self.v1.read().await;
@@ -150,32 +155,22 @@ impl ToolManager {
                 let prog = prog_arc.read().await;
                 for meta in prog.get_metadata() {
                     if let Some(tool) = prog.get_or_load_tool(&meta.id) {
-                        definitions.push((
-                            tool.id().to_string(),
-                            tool.description().to_string(),
-                            tool.input_schema(),
-                            crate::tools::default_tool_risk(tool.id()),
-                        ));
+                        legacy_tools.push(tool);
                     }
                 }
             }
 
             for tool in v1_guard.list() {
-                if !definitions.iter().any(|(id, _, _, _)| id == tool.id()) {
-                    definitions.push((
-                        tool.id().to_string(),
-                        tool.description().to_string(),
-                        tool.input_schema(),
-                        crate::tools::default_tool_risk(tool.id()),
-                    ));
+                if !legacy_tools.iter().any(|existing| existing.id() == tool.id()) {
+                    legacy_tools.push(tool);
                 }
             }
         }
 
         match self.v2.try_write() {
             Ok(mut v2_guard) => {
-                for (id, description, schema, risk) in definitions {
-                    v2_guard.register_known_tool_definition(&id, description, schema, risk);
+                for tool in legacy_tools {
+                    v2_guard.register_legacy_tool(tool);
                 }
             }
             Err(_) => eprintln!(
@@ -477,8 +472,8 @@ impl ToolManager {
             if let Some(tool) = v1_guard.get(id) {
                 return Some(ToolSchema {
                     id: id.to_string(),
-                    description: tool.description().to_string(),
-                    schema: tool.input_schema(),
+                    description: cap_chars(tool.description(), TOOL_INFO_MAX_DESCRIPTION_CHARS),
+                    schema: sanitize_tool_info_schema(tool.input_schema()),
                     risk_level: Some(id_to_risk_label(id)),
                     examples: Vec::new(),
                 });
@@ -497,8 +492,8 @@ impl ToolManager {
                 let risk = def.risk_level.map(|r| format!("{:?}", r));
                 return Some(ToolSchema {
                     id: id.to_string(),
-                    description: def.description,
-                    schema: def.parameters,
+                    description: cap_chars(&def.description, TOOL_INFO_MAX_DESCRIPTION_CHARS),
+                    schema: sanitize_tool_info_schema(def.parameters),
                     risk_level: risk,
                     examples: Vec::new(),
                 });
@@ -539,6 +534,66 @@ impl ToolManager {
     }
 }
 
+fn cap_chars(value: &str, max_chars: usize) -> String {
+    if value.chars().count() <= max_chars {
+        return value.to_string();
+    }
+    let mut out: String = value.chars().take(max_chars).collect();
+    out.push_str("...");
+    out
+}
+
+fn sanitize_tool_info_schema(value: serde_json::Value) -> serde_json::Value {
+    let sanitized = sanitize_schema_value(value, 0);
+    let serialized_len = serde_json::to_string(&sanitized)
+        .map(|s| s.len())
+        .unwrap_or_default();
+    if serialized_len <= TOOL_INFO_MAX_SCHEMA_BYTES {
+        return sanitized;
+    }
+    serde_json::json!({
+        "type": "object",
+        "description": "Schema is too large to expose inline. Use tool_list for discovery and provide only documented arguments.",
+        "truncated": true,
+        "original_bytes": serialized_len
+    })
+}
+
+fn sanitize_schema_value(value: serde_json::Value, depth: usize) -> serde_json::Value {
+    if depth > 8 {
+        return serde_json::json!({ "truncated": true, "reason": "max_depth" });
+    }
+    match value {
+        serde_json::Value::String(s) => {
+            serde_json::Value::String(cap_chars(&s, TOOL_INFO_MAX_STRING_CHARS))
+        }
+        serde_json::Value::Array(items) => {
+            let truncated = items.len() > TOOL_INFO_MAX_ARRAY_ITEMS;
+            let mut next: Vec<serde_json::Value> = items
+                .into_iter()
+                .take(TOOL_INFO_MAX_ARRAY_ITEMS)
+                .map(|item| sanitize_schema_value(item, depth + 1))
+                .collect();
+            if truncated {
+                next.push(serde_json::json!({ "truncated": true }));
+            }
+            serde_json::Value::Array(next)
+        }
+        serde_json::Value::Object(map) => {
+            let truncated = map.len() > TOOL_INFO_MAX_OBJECT_KEYS;
+            let mut next = serde_json::Map::new();
+            for (key, item) in map.into_iter().take(TOOL_INFO_MAX_OBJECT_KEYS) {
+                next.insert(key, sanitize_schema_value(item, depth + 1));
+            }
+            if truncated {
+                next.insert("truncated".to_string(), serde_json::Value::Bool(true));
+            }
+            serde_json::Value::Object(next)
+        }
+        other => other,
+    }
+}
+
 // =====================================================================
 // 3 Meta-Tool Definitions
 // =====================================================================
@@ -549,7 +604,7 @@ pub fn meta_tool_definitions() -> Vec<crate::tools::ToolInfo> {
     vec![
         crate::tools::ToolInfo {
             name: "tool_list".to_string(),
-            description: "List all available tools with short 1-line descriptions. Use this to discover what tools you have access to before deciding which to use.".to_string(),
+            description: "List/search the allowed tools with short 1-line descriptions. Always use this first for unfamiliar, non-trivial, file, terminal, web, research, or agent tasks before choosing a tool.".to_string(),
             parameters: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -564,7 +619,7 @@ pub fn meta_tool_definitions() -> Vec<crate::tools::ToolInfo> {
         },
         crate::tools::ToolInfo {
             name: "tool_info".to_string(),
-            description: "Get the full JSON schema, usage description, and examples for a specific tool. Call this after tool_list to learn how to use a particular tool.".to_string(),
+            description: "Read the full description, JSON schema, parameters, risk level, and examples for one tool. Call this after tool_list and before the first tool_exec for any non-trivial tool.".to_string(),
             parameters: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -579,7 +634,7 @@ pub fn meta_tool_definitions() -> Vec<crate::tools::ToolInfo> {
         },
         crate::tools::ToolInfo {
             name: "tool_exec".to_string(),
-            description: "Execute a tool by name with the provided arguments. Call this after using tool_list to discover tools and tool_info to understand the required parameters.".to_string(),
+            description: "Execute a tool by name with the provided arguments. Call this only after tool_list discovered the tool and tool_info described its schema; use only documented arguments.".to_string(),
             parameters: serde_json::json!({
                 "type": "object",
                 "properties": {

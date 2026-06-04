@@ -20,11 +20,11 @@ const MemoryStatsWidget = React.lazy(() => import("@/components/widgets/memory/M
 const LoadingFallback = () => (
   <div className="flex flex-col items-center justify-center h-full py-32 text-zinc-500 italic opacity-60">
     <div className="relative w-10 h-10 mb-4 flex items-center justify-center">
-      <svg width="40" height="40" viewBox="0 0 100 100" className="text-primary animate-spin">
+      <svg width="40" height="40" viewBox="0 0 100 100" className="text-primary motion-safe:animate-spin">
         <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" strokeWidth="4" strokeDasharray="80 100" />
       </svg>
     </div>
-    <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400">
+    <p className="text-[11px] uppercase tracking-widest font-black text-zinc-400">
       Initializing Module...
     </p>
   </div>
@@ -55,10 +55,10 @@ export function RightPanel() {
       return (
         <div className="flex flex-col items-center justify-center h-full py-32 text-slate-500 italic opacity-40">
           <Zap size={40} className="mb-4 text-primary/30" />
-          <p className="text-[10px] uppercase tracking-widest font-black">
+          <p className="text-[11px] uppercase tracking-widest font-black">
             Module Hidden
           </p>
-          <p className="text-[9px] mt-2 text-center max-w-[180px]">
+          <p className="text-[12px] mt-2 text-center max-w-[220px] leading-relaxed">
             This panel is gated until the feature is mature enough for the primary UI.
           </p>
         </div>
@@ -81,7 +81,7 @@ export function RightPanel() {
       case 'drawing':
         return (
           <div className="flex-grow flex flex-col relative w-full h-full overflow-hidden">
-            <div className="absolute top-[-44px] right-14 z-50 bg-card border border-border rounded-full px-3 py-1 text-[10px] text-muted-foreground font-mono flex items-center gap-2 press">
+            <div className="absolute top-[-44px] right-14 z-50 bg-card border border-border rounded-full px-3 py-1 text-[11px] text-muted-foreground font-mono flex items-center gap-2 press">
               <span className="text-muted-foreground/60">MODE:</span>
               <select
                 value={canvasMode}
@@ -105,10 +105,10 @@ export function RightPanel() {
         return (
           <div className="flex flex-col items-center justify-center h-full py-32 text-slate-500 italic opacity-40">
             <Zap size={40} className="mb-4 text-primary/30" />
-          <p className="text-[10px] uppercase tracking-widest font-black">
+          <p className="text-[11px] uppercase tracking-widest font-black">
               Module "{visibleActiveRightTab}" Locked
             </p>
-            <p className="text-[9px] mt-2 text-center max-w-[180px]">
+            <p className="text-[12px] mt-2 text-center max-w-[220px] leading-relaxed">
               This feature is currently under high-priority initialization.
             </p>
           </div>
@@ -157,19 +157,19 @@ export function RightPanel() {
       <header className="h-14 border-b border-border flex items-center justify-between px-4 bg-card/20 backdrop-blur shrink-0">
         <div className="flex items-center gap-2.5">
           {getIcon()}
-          <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-zinc-300">{getTitle()}</span>
+          <span className="text-[12px] font-bold uppercase tracking-[0.15em] text-zinc-300">{getTitle()}</span>
           {visibleActiveRightTab === 'map' && mapActivated && (
             <div className="flex bg-black/60 border border-white/5 p-0.5 rounded ml-4 font-mono select-none">
               <button
                 type="button"
-                className={`px-2 py-0.5 text-[8.5px] font-bold font-mono tracking-widest cursor-pointer border-0 rounded transition-all ${viewMode === 'globe' ? 'bg-primary/20 text-primary' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
+                className={`px-2 py-0.5 text-[11px] font-bold font-mono tracking-widest cursor-pointer border-0 rounded transition-all ${viewMode === 'globe' ? 'bg-primary/20 text-primary' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
                 onClick={() => setViewMode('globe')}
               >
                 3D_GLOBE
               </button>
               <button
                 type="button"
-                className={`px-2 py-0.5 text-[8.5px] font-bold font-mono tracking-widest cursor-pointer border-0 rounded transition-all ${viewMode === 'navigation' ? 'bg-primary/20 text-primary' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
+                className={`px-2 py-0.5 text-[11px] font-bold font-mono tracking-widest cursor-pointer border-0 rounded transition-all ${viewMode === 'navigation' ? 'bg-primary/20 text-primary' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
                 onClick={() => setViewMode('navigation')}
               >
                 2D_NAV
@@ -179,7 +179,7 @@ export function RightPanel() {
         </div>
         <button 
           onClick={() => setRightPanelOpen(false)}
-          className="p-1.5 rounded-lg hover:bg-white/5 text-zinc-600 hover:text-zinc-300 transition-all"
+          className="p-1.5 rounded-lg hover:bg-white/5 text-zinc-400 hover:text-zinc-200 transition-all"
         >
           <X size={16} />
         </button>
@@ -194,23 +194,23 @@ export function RightPanel() {
               </Suspense>
             ) : (
               <div className="flex-grow flex flex-col items-center justify-center p-6 text-center bg-background">
-                <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-4 animate-pulse">
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-4 motion-safe:animate-pulse">
                   <MapIcon size={24} />
                 </div>
                 <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-200">Operational Map</h3>
-                <p className="text-[10px] text-zinc-500 max-w-[240px] mt-2 leading-relaxed">
+                <p className="text-[12px] text-zinc-400 max-w-[260px] mt-2 leading-relaxed">
                   Initializing the map viewer loads heavy WebGL and Cesium 3D asset engines. Click below to confirm and activate the canvas.
                 </p>
                 <button
                   onClick={() => setMapActivated(true)}
-                  className="mt-6 px-4 py-2 bg-primary/10 hover:bg-primary/25 border border-primary/25 hover:border-primary/50 text-[10px] font-bold uppercase tracking-widest text-primary rounded-xl transition-all duration-200 shadow-sm shadow-primary/5 hover:scale-[1.02] active:scale-[0.98]"
+                  className="mt-6 px-4 py-2 bg-primary/10 hover:bg-primary/25 border border-primary/25 hover:border-primary/50 text-[11px] font-bold uppercase tracking-widest text-primary rounded-xl transition-all duration-200 shadow-sm shadow-primary/5 hover:scale-[1.02] active:scale-[0.98]"
                 >
                   Activate Map Engine
                 </button>
               </div>
             )}
           </div>
-          <div className="px-4 py-2.5 bg-card/40 border-t border-border text-[9px] text-muted-foreground font-mono flex items-center justify-between shrink-0">
+          <div className="px-4 py-2.5 bg-card/40 border-t border-border text-[11px] text-muted-foreground font-mono flex items-center justify-between shrink-0">
             <span>Coordinates System: WGS 84</span>
             <span className="truncate max-w-[180px]">Target: {operationalParams?.label || "Active Search"}</span>
           </div>

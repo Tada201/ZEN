@@ -1,8 +1,10 @@
 pub mod agents;
 pub mod booster;
 pub mod cache;
+pub mod chat_status;
 pub mod clarification;
 pub mod config;
+pub mod config_file;
 pub mod deep_research;
 pub mod event_bus;
 pub mod hooks;

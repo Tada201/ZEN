@@ -27,6 +27,7 @@ interface UIState {
   density: 'normal' | 'compact';
   rightPanelOpen: boolean;
   activeRightTab: RightPanelTabId;
+  agentsPanelDismissed: boolean;
   
   // Actions
   setSidebarOpen: (open: boolean) => void;
@@ -54,6 +55,7 @@ interface UIState {
   setDensity: (density: 'normal' | 'compact') => void;
   setRightPanelOpen: (open: boolean) => void;
   setActiveRightTab: (tab: RightPanelTabId) => void;
+  setAgentsPanelDismissed: (dismissed: boolean) => void;
   toggleSidebar: () => void;
   toggleRightPanel: () => void;
 }
@@ -84,6 +86,7 @@ export const useUIStore = create<UIState>()(
       density: 'normal',
       rightPanelOpen: false,
       activeRightTab: 'metrics',
+      agentsPanelDismissed: false,
 
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
       setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
@@ -109,8 +112,23 @@ export const useUIStore = create<UIState>()(
       setTheme: (theme) => set({ theme }),
       setStyleMode: (styleMode) => set({ styleMode }),
       setDensity: (density) => set({ density }),
-      setRightPanelOpen: (rightPanelOpen) => set({ rightPanelOpen }),
-      setActiveRightTab: (activeRightTab) => set({ activeRightTab }),
+      setRightPanelOpen: (rightPanelOpen) => set((state) => {
+        const nextState: Partial<UIState> = { rightPanelOpen };
+        if (!rightPanelOpen && state.activeRightTab === 'agents') {
+          nextState.agentsPanelDismissed = true;
+        }
+        return nextState as any;
+      }),
+      setActiveRightTab: (activeRightTab) => set((state) => {
+        const nextState: Partial<UIState> = { activeRightTab };
+        if (activeRightTab === 'agents') {
+          nextState.agentsPanelDismissed = false;
+        } else if (state.activeRightTab === 'agents' && state.rightPanelOpen) {
+          nextState.agentsPanelDismissed = true;
+        }
+        return nextState as any;
+      }),
+      setAgentsPanelDismissed: (agentsPanelDismissed) => set({ agentsPanelDismissed }),
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       toggleRightPanel: () => set((state) => ({ rightPanelOpen: !state.rightPanelOpen })),
     }),
@@ -124,6 +142,7 @@ export const useUIStore = create<UIState>()(
           aboutModalOpen,
           voiceModeOpen,
           aiSpeaking,
+          agentsPanelDismissed,
           ...rest
         } = state;
         return rest;

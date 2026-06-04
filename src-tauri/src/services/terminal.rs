@@ -140,18 +140,18 @@ impl TerminalService {
             reason: Some("frontend requested interactive terminal shell".to_string()),
         });
 
-        if decision == PermissionDecision::Deny {
+        if decision != PermissionDecision::Allow {
             security
                 .record_audit(AuditEvent {
                     operation: PrivilegedOperation::ShellCommand,
-                    decision: PermissionDecision::Deny,
+                    decision,
                     caller: "terminal_spawn".to_string(),
                     target: Some("interactive_shell".to_string()),
-                    reason: Some("terminal spawn denied by security policy".to_string()),
+                    reason: Some("terminal spawn requires an explicit allow decision".to_string()),
                 })
                 .await;
             return Err(ZenError::Custom(
-                "Terminal spawn denied by security policy".to_string(),
+                "Terminal spawn requires explicit approval by security policy".to_string(),
             ));
         }
 

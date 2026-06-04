@@ -45,6 +45,14 @@ const helperModule = await loadTsModule("../src/atlas/hooks/chat/optimisticChatM
 ]);
 const ledgerModule = await loadTsModule("../src/atlas/hooks/stream/agentActionLedger.ts", [
   [
+    'import { CHAT_STATUS_PHASES } from "../../../api/chatStatus";',
+    `const CHAT_STATUS_PHASES = {
+      AgentStreaming: "agent_streaming",
+      ToolCallStreaming: "tool_call_streaming",
+      ToolCallReady: "tool_call_ready",
+    };`,
+  ],
+  [
     'import { findWritableAssistantIndex } from "./messageTarget";',
     `function findWritableAssistantIndex(messages) {
       for (let i = messages.length - 1; i >= 0; i--) {

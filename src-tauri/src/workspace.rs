@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 /// This module provides path validation to ensure agents can only operate
 /// within a designated workspace folder, preventing unauthorized access to
 /// sensitive system files.
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 /// Validates that a path is within the workspace folder
 ///
@@ -19,6 +19,16 @@ pub fn validate_workspace_path(workspace_root: &Path, requested_path: &Path) -> 
         )
     })?;
 
+    if requested_path
+        .components()
+        .any(|component| matches!(component, Component::ParentDir))
+    {
+        return Err(anyhow::anyhow!(
+            "Path traversal detected: {} contains parent directory components",
+            requested_path.display()
+        ));
+    }
+
     // If the requested path exists, canonicalize it
     // If it doesn't exist yet (e.g., new file), we need to validate the parent
     let canonical_path = if requested_path.exists() {
@@ -26,25 +36,32 @@ pub fn validate_workspace_path(workspace_root: &Path, requested_path: &Path) -> 
             .canonicalize()
             .with_context(|| format!("Failed to resolve path: {}", requested_path.display()))?
     } else {
-        // For non-existent paths, validate the parent directory
-        let parent = requested_path
+        let mut ancestor = requested_path
             .parent()
             .ok_or_else(|| anyhow::anyhow!("Invalid path: no parent directory"))?;
 
-        // If parent doesn't exist, we'll create it - validate what does exist
-        if parent.exists() {
-            let canonical_parent = parent.canonicalize().with_context(|| {
-                format!("Failed to resolve parent directory: {}", parent.display())
+        while !ancestor.exists() {
+            ancestor = ancestor.parent().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Invalid path: no existing ancestor for {}",
+                    requested_path.display()
+                )
             })?;
+        }
 
-            // Check if parent is within workspace
-            if !canonical_parent.starts_with(&canonical_root) {
-                return Err(anyhow::anyhow!(
-                    "Path traversal detected: {} is outside workspace {}",
-                    requested_path.display(),
-                    workspace_root.display()
-                ));
-            }
+        let canonical_ancestor = ancestor.canonicalize().with_context(|| {
+            format!(
+                "Failed to resolve ancestor directory: {}",
+                ancestor.display()
+            )
+        })?;
+
+        if !canonical_ancestor.starts_with(&canonical_root) {
+            return Err(anyhow::anyhow!(
+                "Path traversal detected: {} is outside workspace {}",
+                requested_path.display(),
+                workspace_root.display()
+            ));
         }
 
         // Return the original path (will be created by caller)
@@ -61,6 +78,18 @@ pub fn validate_workspace_path(workspace_root: &Path, requested_path: &Path) -> 
     }
 
     Ok(canonical_path)
+}
+
+pub fn canonicalize_workspace_root(path: &Path) -> Result<PathBuf> {
+    if !path.exists() || !path.is_dir() {
+        return Err(anyhow::anyhow!(
+            "Workspace root does not exist or is not a directory: {}",
+            path.display()
+        ));
+    }
+
+    path.canonicalize()
+        .with_context(|| format!("Failed to resolve workspace root: {}", path.display()))
 }
 
 /// Resolves a path string (absolute or relative) to an absolute path within workspace
@@ -108,8 +137,37 @@ pub fn looks_like_path_traversal(path_str: &str) -> bool {
         || path_str.starts_with('$')
 }
 
-/// Gets the default workspace folder (user's home directory / projects)
+fn find_project_workspace_from_current_dir() -> Option<PathBuf> {
+    let mut dir = std::env::current_dir().ok()?;
+    loop {
+        let has_tauri = dir.join("src-tauri").join("Cargo.toml").is_file();
+        let has_package = dir.join("package.json").is_file();
+        let is_tauri_dir = dir.join("Cargo.toml").is_file()
+            && dir
+                .parent()
+                .map(|parent| parent.join("package.json").is_file())
+                .unwrap_or(false);
+
+        if has_tauri && has_package {
+            return Some(dir);
+        }
+
+        if is_tauri_dir {
+            return dir.parent().map(Path::to_path_buf);
+        }
+
+        if !dir.pop() {
+            return None;
+        }
+    }
+}
+
+/// Gets the default workspace folder.
 pub fn get_default_workspace() -> PathBuf {
+    if let Some(project_workspace) = find_project_workspace_from_current_dir() {
+        return project_workspace;
+    }
+
     // Try to get user's home directory
     if let Some(home) = dirs::home_dir() {
         // Prefer a 'zen-projects' subdirectory if it exists, or use home
@@ -157,7 +215,18 @@ mod tests {
         assert!(result
             .unwrap_err()
             .to_string()
-            .contains("outside workspace"));
+            .contains("Path traversal detected"));
+    }
+
+    #[test]
+    fn test_nonexistent_nested_path_traversal_blocked() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace = temp_dir.path();
+
+        let escape_path = workspace.join("missing").join("..").join("..").join("escape.txt");
+
+        let result = validate_workspace_path(workspace, &escape_path);
+        assert!(result.is_err());
     }
 
     #[test]

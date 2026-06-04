@@ -79,6 +79,33 @@ pub fn run() {
                     tracing::warn!(error = %e, "Failed to load settings from database");
                     eprintln!("Warning: Failed to load settings from database: {}", e);
                 }
+                let persisted_workspace_root = match state.settings_manager.get("workspace.root").await {
+                    Ok(Some(value)) if !value.trim().is_empty() => Some(value),
+                    Ok(_) => match state.settings_manager.get("workspace_path").await {
+                        Ok(Some(value)) if !value.trim().is_empty() => Some(value),
+                        Ok(_) => None,
+                        Err(e) => {
+                            tracing::warn!(error = %e, "Failed to read legacy persisted workspace root");
+                            None
+                        }
+                    },
+                    Err(e) => {
+                        tracing::warn!(error = %e, "Failed to read persisted workspace root");
+                        None
+                    }
+                };
+                if let Some(workspace_root) = persisted_workspace_root {
+                        if let Err(e) = state.set_workspace_folder(workspace_root).await {
+                            tracing::warn!(
+                                error = %e,
+                                "Failed to apply persisted workspace root; using default workspace"
+                            );
+                            eprintln!(
+                                "Warning: Failed to apply persisted workspace root: {}",
+                                e
+                            );
+                        }
+                }
                 match state.secret_manager.migrate_plaintext_settings_to_keyring().await {
                     Ok(count) if count > 0 => {
                         tracing::info!(count, "Migrated plaintext secrets to OS keyring");
@@ -279,6 +306,13 @@ pub fn run() {
             commands::agent::orchestrator_get_status,
             commands::agent::run_tool_command,
             commands::agent::resolve_tool_approval,
+            commands::agent_config::get_agent_config_file,
+            commands::agent_config::save_agent_config_file,
+            commands::agent_config::delete_agent_config_file,
+            commands::agent_config::list_agent_config_files,
+            commands::agent_config::export_agent_config_file,
+            commands::agent_config::import_agent_config_file,
+            commands::agent_config::list_tools_for_config,
             commands::voice::download_whisper_model,
             commands::voice::transcribe_audio,
             commands::voice::transcribe_stream,
@@ -335,7 +369,6 @@ pub fn run() {
             commands::mcp::mcp_get_config,
             commands::mcp::mcp_save_config,
             commands::mcp::mcp_get_status,
-            commands::mcp::mcp_get_http_token,
             commands::mcp::mcp_start_server,
             commands::mcp::mcp_stop_server,
             commands::mcp::mcp_list_tools,

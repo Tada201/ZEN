@@ -45,7 +45,7 @@ export { terminalApi } from "./terminalApi";
 export { workspaceApi } from "./workspaceApi";
 export type { BrowseFolderResult, FolderEntry } from "./workspaceApi";
 export { agentsApi } from "./agentsApi";
-export type { AgentConfig, AgentInfo } from "./agentsApi";
+export type { AgentConfig, AgentConfigFileData, AgentConfigFileInfo, AgentInfo, ToolMetadataItem } from "./agentsApi";
 export { memoryApi } from "./memoryApi";
 export type { MemoryEntry, MemorySearchResult, MemoryStats, SessionMemoryItem } from "./memoryApi";
 export { gtsmApi } from "./gtsmApi";

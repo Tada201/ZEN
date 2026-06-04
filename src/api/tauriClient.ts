@@ -1,4 +1,4 @@
-import type { InvokeArgs } from "@tauri-apps/api/core";
+import { invoke, type InvokeArgs } from "@tauri-apps/api/core";
 
 /**
  * Detect whether the app is running inside the Tauri native webview.
@@ -101,7 +101,6 @@ export async function callCommand<Response>(
   }
 
   try {
-    const { invoke } = await import("@tauri-apps/api/core");
     return await invoke<Response>(command, args);
   } catch (error) {
     throw normalizeIpcError(command, error);

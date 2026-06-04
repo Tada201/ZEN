@@ -14,6 +14,7 @@
     "runtime:fetch": "powershell -ExecutionPolicy Bypass -File scripts/fetch-runtime-binaries.ps1",
     "runtime:check": "powershell -ExecutionPolicy Bypass -File scripts/check-runtime-binaries.ps1",
     "secret:artifacts": "powershell -ExecutionPolicy Bypass -File scripts/secret-artifact-check.ps1",
+    "test": "node scripts/run-feature-tests.mjs",
     "test:backend": "powershell -ExecutionPolicy Bypass -File scripts/backend-test.ps1",
     "test:active-stream-routing": "node test/verify-active-stream-routing.mjs",
     "test:agentic-fixture": "node test/verify-agentic-fixture.mjs",

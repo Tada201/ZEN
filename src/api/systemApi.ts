@@ -8,6 +8,13 @@ export interface HardwareInfo {
   os: string;
   hostname: string;
   has_cuda: boolean;
+  gpus: Array<{
+    name: string;
+    vendor: string;
+    vram_mb?: number | null;
+    driver_version?: string | null;
+    cuda_capable: boolean;
+  }>;
   disks: Array<{
     name: string;
     mount_point: string;

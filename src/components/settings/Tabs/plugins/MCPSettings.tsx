@@ -13,9 +13,6 @@ export const MCPSettings = memo((_props: { embedded?: boolean }) => {
     const [syncing, setSyncing] = useState<boolean>(false);
     const [savingConfig, setSavingConfig] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
-    const [httpToken, setHttpToken] = useState<string | null>(null);
-    const [revealingToken, setRevealingToken] = useState<boolean>(false);
-    const [copiedToken, setCopiedToken] = useState<boolean>(false);
 
     const fetchMcpState = async () => {
         try {
@@ -72,19 +69,6 @@ export const MCPSettings = memo((_props: { embedded?: boolean }) => {
         }
     };
 
-    const revealHttpToken = async () => {
-        setRevealingToken(true);
-        try {
-            const token = await mcpApi.getHttpToken();
-            setHttpToken(token);
-            setError(null);
-        } catch (e: any) {
-            setError(String(e));
-        } finally {
-            setRevealingToken(false);
-        }
-    };
-
     const copyText = async (text: string, onCopied?: () => void) => {
         try {
             await navigator.clipboard.writeText(text);
@@ -92,14 +76,6 @@ export const MCPSettings = memo((_props: { embedded?: boolean }) => {
         } catch (e: any) {
             setError(`Failed to copy MCP value: ${e.message || e}`);
         }
-    };
-
-    const copyHttpToken = async () => {
-        if (!httpToken) return;
-        await copyText(httpToken, () => {
-            setCopiedToken(true);
-            window.setTimeout(() => setCopiedToken(false), 1600);
-        });
     };
 
     if (loading) {
@@ -226,30 +202,10 @@ export const MCPSettings = memo((_props: { embedded?: boolean }) => {
                                     </WorkbenchButton>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_auto] gap-2 items-center">
-                                    <code className="min-w-0 rounded-lg border border-white/[0.06] bg-black/20 px-2.5 py-2 text-[10px] text-zinc-300 font-mono truncate">
-                                        {httpToken || "Token hidden until revealed"}
-                                    </code>
-                                    <WorkbenchButton
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={revealHttpToken}
-                                        disabled={revealingToken}
-                                        className="h-8 text-[10px] px-3"
-                                    >
-                                        <WorkbenchIcon name="lucide:eye" size={12} className="mr-1" />
-                                        {revealingToken ? "Loading..." : "Reveal"}
-                                    </WorkbenchButton>
-                                    <WorkbenchButton
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={copyHttpToken}
-                                        disabled={!httpToken}
-                                        className="h-8 text-[10px] px-3"
-                                    >
-                                        <WorkbenchIcon name={copiedToken ? "lucide:check" : "lucide:copy"} size={12} className="mr-1" />
-                                        {copiedToken ? "Copied" : "Copy Token"}
-                                    </WorkbenchButton>
+                                <div className="rounded-lg border border-amber-500/10 bg-amber-500/[0.03] px-2.5 py-2">
+                                    <p className="text-[10px] text-amber-200/80 leading-relaxed">
+                                        The MCP bearer token is intentionally not exposed to the renderer. This prevents generated UI, browser extensions, or XSS from copying a token that can call local tools.
+                                    </p>
                                 </div>
                             </div>
 

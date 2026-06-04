@@ -12,7 +12,6 @@ import {
   Select, SelectContent, SelectItem,
   SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
@@ -23,11 +22,10 @@ import {
 } from "@/lib/stores/settings/settingsBridge";
 import { useZenTheme } from "../providers/ZenThemeProvider";
 import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
-import {
-  getVisibleSettingsFeatures,
-  isSettingsTabVisible,
-  type SettingsTabId,
-} from "@/lib/features/frontendFeatures";
+import { SettingsSidebar } from "./SettingsSidebar";
+import { normalizeSettingsTab, type TabId } from "./settingsNavigation";
+
+export type { TabId } from "./settingsNavigation";
 
 const ProvidersSettings = React.lazy(() => import("@/components/settings/Tabs/ProvidersSettings").then(m => ({ default: m.ProvidersSettings })));
 const ModelsSettings = React.lazy(() => import("@/components/settings/Tabs/ModelsSettings").then(m => ({ default: m.ModelsSettings })));
@@ -50,84 +48,12 @@ const EmbeddingModelDownloader = React.lazy(() => import("@/components/settings/
 const CommandsSettings = React.lazy(() => import("@/components/settings/Tabs/plugins/CommandsSettings").then(m => ({ default: m.CommandsSettings })));
 const HooksSettings = React.lazy(() => import("@/components/settings/Tabs/plugins/HooksSettings").then(m => ({ default: m.HooksSettings })));
 
-export type TabId = SettingsTabId;
-
-interface SettingsTabGroup {
-  label: string;
-  tabs: SettingsTab[];
-}
-
-interface SettingsTab {
-  id: TabId;
-  label: string;
-  icon: string;
-  description: string;
-}
-
-const TAB_GROUPS: SettingsTabGroup[] = [
-  {
-    label: "General",
-    tabs: [
-      { id: "general", label: "General", icon: "lucide:settings-2", description: "Workspace & UI" },
-      { id: "appearance", label: "Appearance", icon: "lucide:eye", description: "Theme & layout" },
-    ],
-  },
-  {
-    label: "AI & Chat",
-    tabs: [
-      { id: "chat", label: "Chat", icon: "lucide:message-square", description: "Conversation settings" },
-      { id: "ai-config", label: "Models", icon: "lucide:brain-circuit", description: "Model selection" },
-      { id: "providers", label: "Providers", icon: "lucide:key", description: "API keys" },
-      { id: "capabilities", label: "Capabilities", icon: "lucide:sparkles", description: "Agent skills" },
-      { id: "intelligence", label: "Intelligence", icon: "lucide:search", description: "RAG & memory" },
-      { id: "agents", label: "Agents", icon: "lucide:bot", description: "Sub-agent config" },
-      { id: "commands", label: "Commands", icon: "lucide:zap", description: "Slash commands" },
-      { id: "hooks", label: "Hooks", icon: "lucide:link-2", description: "Event hooks" },
-      { id: "mcp", label: "MCP", icon: "lucide:cpu", description: "MCP servers" },
-      { id: "embedding-models", label: "Embedding Models", icon: "lucide:download", description: "Download embedding models" },
-    ],
-  },
-  {
-    label: "Interface",
-    tabs: [
-      { id: "audio", label: "Audio", icon: "lucide:headphones", description: "Sound & voice" },
-      { id: "terminal", label: "Terminal", icon: "lucide:terminal", description: "Shell & safety" },
-      { id: "workspace", label: "Workspace", icon: "lucide:folder-open", description: "Directories & Git" },
-      { id: "skills", label: "Skills", icon: "lucide:book-open", description: "Tactical modules" },
-      { id: "map-config", label: "Map Config", icon: "lucide:map", description: "GTSM operational layers" },
-    ],
-  },
-  {
-    label: "System",
-    tabs: [
-      { id: "tools", label: "Tools", icon: "lucide:shield", description: "Tool permissions & safety" },
-      { id: "system", label: "System", icon: "lucide:monitor", description: "Performance & maintenance" },
-      { id: "updates", label: "Updates", icon: "lucide:refresh-cw", description: "Update & version info" },
-    ],
-  },
-];
-
-const VISIBLE_SETTING_TAB_IDS = new Set(
-  getVisibleSettingsFeatures().map((feature) => feature.settingsTabId)
-);
-
-const VISIBLE_TAB_GROUPS = TAB_GROUPS
-  .map((group) => ({
-    ...group,
-    tabs: group.tabs.filter((tab) => VISIBLE_SETTING_TAB_IDS.has(tab.id)),
-  }))
-  .filter((group) => group.tabs.length > 0);
-
 function SettingsTabFallback() {
   return (
     <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.02]">
       <WorkbenchIcon name="lucide:loader-2" className="h-5 w-5 animate-spin text-primary" />
     </div>
   );
-}
-
-function normalizeSettingsTab(tab: string): TabId {
-  return isSettingsTabVisible(tab) ? tab : "general";
 }
 
 export function preloadSettingsTab(tab: TabId) {
@@ -277,56 +203,7 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
 
   return (
     <div className="flex flex-col md:flex-row h-full w-full overflow-hidden bg-[#050506]">
-      {/* Sidebar */}
-      <div className="w-full md:w-56 bg-[#050506] border-b md:border-b-0 md:border-r border-white/[0.06] flex flex-col shrink-0">
-        <div className="p-4 border-b border-white/[0.06] flex items-center justify-between">
-          <h2 className="font-bold text-sm flex items-center gap-2 tracking-tight text-zinc-100">
-            <WorkbenchIcon name="lucide:settings-2" size={16} className="text-primary" />
-            Settings
-          </h2>
-        </div>
-
-        <div className="flex-1 overflow-y-auto py-2 pr-1 custom-scrollbar">
-          {VISIBLE_TAB_GROUPS.map((group) => (
-            <div key={group.label} className="mb-2">
-              <div className="px-3 py-1.5">
-                <span className="text-[9px] font-black uppercase tracking-[0.15em] text-zinc-600">
-                  {group.label}
-                </span>
-              </div>
-              <div className="flex md:flex-col gap-0.5 px-2">
-                {group.tabs.map((tab) => {
-                    const isActive = activeTab === tab.id;
-                    return (
-                      <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={cn(
-                          "relative w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-colors duration-150 text-left group",
-                          isActive
-                            ? "bg-muted text-primary font-bold"
-                            : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
-                        )}
-                      >
-                        {isActive && <div className="nav-rail-indicator" />}
-                        <WorkbenchIcon name={tab.icon} size={14} className={cn("shrink-0", isActive ? "text-primary" : "opacity-40 group-hover:opacity-100")} />
-                        <span className="text-[12.5px] tracking-tight truncate">{tab.label}</span>
-                      </button>
-                    );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="hidden md:block p-4 border-t border-white/[0.06]">
-          <div className="flex items-center gap-2 mb-1">
-            <WorkbenchIcon name="lucide:sparkles" size={12} className="text-primary" />
-            <span className="text-[9px] font-black uppercase tracking-[0.15em] text-primary">Zen Engine</span>
-          </div>
-          <p className="text-[9px] text-zinc-600">v1.0 Stable Build</p>
-        </div>
-      </div>
+      <SettingsSidebar activeTab={activeTab} onSelectTab={setActiveTab} />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#050506]">
@@ -356,9 +233,8 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
                           value={settings["workspace.root"] || ""}
                           onChange={(path) => handleUpdate("workspace.root", path)}
                         />
-                        {/* TODO(config-wireup): this persists workspace.root only; add live AppState.workspace_folder update IPC before file tools immediately follow the new root. */}
                         <p className="text-[10px] text-zinc-600">
-                          File tools (read, list, bash) are scoped to this folder.
+                          File tools apply this folder after settings are saved.
                         </p>
                       </div>
 
@@ -453,7 +329,7 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
                 )}
 
                 {activeTab === "agents" && (
-                  <AgentsSettings settings={settings} onUpdate={handleUpdate} />
+                  <AgentsSettings />
                 )}
 
                 {activeTab === "audio" && (

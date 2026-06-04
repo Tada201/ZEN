@@ -3,6 +3,7 @@ pub mod manager;
 pub mod operational_map;
 pub mod permission;
 pub mod sys_metrics;
+pub mod terminal_tools;
 pub mod url_safety;
 pub mod web_fetch;
 
@@ -16,6 +17,7 @@ use tokio::sync::RwLock;
 use self::operational_map::ActivateOperationalMapTool;
 use self::permission::{PermissionDecision, RiskLevel, ToolPermissions};
 use self::sys_metrics::SystemMetricsTool;
+use self::terminal_tools::RunCommandTool;
 use self::web_fetch::WebFetchTool;
 
 // ========== TOOL OUTPUT / ERROR ==========
@@ -152,6 +154,7 @@ pub struct ToolExecutionRecord {
 
 pub struct ToolRegistry {
     tools: HashMap<String, Arc<dyn Tool>>,
+    legacy_tools: HashMap<String, Arc<dyn crate::agent::tools::AgentTool>>,
     pub permissions: ToolPermissions,
     execution_history: Vec<ToolExecutionRecord>,
     /// Risk levels for tools that exist in the AgentTool registry but not here.
@@ -167,6 +170,7 @@ impl ToolRegistry {
     pub fn new() -> Self {
         Self {
             tools: HashMap::new(),
+            legacy_tools: HashMap::new(),
             permissions: ToolPermissions::default(),
             execution_history: Vec::new(),
             known_tool_risks: HashMap::new(),
@@ -177,6 +181,7 @@ impl ToolRegistry {
     pub fn with_permissions(permissions: ToolPermissions) -> Self {
         Self {
             tools: HashMap::new(),
+            legacy_tools: HashMap::new(),
             permissions,
             execution_history: Vec::new(),
             known_tool_risks: HashMap::new(),
@@ -187,6 +192,18 @@ impl ToolRegistry {
     pub fn register(&mut self, tool: Arc<dyn Tool>) {
         let name = tool.name().to_string();
         self.tools.insert(name, tool);
+    }
+
+    pub fn register_legacy_tool(&mut self, tool: Arc<dyn crate::agent::tools::AgentTool>) {
+        let name = tool.id().to_string();
+        let risk = default_tool_risk(&name);
+        self.register_known_tool_definition(
+            &name,
+            tool.description().to_string(),
+            tool.input_schema(),
+            risk,
+        );
+        self.legacy_tools.insert(name, tool);
     }
 
     /// Register a known tool name with its risk level.
@@ -229,6 +246,18 @@ impl ToolRegistry {
 
     pub fn get(&self, name: &str) -> Option<Arc<dyn Tool>> {
         self.tools.get(name).cloned()
+    }
+
+    pub fn get_legacy(&self, name: &str) -> Option<Arc<dyn crate::agent::tools::AgentTool>> {
+        self.legacy_tools.get(name).cloned()
+    }
+
+    pub fn is_direct_tool(&self, name: &str) -> bool {
+        self.tools.contains_key(name)
+    }
+
+    pub fn direct_tool_risk(&self, name: &str) -> Option<RiskLevel> {
+        self.tools.get(name).map(|tool| tool.risk_level())
     }
 
     /// List tool definitions (for sending to LLM as available tools)
@@ -415,12 +444,15 @@ pub fn init_tool_registry(permissions: ToolPermissions) -> ToolRegistry {
     registry.register(Arc::new(WebFetchTool));
     registry.register(Arc::new(crate::search::WebSearchTool));
     registry.register(Arc::new(ActivateOperationalMapTool));
+    registry.register(Arc::new(RunCommandTool));
 
     // Register File System / RAG tools
     registry.register(Arc::new(fs_tools::VectorSearchTool));
     registry.register(Arc::new(fs_tools::ListDocumentsTool));
     registry.register(Arc::new(fs_tools::ReadDocumentTool));
     registry.register(Arc::new(fs_tools::GrepDocumentsTool));
+    registry.register(Arc::new(fs_tools::WriteFileTool));
+    registry.register(Arc::new(fs_tools::EditFileTool));
 
     for tool_id in [
         "tools_search",

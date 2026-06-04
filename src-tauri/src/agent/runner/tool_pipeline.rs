@@ -1,5 +1,8 @@
 use crate::agent::cache::ToolCache;
 use crate::agent::types::{ToolCall, ToolResult};
+use crate::services::permissions::{
+    enforce_tool_allowlist, from_agent_tool_ids, AllowlistDecision,
+};
 use crate::tools::manager::ToolManager;
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -18,6 +21,7 @@ pub(super) async fn preprocess_tool_calls(
 ) -> (Vec<Option<ToolResult>>, Vec<PipelineCall>) {
     let mut ordered_results: Vec<Option<ToolResult>> = vec![None; tool_calls.len()];
     let mut pipeline_calls: Vec<PipelineCall> = Vec::new();
+    let allowlist = from_agent_tool_ids(authorized_tool_ids);
 
     for (index, tc) in tool_calls.iter().enumerate() {
         match tc.name.as_str() {
@@ -44,6 +48,27 @@ pub(super) async fn preprocess_tool_calls(
                     .get("tool_id")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
+                if !authorized_tool_ids.is_empty()
+                    && matches!(
+                        enforce_tool_allowlist(&allowlist, tool_id, "agent"),
+                        AllowlistDecision::Deny { .. }
+                    )
+                {
+                    ordered_results[index] = Some(normalize_tool_result(
+                        tc.id.clone(),
+                        "tool_info",
+                        "Tool Info",
+                        tc.args.clone(),
+                        json!({
+                            "error": format!("Tool '{}' is not authorized for the current agent.", tool_id),
+                            "hint": "Call tool_list to see the tools available to this agent."
+                        }),
+                        true,
+                        0,
+                        chrono::Utc::now(),
+                    ));
+                    continue;
+                }
                 let schema = tool_manager.get_info(tool_id).await;
                 let started_at = chrono::Utc::now();
                 let result = match schema {
@@ -75,16 +100,17 @@ pub(super) async fn preprocess_tool_calls(
             }
             "tool_exec" => {
                 if let Some((real_id, real_args)) = tool_manager.resolve_tool_exec(&tc.args).await {
-                    if !authorized_tool_ids.is_empty()
-                        && !authorized_tool_ids.iter().any(|id| id == &real_id)
-                    {
+                    if !authorized_tool_ids.is_empty() {
+                        if let AllowlistDecision::Deny { reason } =
+                            enforce_tool_allowlist(&allowlist, &real_id, "agent")
+                        {
                         ordered_results[index] = Some(normalize_tool_result(
                             tc.id.clone(),
                             "tool_exec",
                             "Tool Exec",
                             tc.args.clone(),
                             json!({
-                                "error": format!("Tool '{}' is not authorized for the current agent.", real_id),
+                                "error": reason,
                                 "hint": "Call tool_list to see the tools available to this agent."
                             }),
                             true,
@@ -92,6 +118,7 @@ pub(super) async fn preprocess_tool_calls(
                             chrono::Utc::now(),
                         ));
                         continue;
+                        }
                     }
                     pipeline_calls.push(PipelineCall {
                         index,

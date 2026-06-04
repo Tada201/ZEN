@@ -5,6 +5,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { CHAT_STATUS_PHASES, type ChatStatusPhase } from "@/api/chatStatus";
 import type { Message, ArtifactData, Step } from "./types";
 import type { SettingsTabId } from "@/lib/features/frontendFeatures";
 import type { ParsedCard } from "./assistantMessageParts";
@@ -25,14 +26,15 @@ const CardFallback = () => (
   <div className="h-24 w-64 rounded-xl border border-border/30 bg-card/20" aria-hidden="true" />
 );
 
-const VISIBLE_CHAT_STATUS_PHASES = new Set([
-  "agent_streaming",
-  "tool_call_streaming",
-  "tool_call_ready",
+const VISIBLE_CHAT_STATUS_PHASES: ReadonlySet<ChatStatusPhase> = new Set([
+  CHAT_STATUS_PHASES.AgentStreaming,
+  CHAT_STATUS_PHASES.ToolCallStreaming,
+  CHAT_STATUS_PHASES.ToolCallReady,
 ]);
 
 function isVisibleChatStatusStep(step: Step) {
-  return step.kind !== "chat_status" || VISIBLE_CHAT_STATUS_PHASES.has(String(step.metadata?.phase || ""));
+  const phase = step.metadata?.phase;
+  return step.kind !== "chat_status" || (typeof phase === "string" && VISIBLE_CHAT_STATUS_PHASES.has(phase as ChatStatusPhase));
 }
 
 function isVisibleChatActionStep(step: Step) {
@@ -40,7 +42,7 @@ function isVisibleChatActionStep(step: Step) {
   if (!isVisibleChatStatusStep(step)) return false;
   
   if (step.kind === "chat_status") {
-    return false;
+    return true;
   }
 
   return (

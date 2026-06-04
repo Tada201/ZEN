@@ -1,165 +1,149 @@
-import { SettingsSection } from "../SettingsSection";
-import { SettingsRow } from "../SettingsRow";
-import { Badge } from "@/components/ui/badge";
-import { WorkbenchSwitch } from "../ui/WorkbenchSwitch";
-import { WorkbenchSelect } from "../ui/WorkbenchSelect";
-import { WorkbenchSlider } from "../ui/WorkbenchSlider";
-import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
+import { useState, useEffect, useCallback } from 'react';
+import { SettingsSection } from '../SettingsSection';
+import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
+import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
+import { agentsApi, type AgentInfo, type ToolMetadataItem } from '@/api';
+import { AgentConfigEditor } from './agents/AgentConfigEditor';
 
-interface AgentsSettingsProps {
-  settings: Record<string, string>;
-  onUpdate: (key: string, value: string) => void;
-}
+export function AgentsSettings() {
+  const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const [tools, setTools] = useState<ToolMetadataItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
 
-const REGISTERED_AGENTS = [
-  { id: "buffy", name: "Buffy", model: "deepseek-v4", description: "Primary orchestrator agent", tools: 14 },
-  { id: "codex", name: "Codex", model: "gpt-4o", description: "Code generation specialist", tools: 8 },
-  { id: "voyager", name: "Voyager", model: "claude-3.5", description: "Research and analysis agent", tools: 6 },
-];
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [agentList, toolList] = await Promise.all([
+        agentsApi.listAgents().catch(() => [] as AgentInfo[]),
+        agentsApi.listToolsForConfig().catch(() => [] as ToolMetadataItem[]),
+      ]);
+      setAgents(agentList ?? []);
+      setTools(toolList ?? []);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to connect to backend');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-export function AgentsSettings({ settings, onUpdate }: AgentsSettingsProps) {
-  // TODO(config-wireup): this page uses static agent rows and unmapped agents.*
-  // dot-keys. Wire it to agentsApi/AgentConfigManager save commands before these
-  // controls are treated as runtime orchestration configuration.
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleImport = async () => {
+    setImporting(true);
+    setError(null);
+    try {
+      const path = prompt('Enter the file path to import an agent config:');
+      if (!path) return;
+      const result = await agentsApi.importAgentConfigFile(path);
+      if (result) {
+        setError(null);
+        await loadData();
+      }
+    } catch (e: unknown) {
+      setError(`Import failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-8">
+        <div className="flex flex-col items-center justify-center gap-4 py-20">
+          <WorkbenchIcon name="codicon:loading" size={32} className="text-brand-purple animate-spin" />
+          <span className="text-[12px] font-bold text-zinc-500 uppercase tracking-widest">
+            Loading agent configs...
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && agents.length === 0) {
+    return (
+      <div className="space-y-8">
+        <div className="flex flex-col items-center justify-center gap-4 py-20">
+          <WorkbenchIcon name="codicon:warning" size={32} className="text-red-400" />
+          <span className="text-[12px] font-bold text-red-400 uppercase tracking-widest">
+            {error}
+          </span>
+          <WorkbenchButton variant="secondary" onClick={loadData} className="h-8">
+            <span className="text-[10px] font-extrabold uppercase">Retry</span>
+          </WorkbenchButton>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       <div className="space-y-1">
         <h3 className="text-lg font-bold tracking-tight text-foreground">Agents</h3>
-        <p className="text-[13px] text-muted-foreground">Configure sub-agents, delegation, and orchestration settings.</p>
+        <p className="text-[13px] text-muted-foreground">
+          Configure each sub-agent's model, tools, and execution limits. Configs are stored as JSON files.
+        </p>
       </div>
 
-      <SettingsSection title="Orchestrator" icon="lucide:cpu" description="Agent dispatch and execution control">
-        <SettingsRow
-          label="Orchestration Mode"
-          description="How agents are dispatched for tasks"
-          control={
-            <WorkbenchSelect
-              value={settings["agents.orchestration-mode"] || "automatic"}
-              onValueChange={v => onUpdate("agents.orchestration-mode", v)}
-              width={140}
-              options={[
-                { value: "automatic", label: "Automatic" },
-                { value: "manual", label: "Manual" },
-                { value: "round-robin", label: "Round Robin" },
-                { value: "priority", label: "Priority Queue" }
-              ]}
-            />
-          }
-          icon="lucide:git-branch"
-        />
-
-        <SettingsRow
-          label="Max Concurrent Agents"
-          description="Maximum number of agents running simultaneously"
-          control={
-            <div className="flex items-center gap-2 w-[140px]">
-              <WorkbenchSlider
-                value={[parseInt(settings["agents.max-concurrent"] || "3")]}
-                onValueChange={([v]) => onUpdate("agents.max-concurrent", String(v))}
-                min={1}
-                max={10}
-                step={1}
-                className="flex-1"
-              />
-              <span className="text-[11px] font-mono text-muted-foreground w-4 text-right">
-                {settings["agents.max-concurrent"] || "3"}
-              </span>
-            </div>
-          }
-          icon="lucide:users"
-        />
-
-        <SettingsRow
-          label="Agent Timeout"
-          description="Maximum execution time per agent task"
-          control={
-            <WorkbenchSelect
-              value={settings["agents.timeout"] || "120"}
-              onValueChange={v => onUpdate("agents.timeout", v)}
-              width={120}
-              options={[
-                { value: "30", label: "30 seconds" },
-                { value: "60", label: "1 minute" },
-                { value: "120", label: "2 minutes" },
-                { value: "300", label: "5 minutes" },
-                { value: "600", label: "10 minutes" }
-              ]}
-            />
-          }
-          icon="lucide:clock"
-        />
-      </SettingsSection>
-
-      <SettingsSection title="Agent Registry" icon="lucide:bot" description="Registered agents and their status">
-        <div className="px-3 py-2 space-y-1">
-          {REGISTERED_AGENTS.map(agent => (
-            <div
-              key={agent.id}
-              className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-white/[0.03] transition-colors"
-            >
-              <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center">
-                <WorkbenchIcon name="lucide:bot" size={14} className="text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-medium text-foreground">{agent.name}</span>
-                  <Badge variant="outline" className="h-4 px-1.5 text-[9px] font-mono bg-white/[0.03] border-white/[0.06] text-muted-foreground">
-                    {agent.model}
-                  </Badge>
-                </div>
-                <p className="text-[10px] text-muted-foreground/60 truncate">{agent.description} · {agent.tools} tools</p>
-              </div>
-              <WorkbenchSwitch
-                checked={settings[`agents.enabled.${agent.id}`] !== "false"}
-                onCheckedChange={v => onUpdate(`agents.enabled.${agent.id}`, String(v))}
-              />
-            </div>
-          ))}
+      {/* Global Controls */}
+      <SettingsSection
+        title="Config Management"
+        icon="codicon:settings-gear"
+        description="Import and manage agent configuration files."
+      >
+        <div className="flex items-center gap-3 flex-wrap">
+          <WorkbenchButton
+            variant="secondary"
+            className="h-8 gap-2 border-white/5"
+            onClick={handleImport}
+            disabled={importing}
+          >
+            <WorkbenchIcon name="codicon:folder-opened" size={14} className="text-brand-purple" />
+            <span className="text-[10px] font-extrabold uppercase">
+              {importing ? 'Importing...' : 'Import Config File'}
+            </span>
+          </WorkbenchButton>
+          <span className="text-[10px] text-zinc-500">
+            Import a JSON config file to override an agent's settings.
+            {tools.length > 0 && ` ${tools.length} tools available.`}
+          </span>
         </div>
+        {error && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/5 border border-red-500/20">
+            <WorkbenchIcon name="codicon:warning" size={14} className="text-red-400 shrink-0" />
+            <span className="text-[10px] text-red-400">{error}</span>
+          </div>
+        )}
       </SettingsSection>
 
-      <SettingsSection title="Agent Settings" icon="lucide:wrench" description="Defaults for new agents">
-        <SettingsRow
-          label="Default Model"
-          description="Default model for newly created agents"
-          control={
-            <WorkbenchSelect
-              value={settings["agents.default-model"] || "gpt-4o"}
-              onValueChange={v => onUpdate("agents.default-model", v)}
-              width={140}
-              options={[
-                { value: "gpt-4o", label: "GPT-4o" },
-                { value: "claude-3.5", label: "Claude 3.5 Sonnet" },
-                { value: "deepseek-v4", label: "DeepSeek V4" }
-              ]}
-            />
-          }
-          icon="lucide:cpu"
-        />
-
-        <SettingsRow
-          label="Memory Retention"
-          description="New agents retain context between tasks by default"
-          control={
-            <WorkbenchSwitch
-              checked={settings["agents.memory-retention"] !== "false"}
-              onCheckedChange={v => onUpdate("agents.memory-retention", String(v))}
-            />
-          }
-          icon="lucide:database"
-        />
-
-        <SettingsRow
-          label="Tool Access"
-          description="New agents can use file system and terminal tools by default"
-          control={
-            <WorkbenchSwitch
-              checked={settings["agents.tool-access"] !== "false"}
-              onCheckedChange={v => onUpdate("agents.tool-access", String(v))}
-            />
-          }
-          icon="lucide:network"
-        />
+      {/* Agent Config Editors */}
+      <SettingsSection
+        title="Sub-Agent Configuration"
+        icon="codicon:robot"
+        description={`${agents.length} registered agent${agents.length !== 1 ? 's' : ''}. Edit per-agent config to customize model, turns, and tool access.`}
+      >
+        {agents.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-12">
+            <WorkbenchIcon name="codicon:robot" size={24} className="text-zinc-500" />
+            <span className="text-[11px] text-zinc-500">No agents registered in the system.</span>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {agents.map((agent) => (
+              <AgentConfigEditor
+                key={agent.id}
+                agent={agent}
+                allTools={tools}
+                onSaved={() => {}}
+                onDeleted={() => {}}
+              />
+            ))}
+          </div>
+        )}
       </SettingsSection>
     </div>
   );

@@ -231,6 +231,7 @@ impl Tool for ReadDocumentTool {
 
         let state = app.state::<AppState>();
         let workspace = state.workspace_folder.read().await.clone();
+        let max_file_bytes = workspace_max_file_bytes(&state).await;
         let pool = state.db().await.map_err(|e| ToolError::ExecutionFailed {
             message: format!("DB error: {}", e),
         })?;
@@ -276,6 +277,8 @@ impl Tool for ReadDocumentTool {
             .map_err(|e| ToolError::ExecutionFailed {
                 message: format!("Workspace violation: {}", e),
             })?;
+
+        enforce_existing_file_size(&target_path, max_file_bytes).await?;
 
         let content = tokio::fs::read_to_string(&target_path).await.map_err(|e| {
             ToolError::ExecutionFailed {
@@ -362,6 +365,7 @@ impl Tool for GrepDocumentsTool {
 
         let state = app.state::<AppState>();
         let workspace = state.workspace_folder.read().await.clone();
+        let max_file_bytes = workspace_max_file_bytes(&state).await;
         let pool = state.db().await.map_err(|e| ToolError::ExecutionFailed {
             message: format!("DB error: {}", e),
         })?;
@@ -386,6 +390,10 @@ impl Tool for GrepDocumentsTool {
                     else {
                         continue;
                     };
+
+                    if enforce_existing_file_size(&path, max_file_bytes).await.is_err() {
+                        continue;
+                    }
 
                     if let Ok(content) = tokio::fs::read_to_string(&path).await {
                         let search_content = if parsed_args.case_sensitive.unwrap_or(false) {
@@ -441,4 +449,307 @@ impl Tool for GrepDocumentsTool {
             metadata: None,
         })
     }
+}
+
+#[derive(Deserialize)]
+struct WriteFileArgs {
+    file_path: String,
+    content: String,
+}
+
+pub struct WriteFileTool;
+
+#[async_trait]
+impl Tool for WriteFileTool {
+    fn name(&self) -> &str {
+        "write_file"
+    }
+
+    fn description(&self) -> &str {
+        "Writes content to a file inside the active workspace. If the file exists, returns a unified diff showing changes."
+    }
+
+    fn parameters_schema(&self) -> serde_json::Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the file, absolute or relative to the workspace"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Full content to write to the file"
+                }
+            },
+            "required": ["file_path", "content"],
+            "additionalProperties": false
+        })
+    }
+
+    fn risk_level(&self) -> RiskLevel {
+        RiskLevel::High
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    async fn execute(
+        &self,
+        app: AppHandle,
+        _chat_id: String,
+        args: serde_json::Value,
+    ) -> Result<ToolOutput, ToolError> {
+        let args: WriteFileArgs =
+            serde_json::from_value(args).map_err(|e| ToolError::InvalidArguments {
+                details: format!("Invalid write_file arguments: {}", e),
+            })?;
+
+        let state = app.state::<AppState>();
+        let workspace = state.workspace_folder.read().await.clone();
+        let max_file_bytes = workspace_max_file_bytes(&state).await;
+        enforce_content_size(args.content.len(), max_file_bytes, "write_file content")?;
+        let target_path = crate::workspace::resolve_workspace_path(&workspace, &args.file_path)
+            .map_err(|e| ToolError::PermissionDenied {
+                reason: format!("Workspace violation: {}", e),
+            })?;
+
+        let original_content = if target_path.exists() {
+            Some(read_text_file(&target_path).await?)
+        } else {
+            if let Some(parent) = target_path.parent() {
+                tokio::fs::create_dir_all(parent).await.map_err(|e| {
+                    ToolError::ExecutionFailed {
+                        message: format!("Failed to create parent directories: {}", e),
+                    }
+                })?;
+            }
+            None
+        };
+
+        tokio::fs::write(&target_path, &args.content).await.map_err(|e| {
+            ToolError::ExecutionFailed {
+                message: format!("Failed to write file: {}", e),
+            }
+        })?;
+
+        let (change_type, diff, lines_added, lines_removed) =
+            if let Some(original) = original_content {
+                let (diff, lines_added, lines_removed) =
+                    unified_diff(&target_path, &original, &args.content);
+                ("modified", Some(diff), lines_added, lines_removed)
+            } else {
+                ("created", None, args.content.lines().count(), 0)
+            };
+
+        Ok(ToolOutput {
+            content: json!({
+                "file_path": target_path.to_string_lossy(),
+                "change_type": change_type,
+                "lines_added": lines_added,
+                "lines_removed": lines_removed,
+                "diff": diff,
+            }),
+            metadata: None,
+        })
+    }
+}
+
+#[derive(Deserialize)]
+struct EditFileArgs {
+    file_path: String,
+    old_text: String,
+    new_text: String,
+}
+
+pub struct EditFileTool;
+
+#[async_trait]
+impl Tool for EditFileTool {
+    fn name(&self) -> &str {
+        "edit_file"
+    }
+
+    fn description(&self) -> &str {
+        "Edits a workspace file by replacing exact old_text with new_text. Returns a unified diff of changes."
+    }
+
+    fn parameters_schema(&self) -> serde_json::Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the file, absolute or relative to the workspace"
+                },
+                "old_text": {
+                    "type": "string",
+                    "description": "Exact text to find and replace"
+                },
+                "new_text": {
+                    "type": "string",
+                    "description": "Replacement text"
+                }
+            },
+            "required": ["file_path", "old_text", "new_text"],
+            "additionalProperties": false
+        })
+    }
+
+    fn risk_level(&self) -> RiskLevel {
+        RiskLevel::High
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    async fn execute(
+        &self,
+        app: AppHandle,
+        _chat_id: String,
+        args: serde_json::Value,
+    ) -> Result<ToolOutput, ToolError> {
+        let args: EditFileArgs =
+            serde_json::from_value(args).map_err(|e| ToolError::InvalidArguments {
+                details: format!("Invalid edit_file arguments: {}", e),
+            })?;
+
+        if args.old_text.is_empty() {
+            return Err(ToolError::InvalidArguments {
+                details: "old_text cannot be empty".to_string(),
+            });
+        }
+
+        let state = app.state::<AppState>();
+        let workspace = state.workspace_folder.read().await.clone();
+        let max_file_bytes = workspace_max_file_bytes(&state).await;
+        let target_path = crate::workspace::resolve_workspace_path(&workspace, &args.file_path)
+            .map_err(|e| ToolError::PermissionDenied {
+                reason: format!("Workspace violation: {}", e),
+            })?;
+
+        if !target_path.exists() {
+            return Err(ToolError::ExecutionFailed {
+                message: format!("File not found: {}", args.file_path),
+            });
+        }
+
+        enforce_existing_file_size(&target_path, max_file_bytes).await?;
+        let original_content = read_text_file(&target_path).await?;
+        if !original_content.contains(&args.old_text) {
+            return Err(ToolError::ExecutionFailed {
+                message: "old_text not found in file; ensure exact match including whitespace"
+                    .to_string(),
+            });
+        }
+
+        let new_content = original_content.replace(&args.old_text, &args.new_text);
+        enforce_content_size(new_content.len(), max_file_bytes, "edited file content")?;
+        tokio::fs::write(&target_path, &new_content)
+            .await
+            .map_err(|e| ToolError::ExecutionFailed {
+                message: format!("Failed to write edited file: {}", e),
+            })?;
+
+        let (diff, lines_added, lines_removed) =
+            unified_diff(&target_path, &original_content, &new_content);
+
+        Ok(ToolOutput {
+            content: json!({
+                "file_path": target_path.to_string_lossy(),
+                "change_type": "modified",
+                "lines_added": lines_added,
+                "lines_removed": lines_removed,
+                "diff": diff,
+                "success": true,
+            }),
+            metadata: None,
+        })
+    }
+}
+
+async fn read_text_file(path: &Path) -> Result<String, ToolError> {
+    tokio::fs::read_to_string(path)
+        .await
+        .map_err(|e| ToolError::ExecutionFailed {
+            message: format!("Failed to read file as UTF-8 text: {}", e),
+        })
+}
+
+async fn workspace_max_file_bytes(state: &AppState) -> u64 {
+    let db = match state.db().await {
+        Ok(db) => db,
+        Err(_) => return 10 * 1024 * 1024,
+    };
+
+    let mut raw = crate::db::queries::get_setting(&db, "workspace.max-file-size")
+        .await
+        .ok()
+        .flatten();
+
+    if raw.is_none() {
+        raw = crate::db::queries::get_setting(&db, "workspace_max_file_size")
+            .await
+            .ok()
+            .flatten();
+    }
+
+    let mb = raw
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(10)
+        .clamp(1, 500);
+    mb * 1024 * 1024
+}
+
+async fn enforce_existing_file_size(path: &Path, max_bytes: u64) -> Result<(), ToolError> {
+    let metadata = tokio::fs::metadata(path)
+        .await
+        .map_err(|e| ToolError::ExecutionFailed {
+            message: format!("Failed to inspect file size: {}", e),
+        })?;
+    enforce_content_size(metadata.len() as usize, max_bytes, "file")
+}
+
+fn enforce_content_size(size_bytes: usize, max_bytes: u64, label: &str) -> Result<(), ToolError> {
+    if size_bytes as u64 > max_bytes {
+        return Err(ToolError::ExecutionFailed {
+            message: format!(
+                "{} exceeds workspace.max-file-size ({} bytes > {} bytes)",
+                label, size_bytes, max_bytes
+            ),
+        });
+    }
+    Ok(())
+}
+
+fn unified_diff(path: &Path, old: &str, new: &str) -> (String, usize, usize) {
+    use similar::{ChangeTag, TextDiff};
+
+    let diff = TextDiff::from_lines(old, new);
+    let mut diff_lines = Vec::new();
+    let mut lines_added = 0;
+    let mut lines_removed = 0;
+
+    diff_lines.push(format!("--- a/{}", path.display()));
+    diff_lines.push(format!("+++ b/{}", path.display()));
+
+    for change in diff.iter_all_changes() {
+        match change.tag() {
+            ChangeTag::Delete => {
+                diff_lines.push(format!("-{}", change.value().trim_end()));
+                lines_removed += 1;
+            }
+            ChangeTag::Insert => {
+                diff_lines.push(format!("+{}", change.value().trim_end()));
+                lines_added += 1;
+            }
+            ChangeTag::Equal => {
+                diff_lines.push(format!(" {}", change.value().trim_end()));
+            }
+        }
+    }
+
+    (diff_lines.join("\n"), lines_added, lines_removed)
 }

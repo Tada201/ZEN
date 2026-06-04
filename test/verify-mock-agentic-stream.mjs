@@ -4,8 +4,7 @@ import ts from "typescript";
 
 const fixtures = JSON.parse(readFileSync(new URL("./chat-fixtures.json", import.meta.url), "utf8"));
 const sourcePath = new URL("../src/api/mockClient.ts", import.meta.url);
-let source = readFileSync(sourcePath, "utf8")
-  .replace('import { SECRET_PRESENT_VALUE } from "./settingsApi";', 'const SECRET_PRESENT_VALUE = "__secret_present__";')
+let mockStreamingSource = readFileSync(new URL("../src/api/mockStreaming.ts", import.meta.url), "utf8")
   .replace(
     'import { createActionStep } from "@/atlas/hooks/stream/agentActionLedger";',
     `function createActionStep(payload, kind) {
@@ -34,7 +33,11 @@ let source = readFileSync(sourcePath, "utf8")
       };
     }`,
   )
-  .replace('import chatFixtures from "../../test/chat-fixtures.json";', `const chatFixtures = ${JSON.stringify(fixtures)};`);
+  .replace('import chatFixtures from "../../test/chat-fixtures.json";', `const chatFixtures = ${JSON.stringify(fixtures)};`)
+  .replace('export function triggerMockStream', 'function triggerMockStream');
+let source = readFileSync(sourcePath, "utf8")
+  .replace('import { SECRET_PRESENT_VALUE } from "./settingsApi";', 'const SECRET_PRESENT_VALUE = "__secret_present__";')
+  .replace('import { triggerMockStream } from "./mockStreaming";', mockStreamingSource);
 
 const transpiled = ts.transpileModule(source, {
   compilerOptions: {

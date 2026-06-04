@@ -41,12 +41,6 @@ pub async fn mcp_get_status(state: State<'_, AppState>) -> ZenResult<Value> {
 }
 
 #[tauri::command]
-pub async fn mcp_get_http_token(state: State<'_, AppState>) -> ZenResult<String> {
-    let server = state.mcp_server.read().await;
-    Ok(server.http_auth_token().to_string())
-}
-
-#[tauri::command]
 pub async fn mcp_start_server(state: State<'_, AppState>) -> ZenResult<()> {
     let server_arc = state.mcp_server.clone();
     let mut server = state.mcp_server.write().await;

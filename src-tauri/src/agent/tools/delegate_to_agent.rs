@@ -117,20 +117,43 @@ impl AgentTool for DelegateToAgentTool {
             )
         })?;
 
-        // Determine model to use
+        // Determine model to use (priority: config file > agent override > active setting)
         let state = app.state::<AppState>();
         let db = state
             .db()
             .await
             .map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?;
-        let model = if let Some(override_model) = agent.model_override.clone() {
-            override_model
+
+        // Load agent config file
+        let agent_config_file = crate::agent::config_file::load_agent_config(agent_id).ok();
+
+        let model = if let Some(ref cfg) = agent_config_file {
+            if !cfg.model_name.is_empty() {
+                cfg.model_name.clone()
+            } else if let Some(ref m) = agent.model_override {
+                m.clone()
+            } else if let Ok(Some(saved_model)) =
+                crate::db::queries::get_setting(&db, "model_name").await
+            {
+                saved_model
+            } else {
+                String::new()
+            }
+        } else if let Some(ref m) = agent.model_override {
+            m.clone()
         } else if let Ok(Some(saved_model)) =
             crate::db::queries::get_setting(&db, "model_name").await
         {
             saved_model
         } else {
-            "gemini-1.5-flash".to_string()
+            String::new()
+        };
+
+        // Use config file max_iterations if available
+        let effective_max_steps = if let Some(ref cfg) = agent_config_file {
+            cfg.max_iterations.max(1) as usize
+        } else {
+            max_steps
         };
 
         // Create parent runner with inherited depth and permissions
@@ -148,6 +171,12 @@ impl AgentTool for DelegateToAgentTool {
 
         if let Some(allowed) = allowed_tools {
             parent_runner = parent_runner.with_allowed_tools(allowed);
+        } else if let Some(ref cfg) = agent_config_file {
+            if !cfg.enabled_tools.is_empty() {
+                parent_runner = parent_runner.with_allowed_tools(Arc::new(
+                    tokio::sync::Mutex::new(cfg.enabled_tools.iter().cloned().collect()),
+                ));
+            }
         }
 
         // Check depth limit
@@ -158,7 +187,7 @@ impl AgentTool for DelegateToAgentTool {
             }));
         }
 
-        let child_runner = parent_runner.child(max_steps);
+        let child_runner = parent_runner.child(effective_max_steps);
 
         // Build delegation prompt with context
         let mut delegation_content = String::new();

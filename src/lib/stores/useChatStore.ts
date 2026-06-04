@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { ArtifactData, Message } from '../../atlas/components/chat/types';
+import { useUIStore } from './useUIStore';
 
 const EMPTY_ARRAY: Message[] = [];
 
@@ -75,6 +76,9 @@ export const useChatStore = create<ChatState>()(
 
       setStreamingForChat: (chatId, streaming) => set((state) => {
         if (state.streamingChats[chatId] === streaming) return state;
+        if (streaming) {
+          useUIStore.getState().setAgentsPanelDismissed(false);
+        }
         return {
           streamingChats: { ...state.streamingChats, [chatId]: streaming },
         };
@@ -127,6 +131,9 @@ export const useChatStore = create<ChatState>()(
         if (!activeSessionId) return;
         set((state) => {
           if (state.streamingChats[activeSessionId] === isStreaming) return state;
+          if (isStreaming) {
+            useUIStore.getState().setAgentsPanelDismissed(false);
+          }
           return {
             streamingChats: { ...state.streamingChats, [activeSessionId]: isStreaming },
           };

@@ -1,79 +1,13 @@
+import { CHAT_STATUS_PHASES } from "@/api/chatStatus";
+import { parseCardTags, type ParsedCard } from "./assistantCardParser";
 import type { Message, SpawnMeta, Step, ToolCall } from "./types";
 
-export interface ParsedCard {
-  type: string;
-  data: unknown;
-}
+export { parseCardTags, type ParsedCard } from "./assistantCardParser";
 
 export type GroupedAssistantStep =
   | (Step & { type: "text"; cards: ParsedCard[]; cleanText: string })
   | (Step & { type: "reasoning" | "action" })
   | { type: "tool-group"; toolCalls: ToolCall[] };
-
-export function parseCardTags(text: string): { cards: ParsedCard[]; cleanText: string } {
-  const cards: ParsedCard[] = [];
-
-  if (!text || typeof text !== "string") {
-    return { cards, cleanText: text || "" };
-  }
-
-  const regex = /<card(?:\s[^>]*)?>\s*([\s\S]*?)\s*<\/card>/gi;
-  let match;
-  const replacements: { start: number; end: number }[] = [];
-  const placeholders: Array<{ start: number; end: number; text: string }> = [];
-
-  while ((match = regex.exec(text)) !== null) {
-    const rawTag = match[0];
-    const jsonContent = match[1];
-    let replacementText = "";
-
-    try {
-      const parsed = JSON.parse(jsonContent.trim()) as Record<string, unknown>;
-      if (parsed && typeof parsed === "object") {
-        cards.push({
-          type: typeof parsed.type === "string" ? parsed.type : typeof parsed.card === "string" ? parsed.card : "unknown",
-          data: parsed.data || parsed,
-        });
-      }
-    } catch {
-      replacementText = "_Unable to render generated card._";
-    }
-    replacements.push({ start: match.index, end: match.index + rawTag.length });
-    if (replacementText) {
-      placeholders.push({ start: match.index, end: match.index + rawTag.length, text: replacementText });
-    }
-  }
-
-  let cleanText: string;
-  if (replacements.length > 0) {
-    const parts: string[] = [];
-    let lastEnd = 0;
-    for (const { start, end } of replacements) {
-      parts.push(text.slice(lastEnd, start));
-      const placeholder = placeholders.find((item) => item.start === start && item.end === end);
-      if (placeholder) parts.push(`\n\n${placeholder.text}\n\n`);
-      lastEnd = end;
-    }
-    parts.push(text.slice(lastEnd));
-    cleanText = parts.join("").trim();
-  } else {
-    cleanText = text;
-  }
-
-  const partialCardMatch = /<card(?:\s[^>]*)?>/i.exec(cleanText);
-  if (partialCardMatch) {
-    const idx = partialCardMatch.index;
-    const afterCard = cleanText.substring(idx + partialCardMatch[0].length).trimStart();
-    if (afterCard.startsWith("{") || afterCard.startsWith("[")) {
-      cleanText = `${cleanText.substring(0, idx).trim()}\n\n_Generating card..._`.trim();
-    } else {
-      cleanText = cleanText.replace(/<card(?:\s[^>]*)?>/i, "");
-    }
-  }
-  cleanText = cleanText.replace(/<\/card>/gi, "").trim();
-
-  return { cards, cleanText };
-}
 
 function extractToolId(step: Step): string | undefined {
   if (step.toolCall?.id) return step.toolCall.id;
@@ -338,14 +272,14 @@ function mergeChatStatus(grouped: MutableGroupedStep[], incoming: Step) {
     const existingPhase = item.metadata?.phase;
     
     if (incomingPhase === existingPhase) {
-      if (incomingPhase === "agent_streaming") {
+      if (incomingPhase === CHAT_STATUS_PHASES.AgentStreaming) {
         const incomingAgent = incoming.metadata?.agentName || incoming.metadata?.agentId;
         const existingAgent = item.metadata?.agentName || item.metadata?.agentId;
         if (incomingAgent === existingAgent) {
           grouped[i] = { ...item, ...incoming };
           return true;
         }
-      } else if (incomingPhase === "tool_call_streaming" || incomingPhase === "tool_call_ready") {
+      } else if (incomingPhase === CHAT_STATUS_PHASES.ToolCallStreaming || incomingPhase === CHAT_STATUS_PHASES.ToolCallReady) {
         const incomingTool = incoming.metadata?.toolCallPreview?.toolName;
         const existingTool = item.metadata?.toolCallPreview?.toolName;
         if (incomingTool === existingTool) {
@@ -447,6 +381,12 @@ export function groupToolCalls(toolCalls: ToolCall[] | undefined): ToolCall[] {
 
   const grouped: ToolCall[] = [];
   toolCalls.forEach((tc) => {
+    const sameIdIndex = grouped.findIndex((tool) => tool.id === tc.id);
+    if (sameIdIndex !== -1) {
+      grouped[sameIdIndex] = mergeGroupedToolCall(grouped[sameIdIndex], tc);
+      return;
+    }
+
     const prev = grouped[grouped.length - 1];
     if (prev && prev.name === tc.name && prev.status === "error" && tc.status !== "error") {
       prev.retries = (prev.retries || 0) + 1;

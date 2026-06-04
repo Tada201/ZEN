@@ -21,8 +21,7 @@ function loadTsModule(relativePath, replacements = []) {
 
 async function loadMockClient() {
   const fixtures = JSON.parse(readFileSync(new URL("./chat-fixtures.json", import.meta.url), "utf8"));
-  let source = readFileSync(new URL("../src/api/mockClient.ts", import.meta.url), "utf8")
-    .replace('import { SECRET_PRESENT_VALUE } from "./settingsApi";', 'const SECRET_PRESENT_VALUE = "__secret_present__";')
+  const mockStreamingSource = readFileSync(new URL("../src/api/mockStreaming.ts", import.meta.url), "utf8")
     .replace(
       'import { createActionStep } from "@/atlas/hooks/stream/agentActionLedger";',
       `function createActionStep(payload, kind) {
@@ -50,7 +49,11 @@ async function loadMockClient() {
         };
       }`,
     )
-    .replace('import chatFixtures from "../../test/chat-fixtures.json";', `const chatFixtures = ${JSON.stringify(fixtures)};`);
+    .replace('import chatFixtures from "../../test/chat-fixtures.json";', `const chatFixtures = ${JSON.stringify(fixtures)};`)
+    .replace('export function triggerMockStream', 'function triggerMockStream');
+  let source = readFileSync(new URL("../src/api/mockClient.ts", import.meta.url), "utf8")
+    .replace('import { SECRET_PRESENT_VALUE } from "./settingsApi";', 'const SECRET_PRESENT_VALUE = "__secret_present__";')
+    .replace('import { triggerMockStream } from "./mockStreaming";', mockStreamingSource);
 
   const transpiled = ts.transpileModule(source, {
     compilerOptions: {
@@ -75,6 +78,14 @@ globalThis.localStorage = {
 
 const ledgerModule = await loadTsModule("../src/atlas/hooks/stream/agentActionLedger.ts", [
   [
+    'import { CHAT_STATUS_PHASES } from "../../../api/chatStatus";',
+    `const CHAT_STATUS_PHASES = {
+      AgentStreaming: "agent_streaming",
+      ToolCallStreaming: "tool_call_streaming",
+      ToolCallReady: "tool_call_ready",
+    };`,
+  ],
+  [
     'import { findWritableAssistantIndex } from "./messageTarget";',
     `function findWritableAssistantIndex(messages) {
       for (let i = messages.length - 1; i >= 0; i--) {
@@ -86,7 +97,23 @@ const ledgerModule = await loadTsModule("../src/atlas/hooks/stream/agentActionLe
   ],
 ]);
 const toolReducerModule = await loadTsModule("../src/atlas/hooks/stream/toolEventReducer.ts");
-const partsModule = await loadTsModule("../src/atlas/components/chat/assistantMessageParts.ts");
+const partsModule = await loadTsModule("../src/atlas/components/chat/assistantMessageParts.ts", [
+  [
+    'import { CHAT_STATUS_PHASES } from "@/api/chatStatus";',
+    `const CHAT_STATUS_PHASES = {
+      AgentStreaming: "agent_streaming",
+      ToolCallStreaming: "tool_call_streaming",
+      ToolCallReady: "tool_call_ready",
+    };`,
+  ],
+  [
+    'import { parseCardTags, type ParsedCard } from "./assistantCardParser";',
+    `function parseCardTags(text) {
+      return { cards: [], cleanText: text || "" };
+    }`,
+  ],
+  ['export { parseCardTags, type ParsedCard } from "./assistantCardParser";', 'export { parseCardTags };'],
+]);
 const delegationModule = await loadTsModule("../src/atlas/components/chat/agentDelegationLaneModel.ts");
 const traceModelModule = await loadTsModule("../src/atlas/components/chat/agentExecutionTraceModel.ts", [
   [

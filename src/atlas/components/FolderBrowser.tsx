@@ -5,6 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { workspaceApi } from "@/api";
+import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 import {
   Dialog, DialogContent,
   DialogTitle, DialogDescription,
@@ -13,17 +14,57 @@ import {
 interface FolderEntry {
   name: string;
   path: string;
+  type?: "dir" | "file" | string;
 }
 
 interface BrowseResult {
   current: string;
   parent: string | null;
   directories: FolderEntry[];
+  entries?: FolderEntry[];
 }
 
 interface FolderBrowserProps {
   value: string;
   onChange: (path: string) => void;
+}
+
+const FILE_ICON_BY_EXTENSION: Record<string, string> = {
+  ts: "vscode-icons:file-type-typescript",
+  tsx: "vscode-icons:file-type-reactts",
+  js: "vscode-icons:file-type-js",
+  jsx: "vscode-icons:file-type-reactjs",
+  json: "vscode-icons:file-type-json",
+  rs: "vscode-icons:file-type-rust",
+  toml: "vscode-icons:file-type-toml",
+  md: "vscode-icons:file-type-markdown",
+  css: "vscode-icons:file-type-css",
+  scss: "vscode-icons:file-type-scss",
+  html: "vscode-icons:file-type-html",
+  yml: "vscode-icons:file-type-yaml",
+  yaml: "vscode-icons:file-type-yaml",
+  lock: "vscode-icons:file-type-lock",
+  png: "vscode-icons:file-type-image",
+  jpg: "vscode-icons:file-type-image",
+  jpeg: "vscode-icons:file-type-image",
+  svg: "vscode-icons:file-type-svg",
+  pdf: "vscode-icons:file-type-pdf2",
+  env: "vscode-icons:file-type-dotenv",
+};
+
+function fileIconFor(name: string) {
+  const lower = name.toLowerCase();
+  if (lower === "package.json") return "vscode-icons:file-type-node";
+  if (lower === "cargo.toml") return "vscode-icons:file-type-cargo";
+  if (lower === "dockerfile") return "vscode-icons:file-type-docker";
+  if (lower.startsWith(".env")) return "vscode-icons:file-type-dotenv";
+
+  const extension = lower.includes(".") ? lower.split(".").pop() || "" : "";
+  return FILE_ICON_BY_EXTENSION[extension] || "lucide:file";
+}
+
+function entryType(entry: FolderEntry) {
+  return entry.type === "dir" ? "dir" : "file";
 }
 
 export function FolderBrowser({ value, onChange }: FolderBrowserProps) {
@@ -68,6 +109,7 @@ export function FolderBrowser({ value, onChange }: FolderBrowserProps) {
   const pathSegments = browseData?.current
     ? browseData.current.replace(/\\/g, "/").split("/").filter(Boolean)
     : [];
+  const entries = browseData?.entries?.length ? browseData.entries : browseData?.directories ?? [];
 
   return (
     <div className="space-y-2">
@@ -164,33 +206,55 @@ export function FolderBrowser({ value, onChange }: FolderBrowserProps) {
               <div className="flex items-center justify-center h-full py-16">
                 <p className="text-sm text-destructive">{error}</p>
               </div>
-            ) : (browseData?.directories?.length ?? 0) === 0 ? (
+            ) : entries.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full py-16 text-muted-foreground">
                 <Folder className="h-8 w-8 mb-2 opacity-30" />
-                <p className="text-xs">No subdirectories found</p>
+                <p className="text-xs">No files or folders found</p>
               </div>
             ) : (
               <div className="p-1">
-                {browseData?.directories.map((dir) => (
-                  <button
-                    key={dir.path}
-                    onDoubleClick={() => handleNavigate(dir.path)}
-                    onClick={() => setSelectedPath(dir.path)}
-                    className={cn(
-                      "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-all text-sm group",
-                      selectedPath === dir.path
-                        ? "bg-primary/10 text-primary font-medium"
-                        : "hover:bg-muted/40 text-foreground"
-                    )}
-                  >
-                    <Folder className={cn(
-                      "h-4 w-4 shrink-0 transition-colors",
-                      selectedPath === dir.path ? "text-primary" : "text-muted-foreground/60 group-hover:text-primary/50"
-                    )} />
-                    <span className="truncate flex-1">{dir.name}</span>
-                    <ChevronRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-40 transition-opacity" />
-                  </button>
-                ))}
+                {entries.map((entry) => {
+                  const type = entryType(entry);
+                  const isDir = type === "dir";
+                  const isSelected = isDir && selectedPath === entry.path;
+
+                  return (
+                    <button
+                      key={`${type}:${entry.path}`}
+                      type="button"
+                      onDoubleClick={() => isDir && handleNavigate(entry.path)}
+                      onClick={() => {
+                        if (isDir) setSelectedPath(entry.path);
+                      }}
+                      className={cn(
+                        "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-all text-sm group",
+                        isSelected
+                          ? "bg-primary/10 text-primary font-medium"
+                          : isDir
+                            ? "hover:bg-muted/40 text-foreground"
+                            : "cursor-default text-muted-foreground/75"
+                      )}
+                      title={isDir ? "Click to select, double-click to open" : entry.path}
+                    >
+                      <WorkbenchIcon
+                        name={isDir ? "vscode-icons:default-folder" : fileIconFor(entry.name)}
+                        size={16}
+                        className={cn(
+                          "shrink-0 transition-opacity",
+                          isDir ? "opacity-90 group-hover:opacity-100" : "opacity-80"
+                        )}
+                      />
+                      <span className="truncate flex-1">{entry.name}</span>
+                      {isDir ? (
+                        <ChevronRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-40 transition-opacity" />
+                      ) : (
+                        <span className="shrink-0 rounded bg-white/[0.035] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground/50">
+                          file
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </ScrollArea>

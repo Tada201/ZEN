@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod agent_config;
 pub mod artifacts;
 pub mod canvas;
 pub mod chat;
@@ -210,22 +211,12 @@ impl AppState {
                 let prog = prog_arc.blocking_read();
                 for meta in prog.get_metadata() {
                     if let Some(tool) = prog.get_or_load_tool(&meta.id) {
-                        v2_guard.register_known_tool_definition(
-                            tool.id(),
-                            tool.description().to_string(),
-                            tool.input_schema(),
-                            crate::tools::default_tool_risk(tool.id()),
-                        );
+                        v2_guard.register_legacy_tool(tool);
                     }
                 }
             }
             for tool in v1_guard.list() {
-                v2_guard.register_known_tool_definition(
-                    tool.id(),
-                    tool.description().to_string(),
-                    tool.input_schema(),
-                    crate::tools::default_tool_risk(tool.id()),
-                );
+                v2_guard.register_legacy_tool(tool);
             }
         }
 
@@ -342,6 +333,28 @@ impl AppState {
 
     pub async fn get_provider(&self) -> ZenResult<Arc<dyn LlmProvider>> {
         self.provider().await
+    }
+
+    pub async fn set_workspace_folder(&self, path: impl AsRef<std::path::Path>) -> ZenResult<()> {
+        let canonical =
+            crate::workspace::canonicalize_workspace_root(path.as_ref()).map_err(|e| {
+                ZenError::Custom(format!("Invalid workspace root: {}", e).into())
+            })?;
+
+        {
+            let mut workspace = self.workspace_folder.write().await;
+            *workspace = canonical.clone();
+        }
+
+        {
+            let mut session_memory = self.session_memory.write().await;
+            *session_memory = Arc::new(crate::rag::session_memory::SessionMemoryManager::new(
+                canonical.clone(),
+            ));
+        }
+
+        tracing::info!(workspace = %canonical.display(), "Live workspace root updated");
+        Ok(())
     }
 
     pub async fn search_rag(

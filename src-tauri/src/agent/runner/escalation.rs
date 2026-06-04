@@ -2,6 +2,7 @@
 
 use super::helpers::is_tool_capability_error;
 use super::Runner;
+use crate::agent::chat_status::ChatStatusPhase;
 use crate::agent::event_bus::{
     AgentChunkPayload, AgentEvent, ChatChunkFirstPayload, ChatChunkPayload, ChatErrorPayload,
     ChatStatusPayload,
@@ -44,11 +45,15 @@ impl EarlyToolExecutionState {
         }
     }
 
-    pub fn key_for(name: &str, args: &serde_json::Value, id: Option<&str>) -> String {
+    pub fn key_for(name: &str, args: &serde_json::Value, id: Option<&str>, index: Option<usize>) -> String {
         if let Some(id) = id.filter(|value| !value.is_empty()) {
             format!("id:{id}")
         } else {
-            format!("sig:{name}:{}", args)
+            use sha2::{Digest, Sha256};
+            let index = index
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+            format!("sig:{index}:{name}:{:x}", Sha256::digest(args.to_string()))
         }
     }
 
@@ -97,6 +102,86 @@ impl EarlyToolExecutionState {
             }
         }
     }
+}
+
+fn redact_tool_preview_string(value: &str) -> String {
+    const MAX_PREVIEW_CHARS: usize = 2_000;
+    let mut redacted = value.to_string();
+    for marker in [
+        "api_key",
+        "apikey",
+        "authorization",
+        "bearer",
+        "credential",
+        "password",
+        "secret",
+        "token",
+    ] {
+        let lower = redacted.to_lowercase();
+        if lower.contains(marker) {
+            return "[redacted sensitive tool arguments]".to_string();
+        }
+    }
+    if redacted.chars().count() > MAX_PREVIEW_CHARS {
+        redacted = redacted.chars().take(MAX_PREVIEW_CHARS).collect::<String>();
+        redacted.push_str("...");
+    }
+    redacted
+}
+
+fn redact_tool_preview_value(value: serde_json::Value) -> serde_json::Value {
+    const MAX_ITEMS: usize = 24;
+    const MAX_DEPTH: usize = 6;
+
+    fn inner(value: serde_json::Value, depth: usize) -> serde_json::Value {
+        if depth > MAX_DEPTH {
+            return json!("[truncated]");
+        }
+        match value {
+            serde_json::Value::String(s) => serde_json::Value::String(redact_tool_preview_string(&s)),
+            serde_json::Value::Array(items) => serde_json::Value::Array(
+                items
+                    .into_iter()
+                    .take(MAX_ITEMS)
+                    .map(|item| inner(item, depth + 1))
+                    .collect(),
+            ),
+            serde_json::Value::Object(map) => {
+                let mut next = serde_json::Map::new();
+                for (key, item) in map.into_iter().take(MAX_ITEMS) {
+                    let key_lower = key.to_lowercase();
+                    let should_redact = [
+                        "api_key",
+                        "apikey",
+                        "authorization",
+                        "bearer",
+                        "credential",
+                        "password",
+                        "secret",
+                        "token",
+                    ]
+                    .iter()
+                    .any(|marker| key_lower.contains(marker));
+                    next.insert(
+                        key,
+                        if should_redact {
+                            json!("[redacted]")
+                        } else {
+                            inner(item, depth + 1)
+                        },
+                    );
+                }
+                serde_json::Value::Object(next)
+            }
+            other => other,
+        }
+    }
+
+    inner(value, 0)
+}
+
+fn redact_tool_preview_args(value: &serde_json::Value) -> serde_json::Value {
+    redact_tool_preview_value(value.clone())
 }
 
 impl Runner {
@@ -154,7 +239,7 @@ impl Runner {
                         message: "⚠️ Model doesn't support tools — retrying in text mode"
                             .to_string(),
                         iteration: Some(0),
-                        phase: Some("tool_mode_retry".to_string()),
+                        phase: Some(ChatStatusPhase::TOOL_MODE_RETRY.to_string()),
                         metadata: Some(json!({
                             "model": model,
                             "toolsEnabled": false,
@@ -213,7 +298,7 @@ impl Runner {
                         message: "⚡ Local model unavailable - escalating to cloud model"
                             .to_string(),
                         iteration: Some(0),
-                        phase: Some("model_escalating".to_string()),
+                        phase: Some(ChatStatusPhase::MODEL_ESCALATING.to_string()),
                         metadata: Some(json!({
                             "model": model,
                         })),
@@ -232,7 +317,7 @@ impl Runner {
                                     cloud_config.display_name
                                 ),
                                 iteration: Some(0),
-                                phase: Some("provider_ready".to_string()),
+                                phase: Some(ChatStatusPhase::PROVIDER_READY.to_string()),
                                 metadata: Some(json!({
                                     "provider": cloud_config.display_name,
                                 })),
@@ -268,7 +353,7 @@ impl Runner {
                                         chat_id: chat_id.to_string(),
                                         message: "✅ Cloud provider succeeded".to_string(),
                                         iteration: Some(0),
-                                        phase: Some("model_escalated".to_string()),
+                                        phase: Some(ChatStatusPhase::MODEL_ESCALATED.to_string()),
                                         metadata: Some(json!({
                                             "model": fallback_model,
                                         })),
@@ -292,7 +377,7 @@ impl Runner {
                                 chat_id: chat_id.to_string(),
                                 message: "⚠️ No cloud provider configured - add API key in Settings > Providers".to_string(),
                                 iteration: Some(0),
-                                phase: Some("provider_missing".to_string()),
+                                phase: Some(ChatStatusPhase::PROVIDER_MISSING.to_string()),
                                 metadata: None,
                             }));
                             self.emit(AgentEvent::ChatError(ChatErrorPayload {
@@ -465,6 +550,10 @@ impl Runner {
                             arguments_delta,
                             arguments_snapshot,
                         } => {
+                            let safe_arguments_delta =
+                                redact_tool_preview_string(&arguments_delta);
+                            let safe_arguments_snapshot =
+                                redact_tool_preview_string(&arguments_snapshot);
                             let tool_label = name
                                 .as_deref()
                                 .filter(|value| !value.is_empty())
@@ -473,7 +562,7 @@ impl Runner {
                                 chat_id: chat_id_clone.clone(),
                                 message: format!("Preparing {}", tool_label),
                                 iteration: None,
-                                phase: Some("tool_call_streaming".to_string()),
+                                phase: Some(ChatStatusPhase::TOOL_CALL_STREAMING.to_string()),
                                 metadata: Some(serde_json::json!({
                                     "status": "running",
                                     "toolCall": {
@@ -486,8 +575,8 @@ impl Runner {
                                         "index": index,
                                         "toolCallId": id,
                                         "toolName": name,
-                                        "argumentsDelta": arguments_delta,
-                                        "argumentsPreview": arguments_snapshot,
+                                        "argumentsDelta": safe_arguments_delta,
+                                        "argumentsPreview": safe_arguments_snapshot,
                                     }
                                 })),
                             })
@@ -500,24 +589,25 @@ impl Runner {
                             name,
                             arguments,
                         } => {
+                            let safe_arguments = redact_tool_preview_args(&arguments);
                             AgentEvent::ChatStatus(ChatStatusPayload {
                                 chat_id: chat_id_clone.clone(),
                                 message: format!("{} is ready", name),
                                 iteration: None,
-                                phase: Some("tool_call_ready".to_string()),
+                                phase: Some(ChatStatusPhase::TOOL_CALL_READY.to_string()),
                                 metadata: Some(serde_json::json!({
                                     "status": "running",
                                     "toolCall": {
                                         "toolName": name,
                                         "toolCallId": id,
-                                        "args": arguments,
+                                        "args": safe_arguments.clone(),
                                         "status": "running"
                                     },
                                     "toolCallPreview": {
                                         "index": index,
                                         "toolCallId": id,
                                         "toolName": name,
-                                        "argumentsPreview": arguments,
+                                        "argumentsPreview": safe_arguments,
                                         "ready": true,
                                     }
                                 })),
@@ -528,6 +618,7 @@ impl Runner {
                                     &name,
                                     &arguments,
                                     id.as_deref(),
+                                    Some(index),
                                 );
                                 let runner = early_runner.clone();
                                 let token = early_token_for_callback.clone();

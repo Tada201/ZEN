@@ -4,7 +4,7 @@
  */
 
 import { SECRET_PRESENT_VALUE } from "./settingsApi";
-import { createActionStep } from "@/atlas/hooks/stream/agentActionLedger";
+import { triggerMockStream } from "./mockStreaming";
 
 // Local storage keys
 const STORAGE_PREFIX = "zen_mock_";
@@ -31,6 +31,26 @@ function saveData<T>(key: string, data: T): void {
   } catch (e) {
     console.error("Failed to save mock state to localStorage", e);
   }
+}
+
+function redactMockValue(value: unknown, depth = 0): unknown {
+  if (depth > 6) return "[truncated]";
+  if (typeof value === "string") {
+    if (/(api[_-]?key|authorization|bearer|credential|password|secret|token)/i.test(value)) {
+      return "[redacted]";
+    }
+    return value.length > 2000 ? `${value.slice(0, 2000)}...` : value;
+  }
+  if (Array.isArray(value)) return value.slice(0, 24).map((item) => redactMockValue(item, depth + 1));
+  if (!value || typeof value !== "object") return value;
+
+  const output: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>).slice(0, 48)) {
+    output[key] = /(api[_-]?key|authorization|bearer|credential|password|secret|token)/i.test(key)
+      ? "[redacted]"
+      : redactMockValue(item, depth + 1);
+  }
+  return output;
 }
 
 // Initial/default states
@@ -263,7 +283,15 @@ const mockCommands: Record<string, (args: any) => any> = {
     threads: 20,
     memory_gb: 32,
     has_cuda: true,
-    gpu: "NVIDIA GeForce RTX 4060 Laptop GPU",
+    gpus: [
+      {
+        name: "NVIDIA GeForce RTX 4060 Laptop GPU",
+        vendor: "NVIDIA",
+        vram_mb: 8192,
+        driver_version: "mock",
+        cuda_capable: true,
+      },
+    ],
     disks: [
       { name: "System", mount_point: "C:\\", total_space: 512 * 1024 * 1024 * 1024, available_space: 180 * 1024 * 1024 * 1024, is_removable: false },
       { name: "Data", mount_point: "D:\\", total_space: 2048 * 1024 * 1024 * 1024, available_space: 1200 * 1024 * 1024 * 1024, is_removable: false },
@@ -287,14 +315,21 @@ const mockCommands: Record<string, (args: any) => any> = {
   list_session_memories_page: () => ({ items: [], limit: 20, offset: 0, hasMore: false }),
 
   // Workspace
-  browseFolder: ({ path }: { path: string | null }) => ({
-    currentPath: path || "D:\\DATA_VOLUME_D\\VScode\\GG_ANTIGRAV\\ZEN",
-    entries: [
-      { name: "src", isDir: true, sizeBytes: 0 },
-      { name: "package.json", isDir: false, sizeBytes: 1540 },
-      { name: "vite.config.ts", isDir: false, sizeBytes: 3872 },
-    ],
-  }),
+  browse_folder: ({ path }: { path: string | null }) => {
+    const current = path || "D:\\DATA_VOLUME_D\\VScode\\GG_ANTIGRAV\\ZEN";
+    const entries = [
+      { name: "src", type: "dir", path: `${current}\\src` },
+      { name: "src-tauri", type: "dir", path: `${current}\\src-tauri` },
+      { name: "package.json", type: "file", path: `${current}\\package.json` },
+      { name: "vite.config.ts", type: "file", path: `${current}\\vite.config.ts` },
+    ];
+    return {
+      current,
+      parent: "D:\\DATA_VOLUME_D\\VScode\\GG_ANTIGRAV",
+      directories: entries.filter((entry) => entry.type === "dir"),
+      entries,
+    };
+  },
 
   // Voice
   speak_text: () => {},
@@ -313,7 +348,6 @@ const mockCommands: Record<string, (args: any) => any> = {
     http_port: 8989,
     http_auth_required: true,
   }),
-  mcp_get_http_token: () => "mock-mcp-token",
   mcp_list_tools: () => [],
   mcp_get_config: () => ({ servers: {} }),
   mcp_start_server: () => {},
@@ -401,7 +435,14 @@ const mockCommands: Record<string, (args: any) => any> = {
         phase: "llm_invoked",
         iteration: 0,
       });
-      triggerMockStream(req.chatId, req.content);
+      triggerMockStream(req.chatId, req.content, {
+        emit: mockEmit,
+        redact: redactMockValue,
+        saveAssistantMessage: (message) => {
+          messages = [...messages, message as any];
+          saveData(KEY_MESSAGES, messages);
+        },
+      });
     }, 200);
   },
 };
@@ -432,363 +473,11 @@ export function mockEmit(eventName: string, payload: any) {
 
 // Intercept Command Execution
 export async function executeMockCommand(command: string, args: any): Promise<any> {
-  console.log(`[Mock IPC] ${command}`, args);
+  console.log(`[Mock IPC] ${command}`, redactMockValue(args));
   const handler = mockCommands[command];
   if (handler) {
     return handler(args);
   }
   console.warn(`[Mock IPC] No handler defined for: ${command}`);
   return null;
-}
-
-import chatFixtures from "../../test/chat-fixtures.json";
-
-function getFixtureToolName(flow: any[], toolCallId: string): string {
-  const lifecycleEvent = flow.find(
-    (step: any) =>
-      (step.type === "tool:start" || step.type === "tool:authorization_request" || step.type === "tool:complete") &&
-      step.tool_call_id === toolCallId &&
-      step.tool_name
-  );
-  return lifecycleEvent?.tool_name || toolCallId;
-}
-
-function getFixtureToolStartTimes(flow: any[]) {
-  const startTimes = new Map<string, number>();
-  let virtualElapsed = 0;
-  const baseTime = Date.now();
-
-  for (const step of flow) {
-    if (step.type === "tool:start" || step.type === "tool:authorization_request") {
-      startTimes.set(step.tool_call_id, baseTime + virtualElapsed);
-    }
-    virtualElapsed += typeof step.delay_ms === "number" ? step.delay_ms : 0;
-  }
-
-  return startTimes;
-}
-
-function buildFixtureActionStep(step: any, chatId: string, virtualTime: number) {
-  if (step.type === "chat:status") {
-    return createActionStep(
-      {
-        chat_id: chatId,
-        timestamp: new Date(virtualTime).toISOString(),
-        ...step.payload,
-      },
-      "chat_status",
-    );
-  }
-  if (step.type === "agent:spawn") {
-    return createActionStep(
-      {
-        chat_id: chatId,
-        timestamp: new Date(virtualTime).toISOString(),
-        ...step.payload,
-      },
-      "agent_spawn",
-    );
-  }
-  if (step.type === "agent:complete") {
-    return createActionStep(
-      {
-        chat_id: chatId,
-        timestamp: new Date(virtualTime).toISOString(),
-        ...step.payload,
-      },
-      "agent_complete",
-    );
-  }
-  return null;
-}
-
-function buildFixtureExecutionSteps(flow: any[], finalContent: string, chatId: string) {
-  const toolCompletes = new Map(
-    flow
-      .filter((step: any) => step.type === "tool:complete")
-      .map((step: any) => [step.tool_call_id, step])
-  );
-  const toolStartTimes = getFixtureToolStartTimes(flow);
-  const steps: any[] = [];
-  const baseTime = Date.now();
-  let virtualElapsed = 0;
-
-  for (const step of flow) {
-    const virtualTime = baseTime + virtualElapsed;
-    const actionStep = buildFixtureActionStep(step, chatId, virtualTime);
-    if (actionStep) {
-      steps.push(actionStep);
-    }
-
-    if (step.type === "tool:start" || step.type === "tool:authorization_request") {
-      const toolComplete = toolCompletes.get(step.tool_call_id) as any;
-      steps.push({
-        type: "tool-call",
-        toolCall: {
-          id: step.tool_call_id,
-          name: step.tool_name,
-          status: toolComplete?.status === "success" ? "completed" : "error",
-          input: step.arguments,
-          output: toolComplete?.output || "",
-          durationMs: toolComplete?.duration_ms,
-          agentId: step.agent_id,
-          agentName: step.agent_name,
-          iteration: step.iteration,
-          batchId: step.batch_id || step.batchId || step.tool_batch_id || step.toolBatchId,
-          startTime: toolStartTimes.get(step.tool_call_id),
-          approvalContext: step.context ? {
-            riskLevel: step.context.risk_level || step.context.riskLevel,
-            description: step.context.description,
-            argumentsPreview: step.context.arguments_preview || step.context.argumentsPreview,
-            suggestedPatterns: step.context.suggested_patterns || step.context.suggestedPatterns,
-          } : undefined,
-        },
-      });
-    }
-    virtualElapsed += typeof step.delay_ms === "number" ? step.delay_ms : 0;
-  }
-
-  if (finalContent.trim()) {
-    steps.push({ type: "text", content: finalContent });
-  }
-
-  return steps;
-}
-
-// Simulated Stream Response Generator
-function triggerMockStream(chatId: string, userContent: string) {
-  const normalizedInput = userContent.trim().toLowerCase();
-  
-  // Find matching test fixture from JSON
-  let activeFixtureKey: keyof typeof chatFixtures | null = null;
-  if (normalizedInput.includes("markdown") || normalizedInput.includes("test markdown")) {
-    activeFixtureKey = "test_markdown";
-  } else if (normalizedInput.includes("genui") || normalizedInput.includes("test genui")) {
-    activeFixtureKey = "test_genui";
-  } else if (normalizedInput.includes("toolcall") || normalizedInput.includes("test toolcall")) {
-    activeFixtureKey = "test_toolcall";
-  } else if (normalizedInput.includes("agentic") || normalizedInput.includes("codebuff") || normalizedInput.includes("delegation")) {
-    activeFixtureKey = "test_agentic";
-  }
-
-  if (activeFixtureKey) {
-    const fixture = chatFixtures[activeFixtureKey];
-    let stepIndex = 0;
-
-    function runNextStep() {
-      if (stepIndex >= fixture.flow.length) return;
-      const step: any = fixture.flow[stepIndex];
-      stepIndex++;
-
-      let delay = 300;
-
-      if (step.type === "chat:status") {
-        mockEmit("chat:status", { chat_id: chatId, ...step.payload });
-        delay = 200;
-      } else if (step.type === "agent:spawn") {
-        mockEmit("agent:spawn", { chat_id: chatId, ...step.payload });
-        delay = 450;
-      } else if (step.type === "agent:complete") {
-        mockEmit("agent:complete", { chat_id: chatId, ...step.payload });
-        delay = 350;
-      } else if (step.type === "research-step") {
-        mockEmit("chat:research-step", {
-          chat_id: chatId,
-          text: step.text,
-          status: step.status,
-        });
-        delay = 600;
-      } else if (step.type === "chunk:first") {
-        mockEmit("chat:chunk:first", { chat_id: chatId, delta: step.delta || "", type: "text" });
-        delay = 100;
-      } else if (step.type === "chunk") {
-        mockEmit("chat:chunk", { chat_id: chatId, delta: step.delta || "", type: "text" });
-        delay = 150;
-      } else if (step.type === "artifact:start") {
-        mockEmit("artifact:start", {
-          chat_id: chatId,
-          artifact_type: step.artifact_type,
-          title: step.title,
-          language: step.language,
-        });
-        delay = 300;
-      } else if (step.type === "artifact:delta") {
-        mockEmit("artifact:delta", {
-          chat_id: chatId,
-          delta: step.delta || "",
-        });
-        delay = 400;
-      } else if (step.type === "artifact:complete") {
-        mockEmit("artifact:complete", { chat_id: chatId });
-        delay = 200;
-      } else if (step.type === "tool:start") {
-          mockEmit("tool:start", {
-            chat_id: chatId,
-            tool_call_id: step.tool_call_id,
-            tool_name: step.tool_name,
-            arguments: step.arguments,
-            agent_id: step.agent_id,
-            agent_name: step.agent_name,
-            iteration: step.iteration,
-            batch_id: step.batch_id || step.batchId || step.tool_batch_id || step.toolBatchId,
-          });
-          delay = 1000;
-        } else if (step.type === "tool:authorization_request") {
-        mockEmit("tool:authorization_request", {
-          chat_id: chatId,
-            tool_call_id: step.tool_call_id,
-            tool_name: step.tool_name,
-            arguments: step.arguments,
-            context: step.context || {},
-            agent_id: step.agent_id,
-            agent_name: step.agent_name,
-            iteration: step.iteration,
-            batch_id: step.batch_id || step.batchId || step.tool_batch_id || step.toolBatchId,
-          });
-          delay = 700;
-        } else if (step.type === "tool:complete") {
-        mockEmit("tool:complete", {
-          chat_id: chatId,
-          tool_call_id: step.tool_call_id,
-            tool_name: step.tool_name || getFixtureToolName(fixture.flow, step.tool_call_id),
-            status: step.status,
-            output: step.output,
-            duration_ms: step.duration_ms,
-            agent_id: step.agent_id,
-            agent_name: step.agent_name,
-            iteration: step.iteration,
-            batch_id: step.batch_id || step.batchId || step.tool_batch_id || step.toolBatchId,
-          });
-          delay = 300;
-      } else if (step.type === "done") {
-        // Save completed assistant message to mock database
-        const assistantMsg: any = {
-          id: `msg-${Date.now()}-assistant`,
-          chatId,
-          role: "assistant",
-          content: step.content || "",
-          createdAt: Date.now(),
-          isComplete: 1,
-          kind: "text",
-        };
-
-        // For Gen UI attach artifact directly
-        if (activeFixtureKey === "test_genui") {
-          const genUiArtifactStep = fixture.flow.find((s: any) => s.type === "artifact:start") as any;
-          const genUiArtifactDelta = fixture.flow.find((s: any) => s.type === "artifact:delta") as any;
-          if (genUiArtifactStep && genUiArtifactDelta) {
-            assistantMsg.artifact = {
-              type: genUiArtifactStep.artifact_type,
-              title: genUiArtifactStep.title,
-              language: genUiArtifactStep.language,
-              content: genUiArtifactDelta.delta || "",
-            };
-          }
-        }
-
-        // For Tool Call attach all fixture tool calls so the completed workflow stays visible after streaming.
-        if (activeFixtureKey === "test_toolcall" || activeFixtureKey === "test_agentic") {
-          const toolStarts = fixture.flow.filter((s: any) => s.type === "tool:start" || s.type === "tool:authorization_request") as any[];
-          const toolCompletes = new Map(
-            fixture.flow
-              .filter((s: any) => s.type === "tool:complete")
-              .map((s: any) => [s.tool_call_id, s])
-          );
-          const toolStartTimes = getFixtureToolStartTimes(fixture.flow);
-          if (toolStarts.length > 0) {
-            assistantMsg.toolCalls = toolStarts.map((toolStart) => {
-              const toolComplete = toolCompletes.get(toolStart.tool_call_id) as any;
-              return {
-                id: toolStart.tool_call_id,
-                name: toolStart.tool_name,
-                status: toolComplete?.status === "success" ? "completed" : "error",
-                input: toolStart.arguments,
-                output: toolComplete?.output || "",
-                durationMs: toolComplete?.duration_ms,
-                agentId: toolStart.agent_id,
-                agentName: toolStart.agent_name,
-                iteration: toolStart.iteration,
-                batchId: toolStart.batch_id || toolStart.batchId || toolStart.tool_batch_id || toolStart.toolBatchId,
-                startTime: toolStartTimes.get(toolStart.tool_call_id),
-                approvalContext: toolStart.context ? {
-                  riskLevel: toolStart.context.risk_level || toolStart.context.riskLevel,
-                  description: toolStart.context.description,
-                  argumentsPreview: toolStart.context.arguments_preview || toolStart.context.argumentsPreview,
-                  suggestedPatterns: toolStart.context.suggested_patterns || toolStart.context.suggestedPatterns,
-                } : undefined,
-              };
-            });
-          }
-          assistantMsg.steps = buildFixtureExecutionSteps(fixture.flow, step.content || "", chatId);
-          assistantMsg.metadata = JSON.stringify({
-            executionSteps: assistantMsg.steps,
-          });
-        }
-
-        messages = [...messages, assistantMsg];
-        saveData(KEY_MESSAGES, messages);
-
-        mockEmit("chat:done", { chat_id: chatId, content: step.content || "" });
-        return;
-      }
-
-      setTimeout(runNextStep, typeof step.delay_ms === "number" ? step.delay_ms : delay);
-    }
-
-    setTimeout(runNextStep, 200);
-    return;
-  }
-
-  // Fallback to standard message simulation
-  // 1. Emit chunk:first (zero-serialize TTFT simulation)
-  mockEmit("chat:chunk:first", { chat_id: chatId, delta: "", type: "text" });
-
-  // 2. Emit reasoning / research steps to simulate agent loop
-  mockEmit("chat:research-step", {
-    chat_id: chatId,
-    text: "Analyzing project architecture and configuration...",
-    status: "running",
-  });
-
-  setTimeout(() => {
-    mockEmit("chat:research-step", {
-      chat_id: chatId,
-      text: "Found relevant files: package.json, vite.config.ts",
-      status: "completed",
-    });
-  }, 1000);
-
-  // 3. Simulated response words
-  const responseText = `I have received your message: "${userContent}".\n\nThis is a fully-functioning Browser Dummy mode. You can edit files, query settings, and inspect components inside your standard web browser! Outstanding!`;
-  const chunks = responseText.split(" ");
-  let currentText = "";
-  let chunkIdx = 0;
-
-  function emitNextChunk() {
-    if (chunkIdx < chunks.length) {
-      const delta = chunks[chunkIdx] + " ";
-      currentText += delta;
-      mockEmit("chat:chunk", { chat_id: chatId, delta });
-      chunkIdx++;
-      setTimeout(emitNextChunk, 80);
-    } else {
-      // 4. Save completed assistant message to mock database
-      const assistantMsg = {
-        id: `msg-${Date.now()}-assistant`,
-        chatId,
-        role: "assistant",
-        content: responseText,
-        createdAt: Date.now(),
-        isComplete: 1,
-        kind: "text",
-      };
-      messages = [...messages, assistantMsg];
-      saveData(KEY_MESSAGES, messages);
-
-      // 5. Emit chat:done
-      mockEmit("chat:done", { chat_id: chatId, content: responseText });
-    }
-  }
-
-  setTimeout(emitNextChunk, 1500);
 }

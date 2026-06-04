@@ -301,6 +301,8 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
     .execute(pool)
     .await;
 
+    queries::init_session_permissions(pool).await?;
+
     sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS settings (

@@ -67,6 +67,8 @@ const transpiled = ts.transpileModule(source, {
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(transpiled.outputText).toString("base64")}`;
 const { buildAgentExecutionTraceModel } = await import(moduleUrl);
 
+assert(source.includes("[redacted]") && source.includes("api[_-]?key"), "tool activity summaries should redact sensitive input previews");
+
 const parallelTrace = buildAgentExecutionTraceModel([
   {
     id: "tool-a",

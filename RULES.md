@@ -288,6 +288,11 @@ New privileged code requires tests for:
 - audit event
 - malformed input
 
+Feature verifier scripts are product contracts, not snapshots of old file
+layouts. When logic moves between modules, update the verifier to check the new
+owner module or observable behavior in the central test run. Do not keep brittle
+exact-string assertions against files that no longer own the behavior.
+
 ## Documentation Rules
 
 New architecture patterns require docs. Update the relevant file under

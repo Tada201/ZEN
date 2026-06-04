@@ -92,7 +92,7 @@ export function MermaidDiagram({ code, isStreaming }: { code: string; isStreamin
     return (
       <div ref={containerRef} className="space-y-2 my-6">
         <div className="flex items-center gap-2 text-sm text-amber-500 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20">
-          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+          <span className="w-2 h-2 rounded-full bg-amber-500 motion-safe:animate-pulse" />
           <span>Rendering Mermaid Diagram...</span>
         </div>
         <CodeBlock code={code} language="mermaid" />
@@ -131,7 +131,7 @@ export function MermaidDiagram({ code, isStreaming }: { code: string; isStreamin
     return (
       <div
         ref={containerRef}
-        className="my-6 h-32 animate-pulse rounded-xl border border-border/40 bg-card/30 shadow-sm"
+        className="my-6 h-32 motion-safe:animate-pulse rounded-xl border border-border/40 bg-card/30 shadow-sm"
         aria-hidden="true"
       />
     );

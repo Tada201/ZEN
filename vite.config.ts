@@ -8,6 +8,7 @@ const host = process.env.TAURI_DEV_HOST;
 const cesiumBuildDir = path.resolve(__dirname, "node_modules/cesium/Build/Cesium");
 const cesiumBaseUrl = "cesium/";
 const cesiumAssetDirs = ["Assets", "ThirdParty", "Workers", "Widgets"] as const;
+const lazyChunkWarningLimitKb = 5000;
 
 const copyCesiumAssets = (): Plugin => ({
   name: "copy-cesium-assets",
@@ -122,6 +123,10 @@ export default defineConfig(async ({ command }) => ({
     },
   },
   build: {
+    // Tauri ships optional map/diagram/chart surfaces as lazy chunks. Keep Vite's
+    // warning threshold aligned with scripts/performance-budget.ps1 so startup
+    // regressions are measured by the explicit budget gate instead of the web default.
+    chunkSizeWarningLimit: lazyChunkWarningLimitKb,
     rollupOptions: {
       output: {
         manualChunks,

@@ -13,19 +13,25 @@ const chatCommandSource = readFileSync(
   new URL("../src-tauri/src/commands/chat.rs", import.meta.url),
   "utf8",
 );
+const messageTargetSource = readFileSync(
+  new URL("../src/atlas/hooks/stream/messageTarget.ts", import.meta.url),
+  "utf8",
+);
 
 assert(
   chunkHookSource.includes('listenAppEvent("chat:done"') &&
     chunkHookSource.includes("clearHeartbeatTimeout(chatId)") &&
     chunkHookSource.includes("setStreamingForChat(chatId, false)") &&
-    chunkHookSource.includes('status: isCancelled ? "cancelled" : "sent"') &&
+    chunkHookSource.includes("markMessageAsFinished(finalized, isCancelled)") &&
+    messageTargetSource.includes('status: isCancelled ? "cancelled" : "sent"') &&
     chunkHookSource.includes("ttftReport(chatId, reason)"),
   "chat:done must clear heartbeat, stop loading state, finalize assistant status, and report TTFT completion",
 );
 
 assert(
   chunkHookSource.includes('listenAppEvent("chat:error"') &&
-    chunkHookSource.includes('status: "failed"') &&
+    chunkHookSource.includes("markMessageAsFailed") &&
+    messageTargetSource.includes('status: "failed"') &&
     chunkHookSource.includes("setStreamingForChat(chatId, false)") &&
     chunkHookSource.includes("toast.error"),
   "chat:error must fail the visible assistant message and clear loading state",
