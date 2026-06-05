@@ -4,7 +4,7 @@ use crate::llm::openai_compat::types::*;
 use crate::llm::openai_compat::OpenAiCompatProvider;
 use futures::StreamExt;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::RwLock;
 use tracing::{debug, error, info};
 
@@ -180,6 +180,59 @@ impl OpenAiCompatProvider {
         }
     }
 
+    fn sanitize_outbound_messages(&self, messages: Vec<ChatMessage>) -> Vec<ChatMessage> {
+        let mut sanitized = Vec::with_capacity(messages.len());
+        let mut pending_tool_call_ids: HashSet<String> = HashSet::new();
+
+        for (index, mut message) in messages.iter().cloned().enumerate() {
+            // Provider-specific reasoning payloads are response metadata, not
+            // portable chat-completions input. Some OpenAI-compatible upstreams
+            // reject replayed reasoning_details because their schema differs.
+            message.reasoning_details = None;
+
+            if message.role == "tool" {
+                let Some(tool_call_id) = message.tool_call_id.clone() else {
+                    continue;
+                };
+                if pending_tool_call_ids.remove(&tool_call_id) {
+                    sanitized.push(message);
+                }
+                continue;
+            }
+
+            if message.role == "assistant" {
+                if let Some(tool_calls) = message.tool_calls.clone().filter(|calls| !calls.is_empty()) {
+                    let required_ids: HashSet<String> =
+                        tool_calls.iter().map(|call| call.id.clone()).collect();
+                    let mut following_tool_ids = HashSet::new();
+
+                    for following in messages.iter().skip(index + 1) {
+                        if following.role != "tool" {
+                            break;
+                        }
+                        if let Some(tool_call_id) = following.tool_call_id.as_ref() {
+                            following_tool_ids.insert(tool_call_id.clone());
+                        }
+                    }
+
+                    if required_ids.is_subset(&following_tool_ids) {
+                        pending_tool_call_ids.extend(required_ids);
+                        sanitized.push(message);
+                    } else if !message.content.trim().is_empty() {
+                        message.tool_calls = None;
+                        sanitized.push(message);
+                    }
+                    continue;
+                }
+            }
+
+            pending_tool_call_ids.clear();
+            sanitized.push(message);
+        }
+
+        sanitized
+    }
+
     pub async fn do_chat_stream(
         &self,
         model: &str,
@@ -191,7 +244,8 @@ impl OpenAiCompatProvider {
     ) -> ZenResult<ChatResponse> {
         let url = self.url("/chat/completions");
 
-        let oai_messages: Vec<OpenAiMessage> = messages
+        let oai_messages: Vec<OpenAiMessage> = self
+            .sanitize_outbound_messages(messages)
             .into_iter()
             .map(|m| {
                 let tool_calls_out = m.tool_calls.map(|tcs| {

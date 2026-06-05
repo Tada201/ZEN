@@ -234,6 +234,17 @@ impl SpeechService {
         Ok(self.check_model_file(model_name))
     }
 
+    pub fn find_any_valid_model(&self) -> Option<String> {
+        let models = ["ggml-base.en.bin", "ggml-tiny.en.bin", "ggml-small.en.bin", "ggml-medium.en.bin"];
+        for m in models {
+            let status = self.check_model_file(m);
+            if status.valid {
+                return Some(m.to_string());
+            }
+        }
+        None
+    }
+
     /// Download the whisper model if it doesn't exist (legacy ensure for start_server).
     pub async fn ensure_model(&self) -> Result<(), String> {
         if self.model_exists().await {
@@ -243,8 +254,20 @@ impl SpeechService {
         }
 
         let model_name = self.model_name.read().await.clone();
-        self.download_model(&model_name).await?;
-        Ok(())
+        match self.download_model(&model_name).await {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                warn!("Failed to download whisper model '{}': {}. Searching for fallback model...", model_name, e);
+                if let Some(fallback_model) = self.find_any_valid_model() {
+                    warn!("Found fallback model '{}'. Swapping active model.", fallback_model);
+                    *self.model_name.write().await = fallback_model.clone();
+                    *self.model_path.write().await = self.runtime.whisper_model_path(&fallback_model);
+                    Ok(())
+                } else {
+                    Err(format!("Failed to download model '{}' and no fallback models found on disk: {}.", model_name, e))
+                }
+            }
+        }
     }
 
     pub async fn start_server(&self) -> Result<(), String> {

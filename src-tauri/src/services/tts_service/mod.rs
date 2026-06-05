@@ -103,6 +103,19 @@ impl TtsService {
         info!("TTS model updated to: {}", model_path.display());
     }
 
+    /// Rebuild the audio output sink on a specific cpal device by name.
+    /// `None` resets to the system default. Errors are returned to the caller.
+    pub async fn set_output_device(&self, device_name: Option<String>) -> Result<(), String> {
+        let new_handle = tokio::task::spawn_blocking(move || build_audio_handle(device_name))
+            .await
+            .map_err(|e| format!("Audio device task join failed: {e}"))??;
+
+        let mut handle_lock = self.audio_handle.lock().await;
+        *handle_lock = Some(new_handle);
+        info!("TTS output device updated");
+        Ok(())
+    }
+
     pub async fn speak(&self, text: &str, app: AppHandle) -> Result<(), String> {
         if text.trim().is_empty() {
             return Ok(());
@@ -234,7 +247,10 @@ impl TtsService {
 
                 if let Ok(handle_lock) = audio_handle_clone.try_lock() {
                     if let Some(AudioHandle(_stream, _stream_handle, sink)) = handle_lock.as_ref() {
-                        let _ = app.emit("tts:start", duration_ms);
+                        let _ = app.emit(
+                            "tts:start",
+                            serde_json::json!({ "duration_ms": duration_ms }),
+                        );
                         sink.append(buffer);
 
                         // Emit stop after playback completes without holding the blocking thread
@@ -275,4 +291,25 @@ impl TtsService {
             }
         }
     }
+}
+
+fn build_audio_handle(device_name: Option<String>) -> Result<AudioHandle, String> {
+    use cpal::traits::{DeviceTrait, HostTrait};
+
+    let host = cpal::default_host();
+    let device = match device_name.as_deref() {
+        Some(name) => host
+            .output_devices()
+            .map_err(|e| format!("Enumerate output devices: {e}"))?
+            .find(|d| d.name().map(|n| n == name).unwrap_or(false))
+            .ok_or_else(|| format!("Output device '{name}' not found"))?,
+        None => host
+            .default_output_device()
+            .ok_or_else(|| "No default output device available".to_string())?,
+    };
+
+    let (stream, stream_handle) =
+        OutputStream::try_from_device(&device).map_err(|e| format!("Open output device: {e}"))?;
+    let sink = Sink::try_new(&stream_handle).map_err(|e| format!("Create audio sink: {e}"))?;
+    Ok(AudioHandle(stream, stream_handle, sink))
 }

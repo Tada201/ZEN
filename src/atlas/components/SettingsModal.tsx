@@ -31,6 +31,7 @@ const ProvidersSettings = React.lazy(() => import("@/components/settings/Tabs/Pr
 const ModelsSettings = React.lazy(() => import("@/components/settings/Tabs/ModelsSettings").then(m => ({ default: m.ModelsSettings })));
 const SkillsSettingsContent = React.lazy(() => import("./SkillsSettingsContent").then(m => ({ default: m.SkillsSettingsContent })));
 const FolderBrowser = React.lazy(() => import("./FolderBrowser").then(m => ({ default: m.FolderBrowser })));
+const VoiceSettings = React.lazy(() => import("@/components/settings/Tabs/VoiceSettings").then(m => ({ default: m.VoiceSettings })));
 const AudioSettings = React.lazy(() => import("@/components/settings/Tabs/AudioSettings").then(m => ({ default: m.AudioSettings })));
 const ChatSettings = React.lazy(() => import("@/components/settings/Tabs/ChatSettings").then(m => ({ default: m.ChatSettings })));
 const GUISettings = React.lazy(() => import("@/components/settings/Tabs/GUISettings").then(m => ({ default: m.GUISettings })));
@@ -193,7 +194,7 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
 
   if (!isHydrated) {
     return (
-      <div className="flex-1 flex items-center justify-center p-12 bg-[#050506]">
+      <div className="flex-1 flex items-center justify-center p-12 bg-background">
         <WorkbenchIcon name="lucide:loader-2" className="h-6 w-6 animate-spin text-primary" />
       </div>
     );
@@ -202,11 +203,11 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
   // ── Render ──────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col md:flex-row h-full w-full overflow-hidden bg-[#050506]">
+    <div className="flex flex-col md:flex-row h-full w-full overflow-hidden bg-background">
       <SettingsSidebar activeTab={activeTab} onSelectTab={setActiveTab} />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#050506]">
+      <div className="flex-1 flex flex-col h-full overflow-hidden bg-background">
         <ScrollArea className="flex-1">
           <div className="max-w-2xl mx-auto p-6 md:p-8 space-y-6">
             <AnimatePresence mode="wait">
@@ -332,8 +333,12 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
                   <AgentsSettings />
                 )}
 
+                {activeTab === "voice" && (
+                  <VoiceSettings />
+                )}
+
                 {activeTab === "audio" && (
-                  <AudioSettings settings={settings} onUpdate={handleUpdate} />
+                  <AudioSettings />
                 )}
 
                 {activeTab === "terminal" && (
@@ -386,7 +391,7 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
         </ScrollArea>
 
         {/* Footer Actions */}
-        <div className="p-3 border-t border-white/[0.06] flex justify-end gap-2 bg-[#050506]/50 backdrop-blur-sm">
+        <div className="p-3 border-t border-white/[0.06] flex justify-end gap-2 bg-background/50 backdrop-blur-sm">
           <Button variant="ghost" className="h-8 text-[11px] px-3 text-muted-foreground hover:text-foreground" onClick={handleCancel}>
             Cancel
           </Button>

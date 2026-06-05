@@ -129,6 +129,18 @@ export interface AudioSlice {
   sttModel: string;
   selectedMic: string;
   systemSoundsEnabled: boolean;
+  ttsPiperVoiceId: string;
+  noiseSuppression: boolean;
+  echoCancellation: boolean;
+  autoGainControl: boolean;
+  vadThreshold: number;
+  voiceDisplayAgentEnabled: boolean;
+  voiceDisplayAgentContextTokens: number;
+  voiceDisplayAgentMaxTurns: number;
+  voiceDisplayAgentAutoCompactEnabled: boolean;
+  voiceDisplayAgentCompactThreshold: number;
+  voiceDisplayAgentPrompt: string;
+  voiceDisplayAgentBoardMemoryLimit: number;
 
   setForceSttWeb: (val: boolean) => void;
   setForceTtsWeb: (val: boolean) => void;

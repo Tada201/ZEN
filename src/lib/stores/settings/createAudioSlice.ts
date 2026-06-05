@@ -1,9 +1,16 @@
 import type { StateCreator } from "zustand";
 import type { SettingsState } from "./types";
+import {
+  VOICE_DISPLAY_AGENT_DEFAULT_BOARD_MEMORY_LIMIT,
+  VOICE_DISPLAY_AGENT_DEFAULT_COMPACT_THRESHOLD,
+  VOICE_DISPLAY_AGENT_DEFAULT_CONTEXT_TOKENS,
+  VOICE_DISPLAY_AGENT_DEFAULT_MAX_TURNS,
+  VOICE_DISPLAY_AGENT_DEFAULT_PROMPT,
+} from "./voiceDefaults";
 
 export interface AudioSlice {
   ttsEnabled: boolean;
-  ttsEngine: "piper" | "web" | "system";
+  ttsEngine: "piper" | "web" | "system" | "nine_router";
   sttEnabled: boolean;
   sttEngine: "whisper" | "web";
   sttWhisperModel: string;
@@ -27,6 +34,18 @@ export interface AudioSlice {
   sttModel: string;
   selectedMic: string;
   systemSoundsEnabled: boolean;
+  ttsPiperVoiceId: string;
+  noiseSuppression: boolean;
+  echoCancellation: boolean;
+  autoGainControl: boolean;
+  vadThreshold: number;
+  voiceDisplayAgentEnabled: boolean;
+  voiceDisplayAgentContextTokens: number;
+  voiceDisplayAgentMaxTurns: number;
+  voiceDisplayAgentAutoCompactEnabled: boolean;
+  voiceDisplayAgentCompactThreshold: number;
+  voiceDisplayAgentPrompt: string;
+  voiceDisplayAgentBoardMemoryLimit: number;
 
   setForceSttWeb: (val: boolean) => void;
   setForceTtsWeb: (val: boolean) => void;
@@ -58,6 +77,18 @@ export const createAudioSlice: StateCreator<SettingsState, [], [], AudioSlice> =
   sttModel: "base",
   selectedMic: "",
   systemSoundsEnabled: true,
+  ttsPiperVoiceId: "default",
+  noiseSuppression: true,
+  echoCancellation: true,
+  autoGainControl: true,
+  vadThreshold: 0.015,
+  voiceDisplayAgentEnabled: true,
+  voiceDisplayAgentContextTokens: VOICE_DISPLAY_AGENT_DEFAULT_CONTEXT_TOKENS,
+  voiceDisplayAgentMaxTurns: VOICE_DISPLAY_AGENT_DEFAULT_MAX_TURNS,
+  voiceDisplayAgentAutoCompactEnabled: true,
+  voiceDisplayAgentCompactThreshold: VOICE_DISPLAY_AGENT_DEFAULT_COMPACT_THRESHOLD,
+  voiceDisplayAgentPrompt: VOICE_DISPLAY_AGENT_DEFAULT_PROMPT,
+  voiceDisplayAgentBoardMemoryLimit: VOICE_DISPLAY_AGENT_DEFAULT_BOARD_MEMORY_LIMIT,
 
   // Direct set() — immediate state update, not staged
   setForceSttWeb: (val: boolean) => {

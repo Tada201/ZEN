@@ -1,4 +1,11 @@
 import { z } from "zod";
+import {
+  VOICE_DISPLAY_AGENT_DEFAULT_BOARD_MEMORY_LIMIT,
+  VOICE_DISPLAY_AGENT_DEFAULT_COMPACT_THRESHOLD,
+  VOICE_DISPLAY_AGENT_DEFAULT_CONTEXT_TOKENS,
+  VOICE_DISPLAY_AGENT_DEFAULT_MAX_TURNS,
+  VOICE_DISPLAY_AGENT_DEFAULT_PROMPT,
+} from "./voiceDefaults";
 
 export const SettingsSchema = z.object({
   // ─── Interface ───────────────────────────────────────────────────────────
@@ -44,6 +51,13 @@ export const SettingsSchema = z.object({
   sttModel: z.string().default("base"),
   selectedMic: z.string().default(""),
   systemSoundsEnabled: z.boolean().default(true),
+  voiceDisplayAgentEnabled: z.boolean().default(true),
+  voiceDisplayAgentContextTokens: z.number().min(4096).max(1048576).default(VOICE_DISPLAY_AGENT_DEFAULT_CONTEXT_TOKENS),
+  voiceDisplayAgentMaxTurns: z.number().min(1).max(50).default(VOICE_DISPLAY_AGENT_DEFAULT_MAX_TURNS),
+  voiceDisplayAgentAutoCompactEnabled: z.boolean().default(true),
+  voiceDisplayAgentCompactThreshold: z.number().min(50).max(95).default(VOICE_DISPLAY_AGENT_DEFAULT_COMPACT_THRESHOLD),
+  voiceDisplayAgentPrompt: z.string().default(VOICE_DISPLAY_AGENT_DEFAULT_PROMPT),
+  voiceDisplayAgentBoardMemoryLimit: z.number().min(1).max(3).default(VOICE_DISPLAY_AGENT_DEFAULT_BOARD_MEMORY_LIMIT),
 
   // ─── Chat & AI ───────────────────────────────────────────────────────────
   activeProvider: z.string().default("ollama"),

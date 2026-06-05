@@ -7,8 +7,8 @@ import { listenAppEvent } from '@/api/events';
 import { stripMarkdown } from './voiceTextUtils';
 import { useAppUptime } from '@/hooks/useAppUptime';
 import { VoiceModePanel, type VoiceState } from './VoiceModePanel';
+import { type VoiceStageInput, useVoiceStageStore } from './voiceStageStore';
 
-const SILENCE_THRESHOLD = 0.015;
 const SILENCE_DURATION_MS = 2000;
 
 export function VoiceModeOverlay({
@@ -30,11 +30,22 @@ export function VoiceModeOverlay({
     const toggleVoiceMode = onClose;
     const userSttEngine = useSettingsStore(s => s.sttEngine);
     const voiceInputMode = useSettingsStore(s => s.voiceInputMode);
+    const selectedMic = useSettingsStore(s => s.selectedMic ?? '');
+    const micVolume = useSettingsStore(s => s.micVolume ?? 0.8);
+    const noiseSuppression = useSettingsStore(s => s.noiseSuppression ?? true);
+    const echoCancellation = useSettingsStore(s => s.echoCancellation ?? true);
+    const autoGainControl = useSettingsStore(s => s.autoGainControl ?? true);
+    const vadThreshold = useSettingsStore(s => s.vadThreshold ?? 0.015);
     const aiSpeaking = useUIStore(s => s.aiSpeaking);
     const setAiSpeaking = useUIStore(s => s.setAiSpeaking);
+    const clearStage = useVoiceStageStore(s => s.clear);
+    const startStage = useVoiceStageStore(s => s.start);
+    const pauseStage = useVoiceStageStore(s => s.pause);
+    const cancelStage = useVoiceStageStore(s => s.cancel);
+    const upsertStageBlock = useVoiceStageStore(s => s.upsert);
     const appUptimeSecs = useAppUptime();
 
-    const sttEngine = userSttEngine || 'web';
+    const sttEngine = userSttEngine === 'web' ? 'whisper' : (userSttEngine || 'whisper');
     const metrics = useSystemStore(s => s.metrics);
 
     const tokensPerSec = metrics?.throughput || 0;
@@ -48,6 +59,7 @@ export function VoiceModeOverlay({
     const [, setPttHeld] = useState(false);
     const [amplitude, setAmplitude] = useState(0);
     const [showDiagnostics, setShowDiagnostics] = useState(false);
+    const [exitConfirmationOpen, setExitConfirmationOpen] = useState(false);
 
     // YT Closed Caption Subtitle states
     const [subtitleSpeaker, setSubtitleSpeaker] = useState<'user' | 'agent' | 'system'>('system');
@@ -59,10 +71,13 @@ export function VoiceModeOverlay({
     const streamRef = useRef<MediaStream | null>(null);
     const rafRef = useRef<number | null>(null);
     const fullAiResponseRef = useRef('');
+    const lastStageAiTextRef = useRef('');
+    const stageGenerationRef = useRef(0);
     const workletNodeRef = useRef<AudioWorkletNode | null>(null);
-    const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
     const gainNodeRef = useRef<GainNode | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
+    const micInitSeqRef = useRef(0);
+    const messagesRef = useRef(messages);
 
     const recordingChunksRef = useRef<Float32Array[]>([]);
     const isRecordingRef = useRef(false);
@@ -72,6 +87,7 @@ export function VoiceModeOverlay({
 
     const aiSpeakingRef = useRef(aiSpeaking);
     useEffect(() => { aiSpeakingRef.current = aiSpeaking; }, [aiSpeaking]);
+    useEffect(() => { messagesRef.current = messages; }, [messages]);
 
     const isOpenRef = useRef(voiceModeOpen);
     isOpenRef.current = voiceModeOpen;
@@ -79,12 +95,64 @@ export function VoiceModeOverlay({
     const voiceInputModeRef = useRef(voiceInputMode);
     voiceInputModeRef.current = voiceInputMode;
 
+    const vadThresholdRef = useRef(vadThreshold);
+    useEffect(() => {
+        vadThresholdRef.current = vadThreshold;
+        if (workletNodeRef.current) {
+            workletNodeRef.current.port.postMessage({ type: 'SET_THRESHOLD', value: vadThreshold });
+        }
+    }, [vadThreshold]);
+
     const pttActiveRef = useRef(false);
 
     const appendLog = useCallback((msg: string, status: 'OK' | 'ERR' = 'OK') => {
         const ts = new Date().toLocaleTimeString();
         setLogLines(prev => [...prev.slice(-49), `[${ts}] ${status === 'ERR' ? '!! ' : '> '}${msg}`]);
     }, []);
+
+    const stopVoiceAudio = useCallback(() => {
+        stopSpeech();
+        voiceApi.stopSpeech().catch(() => undefined);
+        setAiSpeaking(false);
+    }, [setAiSpeaking]);
+
+    const applyStageBlock = useCallback((block: VoiceStageInput, generation = stageGenerationRef.current) => {
+        const state = useVoiceStageStore.getState();
+        if (state.lifecycle !== 'active') return;
+        if (state.generation !== generation) return;
+        upsertStageBlock(block);
+    }, [upsertStageBlock]);
+
+    const hasActiveWork = aiSpeaking || voiceState === 'processing' || voiceState === 'speaking' || Boolean(toolAction);
+
+    const confirmLeaveVoiceMode = useCallback(() => {
+        setExitConfirmationOpen(false);
+        stopVoiceAudio();
+        pauseStage();
+        stageGenerationRef.current = useVoiceStageStore.getState().generation;
+        toggleVoiceMode();
+    }, [pauseStage, stopVoiceAudio, toggleVoiceMode]);
+
+    const confirmStopEverything = useCallback(() => {
+        setExitConfirmationOpen(false);
+        stopVoiceAudio();
+        onAbort?.();
+        cancelStage('Voice run stopped by the user. Main chat cancellation was requested.');
+        stageGenerationRef.current = useVoiceStageStore.getState().generation;
+        toggleVoiceMode();
+    }, [cancelStage, onAbort, stopVoiceAudio, toggleVoiceMode]);
+
+    const requestVoiceExit = useCallback(() => {
+        if (pttActiveRef.current) {
+            appendLog('Cannot close while recording. Release SPACE first.');
+            return;
+        }
+        if (hasActiveWork) {
+            setExitConfirmationOpen(true);
+            return;
+        }
+        confirmLeaveVoiceMode();
+    }, [appendLog, confirmLeaveVoiceMode, hasActiveWork]);
 
     const processPCMChunks = useCallback(async (chunks: Float32Array[], nativeSampleRate: number) => {
         if (chunks.length === 0) return null;
@@ -122,14 +190,21 @@ export function VoiceModeOverlay({
         try {
             const result = await voiceApi.transcribeAudio(pcmBytesArray);
             if (result.status === 'Transcript' && result.text?.trim()) {
-                setUserSpeechText(result.text.trim());
+                const transcriptText = result.text.trim();
+                setUserSpeechText(transcriptText);
                 setAiSpeechText('');
                 setSubtitleSpeaker('user');
-                onTranscript(result.text.trim());
+                applyStageBlock({
+                    id: 'voice-user-turn',
+                    kind: 'note',
+                    title: 'User turn',
+                    body: transcriptText,
+                });
+                onTranscript(transcriptText);
             }
         } catch (err) { appendLog(`VAD ERR: ${err}`, 'ERR'); }
         setVoiceState('listening');
-    }, [processPCMChunks, appendLog, onTranscript]);
+    }, [processPCMChunks, appendLog, onTranscript, applyStageBlock]);
 
     const setRecordingState = useCallback((recording: boolean) => {
         isRecordingRef.current = recording;
@@ -139,15 +214,33 @@ export function VoiceModeOverlay({
     }, []);
 
     const initMic = useCallback(async () => {
+        const initSeq = ++micInitSeqRef.current;
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const audioConstraints: MediaTrackConstraints = {
+                noiseSuppression,
+                echoCancellation,
+                autoGainControl,
+            };
+            if (selectedMic && selectedMic !== 'default') {
+                audioConstraints.deviceId = { exact: selectedMic };
+            }
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+            if (!isOpenRef.current || initSeq !== micInitSeqRef.current) {
+                stream.getTracks().forEach(t => t.stop());
+                return;
+            }
             streamRef.current = stream;
             const ctx = new AudioContext();
+            if (!isOpenRef.current || initSeq !== micInitSeqRef.current) {
+                stream.getTracks().forEach(t => t.stop());
+                ctx.close().catch(() => undefined);
+                return;
+            }
             audioCtxRef.current = ctx;
             const src = ctx.createMediaStreamSource(stream);
             
             const gain = ctx.createGain();
-            gain.gain.value = (voiceInputMode ? 0 : 1);
+            gain.gain.value = (voiceInputMode ? 0 : micVolume);
             gainNodeRef.current = gain;
             
             const analyser = ctx.createAnalyser();
@@ -158,9 +251,14 @@ export function VoiceModeOverlay({
             gain.connect(analyser);
 
             try {
-                await ctx.audioWorklet.addModule('/vad-processor.js');
+                await ctx.audioWorklet.addModule('/audio/vad-processor.js');
+                if (!isOpenRef.current || initSeq !== micInitSeqRef.current) {
+                    stream.getTracks().forEach(t => t.stop());
+                    ctx.close().catch(() => undefined);
+                    return;
+                }
                 const worklet = new AudioWorkletNode(ctx, 'vad-processor', {
-                    processorOptions: { threshold: SILENCE_THRESHOLD, durationMs: SILENCE_DURATION_MS }
+                    processorOptions: { threshold: vadThreshold, durationMs: SILENCE_DURATION_MS }
                 });
                 workletNodeRef.current = worklet;
                 analyser.connect(worklet);
@@ -191,20 +289,11 @@ export function VoiceModeOverlay({
                     }
                 };
             } catch (err) {
-                appendLog('Worklet failure, falling back to legacy processing...', 'ERR');
-                const processor = ctx.createScriptProcessor(4096, 1, 1);
-                scriptProcessorRef.current = processor;
-                processor.onaudioprocess = (e) => {
-                    const input = e.inputBuffer.getChannelData(0);
-                    if (isRecordingRef.current) recordingChunksRef.current.push(new Float32Array(input));
-                    let sumSq = 0;
-                    for (let i = 0; i < input.length; i++) sumSq += input[i] * input[i];
-                    const val = Math.min(1, Math.sqrt(sumSq / input.length) * 4);
-                    amplitudeRef.current = val;
-                    setAmplitude(val);
-                };
-                analyser.connect(processor);
-                processor.connect(ctx.destination);
+                appendLog(`VAD link failure: ${(err as Error).message}`, 'ERR');
+                setMicStatus('error');
+                stream.getTracks().forEach(t => t.stop());
+                ctx.close().catch(() => undefined);
+                return;
             }
 
             setMicStatus('live');
@@ -213,18 +302,20 @@ export function VoiceModeOverlay({
             if (!voiceInputMode) setRecordingState(true);
             appendLog('Cognitive link established.');
         } catch (err) {
+            if (!isOpenRef.current || initSeq !== micInitSeqRef.current) return;
             setMicStatus('error');
             appendLog(`Link failure: ${(err as Error).message}`, 'ERR');
         }
-    }, [appendLog, voiceInputMode, sttEngine, setRecordingState, flushVadUtterance]);
+    }, [appendLog, voiceInputMode, sttEngine, setRecordingState, flushVadUtterance, selectedMic, micVolume, noiseSuppression, echoCancellation, autoGainControl, vadThreshold]);
 
     const cleanupAudio = useCallback(() => {
+        micInitSeqRef.current += 1;
         if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
         streamRef.current = null;
-        if (scriptProcessorRef.current) {
-            scriptProcessorRef.current.disconnect();
-            scriptProcessorRef.current.onaudioprocess = null;
-            scriptProcessorRef.current = null;
+        if (workletNodeRef.current) {
+            workletNodeRef.current.port.onmessage = null;
+            workletNodeRef.current.disconnect();
+            workletNodeRef.current = null;
         }
         if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
             audioCtxRef.current.close().catch(() => { });
@@ -243,7 +334,7 @@ export function VoiceModeOverlay({
                     return;
                 }
                 e.preventDefault();
-                toggleVoiceMode();
+                requestVoiceExit();
                 return;
             }
             if (e.key === ' ' && voiceInputModeRef.current) {
@@ -256,7 +347,7 @@ export function VoiceModeOverlay({
                 setAiSpeechText('');
                 setSubtitleSpeaker('user');
                 if (gainNodeRef.current && audioCtxRef.current) {
-                    gainNodeRef.current.gain.setTargetAtTime(1, audioCtxRef.current.currentTime, 0.05);
+                    gainNodeRef.current.gain.setTargetAtTime(micVolume, audioCtxRef.current.currentTime, 0.05);
                 }
                 setVoiceState('listening');
                 appendLog('PTT: Recording started');
@@ -286,18 +377,29 @@ export function VoiceModeOverlay({
             window.removeEventListener('keydown', handleKeys, { capture: true });
             window.removeEventListener('keyup', handleKeyUp, { capture: true });
         };
-    }, [toggleVoiceMode, sttEngine, flushVadUtterance, appendLog, setRecordingState]);
+    }, [requestVoiceExit, sttEngine, flushVadUtterance, appendLog, setRecordingState]);
 
     useEffect(() => {
         if (voiceModeOpen) { 
             setLogLines([]); 
             setAiSpeechText('');
             setUserSpeechText('');
+            setExitConfirmationOpen(false);
+            startStage();
+            stageGenerationRef.current = useVoiceStageStore.getState().generation;
+            clearStage();
+            stageGenerationRef.current = useVoiceStageStore.getState().generation;
+            applyStageBlock({
+                id: 'voice-stage-contract',
+                kind: 'note',
+                title: 'Stage protocol',
+                body: 'Temporary outline: voice mode content stays inside the dashed blackboard bounds. Supported block types are note, metric, table, chart, equation, code, and map placeholder. Future visual agents should update this area through clear, replace, append, upsert, and focus operations.',
+            });
             initMic(); 
         }
         else { cleanupAudio(); }
         return () => cleanupAudio();
-    }, [voiceModeOpen, initMic, cleanupAudio]);
+    }, [voiceModeOpen, initMic, cleanupAudio, clearStage, startStage, applyStageBlock]);
 
     useEffect(() => {
         if (!voiceModeOpen) return;
@@ -308,18 +410,17 @@ export function VoiceModeOverlay({
             }
             const amp = amplitudeRef.current;
             const currentAiSpeaking = aiSpeakingRef.current;
-            if (currentAiSpeaking && amp > SILENCE_THRESHOLD && !pttActiveRef.current) {
+            if (currentAiSpeaking && amp > vadThresholdRef.current && !pttActiveRef.current) {
                 const now = performance.now();
                 if (now - lastBargeInRef.current > 400) {
-                    stopSpeech();
+                    stopVoiceAudio();
                     onAbort?.();
-                    setAiSpeaking(false);
                     appendLog('Transmission break detected.');
                     lastBargeInRef.current = now;
                 }
             }
             if (!currentAiSpeaking && !pttActiveRef.current) {
-                if (amp > SILENCE_THRESHOLD) {
+                if (amp > vadThresholdRef.current) {
                     if (!heardSpeechRef.current) {
                         heardSpeechRef.current = true;
                         setVoiceState('speaking');
@@ -356,46 +457,80 @@ export function VoiceModeOverlay({
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             stop();
         };
-    }, [voiceModeOpen, voiceInputMode, sttEngine, flushVadUtterance, appendLog, setAiSpeaking]);
+    }, [voiceModeOpen, voiceInputMode, sttEngine, flushVadUtterance, appendLog, stopVoiceAudio, onAbort]);
 
     useEffect(() => {
         let unlistens: UnlistenFn[] = [];
+        let disposed = false;
         const setup = async () => {
             try {
-                unlistens.push(await listenAppEvent('globe:navigate', () => {}));
-                unlistens.push(await listenAppEvent('drawing:ops', () => {}));
-                unlistens.push(await listenAppEvent('chat:status', (e) => {
+                const nextUnlistens = [
+                    await listenAppEvent('globe:navigate', () => {}),
+                    await listenAppEvent('drawing:ops', () => {}),
+                    await listenAppEvent('chat:status', (e) => {
                     const m = e.payload.message;
-                    if (m?.startsWith('Executing:')) setToolAction(m.replace('Executing: ', '').toUpperCase());
-                }));
-                unlistens.push(await listenAppEvent('chat:done', () => setToolAction(null)));
+                    if (m?.startsWith('Executing:')) {
+                        const action = m.replace('Executing: ', '').toUpperCase();
+                        setToolAction(action);
+                        applyStageBlock({
+                            id: 'voice-tool-action',
+                            kind: 'metric',
+                            title: 'Tool action',
+                            value: action,
+                            detail: 'Running from the main assistant pipeline',
+                        });
+                    }
+                    }),
+                    await listenAppEvent('chat:done', () => setToolAction(null)),
                 
-                unlistens.push(await listenAppEvent('tts:start', () => {
+                    await listenAppEvent('tts:start', () => {
                     setAiSpeaking(true);
                     setSubtitleSpeaker('agent');
                     setUserSpeechText('');
-                }));
+                    }),
                 
-                unlistens.push(await listenAppEvent('tts:stop', () => {
+                    await listenAppEvent('tts:stop', () => {
                     setAiSpeaking(false);
-                }));
+                    }),
 
-                unlistens.push(await listenAppEvent('chat:partial', () => {
-                    if (voiceModeOpen) {
-                        const lastMsg = messages[messages.length - 1];
+                    await listenAppEvent('chat:partial', () => {
+                    if (isOpenRef.current) {
+                        const currentMessages = messagesRef.current;
+                        const lastMsg = currentMessages[currentMessages.length - 1];
                         if (lastMsg?.role === 'assistant') {
-                            fullAiResponseRef.current = stripMarkdown(lastMsg.content);
+                            const stripped = stripMarkdown(lastMsg.content);
+                            fullAiResponseRef.current = stripped;
                             setAiSpeechText(fullAiResponseRef.current);
                             setSubtitleSpeaker('agent');
                             setUserSpeechText('');
+                            const compact = stripped.trim().slice(0, 900);
+                            if (compact && compact !== lastStageAiTextRef.current) {
+                                lastStageAiTextRef.current = compact;
+                                applyStageBlock({
+                                    id: 'voice-assistant-response',
+                                    kind: 'note',
+                                    title: 'Assistant response',
+                                    body: compact,
+                                });
+                            }
                         }
                     }
-                }));
+                    }),
+                ];
+                if (disposed) {
+                    nextUnlistens.forEach(fn => fn());
+                    return;
+                }
+                unlistens = nextUnlistens;
             } catch (err) { console.error(err); }
         };
         setup();
-        return () => unlistens.forEach(fn => fn());
-    }, [messages, voiceModeOpen, setAiSpeaking]);
+        return () => {
+            disposed = true;
+            unlistens.forEach(fn => fn());
+            unlistens = [];
+        };
+    }, [setAiSpeaking, applyStageBlock]);
 
     if (!voiceModeOpen) return null;
 
@@ -409,7 +544,12 @@ export function VoiceModeOverlay({
             logLines={logLines}
             memoryUsage={memoryUsage}
             micStatus={micStatus}
-            onClose={toggleVoiceMode}
+            exitConfirmationOpen={exitConfirmationOpen}
+            hasActiveWork={hasActiveWork}
+            onCancelExit={() => setExitConfirmationOpen(false)}
+            onConfirmLeaveVoice={confirmLeaveVoiceMode}
+            onConfirmStopEverything={confirmStopEverything}
+            onRequestClose={requestVoiceExit}
             onToggleDiagnostics={() => setShowDiagnostics((value) => !value)}
             showDiagnostics={showDiagnostics}
             sttEngine={sttEngine}

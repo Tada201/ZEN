@@ -3,6 +3,7 @@ import { useChatChunkEvent } from "./stream/useChatChunkEvent";
 import { useToolEvents } from "./stream/useToolEvents";
 import { useArtifactEvents } from "./stream/useArtifactEvents";
 import { useAgentEvents } from "./stream/useAgentEvents";
+import { useGraphSessionEvents } from "./stream/useGraphSessionEvents";
 
 /**
  * Global Tauri event listener for ALL chat streaming events.
@@ -22,4 +23,5 @@ export function useGlobalStreamListener() {
   useToolEvents({ resetHeartbeatTimeout });
   useArtifactEvents({ resetHeartbeatTimeout });
   useAgentEvents();
+  useGraphSessionEvents();
 }

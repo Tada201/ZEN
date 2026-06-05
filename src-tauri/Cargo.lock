@@ -13043,6 +13043,7 @@ dependencies = [
  "candle-nn",
  "candle-transformers",
  "chrono",
+ "cpal",
  "dashmap",
  "dirs",
  "futures",

@@ -27,7 +27,6 @@ const CardFallback = () => (
 );
 
 const VISIBLE_CHAT_STATUS_PHASES: ReadonlySet<ChatStatusPhase> = new Set([
-  CHAT_STATUS_PHASES.AgentStreaming,
   CHAT_STATUS_PHASES.ToolCallStreaming,
   CHAT_STATUS_PHASES.ToolCallReady,
 ]);

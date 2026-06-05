@@ -44,6 +44,7 @@ const TAB_GROUPS: SettingsTabGroup[] = [
   {
     label: "Interface",
     tabs: [
+      { id: "voice", label: "Voice", icon: "lucide:audio-lines", description: "Voice mode" },
       { id: "audio", label: "Audio", icon: "lucide:headphones", description: "Sound & voice" },
       { id: "terminal", label: "Terminal", icon: "lucide:terminal", description: "Shell & safety" },
       { id: "workspace", label: "Workspace", icon: "lucide:folder-open", description: "Directories & Git" },

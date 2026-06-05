@@ -168,8 +168,8 @@ export const VoiceOscilloscope: React.FC<VoiceOscilloscopeProps> = ({ analyserRe
     return (
         <canvas 
             ref={canvasRef}
-            width={400}
-            height={120}
+            width={600}
+            height={96}
             className="w-full h-full block mx-auto filter drop-shadow-[0_0_12px_rgba(168,85,247,0.15)] dark:drop-shadow-[0_0_12px_rgba(6,182,212,0.15)]"
         />
     );

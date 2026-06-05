@@ -44,6 +44,13 @@ function stepSignature(step: Step) {
   return [step.type, step.status || "", bucketLength(step.content, CONTENT_BUCKET_SIZE)].join(":");
 }
 
+function toolCallsFingerprint(toolCalls: Message["toolCalls"]) {
+  if (!toolCalls || toolCalls.length === 0) return "";
+  return toolCalls
+    .map((tc) => `${tc.id}:${tc.status || ""}:${tc.name || ""}`)
+    .join(",");
+}
+
 export function buildMessageListStreamSignature(message: Message | undefined) {
   if (!message) return "";
   const stepFingerprint = (message.steps || []).map(stepSignature).join("|");
@@ -54,5 +61,6 @@ export function buildMessageListStreamSignature(message: Message | undefined) {
     bucketLength(message.reasoning, CONTENT_BUCKET_SIZE),
     message.artifact ? `${message.artifact.type}:${bucketLength(message.artifact.content, TOOL_OUTPUT_BUCKET_SIZE)}` : "",
     stepFingerprint,
+    toolCallsFingerprint(message.toolCalls),
   ].join(":");
 }

@@ -6,7 +6,7 @@ import { PremiumChatInput } from "../components/PremiumChatInput";
 import type { TabId } from "../components/SettingsModal";
 import type { ArtifactData } from "../components/chat/types";
 import { SessionSidebar } from "../components/chat/SessionSidebar";
-import { MessageSquare, Settings, Hammer, PanelLeftOpen } from "lucide-react";
+import { Settings, Hammer, PanelLeftOpen } from "lucide-react";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { getVisibleWorkspaceModeFeatures, isWorkspaceModeVisible } from "@/lib/features/frontendFeatures";
 
@@ -168,11 +168,8 @@ export function WorkspaceApp() {
                   >
                     <PanelLeftOpen className="h-4 w-4 text-zinc-500" />
                   </button>
-                  <div className="w-8 h-8 rounded-lg bg-primary/20 backdrop-blur-md flex items-center justify-center shadow-lg border border-white/5">
-                    <MessageSquare className="w-4 h-4 text-primary" />
-                  </div>
-                  <span className="text-sm font-semibold tracking-tight text-foreground/90 font-sans drop-shadow-md">
-                    Zen Investigation
+                  <span className="text-sm font-semibold tracking-tight text-foreground/90 font-sans drop-shadow-md truncate max-w-[300px]">
+                    {sessions.find(s => s.id === currentSessionId)?.title || "New Chat"}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 pointer-events-auto">

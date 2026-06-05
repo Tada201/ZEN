@@ -27,6 +27,7 @@ interface UIState {
   density: 'normal' | 'compact';
   rightPanelOpen: boolean;
   activeRightTab: RightPanelTabId;
+  rightPanelCanvasMode: 'draw' | 'mathplot';
   agentsPanelDismissed: boolean;
   
   // Actions
@@ -55,6 +56,7 @@ interface UIState {
   setDensity: (density: 'normal' | 'compact') => void;
   setRightPanelOpen: (open: boolean) => void;
   setActiveRightTab: (tab: RightPanelTabId) => void;
+  setRightPanelCanvasMode: (mode: 'draw' | 'mathplot') => void;
   setAgentsPanelDismissed: (dismissed: boolean) => void;
   toggleSidebar: () => void;
   toggleRightPanel: () => void;
@@ -86,6 +88,7 @@ export const useUIStore = create<UIState>()(
       density: 'normal',
       rightPanelOpen: false,
       activeRightTab: 'metrics',
+      rightPanelCanvasMode: 'draw',
       agentsPanelDismissed: false,
 
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
@@ -128,6 +131,7 @@ export const useUIStore = create<UIState>()(
         }
         return nextState as any;
       }),
+      setRightPanelCanvasMode: (rightPanelCanvasMode) => set({ rightPanelCanvasMode }),
       setAgentsPanelDismissed: (agentsPanelDismissed) => set({ agentsPanelDismissed }),
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       toggleRightPanel: () => set((state) => ({ rightPanelOpen: !state.rightPanelOpen })),

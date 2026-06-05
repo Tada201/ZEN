@@ -33,6 +33,8 @@ export const MessageList = memo(function MessageList({
   const resizeObservers = useRef(new Map<Element, ResizeObserver>());
   const lastViewportWidth = useRef(0);
   const measureFrame = useRef<number | null>(null);
+  const followupMeasureFrame = useRef<number | null>(null);
+  const delayedMeasureTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Get the actual scrollable element from Radix ScrollArea
   const getViewport = useCallback(() => scrollRef.current?.querySelector("[data-radix-scroll-area-viewport]") as HTMLElement, []);
@@ -58,16 +60,40 @@ export const MessageList = memo(function MessageList({
   const rowVirtualizer = useVirtualizer({
     count: filteredMessages.length,
     getScrollElement: getViewport,
+    getItemKey: (index) => filteredMessages[index]?.id ?? index,
     estimateSize: (index) => sizeCache.current.get(index) || 200,
     overscan: 5,
   });
+
+  // Re-read heights from all mounted DOM elements and update virtualizer + cache
+  const remeasureAllMountedElements = useCallback(() => {
+    resizeObservers.current.forEach((_observer, el) => {
+      const htmlEl = el as HTMLElement;
+      rowVirtualizer.measureElement(htmlEl);
+      const index = Number(htmlEl.dataset?.index);
+      if (!isNaN(index) && htmlEl.offsetHeight > 0) {
+        sizeCache.current.set(index, htmlEl.offsetHeight);
+      }
+    });
+  }, [rowVirtualizer]);
 
   const scheduleFullMeasure = useCallback(() => {
     if (measureFrame.current !== null) return;
     measureFrame.current = window.requestAnimationFrame(() => {
       measureFrame.current = null;
-      sizeCache.current.clear();
-      rowVirtualizer.measure();
+      // Re-measure all mounted elements directly from DOM instead of
+      // clearing cache (which would fall back to wrong 200px estimates)
+      remeasureAllMountedElements();
+      followupMeasureFrame.current = window.requestAnimationFrame(() => {
+        followupMeasureFrame.current = null;
+        remeasureAllMountedElements();
+      });
+      // Delayed pass for snap/instant resizes where DOM reflow is deferred
+      if (delayedMeasureTimer.current !== null) clearTimeout(delayedMeasureTimer.current);
+      delayedMeasureTimer.current = setTimeout(() => {
+        delayedMeasureTimer.current = null;
+        remeasureAllMountedElements();
+      }, 150);
       if (isAutoScrolling.current && filteredMessages.length > 0) {
         rowVirtualizer.scrollToIndex(filteredMessages.length - 1, {
           align: "end",
@@ -75,7 +101,7 @@ export const MessageList = memo(function MessageList({
         });
       }
     });
-  }, [filteredMessages.length, rowVirtualizer]);
+  }, [filteredMessages.length, remeasureAllMountedElements, rowVirtualizer]);
 
   // Callback for caching measured sizes from the virtualizer
   const measureElementWithCache = useCallback((el: HTMLElement | null) => {
@@ -117,7 +143,17 @@ export const MessageList = memo(function MessageList({
     });
 
     observer.observe(viewport);
-    return () => observer.disconnect();
+
+    // Fix: force re-measure when crossing the md breakpoint (768px)
+    // since tool cards use md:grid-cols-2 which causes dramatic height changes
+    const mql = window.matchMedia("(min-width: 768px)");
+    const onBreakpoint = () => scheduleFullMeasure();
+    mql.addEventListener("change", onBreakpoint);
+
+    return () => {
+      observer.disconnect();
+      mql.removeEventListener("change", onBreakpoint);
+    };
   }, [getViewport, scheduleFullMeasure]);
 
   useEffect(() => {
@@ -125,6 +161,14 @@ export const MessageList = memo(function MessageList({
       if (measureFrame.current !== null) {
         window.cancelAnimationFrame(measureFrame.current);
         measureFrame.current = null;
+      }
+      if (followupMeasureFrame.current !== null) {
+        window.cancelAnimationFrame(followupMeasureFrame.current);
+        followupMeasureFrame.current = null;
+      }
+      if (delayedMeasureTimer.current !== null) {
+        clearTimeout(delayedMeasureTimer.current);
+        delayedMeasureTimer.current = null;
       }
       resizeObservers.current.forEach((observer) => observer.disconnect());
       resizeObservers.current.clear();
@@ -190,16 +234,16 @@ export const MessageList = memo(function MessageList({
           virtualItems.map((virtualItem) => {
             const m = filteredMessages[virtualItem.index];
             if (!m) return null;
-            const isActiveStreamingRow = m.status === "sending" || (isStreaming && virtualItem.index === filteredMessages.length - 1);
             return (
               <div
                 key={virtualItem.key}
                 data-index={virtualItem.index}
                 ref={measureElementWithCache}
-                className="absolute top-0 left-0 w-full isolate"
+                className="absolute top-0 left-0 w-full"
                 style={{
                   transform: `translateY(${virtualItem.start + LIST_TOP_PADDING}px)`,
-                  zIndex: isActiveStreamingRow ? 30 : 1,
+                  zIndex: 0,
+                  contain: "style",
                 }}
               >
                 <MemoizedMessageItem

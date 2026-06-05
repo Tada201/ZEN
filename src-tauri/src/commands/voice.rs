@@ -6,6 +6,9 @@ use crate::commands::AppState;
 use crate::error::ZenError;
 use crate::services::SpeechService;
 
+const MAX_VOICE_MODEL_BYTES: u64 = 600 * 1024 * 1024;
+const MAX_VOICE_CONFIG_BYTES: u64 = 2 * 1024 * 1024;
+
 #[tauri::command]
 pub async fn download_whisper_model(
     state: State<'_, AppState>,
@@ -288,15 +291,46 @@ pub async fn add_voice_model(
     onnx_path: String,
     config_path: String,
 ) -> Result<VoiceModel, ZenError> {
-    let onnx_src = std::path::PathBuf::from(&onnx_path);
-    let config_src = std::path::PathBuf::from(&config_path);
+    let onnx_src = std::path::PathBuf::from(&onnx_path)
+        .canonicalize()
+        .map_err(|_| ZenError::Custom("ONNX file not found".to_string()))?;
+    let config_src = std::path::PathBuf::from(&config_path)
+        .canonicalize()
+        .map_err(|_| ZenError::Custom("Config (JSON) file not found".to_string()))?;
 
-    if !onnx_src.exists() {
-        return Err(ZenError::Custom("ONNX file not found".to_string()));
+    if !onnx_src
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("onnx"))
+        .unwrap_or(false)
+    {
+        return Err(ZenError::Custom("Voice model must be an .onnx file".to_string()));
     }
-    if !config_src.exists() {
-        return Err(ZenError::Custom("Config (JSON) file not found".to_string()));
+    if !config_src
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("json"))
+        .unwrap_or(false)
+    {
+        return Err(ZenError::Custom("Voice config must be a .json file".to_string()));
     }
+
+    let onnx_meta = std::fs::metadata(&onnx_src)
+        .map_err(|e| ZenError::Internal(format!("Failed to inspect ONNX file: {}", e)))?;
+    if !onnx_meta.is_file() || onnx_meta.len() > MAX_VOICE_MODEL_BYTES {
+        return Err(ZenError::Custom("ONNX file is invalid or too large".to_string()));
+    }
+
+    let config_meta = std::fs::metadata(&config_src)
+        .map_err(|e| ZenError::Internal(format!("Failed to inspect config file: {}", e)))?;
+    if !config_meta.is_file() || config_meta.len() > MAX_VOICE_CONFIG_BYTES {
+        return Err(ZenError::Custom("Config file is invalid or too large".to_string()));
+    }
+
+    let config_text = std::fs::read_to_string(&config_src)
+        .map_err(|e| ZenError::Internal(format!("Failed to read config file: {}", e)))?;
+    serde_json::from_str::<serde_json::Value>(&config_text)
+        .map_err(|e| ZenError::Custom(format!("Config file is not valid JSON: {}", e)))?;
 
     let app_data_dir = app
         .path()
@@ -306,11 +340,17 @@ pub async fn add_voice_model(
 
     std::fs::create_dir_all(&voices_dir)
         .map_err(|e| ZenError::Internal(format!("Failed to create voices dir: {}", e)))?;
+    let voices_dir = voices_dir
+        .canonicalize()
+        .map_err(|e| ZenError::Internal(format!("Failed to resolve voices dir: {}", e)))?;
 
     let onnx_file_name = onnx_src
         .file_name()
         .ok_or_else(|| ZenError::Custom("Invalid ONNX file name".to_string()))?;
     let onnx_dest = voices_dir.join(onnx_file_name);
+    if !onnx_dest.starts_with(&voices_dir) {
+        return Err(ZenError::Custom("Invalid voice model destination".to_string()));
+    }
 
     std::fs::copy(&onnx_src, &onnx_dest)
         .map_err(|e| ZenError::Internal(format!("Failed to copy ONNX file: {}", e)))?;
@@ -319,6 +359,9 @@ pub async fn add_voice_model(
     let mut config_dest = onnx_dest.clone().into_os_string();
     config_dest.push(".json");
     let config_dest = std::path::PathBuf::from(config_dest);
+    if !config_dest.starts_with(&voices_dir) {
+        return Err(ZenError::Custom("Invalid voice config destination".to_string()));
+    }
 
     std::fs::copy(&config_src, &config_dest)
         .map_err(|e| ZenError::Internal(format!("Failed to copy config file: {}", e)))?;
@@ -334,4 +377,28 @@ pub async fn add_voice_model(
         path: onnx_dest.to_string_lossy().to_string(),
         is_default: false,
     })
+}
+
+#[tauri::command]
+pub async fn set_active_voice_model(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    voice_id: String,
+) -> Result<(), ZenError> {
+    let voices = list_voice_models(app).await?;
+
+    let model = voices
+        .into_iter()
+        .find(|v| v.id == voice_id)
+        .ok_or_else(|| ZenError::Custom(format!("Voice model '{}' not found", voice_id)))?;
+
+    let path = std::path::PathBuf::from(&model.path);
+
+    let tts_lock = state.tts.read().await;
+    if let Some(tts) = tts_lock.as_ref() {
+        tts.set_model(path).await;
+        Ok(())
+    } else {
+        Err(ZenError::Internal("TTS service not initialized".into()))
+    }
 }

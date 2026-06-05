@@ -1,6 +1,7 @@
 import { listen, type Event, type UnlistenFn } from "@tauri-apps/api/event";
 import { IS_TAURI } from "./tauriClient";
 import type { ActionMeta, ArtifactData, Message, MessageKind, ToolCall } from "@/atlas/components/chat/types";
+import type { SessionFeedback, VisionCapture } from "@/types/session";
 
 type ResearchStep = NonNullable<ActionMeta["researchSteps"]>[number];
 
@@ -292,6 +293,11 @@ export interface ChatStatusEventPayload {
   tools?: string[];
 }
 
+export interface TtsStartEventPayload {
+  duration_ms?: number;
+  durationMs?: number;
+}
+
 export type EmptyEventPayload = Record<string, never>;
 export type UnknownRecordEventPayload = Record<string, unknown>;
 
@@ -357,7 +363,9 @@ export interface AppEventPayloadMap {
   "chat:partial": UnknownRecordEventPayload;
   "globe:navigate": UnknownRecordEventPayload;
   "drawing:ops": UnknownRecordEventPayload;
-  "tts:start": EmptyEventPayload;
+  "graph:session:feedback": SessionFeedback;
+  "graph:session:vision_capture": VisionCapture;
+  "tts:start": TtsStartEventPayload;
   "tts:stop": EmptyEventPayload;
   "orchestrator:progress": AgentActionEventPayload;
   "orchestrator:start": EmptyEventPayload;

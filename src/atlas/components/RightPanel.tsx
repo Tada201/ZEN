@@ -4,16 +4,16 @@ import { useGTSMStore } from "@/lib/stores/useGTSMStore";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Activity, Cpu, Box, Terminal as TerminalIcon, Map as MapIcon, Zap, X, Paintbrush, Database
+  Activity, BarChart3, Cpu, Box, Terminal as TerminalIcon, Map as MapIcon, Zap, X, Paintbrush, Database, Workflow, Telescope, PenLine, Sigma
 } from 'lucide-react';
 import { getDefaultRightPanelTab, getRightPanelFeature, isRightPanelFeatureVisible } from "@/lib/features/frontendFeatures";
+import { ChatAnalyticsPanel, WorkflowPanel } from "./right-panel/RightPanelInsights";
 // Lazy load heavy components to prevent main thread blocking and high INP
 const SystemDiagnostics = React.lazy(() => import("@/components/shared/SystemDiagnostics").then(m => ({ default: m.SystemDiagnostics })));
 const XTermPanel = React.lazy(() => import("@/components/Zen/XTermPanel").then(m => ({ default: m.XTermPanel })));
 const CesiumCanvas = React.lazy(() => import("@/components/workbench/MapContainer").then(m => ({ default: m.CesiumCanvas })));
 const ArtifactPanel = React.lazy(() => import("@/components/shared/ArtifactPanel").then(m => ({ default: m.ArtifactPanel })));
 const AgentOrchestratorPanel = React.lazy(() => import("@/components/widgets/orchestrator/AgentOrchestratorPanel").then(m => ({ default: m.AgentOrchestratorPanel })));
-const MathPlotInterface = React.lazy(() => import("@/components/widgets/workbench/MathPlotInterface").then(m => ({ default: m.MathPlotInterface })));
 const InteractiveDrawingCanvas = React.lazy(() => import("@/components/widgets/workbench/InteractiveDrawingCanvas"));
 const MemoryStatsWidget = React.lazy(() => import("@/components/widgets/memory/MemoryStatsWidget").then(m => ({ default: m.MemoryStatsWidget })));
 
@@ -30,13 +30,26 @@ const LoadingFallback = () => (
   </div>
 );
 
+const MathGraphPlaceholder = () => (
+  <div className="flex h-full flex-col items-center justify-center bg-black p-8 text-center">
+    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+      <Sigma size={24} />
+    </div>
+    <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-200">
+      Math Graph TODO
+    </h3>
+    <p className="mt-3 max-w-[360px] text-[12px] leading-relaxed text-zinc-500">
+      The Desmos-backed graph renderer is disabled. This space is reserved for a future local graphing engine that works offline and renders graph_session tool output without third-party script loading.
+    </p>
+  </div>
+);
+
 /**
  * RightPanel - The primary system utility panel.
  */
 export function RightPanel() {
-  const { activeRightTab, setActiveRightTab, setRightPanelOpen, operationalParams } = useUIStore();
+  const { activeRightTab, setActiveRightTab, setRightPanelOpen, operationalParams, rightPanelCanvasMode, setRightPanelCanvasMode } = useUIStore();
   const [mapActivated, setMapActivated] = React.useState(false);
-  const [canvasMode, setCanvasMode] = React.useState<'draw' | 'mathplot'>('mathplot');
 
   const viewMode = useGTSMStore(state => state.viewMode);
   const setViewMode = useGTSMStore(state => state.setViewMode);
@@ -72,32 +85,26 @@ export function RightPanel() {
             <SystemDiagnostics />
           </div>
         );
+      case 'analytics':
+        return <ChatAnalyticsPanel />;
       case 'artifacts':
         return <ArtifactPanel isEmbedded={true} />;
       case 'terminal':
         return <XTermPanel />;
       case 'agents':
         return <AgentOrchestratorPanel />;
+      case 'workflows':
+        return <WorkflowPanel />;
       case 'drawing':
         return (
           <div className="flex-grow flex flex-col relative w-full h-full overflow-hidden">
-            <div className="absolute top-[-44px] right-14 z-50 bg-card border border-border rounded-full px-3 py-1 text-[11px] text-muted-foreground font-mono flex items-center gap-2 press">
-              <span className="text-muted-foreground/60">MODE:</span>
-              <select
-                value={canvasMode}
-                onChange={(e) => setCanvasMode(e.target.value as 'draw' | 'mathplot')}
-                className="bg-transparent outline-none cursor-pointer text-primary font-bold uppercase"
-              >
-                <option value="mathplot" className="bg-card text-foreground">MATH PLOT</option>
-                <option value="draw" className="bg-card text-foreground">FREE DRAW</option>
-              </select>
-            </div>
             <div className="flex-grow overflow-hidden relative w-full h-full flex flex-col">
-              {canvasMode === 'draw' ? <InteractiveDrawingCanvas /> : <MathPlotInterface />}
+              {rightPanelCanvasMode === 'draw' ? <InteractiveDrawingCanvas /> : <MathGraphPlaceholder />}
             </div>
           </div>
         );
       case 'map':
+      case 'space':
         return null;
       case 'memory':
         return <MemoryStatsWidget />;
@@ -122,10 +129,13 @@ export function RightPanel() {
 
     const titles: Record<string, string> = {
       metrics: 'System Health',
+      analytics: 'Chat Analytics',
       agents: 'Active Agents',
+      workflows: 'Workflows',
       artifacts: 'Artifacts',
       terminal: 'Terminal',
       map: 'Operational Map',
+      space: 'Space View',
       drawing: 'Canvas Workspace',
       memory: 'Memory Stats'
     };
@@ -141,10 +151,13 @@ export function RightPanel() {
 
     const icons: Record<string, any> = {
       metrics: Activity,
+      analytics: BarChart3,
       agents: Cpu,
+      workflows: Workflow,
       artifacts: Box,
       terminal: TerminalIcon,
       map: MapIcon,
+      space: Telescope,
       drawing: Paintbrush,
       memory: Database
     };
@@ -158,7 +171,29 @@ export function RightPanel() {
         <div className="flex items-center gap-2.5">
           {getIcon()}
           <span className="text-[12px] font-bold uppercase tracking-[0.15em] text-zinc-300">{getTitle()}</span>
-          {visibleActiveRightTab === 'map' && mapActivated && (
+          {visibleActiveRightTab === 'drawing' && (
+            <div className="ml-2 flex rounded-lg border border-border bg-black/40 p-0.5">
+              <button
+                type="button"
+                className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-bold uppercase tracking-wider transition-colors ${rightPanelCanvasMode === 'draw' ? 'bg-primary/15 text-primary' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
+                onClick={() => setRightPanelCanvasMode('draw')}
+                title="Switch to free drawing canvas"
+              >
+                <PenLine size={13} />
+                Draw
+              </button>
+              <button
+                type="button"
+                className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-bold uppercase tracking-wider transition-colors ${rightPanelCanvasMode === 'mathplot' ? 'bg-primary/15 text-primary' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
+                onClick={() => setRightPanelCanvasMode('mathplot')}
+                title="Switch to math graph mode"
+              >
+                <Sigma size={13} />
+                Graph
+              </button>
+            </div>
+          )}
+          {(visibleActiveRightTab === 'map' || visibleActiveRightTab === 'space') && mapActivated && (
             <div className="flex bg-black/60 border border-white/5 p-0.5 rounded ml-4 font-mono select-none">
               <button
                 type="button"
@@ -185,7 +220,7 @@ export function RightPanel() {
         </button>
       </header>
 
-      {visibleActiveRightTab === 'map' ? (
+      {visibleActiveRightTab === 'map' || visibleActiveRightTab === 'space' ? (
         <div className="flex-1 flex flex-col relative overflow-hidden bg-black select-none">
           <div className="flex-1 relative w-full h-full flex flex-col">
             {mapActivated ? (
@@ -195,17 +230,19 @@ export function RightPanel() {
             ) : (
               <div className="flex-grow flex flex-col items-center justify-center p-6 text-center bg-background">
                 <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-4 motion-safe:animate-pulse">
-                  <MapIcon size={24} />
+                  {visibleActiveRightTab === 'space' ? <Telescope size={24} /> : <MapIcon size={24} />}
                 </div>
-                <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-200">Operational Map</h3>
+                <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-200">
+                  {visibleActiveRightTab === 'space' ? 'Space View' : 'Operational Map'}
+                </h3>
                 <p className="text-[12px] text-zinc-400 max-w-[260px] mt-2 leading-relaxed">
-                  Initializing the map viewer loads heavy WebGL and Cesium 3D asset engines. Click below to confirm and activate the canvas.
+                  Initializing this viewer loads heavy WebGL and Cesium 3D asset engines. Click below to confirm and activate the canvas.
                 </p>
                 <button
                   onClick={() => setMapActivated(true)}
                   className="mt-6 px-4 py-2 bg-primary/10 hover:bg-primary/25 border border-primary/25 hover:border-primary/50 text-[11px] font-bold uppercase tracking-widest text-primary rounded-xl transition-all duration-200 shadow-sm shadow-primary/5 hover:scale-[1.02] active:scale-[0.98]"
                 >
-                  Activate Map Engine
+                  Activate Viewer
                 </button>
               </div>
             )}
@@ -215,7 +252,7 @@ export function RightPanel() {
             <span className="truncate max-w-[180px]">Target: {operationalParams?.label || "Active Search"}</span>
           </div>
         </div>
-      ) : visibleActiveRightTab === 'drawing' || visibleActiveRightTab === 'agents' || visibleActiveRightTab === 'terminal' || visibleActiveRightTab === 'artifacts' || visibleActiveRightTab === 'memory' ? (
+      ) : visibleActiveRightTab === 'drawing' || visibleActiveRightTab === 'agents' || visibleActiveRightTab === 'workflows' || visibleActiveRightTab === 'analytics' || visibleActiveRightTab === 'terminal' || visibleActiveRightTab === 'artifacts' || visibleActiveRightTab === 'memory' ? (
         <div className="flex-grow flex-1 relative overflow-hidden bg-black flex flex-col">
           <AnimatePresence mode="wait">
             <motion.div

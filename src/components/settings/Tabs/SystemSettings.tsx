@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { SettingsSection } from "../SettingsSection";
 import { SettingsRow } from "../SettingsRow";
 import { WorkbenchSwitch } from "../ui/WorkbenchSwitch";
-import { WorkbenchSelect } from "../ui/WorkbenchSelect";
-import { WorkbenchSlider } from "../ui/WorkbenchSlider";
 import { WorkbenchButton } from "@/components/ui/WorkbenchButton";
 import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 import { systemApi, type HardwareInfo } from "@/api";
@@ -39,12 +37,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
     const bytes = hardware?.disks?.reduce((total, disk) => total + (disk.total_space || 0), 0) || 0;
     return bytes > 0 ? bytes / 1024 / 1024 / 1024 : 0;
   }, [hardware?.disks]);
-  const maxThreads = Math.max(2, hardware?.threads || 16);
-  const threadOptions = Array.from(new Set([2, 4, 8, 16, maxThreads].filter((value) => value <= maxThreads))).map((n) => ({
-    value: String(n),
-    label: `${n} Threads`,
-  }));
-  const memoryMax = Math.max(2, Math.ceil(hardware?.memory_gb || 32));
+
 
   return (
     <div className="space-y-8">
@@ -113,6 +106,16 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
       </SettingsSection>
 
       <SettingsSection title="Performance" icon="lucide:gauge" description="Resource allocation and performance tuning">
+        <div className="mx-3 mb-2 flex items-start gap-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-amber-200/90">
+          <WorkbenchIcon name="lucide:alert-triangle" size={16} className="text-amber-500 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <p className="text-[11px] font-medium leading-none">Settings Under Construction</p>
+            <p className="text-[10px] text-amber-200/60 leading-normal">
+              Not working — TODO: wire the app properly
+            </p>
+          </div>
+        </div>
+
         <SettingsRow
           label="Low Resource Mode"
           description="Reduce resource usage on constrained hardware"
@@ -126,21 +129,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
         />
 
         <SettingsRow
-          label="Max CPU Threads"
-          description="Maximum threads for processing tasks"
-          control={
-            <WorkbenchSelect
-              value={settings["system.max-cpu-threads"] || "8"}
-              onValueChange={v => onUpdate("system.max-cpu-threads", v)}
-              options={threadOptions}
-              width={100}
-            />
-          }
-          icon="lucide:activity"
-        />
-
-        <SettingsRow
-          label="GPU Offloading"
+          label="Hardware Acceleration"
           description="Use GPU for accelerated inference"
           control={
             <WorkbenchSwitch
@@ -150,27 +139,6 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
             />
           }
           icon="lucide:zap"
-        />
-
-        <SettingsRow
-          label="Max Memory Usage"
-          description="Maximum RAM allocated to the application"
-          control={
-            <div className="flex items-center gap-2 w-[140px]">
-              <WorkbenchSlider
-                value={[parseInt(settings["system.max-memory"] || "8")]}
-                onValueChange={([v]) => onUpdate("system.max-memory", String(v))}
-                min={2}
-                max={memoryMax}
-                step={2}
-                className="flex-1"
-              />
-              <span className="text-[11px] font-mono text-muted-foreground w-8 text-right">
-                {settings["system.max-memory"] || "8"}GB
-              </span>
-            </div>
-          }
-          icon="lucide:server"
         />
       </SettingsSection>
 

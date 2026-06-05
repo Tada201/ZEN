@@ -8,41 +8,49 @@ interface VoiceSubtitleBoxProps {
     aiText: string;
 }
 
-export function VoiceSubtitleBox({ speaker, userText, aiText }: VoiceSubtitleBoxProps) {
-    return (
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 w-full max-w-xl px-6 z-40 animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <div className="bg-[#0c0d14]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl flex items-start gap-3.5 transition-all duration-200">
-                {speaker === 'user' && (
-                    <span className="shrink-0 text-[9px] font-extrabold tracking-widest px-2.5 py-0.5 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 select-none uppercase">
-                        YOU
-                    </span>
-                )}
-                {speaker === 'agent' && (
-                    <span className="shrink-0 text-[9px] font-extrabold tracking-widest px-2.5 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 select-none uppercase">
-                        ZEN
-                    </span>
-                )}
-                {speaker === 'system' && (
-                    <span className="shrink-0 text-[9px] font-extrabold tracking-widest px-2.5 py-0.5 rounded border border-zinc-500/30 bg-zinc-500/10 text-zinc-400 select-none uppercase">
-                        SYS
-                    </span>
-                )}
+const speakerConfig = {
+    user: {
+        label: "YOU",
+        badgeClass: "border-purple-500/30 bg-purple-500/10 text-purple-400",
+        textClass: "text-purple-300/90",
+        fallback: "Listening...",
+    },
+    agent: {
+        label: "ZEN",
+        badgeClass: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
+        textClass: "text-emerald-300/90",
+        fallback: "Responding...",
+    },
+    system: {
+        label: "SYS",
+        badgeClass: "border-zinc-500/30 bg-zinc-500/10 text-zinc-500",
+        textClass: "text-zinc-500 italic",
+        fallback: "Voice link established. Monitoring channel...",
+    },
+} as const;
 
-                <p className={cn(
-                    "text-[13px] font-semibold leading-relaxed flex-1 text-left select-none transition-colors duration-200",
-                    speaker === 'user'
-                        ? "text-purple-100/90"
-                        : speaker === 'agent'
-                            ? "text-emerald-100/90"
-                            : "text-zinc-500 italic"
-                )}>
-                    {speaker === 'user'
-                        ? (userText || 'Listening for speech...')
-                        : speaker === 'agent'
-                            ? (aiText || 'Responding...')
-                            : 'Voice link established. Monitoring channel...'}
-                </p>
-            </div>
+export function VoiceSubtitleBox({ speaker, userText, aiText }: VoiceSubtitleBoxProps) {
+    const config = speakerConfig[speaker];
+    const text = speaker === 'user'
+        ? (userText || config.fallback)
+        : speaker === 'agent'
+            ? (aiText || config.fallback)
+            : config.fallback;
+
+    return (
+        <div className="flex w-full items-center gap-3">
+            <span className={cn(
+                "shrink-0 text-[10px] font-extrabold tracking-[0.2em] px-2 py-0.5 rounded border select-none uppercase",
+                config.badgeClass,
+            )}>
+                {config.label}
+            </span>
+            <p className={cn(
+                "min-w-0 flex-1 truncate text-sm font-medium leading-relaxed tracking-wide select-none transition-colors duration-200",
+                config.textClass,
+            )}>
+                {text}
+            </p>
         </div>
     );
 }

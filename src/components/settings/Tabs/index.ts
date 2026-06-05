@@ -1,4 +1,13 @@
 export { AudioSettings } from "./AudioSettings";
+export { VoiceSettings } from "./VoiceSettings";
+export { STTConfig } from "./audio/STTConfig";
+export { TTSConfig } from "./audio/TTSConfig";
+export { InputControls } from "./audio/InputControls";
+export { MicrophoneConfig } from "./audio/MicrophoneConfig";
+export { OutputConfig } from "./audio/OutputConfig";
+export { VoiceModulation } from "./audio/VoiceModulation";
+export { SystemSoundsConfig } from "./audio/SystemSoundsConfig";
+export { FeedbackIntensityConfig } from "./audio/FeedbackIntensityConfig";
 export { ChatSettings } from "./ChatSettings";
 export { GUISettings } from "./GUISettings";
 export { IntelligenceSettings } from "./IntelligenceSettings";

@@ -16,6 +16,8 @@ const requiredPanelSnippets = [
   'EMPTY_MESSAGES',
   'useChatStore(s => activeSessionId ? s.sessionMessages[activeSessionId] ?? EMPTY_MESSAGES : EMPTY_MESSAGES)',
   'useChatStore(s => activeSessionId ? s.streamingChats[activeSessionId] ?? false : false)',
+  'useAgentActivityStore(s => s.activeTasks)',
+  'useAgentActivityStore(s => s.activities)',
   '<LiveSessionExecution model={liveModel} isStreaming={isSessionStreaming} />',
 ];
 

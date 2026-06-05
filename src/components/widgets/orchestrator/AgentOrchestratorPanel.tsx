@@ -29,7 +29,12 @@ export function AgentOrchestratorPanel() {
     const activeSessionId = useChatStore(s => s.activeSessionId);
     const sessionMessages = useChatStore(s => activeSessionId ? s.sessionMessages[activeSessionId] ?? EMPTY_MESSAGES : EMPTY_MESSAGES);
     const isSessionStreaming = useChatStore(s => activeSessionId ? s.streamingChats[activeSessionId] ?? false : false);
-    const { activeTasks, selectedTaskId, setSelectedTaskId, clearTasks, removeTask, activities } = useAgentActivityStore();
+    const activeTasks = useAgentActivityStore(s => s.activeTasks);
+    const selectedTaskId = useAgentActivityStore(s => s.selectedTaskId);
+    const setSelectedTaskId = useAgentActivityStore(s => s.setSelectedTaskId);
+    const clearTasks = useAgentActivityStore(s => s.clearTasks);
+    const removeTask = useAgentActivityStore(s => s.removeTask);
+    const activities = useAgentActivityStore(s => s.activities);
 
     const liveModel = useMemo(() => buildLiveAgentPanelModel(sessionMessages), [sessionMessages]);
 
@@ -45,12 +50,12 @@ export function AgentOrchestratorPanel() {
         );
     }, [activities, selectedTask]);
 
-    const sessionTasks = activeTasks.filter(t => t.chatId === activeSessionId);
-    const crossSessionTasks = activeTasks.filter(t => t.chatId !== activeSessionId);
+    const sessionTasks = useMemo(() => activeTasks.filter(t => t.chatId === activeSessionId), [activeSessionId, activeTasks]);
+    const crossSessionTasks = useMemo(() => activeTasks.filter(t => t.chatId !== activeSessionId), [activeSessionId, activeTasks]);
 
-    const runningTasks = sessionTasks.filter(t => t.status === 'in_progress');
-    const pendingTasks = sessionTasks.filter(t => t.status === 'pending');
-    const historyTasks = sessionTasks.filter(t => t.status === 'completed' || t.status === 'failed');
+    const runningTasks = useMemo(() => sessionTasks.filter(t => t.status === 'in_progress'), [sessionTasks]);
+    const pendingTasks = useMemo(() => sessionTasks.filter(t => t.status === 'pending'), [sessionTasks]);
+    const historyTasks = useMemo(() => sessionTasks.filter(t => t.status === 'completed' || t.status === 'failed'), [sessionTasks]);
 
     // Bird's Eye View Renderer
     const renderBirdsEye = () => (

@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import {
   Activity,
+  BarChart3,
   Bot,
   Box,
   Cpu,
@@ -15,8 +16,10 @@ import {
   Settings,
   Sparkles,
   Sun,
+  Telescope,
   Terminal,
   User,
+  Workflow,
   Zap,
 } from "lucide-react";
 
@@ -34,6 +37,7 @@ export type SettingsTabId =
   | "intelligence"
   | "agents"
   | "skills"
+  | "voice"
   | "audio"
   | "terminal"
   | "workspace"
@@ -88,6 +92,7 @@ export const FRONTEND_FEATURES = [
   { id: "settings.capabilities", label: "Capabilities", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "privileged", settingsTabId: "capabilities", icon: Sparkles },
   { id: "settings.intelligence", label: "Intelligence", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "heavy-runtime", settingsTabId: "intelligence", icon: Search },
   { id: "settings.agents", label: "Agents", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "privileged", settingsTabId: "agents", icon: Bot },
+  { id: "settings.voice", label: "Voice", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "none", settingsTabId: "voice", icon: Headphones },
   { id: "settings.audio", label: "Audio", maturity: "production", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "none", settingsTabId: "audio", icon: Headphones },
   { id: "settings.terminal", label: "Terminal", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "privileged", settingsTabId: "terminal", icon: User },
   { id: "settings.workspace", label: "Workspace", maturity: "production", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "privileged", settingsTabId: "workspace", icon: Layers },
@@ -101,12 +106,15 @@ export const FRONTEND_FEATURES = [
   { id: "settings.embedding-models", label: "Embedding Models", maturity: "prototype", surfaces: ["settings", "commandPalette"], defaultVisible: false, labsOnly: true, risk: "heavy-runtime", settingsTabId: "embedding-models", icon: Search },
   { id: "settings.map-config", label: "Map Config", maturity: "prototype", surfaces: ["settings", "commandPalette"], defaultVisible: false, labsOnly: true, risk: "heavy-runtime", settingsTabId: "map-config", icon: MapIcon },
   { id: "right.metrics", label: "System Health", maturity: "production", surfaces: ["rightRail"], defaultVisible: true, risk: "none", rightPanelTabId: "metrics", icon: Activity },
+  { id: "right.analytics", label: "Chat Analytics", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "none", rightPanelTabId: "analytics", icon: BarChart3 },
   { id: "right.artifacts", label: "Artifacts", maturity: "production", surfaces: ["rightRail"], defaultVisible: true, risk: "untrusted-content", rightPanelTabId: "artifacts", icon: Box },
   { id: "right.agents", label: "Active Agents", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "privileged", rightPanelTabId: "agents", icon: Cpu },
-  { id: "right.drawing", label: "Canvas Workspace", maturity: "prototype", surfaces: ["rightRail"], defaultVisible: false, labsOnly: true, risk: "heavy-runtime", rightPanelTabId: "drawing", icon: Paintbrush },
-  { id: "right.memory", label: "Memory Stats", maturity: "prototype", surfaces: ["rightRail"], defaultVisible: false, labsOnly: true, risk: "heavy-runtime", rightPanelTabId: "memory", icon: Database },
+  { id: "right.workflows", label: "Workflows", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "privileged", rightPanelTabId: "workflows", icon: Workflow },
+  { id: "right.drawing", label: "Canvas Workspace", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "heavy-runtime", rightPanelTabId: "drawing", icon: Paintbrush },
+  { id: "right.memory", label: "Memory Stats", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "heavy-runtime", rightPanelTabId: "memory", icon: Database },
   { id: "right.terminal", label: "Terminal", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "privileged", rightPanelTabId: "terminal", icon: Terminal },
-  { id: "right.map", label: "Operational Map", maturity: "prototype", surfaces: ["rightRail"], defaultVisible: false, labsOnly: true, risk: "heavy-runtime", rightPanelTabId: "map", icon: MapIcon },
+  { id: "right.map", label: "Operational Map", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "heavy-runtime", rightPanelTabId: "map", icon: MapIcon },
+  { id: "right.space", label: "Space View", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "heavy-runtime", rightPanelTabId: "space", icon: Telescope },
   { id: "workspace.chat", label: "Chat", maturity: "production", surfaces: ["workspaceMode", "sidebar"], defaultVisible: true, risk: "none", workspaceModeId: "chat", icon: MessageSquare },
   { id: "workspace.openui", label: "Canvas", maturity: "prototype", surfaces: ["workspaceMode", "sidebar"], defaultVisible: false, labsOnly: true, requiresSecurityReview: true, risk: "untrusted-content", workspaceModeId: "openui", icon: Paintbrush },
 ] satisfies FrontendFeature[];

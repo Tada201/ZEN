@@ -1,6 +1,7 @@
 pub mod agent;
 pub mod agent_config;
 pub mod artifacts;
+pub mod audio;
 pub mod canvas;
 pub mod chat;
 pub mod document;

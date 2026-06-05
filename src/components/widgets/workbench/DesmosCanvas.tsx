@@ -11,7 +11,7 @@ declare global {
 }
 
 const DESMOS_SCRIPT_SRC = 'https://www.desmos.com/api/v1.9/calculator.js?apiKey=dcb31709b452b1cf9dcba9e7c254d7e6';
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 2;
 
 type ScriptLoadState = 'idle' | 'loading' | 'loaded' | 'error';
 
@@ -66,6 +66,7 @@ function loadDesmosScript(): Promise<void> {
     });
     script.addEventListener('error', () => {
       globalLoadState = 'error';
+      globalLoadPromise = null;
       reject(new Error('Desmos API script failed to load'));
     });
     document.head.appendChild(script);
@@ -184,6 +185,8 @@ export const DesmosCanvas = forwardRef<DesmosCanvasRef, { config: DesmosConfig }
     setScriptState('idle');
     globalLoadState = 'idle';
     globalLoadPromise = null;
+    const existing = document.querySelector(`script[src="${DESMOS_SCRIPT_SRC}"]`);
+    existing?.remove();
   }, []);
 
   useEffect(() => {
@@ -212,7 +215,7 @@ export const DesmosCanvas = forwardRef<DesmosCanvasRef, { config: DesmosConfig }
         .catch((err) => {
           if (!cancelled && mountedRef.current) {
             setScriptState('error');
-            setError(`${err.message}. Check your internet connection.`);
+            setError(`${err.message}. The embedded calculator is unavailable right now, so this panel cannot start the graph engine.`);
             setLoading(false);
           }
         });
@@ -337,8 +340,11 @@ export const DesmosCanvas = forwardRef<DesmosCanvasRef, { config: DesmosConfig }
         <WorkbenchIcon name="codicon:warning" size={32} />
 
         <div>
-          <h3 className="text-lg font-bold mb-2">ENGINE FAILURE</h3>
-          <p className="text-sm opacity-80">{error}</p>
+          <h3 className="text-lg font-bold mb-2">GRAPH ENGINE UNAVAILABLE</h3>
+          <p className="text-sm opacity-80 max-w-[360px]">{error}</p>
+          <p className="text-xs opacity-60 mt-2 max-w-[360px]">
+            Free Draw still works. Switch the canvas mode to Free Draw if you do not need Desmos plotting.
+          </p>
           {retryCountRef.current > 0 && (
             <p className="text-xs opacity-50 mt-1">Attempt {retryCountRef.current} of {MAX_RETRIES}</p>
           )}
@@ -351,12 +357,9 @@ export const DesmosCanvas = forwardRef<DesmosCanvasRef, { config: DesmosConfig }
             [ RETRY ({MAX_RETRIES - retryCountRef.current} remaining) ]
           </WorkbenchButton>
         ) : (
-          <WorkbenchButton
-            onClick={() => window.location.reload()}
-            className="mt-4 px-4 py-2 bg-[#FF0055]/10 border border-[#FF0055]/50 hover:bg-[#FF0055]/20 transition-colors uppercase text-xs tracking-widest"
-          >
-            [ REBOOT SYSTEM ]
-          </WorkbenchButton>
+          <p className="mt-4 text-xs uppercase tracking-widest text-[#FF0055]/70">
+            Retry limit reached
+          </p>
         )}
       </div>
     );
