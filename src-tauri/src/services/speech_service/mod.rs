@@ -5,6 +5,7 @@ use crate::services::runtime_resource::{
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::process::Command;
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -23,11 +24,24 @@ pub struct ModelFileStatus {
     pub error: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct WhisperRuntimeStatus {
+    pub backend: String,
+    pub recommended_backend: String,
+    pub detected_gpu_vendors: Vec<String>,
+    pub cuda_driver_available: bool,
+    pub cuda_server_available: bool,
+    pub vulkan_server_available: bool,
+    pub binary_path: String,
+    pub binary_source: String,
+}
+
 /// Manages the Whisper model lifecycle and transcription.
 pub struct SpeechService {
     runtime: RuntimeResources,
     model_path: std::sync::Arc<tokio::sync::RwLock<PathBuf>>,
     model_name: std::sync::Arc<tokio::sync::RwLock<String>>,
+    gpu_device: std::sync::Arc<tokio::sync::RwLock<Option<u32>>>,
     hardware: HardwareInfo,
     server_process: std::sync::Arc<tokio::sync::Mutex<Option<tokio::process::Child>>>,
     watchdog_running: std::sync::Arc<std::sync::atomic::AtomicBool>,
@@ -36,6 +50,30 @@ pub struct SpeechService {
 }
 
 impl SpeechService {
+    fn detected_gpu_vendors(&self) -> Vec<String> {
+        let mut vendors: Vec<String> = self
+            .hardware
+            .gpus
+            .iter()
+            .map(|gpu| gpu.vendor.clone())
+            .filter(|vendor| vendor != "Unknown")
+            .collect();
+        vendors.sort();
+        vendors.dedup();
+        vendors
+    }
+
+    fn prefers_vulkan(&self) -> bool {
+        self.hardware
+            .gpus
+            .iter()
+            .any(|gpu| gpu.vendor == "AMD" || gpu.vendor == "Intel")
+    }
+
+    fn resolved_whisper_binary(&self) -> crate::services::runtime_resource::ResolvedBinary {
+        self.runtime
+            .whisper_server_binary(self.hardware.has_cuda, self.prefers_vulkan())
+    }
     /// Create a new SpeechService pointing to the app data directory.
     pub fn new(
         app_data_dir: &std::path::Path,
@@ -62,13 +100,14 @@ impl SpeechService {
         process_manager: Option<Arc<crate::services::process_manager::ProcessManager>>,
     ) -> Self {
         let runtime = RuntimeResources::new(app_data_dir, resource_dir);
-        let model_name = "ggml-base.en.bin".to_string();
+        let model_name = "ggml-tiny.en.bin".to_string();
         let model_path = runtime.whisper_model_path(&model_name);
 
         Self {
             runtime,
             model_path: std::sync::Arc::new(tokio::sync::RwLock::new(model_path)),
             model_name: std::sync::Arc::new(tokio::sync::RwLock::new(model_name)),
+            gpu_device: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
             hardware,
             server_process: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
             watchdog_running: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -235,7 +274,12 @@ impl SpeechService {
     }
 
     pub fn find_any_valid_model(&self) -> Option<String> {
-        let models = ["ggml-base.en.bin", "ggml-tiny.en.bin", "ggml-small.en.bin", "ggml-medium.en.bin"];
+        let models = [
+            "ggml-tiny.en.bin",
+            "ggml-base.en.bin",
+            "ggml-small.en.bin",
+            "ggml-medium.en.bin",
+        ];
         for m in models {
             let status = self.check_model_file(m);
             if status.valid {
@@ -243,6 +287,44 @@ impl SpeechService {
             }
         }
         None
+    }
+
+    pub fn runtime_status(&self) -> WhisperRuntimeStatus {
+        let resolved = self.resolved_whisper_binary();
+        let binary_path = resolved.path.display().to_string();
+        let cuda_server_available = self.runtime.whisper_cuda_server_path().exists()
+            || self.runtime.whisper_app_data_cuda_server_path().exists();
+        let vulkan_server_available = self.runtime.whisper_vulkan_server_path().exists()
+            || self.runtime.whisper_app_data_vulkan_server_path().exists();
+        let backend = if self.hardware.has_cuda && binary_path.contains("whisper-cublas") {
+            "cuda".to_string()
+        } else if binary_path.contains("whisper-vulkan") {
+            "vulkan".to_string()
+        } else {
+            "cpu".to_string()
+        };
+        let detected_gpu_vendors = self.detected_gpu_vendors();
+        let recommended_backend = if detected_gpu_vendors.iter().any(|vendor| vendor == "NVIDIA") {
+            "cuda".to_string()
+        } else if detected_gpu_vendors
+            .iter()
+            .any(|vendor| vendor == "AMD" || vendor == "Intel")
+        {
+            "vulkan".to_string()
+        } else {
+            "cpu".to_string()
+        };
+
+        WhisperRuntimeStatus {
+            backend,
+            recommended_backend,
+            detected_gpu_vendors,
+            cuda_driver_available: self.hardware.has_cuda,
+            cuda_server_available,
+            vulkan_server_available,
+            binary_path,
+            binary_source: format!("{:?}", resolved.source),
+        }
     }
 
     /// Download the whisper model if it doesn't exist (legacy ensure for start_server).
@@ -257,14 +339,24 @@ impl SpeechService {
         match self.download_model(&model_name).await {
             Ok(_) => Ok(()),
             Err(e) => {
-                warn!("Failed to download whisper model '{}': {}. Searching for fallback model...", model_name, e);
+                warn!(
+                    "Failed to download whisper model '{}': {}. Searching for fallback model...",
+                    model_name, e
+                );
                 if let Some(fallback_model) = self.find_any_valid_model() {
-                    warn!("Found fallback model '{}'. Swapping active model.", fallback_model);
+                    warn!(
+                        "Found fallback model '{}'. Swapping active model.",
+                        fallback_model
+                    );
                     *self.model_name.write().await = fallback_model.clone();
-                    *self.model_path.write().await = self.runtime.whisper_model_path(&fallback_model);
+                    *self.model_path.write().await =
+                        self.runtime.whisper_model_path(&fallback_model);
                     Ok(())
                 } else {
-                    Err(format!("Failed to download model '{}' and no fallback models found on disk: {}.", model_name, e))
+                    Err(format!(
+                        "Failed to download model '{}' and no fallback models found on disk: {}.",
+                        model_name, e
+                    ))
                 }
             }
         }
@@ -280,29 +372,33 @@ impl SpeechService {
             self.ensure_model().await?;
         }
 
-        let resolved_binary = self.runtime.whisper_server_binary(self.hardware.has_cuda);
+        let resolved_binary = self.resolved_whisper_binary();
         info!(
             path = %resolved_binary.path.display(),
             source = ?resolved_binary.source,
             exists = resolved_binary.path.exists(),
+            cuda_driver = self.hardware.has_cuda,
+            cuda_backend = resolved_binary.path.to_string_lossy().contains("whisper-cublas"),
             "Resolved whisper-server path"
         );
 
         let path_str = self.model_path.read().await.to_str().unwrap().to_string();
-        info!(path = %path_str, "Starting whisper-server with model");
+        info!(
+            path = %path_str,
+            cuda_driver = self.hardware.has_cuda,
+            cuda_backend = resolved_binary.path.to_string_lossy().contains("whisper-cublas"),
+            "Starting whisper-server with model"
+        );
 
         let mut command = Command::new(&resolved_binary.path);
         configure_tokio_command_for_binary(&mut command, &resolved_binary.path);
+        let port = WHISPER_PORT.to_string();
+        command.args(["-m", &path_str, "--port", &port, "--host", "127.0.0.1"]);
+        if let Some(device) = *self.gpu_device.read().await {
+            command.args(["--gpu-device", &device.to_string()]);
+        }
 
         let child = command
-            .args([
-                "-m",
-                &path_str,
-                "--port",
-                &WHISPER_PORT.to_string(),
-                "--host",
-                "127.0.0.1",
-            ])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .spawn()
@@ -361,8 +457,10 @@ impl SpeechService {
             let process_mtx = self.server_process.clone();
             let runtime = self.runtime.clone();
             let model_path = self.model_path.clone();
+            let gpu_device = self.gpu_device.clone();
             let process_manager = self.process_manager.clone();
             let has_cuda = self.hardware.has_cuda;
+            let prefer_vulkan = self.prefers_vulkan();
 
             tokio::spawn(async move {
                 let mut fail_count = 0;
@@ -396,19 +494,26 @@ impl SpeechService {
                             }
 
                             // Respawn - use same binary resolution as start_server()
-                            let resolved_binary = runtime.whisper_server_binary(has_cuda);
+                            let resolved_binary =
+                                runtime.whisper_server_binary(has_cuda, prefer_vulkan);
                             let mut command = tokio::process::Command::new(&resolved_binary.path);
                             configure_tokio_command_for_binary(&mut command, &resolved_binary.path);
+                            let model = model_path.read().await;
+                            let port = WHISPER_PORT.to_string();
+                            command.args([
+                                "-m",
+                                model.to_str().unwrap(),
+                                "--port",
+                                &port,
+                                "--host",
+                                "127.0.0.1",
+                            ]);
+                            if let Some(device) = *gpu_device.read().await {
+                                command.args(["--gpu-device", &device.to_string()]);
+                            }
+                            drop(model);
 
                             if let Ok(new_child) = command
-                                .args([
-                                    "-m",
-                                    model_path.read().await.to_str().unwrap(),
-                                    "--port",
-                                    &WHISPER_PORT.to_string(),
-                                    "--host",
-                                    "127.0.0.1",
-                                ])
                                 .stdout(std::process::Stdio::null())
                                 .stderr(std::process::Stdio::null())
                                 .spawn()
@@ -438,15 +543,25 @@ impl SpeechService {
         &self,
         samples: Vec<f32>,
         requested_model: &str,
+        requested_gpu_device: Option<u32>,
     ) -> Result<String, String> {
+        let total_started_at = Instant::now();
         // Check if model needs changing
         let mut current_model = self.model_name.write().await;
-        if *current_model != requested_model {
+        let current_gpu_device = *self.gpu_device.read().await;
+        if *current_model != requested_model || current_gpu_device != requested_gpu_device {
+            info!(
+                from = %*current_model,
+                to = %requested_model,
+                gpu_device = ?requested_gpu_device,
+                "Whisper model changed; restarting server"
+            );
             self.stop_server().await;
 
             *current_model = requested_model.to_string();
             let mut current_path = self.model_path.write().await;
             *current_path = self.runtime.whisper_model_path(requested_model);
+            *self.gpu_device.write().await = requested_gpu_device;
         }
         drop(current_model);
 
@@ -455,7 +570,12 @@ impl SpeechService {
             let process_guard = self.server_process.lock().await;
             if process_guard.is_none() {
                 drop(process_guard);
+                let server_started_at = Instant::now();
                 self.start_server().await?;
+                info!(
+                    elapsed_ms = server_started_at.elapsed().as_millis(),
+                    "whisper-server startup completed"
+                );
             }
         }
 
@@ -487,7 +607,12 @@ impl SpeechService {
                 .map_err(|e| format!("Failed to finalize WAV: {e}"))?;
         }
 
-        info!(path = %temp_wav_path.display(), "Saved temp audio, sending to whisper-server");
+        info!(
+            path = %temp_wav_path.display(),
+            samples = samples.len(),
+            duration_ms = ((samples.len() as f64 / 16_000.0) * 1000.0) as u64,
+            "Saved temp audio, sending to whisper-server"
+        );
 
         let audio_data = self.runtime.read_and_remove_temp_file(&temp_wav_path)?;
 
@@ -505,9 +630,11 @@ impl SpeechService {
 
         // Send request to local whisper-server
         let client = crate::utils::default_http_client();
+        let inference_started_at = Instant::now();
         let res = client
             .post(format!("http://127.0.0.1:{WHISPER_PORT}/inference"))
             .multipart(form)
+            .timeout(std::time::Duration::from_secs(90))
             .send()
             .await
             .map_err(|e| format!("Failed to send request to whisper-server: {}", e))?;
@@ -523,6 +650,11 @@ impl SpeechService {
             .json()
             .await
             .map_err(|e| format!("Failed to parse whisper-server JSON: {}", e))?;
+        info!(
+            inference_ms = inference_started_at.elapsed().as_millis(),
+            total_ms = total_started_at.elapsed().as_millis(),
+            "whisper-server inference response received"
+        );
 
         // The exact structure of whisper-server JSON
         // Usually: { "text": " transcript here" }

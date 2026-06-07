@@ -4,10 +4,10 @@ use super::tool_pipeline::{
     should_write_cache, PipelineCall,
 };
 use super::Runner;
+use crate::agent::chat_status::ChatStatusPhase;
 use crate::agent::event_bus::{
     AgentEvent, ChatStatusPayload, ToolCompletePayload, ToolStartPayload,
 };
-use crate::agent::chat_status::ChatStatusPhase;
 use crate::agent::hooks::HookDecision;
 use crate::agent::types::{Agent, ToolCall, ToolResult};
 use crate::db::queries;

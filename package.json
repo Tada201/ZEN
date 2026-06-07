@@ -54,6 +54,7 @@
     "test:mock-agentic-ui-pipeline": "node test/verify-mock-agentic-ui-pipeline.mjs",
     "test:openai-compatible-history-sanitizer": "node test/verify-openai-compatible-history-sanitizer.mjs",
     "test:opencode-provider": "node test/verify-opencode-provider.mjs",
+    "test:nine-router-provider": "node test/verify-nine-router-provider.mjs",
     "test:right-panel-features": "node test/verify-right-panel-features.mjs",
     "test:right-panel-live-agents": "node test/verify-right-panel-live-agents.mjs",
     "test:reasoning-block-ux": "node test/verify-reasoning-block-ux.mjs",
@@ -90,6 +91,7 @@
     "@hookform/resolvers": "^5.2.2",
     "@iconify/react": "^6.0.2",
     "@monaco-editor/react": "^4.7.0",
+    "@moonshine-ai/moonshine-js": "^0.1.29",
     "@openuidev/lang-core": "0.2.4",
     "@openuidev/react-headless": "0.8.1",
     "@openuidev/react-lang": "0.2.4",
@@ -175,20 +177,20 @@
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.0",
     "three": "^0.184.0",
+    "topojson-client": "^3.1.0",
     "vaul": "^1.1.2",
     "yet-another-react-lightbox": "^3.32.0",
     "zod": "^3.25.76",
-    "zustand": "^5.0.13",
-    "topojson-client": "^3.1.0"
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "@types/topojson-client": "^3.1.5",
     "@vitejs/plugin-react": "^4.6.0",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4",
-    "@types/topojson-client": "^3.1.5"
+    "vite": "^7.0.4"
   },
   "overrides": {
     "jsondiffpatch": "^0.7.6",

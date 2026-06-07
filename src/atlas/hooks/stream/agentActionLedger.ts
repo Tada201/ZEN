@@ -359,6 +359,13 @@ export function createActionStep(payload: AgentActionEventPayload, kind: string)
   };
 }
 
+function shouldSkipChatActionStep(payload: AgentActionEventPayload, kind: string): boolean {
+  if (kind !== "chat_status") return false;
+  const metadata = normalizeIncomingMetadata(payload.metadata);
+  const phase = payload.phase || metadata?.phase;
+  return phase === CHAT_STATUS_PHASES.AgentStreaming;
+}
+
 function mergeActionMetadata(existing: ActionMeta | undefined, incoming: ActionMeta | undefined): ActionMeta {
   const merged = { ...(existing || {}), ...(incoming || {}) };
   if (
@@ -452,6 +459,10 @@ export function appendActionStepToMessages(
   payload: AgentActionEventPayload,
   kind: string,
 ): Message[] {
+  if (shouldSkipChatActionStep(payload, kind)) {
+    return prev;
+  }
+
   const actionStep = createActionStep(payload, kind);
   const eventId = actionStep.eventId;
 

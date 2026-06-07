@@ -23,10 +23,7 @@ pub fn enforce_tool_allowlist(
     if list.yolo && !is_critical_floor(requested_tool) {
         return AllowlistDecision::Allow;
     }
-    if list
-        .agent_tool_ids
-        .contains(requested_tool)
-        || list.session_allowed.contains(requested_tool)
+    if list.agent_tool_ids.contains(requested_tool) || list.session_allowed.contains(requested_tool)
     {
         return AllowlistDecision::Allow;
     }
@@ -101,15 +98,17 @@ mod tests {
             AllowlistDecision::Deny { reason } => {
                 assert!(reason.contains("run_command"));
             }
-            other => panic!("expected Deny for critical floor under YOLO, got {:?}", other),
+            other => panic!(
+                "expected Deny for critical floor under YOLO, got {:?}",
+                other
+            ),
         }
     }
 
     #[test]
     fn session_grant_allows_tool_not_in_agent_list() {
         let mut list = from_agent_tool_ids(&["web_search".to_string()]);
-        list.session_allowed
-            .insert("write_file".to_string());
+        list.session_allowed.insert("write_file".to_string());
         match enforce_tool_allowlist(&list, "write_file", "session") {
             AllowlistDecision::Allow => {}
             other => panic!("expected Allow via session grant, got {:?}", other),

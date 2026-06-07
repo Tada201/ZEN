@@ -745,25 +745,34 @@ impl LlmProvider for AnthropicProvider {
                                                 if let Some(idx) = active_tool_index {
                                                     if let Some(acc) = tool_call_accs.get_mut(idx) {
                                                         acc.input_json.push_str(json_fragment);
-                                                        on_chunk(crate::llm::LlmChunk::ToolCallDelta {
-                                                            index: idx,
-                                                            id: if acc.id.is_empty() {
-                                                                None
-                                                            } else {
-                                                                Some(acc.id.clone())
+                                                        on_chunk(
+                                                            crate::llm::LlmChunk::ToolCallDelta {
+                                                                index: idx,
+                                                                id: if acc.id.is_empty() {
+                                                                    None
+                                                                } else {
+                                                                    Some(acc.id.clone())
+                                                                },
+                                                                name: if acc.name.is_empty() {
+                                                                    None
+                                                                } else {
+                                                                    Some(acc.name.clone())
+                                                                },
+                                                                arguments_delta: json_fragment
+                                                                    .clone(),
+                                                                arguments_snapshot: acc
+                                                                    .input_json
+                                                                    .clone(),
                                                             },
-                                                            name: if acc.name.is_empty() {
-                                                                None
-                                                            } else {
-                                                                Some(acc.name.clone())
-                                                            },
-                                                            arguments_delta: json_fragment.clone(),
-                                                            arguments_snapshot: acc.input_json.clone(),
-                                                        });
-                                                        if !acc.ready_emitted && !acc.name.is_empty() {
+                                                        );
+                                                        if !acc.ready_emitted
+                                                            && !acc.name.is_empty()
+                                                        {
                                                             if let Ok(arguments) =
-                                                                serde_json::from_str::<serde_json::Value>(
-                                                                    &acc.input_json,
+                                                                serde_json::from_str::<
+                                                                    serde_json::Value,
+                                                                >(
+                                                                    &acc.input_json
                                                                 )
                                                             {
                                                                 acc.ready_emitted = true;

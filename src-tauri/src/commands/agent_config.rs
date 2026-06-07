@@ -129,7 +129,9 @@ pub async fn import_agent_config_file(
 
 /// List available tools from the tool registry for config UI.
 #[tauri::command]
-pub async fn list_tools_for_config(state: State<'_, AppState>) -> ZenResult<Vec<ToolMetadataResponse>> {
+pub async fn list_tools_for_config(
+    state: State<'_, AppState>,
+) -> ZenResult<Vec<ToolMetadataResponse>> {
     let metadata = state.tool_manager.list_metadata().await;
     Ok(metadata
         .into_iter()

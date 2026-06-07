@@ -20,6 +20,7 @@ use crate::llm::LlmProvider;
 #[derive(Clone, Debug)]
 pub struct ModelCapabilities {
     pub supports_tools: bool,
+    pub supports_reasoning: bool,
 }
 
 /// OpenAI-compatible API provider.

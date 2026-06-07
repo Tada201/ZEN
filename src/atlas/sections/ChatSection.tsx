@@ -21,6 +21,7 @@ import { SettingsModal, type TabId } from "../components/SettingsModal";
 import { VoiceModeOverlay } from "../components/voice";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { useChatStore } from "@/lib/stores/useChatStore";
+import { VOICE_MODE_SYSTEM_PROMPT } from "../components/voice/voiceModePrompt";
 
 export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
   const [, startTransition] = useTransition();
@@ -76,6 +77,8 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
     attachments?: any[];
     files?: any[];
     tools?: string[];
+    systemPrompt?: string | null;
+    systemPromptMode?: "append" | "replace" | null;
   }) => {
     handleSendMessage({
       ...data,
@@ -213,13 +216,16 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
           <VoiceModeOverlay
             isOpen={voiceModeOpen}
             onClose={() => toggleVoiceMode()}
+            chatId={currentSessionId ?? undefined}
             messages={messages}
             activeModel={selectedModelId}
             onTranscript={(text) => {
               handleSendMessageInternal({
                 message: text,
                 model: selectedModelId,
-                provider: selectedProvider
+                provider: selectedProvider,
+                systemPrompt: VOICE_MODE_SYSTEM_PROMPT,
+                systemPromptMode: "replace",
               });
             }}
           />

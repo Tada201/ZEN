@@ -285,6 +285,9 @@ const mockCommands: Record<string, (args: any) => any> = {
     has_cuda: true,
     gpus: [
       {
+        id: "mock-nvidia-0",
+        system_index: 0,
+        backend_device_index: 0,
         name: "NVIDIA GeForce RTX 4060 Laptop GPU",
         vendor: "NVIDIA",
         vram_mb: 8192,

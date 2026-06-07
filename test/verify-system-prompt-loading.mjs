@@ -27,8 +27,8 @@ const settingsMapperSource = readFileSync(
 );
 
 assert(
-  sendSource.includes("setSessionMessages(currentSessionId") &&
-    sendSource.indexOf("setSessionMessages(currentSessionId") < sendSource.indexOf("systemPrompt = await preloadOpenUISystemPrompt()"),
+  sendSource.includes("setSessionMessages(targetSessionId") &&
+    sendSource.indexOf("setSessionMessages(targetSessionId") < sendSource.indexOf("systemPrompt = await preloadOpenUISystemPrompt()"),
   "assistant placeholder should render before waiting on Gen UI system prompt load",
 );
 assert(

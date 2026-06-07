@@ -85,6 +85,7 @@ export interface SendMessageRequest extends Record<string, unknown> {
   tools?: string[] | null;
   attachments?: Attachment[] | null;
   systemPrompt?: string | null;
+  systemPromptMode?: "append" | "replace" | null;
 }
 
 export const chatApi = {

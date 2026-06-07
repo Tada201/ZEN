@@ -21,14 +21,21 @@ pub async fn get_setting(state: State<'_, AppState>, key: String) -> AppResult<O
 #[tauri::command]
 pub async fn set_setting(state: State<'_, AppState>, key: String, value: String) -> AppResult<()> {
     if is_workspace_root_key(&key) {
-        crate::workspace::canonicalize_workspace_root(std::path::Path::new(&value))
-            .map_err(|e| crate::error::ZenError::Custom(format!("Invalid workspace root: {}", e)))?;
+        crate::workspace::canonicalize_workspace_root(std::path::Path::new(&value)).map_err(
+            |e| crate::error::ZenError::Custom(format!("Invalid workspace root: {}", e)),
+        )?;
     }
 
     if is_secret_key(&key) {
-        state.secret_manager.set_secret(key.clone(), value.clone()).await?;
+        state
+            .secret_manager
+            .set_secret(key.clone(), value.clone())
+            .await?;
     } else {
-        state.settings_manager.set(key.clone(), value.clone()).await?;
+        state
+            .settings_manager
+            .set(key.clone(), value.clone())
+            .await?;
     }
 
     if is_workspace_root_key(&key) {
@@ -52,7 +59,9 @@ pub async fn set_settings(
         .cloned();
     if let Some(workspace_root) = workspace_root.as_deref() {
         crate::workspace::canonicalize_workspace_root(std::path::Path::new(workspace_root))
-            .map_err(|e| crate::error::ZenError::Custom(format!("Invalid workspace root: {}", e)))?;
+            .map_err(|e| {
+                crate::error::ZenError::Custom(format!("Invalid workspace root: {}", e))
+            })?;
     }
     let (secret_settings, public_settings): (HashMap<_, _>, HashMap<_, _>) = settings
         .into_iter()
@@ -161,7 +170,7 @@ pub async fn get_all_available_models(
                 .get(&base_url_key)
                 .map(|v| !v.is_empty())
                 .unwrap_or(false);
-            let is_local = p_name == "ollama" || p_name == "lmstudio";
+            let is_local = p_name == "ollama" || p_name == "lmstudio" || p_name == "nine_router";
             let is_no_key_builtin = p_name == "opencode";
             let is_active = all_settings
                 .get("active_provider")
@@ -172,7 +181,12 @@ pub async fn get_all_available_models(
             // mount. Do not wake local servers unless the user selected that
             // local provider. Explicit provider refreshes still call the branch
             // above with provider=Some(...), so Settings/manual checks work.
-            if (is_local && is_active) || is_no_key_builtin || is_active || has_key || has_url {
+            let should_fetch = if is_local {
+                is_active
+            } else {
+                is_no_key_builtin || is_active || has_key || has_url
+            };
+            if should_fetch {
                 if let Ok(provider_instance) = state.provider_by_name(p_name, &db).await {
                     match provider_instance.list_models().await {
                         Ok(models) => all_models.extend(models),

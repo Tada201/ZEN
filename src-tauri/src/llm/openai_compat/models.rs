@@ -9,7 +9,16 @@ use tracing::{info, warn};
 
 impl OpenAiCompatProvider {
     fn provider_is_mixed_router(provider: &str) -> bool {
-        matches!(provider, "openrouter" | "together" | "perplexity")
+        matches!(
+            provider,
+            "openrouter"
+                | "together"
+                | "perplexity"
+                | "nine_router"
+                | "nine-router"
+                | "n9router"
+                | "9router"
+        )
     }
 
     fn parameter_supported(parameters: &[String], name: &str) -> bool {
@@ -192,15 +201,22 @@ impl OpenAiCompatProvider {
                     !model_id_lower.contains("vision-only"),
                 );
 
-                // Populate capability cache for runtime lookups
-                if let Ok(mut cache) = self.model_capabilities.write() {
-                    cache.insert(m.id.clone(), ModelCapabilities { supports_tools });
-                }
                 let (supports_reasoning, reasoning_config_type) =
                     match Self::reasoning_metadata_from_parameters(supported_parameters) {
                         Some(metadata) => metadata,
                         None => reasoning_metadata(&m.id),
                     };
+
+                // Populate capability cache for runtime request gating.
+                if let Ok(mut cache) = self.model_capabilities.write() {
+                    cache.insert(
+                        m.id.clone(),
+                        ModelCapabilities {
+                            supports_tools,
+                            supports_reasoning: supports_reasoning.unwrap_or(false),
+                        },
+                    );
+                }
 
                 ModelInfo {
                     id: m.id.clone(),

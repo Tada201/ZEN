@@ -17,6 +17,21 @@ impl OpenAiCompatProvider {
         self.provider_key() == "openrouter"
     }
 
+    fn is_nine_router(&self) -> bool {
+        matches!(
+            self.provider_key().as_str(),
+            "nine_router" | "nine-router" | "n9router" | "9router"
+        )
+    }
+
+    fn model_supports_reasoning(&self, model: &str) -> bool {
+        self.model_capabilities
+            .read()
+            .ok()
+            .and_then(|cache| cache.get(model).map(|caps| caps.supports_reasoning))
+            .unwrap_or(false)
+    }
+
     fn is_gemini_compat(&self) -> bool {
         matches!(self.provider_key().as_str(), "google" | "gemini")
     }
@@ -201,7 +216,9 @@ impl OpenAiCompatProvider {
             }
 
             if message.role == "assistant" {
-                if let Some(tool_calls) = message.tool_calls.clone().filter(|calls| !calls.is_empty()) {
+                if let Some(tool_calls) =
+                    message.tool_calls.clone().filter(|calls| !calls.is_empty())
+                {
                     let required_ids: HashSet<String> =
                         tool_calls.iter().map(|call| call.id.clone()).collect();
                     let mut following_tool_ids = HashSet::new();
@@ -351,6 +368,7 @@ impl OpenAiCompatProvider {
             None
         };
 
+        let allow_reasoning = !self.is_nine_router() || self.model_supports_reasoning(model);
         let request = OpenAiChatRequest {
             model: model.to_string(),
             messages: oai_messages,
@@ -365,7 +383,7 @@ impl OpenAiCompatProvider {
             stop: config.stop.clone(),
             tools: oai_tools,
             response_format,
-            reasoning_effort: if is_openrouter {
+            reasoning_effort: if is_openrouter || !allow_reasoning {
                 None
             } else {
                 config.reasoning_effort.clone()
@@ -524,7 +542,9 @@ impl OpenAiCompatProvider {
                                     });
                                     if !acc.ready_emitted && !acc.name.is_empty() {
                                         if let Ok(arguments) =
-                                            serde_json::from_str::<serde_json::Value>(&acc.arguments)
+                                            serde_json::from_str::<serde_json::Value>(
+                                                &acc.arguments,
+                                            )
                                         {
                                             acc.ready_emitted = true;
                                             on_chunk(crate::llm::LlmChunk::ToolCallReady {
@@ -689,7 +709,7 @@ impl OpenAiCompatProvider {
         match p.as_str() {
             // Curated / official catalogs — all models support tools
             "openai" | "groq" | "mistral" | "gemini" | "google" | "deepseek" | "qwen" | "xai"
-            | "kilocode" | "nine_router" | "nine-router" | "n9router" | "9router" | "opencode"
+            | "kilocode" | "opencode"
             | "opencode_free" | "aihubmix" | "nvidia" => true,
 
             // Mixed catalogs — many models lack tool support
@@ -1048,6 +1068,60 @@ mod tests {
         assert_eq!(models[0].supports_tools, Some(false));
         assert_eq!(models[0].supports_reasoning, None);
         assert!(!provider.supports_tools("unknown/router-model"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_nine_router_without_metadata_stays_conservative() -> ZenResult<()> {
+        let server = MockServer::start().await;
+        let provider = OpenAiCompatProvider::new(&server.uri(), "", "nine_router");
+
+        Mock::given(method("GET"))
+            .and(path("/v1/models"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": [{"id": "nvidia/parakeet-ctc-1.1b-asr"}]
+            })))
+            .mount(&server)
+            .await;
+
+        let models = provider.list_models().await?;
+        assert_eq!(models[0].supports_tools, Some(false));
+        assert_eq!(models[0].supports_reasoning, None);
+        assert!(!provider.supports_tools("nvidia/parakeet-ctc-1.1b-asr"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_nine_router_omits_reasoning_without_model_metadata() -> ZenResult<()> {
+        let server = MockServer::start().await;
+        let provider = OpenAiCompatProvider::new(&server.uri(), "", "nine_router");
+
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: [DONE]\n\n",
+                "text/event-stream",
+            ))
+            .mount(&server)
+            .await;
+
+        provider
+            .chat_stream(
+                "unknown/routed-model",
+                vec![user_message("hello")],
+                None,
+                crate::llm::ChatRequestConfig {
+                    reasoning_effort: Some("high".to_string()),
+                    ..crate::llm::ChatRequestConfig::default()
+                },
+                Box::new(|_| {}),
+                tokio_util::sync::CancellationToken::new(),
+            )
+            .await?;
+
+        let requests = server.received_requests().await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&requests[0].body)?;
+        assert!(body.get("reasoning_effort").is_none());
         Ok(())
     }
 

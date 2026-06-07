@@ -337,10 +337,8 @@ impl AppState {
     }
 
     pub async fn set_workspace_folder(&self, path: impl AsRef<std::path::Path>) -> ZenResult<()> {
-        let canonical =
-            crate::workspace::canonicalize_workspace_root(path.as_ref()).map_err(|e| {
-                ZenError::Custom(format!("Invalid workspace root: {}", e).into())
-            })?;
+        let canonical = crate::workspace::canonicalize_workspace_root(path.as_ref())
+            .map_err(|e| ZenError::Custom(format!("Invalid workspace root: {}", e).into()))?;
 
         {
             let mut workspace = self.workspace_folder.write().await;

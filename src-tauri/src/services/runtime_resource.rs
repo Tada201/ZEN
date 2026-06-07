@@ -67,6 +67,40 @@ impl RuntimeResources {
         self.app_data_dir.join(file_name)
     }
 
+    pub fn whisper_cuda_server_path(&self) -> PathBuf {
+        self.resource_dir
+            .join("resources")
+            .join("binaries")
+            .join("whisper")
+            .join("whisper-cublas")
+            .join("whisper-server.exe")
+    }
+
+    pub fn whisper_app_data_cuda_server_path(&self) -> PathBuf {
+        self.app_data_dir
+            .join("binaries")
+            .join("whisper")
+            .join("whisper-cublas")
+            .join("whisper-server.exe")
+    }
+
+    pub fn whisper_vulkan_server_path(&self) -> PathBuf {
+        self.resource_dir
+            .join("resources")
+            .join("binaries")
+            .join("whisper")
+            .join("whisper-vulkan")
+            .join("whisper-server.exe")
+    }
+
+    pub fn whisper_app_data_vulkan_server_path(&self) -> PathBuf {
+        self.app_data_dir
+            .join("binaries")
+            .join("whisper")
+            .join("whisper-vulkan")
+            .join("whisper-server.exe")
+    }
+
     pub fn remove_downloaded_model(&self, model_name: &str) -> Result<(), String> {
         let path = self.downloaded_model_path(model_name);
         match std::fs::remove_file(&path) {
@@ -107,7 +141,7 @@ impl RuntimeResources {
         })
     }
 
-    pub fn whisper_server_binary(&self, has_cuda: bool) -> ResolvedBinary {
+    pub fn whisper_server_binary(&self, has_cuda: bool, prefer_vulkan: bool) -> ResolvedBinary {
         let base_dir = self
             .resource_dir
             .join("resources")
@@ -115,11 +149,37 @@ impl RuntimeResources {
             .join("whisper");
 
         if has_cuda {
-            let cublas = base_dir.join("whisper-cublas").join("whisper-server.exe");
+            let cublas = self.whisper_cuda_server_path();
             if cublas.exists() {
                 return ResolvedBinary {
                     path: cublas,
                     source: RuntimeBinarySource::Bundled,
+                };
+            }
+
+            let app_data_cublas = self.whisper_app_data_cuda_server_path();
+            if app_data_cublas.exists() {
+                return ResolvedBinary {
+                    path: app_data_cublas,
+                    source: RuntimeBinarySource::AppData,
+                };
+            }
+        }
+
+        if prefer_vulkan {
+            let vulkan = self.whisper_vulkan_server_path();
+            if vulkan.exists() {
+                return ResolvedBinary {
+                    path: vulkan,
+                    source: RuntimeBinarySource::Bundled,
+                };
+            }
+
+            let app_data_vulkan = self.whisper_app_data_vulkan_server_path();
+            if app_data_vulkan.exists() {
+                return ResolvedBinary {
+                    path: app_data_vulkan,
+                    source: RuntimeBinarySource::AppData,
                 };
             }
         }

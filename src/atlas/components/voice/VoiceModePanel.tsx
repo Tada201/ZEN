@@ -2,10 +2,12 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Captions, CaptionsOff, Sparkles, Terminal } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import type { TtftMetricSnapshot } from "@/lib/ttft";
 import { VoiceDiagnosticsPanel } from "./VoiceDiagnosticsPanel";
 import { VoiceOscilloscope } from "./VoiceOscilloscope";
 import { VoiceStage } from "./VoiceStage";
 import { VoiceSubtitleBox } from "./VoiceSubtitleBox";
+import type { SttServiceStatus } from "./voiceStatus";
 
 export type VoiceState = "initializing" | "listening" | "processing" | "speaking" | "idle";
 
@@ -27,7 +29,10 @@ interface VoiceModePanelProps {
   onToggleDiagnostics: () => void;
   showDiagnostics: boolean;
   sttEngine: string;
+  sttModel?: string;
+  sttStatus: SttServiceStatus;
   subtitleSpeaker: "user" | "agent" | "system";
+  ttftMetric?: TtftMetricSnapshot | null;
   tokensPerSec: number;
   toolAction: string | null;
   ttsModel?: string;
@@ -36,6 +41,8 @@ interface VoiceModePanelProps {
   voiceInputMode: boolean;
   voiceModeOpen: boolean;
   voiceState: VoiceState;
+  whisperBackend?: string;
+  whisperBackendDetail?: string;
 }
 
 const stateColors: Record<VoiceState, string> = {
@@ -44,6 +51,15 @@ const stateColors: Record<VoiceState, string> = {
   processing: "text-blue-400 bg-blue-400/10 border-blue-500/20",
   speaking: "text-emerald-400 bg-emerald-400/10 border-emerald-500/20",
   idle: "text-zinc-400 bg-zinc-400/10 border-zinc-500/20",
+};
+
+const sttStatusColors: Record<SttServiceStatus, string> = {
+  idle: "border-zinc-500/20 bg-zinc-400/10 text-zinc-300",
+  starting: "border-amber-400/20 bg-amber-400/10 text-amber-300",
+  ready: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
+  recording: "border-cyan-400/20 bg-cyan-400/10 text-cyan-300",
+  transcribing: "border-blue-400/20 bg-blue-400/10 text-blue-300",
+  failed: "border-red-400/20 bg-red-400/10 text-red-300",
 };
 
 export function VoiceModePanel({
@@ -63,7 +79,10 @@ export function VoiceModePanel({
   onToggleDiagnostics,
   showDiagnostics,
   sttEngine,
+  sttModel,
+  sttStatus,
   subtitleSpeaker,
+  ttftMetric,
   tokensPerSec,
   toolAction,
   ttsModel = "",
@@ -72,8 +91,11 @@ export function VoiceModePanel({
   voiceInputMode,
   voiceModeOpen,
   voiceState,
+  whisperBackend = "unknown",
+  whisperBackendDetail = "",
 }: VoiceModePanelProps) {
   const [captionsVisible, setCaptionsVisible] = useState(true);
+  const ttftLabel = ttftMetric?.ttftMs != null ? `${Math.round(ttftMetric.ttftMs)}ms` : "—";
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black p-5 text-zinc-100 transition-all duration-300 md:p-8">
@@ -99,10 +121,27 @@ export function VoiceModePanel({
             <span className="text-zinc-300">{ttsModel || "—"}</span>
           </div>
           <span className="h-3 w-[1px] bg-white/8" />
-          {/* STT Model */}
-          <div className="flex items-center gap-1.5">
+          {/* Active STT service */}
+          <div className="flex items-center gap-1.5" title={`Active speech-to-text service: ${sttModel || sttEngine || "unknown"}`}>
+            <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">STT Service</span>
+            <span className="font-semibold text-white">{sttModel || sttEngine || "—"}</span>
+          </div>
+          <span className="h-3 w-[1px] bg-white/8" />
+          <div className="flex items-center gap-1.5" title={`Speech-to-text service is ${sttStatus}`}>
             <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">STT</span>
-            <span className="text-zinc-300">{sttEngine || "—"}</span>
+            <span className={cn("rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase", sttStatusColors[sttStatus])}>{sttStatus}</span>
+          </div>
+          <span className="h-3 w-[1px] bg-white/8" />
+          <div className="flex items-center gap-1.5" title={whisperBackendDetail}>
+            <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">Runtime</span>
+            <span className={cn("rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase", whisperBackend !== "checking" ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300" : "border-amber-400/20 bg-amber-400/10 text-amber-300")}>
+              {whisperBackend}
+            </span>
+          </div>
+          <span className="h-3 w-[1px] bg-white/8" />
+          <div className="flex items-center gap-1.5">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">TTFT</span>
+            <span className="text-zinc-300">{ttftLabel}</span>
           </div>
           <span className="h-3 w-[1px] bg-white/8" />
           {/* Status Badge */}
@@ -113,6 +152,7 @@ export function VoiceModePanel({
 
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={() => setCaptionsVisible((value) => !value)}
             className="rounded border border-white/5 bg-white/5 p-1.5 text-zinc-400 transition-colors hover:bg-white/10 hover:text-white"
             title={captionsVisible ? "Hide captions" : "Show captions"}
@@ -120,6 +160,7 @@ export function VoiceModePanel({
             {captionsVisible ? <Captions size={12} /> : <CaptionsOff size={12} />}
           </button>
           <button
+            type="button"
             onClick={onToggleDiagnostics}
             className="rounded border border-white/5 bg-white/5 p-1.5 text-zinc-400 transition-colors hover:bg-white/10 hover:text-white"
             title="Diagnostics Console"
@@ -127,6 +168,7 @@ export function VoiceModePanel({
             <Terminal size={12} />
           </button>
           <button
+            type="button"
             onClick={onRequestClose}
             className="rounded border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-mono text-zinc-300 transition-all hover:border-red-500/30 hover:bg-red-500/20 hover:text-red-400"
             title="Close Overlay"
@@ -154,6 +196,8 @@ export function VoiceModePanel({
                 amplitude={amplitude}
                 tokensPerSec={tokensPerSec}
                 logLines={logLines}
+                whisperBackend={whisperBackend}
+                whisperBackendDetail={whisperBackendDetail}
               />
             </motion.div>
           )}
@@ -235,7 +279,7 @@ export function VoiceModePanel({
 
       </main>
 
-      {/* 3. Voice Dock — CC | Waveform | Stats */}
+      {/* 3. Voice Dock - CC | Waveform */}
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-5 pb-6 pt-2 shrink-0">
         {/* Left: Closed Captions */}
         <div className="min-w-0">
@@ -252,27 +296,12 @@ export function VoiceModePanel({
           </AnimatePresence>
         </div>
 
-        {/* Center: Waveform Strip */}
-        <div className="w-[400px] h-12 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-1.5 overflow-hidden">
+        {/* Compact voice wave */}
+        <div className="h-20 w-20 overflow-hidden rounded-lg border border-white/10 bg-white/[0.02] p-2">
           <VoiceOscilloscope analyserRef={analyserRef} isAiSpeaking={aiSpeaking} isActive={voiceModeOpen} />
         </div>
 
-        {/* Right: Stats */}
-        <div className="flex items-center justify-end">
-          <div className="flex flex-col gap-1.5 rounded-lg border border-white/8 bg-white/[0.025] px-3 py-2 font-mono text-[11px] min-w-[120px]">
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-zinc-500 uppercase tracking-wider text-[9px] font-bold">TTFT</span>
-              <span className="text-zinc-300 tabular-nums">—</span>
-            </div>
-            <div className="h-px bg-white/5" />
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-zinc-500 uppercase tracking-wider text-[9px] font-bold">Speed</span>
-              <span className="text-zinc-300 tabular-nums">
-                {tokensPerSec > 0 ? `${tokensPerSec.toFixed(1)} tk/s` : "— tk/s"}
-              </span>
-            </div>
-          </div>
-        </div>
+        <div aria-hidden="true" />
       </div>
 
     </div>

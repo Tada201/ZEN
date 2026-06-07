@@ -73,15 +73,27 @@ export const MicrophoneConfig = memo(() => {
         isRecordingRef.current = true;
         setStatus('recording');
         try {
-            const audioConstraints: MediaTrackConstraints = {
+            const baseConstraints: MediaTrackConstraints = {
                 noiseSuppression,
                 echoCancellation,
                 autoGainControl,
             };
+            let stream: MediaStream;
             if (selectedMic && selectedMic !== 'default') {
-                audioConstraints.deviceId = { exact: selectedMic };
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            ...baseConstraints,
+                            deviceId: { exact: selectedMic },
+                        },
+                    });
+                } catch (e) {
+                    setError(`Selected microphone unavailable; testing system default instead. ${e instanceof Error ? e.message : String(e)}`);
+                    stream = await navigator.mediaDevices.getUserMedia({ audio: baseConstraints });
+                }
+            } else {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: baseConstraints });
             }
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
             streamRef.current = stream;
             const ctx = new AudioContext();
             sampleRateRef.current = ctx.sampleRate;

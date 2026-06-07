@@ -9,6 +9,9 @@ export interface HardwareInfo {
   hostname: string;
   has_cuda: boolean;
   gpus: Array<{
+    id: string;
+    system_index: number;
+    backend_device_index: number;
     name: string;
     vendor: string;
     vram_mb?: number | null;

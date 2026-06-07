@@ -45,7 +45,12 @@ impl EarlyToolExecutionState {
         }
     }
 
-    pub fn key_for(name: &str, args: &serde_json::Value, id: Option<&str>, index: Option<usize>) -> String {
+    pub fn key_for(
+        name: &str,
+        args: &serde_json::Value,
+        id: Option<&str>,
+        index: Option<usize>,
+    ) -> String {
         if let Some(id) = id.filter(|value| !value.is_empty()) {
             format!("id:{id}")
         } else {
@@ -84,11 +89,7 @@ impl EarlyToolExecutionState {
         self.notify.notify_waiters();
     }
 
-    pub async fn wait_for_result(
-        &self,
-        key: &str,
-        token: CancellationToken,
-    ) -> Option<ToolResult> {
+    pub async fn wait_for_result(&self, key: &str, token: CancellationToken) -> Option<ToolResult> {
         loop {
             if let Some(result) = self.take_result(key).await {
                 return Some(result);
@@ -138,7 +139,9 @@ fn redact_tool_preview_value(value: serde_json::Value) -> serde_json::Value {
             return json!("[truncated]");
         }
         match value {
-            serde_json::Value::String(s) => serde_json::Value::String(redact_tool_preview_string(&s)),
+            serde_json::Value::String(s) => {
+                serde_json::Value::String(redact_tool_preview_string(&s))
+            }
             serde_json::Value::Array(items) => serde_json::Value::Array(
                 items
                     .into_iter()
@@ -550,8 +553,7 @@ impl Runner {
                             arguments_delta,
                             arguments_snapshot,
                         } => {
-                            let safe_arguments_delta =
-                                redact_tool_preview_string(&arguments_delta);
+                            let safe_arguments_delta = redact_tool_preview_string(&arguments_delta);
                             let safe_arguments_snapshot =
                                 redact_tool_preview_string(&arguments_snapshot);
                             let tool_label = name

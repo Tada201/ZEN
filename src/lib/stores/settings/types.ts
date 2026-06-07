@@ -105,10 +105,11 @@ export interface InterfaceSlice {
 
 export interface AudioSlice {
   ttsEnabled: boolean;
-  ttsEngine: "piper" | "web" | "system" | "nine_router";
+  ttsEngine: "piper" | "web" | "system";
   sttEnabled: boolean;
-  sttEngine: "whisper" | "web";
+  sttEngine: "whisper" | "web" | "moonshine" | "system";
   sttWhisperModel: string;
+  sttComputeDevice: string;
   webTtsVoiceURI: string;
   webTtsRate: number;
   webTtsPitch: number;

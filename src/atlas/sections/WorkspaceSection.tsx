@@ -11,6 +11,7 @@ import { useUIStore } from "@/lib/stores/useUIStore";
 import { getVisibleWorkspaceModeFeatures, isWorkspaceModeVisible } from "@/lib/features/frontendFeatures";
 
 import { MainArea } from "@/components/workbench/MainArea";
+import { VOICE_MODE_SYSTEM_PROMPT } from "../components/voice/voiceModePrompt";
 
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 
@@ -316,6 +317,7 @@ export function WorkspaceApp() {
           <VoiceModeOverlay
             isOpen={voiceModeOpen}
             onClose={() => toggleVoiceMode()}
+            chatId={currentSessionId ?? undefined}
             messages={chatMessages}
             activeModel={selectedModelId}
             onTranscript={(text: string) => {
@@ -323,6 +325,8 @@ export function WorkspaceApp() {
                 message: text,
                 model: selectedModelId,
                 provider: selectedProvider,
+                systemPrompt: VOICE_MODE_SYSTEM_PROMPT,
+                systemPromptMode: "replace",
               });
             }}
           />

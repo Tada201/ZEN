@@ -87,9 +87,7 @@ fn resource_config_dir() -> Option<PathBuf> {
 
     for candidate in &candidates {
         if candidate.exists() {
-            return Some(
-                std::fs::canonicalize(candidate).unwrap_or_else(|_| candidate.clone()),
-            );
+            return Some(std::fs::canonicalize(candidate).unwrap_or_else(|_| candidate.clone()));
         }
     }
 
@@ -141,10 +139,13 @@ pub fn load_agent_config(agent_id: &str) -> Result<AgentConfigFile> {
     if let Some(res_dir) = resource_config_dir() {
         let res_path = res_dir.join(format!("{}.json", agent_id));
         if res_path.exists() {
-            let content = std::fs::read_to_string(&res_path)
-                .with_context(|| format!("Failed to read resource config: {}", res_path.display()))?;
-            let mut config: AgentConfigFile = serde_json::from_str(&content)
-                .with_context(|| format!("Invalid JSON in resource config: {}", res_path.display()))?;
+            let content = std::fs::read_to_string(&res_path).with_context(|| {
+                format!("Failed to read resource config: {}", res_path.display())
+            })?;
+            let mut config: AgentConfigFile =
+                serde_json::from_str(&content).with_context(|| {
+                    format!("Invalid JSON in resource config: {}", res_path.display())
+                })?;
             config.agent_id = agent_id.to_string();
             return Ok(config);
         }
@@ -168,8 +169,7 @@ pub fn save_agent_config(agent_id: &str, config: &AgentConfigFile) -> Result<()>
     let mut saved = config.clone();
     saved.agent_id = agent_id.to_string();
 
-    let json =
-        serde_json::to_string_pretty(&saved).context("Failed to serialize agent config")?;
+    let json = serde_json::to_string_pretty(&saved).context("Failed to serialize agent config")?;
 
     std::fs::write(&file_path, json)
         .with_context(|| format!("Failed to write config file: {}", file_path.display()))?;
@@ -219,8 +219,7 @@ pub fn list_agent_configs() -> Result<Vec<AgentConfigFile>> {
 /// Export an agent config to a user-chosen file path.
 pub fn export_agent_config(agent_id: &str, export_path: &str) -> Result<()> {
     let config = load_agent_config(agent_id)?;
-    let json =
-        serde_json::to_string_pretty(&config).context("Failed to serialize for export")?;
+    let json = serde_json::to_string_pretty(&config).context("Failed to serialize for export")?;
     std::fs::write(export_path, json)
         .with_context(|| format!("Failed to write export file: {}", export_path))?;
     Ok(())
@@ -284,7 +283,10 @@ mod tests {
         assert_eq!(parsed.model_name, "gpt-4o");
         assert_eq!(parsed.max_iterations, 15);
         assert_eq!(parsed.enabled_tools.len(), 2);
-        assert_eq!(parsed.system_prompt_override, Some("Custom prompt".to_string()));
+        assert_eq!(
+            parsed.system_prompt_override,
+            Some("Custom prompt".to_string())
+        );
     }
 
     #[test]
@@ -292,6 +294,9 @@ mod tests {
         let dir = user_config_dir().unwrap();
         let dir_str = dir.to_string_lossy();
         // Must not be inside src-tauri or the project root
-        assert!(!dir_str.contains("src-tauri"), "user config dir must not be in src-tauri");
+        assert!(
+            !dir_str.contains("src-tauri"),
+            "user config dir must not be in src-tauri"
+        );
     }
 }

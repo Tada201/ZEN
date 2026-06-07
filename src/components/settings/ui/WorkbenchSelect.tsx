@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 interface Option {
     value: string;
     label: string;
+    disabled?: boolean;
 }
 
 interface WorkbenchSelectProps {
@@ -32,7 +33,7 @@ export const WorkbenchSelect = memo(({ value, onValueChange, options, placeholde
                 {options.map(option => {
                     const optVal = option.value === "" ? "__none__" : option.value;
                     return (
-                        <SelectItem key={optVal} value={optVal}>
+                        <SelectItem key={optVal} value={optVal} disabled={option.disabled}>
                             {option.label}
                         </SelectItem>
                     );

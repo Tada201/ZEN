@@ -391,32 +391,7 @@ export const ProvidersSettings = memo(() => {
                                             ]}
                                         />
                                     </div>
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Speech-to-Text Model</label>
-                                        <WorkbenchSelect
-                                            value={providerParams.sttModel || ''}
-                                            onValueChange={(val) => updateProviderParams('nine_router', { sttModel: val })}
-                                            className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
-                                            options={[
-                                                { value: "", label: "No model selected" },
-                                                { value: "stt", label: "Local STT Engine" },
-                                                { value: "whisper-1", label: "Whisper v1 Proxy" }
-                                            ]}
-                                        />
-                                    </div>
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Text-to-Speech Model</label>
-                                        <WorkbenchSelect
-                                            value={providerParams.ttsModel || ''}
-                                            onValueChange={(val) => updateProviderParams('nine_router', { ttsModel: val })}
-                                            className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
-                                            options={[
-                                                { value: "", label: "No model selected" },
-                                                { value: "tts", label: "Local TTS Engine" },
-                                                { value: "tts-1", label: "TTS OpenAI Proxy" }
-                                            ]}
-                                        />
-                                    </div>
+
                                     <div className="flex flex-col gap-1.5 col-span-2">
                                         <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Web Search Strategy & Model</label>
                                         <WorkbenchSelect

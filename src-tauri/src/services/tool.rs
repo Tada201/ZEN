@@ -52,7 +52,9 @@ impl ToolApprovalOutcome {
             Self::Denied => "Tool execution denied by user.",
             Self::TimedOut => "Tool approval timed out.",
             Self::Cancelled => "Tool approval was cancelled before the user responded.",
-            Self::ArgumentMismatch => "Tool approval rejected because arguments changed after approval was requested.",
+            Self::ArgumentMismatch => {
+                "Tool approval rejected because arguments changed after approval was requested."
+            }
         }
     }
 }
@@ -444,7 +446,10 @@ impl ToolService {
             }
 
             let timeout_seconds = tool.timeout_seconds();
-            let permit = match self.acquire_execution_permit("agent_tool", &tool_call.name).await {
+            let permit = match self
+                .acquire_execution_permit("agent_tool", &tool_call.name)
+                .await
+            {
                 Ok(permit) => permit,
                 Err(e) => {
                     return crate::agent::types::ToolResult {
@@ -850,13 +855,10 @@ impl ToolService {
         args_hash: &str,
     ) {
         let run_id = execution_context.and_then(|ctx| ctx.run_id.as_deref());
-        let parent_agent_id = execution_context
-            .and_then(|ctx| ctx.parent_agent_id.as_deref());
-        let execution_id = execution_context
-            .and_then(|ctx| ctx.execution_id.as_deref());
+        let parent_agent_id = execution_context.and_then(|ctx| ctx.parent_agent_id.as_deref());
+        let execution_id = execution_context.and_then(|ctx| ctx.execution_id.as_deref());
         let batch_id = execution_context.and_then(|ctx| ctx.batch_id.as_deref());
-        let tool_batch_id = execution_context
-            .and_then(|ctx| ctx.tool_batch_id.as_deref());
+        let tool_batch_id = execution_context.and_then(|ctx| ctx.tool_batch_id.as_deref());
         let agent_id = execution_context.and_then(|ctx| ctx.agent_id.as_deref());
         let agent_name = execution_context.and_then(|ctx| ctx.agent_name.as_deref());
         let iteration = execution_context.and_then(|ctx| ctx.iteration);

@@ -9,7 +9,10 @@ import { findWritableAssistantIndex, markMessageAsFailed } from "../stream/messa
 import { createOptimisticChatMessages } from "./optimisticChatMessages";
 import { preloadOpenUISystemPrompt } from "../../components/genui/promptLoader";
 
-export function useSendMessage(currentSessionId: string | null) {
+export function useSendMessage(
+  currentSessionId: string | null,
+  ensureSession?: () => Promise<string>,
+) {
   const setSessionMessages = useChatStore(state => state.setSessionMessages);
 
   const handleSendMessage = useCallback(async (data: {
@@ -26,12 +29,19 @@ export function useSendMessage(currentSessionId: string | null) {
     generativeUI?: boolean;
     attachments?: Attachment[];
     tools?: string[];
+    systemPrompt?: string | null;
+    systemPromptMode?: "append" | "replace" | null;
   }) => {
-    if (!currentSessionId) {
+    let targetSessionId = currentSessionId;
+    if (!targetSessionId && ensureSession) {
+      targetSessionId = await ensureSession();
+    }
+    if (!targetSessionId) {
       console.warn("[useChat] Attempted to send message, but no active chat session is selected.");
+      toast.error("Create or select a chat before sending.");
       return;
     }
-    ttftBegin(currentSessionId);
+    ttftBegin(targetSessionId);
 
     const store = useSettingsStore.getState();
     const activeProvider = data.provider || store.activeProvider || "ollama";
@@ -43,7 +53,7 @@ export function useSendMessage(currentSessionId: string | null) {
     const maxTokens = Number(providerParams.maxTokens ?? store.maxTokens ?? 4096);
 
     const { userMessage, assistantMessage } = createOptimisticChatMessages({
-      sessionId: currentSessionId,
+      sessionId: targetSessionId,
       content: data.message,
       model: data.model,
       provider: activeProvider,
@@ -53,18 +63,23 @@ export function useSendMessage(currentSessionId: string | null) {
       attachments: data.attachments,
     });
 
-    setSessionMessages(currentSessionId, (prev: Message[]) => [...prev, userMessage, assistantMessage]);
+    setSessionMessages(targetSessionId, (prev: Message[]) => [...prev, userMessage, assistantMessage]);
 
-    useChatStore.getState().setStreamingForChat(currentSessionId, true);
+    useChatStore.getState().setStreamingForChat(targetSessionId, true);
 
     try {
       let systemPrompt: string | null = null;
+      let systemPromptMode: "append" | "replace" | null = null;
       if (data.generativeUI) {
         systemPrompt = await preloadOpenUISystemPrompt();
       }
+      if (data.systemPrompt?.trim()) {
+        systemPrompt = data.systemPrompt;
+        systemPromptMode = data.systemPromptMode ?? "append";
+      }
 
       await chatApi.sendMessage({
-        chatId: currentSessionId,
+        chatId: targetSessionId,
         content: data.message,
         model: data.model === "No Model" ? null : data.model,
         provider: data.provider,
@@ -84,12 +99,13 @@ export function useSendMessage(currentSessionId: string | null) {
         tools: data.tools,
         attachments: data.attachments,
         systemPrompt: systemPrompt,
+        systemPromptMode,
       });
     } catch (e: unknown) {
       const errorMessage = getIpcErrorMessage(e, "Failed to send message");
       console.error("[useChat] 'send_message' IPC command failed:", e);
-      ttftReport(currentSessionId, "send-error");
-      setSessionMessages(currentSessionId, (prev: Message[]) => {
+      ttftReport(targetSessionId, "send-error");
+      setSessionMessages(targetSessionId, (prev: Message[]) => {
         const next = [...prev];
         const assistantIdx = findWritableAssistantIndex(next);
         if (assistantIdx !== -1) {
@@ -97,10 +113,10 @@ export function useSendMessage(currentSessionId: string | null) {
         }
         return next;
       });
-      useChatStore.getState().setStreamingForChat(currentSessionId, false);
+      useChatStore.getState().setStreamingForChat(targetSessionId, false);
       toast.error(errorMessage);
     }
-  }, [currentSessionId, setSessionMessages]);
+  }, [currentSessionId, ensureSession, setSessionMessages]);
 
   return { handleSendMessage };
 }

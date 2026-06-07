@@ -87,12 +87,11 @@ pub async fn load_session_permission_map(
     pool: &SqlitePool,
     chat_id: &str,
 ) -> ZenResult<std::collections::HashMap<String, bool>> {
-    let rows = sqlx::query(
-        "SELECT tool_name, args_hash FROM session_permissions WHERE chat_id = ?",
-    )
-    .bind(chat_id)
-    .fetch_all(pool)
-    .await?;
+    let rows =
+        sqlx::query("SELECT tool_name, args_hash FROM session_permissions WHERE chat_id = ?")
+            .bind(chat_id)
+            .fetch_all(pool)
+            .await?;
 
     let mut map = std::collections::HashMap::new();
     for row in rows {

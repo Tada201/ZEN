@@ -104,20 +104,20 @@ pub(super) async fn preprocess_tool_calls(
                         if let AllowlistDecision::Deny { reason } =
                             enforce_tool_allowlist(&allowlist, &real_id, "agent")
                         {
-                        ordered_results[index] = Some(normalize_tool_result(
-                            tc.id.clone(),
-                            "tool_exec",
-                            "Tool Exec",
-                            tc.args.clone(),
-                            json!({
-                                "error": reason,
-                                "hint": "Call tool_list to see the tools available to this agent."
-                            }),
-                            true,
-                            0,
-                            chrono::Utc::now(),
-                        ));
-                        continue;
+                            ordered_results[index] = Some(normalize_tool_result(
+                                tc.id.clone(),
+                                "tool_exec",
+                                "Tool Exec",
+                                tc.args.clone(),
+                                json!({
+                                    "error": reason,
+                                    "hint": "Call tool_list to see the tools available to this agent."
+                                }),
+                                true,
+                                0,
+                                chrono::Utc::now(),
+                            ));
+                            continue;
                         }
                     }
                     pipeline_calls.push(PipelineCall {

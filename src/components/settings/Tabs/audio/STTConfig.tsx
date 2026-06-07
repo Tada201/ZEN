@@ -5,7 +5,10 @@ import { SettingsSection } from '../../SettingsSection';
 import { SettingsRow } from '../../SettingsRow';
 import { WorkbenchSelect } from '@/components/settings/ui/WorkbenchSelect';
 import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
-import { voiceApi, type WhisperModelStatus } from '@/api/voiceApi';
+import { voiceApi, type WhisperModelStatus, type WhisperRuntimeStatus } from '@/api/voiceApi';
+import { systemApi, type HardwareInfo } from '@/api/systemApi';
+import { detectWebSpeechCapability } from '@/lib/voice/webSpeechCapability';
+import { STTCapabilityTable, WebSpeechDetectionTable } from './STTCapabilityTable';
 
 interface WhisperVariant {
     value: string;
@@ -15,28 +18,38 @@ interface WhisperVariant {
 }
 
 const WHISPER_VARIANTS: WhisperVariant[] = [
-    { value: 'ggml-tiny.en.bin', label: 'Tiny (English)', description: 'Fastest, lowest accuracy', approxMb: 75 },
-    { value: 'ggml-base.en.bin', label: 'Base (English)', description: 'Balanced — recommended', approxMb: 141 },
+    { value: 'ggml-tiny.en.bin', label: 'Tiny (English)', description: 'Fastest, recommended for voice commands', approxMb: 75 },
+    { value: 'ggml-base.en.bin', label: 'Base (English)', description: 'Balanced accuracy, slower on CPU', approxMb: 141 },
     { value: 'ggml-small.en.bin', label: 'Small (English)', description: 'Higher accuracy, slower', approxMb: 465 },
     { value: 'ggml-medium.en.bin', label: 'Medium (English)', description: 'Highest accuracy, slowest', approxMb: 1460 },
 ];
 
 export const STTConfig = memo(() => {
     const sttEngine = useSettingsStore(s => s.sttEngine ?? 'whisper');
-    const sttWhisperModel = useSettingsStore(s => s.sttWhisperModel ?? 'ggml-base.en.bin');
+    const sttWhisperModel = useSettingsStore(s => s.sttWhisperModel ?? 'ggml-tiny.en.bin');
+    const sttComputeDevice = useSettingsStore(s => s.sttComputeDevice ?? 'auto');
     const updateSetting = useSettingsStore(s => s.updateSetting);
 
     const [status, setStatus] = useState<WhisperModelStatus | null>(null);
+    const [runtimeStatus, setRuntimeStatus] = useState<WhisperRuntimeStatus | null>(null);
+    const [hardware, setHardware] = useState<HardwareInfo | null>(null);
     const [downloading, setDownloading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const webSpeechCapability = detectWebSpeechCapability();
 
     useEffect(() => {
         let active = true;
         const checkStatus = async () => {
             try {
-                const result = await voiceApi.downloadWhisperModel(sttWhisperModel);
+                const [result, runtime, hardwareInfo] = await Promise.all([
+                    voiceApi.getWhisperModelStatus(sttWhisperModel),
+                    voiceApi.getWhisperRuntimeStatus(),
+                    systemApi.getHardwareInfo(),
+                ]);
                 if (active) {
                     setStatus(result);
+                    setRuntimeStatus(runtime);
+                    setHardware(hardwareInfo);
                 }
             } catch (e) {
                 console.error("Failed to fetch Whisper model status:", e);
@@ -65,6 +78,32 @@ export const STTConfig = memo(() => {
     }, [sttWhisperModel]);
 
     const isWhisper = sttEngine === 'whisper';
+    const backendLabel = runtimeStatus?.backend === 'cuda'
+        ? 'CUDA GPU'
+        : runtimeStatus?.backend === 'vulkan'
+            ? 'Vulkan GPU'
+            : runtimeStatus?.backend === 'cpu'
+                ? 'CPU'
+                : 'Checking';
+    const backendDetail = runtimeStatus
+        ? runtimeStatus.backend === 'cuda' || runtimeStatus.backend === 'vulkan'
+            ? `Using ${runtimeStatus.backend.toUpperCase()} whisper-server from ${runtimeStatus.binary_source}.`
+            : runtimeStatus.recommended_backend !== 'cpu'
+                ? `CPU mode. ${runtimeStatus.recommended_backend.toUpperCase()} is recommended for ${runtimeStatus.detected_gpu_vendors.join('/')}, but its runtime is not installed.`
+                : 'CPU mode. No supported GPU runtime detected.'
+        : 'Checking Whisper runtime backend.';
+    const compatibleGpus = (hardware?.gpus ?? []).filter((gpu) => {
+        if (runtimeStatus?.backend === 'cuda') return gpu.vendor === 'NVIDIA';
+        if (runtimeStatus?.backend === 'vulkan') return gpu.vendor === 'AMD' || gpu.vendor === 'Intel';
+        return false;
+    });
+    const computeDeviceOptions = [
+        { value: 'auto', label: 'Auto select' },
+        ...compatibleGpus.map((gpu) => ({
+            value: String(gpu.backend_device_index),
+            label: `${gpu.name}${gpu.vram_mb ? ` (${(gpu.vram_mb / 1024).toFixed(1)} GB)` : ''}`,
+        })),
+    ];
     const statusBadge = (() => {
         if (downloading) {
             return (
@@ -105,11 +144,18 @@ export const STTConfig = memo(() => {
                     control={
                         <WorkbenchSelect
                             value={sttEngine}
-                            onValueChange={(val) => updateSetting({ sttEngine: val as 'whisper' })}
+                            onValueChange={(val) => updateSetting({ sttEngine: val as 'whisper' | 'web' | 'moonshine' | 'system' })}
                             options={[
                                 { label: 'Whisper (Local)', value: 'whisper' },
+                                {
+                                    label: webSpeechCapability.supported ? 'Web Speech (Available)' : 'Web Speech (Unsupported)',
+                                    value: 'web',
+                                    disabled: !webSpeechCapability.supported,
+                                },
+                                { label: 'Moonshine Tiny (Local)', value: 'moonshine' },
+                                { label: 'OS Native (Planned)', value: 'system', disabled: true },
                             ]}
-                            width={160}
+                            width={220}
                         />
                     }
                 />
@@ -118,7 +164,7 @@ export const STTConfig = memo(() => {
                     <>
                         <SettingsRow
                             label="Whisper Model"
-                            description="Larger models are more accurate but slower"
+                            description="Tiny is best for low-latency push-to-talk; larger models are more accurate but slower."
                             control={
                                 <WorkbenchSelect
                                     value={sttWhisperModel}
@@ -128,6 +174,19 @@ export const STTConfig = memo(() => {
                                         label: `${v.label} — ~${v.approxMb} MB`,
                                     }))}
                                     width={220}
+                                />
+                            }
+                        />
+
+                        <SettingsRow
+                            label="STT Compute Device"
+                            description="Choose which compatible GPU Whisper uses. Changing it restarts the local STT server."
+                            control={
+                                <WorkbenchSelect
+                                    value={computeDeviceOptions.some((option) => option.value === sttComputeDevice) ? sttComputeDevice : 'auto'}
+                                    onValueChange={(value) => updateSetting({ sttComputeDevice: value })}
+                                    options={computeDeviceOptions}
+                                    width={260}
                                 />
                             }
                         />
@@ -145,6 +204,12 @@ export const STTConfig = memo(() => {
                                         {WHISPER_VARIANTS.find((v) => v.value === sttWhisperModel)?.description}
                                     </span>
                                     <div className="mt-0.5">{statusBadge}</div>
+                                    <div className="mt-1 flex items-center gap-2 text-[10px]">
+                                        <span className={runtimeStatus?.backend === 'cuda' || runtimeStatus?.backend === 'vulkan' ? 'font-bold text-emerald-400' : 'font-bold text-amber-300'}>
+                                            Backend: {backendLabel}
+                                        </span>
+                                        <span className="truncate text-zinc-600">{backendDetail}</span>
+                                    </div>
                                 </div>
                                 <WorkbenchButton
                                     size="sm"
@@ -168,8 +233,8 @@ export const STTConfig = memo(() => {
                     </>
                 )}
 
-                {!isWhisper && (
-                    <div className="rounded-xl border border-white/[0.04] bg-zinc-900/15 px-4 py-3 text-[11px] text-zinc-500">
+                {sttEngine === 'web' && (
+                    <div className="flex flex-col gap-3 rounded-xl border border-white/[0.04] bg-zinc-900/15 px-4 py-3 text-[11px] text-zinc-500">
                         <div className="flex items-center gap-2 text-white">
                             <Mic size={12} className="text-primary" />
                             <span className="font-bold">Browser Web Speech</span>
@@ -178,8 +243,31 @@ export const STTConfig = memo(() => {
                             Uses the Web Speech API built into the browser. No local download required,
                             but accuracy and language support depend on the host browser/OS.
                         </p>
+                        <WebSpeechDetectionTable capability={webSpeechCapability} />
                     </div>
                 )}
+
+                {sttEngine === 'moonshine' && (
+                    <div className="rounded-lg border border-emerald-400/15 bg-emerald-400/[0.04] px-4 py-3">
+                        <div className="flex items-center gap-2 text-[12px] font-semibold text-white">
+                            <Mic size={13} className="text-emerald-400" />
+                            Moonshine Tiny
+                        </div>
+                        <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
+                            Local English speech recognition optimized for short commands and low-power CPUs. The approximately 28 MB model and WebAssembly runtime download on first use and are then browser-cached.
+                        </p>
+                    </div>
+                )}
+
+                <div className="flex flex-col gap-2">
+                    <div>
+                        <h4 className="text-[12px] font-semibold text-white">Engine capabilities</h4>
+                        <p className="mt-0.5 text-[11px] text-zinc-500">
+                            Relative guidance for short voice commands. Actual speed and accuracy depend on hardware, language, microphone, and noise.
+                        </p>
+                    </div>
+                    <STTCapabilityTable />
+                </div>
             </div>
         </SettingsSection>
     );

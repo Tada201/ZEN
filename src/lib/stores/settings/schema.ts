@@ -27,10 +27,11 @@ export const SettingsSchema = z.object({
 
   // ─── Audio ───────────────────────────────────────────────────────────────
   ttsEnabled: z.boolean().default(false),
-  ttsEngine: z.enum(["piper", "web", "system", "nine_router"]).default("piper"),
+  ttsEngine: z.enum(["piper", "web", "system"]).default("piper"),
   sttEnabled: z.boolean().default(false),
-  sttEngine: z.enum(["whisper", "web"]).default("whisper"),
-  sttWhisperModel: z.string().default("base"),
+  sttEngine: z.enum(["whisper", "web", "moonshine", "system"]).default("whisper"),
+  sttWhisperModel: z.string().default("ggml-tiny.en.bin"),
+  sttComputeDevice: z.string().default("auto"),
   webTtsVoiceURI: z.string().default(""),
   webTtsRate: z.number().min(0.1).max(3.0).default(1.0),
   webTtsPitch: z.number().min(0.1).max(2.0).default(1.0),

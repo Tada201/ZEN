@@ -15,12 +15,17 @@ assert(
   "simple generalist turns should keep the quiet agent_step phase instead of showing noisy execution rows",
 );
 assert(
-  assistant.includes("CHAT_STATUS_PHASES.AgentStreaming") && assistant.includes("VISIBLE_CHAT_STATUS_PHASES"),
-  "assistant message rendering should allow the live agent phase through the chat_status filter",
+  assistant.includes("VISIBLE_CHAT_STATUS_PHASES") &&
+    assistant.includes("CHAT_STATUS_PHASES.ToolCallStreaming") &&
+    assistant.includes("CHAT_STATUS_PHASES.ToolCallReady") &&
+    !assistant.includes("CHAT_STATUS_PHASES.AgentStreaming"),
+  "assistant message rendering should keep the live agent phase out of chat_status cards",
 );
 assert(
-  trace.includes("phase === CHAT_STATUS_PHASES.AgentStreaming") && trace.includes("is working"),
-  "trace row should present live agent work as a human-readable status",
+  ledger.includes("shouldSkipChatActionStep") &&
+    ledger.includes("phase === CHAT_STATUS_PHASES.AgentStreaming") &&
+    ledger.includes("return prev;"),
+  "agent streaming should stay out of chat cards while tool status cards remain visible",
 );
 assert(
   ledger.includes("agent-stream:") && ledger.includes("agentName"),

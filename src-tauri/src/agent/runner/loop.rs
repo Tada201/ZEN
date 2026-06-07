@@ -1,16 +1,16 @@
 use super::actions::{emit_action_only, persist_and_emit_action};
+use super::escalation::{EarlyToolExecutionContext, EarlyToolExecutionState};
 use super::helpers::{generate_handoff_summary, parse_file_changes, parse_text_tool_calls};
 use super::lifecycle::Runner;
-use super::escalation::{EarlyToolExecutionContext, EarlyToolExecutionState};
 use super::memory_bootstrap::{
     cached_recall_context, compact_context_if_needed, load_initial_conversation,
     load_memory_run_settings,
 };
 use super::turn_persistence::{save_assistant_message, AssistantMessageSave};
+use crate::agent::chat_status::ChatStatusPhase;
 use crate::agent::event_bus::{
     AgentEvent, ChatChunkPayload, ChatDonePayload, ChatErrorPayload, ChatStatusPayload,
 };
-use crate::agent::chat_status::ChatStatusPhase;
 use crate::agent::middleware::{EnrichmentContext, MiddlewareChain};
 use crate::agent::types::*;
 use crate::db::models::ChatMessage;
@@ -620,9 +620,18 @@ impl Runner {
             let mut remaining_indexes: Vec<usize> = Vec::new();
 
             for (index, tool_call) in tool_calls.iter().enumerate() {
-                let id_key =
-                    EarlyToolExecutionState::key_for(&tool_call.name, &tool_call.args, Some(&tool_call.id), Some(index));
-                let sig_key = EarlyToolExecutionState::key_for(&tool_call.name, &tool_call.args, None, Some(index));
+                let id_key = EarlyToolExecutionState::key_for(
+                    &tool_call.name,
+                    &tool_call.args,
+                    Some(&tool_call.id),
+                    Some(index),
+                );
+                let sig_key = EarlyToolExecutionState::key_for(
+                    &tool_call.name,
+                    &tool_call.args,
+                    None,
+                    Some(index),
+                );
                 let key = if early_tool_state.was_started(&id_key).await {
                     id_key
                 } else {
@@ -654,7 +663,10 @@ impl Runner {
                 .await
             };
 
-            for (index, result) in remaining_indexes.into_iter().zip(remaining_results.into_iter()) {
+            for (index, result) in remaining_indexes
+                .into_iter()
+                .zip(remaining_results.into_iter())
+            {
                 ordered_results[index] = Some(result);
             }
 

@@ -313,6 +313,8 @@ pub fn run() {
             commands::agent_config::export_agent_config_file,
             commands::agent_config::import_agent_config_file,
             commands::agent_config::list_tools_for_config,
+            commands::voice::get_whisper_model_status,
+            commands::voice::get_whisper_runtime_status,
             commands::voice::download_whisper_model,
             commands::voice::transcribe_audio,
             commands::voice::transcribe_stream,

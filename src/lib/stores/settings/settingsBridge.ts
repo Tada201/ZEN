@@ -85,6 +85,7 @@ const DOT_TO_FIELD: Record<string, BridgeEntry> = {
   "audio.notifications": { field: "notificationSounds",  type: "boolean" },
   "audio.tts-engine":    { field: "ttsEngine",            type: "string" },
   "audio.stt-engine":    { field: "sttEngine",            type: "string" },
+  "audio.stt-compute-device": { field: "sttComputeDevice", type: "string" },
   "audio.push-to-talk":  { field: "sttHotkeysEnabled",    type: "boolean" },
   "audio.tts-rate":      { field: "webTtsRate",           type: "number" },
   "audio.system-sounds": { field: "systemSoundsEnabled",  type: "boolean" },

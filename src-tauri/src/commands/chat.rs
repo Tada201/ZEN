@@ -130,6 +130,7 @@ pub async fn send_message(
     tools: Option<Vec<String>>,
     _attachments: Option<Vec<crate::db::models::Attachment>>,
     system_prompt: Option<String>,
+    system_prompt_mode: Option<String>,
 ) -> ZenResult<()> {
     info!(
         chat_id = %chat_id,
@@ -210,7 +211,14 @@ pub async fn send_message(
         active_model = %active_model,
         "Fetching provider, history, and settings in parallel"
     );
-    let (llm_provider, history, tools_enabled_str, tool_yolo_mode_str, tools_yolo_mode_str, custom_prompt_setting) = tokio::try_join!(
+    let (
+        llm_provider,
+        history,
+        tools_enabled_str,
+        tool_yolo_mode_str,
+        tools_yolo_mode_str,
+        custom_prompt_setting,
+    ) = tokio::try_join!(
         state.provider_registry.create(&resolved_provider_name),
         queries::get_messages(&db, &chat_id),
         state.settings_manager.get("tools_enabled"),
@@ -354,7 +362,12 @@ Always use these specialized code blocks for visual scenarios:
         Some(p) if !p.trim().is_empty() => p,
         _ => default_instructions,
     };
+    let replace_system_prompt = system_prompt_mode
+        .as_deref()
+        .map(|mode| mode.eq_ignore_ascii_case("replace"))
+        .unwrap_or(false);
     let mut instructions = match system_prompt {
+        Some(p) if replace_system_prompt && !p.trim().is_empty() => p,
         Some(p) if !p.trim().is_empty() && !base_instructions.trim().is_empty() => {
             format!("{}\n\n{}", base_instructions, p)
         }
@@ -363,7 +376,10 @@ Always use these specialized code blocks for visual scenarios:
     };
 
     // Inject state watcher directive to prevent LLM context confusion
-    if generative_ui.unwrap_or(false) {
+    if replace_system_prompt {
+        // Per-turn replacements are used by specialized surfaces such as Voice Mode.
+        // Those prompts own their output contract and should not inherit chat UI warnings.
+    } else if generative_ui.unwrap_or(false) {
         instructions.push_str("\n\n[SYSTEM STATE WARNING]\nIMPORTANT: The Generative UI feature is currently ENABLED for this message turn. You MUST generate any visual mockups, dashboards, grids, stacks, or styled templates inside ```openui ... ``` code blocks using the specified DSL catalog.");
     } else {
         instructions.push_str("\n\n[SYSTEM STATE WARNING]\nIMPORTANT: The Generative UI feature is currently DISABLED for this message turn. Do NOT generate any 'openui' or visual sandbox layout blocks. Provide all responses in plain, standard markdown or text.");

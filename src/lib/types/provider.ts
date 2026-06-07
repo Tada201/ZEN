@@ -53,7 +53,6 @@ export const PROVIDER_KEY_MAP: Record<string, string> = {
     nvidia: 'nvidiaApiKey',
     ollama: 'ollamaBaseUrl',
     lmstudio: 'lmstudioBaseUrl',
-    nine_router: 'nineRouterApiKey',
     aihubmix: 'aihubmixApiKey',
 };
 
@@ -92,7 +91,7 @@ export const providerOrder: ProviderInfo[] = [
         name: '9Router',
         description: 'Offline-first local coding proxy and local orchestration gateway.',
         isLocal: true,
-        requiresKey: true,
+        requiresKey: false,
         baseUrl: 'http://localhost:20128/v1',
         category: 'local',
         icon: 'lucide:router'

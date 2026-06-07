@@ -161,7 +161,10 @@ impl ToolManager {
             }
 
             for tool in v1_guard.list() {
-                if !legacy_tools.iter().any(|existing| existing.id() == tool.id()) {
+                if !legacy_tools
+                    .iter()
+                    .any(|existing| existing.id() == tool.id())
+                {
                     legacy_tools.push(tool);
                 }
             }

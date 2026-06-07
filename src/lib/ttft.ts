@@ -10,12 +10,56 @@ export type TtftMarker =
   | 'firstRender'     // first text visible to user
   | 'complete'        // streaming complete
 
+export interface TtftMetricSnapshot {
+  chatId: string;
+  ttftMs: number | null;
+  firstChunkMs: number | null;
+  completeMs: number | null;
+  reason?: string;
+}
+
 interface TtftSession {
   markers: Partial<Record<TtftMarker, number>>;
   startTime: number;
 }
 
 const activeSessions: Record<string, TtftSession> = {};
+const latestMetrics: Record<string, TtftMetricSnapshot> = {};
+const listeners = new Set<(chatId: string, snapshot: TtftMetricSnapshot) => void>();
+
+function buildSnapshot(chatId: string, reason?: string): TtftMetricSnapshot | null {
+  const session = activeSessions[chatId];
+  if (!session) return latestMetrics[chatId] ?? null;
+  const firstRender = session.markers.firstRender;
+  const firstChunk = session.markers.firstChunk;
+  const complete = session.markers.complete;
+  const snapshot = {
+    chatId,
+    ttftMs: firstRender ? firstRender - session.startTime : null,
+    firstChunkMs: firstChunk ? firstChunk - session.startTime : null,
+    completeMs: complete ? complete - session.startTime : null,
+    reason,
+  };
+  latestMetrics[chatId] = snapshot;
+  return snapshot;
+}
+
+function emitSnapshot(chatId: string, reason?: string): void {
+  const snapshot = buildSnapshot(chatId, reason);
+  if (!snapshot) return;
+  listeners.forEach(listener => listener(chatId, snapshot));
+}
+
+export function getTtftMetric(chatId: string): TtftMetricSnapshot | null {
+  return latestMetrics[chatId] ?? buildSnapshot(chatId);
+}
+
+export function subscribeTtftMetric(listener: (chatId: string, snapshot: TtftMetricSnapshot) => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
 
 export function ttftBegin(chatId: string): void {
   activeSessions[chatId] = {
@@ -23,6 +67,7 @@ export function ttftBegin(chatId: string): void {
     startTime: performance.now()
   };
   console.log(`[TTFT] Session ${chatId} started`);
+  emitSnapshot(chatId);
 }
 
 export function ttftMark(chatId: string, marker: TtftMarker): void {
@@ -34,6 +79,7 @@ export function ttftMark(chatId: string, marker: TtftMarker): void {
     session.markers[marker] = performance.now();
     const elapsed = session.markers[marker]! - session.startTime;
     console.log(`[TTFT] ${marker}: ${elapsed.toFixed(1)}ms`);
+    emitSnapshot(chatId);
   }
 }
 
@@ -42,6 +88,7 @@ export function ttftReport(chatId: string, reason: string): void {
   if (!session) return;
   
   session.markers['complete'] = performance.now();
+  emitSnapshot(chatId, reason);
   
   console.group(`TTFT Report: ${chatId} (${reason})`);
   

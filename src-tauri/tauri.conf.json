@@ -41,8 +41,10 @@
       "resources/binaries/piper/*.dll",
       "resources/binaries/piper/*.ort",
       "resources/binaries/whisper/*.exe",
+      "resources/binaries/whisper/**/*.exe",
       "resources/binaries/piper/espeak-ng-data/**/*",
-      "resources/binaries/whisper/*.dll"
+      "resources/binaries/whisper/*.dll",
+      "resources/binaries/whisper/**/*.dll"
     ]
   },
   "plugins": {}

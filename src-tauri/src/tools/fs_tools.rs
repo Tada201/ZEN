@@ -391,7 +391,10 @@ impl Tool for GrepDocumentsTool {
                         continue;
                     };
 
-                    if enforce_existing_file_size(&path, max_file_bytes).await.is_err() {
+                    if enforce_existing_file_size(&path, max_file_bytes)
+                        .await
+                        .is_err()
+                    {
                         continue;
                     }
 
@@ -528,11 +531,11 @@ impl Tool for WriteFileTool {
             None
         };
 
-        tokio::fs::write(&target_path, &args.content).await.map_err(|e| {
-            ToolError::ExecutionFailed {
+        tokio::fs::write(&target_path, &args.content)
+            .await
+            .map_err(|e| ToolError::ExecutionFailed {
                 message: format!("Failed to write file: {}", e),
-            }
-        })?;
+            })?;
 
         let (change_type, diff, lines_added, lines_removed) =
             if let Some(original) = original_content {

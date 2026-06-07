@@ -15,6 +15,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
   const [hardware, setHardware] = useState<HardwareInfo | null>(null);
   const [hardwareError, setHardwareError] = useState<string | null>(null);
   const [loadingHardware, setLoadingHardware] = useState(false);
+  const [hardwareView, setHardwareView] = useState<"overview" | "gpus">("overview");
 
   const loadHardware = async () => {
     setLoadingHardware(true);
@@ -47,7 +48,19 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
       </div>
 
       <SettingsSection title="Hardware Resources" icon="lucide:server" description="Detected system capabilities">
-        <div className="grid grid-cols-2 gap-2 px-3 py-2">
+        <div className="flex gap-1 border-b border-white/[0.06] px-3 py-2">
+          {(["overview", "gpus"] as const).map((view) => (
+            <button
+              key={view}
+              type="button"
+              onClick={() => setHardwareView(view)}
+              className={`rounded px-2.5 py-1 text-[11px] font-medium ${hardwareView === view ? "bg-white/10 text-foreground" : "text-muted-foreground hover:bg-white/5"}`}
+            >
+              {view === "overview" ? "Overview" : `GPU Devices (${hardware?.gpus.length ?? 0})`}
+            </button>
+          ))}
+        </div>
+        {hardwareView === "overview" ? <div className="grid grid-cols-2 gap-2 px-3 py-2">
           {[
             {
               label: "CPU",
@@ -85,7 +98,27 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
               </div>
             );
           })}
-        </div>
+        </div> : (
+          <div className="space-y-2 px-3 py-3">
+            {(hardware?.gpus ?? []).map((gpu) => (
+              <div key={gpu.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-md border border-white/[0.06] bg-white/[0.025] px-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="truncate text-[12px] font-semibold text-foreground">{gpu.name}</p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">{gpu.vendor} · System #{gpu.system_index} · Backend #{gpu.backend_device_index}</p>
+                  <p className="mt-1 truncate font-mono text-[9px] text-muted-foreground/60" title={gpu.id}>{gpu.id}</p>
+                </div>
+                <div className="text-right text-[10px] text-muted-foreground">
+                  <p>{gpu.vram_mb ? `${(gpu.vram_mb / 1024).toFixed(1)} GB VRAM` : "VRAM unknown"}</p>
+                  <p>{gpu.driver_version ? `Driver ${gpu.driver_version}` : "Driver unknown"}</p>
+                  <p className={gpu.cuda_capable ? "text-emerald-400" : "text-muted-foreground"}>{gpu.cuda_capable ? "CUDA capable" : gpu.vendor === "AMD" || gpu.vendor === "Intel" ? "Vulkan candidate" : "CPU fallback"}</p>
+                </div>
+              </div>
+            ))}
+            {!loadingHardware && (hardware?.gpus.length ?? 0) === 0 && (
+              <p className="py-4 text-center text-[11px] text-muted-foreground">No GPU adapters detected.</p>
+            )}
+          </div>
+        )}
         <div className="mx-3 mb-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -106,16 +139,6 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
       </SettingsSection>
 
       <SettingsSection title="Performance" icon="lucide:gauge" description="Resource allocation and performance tuning">
-        <div className="mx-3 mb-2 flex items-start gap-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-amber-200/90">
-          <WorkbenchIcon name="lucide:alert-triangle" size={16} className="text-amber-500 shrink-0 mt-0.5" />
-          <div className="space-y-0.5">
-            <p className="text-[11px] font-medium leading-none">Settings Under Construction</p>
-            <p className="text-[10px] text-amber-200/60 leading-normal">
-              Not working — TODO: wire the app properly
-            </p>
-          </div>
-        </div>
-
         <SettingsRow
           label="Low Resource Mode"
           description="Reduce resource usage on constrained hardware"

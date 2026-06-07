@@ -13,7 +13,8 @@ import { voiceApi } from '@/api';
 export function speakText(text: string): Promise<void> {
     const { ttsEngine } = useSettingsStore.getState();
 
-    if (ttsEngine === 'web') {
+    // 'system' and 'web' both use the browser/OS native TTS APIs
+    if (ttsEngine === 'web' || ttsEngine === 'system') {
         return speakWithWebSpeech(text);
     }
 
@@ -24,13 +25,8 @@ export function speakText(text: string): Promise<void> {
  * Stops any active speech — both web and local Piper.
  */
 export function stopSpeech(): void {
-    const { ttsEngine } = useSettingsStore.getState();
-
-    if (ttsEngine === 'web') {
-        window.speechSynthesis?.cancel();
-    } else {
-        voiceApi.stopSpeech().catch(console.error);
-    }
+    window.speechSynthesis?.cancel();
+    voiceApi.stopSpeech().catch(console.error);
 }
 
 /**
@@ -58,8 +54,7 @@ function speakWithWebSpeech(text: string): Promise<void> {
     return new Promise((resolve, reject) => {
         if (!window.speechSynthesis) {
             console.warn('[TTS] Web Speech API not available, falling back to Piper');
-            voiceApi.speakText(text).catch(console.error);
-            resolve();
+            voiceApi.speakText(text).then(resolve).catch(reject);
             return;
         }
 

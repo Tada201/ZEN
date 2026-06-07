@@ -46,7 +46,7 @@ export function useChat() {
     selectedModelId,
   });
 
-  const { handleSendMessage } = useSendMessage(currentSessionId);
+  const { handleSendMessage } = useSendMessage(currentSessionId, () => mutations.handleCreateSession("New Case"));
 
   const handleExportSession = async (id: string) => {
     try {

@@ -131,9 +131,13 @@ impl AgentTool for SpawnAgentTool {
         let model = if let Some(m) = model_override.clone() {
             m
         } else {
-            let config_file_model = agent_config_file
-                .as_ref()
-                .and_then(|c| if c.model_name.is_empty() { None } else { Some(c.model_name.clone()) });
+            let config_file_model = agent_config_file.as_ref().and_then(|c| {
+                if c.model_name.is_empty() {
+                    None
+                } else {
+                    Some(c.model_name.clone())
+                }
+            });
 
             if let Some(m) = config_file_model.or(agent.model_override.clone()) {
                 m
@@ -185,9 +189,9 @@ impl AgentTool for SpawnAgentTool {
             child_runner = child_runner.with_allowed_tools(allowed);
         } else if let Some(ref cfg) = agent_config_file {
             if !cfg.enabled_tools.is_empty() {
-                child_runner = child_runner.with_allowed_tools(Arc::new(
-                    tokio::sync::Mutex::new(cfg.enabled_tools.iter().cloned().collect()),
-                ));
+                child_runner = child_runner.with_allowed_tools(Arc::new(tokio::sync::Mutex::new(
+                    cfg.enabled_tools.iter().cloned().collect(),
+                )));
             }
         }
 

@@ -223,7 +223,11 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let workspace = temp_dir.path();
 
-        let escape_path = workspace.join("missing").join("..").join("..").join("escape.txt");
+        let escape_path = workspace
+            .join("missing")
+            .join("..")
+            .join("..")
+            .join("escape.txt");
 
         let result = validate_workspace_path(workspace, &escape_path);
         assert!(result.is_err());

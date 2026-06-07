@@ -34,6 +34,12 @@ for (const required of ["<STTConfig />", "<TTSConfig />", "testProviderConnectio
   assertIncludes(voiceSettings, required, `Voice settings page missing ${required}.`);
 }
 
+const sttConfig = read("src/components/settings/Tabs/audio/STTConfig.tsx");
+const voiceApi = read("src/api/voiceApi.ts");
+assertIncludes(voiceApi, "getWhisperModelStatus", "Voice API must expose status-only Whisper detection.");
+assertIncludes(sttConfig, "voiceApi.getWhisperModelStatus(sttWhisperModel)", "Opening Voice settings must check Whisper status without downloading.");
+assertIncludes(sttConfig, "voiceApi.downloadWhisperModel(sttWhisperModel)", "Whisper download button must still download the selected model.");
+
 for (const field of [
   "voiceDisplayAgentEnabled",
   "voiceDisplayAgentContextTokens",

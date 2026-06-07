@@ -338,13 +338,17 @@ impl ToolRegistry {
             return Ok(());
         };
 
-        let validator = jsonschema::validator_for(&schema).map_err(|e| ToolError::InvalidArguments {
-            details: format!("Invalid schema for '{}': {}", tool_call.name, e),
-        })?;
+        let validator =
+            jsonschema::validator_for(&schema).map_err(|e| ToolError::InvalidArguments {
+                details: format!("Invalid schema for '{}': {}", tool_call.name, e),
+            })?;
 
         if let Err(error) = validator.validate(&tool_call.arguments) {
             return Err(ToolError::InvalidArguments {
-                details: format!("{} arguments do not match schema: {}", tool_call.name, error),
+                details: format!(
+                    "{} arguments do not match schema: {}",
+                    tool_call.name, error
+                ),
             });
         }
 
