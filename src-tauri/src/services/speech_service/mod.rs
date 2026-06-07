@@ -13,6 +13,13 @@ use uuid::Uuid;
 use reqwest::multipart;
 
 const WHISPER_PORT: u16 = 8080;
+/// Maximum port offset to try when the preferred port is occupied.
+const PORT_FALLBACK_RANGE: u16 = 10;
+
+/// Returns true if the given TCP port is available (no process bound to it).
+async fn is_port_available(port: u16) -> bool {
+    tokio::net::TcpListener::bind(("127.0.0.1", port)).await.is_ok()
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ModelFileStatus {
@@ -42,6 +49,8 @@ pub struct SpeechService {
     model_path: std::sync::Arc<tokio::sync::RwLock<PathBuf>>,
     model_name: std::sync::Arc<tokio::sync::RwLock<String>>,
     gpu_device: std::sync::Arc<tokio::sync::RwLock<Option<u32>>>,
+    /// The TCP port the whisper-server is actually bound to (may differ from WHISPER_PORT).
+    active_port: std::sync::Arc<tokio::sync::RwLock<u16>>,
     hardware: HardwareInfo,
     server_process: std::sync::Arc<tokio::sync::Mutex<Option<tokio::process::Child>>>,
     watchdog_running: std::sync::Arc<std::sync::atomic::AtomicBool>,
@@ -108,6 +117,7 @@ impl SpeechService {
             model_path: std::sync::Arc::new(tokio::sync::RwLock::new(model_path)),
             model_name: std::sync::Arc::new(tokio::sync::RwLock::new(model_name)),
             gpu_device: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
+            active_port: std::sync::Arc::new(tokio::sync::RwLock::new(WHISPER_PORT)),
             hardware,
             server_process: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
             watchdog_running: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -392,8 +402,31 @@ impl SpeechService {
 
         let mut command = Command::new(&resolved_binary.path);
         configure_tokio_command_for_binary(&mut command, &resolved_binary.path);
-        let port = WHISPER_PORT.to_string();
-        command.args(["-m", &path_str, "--port", &port, "--host", "127.0.0.1"]);
+
+        // Probe preferred port, then fall back through nearby ports if occupied.
+        let mut bound_port: Option<u16> = None;
+        for offset in 0..=PORT_FALLBACK_RANGE {
+            let candidate = WHISPER_PORT.saturating_add(offset);
+            if is_port_available(candidate).await {
+                bound_port = Some(candidate);
+                break;
+            }
+            warn!(
+                port = candidate,
+                "Port {} is occupied, trying next...",
+                candidate
+            );
+        }
+        let port = bound_port.ok_or_else(|| {
+            format!(
+                "All ports {}..{} are occupied — cannot start whisper-server",
+                WHISPER_PORT,
+                WHISPER_PORT + PORT_FALLBACK_RANGE
+            )
+        })?;
+        *self.active_port.write().await = port;
+        let port_str = port.to_string();
+        command.args(["-m", &path_str, "--port", &port_str, "--host", "127.0.0.1"]);
         if let Some(device) = *self.gpu_device.read().await {
             command.args(["--gpu-device", &device.to_string()]);
         }
@@ -429,7 +462,7 @@ impl SpeechService {
         for _ in 0..60 {
             // wait up to 30s
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-            if tokio::net::TcpStream::connect(format!("127.0.0.1:{WHISPER_PORT}"))
+            if tokio::net::TcpStream::connect(format!("127.0.0.1:{port}"))
                 .await
                 .is_ok()
             {
@@ -444,10 +477,10 @@ impl SpeechService {
                 let _ = c.kill().await;
             }
             return Err(format!(
-                "whisper-server failed to bind to port {WHISPER_PORT} in time"
+                "whisper-server failed to bind to port {port} in time"
             ));
         }
-        info!("whisper-server initialized");
+        info!(port = port, "whisper-server initialized");
 
         // Spawn watchdog if not already running
         if !self
@@ -458,6 +491,7 @@ impl SpeechService {
             let runtime = self.runtime.clone();
             let model_path = self.model_path.clone();
             let gpu_device = self.gpu_device.clone();
+            let active_port = self.active_port.clone();
             let process_manager = self.process_manager.clone();
             let has_cuda = self.hardware.has_cuda;
             let prefer_vulkan = self.prefers_vulkan();
@@ -467,9 +501,10 @@ impl SpeechService {
                 loop {
                     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
-                    // Ping TCP
+                    // Ping the active port
+                    let current_port = *active_port.read().await;
                     let is_healthy =
-                        tokio::net::TcpStream::connect(format!("127.0.0.1:{WHISPER_PORT}"))
+                        tokio::net::TcpStream::connect(format!("127.0.0.1:{current_port}"))
                             .await
                             .is_ok();
 
@@ -493,18 +528,31 @@ impl SpeechService {
                                 }
                             }
 
-                            // Respawn - use same binary resolution as start_server()
+                            // Respawn - probe for an available port instead of
+                            // blindly using the old one (it may have been taken
+                            // by another process during the crash window).
+                            let mut respawn_port: Option<u16> = None;
+                            for offset in 0..=PORT_FALLBACK_RANGE {
+                                let candidate = WHISPER_PORT.saturating_add(offset);
+                                if is_port_available(candidate).await {
+                                    respawn_port = Some(candidate);
+                                    break;
+                                }
+                            }
+                            let respawn_port = respawn_port.unwrap_or(WHISPER_PORT);
+                            *active_port.write().await = respawn_port;
+
                             let resolved_binary =
                                 runtime.whisper_server_binary(has_cuda, prefer_vulkan);
                             let mut command = tokio::process::Command::new(&resolved_binary.path);
                             configure_tokio_command_for_binary(&mut command, &resolved_binary.path);
                             let model = model_path.read().await;
-                            let port = WHISPER_PORT.to_string();
+                            let port_str = respawn_port.to_string();
                             command.args([
                                 "-m",
                                 model.to_str().unwrap(),
                                 "--port",
-                                &port,
+                                &port_str,
                                 "--host",
                                 "127.0.0.1",
                             ]);
@@ -526,6 +574,7 @@ impl SpeechService {
                                 *guard = Some(new_child);
                                 fail_count = 0;
                                 tracing::info!(
+                                    port = respawn_port,
                                     "Whisper server successfully resurrected by watchdog"
                                 );
                             }
@@ -631,8 +680,9 @@ impl SpeechService {
         // Send request to local whisper-server
         let client = crate::utils::default_http_client();
         let inference_started_at = Instant::now();
+        let active_port = *self.active_port.read().await;
         let res = client
-            .post(format!("http://127.0.0.1:{WHISPER_PORT}/inference"))
+            .post(format!("http://127.0.0.1:{active_port}/inference"))
             .multipart(form)
             .timeout(std::time::Duration::from_secs(90))
             .send()

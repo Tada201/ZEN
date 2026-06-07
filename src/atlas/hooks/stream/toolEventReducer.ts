@@ -1,20 +1,48 @@
 import type { Message, ToolCall } from "../../components/chat/types";
 
-function findTargetMessageIndex(messages: Message[], toolCallId: string): number {
+function messageOwnsTool(message: Message, toolCallId: string) {
+  return Boolean(
+    message.toolCalls?.some((tool) => tool.id === toolCallId) ||
+    message.steps?.some((step) => step.type === "tool-call" && step.toolCall?.id === toolCallId)
+  );
+}
+
+function messageMatchesToolMeta(message: Message, incoming: ToolCall) {
+  const messageMeta = message as Message & { runId?: string; messageId?: string };
+  if (incoming.messageId && (message.id === incoming.messageId || messageMeta.messageId === incoming.messageId)) {
+    return true;
+  }
+  if (incoming.runId && messageMeta.runId === incoming.runId) return true;
+  return Boolean(
+    message.toolCalls?.some((tool) =>
+      (incoming.messageId && tool.messageId === incoming.messageId) ||
+      (incoming.runId && tool.runId === incoming.runId)
+    ) ||
+    message.steps?.some((step) => {
+      const metadata = step.metadata as { runId?: string; messageId?: string } | undefined;
+      return (
+        (incoming.messageId && metadata?.messageId === incoming.messageId) ||
+        (incoming.runId && metadata?.runId === incoming.runId)
+      );
+    })
+  );
+}
+
+function findTargetMessageIndex(messages: Message[], incoming: ToolCall): number {
   let activeAssistantIdx = -1;
+  let latestAssistantIdx = -1;
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
-    if (
-      message.toolCalls?.some((tool) => tool.id === toolCallId) ||
-      message.steps?.some((step) => step.type === "tool-call" && step.toolCall?.id === toolCallId)
-    ) {
+    if (messageOwnsTool(message, incoming.id)) {
       return i;
     }
+    if (message.role === "assistant" && messageMatchesToolMeta(message, incoming)) return i;
     if (activeAssistantIdx === -1 && message.role === "assistant" && message.status === "sending") {
       activeAssistantIdx = i;
     }
+    if (latestAssistantIdx === -1 && message.role === "assistant") latestAssistantIdx = i;
   }
-  return activeAssistantIdx;
+  return activeAssistantIdx !== -1 ? activeAssistantIdx : latestAssistantIdx;
 }
 
 function isTerminalToolStatus(status?: ToolCall["status"]) {
@@ -51,7 +79,7 @@ export function mergeToolCall(existing: ToolCall | undefined, incoming: ToolCall
 }
 
 export function upsertTool(prev: Message[], chatId: string, incoming: ToolCall, now = Date.now()): Message[] {
-  const targetIdx = findTargetMessageIndex(prev, incoming.id);
+  const targetIdx = findTargetMessageIndex(prev, incoming);
   if (targetIdx === -1) {
     return [
       ...prev,
@@ -71,18 +99,25 @@ export function upsertTool(prev: Message[], chatId: string, incoming: ToolCall, 
   const next = [...prev];
   const target = next[targetIdx];
   const hasTool = target.toolCalls?.some((tool) => tool.id === incoming.id) || false;
+  const existingSteps = target.steps || [];
+  const hasToolStep = existingSteps.some((step) => step.type === "tool-call" && step.toolCall?.id === incoming.id);
+  const nextToolStep = { type: "tool-call" as const, toolCall: incoming };
+  const firstTextIndex = existingSteps.findIndex((step) => step.type === "text");
+  const stepsWithInsertedTool = firstTextIndex === -1
+    ? [...existingSteps, nextToolStep]
+    : [...existingSteps.slice(0, firstTextIndex), nextToolStep, ...existingSteps.slice(firstTextIndex)];
   next[targetIdx] = {
     ...target,
     toolCalls: hasTool
       ? (target.toolCalls || []).map((tool) => tool.id === incoming.id ? mergeToolCall(tool, incoming) : tool)
       : [...(target.toolCalls || []), incoming],
-    steps: target.steps?.some((step) => step.type === "tool-call" && step.toolCall?.id === incoming.id)
-      ? target.steps.map((step) =>
+    steps: hasToolStep
+      ? existingSteps.map((step) =>
           step.type === "tool-call" && step.toolCall?.id === incoming.id
             ? { ...step, toolCall: mergeToolCall(step.toolCall, incoming) }
             : step
         )
-      : [...(target.steps || []), { type: "tool-call", toolCall: incoming }],
+      : stepsWithInsertedTool,
   };
   return next;
 }

@@ -1,4 +1,4 @@
-import { useCallback, useRef, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react';
 import { createMoonshineRecognition, type MoonshineRecognitionSession } from '@/lib/voice/moonshineRecognition';
 import type { VoiceState } from './VoiceModePanel';
 import type { SttServiceStatus } from './voiceStatus';
@@ -111,6 +111,18 @@ export function useMoonshineStt({
         };
         if (delayMs > 0) stopTimerRef.current = window.setTimeout(stop, delayMs);
         else stop();
+    }, []);
+
+    // Clean up session on unmount to prevent WASM transcriber from leaking CPU
+    useEffect(() => {
+        return () => {
+            if (stopTimerRef.current !== null) {
+                window.clearTimeout(stopTimerRef.current);
+            }
+            sessionRef.current?.stop();
+            sessionRef.current = null;
+            moonshineReadyRef.current = false;
+        };
     }, []);
 
     return { moonshineReadyRef, startMoonshineRecognition, stopMoonshineRecognition };

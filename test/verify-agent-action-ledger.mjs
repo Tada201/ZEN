@@ -240,4 +240,32 @@ assert.equal(taskLateStart[1].steps[0].status, "completed", "late task start mus
 assert.equal(taskLateStart[1].steps[0].content, "Task is done", "late task start must not hide completed task result");
 assert.equal(taskLateStart[1].steps[0].metadata.taskResult.output, "Task is done", "late task start should preserve task result preview");
 
+const lateToolStatus = appendActionStepToMessages(
+  [
+    { id: "user-4", sessionId: "chat-1", role: "user", content: "Search news", status: "sent" },
+    {
+      id: "assistant-final",
+      sessionId: "chat-1",
+      role: "assistant",
+      content: "Here is the final answer.",
+      status: "sent",
+      steps: [{ type: "text", content: "Here is the final answer." }],
+    },
+  ],
+  "chat-1",
+  {
+    chat_id: "chat-1",
+    messageId: "assistant-final",
+    phase: "tool_call_ready",
+    metadata: {
+      phase: "tool_call_ready",
+      toolCallPreview: { toolCallId: "call-search", toolName: "tool_exec", argumentsPreview: "{\"query\":\"news\"}" },
+    },
+  },
+  "chat_status",
+);
+assert.equal(lateToolStatus.length, 2, "late tool status should not create a bottom system row");
+assert.equal(lateToolStatus[1].steps[0].type, "action", "late tool status should render before final text");
+assert.equal(lateToolStatus[1].steps[1].type, "text", "final assistant text should remain after late tool status");
+
 console.log("agent action ledger ok");

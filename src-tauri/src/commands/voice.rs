@@ -273,15 +273,20 @@ pub async fn transcribe_stream(
     match transcript_result {
         Ok(t) if !t.is_empty() => {
             let lower = t.to_lowercase();
+            // Only block known Whisper hallucination phrases (exact or near-exact matches)
             let blacklist = [
+                "thank you for watching",
+                "subscribe to my channel",
+                "please subscribe",
+                "thanks for watching",
                 "locate france",
-                "thank you",
-                "subscribe",
-                "watching",
-                "you",
-                "bye",
             ];
-            if blacklist.iter().any(|&b| lower.contains(b)) && t.split_whitespace().count() <= 3 {
+            let word_count = t.split_whitespace().count();
+            let is_hallucination = word_count <= 5 && blacklist.iter().any(|&b| {
+                lower == b || (word_count <= 3 && lower.contains(b))
+            });
+            if is_hallucination {
+                info!(transcript = %t, "Blocked suspected STT hallucination in stream");
                 return Ok(TranscriptionResult::NoSpeech);
             }
             Ok(TranscriptionResult::Transcript(t))
@@ -302,7 +307,9 @@ pub async fn speak_text(
             .await
             .map_err(|e| ZenError::Internal(e))?;
     } else {
-        tracing::warn!("TTS service is not available");
+        return Err(ZenError::Internal(
+            "TTS service is not initialized. Check Settings → Audio to configure TTS.".into(),
+        ));
     }
     Ok(())
 }

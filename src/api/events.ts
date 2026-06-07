@@ -293,9 +293,29 @@ export interface ChatStatusEventPayload {
   tools?: string[];
 }
 
+export interface TtsSentenceCue {
+  /** Sentence text exactly as spoken by TTS. */
+  text: string;
+  /** Start of this sentence within the TTS clip, in milliseconds. */
+  start_ms: number;
+  /** End of this sentence within the TTS clip, in milliseconds. */
+  end_ms: number;
+}
+
 export interface TtsStartEventPayload {
   duration_ms?: number;
   durationMs?: number;
+  /** Full text that is about to be spoken. Useful as a fallback when
+   *  the closed-caption box was populated from streaming chunks. */
+  text?: string;
+  /** Sentence-level caption cues with estimated start/end times. The
+   *  frontend uses these to highlight the active sentence in the
+   *  closed-caption box as Piper plays. */
+  sentences?: TtsSentenceCue[];
+}
+
+export interface TtsErrorEventPayload {
+  error?: string;
 }
 
 export type EmptyEventPayload = Record<string, never>;
@@ -367,6 +387,7 @@ export interface AppEventPayloadMap {
   "graph:session:vision_capture": VisionCapture;
   "tts:start": TtsStartEventPayload;
   "tts:stop": EmptyEventPayload;
+  "tts:error": TtsErrorEventPayload;
   "orchestrator:progress": AgentActionEventPayload;
   "orchestrator:start": EmptyEventPayload;
   "agent:spawn": AgentActionEventPayload;

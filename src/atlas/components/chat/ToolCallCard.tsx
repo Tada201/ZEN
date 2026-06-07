@@ -6,7 +6,6 @@ import { ToolCall, ArtifactData } from './types';
 import { ToolTimer } from './tool/ToolTimer';
 import { buildToolOutputPreview } from './tool/toolOutputPreview';
 import { buildToolChecklistPreview } from './tool/toolInputPreview';
-import { buildToolCompactPreview } from './tool/toolCompactPreview';
 
 export interface ToolCallCardProps {
   toolCall: ToolCall;
@@ -125,11 +124,6 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
     ''
   );
   const outputSummary = outputPreview.summary;
-  const compactPreview = useMemo(
-    () => buildToolCompactPreview({ name, input: displayInput, outputSummary, status, checklistItems: checklistPreview }),
-    [checklistPreview, displayInput, name, outputSummary, status]
-  );
-
   const statusLabel = getStatusLabel(status);
   const toolActionVerb = getToolActionVerb(name, status);
   const actionText = useMemo(() => {
@@ -258,26 +252,6 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
           isExpanded && 'rotate-90'
         )} />
       </button>
-
-      {!isExpanded && compactPreview && (
-        <div
-          className={cn(
-            'ml-8 mr-2 -mt-0.5 flex min-w-0 items-center gap-2 rounded-md border px-2 py-1 text-[11px] leading-5',
-            compactPreview.tone === 'command' && 'border-blue-400/10 bg-blue-400/[0.035] font-mono text-blue-100/70',
-            compactPreview.tone === 'file' && 'border-zinc-700/40 bg-white/[0.018] font-mono text-zinc-400',
-            compactPreview.tone === 'search' && 'border-cyan-400/10 bg-cyan-400/[0.03] text-cyan-100/70',
-            compactPreview.tone === 'checklist' && 'border-amber-400/10 bg-amber-400/[0.035] text-amber-100/70',
-            compactPreview.tone === 'result' && 'border-emerald-400/10 bg-emerald-400/[0.03] text-emerald-100/70',
-            compactPreview.tone === 'error' && 'border-rose-400/15 bg-rose-400/[0.035] text-rose-100/80',
-            compactPreview.tone === 'default' && 'border-zinc-800/80 bg-white/[0.018] text-zinc-500'
-          )}
-        >
-          <span className="min-w-0 flex-1 truncate">{compactPreview.primary}</span>
-          {compactPreview.secondary && (
-            <span className="min-w-0 max-w-[40%] shrink truncate text-zinc-500">{compactPreview.secondary}</span>
-          )}
-        </div>
-      )}
 
       {isExpanded && (
         <div className="ml-2 border-l border-zinc-800/80 py-1 pl-3">

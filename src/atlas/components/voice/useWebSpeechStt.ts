@@ -26,8 +26,11 @@ export function useWebSpeechStt({
 }) {
     const recognitionRef = useRef<WebSpeechRecognitionLike | null>(null);
     const recognitionActiveRef = useRef(false);
+    const restartTimerRef = useRef<number | null>(null);
+    const shouldRunRef = useRef(false);
 
     const startWebRecognition = useCallback(() => {
+        shouldRunRef.current = true;
         if (recognitionActiveRef.current) return true;
 
         const recognition = recognitionRef.current ?? createWebSpeechRecognition();
@@ -65,6 +68,22 @@ export function useWebSpeechStt({
         };
         recognition.onend = () => {
             recognitionActiveRef.current = false;
+            // Auto-restart in continuous mode (voice activity detection) if voice mode is still open
+            if (shouldRunRef.current && !voiceInputModeRef.current) {
+                restartTimerRef.current = window.setTimeout(() => {
+                    restartTimerRef.current = null;
+                    if (shouldRunRef.current && !recognitionActiveRef.current) {
+                        try {
+                            recognition.start();
+                            recognitionActiveRef.current = true;
+                            setSttStatus('ready');
+                        } catch (error) {
+                            setSttStatus('failed');
+                            appendLog(`Web Speech restart failed: ${error instanceof Error ? error.message : String(error)}`, 'ERR');
+                        }
+                    }
+                }, 100);
+            }
         };
 
         try {
@@ -82,6 +101,12 @@ export function useWebSpeechStt({
     }, [appendLog, onTranscript, setSttStatus, setSubtitleSpeaker, setUserSpeechText, voiceInputModeRef]);
 
     const stopWebRecognition = useCallback((abort = false) => {
+        shouldRunRef.current = false;
+        // Cancel any pending auto-restart timer
+        if (restartTimerRef.current !== null) {
+            window.clearTimeout(restartTimerRef.current);
+            restartTimerRef.current = null;
+        }
         const recognition = recognitionRef.current;
         if (!recognition || !recognitionActiveRef.current) return;
         recognitionActiveRef.current = false;

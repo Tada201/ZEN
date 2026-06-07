@@ -46,51 +46,46 @@ export function useWhisperStt({
     workletNodeRef: MutableRefObject<AudioWorkletNode | null>;
 }) {
     const flushVadUtterance = useCallback(async () => {
+        // Concurrency guard: only one transcription at a time.
+        // The check+set is synchronous so no two callers can pass simultaneously.
         if (flushingRef.current) return;
         flushingRef.current = true;
-        const chunks = [...recordingChunksRef.current];
-        recordingChunksRef.current = [];
-        if (chunks.length === 0) {
-            flushingRef.current = false;
-            setSttStatus('failed');
-            setUserSpeechText('No audio captured.');
-            setSubtitleSpeaker('system');
-            return;
-        }
-
-        setVoiceState('processing');
-        setSttStatus('transcribing');
-        setUserSpeechText('Processing speech...');
-        setSubtitleSpeaker('system');
-        const pcm = convertChunksToWhisperPcm(chunks, audioCtxRef.current?.sampleRate || 48000, micVolume);
-        if (!pcm) {
-            flushingRef.current = false;
-            setSttStatus('failed');
-            setUserSpeechText('No audio captured.');
-            setSubtitleSpeaker('system');
-            setVoiceState('listening');
-            return;
-        }
-        if (voiceInputModeRef.current && pcm.bytes.length < WHISPER_AUDIO_LIMITS.minPttAudioBytes) {
-            appendLog('PTT: audio was too short to transcribe.', 'ERR');
-            flushingRef.current = false;
-            setSttStatus('failed');
-            setUserSpeechText('Audio was too short.');
-            setSubtitleSpeaker('system');
-            setVoiceState('listening');
-            return;
-        }
-        if (pcm.rms < WHISPER_AUDIO_LIMITS.minRms || pcm.peak < WHISPER_AUDIO_LIMITS.minPeak) {
-            appendLog(`PTT: captured silence (${pcm.durationMs}ms, rms ${pcm.rms.toFixed(4)}, peak ${pcm.peak.toFixed(4)}).`, 'ERR');
-            flushingRef.current = false;
-            setSttStatus('failed');
-            setUserSpeechText('No speech detected.');
-            setSubtitleSpeaker('system');
-            setVoiceState('listening');
-            return;
-        }
-
         try {
+            const chunks = [...recordingChunksRef.current];
+            recordingChunksRef.current = [];
+            if (chunks.length === 0) {
+                setSttStatus('failed');
+                setUserSpeechText('No audio captured.');
+                setSubtitleSpeaker('system');
+                return;
+            }
+
+            setVoiceState('processing');
+            setSttStatus('transcribing');
+            setUserSpeechText('Processing speech...');
+            setSubtitleSpeaker('system');
+            const pcm = convertChunksToWhisperPcm(chunks, audioCtxRef.current?.sampleRate || 48000, micVolume);
+            if (!pcm) {
+                setSttStatus('failed');
+                setUserSpeechText('No audio captured.');
+                setSubtitleSpeaker('system');
+                return;
+            }
+            if (voiceInputModeRef.current && pcm.bytes.length < WHISPER_AUDIO_LIMITS.minPttAudioBytes) {
+                appendLog('PTT: audio was too short to transcribe.', 'ERR');
+                setSttStatus('failed');
+                setUserSpeechText('Audio was too short.');
+                setSubtitleSpeaker('system');
+                return;
+            }
+            if (pcm.rms < WHISPER_AUDIO_LIMITS.minRms || pcm.peak < WHISPER_AUDIO_LIMITS.minPeak) {
+                appendLog(`PTT: captured silence (${pcm.durationMs}ms, rms ${pcm.rms.toFixed(4)}, peak ${pcm.peak.toFixed(4)}).`, 'ERR');
+                setSttStatus('failed');
+                setUserSpeechText('No speech detected.');
+                setSubtitleSpeaker('system');
+                return;
+            }
+
             appendLog(`Whisper: transcribing ${Math.round(pcm.bytes.length / 1024)} KB, ${pcm.durationMs}ms, rms ${pcm.rms.toFixed(4)}, peak ${pcm.peak.toFixed(4)} with ${sttWhisperModel}`);
             const modelStatus = await voiceApi.getWhisperModelStatus(sttWhisperModel);
             appendLog(`Whisper model: ${modelStatus.valid ? 'ready' : 'not ready'} (${modelStatus.source}, ${Math.round(modelStatus.size_bytes / 1024 / 1024)} MB)`, modelStatus.valid ? 'OK' : 'ERR');
@@ -99,7 +94,6 @@ export function useWhisperStt({
                 setSttStatus('failed');
                 setUserSpeechText('Whisper model is not ready.');
                 setSubtitleSpeaker('system');
-                setVoiceState('listening');
                 return;
             }
             appendLog('Whisper: request sent to local transcription service.');
@@ -128,9 +122,10 @@ export function useWhisperStt({
             setSttStatus('failed');
             setUserSpeechText('Whisper transcription failed.');
             setSubtitleSpeaker('system');
+        } finally {
+            setVoiceState('listening');
+            flushingRef.current = false;
         }
-        setVoiceState('listening');
-        flushingRef.current = false;
     }, [appendLog, applyStageBlock, audioCtxRef, flushingRef, micVolume, onTranscript, recordingChunksRef, setAiSpeechText, setSttStatus, setSubtitleSpeaker, setUserSpeechText, setVoiceState, sttComputeDevice, sttWhisperModel, voiceInputModeRef]);
 
     const setRecordingState = useCallback((recording: boolean) => {

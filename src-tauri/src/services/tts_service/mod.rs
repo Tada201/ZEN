@@ -1,4 +1,5 @@
 use rodio::{buffer::SamplesBuffer, OutputStream, OutputStreamHandle, Sink};
+use serde::Serialize;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -10,6 +11,19 @@ use tracing::{error, info};
 use crate::services::runtime_resource::{configure_std_command_for_binary, RuntimeResources};
 
 struct AudioHandle(OutputStream, OutputStreamHandle, Sink);
+
+/// One sentence-sized caption cue.
+///
+/// Piper cannot emit word-level timestamps, so we pre-split the text on
+/// sentence boundaries and assign estimated start/end times proportional
+/// to character count. The frontend uses this to highlight the active
+/// sentence in the closed-caption box as Piper plays.
+#[derive(Debug, Clone, Serialize)]
+pub struct TtsSentenceCue {
+    pub text: String,
+    pub start_ms: u64,
+    pub end_ms: u64,
+}
 
 // Safety: OutputStream is !Send on Windows/WASAPI, but we need it to stay alive
 // to maintain the audio context. By wrapping it in a Mutex and implementing Send/Sync,
@@ -123,6 +137,18 @@ impl TtsService {
 
         info!("TTS requested for text length: {}", text.len());
 
+        // ── Pre-flight: verify piper binary exists before spawning ──
+        // Note: returns Err directly — the IPC error path handles surfacing.
+        // tts:error is only emitted from the blocking task where errors can't propagate.
+        if !self.piper_path.exists() {
+            let msg = format!(
+                "Piper binary not found at '{}'. Download the Piper runtime or switch TTS engine to 'web'.",
+                self.piper_path.display()
+            );
+            error!("{}", msg);
+            return Err(msg);
+        }
+
         let text_owned = text.to_string();
         let audio_handle_clone = self.audio_handle.clone();
         let piper_path_clone = self.piper_path.clone();
@@ -131,6 +157,16 @@ impl TtsService {
         let model_path_guard = self.model_path.read().await;
         let model_path_clone = model_path_guard.clone();
         drop(model_path_guard);
+
+        // ── Pre-flight: verify model file exists ──
+        if !model_path_clone.exists() {
+            let msg = format!(
+                "Piper voice model not found at '{}'. Download a voice model in Settings → Audio.",
+                model_path_clone.display()
+            );
+            error!("{}", msg);
+            return Err(msg);
+        }
 
         tokio::task::spawn_blocking(move || {
             let piper_exe = piper_path_clone.to_string_lossy().into_owned();
@@ -173,10 +209,12 @@ impl TtsService {
             {
                 Ok(child) => child,
                 Err(e) => {
-                    error!(
+                    let msg = format!(
                         "Failed to spawn piper process: {}. Ensure '{}' exists and is executable.",
                         e, piper_exe
                     );
+                    error!("{}", msg);
+                    let _ = app.emit("tts:error", serde_json::json!({ "error": msg }));
                     return;
                 }
             };
@@ -187,13 +225,10 @@ impl TtsService {
             // Register with process manager if available
             if let Some(ref pm) = process_manager_clone {
                 let pm_clone = pm.clone();
-                let _ = std::thread::spawn(move || {
-                    let rt = tokio::runtime::Handle::current();
-                    rt.block_on(async move {
-                        pm_clone
-                            .register(&format!("piper-{}", pid), "piper-tts", pid)
-                            .await;
-                    });
+                tauri::async_runtime::spawn(async move {
+                    pm_clone
+                        .register(&format!("piper-{}", pid), "piper-tts", pid)
+                        .await;
                 });
             }
 
@@ -217,11 +252,8 @@ impl TtsService {
             // Unregister from process manager after completion
             if let Some(ref pm) = process_manager_clone {
                 let pm_clone = pm.clone();
-                let _ = std::thread::spawn(move || {
-                    let rt = tokio::runtime::Handle::current();
-                    rt.block_on(async move {
-                        pm_clone.unregister(&format!("piper-{}", pid)).await;
-                    });
+                tauri::async_runtime::spawn(async move {
+                    pm_clone.unregister(&format!("piper-{}", pid)).await;
                 });
             }
 
@@ -245,30 +277,52 @@ impl TtsService {
 
                 let buffer = SamplesBuffer::new(channels.get(), sample_rate.get(), samples);
 
+                // Build sentence-level caption cues for the closed-caption box.
+                // Piper cannot emit word-level timestamps, so we estimate the
+                // start/end of each sentence proportionally to its char count.
+                let cues = build_sentence_cues(&text_owned, duration_ms);
+
                 if let Ok(handle_lock) = audio_handle_clone.try_lock() {
                     if let Some(AudioHandle(_stream, _stream_handle, sink)) = handle_lock.as_ref() {
                         let _ = app.emit(
                             "tts:start",
-                            serde_json::json!({ "duration_ms": duration_ms }),
+                            serde_json::json!({
+                                "text": text_owned,
+                                "sentences": cues,
+                                "duration_ms": duration_ms,
+                            }),
                         );
                         sink.append(buffer);
 
-                        // Emit stop after playback completes without holding the blocking thread
-                        let app_clone = app.clone();
-                        std::thread::spawn(move || {
-                            std::thread::sleep(std::time::Duration::from_millis(duration_ms));
-                            let _ = app_clone.emit("tts:stop", ());
-                        });
+                        // Block this spawn_blocking task until playback actually
+                        // finishes. This replaces the previous heuristic
+                        // thread::sleep(duration_ms) which could fire
+                        // tts:stop early or late depending on Piper's real-time
+                        // factor.
+                        sink.sleep_until_end();
+
+                        let _ = app.emit("tts:stop", ());
+                    } else {
+                        let _ = app.emit(
+                            "tts:error",
+                            serde_json::json!({ "error": "Audio output is not initialized" }),
+                        );
                     }
+                } else {
+                    let _ = app.emit(
+                        "tts:error",
+                        serde_json::json!({ "error": "Audio output is busy" }),
+                    );
                 }
             } else {
-                error!(
-                    "Piper failed or returned empty output. Status: {:?}",
-                    output.status
+                let stderr_text = String::from_utf8_lossy(&output.stderr);
+                let msg = format!(
+                    "Piper failed (exit {:?}). stderr: {}",
+                    output.status,
+                    if stderr_text.is_empty() { "(empty)".to_string() } else { stderr_text.to_string() }
                 );
-                if !output.stderr.is_empty() {
-                    error!("Piper stderr: {}", String::from_utf8_lossy(&output.stderr));
-                }
+                error!("{}", msg);
+                let _ = app.emit("tts:error", serde_json::json!({ "error": msg }));
             }
         });
 
@@ -307,9 +361,76 @@ fn build_audio_handle(device_name: Option<String>) -> Result<AudioHandle, String
             .default_output_device()
             .ok_or_else(|| "No default output device available".to_string())?,
     };
-
     let (stream, stream_handle) =
         OutputStream::try_from_device(&device).map_err(|e| format!("Open output device: {e}"))?;
     let sink = Sink::try_new(&stream_handle).map_err(|e| format!("Create audio sink: {e}"))?;
     Ok(AudioHandle(stream, stream_handle, sink))
+}
+
+/// Split a piece of text into sentence-sized caption cues with estimated
+/// start/end times proportional to character count.
+///
+/// Piper has no word-level timestamp mode, so the cue times are estimates
+/// derived from the relative weight of each sentence. This is good enough
+/// to drive a "current sentence" highlight in the closed-caption box; it
+/// is not intended for frame-accurate word timing.
+fn build_sentence_cues(text: &str, total_duration_ms: u64) -> Vec<TtsSentenceCue> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+
+    let mut sentences: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut chars = trimmed.chars().peekable();
+    while let Some(c) = chars.next() {
+        current.push(c);
+        if matches!(c, '.' | '!' | '?') {
+            // Consume any trailing whitespace as part of this sentence
+            // so the next cue starts on the first real character.
+            while let Some(&next) = chars.peek() {
+                if next.is_whitespace() {
+                    current.push(chars.next().unwrap());
+                } else {
+                    break;
+                }
+            }
+            let piece = current.trim().to_string();
+            if !piece.is_empty() {
+                sentences.push(piece);
+            }
+            current.clear();
+        }
+    }
+    let tail = current.trim();
+    if !tail.is_empty() {
+        sentences.push(tail.to_string());
+    }
+    if sentences.is_empty() {
+        sentences.push(trimmed.to_string());
+    }
+
+    let weights: Vec<usize> = sentences.iter().map(|s| s.chars().count().max(1)).collect();
+    let total_weight: usize = weights.iter().sum();
+    let total_ms = total_duration_ms.max(1);
+
+    let mut cues = Vec::with_capacity(sentences.len());
+    let mut acc_ms: u64 = 0;
+    for (sentence, &weight) in sentences.iter().zip(weights.iter()) {
+        let dur = ((weight as u64) * total_ms) / (total_weight as u64);
+        let start = acc_ms;
+        let end = acc_ms + dur;
+        cues.push(TtsSentenceCue {
+            text: sentence.clone(),
+            start_ms: start,
+            end_ms: end,
+        });
+        acc_ms = end;
+    }
+    // Pin the final cue's end_ms to the actual total to avoid a 1-cue
+    // rounding gap when the last sentence is short.
+    if let Some(last) = cues.last_mut() {
+        last.end_ms = total_ms;
+    }
+    cues
 }

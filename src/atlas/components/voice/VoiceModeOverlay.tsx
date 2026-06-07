@@ -13,9 +13,9 @@ import { useWhisperStt } from './useWhisperStt';
 import { useVoiceChatEvents } from './useVoiceChatEvents';
 import { usePushToTalk } from './usePushToTalk';
 import { useVoiceAudioGraph } from './useVoiceAudioGraph';
-import type { SttServiceStatus } from './voiceStatus';
+import { useVoiceActivityLoop } from './useVoiceActivityLoop';
+import type { SttServiceStatus, TtsServiceStatus } from './voiceStatus';
 
-const SILENCE_DURATION_MS = 2000;
 export function VoiceModeOverlay({
     isOpen,
     onClose,
@@ -74,6 +74,7 @@ export function VoiceModeOverlay({
     const [logLines, setLogLines] = useState<string[]>([]);
     const [micStatus, setMicStatus] = useState<'inactive' | 'live' | 'error'>('inactive');
     const [sttStatus, setSttStatus] = useState<SttServiceStatus>('idle');
+    const [ttsStatus, setTtsStatus] = useState<TtsServiceStatus>('idle');
     const [toolAction, setToolAction] = useState<string | null>(null);
     const [, setPttHeld] = useState(false);
     const [amplitude, setAmplitude] = useState(0);
@@ -92,7 +93,6 @@ export function VoiceModeOverlay({
     const fullAiResponseRef = useRef('');
     const lastSpokenResponseRef = useRef('');
     const speakingBackRef = useRef(false);
-    const lastStageAiTextRef = useRef('');
     const stageGenerationRef = useRef(0);
     const workletNodeRef = useRef<AudioWorkletNode | null>(null);
     const gainNodeRef = useRef<GainNode | null>(null);
@@ -111,6 +111,7 @@ export function VoiceModeOverlay({
     const aiSpeakingRef = useRef(aiSpeaking);
     useEffect(() => { aiSpeakingRef.current = aiSpeaking; }, [aiSpeaking]);
     useEffect(() => { messagesRef.current = messages; }, [messages]);
+    useEffect(() => { amplitudeRef.current = amplitude; }, [amplitude]);
 
     const isOpenRef = useRef(voiceModeOpen);
     isOpenRef.current = voiceModeOpen;
@@ -221,14 +222,13 @@ export function VoiceModeOverlay({
 
     useVoiceChatEvents({
         appendLog,
-        applyStageBlock,
         fullAiResponseRef,
         isOpenRef,
         lastSpokenResponseRef,
-        lastStageAiTextRef,
         messagesRef,
         setAiSpeaking,
         setAiSpeechText,
+        setTtsStatus,
         setSubtitleSpeaker,
         setToolAction,
         setUserSpeechText,
@@ -338,6 +338,7 @@ export function VoiceModeOverlay({
         if (voiceModeOpen) { 
             setLogLines([]); 
             setSttStatus('starting');
+            setTtsStatus('idle');
             setAiSpeechText('');
             setUserSpeechText('');
             fullAiResponseRef.current = '';
@@ -351,12 +352,6 @@ export function VoiceModeOverlay({
             stageGenerationRef.current = useVoiceStageStore.getState().generation;
             clearStage();
             stageGenerationRef.current = useVoiceStageStore.getState().generation;
-            applyStageBlock({
-                id: 'voice-stage-contract',
-                kind: 'note',
-                title: 'Stage protocol',
-                body: 'Temporary outline: voice mode content stays inside the dashed blackboard bounds. Supported block types are note, metric, table, chart, equation, code, and map placeholder. Future visual agents should update this area through clear, replace, append, upsert, and focus operations.',
-            });
             initMic();
             if (sttEngine === 'web' && !voiceInputMode) startWebRecognition();
         }
@@ -384,63 +379,12 @@ export function VoiceModeOverlay({
         });
     }, [chatId]);
 
-    useEffect(() => {
-        if (!voiceModeOpen) return;
-        const animate = (time: number) => {
-            if (document.hidden || !isOpenRef.current) {
-                rafRef.current = null;
-                return;
-            }
-            const amp = amplitudeRef.current;
-            const currentAiSpeaking = aiSpeakingRef.current;
-            if (currentAiSpeaking && amp > vadThresholdRef.current && !pttActiveRef.current) {
-                const now = performance.now();
-                if (now - lastBargeInRef.current > 400) {
-                    stopVoiceAudio();
-                    onAbort?.();
-                    appendLog('Transmission break detected.');
-                    lastBargeInRef.current = now;
-                }
-            }
-            if (!currentAiSpeaking && !pttActiveRef.current) {
-                if (amp > vadThresholdRef.current) {
-                    if (!heardSpeechRef.current) {
-                        heardSpeechRef.current = true;
-                        setVoiceState('speaking');
-                    }
-                    silenceStartRef.current = time;
-                } else if (heardSpeechRef.current && (time - (silenceStartRef.current || 0) > SILENCE_DURATION_MS)) {
-                    heardSpeechRef.current = false;
-                    setVoiceState('listening');
-                    if (!voiceInputMode && sttEngine === 'whisper') flushVadUtterance();
-                }
-            } else if (currentAiSpeaking) {
-                setVoiceState('speaking');
-            }
-            rafRef.current = requestAnimationFrame(animate);
-        };
-        const start = () => {
-            if (!rafRef.current && !document.hidden) {
-                rafRef.current = requestAnimationFrame(animate);
-            }
-        };
-        const stop = () => {
-            if (rafRef.current) {
-                cancelAnimationFrame(rafRef.current);
-                rafRef.current = null;
-            }
-        };
-        const handleVisibilityChange = () => {
-            if (document.hidden) stop();
-            else start();
-        };
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        start();
-        return () => {
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
-            stop();
-        };
-    }, [voiceModeOpen, voiceInputMode, sttEngine, flushVadUtterance, appendLog, stopVoiceAudio, onAbort]);
+    useVoiceActivityLoop({
+        aiSpeakingRef, amplitudeRef, appendLog, flushVadUtterance, flushingRef,
+        heardSpeechRef, isOpenRef, lastBargeInRef, onAbort, pttActiveRef, rafRef,
+        setRecordingState, setVoiceState, silenceStartRef, stopVoiceAudio, sttEngine,
+        vadThresholdRef, voiceInputMode, voiceInputModeRef, voiceModeOpen,
+    });
 
     if (!voiceModeOpen) return null;
 
@@ -486,11 +430,13 @@ export function VoiceModeOverlay({
             sttEngine={sttEngine}
             sttModel={sttModelLabel}
             sttStatus={sttStatus}
+            ttsStatus={ttsStatus}
             subtitleSpeaker={subtitleSpeaker}
             ttftMetric={ttftMetric}
             tokensPerSec={tokensPerSec}
             toolAction={toolAction}
             ttsModel={ttsModelLabel}
+            captionsAvailable={sttEngine === 'web' && ttsEngine === 'web'}
             userSpeechText={userSpeechText}
             aiSpeechText={aiSpeechText}
             voiceInputMode={voiceInputMode}

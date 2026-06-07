@@ -179,6 +179,24 @@ const checks = [
       src.voiceAudioGraph.includes("setSttStatus('ready')"),
   ],
   [
+    "voice UI displays live TTS service lifecycle",
+    src.overlay.includes("TtsServiceStatus") &&
+      src.overlay.includes("ttsStatus={ttsStatus}") &&
+      src.panel.includes("ttsStatusColors") &&
+      src.panel.includes("Text-to-speech service is") &&
+      src.voiceChatEvents.includes('setTtsStatus("starting")') &&
+      src.voiceChatEvents.includes('setTtsStatus("speaking")') &&
+      src.voiceChatEvents.includes('setTtsStatus("ready")') &&
+      src.voiceChatEvents.includes('setTtsStatus("failed")'),
+  ],
+  [
+    "voice captions require Web Speech for both STT and TTS",
+    src.overlay.includes("captionsAvailable={sttEngine === 'web' && ttsEngine === 'web'}") &&
+      src.panel.includes("disabled={!captionsAvailable}") &&
+      src.panel.includes("Captions require Web Speech for both STT and TTS") &&
+      src.panel.includes("captionsAvailable && captionsVisible"),
+  ],
+  [
     "voice Whisper defaults and backend are configured for low latency",
     src.settingsSchema.includes('default("ggml-tiny.en.bin")') &&
       src.audioSlice.includes('sttWhisperModel: "ggml-tiny.en.bin"') &&
@@ -255,7 +273,8 @@ const checks = [
     "tts:start event payload is typed as an object",
     src.events.includes("interface TtsStartEventPayload") &&
       src.events.includes('"tts:start": TtsStartEventPayload') &&
-      src.ttsService.includes('serde_json::json!({ "duration_ms": duration_ms })'),
+      src.ttsService.includes('"text": text_owned') &&
+      src.ttsService.includes('"duration_ms": duration_ms'),
   ],
   [
     "custom voice imports validate file type and size",
@@ -271,7 +290,8 @@ const checks = [
       src.panel.includes("captionsVisible") &&
       src.panel.includes("CaptionsOff") &&
       src.stage.includes('aria-label="Voice display canvas"') &&
-      src.stage.includes("border border-white/85") &&
+      src.stage.includes("rounded-sm border bg-transparent") &&
+      src.stage.includes('listening: "border-white/85"') &&
       !src.stage.includes("Voice Stage") &&
       !src.stage.includes("Current Focus") &&
       !src.stage.includes("Blackboard Blocks"),
@@ -285,7 +305,7 @@ const checks = [
       src.stageStore.includes("upsert: (block: VoiceStageInput) => void") &&
       src.stageStore.includes("focus: (id: string | null) => void") &&
       !src.stage.includes("content bounds") &&
-      src.overlay.includes("voice-stage-contract"),
+      !src.overlay.includes("voice-stage-contract"),
   ],
   [
     "voice panel displays live TTFT metric",

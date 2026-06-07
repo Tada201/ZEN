@@ -21,7 +21,13 @@ export function convertChunksToWhisperPcm(chunks: Float32Array[], nativeSampleRa
         const ratio = nativeSampleRate / TARGET_SAMPLE_RATE;
         const newLength = Math.floor(totalLength / ratio);
         samples16k = new Float32Array(newLength);
-        for (let i = 0; i < newLength; i++) samples16k[i] = merged[Math.floor(i * ratio)];
+        for (let i = 0; i < newLength; i++) {
+            const srcIdx = i * ratio;
+            const lo = Math.floor(srcIdx);
+            const hi = Math.min(lo + 1, totalLength - 1);
+            const frac = srcIdx - lo;
+            samples16k[i] = merged[lo] * (1 - frac) + merged[hi] * frac;
+        }
     } else {
         samples16k = merged;
     }

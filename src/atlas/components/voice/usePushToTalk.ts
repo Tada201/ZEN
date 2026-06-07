@@ -4,7 +4,6 @@ import type { SttServiceStatus } from './voiceStatus';
 
 type SubtitleSpeaker = 'user' | 'agent' | 'system';
 type AppendVoiceLog = (msg: string, status?: 'OK' | 'ERR') => void;
-
 function consumeVoiceSpaceEvent(e: KeyboardEvent) {
     e.preventDefault();
     e.stopPropagation();

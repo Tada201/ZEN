@@ -142,7 +142,13 @@ function getActiveAssistantIndex(messages: Message[], preferredMessageId?: strin
     if (exact !== -1) return exact;
   }
 
-  return findWritableAssistantIndex(messages);
+  const writable = findWritableAssistantIndex(messages);
+  if (writable !== -1) return writable;
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === "assistant") return i;
+  }
+  return -1;
 }
 
 export function summarizeAction(payload: AgentActionEventPayload, kind: string): string {
@@ -422,6 +428,17 @@ function mergeActionStep(existing: Step, incoming: Step): Step {
   };
 }
 
+function insertActionStepBeforeText(steps: Step[] | undefined, actionStep: Step): Step[] {
+  const existingSteps = steps || [];
+  const firstTextIndex = existingSteps.findIndex((step) => step.type === "text");
+  if (firstTextIndex === -1) return [...existingSteps, actionStep];
+  return [
+    ...existingSteps.slice(0, firstTextIndex),
+    actionStep,
+    ...existingSteps.slice(firstTextIndex),
+  ];
+}
+
 function getStepAgentIdentity(step: Step): string {
   const spawn = step.metadata?.spawn;
   return stringValue(step.metadata?.agentId, step.metadata?.agentName, spawn?.childAgent) || "";
@@ -482,13 +499,13 @@ export function appendActionStepToMessages(
     return completeMatchingAgentChunkSteps(next, actionStep);
   }
 
-  const targetIdx = getActiveAssistantIndex(prev, payload.message_id);
+  const targetIdx = getActiveAssistantIndex(prev, payload.message_id || payload.messageId);
   if (targetIdx !== -1) {
     const next = [...prev];
     const target = next[targetIdx];
     next[targetIdx] = {
       ...target,
-      steps: [...(target.steps || []), actionStep],
+      steps: insertActionStepBeforeText(target.steps, actionStep),
       metadata: { ...(target.metadata || {}), ...(actionStep.metadata || {}) },
     };
     return completeMatchingAgentChunkSteps(next, actionStep);

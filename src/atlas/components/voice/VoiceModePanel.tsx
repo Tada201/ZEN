@@ -1,19 +1,21 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Captions, CaptionsOff, Sparkles, Terminal } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { TtftMetricSnapshot } from "@/lib/ttft";
 import { VoiceDiagnosticsPanel } from "./VoiceDiagnosticsPanel";
 import { VoiceOscilloscope } from "./VoiceOscilloscope";
 import { VoiceStage } from "./VoiceStage";
 import { VoiceSubtitleBox } from "./VoiceSubtitleBox";
-import type { SttServiceStatus } from "./voiceStatus";
+import type { SttServiceStatus, TtsServiceStatus } from "./voiceStatus";
 
 export type VoiceState = "initializing" | "listening" | "processing" | "speaking" | "idle";
 
 interface VoiceModePanelProps {
   activeModel: string;
   aiSpeaking: boolean;
+  aiSpeechText: string;
+  captionsAvailable: boolean;
   amplitude: number;
   analyserRef: React.RefObject<AnalyserNode | null>;
   appUptimeSecs: number;
@@ -36,8 +38,8 @@ interface VoiceModePanelProps {
   tokensPerSec: number;
   toolAction: string | null;
   ttsModel?: string;
+  ttsStatus: TtsServiceStatus;
   userSpeechText: string;
-  aiSpeechText: string;
   voiceInputMode: boolean;
   voiceModeOpen: boolean;
   voiceState: VoiceState;
@@ -62,9 +64,18 @@ const sttStatusColors: Record<SttServiceStatus, string> = {
   failed: "border-red-400/20 bg-red-400/10 text-red-300",
 };
 
+const ttsStatusColors: Record<TtsServiceStatus, string> = {
+  idle: "border-zinc-500/20 bg-zinc-400/10 text-zinc-300",
+  starting: "border-amber-400/20 bg-amber-400/10 text-amber-300",
+  ready: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
+  speaking: "border-cyan-400/20 bg-cyan-400/10 text-cyan-300",
+  failed: "border-red-400/20 bg-red-400/10 text-red-300",
+};
+
 export function VoiceModePanel({
   activeModel,
   aiSpeaking,
+  captionsAvailable,
   amplitude,
   analyserRef,
   appUptimeSecs,
@@ -86,6 +97,7 @@ export function VoiceModePanel({
   tokensPerSec,
   toolAction,
   ttsModel = "",
+  ttsStatus,
   userSpeechText,
   aiSpeechText,
   voiceInputMode,
@@ -95,6 +107,9 @@ export function VoiceModePanel({
   whisperBackendDetail = "",
 }: VoiceModePanelProps) {
   const [captionsVisible, setCaptionsVisible] = useState(true);
+  useEffect(() => {
+    if (!captionsAvailable) setCaptionsVisible(false);
+  }, [captionsAvailable]);
   const ttftLabel = ttftMetric?.ttftMs != null ? `${Math.round(ttftMetric.ttftMs)}ms` : "—";
 
   return (
@@ -119,6 +134,11 @@ export function VoiceModePanel({
           <div className="flex items-center gap-1.5">
             <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">TTS</span>
             <span className="text-zinc-300">{ttsModel || "—"}</span>
+          </div>
+          <span className="h-3 w-[1px] bg-white/8" />
+          <div className="flex items-center gap-1.5" title={`Text-to-speech service is ${ttsStatus}`}>
+            <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">TTS</span>
+            <span className={cn("rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase", ttsStatusColors[ttsStatus])}>{ttsStatus}</span>
           </div>
           <span className="h-3 w-[1px] bg-white/8" />
           {/* Active STT service */}
@@ -153,9 +173,10 @@ export function VoiceModePanel({
         <div className="flex items-center gap-2">
           <button
             type="button"
+            disabled={!captionsAvailable}
             onClick={() => setCaptionsVisible((value) => !value)}
-            className="rounded border border-white/5 bg-white/5 p-1.5 text-zinc-400 transition-colors hover:bg-white/10 hover:text-white"
-            title={captionsVisible ? "Hide captions" : "Show captions"}
+            className={cn("rounded border p-1.5 transition-colors", captionsAvailable ? "border-white/5 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white" : "cursor-not-allowed border-white/5 bg-white/[0.02] text-zinc-700")}
+            title={captionsAvailable ? (captionsVisible ? "Hide captions" : "Show captions") : "Captions require Web Speech for both STT and TTS"}
           >
             {captionsVisible ? <Captions size={12} /> : <CaptionsOff size={12} />}
           </button>
@@ -268,14 +289,7 @@ export function VoiceModePanel({
           )}
         </AnimatePresence>
 
-        <VoiceStage
-          activeModel={activeModel}
-          aiText={aiSpeechText}
-          subtitleSpeaker={subtitleSpeaker}
-          toolAction={toolAction}
-          userText={userSpeechText}
-          voiceState={voiceState}
-        />
+        <VoiceStage voiceState={voiceState} />
 
       </main>
 
@@ -284,7 +298,7 @@ export function VoiceModePanel({
         {/* Left: Closed Captions */}
         <div className="min-w-0">
           <AnimatePresence>
-            {captionsVisible && (
+            {captionsAvailable && captionsVisible && (
               <motion.div
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}

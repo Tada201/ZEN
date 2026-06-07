@@ -76,19 +76,7 @@ export function AgentExecutionTrace({
   );
   const shouldDefaultOpen = preferCompact
     ? importantToolCalls.length > 0
-    : trace.active || trace.errorCount > 0 || toolCalls.length <= 8;
-  const collapsedSummary = preferCompact
-    ? trace.resultSummary || trace.compactCategoryLabel || ""
-    : [
-        trace.activeLaneSummary ? `active batch ${trace.activeLaneSummary}` : "",
-        trace.runningToolSummaries.length > 0 ? `active ${trace.runningToolSummaries.join(", ")}` : "",
-        trace.approvalToolSummaries.length > 0 ? `waiting approval ${trace.approvalToolSummaries.join(", ")}` : "",
-        trace.resultSummary ? `results ${trace.resultSummary}` : "",
-        trace.completionSummary && trace.completionOrder.length > 1 ? `completed ${trace.completionSummary}` : "",
-        trace.agentHierarchySummary ? `delegation ${trace.agentHierarchySummary}` : "",
-        trace.agentSummary ? `delegation ${trace.agentSummary}` : "",
-        trace.ownerSummary ? `agents ${trace.ownerSummary}` : "",
-      ].filter(Boolean).join(" / ");
+    : trace.active || trace.errorCount > 0 || trace.approvalCount > 0;
   const [isExpanded, setIsExpanded] = useState(shouldDefaultOpen);
   const userToggledRef = useRef(false);
 
@@ -137,12 +125,6 @@ export function AgentExecutionTrace({
         </span>
         <ChevronRight className={cn("h-3.5 w-3.5 shrink-0 text-zinc-400 transition-transform duration-200", isExpanded && "rotate-90")} />
       </button>
-
-      {!isExpanded && collapsedSummary && (
-        <div className="ml-8 mr-2 -mt-0.5 truncate rounded-md border border-zinc-800/70 bg-white/[0.012] px-2 py-1 text-[11px] leading-5 text-zinc-500">
-          {collapsedSummary}
-        </div>
-      )}
 
       {isExpanded && (
         <div className="mt-1 overflow-hidden">
@@ -206,7 +188,6 @@ export function AgentExecutionTrace({
                       lane={lane}
                       sessionId={sessionId}
                       onOpenArtifact={onOpenArtifact}
-                      totalToolCount={normalizedToolCalls.length}
                     />
                   ))
                 : (preferCompact ? importantToolCalls : toolCalls).map((tc, idx) => (
@@ -215,7 +196,6 @@ export function AgentExecutionTrace({
                       toolCall={tc}
                       sessionId={sessionId}
                       onOpenArtifact={onOpenArtifact}
-                      totalToolCount={normalizedToolCalls.length}
                     />
                   ))}
             </div>
@@ -230,12 +210,10 @@ function ToolTraceRow({
   toolCall,
   sessionId,
   onOpenArtifact,
-  totalToolCount,
 }: {
   toolCall: ToolCall;
   sessionId?: string;
   onOpenArtifact: (a: ArtifactData) => void;
-  totalToolCount: number;
 }) {
   return (
     <div className="relative">
@@ -262,8 +240,7 @@ function ToolTraceRow({
         onRetry={() => resolveToolApproval(toolCall.id, true)}
         defaultExpanded={
           toolCall.status === "awaiting_approval" ||
-          toolCall.status === "error" ||
-          (totalToolCount <= 4 && toolCall.status === "completed" && Boolean(toolCall.output))
+          toolCall.status === "error"
         }
       />
     </div>
@@ -274,12 +251,10 @@ function ToolBatchLane({
   lane,
   sessionId,
   onOpenArtifact,
-  totalToolCount,
 }: {
   lane: ToolExecutionBatchLane;
   sessionId?: string;
   onOpenArtifact: (a: ArtifactData) => void;
-  totalToolCount: number;
 }) {
   const active = lane.runningCount > 0 || lane.approvalCount > 0;
 
@@ -313,7 +288,6 @@ function ToolBatchLane({
             toolCall={toolCall}
             sessionId={sessionId}
             onOpenArtifact={onOpenArtifact}
-            totalToolCount={totalToolCount}
           />
         ))}
       </div>

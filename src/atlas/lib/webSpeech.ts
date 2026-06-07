@@ -1,85 +1,72 @@
-import { useSettingsStore } from '@/lib/stores/useSettingsStore';
-import { voiceApi } from '@/api';
+import { emit as emitTauri } from "@tauri-apps/api/event";
+import { voiceApi } from "@/api";
+import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 
-/**
- * Speaks text using the appropriate TTS backend.
- *
- * Priority order:
- *  1. Performance override (forceTtsWeb) -> always uses Web Speech API
- *  2. User-selected ttsEngine in Settings:
- *     - 'web'   -> Web Speech API with selected voice / rate / pitch
- *     - 'piper' -> Local Rust Piper via Tauri IPC
- */
 export function speakText(text: string): Promise<void> {
-    const { ttsEngine } = useSettingsStore.getState();
-
-    // 'system' and 'web' both use the browser/OS native TTS APIs
-    if (ttsEngine === 'web' || ttsEngine === 'system') {
-        return speakWithWebSpeech(text);
-    }
-
-    return voiceApi.speakText(text).catch(console.error) as Promise<void>;
+  const { ttsEngine } = useSettingsStore.getState();
+  if (ttsEngine === "web" || ttsEngine === "system") return speakWithWebSpeech(text);
+  return voiceApi.speakText(text) as Promise<void>;
 }
 
-/**
- * Stops any active speech — both web and local Piper.
- */
 export function stopSpeech(): void {
-    window.speechSynthesis?.cancel();
-    voiceApi.stopSpeech().catch(console.error);
+  window.speechSynthesis?.cancel();
+  voiceApi.stopSpeech().catch(console.error);
 }
 
-/**
- * Returns all available Web Speech API voices, waiting for async population if needed.
- * On some browsers (and Tauri's WebView), getVoices() is empty on first call and
- * populates asynchronously after the 'voiceschanged' event.
- */
 export function getWebSpeechVoices(): Promise<SpeechSynthesisVoice[]> {
-    return new Promise((resolve) => {
-        if (!window.speechSynthesis) { resolve([]); return; }
-        const voices = window.speechSynthesis.getVoices();
-        if (voices.length > 0) { resolve(voices); return; }
-        // Voices not ready yet — wait for event
-        const handler = () => {
-            resolve(window.speechSynthesis.getVoices());
-            window.speechSynthesis.removeEventListener('voiceschanged', handler);
-        };
-        window.speechSynthesis.addEventListener('voiceschanged', handler);
-        // Safety timeout: resolve empty after 3s if event never fires
-        setTimeout(() => { resolve(window.speechSynthesis.getVoices()); }, 3000);
-    });
+  return new Promise((resolve) => {
+    if (!window.speechSynthesis) {
+      resolve([]);
+      return;
+    }
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      resolve(voices);
+      return;
+    }
+    const handler = () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", handler);
+      resolve(window.speechSynthesis.getVoices());
+    };
+    window.speechSynthesis.addEventListener("voiceschanged", handler);
+    window.setTimeout(() => {
+      window.speechSynthesis.removeEventListener("voiceschanged", handler);
+      resolve(window.speechSynthesis.getVoices());
+    }, 3000);
+  });
 }
 
 function speakWithWebSpeech(text: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-        if (!window.speechSynthesis) {
-            console.warn('[TTS] Web Speech API not available, falling back to Piper');
-            voiceApi.speakText(text).then(resolve).catch(reject);
-            return;
-        }
+  return new Promise((resolve, reject) => {
+    if (!window.speechSynthesis) {
+      const error = new Error("Web Speech synthesis is unavailable in this WebView");
+      void emitTauri("tts:error", { error: error.message });
+      reject(error);
+      return;
+    }
 
-        window.speechSynthesis.cancel();
+    window.speechSynthesis.cancel();
+    const { webTtsVoiceURI, webTtsRate, webTtsPitch } = useSettingsStore.getState();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = webTtsRate ?? 1;
+    utterance.pitch = webTtsPitch ?? 1;
+    utterance.volume = 1;
 
-        const { webTtsVoiceURI, webTtsRate, webTtsPitch } = useSettingsStore.getState();
+    if (webTtsVoiceURI) {
+      const voice = window.speechSynthesis.getVoices().find((candidate) => candidate.voiceURI === webTtsVoiceURI);
+      if (voice) utterance.voice = voice;
+    }
 
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = webTtsRate ?? 1.0;
-        utterance.pitch = webTtsPitch ?? 1.0;
-        utterance.volume = 1.0;
-
-        // Apply the user-selected voice if set
-        if (webTtsVoiceURI) {
-            const voices = window.speechSynthesis.getVoices();
-            const match = voices.find(v => v.voiceURI === webTtsVoiceURI);
-            if (match) utterance.voice = match;
-        }
-
-        utterance.onend = () => resolve();
-        utterance.onerror = (e) => {
-            console.error('[TTS] Web Speech error:', e);
-            reject(e);
-        };
-
-        window.speechSynthesis.speak(utterance);
-    });
+    utterance.onstart = () => void emitTauri("tts:start", { text });
+    utterance.onend = () => {
+      void emitTauri("tts:stop", {});
+      resolve();
+    };
+    utterance.onerror = (event) => {
+      const error = event.error || "Web Speech synthesis failed";
+      void emitTauri("tts:error", { error });
+      reject(new Error(error));
+    };
+    window.speechSynthesis.speak(utterance);
+  });
 }

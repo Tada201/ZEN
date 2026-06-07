@@ -1,4 +1,4 @@
-import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
+import { useCallback, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import type { VoiceState } from './VoiceModePanel';
 import { getVoiceInputStream } from './voiceInputStream';
 import type { SttServiceStatus } from './voiceStatus';
@@ -26,7 +26,10 @@ export function useVoiceAudioGraph({
     moonshineGateRef: MutableRefObject<GainNode | null>; moonshineStreamRef: MutableRefObject<MediaStream | null>; pttActiveRef: MutableRefObject<boolean>;
     rafRef: MutableRefObject<number | null>; recordingChunksRef: MutableRefObject<Float32Array[]>; streamRef: MutableRefObject<MediaStream | null>; workletNodeRef: MutableRefObject<AudioWorkletNode | null>;
 }) {
+    const cleanupPendingRef = useRef<Promise<void>>(Promise.resolve());
+
     const initMic = useCallback(async () => {
+        await cleanupPendingRef.current;
         const initSeq = ++micInitSeqRef.current;
         setSttStatus('starting');
         try {
@@ -34,6 +37,9 @@ export function useVoiceAudioGraph({
             if (!isOpenRef.current || initSeq !== micInitSeqRef.current) { stream.getTracks().forEach((track) => track.stop()); return; }
             streamRef.current = stream;
             const ctx = new AudioContext();
+            if (ctx.state === 'suspended') {
+                await ctx.resume();
+            }
             if (!isOpenRef.current || initSeq !== micInitSeqRef.current) {
                 stream.getTracks().forEach((track) => track.stop());
                 ctx.close().catch(() => undefined);
@@ -123,10 +129,21 @@ export function useVoiceAudioGraph({
         }
         moonshineGateRef.current?.disconnect();
         moonshineGateRef.current = null;
-        if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') audioCtxRef.current.close().catch(() => undefined);
-        setMicStatus('inactive');
         isRecordingRef.current = false;
         if (rafRef.current) cancelAnimationFrame(rafRef.current);
+
+        const ctx = audioCtxRef.current;
+        audioCtxRef.current = null;
+        const pending = (ctx && ctx.state !== 'closed')
+            ? ctx.close().catch(() => undefined)
+            : Promise.resolve();
+        cleanupPendingRef.current = pending;
+        const seqAtCleanup = micInitSeqRef.current;
+        void pending.then(() => {
+            if (micInitSeqRef.current === seqAtCleanup) {
+                setMicStatus('inactive');
+            }
+        });
     }, [audioCtxRef, isRecordingRef, micInitSeqRef, moonshineGateRef, moonshineStreamRef, rafRef, setMicStatus, stopMoonshineRecognition, stopWebRecognition, streamRef, workletNodeRef]);
 
     return { cleanupAudio, initMic };
