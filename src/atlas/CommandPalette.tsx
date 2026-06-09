@@ -84,7 +84,14 @@ export function CommandPalette() {
       hint: "Push-to-talk or VAD",
       group: "Actions",
       icon: Mic,
-      run: () => toggleVoiceMode(),
+      run: () => {
+        const state = useUIStore.getState();
+        if (state.voiceModeOpen) {
+          window.dispatchEvent(new Event('request-voice-close'));
+        } else {
+          state.toggleVoiceMode();
+        }
+      },
     });
 
     out.push({

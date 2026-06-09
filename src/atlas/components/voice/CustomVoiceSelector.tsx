@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Loader2, Play, Plus, RefreshCw, Trash2, Volume2 } from "lucide-react";
 import { voiceApi, type VoiceModel } from "@/api/voiceApi";
@@ -31,6 +31,7 @@ export const CustomVoiceSelector = memo(({ disabled }: CustomVoiceSelectorProps)
   const [error, setError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [previewingId, setPreviewingId] = useState<string | null>(null);
+  const previewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -48,6 +49,13 @@ export const CustomVoiceSelector = memo(({ disabled }: CustomVoiceSelectorProps)
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => () => {
+    if (previewTimeoutRef.current) {
+      clearTimeout(previewTimeoutRef.current);
+      previewTimeoutRef.current = null;
+    }
+  }, []);
 
   const handleAddVoice = useCallback(async () => {
     setError(null);
@@ -124,7 +132,11 @@ export const CustomVoiceSelector = memo(({ disabled }: CustomVoiceSelectorProps)
       } catch (e) {
         setError(`Preview failed: ${e instanceof Error ? e.message : String(e)}`);
       } finally {
-        setTimeout(() => setPreviewingId(null), 1500);
+        if (previewTimeoutRef.current) clearTimeout(previewTimeoutRef.current);
+        previewTimeoutRef.current = setTimeout(() => {
+          setPreviewingId(null);
+          previewTimeoutRef.current = null;
+        }, 1500);
       }
     },
     [activeVoiceId, updateSetting],

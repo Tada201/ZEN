@@ -314,8 +314,16 @@ export interface TtsStartEventPayload {
   sentences?: TtsSentenceCue[];
 }
 
+export interface TtsLevelEventPayload {
+  level: number;
+}
+
 export interface TtsErrorEventPayload {
   error?: string;
+}
+
+export interface TtsCaptionEventPayload {
+  text?: string;
 }
 
 export type EmptyEventPayload = Record<string, never>;
@@ -387,6 +395,8 @@ export interface AppEventPayloadMap {
   "graph:session:vision_capture": VisionCapture;
   "tts:start": TtsStartEventPayload;
   "tts:stop": EmptyEventPayload;
+  "tts:level": TtsLevelEventPayload;
+  "tts:caption": TtsCaptionEventPayload;
   "tts:error": TtsErrorEventPayload;
   "orchestrator:progress": AgentActionEventPayload;
   "orchestrator:start": EmptyEventPayload;

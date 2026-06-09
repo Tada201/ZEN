@@ -62,13 +62,13 @@ export function CodeBlock({
   onOpenArtifact?: (a: ArtifactData) => void;
 }) {
   const { copied, copy } = useCopy();
+  const normalizedLanguage = getLanguageGrammarName(language ?? "plaintext");
 
   const highlightedHtml = useMemo(() => {
-    const cleanLang = getLanguageGrammarName(language ?? "plaintext");
-    const grammar = Prism.languages[cleanLang];
+    const grammar = Prism.languages[normalizedLanguage];
     if (grammar) {
       try {
-        return Prism.highlight(code, grammar, cleanLang);
+        return Prism.highlight(code, grammar, normalizedLanguage);
       } catch (err) {
         console.error("Prism highlighting failed:", err);
       }
@@ -80,7 +80,7 @@ export function CodeBlock({
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
-  }, [code, language]);
+  }, [code, normalizedLanguage]);
 
   return (
     <div className="group/code relative my-3 overflow-hidden rounded-xl border border-border/40 bg-slate-950 shadow-sm transition-all duration-300">
@@ -124,7 +124,7 @@ export function CodeBlock({
       </div>
       <pre className="max-h-[400px] overflow-y-auto overflow-x-auto p-4 text-[13px] leading-6">
         <code
-          className={`font-mono text-[#e6edf3] language-${language}`}
+          className={`font-mono text-[#e6edf3] language-${normalizedLanguage}`}
           dangerouslySetInnerHTML={{ __html: highlightedHtml }}
         />
       </pre>

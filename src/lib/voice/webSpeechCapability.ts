@@ -29,7 +29,7 @@ export function detectWebSpeechCapability(): WebSpeechCapability {
         speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition,
     );
     const microphoneApi = Boolean(navigator.mediaDevices?.getUserMedia);
-    const secureContext = window.isSecureContext || window.location.protocol === 'tauri:';
+    const secureContext = window.isSecureContext || window.location.protocol.startsWith('tauri');
 
     return {
         recognitionApi,

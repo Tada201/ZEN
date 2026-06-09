@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useUIStore, useSystemStore, useSettingsStore } from '@/atlas/lib/store';
-import { stopSpeech } from '@/atlas/lib/webSpeech';
+import { stopSpeech, TTS_LEVEL_EVENT } from '@/atlas/lib/webSpeech';
 import { voiceApi } from '@/api';
 import type { WhisperRuntimeStatus } from '@/api/voiceApi';
 import { useAppUptime } from '@/hooks/useAppUptime';
@@ -47,7 +47,6 @@ export function VoiceModeOverlay({
     const setAiSpeaking = useUIStore(s => s.setAiSpeaking);
     const clearStage = useVoiceStageStore(s => s.clear);
     const startStage = useVoiceStageStore(s => s.start);
-    const pauseStage = useVoiceStageStore(s => s.pause);
     const cancelStage = useVoiceStageStore(s => s.cancel);
     const upsertStageBlock = useVoiceStageStore(s => s.upsert);
     const appUptimeSecs = useAppUptime();
@@ -76,8 +75,9 @@ export function VoiceModeOverlay({
     const [sttStatus, setSttStatus] = useState<SttServiceStatus>('idle');
     const [ttsStatus, setTtsStatus] = useState<TtsServiceStatus>('idle');
     const [toolAction, setToolAction] = useState<string | null>(null);
-    const [, setPttHeld] = useState(false);
+    const [pttHeld, setPttHeld] = useState(false);
     const [amplitude, setAmplitude] = useState(0);
+    const [playbackEnergy, setPlaybackEnergy] = useState(0);
     const [showDiagnostics, setShowDiagnostics] = useState(false);
     const [exitConfirmationOpen, setExitConfirmationOpen] = useState(false);
     const [ttftMetric, setTtftMetric] = useState<TtftMetricSnapshot | null>(() => chatId ? getTtftMetric(chatId) : null);
@@ -112,6 +112,14 @@ export function VoiceModeOverlay({
     useEffect(() => { aiSpeakingRef.current = aiSpeaking; }, [aiSpeaking]);
     useEffect(() => { messagesRef.current = messages; }, [messages]);
     useEffect(() => { amplitudeRef.current = amplitude; }, [amplitude]);
+    useEffect(() => {
+        const onTtsLevel = (event: Event) => {
+            const level = (event as CustomEvent<{ level?: number }>).detail?.level;
+            setPlaybackEnergy(typeof level === 'number' ? Math.max(0, Math.min(1, level)) : 0);
+        };
+        window.addEventListener(TTS_LEVEL_EVENT, onTtsLevel);
+        return () => window.removeEventListener(TTS_LEVEL_EVENT, onTtsLevel);
+    }, []);
 
     const isOpenRef = useRef(voiceModeOpen);
     isOpenRef.current = voiceModeOpen;
@@ -191,6 +199,7 @@ export function VoiceModeOverlay({
         voiceApi.stopSpeech().catch(() => undefined);
         speakingBackRef.current = false;
         setAiSpeaking(false);
+        setPlaybackEnergy(0);
     }, [setAiSpeaking]);
 
     const applyStageBlock = useCallback((block: VoiceStageInput, generation = stageGenerationRef.current) => {
@@ -233,18 +242,17 @@ export function VoiceModeOverlay({
         setToolAction,
         setUserSpeechText,
         speakingBackRef,
-        ttsEngine,
+        setPlaybackEnergy,
     });
 
     const hasActiveWork = aiSpeaking || voiceState === 'processing' || voiceState === 'speaking' || Boolean(toolAction);
 
     const confirmLeaveVoiceMode = useCallback(() => {
         setExitConfirmationOpen(false);
-        stopVoiceAudio();
-        pauseStage();
+        // Do not stop audio or pause stage here, allowing the voice and agent to keep working in the background.
         stageGenerationRef.current = useVoiceStageStore.getState().generation;
         toggleVoiceMode();
-    }, [pauseStage, stopVoiceAudio, toggleVoiceMode]);
+    }, [toggleVoiceMode]);
 
     const confirmStopEverything = useCallback(() => {
         setExitConfirmationOpen(false);
@@ -266,6 +274,12 @@ export function VoiceModeOverlay({
         }
         confirmLeaveVoiceMode();
     }, [appendLog, confirmLeaveVoiceMode, hasActiveWork]);
+
+    useEffect(() => {
+        const handleRequestClose = () => requestVoiceExit();
+        window.addEventListener('request-voice-close', handleRequestClose);
+        return () => window.removeEventListener('request-voice-close', handleRequestClose);
+    }, [requestVoiceExit]);
 
     usePushToTalk({
         appendLog,
@@ -415,6 +429,7 @@ export function VoiceModeOverlay({
             aiSpeaking={aiSpeaking}
             amplitude={amplitude}
             analyserRef={analyserRef}
+            playbackEnergy={playbackEnergy}
             appUptimeSecs={appUptimeSecs}
             logLines={logLines}
             memoryUsage={memoryUsage}
@@ -436,7 +451,8 @@ export function VoiceModeOverlay({
             tokensPerSec={tokensPerSec}
             toolAction={toolAction}
             ttsModel={ttsModelLabel}
-            captionsAvailable={sttEngine === 'web' && ttsEngine === 'web'}
+            captionsAvailable={sttEngine === 'web'}
+            pttHeld={pttHeld}
             userSpeechText={userSpeechText}
             aiSpeechText={aiSpeechText}
             voiceInputMode={voiceInputMode}

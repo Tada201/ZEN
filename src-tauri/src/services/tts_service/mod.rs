@@ -275,7 +275,7 @@ impl TtsService {
                 let duration_secs = samples.len() as f32 / 22050.0;
                 let duration_ms = (duration_secs * 1000.0) as u64;
 
-                let buffer = SamplesBuffer::new(channels.get(), sample_rate.get(), samples);
+                let buffer = SamplesBuffer::new(channels.get(), sample_rate.get(), samples.clone());
 
                 // Build sentence-level caption cues for the closed-caption box.
                 // Piper cannot emit word-level timestamps, so we estimate the
@@ -299,6 +299,30 @@ impl TtsService {
                         // thread::sleep(duration_ms) which could fire
                         // tts:stop early or late depending on Piper's real-time
                         // factor.
+                        // Playback tracking loop to emit real-time audio energy levels
+                        let start_time = std::time::Instant::now();
+                        let sample_rate = 22050.0;
+                        let frame_size = 1024;
+                        let samples_len = samples.len();
+
+                        while !sink.empty() {
+                            let elapsed_secs = start_time.elapsed().as_secs_f32();
+                            let current_idx = (elapsed_secs * sample_rate) as usize;
+                            if current_idx < samples_len {
+                                let end_idx = (current_idx + frame_size).min(samples_len);
+                                let frame = &samples[current_idx..end_idx];
+                                if !frame.is_empty() {
+                                    let mut sum_sq = 0.0;
+                                    for &s in frame {
+                                        sum_sq += s * s;
+                                    }
+                                    let rms = (sum_sq / frame.len() as f32).sqrt();
+                                    let level = (rms * 5.0).min(1.0);
+                                    let _ = app.emit("tts:level", serde_json::json!({ "level": level }));
+                                }
+                            }
+                            std::thread::sleep(std::time::Duration::from_millis(30));
+                        }
                         sink.sleep_until_end();
 
                         let _ = app.emit("tts:stop", ());

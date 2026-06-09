@@ -10,6 +10,10 @@ import { SettingsCard } from '@/components/settings/ui/SettingsCard';
 import { audioApi, type AudioDevice } from '@/api/audioApi';
 import { cn } from '@/lib/utils';
 
+type SinkAudioContext = AudioContext & {
+    setSinkId?: (sinkId: string) => Promise<void>;
+};
+
 export const OutputConfig = memo(() => {
     const masterVolume = useSettingsStore(s => s.masterVolume ?? 1.0);
     const speakerVolume = useSettingsStore(s => s.speakerVolume ?? 0.8);
@@ -75,9 +79,10 @@ export const OutputConfig = memo(() => {
             const persisted = useSettingsStore.getState().speakerDeviceId ?? '';
             const sinkId = persisted && persisted !== 'default' ? persisted : '';
             const AudioCtor = window.AudioContext;
-            const ctx = sinkId && 'setSinkId' in AudioCtor.prototype
-                ? new AudioCtor({ sinkId } as AudioContextOptions)
-                : new AudioCtor();
+            const ctx = new AudioCtor() as SinkAudioContext;
+            if (sinkId && typeof ctx.setSinkId === 'function') {
+                await ctx.setSinkId(sinkId);
+            }
             ctxRef.current = ctx;
             const osc = ctx.createOscillator();
             osc.type = 'sine';

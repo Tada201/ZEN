@@ -231,6 +231,40 @@ fn detect_gpus(has_cuda: bool) -> Vec<GpuInfo> {
         .collect()
 }
 
+#[cfg(test)]
+mod tests {
+    use super::GpuInfo;
+    use serde_json::json;
+
+    #[test]
+    fn gpu_info_serializes_required_identity_fields() {
+        let gpu = GpuInfo {
+            id: "gpu-0".to_string(),
+            system_index: 0,
+            backend_device_index: 0,
+            name: "NVIDIA Test GPU".to_string(),
+            vendor: "NVIDIA".to_string(),
+            vram_mb: Some(4096),
+            driver_version: Some("1.2.3".to_string()),
+            cuda_capable: true,
+        };
+
+        let value = serde_json::to_value(&gpu).expect("gpu should serialize");
+        assert_eq!(value["id"], json!("gpu-0"));
+        assert_eq!(value["system_index"], json!(0));
+        assert_eq!(value["backend_device_index"], json!(0));
+    }
+
+    #[test]
+    fn hardware_gpu_identity_fields_are_present_for_detected_gpus() {
+        for (expected_index, gpu) in super::detect_gpus(super::detect_cuda_driver()).iter().enumerate() {
+            assert!(!gpu.id.trim().is_empty());
+            assert_eq!(gpu.system_index, expected_index as u32);
+            assert!(serde_json::to_value(gpu).expect("gpu should serialize").get("backend_device_index").is_some());
+        }
+    }
+}
+
 #[cfg(not(target_os = "windows"))]
 fn detect_gpus(has_cuda: bool) -> Vec<GpuInfo> {
     let output = std::process::Command::new("nvidia-smi")

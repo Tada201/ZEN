@@ -116,4 +116,5 @@ export function ttftReport(chatId: string, reason: string): void {
   
   // Clean up
   delete activeSessions[chatId];
+  delete latestMetrics[chatId];
 }

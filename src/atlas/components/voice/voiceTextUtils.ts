@@ -1,21 +1,37 @@
 // Strip markdown syntax before showing model output as voice captions.
 export function stripMarkdown(text: string) {
     if (!text) return '';
-    const codeBlocks: string[] = [];
-    let stripped = text.replace(/```[\s\S]*?```/g, (match) => {
-        codeBlocks.push(match.replace(/^```\w*\n?/, '').replace(/\n?```$/, ''));
-        return `\x00CB${codeBlocks.length - 1}\x00`;
-    });
+    
+    let stripped = text;
+
+    // 1. Strip thinking blocks completely
+    stripped = stripped.replace(/<think>[\s\S]*?<\/think>/gi, '');
+    stripped = stripped.replace(/<thought>[\s\S]*?<\/thought>/gi, '');
+
+    // 2. Strip tool call / artifact XML blocks completely
+    stripped = stripped.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '');
+    stripped = stripped.replace(/<boltArtifact[\s\S]*?<\/boltArtifact>/gi, '');
+    stripped = stripped.replace(/<boltAction[\s\S]*?<\/boltAction>/gi, '');
+
+    // 3. Strip code blocks completely
+    stripped = stripped.replace(/```[\s\S]*?```/g, '');
+
+    // 4. Strip Markdown tables (lines containing pipes)
+    // Matches contiguous lines that contain a pipe character typical of tables
+    stripped = stripped.replace(/(?:^|\n)(?:\s*\|.*\|\s*\n?)+/g, '\n');
+
+    // 5. Clean up inline markdown formatting
     stripped = stripped
-        .replace(/\[\d+\]/g, '')
-        .replace(/\*\*(.*?)\*\*/g, '$1')
-        .replace(/\*(.*?)\*/g, '$1')
-        .replace(/`(.*?)`/g, '$1')
-        .replace(/#+\s/g, '')
-        .replace(/\[(.*?)\]\(.*?\)/g, '$1')
-        .replace(/<.*?>/g, '')
-        .replace(/\n/g, ' ')
+        .replace(/\[\d+\]/g, '') // Strip citations
+        .replace(/\*\*(.*?)\*\*/g, '$1') // Bold
+        .replace(/\*(.*?)\*/g, '$1') // Italic
+        .replace(/`(.*?)`/g, '$1') // Inline code
+        .replace(/#+\s/g, '') // Headings
+        .replace(/\[(.*?)\]\(.*?\)/g, '$1') // Links
+        .replace(/<.*?>/g, '') // Any remaining standalone tags
+        .replace(/\n/g, ' ') // Convert newlines to spaces
+        .replace(/\s{2,}/g, ' ') // Collapse multiple spaces
         .trim();
-    stripped = stripped.replace(/\x00CB(\d+)\x00/g, (_, i) => codeBlocks[parseInt(i)]);
+
     return stripped;
 }

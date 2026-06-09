@@ -32,6 +32,7 @@ export const MicrophoneConfig = memo(() => {
     const recordedRef = useRef<Float32Array[]>([]);
     const sampleRateRef = useRef<number>(48000);
     const isRecordingRef = useRef(false);
+    const playbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const refresh = useCallback(async () => {
         setLoading(true);
@@ -65,7 +66,13 @@ export const MicrophoneConfig = memo(() => {
         setAmplitude(0);
     }, []);
 
-    useEffect(() => () => stopMeter(), [stopMeter]);
+    useEffect(() => () => {
+        if (playbackTimeoutRef.current) {
+            clearTimeout(playbackTimeoutRef.current);
+            playbackTimeoutRef.current = null;
+        }
+        stopMeter();
+    }, [stopMeter]);
 
     const startRecording = useCallback(async () => {
         setError(null);
@@ -167,7 +174,11 @@ export const MicrophoneConfig = memo(() => {
     const handleTestPress = useCallback(() => {
         if (status === 'recording') {
             stopRecording();
-            setTimeout(playRecording, 50);
+            if (playbackTimeoutRef.current) clearTimeout(playbackTimeoutRef.current);
+            playbackTimeoutRef.current = setTimeout(() => {
+                playbackTimeoutRef.current = null;
+                void playRecording();
+            }, 50);
         } else if (status === 'idle' || status === 'error') {
             startRecording();
         }

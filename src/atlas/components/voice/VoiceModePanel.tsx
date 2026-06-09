@@ -18,6 +18,7 @@ interface VoiceModePanelProps {
   captionsAvailable: boolean;
   amplitude: number;
   analyserRef: React.RefObject<AnalyserNode | null>;
+  playbackEnergy: number;
   appUptimeSecs: number;
   logLines: string[];
   memoryUsage: number;
@@ -29,6 +30,7 @@ interface VoiceModePanelProps {
   onConfirmStopEverything: () => void;
   onRequestClose: () => void;
   onToggleDiagnostics: () => void;
+  pttHeld: boolean;
   showDiagnostics: boolean;
   sttEngine: string;
   sttModel?: string;
@@ -78,6 +80,7 @@ export function VoiceModePanel({
   captionsAvailable,
   amplitude,
   analyserRef,
+  playbackEnergy,
   appUptimeSecs,
   logLines,
   micStatus,
@@ -88,6 +91,7 @@ export function VoiceModePanel({
   onConfirmStopEverything,
   onRequestClose,
   onToggleDiagnostics,
+  pttHeld,
   showDiagnostics,
   sttEngine,
   sttModel,
@@ -176,7 +180,7 @@ export function VoiceModePanel({
             disabled={!captionsAvailable}
             onClick={() => setCaptionsVisible((value) => !value)}
             className={cn("rounded border p-1.5 transition-colors", captionsAvailable ? "border-white/5 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white" : "cursor-not-allowed border-white/5 bg-white/[0.02] text-zinc-700")}
-            title={captionsAvailable ? (captionsVisible ? "Hide captions" : "Show captions") : "Captions require Web Speech for both STT and TTS"}
+            title={captionsAvailable ? (captionsVisible ? "Hide captions" : "Show captions") : "Captions require Web Speech STT"}
           >
             {captionsVisible ? <Captions size={12} /> : <CaptionsOff size={12} />}
           </button>
@@ -310,10 +314,15 @@ export function VoiceModePanel({
           </AnimatePresence>
         </div>
 
-        {/* Compact voice wave */}
-        <div className="h-20 w-20 overflow-hidden rounded-lg border border-white/10 bg-white/[0.02] p-2">
-          <VoiceOscilloscope analyserRef={analyserRef} isAiSpeaking={aiSpeaking} isActive={voiceModeOpen} />
-        </div>
+        <VoiceOscilloscope
+          analyserRef={analyserRef}
+          isAiSpeaking={aiSpeaking}
+          isActive={voiceModeOpen}
+          isCapturing={!voiceInputMode || pttHeld}
+          voiceInputMode={voiceInputMode}
+          amplitude={amplitude}
+          playbackEnergy={playbackEnergy}
+        />
 
         <div aria-hidden="true" />
       </div>

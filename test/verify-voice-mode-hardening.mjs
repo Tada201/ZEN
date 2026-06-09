@@ -5,6 +5,7 @@ const files = {
   sttConfig: "src/components/settings/Tabs/audio/STTConfig.tsx",
   ttsConfig: "src/components/settings/Tabs/audio/TTSConfig.tsx",
   panel: "src/atlas/components/voice/VoiceModePanel.tsx",
+  oscilloscope: "src/atlas/components/voice/VoiceOscilloscope.tsx",
   stage: "src/atlas/components/voice/VoiceStage.tsx",
   stageStore: "src/atlas/components/voice/voiceStageStore.ts",
   events: "src/api/events.ts",
@@ -43,7 +44,7 @@ const src = Object.fromEntries(
 const checks = [
   [
     "push-to-talk captions leave recording state on release",
-    src.pushToTalk.includes("setUserSpeechText('Processing speech...')") &&
+    src.pushToTalk.includes("Processing speech...") &&
       src.whisperStt.includes("setUserSpeechText('No audio captured.')") &&
       src.whisperStt.includes("setUserSpeechText('Audio was too short.')") &&
       src.whisperStt.includes("setUserSpeechText('No speech detected.')") &&
@@ -51,6 +52,8 @@ const checks = [
       src.whisperStt.includes("setUserSpeechText('Whisper transcription failed.')") &&
       src.pushToTalk.includes("finishPttTurn") &&
       src.pushToTalk.includes("PTT: Released by") &&
+      src.pushToTalk.includes("PTT_LIMIT_MS = 20_000") &&
+      src.pushToTalk.includes("VOICE_PTT_TOGGLE_EVENT") &&
       src.pushToTalk.includes("window.addEventListener('blur'") &&
       src.pushToTalk.includes("document.addEventListener('visibilitychange'"),
   ],
@@ -190,10 +193,10 @@ const checks = [
       src.voiceChatEvents.includes('setTtsStatus("failed")'),
   ],
   [
-    "voice captions require Web Speech for both STT and TTS",
-    src.overlay.includes("captionsAvailable={sttEngine === 'web' && ttsEngine === 'web'}") &&
+    "voice captions require Web Speech STT",
+    src.overlay.includes("captionsAvailable={sttEngine === 'web'}") &&
       src.panel.includes("disabled={!captionsAvailable}") &&
-      src.panel.includes("Captions require Web Speech for both STT and TTS") &&
+      src.panel.includes("Captions require Web Speech STT") &&
       src.panel.includes("captionsAvailable && captionsVisible"),
   ],
   [
@@ -319,9 +322,14 @@ const checks = [
       src.workspaceSection.includes("chatId={currentSessionId ?? undefined}"),
   ],
   [
-    "voice panel has compact wave and no visible runtime stats",
-    src.panel.includes("Compact voice wave") &&
-      src.panel.includes("h-20 w-20") &&
+    "voice panel has expanding waveform pill and no visible runtime stats",
+    src.panel.includes("VoiceOscilloscope") &&
+      src.panel.includes("amplitude={amplitude}") &&
+      src.panel.includes("isCapturing={!voiceInputMode || pttHeld}") &&
+      src.oscilloscope.includes("w-[70px] rounded-[22px]") &&
+      src.oscilloscope.includes("w-[280px] rounded-[35px]") &&
+      src.oscilloscope.includes("getFloatTimeDomainData") &&
+      src.oscilloscope.includes("conic-gradient") &&
       !src.panel.includes("<span>MEM</span>") &&
       !src.panel.includes("<span>TOK/S</span>"),
   ],

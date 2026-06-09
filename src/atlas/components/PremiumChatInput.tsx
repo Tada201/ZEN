@@ -458,7 +458,14 @@ export const PremiumChatInput = memo(({
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() => useUIStore.getState().toggleVoiceMode()}
+                onClick={() => {
+                  const state = useUIStore.getState();
+                  if (state.voiceModeOpen) {
+                    window.dispatchEvent(new Event('request-voice-close'));
+                  } else {
+                    state.toggleVoiceMode();
+                  }
+                }}
                 type="button"
                 className="p-1.5 rounded-full text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all duration-200 flex items-center justify-center"
                 aria-label="Open Voice Mode"

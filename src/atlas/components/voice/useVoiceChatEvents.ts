@@ -12,7 +12,7 @@ type VoiceMessage = { role?: string; content?: string };
 export function useVoiceChatEvents({
   appendLog, fullAiResponseRef, isOpenRef, lastSpokenResponseRef, messagesRef,
   setAiSpeaking, setAiSpeechText, setSubtitleSpeaker, setToolAction, setTtsStatus,
-  setUserSpeechText, speakingBackRef, ttsEngine,
+  setUserSpeechText, speakingBackRef, setPlaybackEnergy,
 }: {
   appendLog: AppendVoiceLog;
   fullAiResponseRef: MutableRefObject<string>;
@@ -26,7 +26,7 @@ export function useVoiceChatEvents({
   setTtsStatus: Dispatch<SetStateAction<TtsServiceStatus>>;
   setUserSpeechText: Dispatch<SetStateAction<string>>;
   speakingBackRef: MutableRefObject<boolean>;
-  ttsEngine: string;
+  setPlaybackEnergy: Dispatch<SetStateAction<number>>;
 }) {
   const speakAssistantResponse = useCallback(async () => {
     if (!isOpenRef.current || speakingBackRef.current) return;
@@ -46,12 +46,12 @@ export function useVoiceChatEvents({
       appendLog(`TTS readback failed: ${error instanceof Error ? error.message : String(error)}`, "ERR");
     } finally {
       speakingBackRef.current = false;
-      if (ttsEngine === "web" || ttsEngine === "system") setAiSpeaking(false);
     }
-  }, [appendLog, fullAiResponseRef, isOpenRef, lastSpokenResponseRef, setAiSpeaking, setAiSpeechText, setSubtitleSpeaker, setTtsStatus, setUserSpeechText, speakingBackRef, ttsEngine]);
+  }, [appendLog, fullAiResponseRef, isOpenRef, lastSpokenResponseRef, setAiSpeaking, setAiSpeechText, setSubtitleSpeaker, setTtsStatus, setUserSpeechText, speakingBackRef]);
 
   useEffect(() => {
     let unlistens: UnlistenFn[] = [];
+    let subtitleFrameId: number | null = null;
     let disposed = false;
     const setup = async () => {
       try {
@@ -67,7 +67,8 @@ export function useVoiceChatEvents({
             if (content && isOpenRef.current) {
               const stripped = stripMarkdown(content);
               fullAiResponseRef.current = stripped;
-              setAiSpeechText(stripped);
+              // We do not set aiSpeechText here to avoid flashing the entire response and truncating it.
+              // It will stay as "Preparing response..." until tts:start provides the timed sentence cues.
               setSubtitleSpeaker("agent");
               setUserSpeechText("");
             }
@@ -76,17 +77,59 @@ export function useVoiceChatEvents({
           await listenAppEvent("tts:start", (event) => {
             setTtsStatus("speaking");
             setAiSpeaking(true);
+            setPlaybackEnergy(0.45);
             setSubtitleSpeaker("agent");
             setUserSpeechText("");
-            if (!fullAiResponseRef.current && event.payload?.text) setAiSpeechText(event.payload.text);
+
+            if (subtitleFrameId !== null) cancelAnimationFrame(subtitleFrameId);
+            const payload = event.payload;
+
+            if (payload?.sentences && Array.isArray(payload.sentences) && payload.sentences.length > 0) {
+              const cues = payload.sentences as {text: string, start_ms: number, end_ms: number}[];
+              const startTime = performance.now();
+              let lastText = "";
+
+              const checkSubtitles = () => {
+                const elapsed = performance.now() - startTime;
+                const activeCue = cues.find(c => elapsed >= c.start_ms && elapsed <= c.end_ms);
+                const textToSet = activeCue ? activeCue.text : (elapsed > cues[cues.length - 1].end_ms ? cues[cues.length - 1].text : "");
+                
+                if (textToSet && textToSet !== lastText) {
+                  lastText = textToSet;
+                  setAiSpeechText(textToSet);
+                }
+                
+                if (!disposed) {
+                  subtitleFrameId = requestAnimationFrame(checkSubtitles);
+                }
+              };
+              subtitleFrameId = requestAnimationFrame(checkSubtitles);
+            } else if (payload?.text || fullAiResponseRef.current) {
+              setAiSpeechText(payload?.text || fullAiResponseRef.current);
+            }
+          }),
+          await listenAppEvent("tts:level", (event) => {
+            if (event.payload && typeof event.payload.level === 'number') {
+              setPlaybackEnergy(event.payload.level);
+            }
+          }),
+          await listenAppEvent("tts:caption", (event) => {
+            if (event.payload?.text) {
+              setAiSpeechText(event.payload.text);
+            }
           }),
           await listenAppEvent("tts:stop", () => {
+            if (subtitleFrameId !== null) cancelAnimationFrame(subtitleFrameId);
             setTtsStatus("ready");
             setAiSpeaking(false);
+            setPlaybackEnergy(0);
+            speakingBackRef.current = false;
           }),
           await listenAppEvent("tts:error", (event) => {
+            if (subtitleFrameId !== null) cancelAnimationFrame(subtitleFrameId);
             setTtsStatus("failed");
             setAiSpeaking(false);
+            setPlaybackEnergy(0);
             speakingBackRef.current = false;
             appendLog(`TTS error: ${event.payload?.error ?? "TTS playback failed"}`, "ERR");
           }),
@@ -103,5 +146,5 @@ export function useVoiceChatEvents({
       unlistens.forEach((unlisten) => unlisten());
       unlistens = [];
     };
-  }, [appendLog, fullAiResponseRef, isOpenRef, messagesRef, setAiSpeaking, setAiSpeechText, setSubtitleSpeaker, setToolAction, setTtsStatus, setUserSpeechText, speakAssistantResponse, speakingBackRef]);
+  }, [appendLog, fullAiResponseRef, isOpenRef, messagesRef, setAiSpeaking, setAiSpeechText, setPlaybackEnergy, setSubtitleSpeaker, setToolAction, setTtsStatus, setUserSpeechText, speakAssistantResponse, speakingBackRef]);
 }

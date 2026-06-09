@@ -5,10 +5,13 @@ import { useUIStore } from "@/lib/stores/useUIStore";
 
 export function useGraphSessionEvents() {
   useEffect(() => {
+    let mounted = true;
+    let unlistenFeedback: (() => void) | undefined;
+    let unlistenVision: (() => void) | undefined;
     let cleanup: (() => void) | undefined;
 
     const setup = async () => {
-      const unlistenFeedback = await listenAppEvent("graph:session:feedback", (event) => {
+      unlistenFeedback = await listenAppEvent("graph:session:feedback", (event) => {
         useSessionStore.getState().applyFeedback(event.payload);
         const ui = useUIStore.getState();
         ui.setActiveRightTab("drawing");
@@ -16,7 +19,13 @@ export function useGraphSessionEvents() {
         ui.setRightPanelOpen(true);
       });
 
-      const unlistenVision = await listenAppEvent("graph:session:vision_capture", () => {
+      if (!mounted) {
+        unlistenFeedback();
+        unlistenFeedback = undefined;
+        return;
+      }
+
+      unlistenVision = await listenAppEvent("graph:session:vision_capture", () => {
         const ui = useUIStore.getState();
         ui.setActiveRightTab("drawing");
         ui.setRightPanelCanvasMode("mathplot");
@@ -24,14 +33,18 @@ export function useGraphSessionEvents() {
       });
 
       cleanup = () => {
-        unlistenFeedback();
-        unlistenVision();
+        unlistenFeedback?.();
+        unlistenVision?.();
+        unlistenFeedback = undefined;
+        unlistenVision = undefined;
       };
+      if (!mounted) cleanup();
     };
 
     void setup();
 
     return () => {
+      mounted = false;
       cleanup?.();
     };
   }, []);
