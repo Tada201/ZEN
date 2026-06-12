@@ -21,7 +21,7 @@ export const StartupConfig = memo(() => {
             <div className="flex flex-col gap-1">
                 <WorkbenchSettingRow
                     label="Enable Boot Sequence"
-                    description="Execute hardware discovery simulation upon launch"
+                    description="Show startup progress while settings and chat history initialize"
                     control={
                         <WorkbenchSwitch
                             checked={bootEnabled}
@@ -38,8 +38,13 @@ export const StartupConfig = memo(() => {
                             <WorkbenchInput
                                 placeholder="2500"
                                 type="number"
+                                min={500}
+                                max={10000}
+                                step={100}
                                 value={bootDurationMs.toString()}
-                                onChangeText={(text) => updateSetting({ bootDurationMs: parseInt(text) || 0 })}
+                                onChangeText={(text) => updateSetting({
+                                    bootDurationMs: Math.min(10000, Math.max(500, Number.parseInt(text, 10) || 500)),
+                                })}
                                 className="w-[120px] text-center bg-zinc-950/50 rounded-lg border border-white/5 font-mono text-emerald-400 focus:border-emerald-500/30"
                             />
                             <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-white/20 group-focus-within:text-emerald-500/40 transition-colors uppercase">ms</div>

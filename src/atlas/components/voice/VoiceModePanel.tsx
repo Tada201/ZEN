@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Captions, CaptionsOff, Sparkles, Terminal } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo } from "react";
 import { cn } from "@/lib/utils";
 import type { TtftMetricSnapshot } from "@/lib/ttft";
 import { VoiceDiagnosticsPanel } from "./VoiceDiagnosticsPanel";
@@ -74,7 +74,7 @@ const ttsStatusColors: Record<TtsServiceStatus, string> = {
   failed: "border-red-400/20 bg-red-400/10 text-red-300",
 };
 
-export function VoiceModePanel({
+export function VoiceModePanelInner({
   activeModel,
   aiSpeaking,
   captionsAvailable,
@@ -121,49 +121,49 @@ export function VoiceModePanel({
 
       {/* 1. Top Bar — Agent | Speech | TTS | STT | Status */}
       <header className="z-10 flex w-full items-center justify-between gap-4 border-b border-white/5 pb-4">
-        <div className="flex items-center gap-4 font-mono text-[11px] text-zinc-400">
+        <div className="flex items-center gap-2 sm:gap-4 font-mono text-[11px] text-zinc-400 flex-wrap">
           {/* Agent Model */}
           <div className="flex items-center gap-1.5">
             <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">Agent</span>
             <span className="text-zinc-300">{activeModel || "—"}</span>
           </div>
-          <span className="h-3 w-[1px] bg-white/8" />
+          <span className="h-3 w-[1px] bg-white/8 hidden sm:block" />
           {/* Speech Mode */}
           <div className="flex items-center gap-1.5">
             <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">Speech</span>
             <span className="text-zinc-300">{voiceInputMode ? "Hold to Talk" : "Voice Activity"}</span>
           </div>
-          <span className="h-3 w-[1px] bg-white/8" />
+          <span className="h-3 w-[1px] bg-white/8 hidden sm:block" />
           {/* TTS Model */}
           <div className="flex items-center gap-1.5">
             <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">TTS</span>
             <span className="text-zinc-300">{ttsModel || "—"}</span>
           </div>
-          <span className="h-3 w-[1px] bg-white/8" />
-          <div className="flex items-center gap-1.5" title={`Text-to-speech service is ${ttsStatus}`}>
+          <span className="h-3 w-[1px] bg-white/8 hidden sm:block" />
+          <div className="hidden sm:flex items-center gap-1.5" title={`Text-to-speech service is ${ttsStatus}`}>
             <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">TTS</span>
             <span className={cn("rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase", ttsStatusColors[ttsStatus])}>{ttsStatus}</span>
           </div>
-          <span className="h-3 w-[1px] bg-white/8" />
+          <span className="h-3 w-[1px] bg-white/8 hidden sm:block" />
           {/* Active STT service */}
-          <div className="flex items-center gap-1.5" title={`Active speech-to-text service: ${sttModel || sttEngine || "unknown"}`}>
+          <div className="hidden sm:flex items-center gap-1.5" title={`Active speech-to-text service: ${sttModel || sttEngine || "unknown"}`}>
             <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">STT Service</span>
             <span className="font-semibold text-white">{sttModel || sttEngine || "—"}</span>
           </div>
-          <span className="h-3 w-[1px] bg-white/8" />
-          <div className="flex items-center gap-1.5" title={`Speech-to-text service is ${sttStatus}`}>
+          <span className="h-3 w-[1px] bg-white/8 hidden sm:block" />
+          <div className="hidden sm:flex items-center gap-1.5" title={`Speech-to-text service is ${sttStatus}`}>
             <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">STT</span>
             <span className={cn("rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase", sttStatusColors[sttStatus])}>{sttStatus}</span>
           </div>
-          <span className="h-3 w-[1px] bg-white/8" />
-          <div className="flex items-center gap-1.5" title={whisperBackendDetail}>
+          <span className="h-3 w-[1px] bg-white/8 hidden sm:block" />
+          <div className="hidden sm:flex items-center gap-1.5" title={whisperBackendDetail}>
             <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">Runtime</span>
             <span className={cn("rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase", whisperBackend !== "checking" ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300" : "border-amber-400/20 bg-amber-400/10 text-amber-300")}>
               {whisperBackend}
             </span>
           </div>
-          <span className="h-3 w-[1px] bg-white/8" />
-          <div className="flex items-center gap-1.5">
+          <span className="h-3 w-[1px] bg-white/8 hidden sm:block" />
+          <div className="hidden sm:flex items-center gap-1.5">
             <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">TTFT</span>
             <span className="text-zinc-300">{ttftLabel}</span>
           </div>
@@ -330,3 +330,4 @@ export function VoiceModePanel({
     </div>
   );
 }
+export const VoiceModePanel = memo(VoiceModePanelInner);

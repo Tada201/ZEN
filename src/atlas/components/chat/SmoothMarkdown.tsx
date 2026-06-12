@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useDeferredValue } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -15,15 +15,15 @@ interface SmoothMarkdownProps {
   isStreaming?: boolean;
   components?: Components;
   onComplete?: () => void;
-  baseSpeed?: number; // chars per tick
+  baseSpeed?: number;
   tickMs?: number;
   chatPlugins?: Record<string, boolean>;
   streamingSpeed?: 'instant' | 'typewriter';
 }
 
-const INSTANT_IMMEDIATE_LAG_CHARS = 96;
-const TYPEWRITER_IMMEDIATE_LAG_CHARS = 16;
-const MAX_ANIMATED_LAG_CHARS = 1800;
+const INSTANT_IMMEDIATE_LAG_CHARS = 180;
+const TYPEWRITER_IMMEDIATE_LAG_CHARS = 24;
+const DEFAULT_TICK_MS = 24;
 
 function normalizeMathMarkdown(content: string): string {
   return content
@@ -44,156 +44,80 @@ export function SmoothMarkdown({
   isStreaming, 
   components, 
   onComplete,
-  baseSpeed = 1,
-  tickMs = 20,
+  baseSpeed,
+  tickMs = DEFAULT_TICK_MS,
   chatPlugins = {},
   streamingSpeed = 'instant',
 }: SmoothMarkdownProps) {
-  const [displayedContent, setDisplayedContent] = useState('');
-  const targetContentRef = useRef(content);
-  const currentPosRef = useRef(0);
-  const rafRef = useRef<number | null>(null);
-  const lastTickTimeRef = useRef(0);
+  const [displayedContent, setDisplayedContent] = useState(content);
+  const completedContentRef = useRef("");
 
-  const deferredContent = useDeferredValue(displayedContent);
-  const immediateLagChars = streamingSpeed === 'typewriter'
-    ? TYPEWRITER_IMMEDIATE_LAG_CHARS
-    : INSTANT_IMMEDIATE_LAG_CHARS;
-
-  // Performance Fix #4: Memoize plugin arrays so ReactMarkdown doesn't
-  // re-create its processing pipeline on every render tick.
-  const remarkPlugins = useMemo(() => [
-    chatPlugins?.gfm !== false && [remarkGfm, { singleTilde: false }], 
-    chatPlugins?.math !== false && remarkMath, 
-    remarkBreaks, 
-    chatPlugins?.gemoji !== false && remarkGemoji, 
-    chatPlugins?.supersub !== false && remarkSupersub
-  ].filter(Boolean) as any, [chatPlugins?.gfm, chatPlugins?.math, chatPlugins?.gemoji, chatPlugins?.supersub]);
-
-  const rehypePlugins = useMemo(() => [
-    rehypeKatex, 
-    rehypeSlug
-  ] as any, []);
-
-  // Sync target content
   useEffect(() => {
-    targetContentRef.current = content;
+    const isAppendOnlyUpdate = content.startsWith(displayedContent);
+    const lag = Math.max(0, content.length - displayedContent.length);
+    const immediateLag = streamingSpeed === 'typewriter'
+      ? TYPEWRITER_IMMEDIATE_LAG_CHARS
+      : INSTANT_IMMEDIATE_LAG_CHARS;
+    const hasPartialStreamingReveal = isAppendOnlyUpdate && displayedContent.length > 0 && lag > immediateLag;
 
-    const displayed = displayedContent;
-    const hasPartialStreamingReveal = currentPosRef.current > 0
-      && currentPosRef.current < content.length
-      && content.startsWith(displayed);
-
-    // If this is a stable historical message, show it immediately. If a live
-    // stream just completed, keep revealing the remaining provider burst so
-    // the UI does not jump from partial text to the final answer.
-    if (!isStreaming) {
-      if (hasPartialStreamingReveal) {
-        return;
-      }
-      currentPosRef.current = content.length;
+    if (!isAppendOnlyUpdate) {
       setDisplayedContent(content);
       return;
     }
 
-    const lag = content.length - currentPosRef.current;
+    if (lag <= 0) {
+      if (!isStreaming && completedContentRef.current !== content) {
+        completedContentRef.current = content;
+        onComplete?.();
+      }
+      return;
+    }
 
-    // For normal-speed providers, do not add artificial latency. Smooth only
-    // when the provider/UI backlog is large enough to cause chunky jumps.
-    if (lag > 0 && lag <= immediateLagChars) {
-      currentPosRef.current = content.length;
+    if (isStreaming && !hasPartialStreamingReveal) {
       setDisplayedContent(content);
-    }
-  }, [content, displayedContent, immediateLagChars, isStreaming]);
-
-  useEffect(() => {
-    const tick = (timestamp: number) => {
-      // Throttle to respect tickMs interval using rAF timing
-      if (timestamp - lastTickTimeRef.current < tickMs) {
-        rafRef.current = requestAnimationFrame(tick);
-        return;
-      }
-      lastTickTimeRef.current = timestamp;
-
-      const target = targetContentRef.current;
-      const current = currentPosRef.current;
-
-      if (current < target.length) {
-        const remaining = target.length - current;
-
-        if (remaining <= immediateLagChars) {
-          currentPosRef.current = target.length;
-          setDisplayedContent(target);
-          rafRef.current = null;
-          if (!isStreaming) {
-            onComplete?.();
-          }
-          return;
-        }
-
-        if (remaining > MAX_ANIMATED_LAG_CHARS) {
-          const nextPos = target.length - MAX_ANIMATED_LAG_CHARS;
-          currentPosRef.current = nextPos;
-          setDisplayedContent(target.slice(0, nextPos));
-        }
-
-        // 1. Detect if we are inside a code block
-        const adjustedCurrent = currentPosRef.current;
-        const textBefore = target.slice(0, adjustedCurrent);
-        const backtickCount = (textBefore.match(/```/g) || []).length;
-        const inCodeBlock = backtickCount % 2 !== 0;
-
-        // 2. Determine increment — more aggressive catch-up to reduce
-        //    the number of intermediate ReactMarkdown re-parses
-        let baseIncrement = streamingSpeed === 'typewriter'
-          ? 2
-          : (Math.random() > 0.85 ? 2 : 1);
-        
-        let speedMultiplier = 1;
-        if (streamingSpeed === 'typewriter') {
-          if (remaining > 2000) speedMultiplier = 24;
-          else if (remaining > 1000) speedMultiplier = 14;
-          else if (remaining > 400) speedMultiplier = 7;
-          else if (remaining > 100) speedMultiplier = 3;
-        } else {
-          if (remaining > 2000) speedMultiplier = 40;
-          else if (remaining > 1000) speedMultiplier = 25;
-          else if (remaining > 400) speedMultiplier = 12;
-          else if (remaining > 100) speedMultiplier = 6;
-        }
-
-        let increment = inCodeBlock ? 50 : Math.max(1, baseIncrement * speedMultiplier);
-
-        // 3. Update position
-        const nextPos = Math.min(adjustedCurrent + increment, target.length);
-        currentPosRef.current = nextPos;
-        setDisplayedContent(target.slice(0, nextPos));
-
-        // 4. Schedule next frame
-        rafRef.current = requestAnimationFrame(tick);
-      } else {
-        if (!isStreaming) {
-          onComplete?.();
-        }
-        rafRef.current = null;
-      }
-    };
-
-    if (!rafRef.current && currentPosRef.current < targetContentRef.current.length) {
-      rafRef.current = requestAnimationFrame(tick);
+      return;
     }
 
-    return () => {
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
-    };
-  }, [content, immediateLagChars, isStreaming, baseSpeed, tickMs, onComplete, streamingSpeed]);
+    // When chat:done arrives, keep revealing the remaining provider burst
+    // instead of replacing the visible text with the full answer at once.
+    const timer = window.setInterval(() => {
+      setDisplayedContent((current) => {
+        if (!content.startsWith(current)) return content;
+        const remaining = content.length - current.length;
+        if (remaining <= 0) {
+          window.clearInterval(timer);
+          return current;
+        }
+
+        const configuredSpeed = Math.max(1, baseSpeed ?? (streamingSpeed === 'typewriter' ? 8 : 96));
+        const adaptiveCatchup = streamingSpeed === 'typewriter'
+          ? Math.min(40, Math.max(configuredSpeed, Math.ceil(remaining / 40)))
+          : Math.min(180, Math.max(configuredSpeed, Math.ceil(remaining / 10)));
+        return content.slice(0, current.length + adaptiveCatchup);
+      });
+    }, Math.max(16, tickMs));
+
+    return () => window.clearInterval(timer);
+  }, [baseSpeed, content, displayedContent, isStreaming, onComplete, streamingSpeed, tickMs]);
+
+  const displayContent = displayedContent;
+
+  const remarkPlugins = useMemo(() => [
+    chatPlugins?.gfm !== false && [remarkGfm, { singleTilde: false }],
+    chatPlugins?.math !== false && remarkMath,
+    remarkBreaks,
+    chatPlugins?.gemoji !== false && remarkGemoji,
+    chatPlugins?.supersub !== false && remarkSupersub
+  ].filter(Boolean) as any, [chatPlugins?.gfm, chatPlugins?.math, chatPlugins?.gemoji, chatPlugins?.supersub]);
+
+  const rehypePlugins = useMemo(() => [
+    rehypeKatex,
+    rehypeSlug
+  ] as any, []);
 
   const normalizedContent = useMemo(
-    () => normalizeMathMarkdown(deferredContent),
-    [deferredContent],
+    () => normalizeMathMarkdown(displayContent),
+    [displayContent],
   );
 
   return (

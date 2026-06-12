@@ -11,7 +11,7 @@ import {
   applyBufferedDeltaToChat,
   applyBufferedDeltaToMessage,
   clearChunkTrackingForChat,
-  firstChunkTypeSentKey,
+  markFirstChunkTypeSent,
   normalizeChatChunkType,
   replaceTextStepsWithContent,
   type ChunkBuffer,
@@ -28,7 +28,6 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
   const chunkBuffersRef = useRef<Record<string, ChunkBuffer>>({});
   const chunkRafRef = useRef<number | null>(null);
   const firstChunkDeltas = useRef<Record<string, ChunkBuffer>>({});
-  const firstChunkTypesSent = useRef<Set<string>>(new Set());
 
   const flushAllChunkBuffers = useCallback(() => {
     const buffers = chunkBuffersRef.current;
@@ -88,11 +87,10 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         // Guard: if the first chat:chunk already flushed before this event
         // arrived (Tauri events across names are unordered), skip merging
         // to avoid double-rendering the first delta.
-        if (firstChunkTypesSent.current.has(firstChunkTypeSentKey(chatId, chunkType))) {
+        if (!markFirstChunkTypeSent(chatId, chunkType)) {
           firstChunkDeltas.current[chatId] = { delta, type: chunkType };
           return;
         }
-        firstChunkTypesSent.current.add(firstChunkTypeSentKey(chatId, chunkType));
 
         useChatStore.getState().setStreamingForChat(chatId, true);
         resetHeartbeatTimeout(chatId);
@@ -148,7 +146,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         };
 
         if (isFirstChunk) {
-          firstChunkTypesSent.current.add(firstChunkTypeSentKey(chatId, incomingType));
+          markFirstChunkTypeSent(chatId, incomingType);
           ttftMark(chatId, 'firstChunk');
           flushAllChunkBuffers();
 
@@ -174,7 +172,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         if (prefix && buf?.type === prefix.type && finalDelta.startsWith(prefix.delta)) {
           finalDelta = finalDelta.slice(prefix.delta.length);
         }
-        clearChunkTrackingForChat(chatId, chunkBuffersRef.current, firstChunkDeltas.current, firstChunkTypesSent.current);
+        clearChunkTrackingForChat(chatId, chunkBuffersRef.current, firstChunkDeltas.current);
 
         if (finalDelta) {
           applyBufferedDeltaToChat(chatId, finalDelta, buf?.type || "text", { isThinking: false });
@@ -200,6 +198,9 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
           if (assistantIdx === -1) return prev;
           const assistant = prev[assistantIdx];
 
+          // Guard: if already failed (chat:error fired first), don't overwrite
+          if (assistant.status === "failed") return prev;
+
           const finalContent = isCancelled && event.payload.content
             ? assistant.content
             : (event.payload.content || assistant.content);
@@ -208,7 +209,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
             : { ...assistant, content: finalContent };
 
           const next = [...prev];
-          next[assistantIdx] = markMessageAsFinished(finalized, isCancelled);
+          next[assistantIdx] = markMessageAsFinished(finalized, isCancelled, reason);
           return next;
         });
 
@@ -221,7 +222,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         if (!chatId) return;
 
         clearHeartbeatTimeout(chatId);
-        clearChunkTrackingForChat(chatId, chunkBuffersRef.current, firstChunkDeltas.current, firstChunkTypesSent.current);
+        clearChunkTrackingForChat(chatId, chunkBuffersRef.current, firstChunkDeltas.current);
         console.error("[chat:error]", event.payload.error);
         ttftReport(chatId, "error");
         let appliedToSendingAssistant = false;
@@ -245,7 +246,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         const chatId = event.payload.chat_id;
         if (!chatId) return;
 
-        clearChunkTrackingForChat(chatId, chunkBuffersRef.current, firstChunkDeltas.current, firstChunkTypesSent.current);
+        clearChunkTrackingForChat(chatId, chunkBuffersRef.current, firstChunkDeltas.current);
         clearHeartbeatTimeout(chatId);
         useChatStore.getState().setStreamingForChat(chatId, false);
       });

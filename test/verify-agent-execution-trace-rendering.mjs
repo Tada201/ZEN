@@ -74,14 +74,15 @@ assert(
 assert(
   traceSource.includes("ToolTraceRow") &&
     traceSource.includes("ToolCallCard") &&
-    traceSource.includes("totalToolCount <= 4"),
-  "batch lanes should keep the existing tool card behavior and preview expansion",
+    traceSource.includes("preferCompact ? importantToolCalls : toolCalls") &&
+    !traceSource.includes("totalToolCount <= 4"),
+  "batch lanes should keep tool cards available without auto-expanding completed details",
 );
 assert(
-  cardSource.includes("buildToolCompactPreview") &&
-    cardSource.includes("!isExpanded && compactPreview") &&
-    cardSource.includes("compactPreview.primary"),
-  "collapsed tool cards should show compact previews",
+  cardSource.includes("actionText") &&
+    cardSource.includes("!isExpanded") &&
+    !cardSource.includes("!isExpanded && compactPreview"),
+  "collapsed tool cards should stay single-row and reveal details only when expanded",
 );
 assert(
   assistantMessageSource.includes("visibleGroupedSteps") &&

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useDeferredValue, memo } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { ChevronDown } from "lucide-react";
@@ -29,9 +29,64 @@ function normalizeMathMarkdown(content: string): string {
     );
 }
 
-export function ReasoningBlock({ content, isThinking, className, defaultOpen = false }: ReasoningBlockProps) {
+function ElapsedTimer({ running }: { running?: boolean }) {
+  const [elapsed, setElapsed] = useState(0);
+  const startRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!running) return;
+    startRef.current = Date.now();
+    const interval = setInterval(() => {
+      if (startRef.current) {
+        setElapsed(Date.now() - startRef.current);
+      }
+    }, 100);
+    return () => clearInterval(interval);
+  }, [running]);
+
+  if (!running && elapsed === 0) return null;
+
+  return (
+    <span className="font-mono text-[11px] text-muted-foreground/25 tabular-nums">
+      {(elapsed / 1000).toFixed(1)}s
+    </span>
+  );
+}
+
+const MemoReasoningContent = memo(function MemoReasoningContent({ content }: { content: string }) {
+  const normalizedContent = useMemo(() => normalizeMathMarkdown(content.trim()), [content]);
+  const remarkPlugins = useMemo(() => [remarkGfm, remarkMath], []);
+  const rehypePlugins = useMemo(() => [rehypeKatex] as any, []);
+
+  if (!content) return null;
+
+  return (
+    <div className="font-mono text-[12px] leading-[1.65] text-muted-foreground prose prose-invert max-w-none prose-p:my-2 prose-p:first:mt-0 prose-p:last:mb-0 prose-pre:my-2 prose-pre:bg-muted/20 prose-pre:p-2 prose-code:px-1 prose-code:bg-muted/40 prose-code:rounded-sm prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-a:text-muted-foreground/80 prose-a:underline">
+      <ReactMarkdown
+        remarkPlugins={remarkPlugins}
+        rehypePlugins={rehypePlugins}
+        components={{
+          img: () => null,
+          code({ className, children }) {
+            const isBlock = /language-/.test(className || '');
+            return <code className={cn("font-mono bg-muted/40 rounded px-1 py-0.5", isBlock ? "block my-2 p-2" : "")}>{children}</code>;
+          }
+        }}
+      >
+        {normalizedContent}
+      </ReactMarkdown>
+    </div>
+  );
+});
+
+export const ReasoningBlock = memo(function ReasoningBlock({ content, isThinking, className, defaultOpen = false }: ReasoningBlockProps) {
   const [expanded, setExpanded] = useState(defaultOpen);
   const [userToggled, setUserToggled] = useState(false);
+
+  // Use deferred content during streaming so ReactMarkdown re-parses at idle time
+  const deferredContent = useDeferredValue(content);
+  const displayContent = isThinking ? deferredContent : content;
+
   const thoughts = content.split('\n').filter(t => t.trim().length > 0);
   const stepsCount = thoughts.length;
   const charCount = content.trim().length;
@@ -41,11 +96,6 @@ export function ReasoningBlock({ content, isThinking, className, defaultOpen = f
     : charCount > 0
       ? `${Math.max(1, Math.ceil(charCount / 280))} note`
       : "No details";
-  
-  const normalizedContent = useMemo(() => normalizeMathMarkdown(content.trim()), [content]);
-
-  const remarkPlugins = useMemo(() => [remarkGfm, remarkMath], []);
-  const rehypePlugins = useMemo(() => [rehypeKatex] as any, []);
 
   useEffect(() => {
     if (!isThinking && !defaultOpen && !userToggled) {
@@ -112,51 +162,11 @@ export function ReasoningBlock({ content, isThinking, className, defaultOpen = f
               </span>
             </div>
             <div className="max-h-[260px] overflow-y-auto px-3 py-2">
-              <div className="font-mono text-[12px] leading-[1.65] text-muted-foreground prose prose-invert max-w-none prose-p:my-2 prose-p:first:mt-0 prose-p:last:mb-0 prose-pre:my-2 prose-pre:bg-muted/20 prose-pre:p-2 prose-code:px-1 prose-code:bg-muted/40 prose-code:rounded-sm prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-a:text-muted-foreground/80 prose-a:underline">
-                <ReactMarkdown
-                  remarkPlugins={remarkPlugins}
-                  rehypePlugins={rehypePlugins}
-                  components={{
-                    img: () => null,
-                    code({ className, children }) {
-                      const isBlock = /language-/.test(className || '');
-                      return <code className={cn("font-mono bg-muted/40 rounded px-1 py-0.5", isBlock ? "block my-2 p-2" : "")}>{children}</code>;
-                    }
-                  }}
-                >
-                  {normalizedContent}
-                </ReactMarkdown>
-              </div>
+              <MemoReasoningContent content={displayContent} />
             </div>
           </div>
         </CollapsibleContent>
       </Collapsible>
     </div>
   );
-}
-
-function ElapsedTimer({ running }: { running?: boolean }) {
-  const [elapsed, setElapsed] = useState(0);
-  const startRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!running) return;
-    startRef.current = Date.now();
-    // Update at 100ms intervals — matches the 0.1s display precision
-    // instead of 60fps rAF which wastes renders
-    const interval = setInterval(() => {
-      if (startRef.current) {
-        setElapsed(Date.now() - startRef.current);
-      }
-    }, 100);
-    return () => clearInterval(interval);
-  }, [running]);
-
-  if (!running && elapsed === 0) return null;
-
-  return (
-    <span className="font-mono text-[11px] text-muted-foreground/25 tabular-nums">
-      {(elapsed / 1000).toFixed(1)}s
-    </span>
-  );
-}
+});

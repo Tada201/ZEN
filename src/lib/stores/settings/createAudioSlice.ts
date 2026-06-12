@@ -41,6 +41,7 @@ export interface AudioSlice {
   autoGainControl: boolean;
   vadThreshold: number;
   voiceDisplayAgentEnabled: boolean;
+  voiceDisplayAgentModel: string;
   voiceDisplayAgentContextTokens: number;
   voiceDisplayAgentMaxTurns: number;
   voiceDisplayAgentAutoCompactEnabled: boolean;
@@ -85,6 +86,7 @@ export const createAudioSlice: StateCreator<SettingsState, [], [], AudioSlice> =
   autoGainControl: true,
   vadThreshold: 0.015,
   voiceDisplayAgentEnabled: true,
+  voiceDisplayAgentModel: "",
   voiceDisplayAgentContextTokens: VOICE_DISPLAY_AGENT_DEFAULT_CONTEXT_TOKENS,
   voiceDisplayAgentMaxTurns: VOICE_DISPLAY_AGENT_DEFAULT_MAX_TURNS,
   voiceDisplayAgentAutoCompactEnabled: true,

@@ -15,6 +15,7 @@ export interface ToolCallCardProps {
   onRetry?: (id: string) => void;
   chatId?: string;
   defaultExpanded?: boolean;
+  streamingPreview?: string;
 }
 
 function toRecord(value: ToolCall['input']): Record<string, unknown> {
@@ -105,7 +106,7 @@ function formatDuration(durationMs?: number) {
   return durationMs < 1000 ? `${durationMs}ms` : `${(durationMs / 1000).toFixed(durationMs < 10_000 ? 1 : 0)}s`;
 }
 
-export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, onRetry, defaultExpanded }: ToolCallCardProps) {
+export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, onRetry, defaultExpanded, streamingPreview }: ToolCallCardProps) {
   const { id, name, status, input, output, durationMs, attempts, startTime, approvalContext, agentName, agentId, parentAgentId, iteration } = toolCall;
   const batchId = toolCall.toolBatchId || toolCall.batchId;
   const ToolIcon = getToolIcon(name);
@@ -128,11 +129,12 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
   const toolActionVerb = getToolActionVerb(name, status);
   const actionText = useMemo(() => {
     if (status === 'running' || status === 'awaiting_approval') {
+      if (streamingPreview) return `${toolActionVerb} ${streamingPreview}`;
       return argPreview ? `${toolActionVerb} ${argPreview}` : toolActionVerb;
     }
     if (status === 'error') return outputSummary || `${humanizeToolName(name)} failed`;
     return outputSummary || `${humanizeToolName(name)} completed`;
-  }, [argPreview, name, outputSummary, status, toolActionVerb]);
+  }, [argPreview, name, outputSummary, status, streamingPreview, toolActionVerb]);
 
   const copyValue = (value: unknown, label: string) => {
     navigator.clipboard.writeText(typeof value === 'string' ? value : JSON.stringify(value, null, 2));
@@ -179,54 +181,49 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
     outputSummary
   );
   const [isExpanded, setIsExpanded] = useState(
-    defaultExpanded ?? (status === 'awaiting_approval' || status === 'error')
+    () => defaultExpanded ?? (status === 'awaiting_approval' || status === 'error')
   );
   const userToggledRef = useRef(false);
 
   useEffect(() => {
-    if (!userToggledRef.current && defaultExpanded) {
-      setIsExpanded(true);
+    if (!userToggledRef.current && defaultExpanded !== undefined) {
+      setIsExpanded(defaultExpanded);
     }
   }, [defaultExpanded]);
+
+  const handleToggle = () => {
+    userToggledRef.current = true;
+    setIsExpanded(!isExpanded);
+  };
 
   return (
     <div className={cn('min-w-0', className)}>
       <button
         type="button"
-        onClick={() => {
-          userToggledRef.current = true;
-          setIsExpanded(!isExpanded);
-        }}
+        onClick={handleToggle}
         className={cn(
-          'group flex min-h-9 w-full min-w-0 items-center gap-2 rounded-lg border border-zinc-800/70 bg-white/[0.012] px-2 py-1.5 text-left transition-colors',
-          'hover:bg-white/[0.025]'
+          'group flex min-h-8 w-full min-w-0 items-center gap-2 rounded-md border border-white/[0.04] px-2 py-1 text-left transition-all duration-200',
+          'hover:border-white/[0.08] hover:bg-white/[0.015]'
         )}
       >
-        <span className="flex h-5 w-5 shrink-0 items-center justify-center text-zinc-400">
+        <span className={cn(
+          "flex h-4 w-4 shrink-0 items-center justify-center",
+          status === 'completed' ? "text-emerald-400/80" : status === 'error' ? "text-rose-400/80" : "text-zinc-400"
+        )}>
           {status === 'running' && <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" />}
           {status === 'awaiting_approval' && <Clock className="h-3.5 w-3.5 text-amber-400/80" />}
           {status === 'completed' && <CheckCircle2 className="h-3.5 w-3.5" />}
-          {status === 'error' && <XCircle className="h-3.5 w-3.5 text-rose-400/80" />}
+          {status === 'error' && <XCircle className="h-3.5 w-3.5" />}
         </span>
 
-        <span className="flex min-w-0 flex-1 items-center gap-2">
-          <ToolIcon className="h-3.5 w-3.5 shrink-0 opacity-75" />
-          <code className="max-w-[11rem] shrink truncate rounded bg-white/[0.035] px-1.5 py-0.5 font-mono text-[11px] text-zinc-300">
-            {name}
-          </code>
-          <span className={cn(
-            'min-w-0 flex-1 truncate text-[12px] leading-5 text-zinc-400',
-            status === 'running' && 'text-premium-shimmer',
-            status === 'error' && 'text-rose-300/90'
-          )}>
-            {actionText}
-          </span>
-          {status === 'running' && <ToolTimer startTime={startTime} />}
-          {status !== 'running' && durationLabel && <span className="shrink-0 text-[11px] text-zinc-400">{durationLabel}</span>}
-          <span className={cn('shrink-0 rounded border px-1.5 py-0.5 text-[11px] uppercase leading-none', statusStyle)}>
-            {statusLabel}
-          </span>
+        <span className={cn(
+          'min-w-0 flex-1 truncate text-[12px] leading-5',
+          status === 'running' ? 'text-premium-shimmer text-zinc-300' : status === 'error' ? 'text-rose-300' : 'text-zinc-400'
+        )}>
+          {actionText}
         </span>
+        {status === 'running' && <ToolTimer startTime={startTime} />}
+        {status !== 'running' && durationLabel && <span className="shrink-0 text-[11px] text-zinc-500 tabular-nums">{durationLabel}</span>}
 
         {status === 'awaiting_approval' && (
           <span className="ml-auto flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
@@ -253,8 +250,9 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
         )} />
       </button>
 
-      {isExpanded && (
-        <div className="ml-2 border-l border-zinc-800/80 py-1 pl-3">
+      <div className={cn("ml-2 tool-expand-grid", isExpanded && "open")}>
+        <div className="tool-expand-inner">
+          <div className="border-l border-zinc-800/80 py-1 pl-3">
           <div className="mb-1.5 rounded-md bg-white/[0.018] px-2 py-1.5">
             <div className="mb-1 text-[11px] uppercase tracking-wider text-zinc-400">Tool</div>
             <div className="flex min-w-0 flex-wrap items-center gap-2 text-[12px] leading-5">
@@ -424,8 +422,11 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
               </div>
             )
           ) : (
-            <div className="rounded-md bg-white/[0.018] px-2 py-1.5 text-[12px] text-zinc-400">
-              {status === "running" ? "Waiting for tool output..." : "No output returned."}
+            <div className={cn(
+              "rounded-md bg-white/[0.018] px-2 py-1.5 text-[12px]",
+              status === "error" ? "text-rose-300/80" : "text-zinc-400"
+            )}>
+              {status === "running" ? "Waiting for tool output..." : status === "error" ? "Tool failed — no output returned." : "No output returned."}
             </div>
           )}
           {(status === 'running' || durationLabel || agentLabel || iteration !== undefined || batchId || (attempts && attempts.length > 1)) && (
@@ -457,8 +458,9 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
               <Copy className="h-3 w-3" /> Output
             </button>
           </div>
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

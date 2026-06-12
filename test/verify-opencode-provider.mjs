@@ -37,7 +37,8 @@ assert(
     backendProviderMeta.includes('default_base_url: "https://opencode.ai/zen/v1"') &&
     backendSettings.includes('"opencode"') &&
     backendSettings.includes('let is_no_key_builtin = p_name == "opencode";') &&
-    backendSettings.includes("(is_local && is_active) || is_no_key_builtin || is_active || has_key || has_url"),
+    backendSettings.includes("let should_fetch = if is_local") &&
+    backendSettings.includes("is_no_key_builtin || is_active || has_key || has_url"),
   "Backend provider registry must include native OpenCode defaults and discovery",
 );
 

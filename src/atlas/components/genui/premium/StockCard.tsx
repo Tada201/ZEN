@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 export function StockCard({ data }: { data: any }) {
   const isUp = (data.change ?? 0) >= 0;
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-black/40 backdrop-blur-md p-5 shadow-lg max-w-sm">
+    <div className="rounded-2xl border border-white/[0.08] bg-black/40 backdrop-blur-md p-5 shadow-lg max-w-md">
       <div className="flex items-center justify-between mb-3">
         <div>
           <h4 className="text-lg font-bold tracking-tight text-white">{data.ticker || 'TICKER'}</h4>

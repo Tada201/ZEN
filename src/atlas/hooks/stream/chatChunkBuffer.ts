@@ -1,6 +1,7 @@
 import { useChatStore } from "@/lib/stores/useChatStore";
 import type { Message, Step } from "../../components/chat/types";
 import { findWritableAssistantIndex } from "./messageTarget";
+import { filterToolProtocolStream, stripToolProtocolText } from "@/atlas/lib/toolProtocolText";
 
 export interface ChunkBuffer {
   delta: string;
@@ -17,8 +18,17 @@ export function normalizeChatChunkType(type?: string): string {
   return type === "reasoning" ? "thought" : type || "text";
 }
 
-export function firstChunkTypeSentKey(chatId: string, chunkType: string): string {
-  return `${chatId}\u0000${chunkType}`;
+const firstChunkTypesMap = new Map<string, Set<string>>();
+
+export function markFirstChunkTypeSent(chatId: string, chunkType: string): boolean {
+  let typeSet = firstChunkTypesMap.get(chatId);
+  if (!typeSet) {
+    typeSet = new Set<string>();
+    firstChunkTypesMap.set(chatId, typeSet);
+  }
+  if (typeSet.has(chunkType)) return false;
+  typeSet.add(chunkType);
+  return true;
 }
 
 const INLINE_THINK_TAGS = ["<think>", "</think>", "<thought>", "</thought>"];
@@ -99,13 +109,24 @@ function applyBufferedDelta(message: Message, delta: string, chunkType: string, 
     return applyDeltaSegment(message, delta, chunkType, options);
   }
 
+  const protocolState = message.metadata as { toolProtocolPending?: string } | undefined;
+  const protocol = filterToolProtocolStream(delta, protocolState?.toolProtocolPending || "");
+  const visibleDelta = protocol.visible;
+  if (!visibleDelta) {
+    return {
+      ...message,
+      metadata: { ...message.metadata, toolProtocolPending: protocol.pending },
+    };
+  }
+
   const inlineState = message.metadata as { inlineThinkOpen?: boolean; inlineThinkPending?: string } | undefined;
   const thinkState = Boolean(inlineState?.inlineThinkOpen);
   const thinkPending = inlineState?.inlineThinkPending || "";
-  const split = splitInlineThinkTags(delta, thinkState, thinkPending);
+  const split = splitInlineThinkTags(visibleDelta, thinkState, thinkPending);
 
   if (!thinkState && !thinkPending && !split.open && !split.pending && split.segments.length === 1 && split.segments[0]?.type === "text") {
-    return applyDeltaSegment(message, delta, chunkType, options);
+    const next = applyDeltaSegment(message, visibleDelta, chunkType, options);
+    return { ...next, metadata: { ...next.metadata, toolProtocolPending: protocol.pending } };
   }
 
   let nextMessage = message;
@@ -122,6 +143,7 @@ function applyBufferedDelta(message: Message, delta: string, chunkType: string, 
       ...nextMessage.metadata,
       inlineThinkOpen: split.open,
       inlineThinkPending: split.pending,
+      toolProtocolPending: protocol.pending,
     },
   };
 }
@@ -146,13 +168,12 @@ function splitInlineThinkContent(content: string): { content: string; reasoning:
 }
 
 export function replaceTextStepsWithContent(message: Message, content: string): Message {
-  const extracted = splitInlineThinkContent(content);
-  const hasInlineThinkTags = /<\/?(?:think|thought)>/i.test(content);
-  const normalizedContent = hasInlineThinkTags ? extracted.content : content;
+  const safeContent = stripToolProtocolText(content);
+  const extracted = splitInlineThinkContent(safeContent);
+  const hasInlineThinkTags = /<\/?(?:think|thought)>/i.test(safeContent);
+  const normalizedContent = hasInlineThinkTags ? extracted.content : safeContent;
   const normalizedReasoning = extracted.reasoning;
   const steps = message.steps || [];
-  const firstTextIndex = steps.findIndex((step) => step.type === "text");
-  const hasExecutionTimeline = steps.some((step) => step.type !== "text" && step.type !== "reasoning");
   const reasoningSteps = normalizedReasoning
     ? steps.filter((step) => step.type === "reasoning")
     : [];
@@ -170,10 +191,17 @@ export function replaceTextStepsWithContent(message: Message, content: string): 
     return [{ type: "reasoning" as const, content: normalizedReasoning }, ...nextSteps];
   };
 
-  if (hasExecutionTimeline && firstTextIndex !== -1) {
-    const updatedSteps = steps.map((step, i) =>
-      i === firstTextIndex ? { ...step, content: normalizedContent } : step
-    );
+  const hasExecutionTimeline = steps.some((step) => step.type !== "text" && step.type !== "reasoning");
+
+  if (hasExecutionTimeline) {
+    // The streamed steps are the chronological source of truth. Replacing the
+    // first text step with the full final response moves post-tool commentary
+    // ahead of tool cards when chat:done arrives.
+    const updatedSteps = steps
+      .map((step) => step.type === "text"
+        ? { ...step, content: stripToolProtocolText(step.content || "") }
+        : step)
+      .filter((step) => step.type !== "text" || Boolean(step.content?.trim()));
     return {
       ...message,
       content: normalizedContent,
@@ -194,6 +222,7 @@ export function replaceTextStepsWithContent(message: Message, content: string): 
   }
 
   const textStep: Step = { type: "text", content: normalizedContent };
+  const firstTextIndex = steps.findIndex((step) => step.type === "text");
   if (firstTextIndex === -1) {
     return {
       ...message,
@@ -232,13 +261,8 @@ export function clearChunkTrackingForChat(
   chatId: string,
   chunkBuffers: Record<string, ChunkBuffer>,
   firstChunkDeltas: Record<string, ChunkBuffer>,
-  firstChunkTypesSent: Set<string>,
 ) {
   delete chunkBuffers[chatId];
   delete firstChunkDeltas[chatId];
-  firstChunkTypesSent.forEach((key) => {
-    if (key.startsWith(`${chatId}\u0000`)) {
-      firstChunkTypesSent.delete(key);
-    }
-  });
+  firstChunkTypesMap.delete(chatId);
 }

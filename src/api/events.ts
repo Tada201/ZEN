@@ -391,6 +391,7 @@ export interface AppEventPayloadMap {
   "chat:partial": UnknownRecordEventPayload;
   "globe:navigate": UnknownRecordEventPayload;
   "drawing:ops": UnknownRecordEventPayload;
+  "board:update": UnknownRecordEventPayload;
   "graph:session:feedback": SessionFeedback;
   "graph:session:vision_capture": VisionCapture;
   "tts:start": TtsStartEventPayload;

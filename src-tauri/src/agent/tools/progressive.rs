@@ -277,15 +277,6 @@ impl ProgressiveToolRegistry {
         ));
 
         self.register_metadata(ToolMetadata::new(
-            "delegate_to_agent",
-            "Transfer to Agent",
-            "Transfer conversation control to another specialized agent.",
-            "agent",
-            vec!["agent", "transfer", "handoff", "delegate"],
-            DetailLevel::Full,
-        ));
-
-        self.register_metadata(ToolMetadata::new(
             "handoff_to_agent",
             "Handoff to Agent",
             "Signal that the current conversation should be handed off to a specialized agent.",
@@ -399,6 +390,15 @@ impl ProgressiveToolRegistry {
             "Manage graph sessions.",
             "visualization",
             vec!["graph", "session", "visualization"],
+            DetailLevel::Full,
+        ));
+
+        self.register_metadata(ToolMetadata::new(
+            "manage_board",
+            "Manage Board",
+            "Update the scratch-pad board in the voice/visual mode UI. Display notes, metrics, tables, charts, code, equations, or map placeholders. Use to show data visually instead of describing it in text.",
+            "visualization",
+            vec!["board", "display", "show", "visual", "ui", "panel"],
             DetailLevel::Full,
         ));
 
@@ -574,6 +574,15 @@ impl ProgressiveToolRegistry {
         hook_registry: Arc<crate::agent::hooks::HookRegistry>,
         permissions: crate::tools::GlobalToolRegistry,
     ) {
+        // Board management — lightweight UI scratch pad
+        self.tool_factory.insert(
+            "manage_board".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::manage_board::ManageBoardTool::new())
+                    as Arc<dyn AgentTool>
+            }),
+        );
+
         let tr = tool_registry.clone();
         let ar = agent_registry.clone();
         let hr = hook_registry.clone();
@@ -590,23 +599,6 @@ impl ProgressiveToolRegistry {
             }),
         );
 
-        let tr2 = tool_registry.clone();
-        let ar2 = agent_registry.clone();
-        let hr2 = hook_registry.clone();
-        let p2 = permissions.clone();
-        self.tool_factory.insert(
-            "delegate_to_agent".to_string(),
-            Box::new(move || {
-                Arc::new(
-                    crate::agent::tools::delegate_to_agent::DelegateToAgentTool::new(
-                        tr2.clone(),
-                        ar2.clone(),
-                        hr2.clone(),
-                        p2.clone(),
-                    ),
-                ) as Arc<dyn AgentTool>
-            }),
-        );
     }
 
     fn register_metadata(&mut self, metadata: ToolMetadata) {

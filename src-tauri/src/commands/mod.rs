@@ -23,7 +23,6 @@ use tokio_util::sync::CancellationToken;
 
 use crate::agent::event_bus::EventBus;
 use crate::agent::hooks::HookRegistry;
-use crate::agent::memory::UnifiedMemoryBackend;
 use crate::agent::orchestrator::Orchestrator;
 use crate::agent::swarm::SwarmCoordinator;
 use crate::agent::types::AgentRegistry;
@@ -143,7 +142,6 @@ pub struct AppState {
     pub tool_manager: Arc<ToolManager>,
     pub tool_service: Arc<ToolService>,
     pub orchestrator: InitState<Arc<Orchestrator>>,
-    pub memory_backend: Arc<UnifiedMemoryBackend>,
     pub geofence_engine: Arc<crate::services::gtsm::geofence::GeofenceEngine>,
     pub gtsm_cache: Arc<crate::services::gtsm::cache::GtsmCache>,
     /// Per-chat cached recall context from the previous turn.
@@ -284,19 +282,8 @@ impl AppState {
                 tool_registry_v2.clone(),
             )),
             tool_service: tool_service.clone(),
-            swarm: Arc::new(SwarmCoordinator::new(
-                crate::agent::swarm::SwarmTopology::default(),
-                event_bus.clone(),
-                tool_service.clone(),
-            )),
+            swarm: Arc::new(SwarmCoordinator::new(event_bus.clone())),
             orchestrator: InitState::new(),
-            memory_backend: {
-                let session_memory =
-                    Arc::new(crate::rag::session_memory::SessionMemoryManager::new(
-                        default_workspace.clone(),
-                    ));
-                Arc::new(UnifiedMemoryBackend::new(session_memory))
-            },
             geofence_engine: Arc::new(crate::services::gtsm::geofence::GeofenceEngine::new()),
             gtsm_cache: Arc::new(crate::services::gtsm::cache::GtsmCache::new()),
             recall_cache: Arc::new(tokio::sync::Mutex::new(HashMap::new())),

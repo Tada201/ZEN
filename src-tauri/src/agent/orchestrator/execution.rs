@@ -7,7 +7,7 @@ use tracing::{error, info};
 use super::Orchestrator;
 use super::OrchestratorPhase;
 use crate::agent::event_bus::{AgentEvent, ChatChunkFirstPayload, ChatChunkPayload};
-use crate::agent::runner::{self, Runner};
+use crate::agent::runner;
 use crate::agent::task::Task;
 use crate::agent::types::{ActionMeta, AgentResponse, MessageKind, SpawnMeta};
 use crate::db::models::ChatMessage;
@@ -37,15 +37,25 @@ impl Orchestrator {
             })
             .ok_or_else(|| anyhow::anyhow!("Agent '{}' not found", agent_id))?;
 
-        // Create runner for this agent
-        let mut runner = Runner::new(
-            self.app.clone(),
+        // Resolve agent configuration
+        let resolved = crate::agent::tools::child_runner::resolve_agent(
+            &self.agent_registry,
+            agent_id,
+            Some(model),
+            None,
+        )?;
+
+        // Create runner for this agent using the unified child runner builder
+        let mut runner = crate::agent::tools::child_runner::build_child_runner(
+            &self.app,
             self.tool_registry.clone(),
             self.agent_registry.clone(),
             self.hook_registry.clone(),
             self.permissions.clone(),
-            self.tool_manager.clone(),
-        );
+            0, // Orchestrator tasks are spawned at parent depth 0
+            &resolved,
+            None,
+        )?;
 
         // Pass direct channel for high-performance streaming if available
         if let Some(ref channel) = self.on_event {
@@ -331,14 +341,13 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
         let app_clone = self.app.clone();
         let chat_id_owned = chat_id.to_string();
 
-        // First-chunk immediate emission flag — bypasses the 40ms buffer for TTFT
+        // First-chunk immediate emission flag for TTFT diagnostics
         let first_chunk_sent = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let first_chunk_sent_clone = first_chunk_sent.clone();
 
-        // Optimize IPC: Buffer tokens for ~40ms windows to reduce event frequency
+        // Text buffer: accumulates delta text and emits on every chunk (frontend rAF batches).
         let buffer = std::sync::Arc::new(std::sync::Mutex::new((
             String::new(),
-            std::time::Instant::now(),
             "text",
         )));
         let buffer_clone = buffer.clone();
@@ -383,6 +392,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                     chat_id: chat_id_owned_2.clone(),
                     delta: chunk_text.clone(),
                     r#type: chunk_type.to_string(),
+                    message_id: None,
                 })
                 .emit_via(&app_clone_2, &maybe_channel_clone);
             }
@@ -391,44 +401,43 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                 let mut data = match buffer_clone.lock() {
                     Ok(guard) => guard,
                     Err(poisoned) => {
-                        error!("[orchestrator] buffer mutex poisoned, recovering");
-                        poisoned.into_inner()
+                        error!("[orchestrator] buffer mutex poisoned, discarding");
+                        drop(poisoned);
+                        return;
                     }
                 };
 
-                // If type changed, flush immediately
-                if data.2 != chunk_type && !data.0.is_empty() {
+                // If type changed, flush the old type immediately
+                if data.1 != chunk_type && !data.0.is_empty() {
                     let old_text = std::mem::take(&mut data.0);
-                    let old_type = data.2;
+                    let old_type = data.1;
 
                     AgentEvent::ChatChunk(ChatChunkPayload {
                         chat_id: chat_id_owned_2.clone(),
                         delta: old_text,
                         r#type: old_type.to_string(),
                         done: false,
+                        message_id: None,
                     })
                     .emit_via(&app_clone_2, &maybe_channel_clone);
-
-                    data.1 = std::time::Instant::now();
                 }
 
                 data.0.push_str(&chunk_text);
-                data.2 = chunk_type;
+                data.1 = chunk_type;
 
-                if data.1.elapsed().as_millis() >= 40 {
-                    let text = std::mem::take(&mut data.0);
-                    let current_type = data.2;
-                    data.1 = std::time::Instant::now();
-                    drop(data);
+                // Emit immediately — frontend rAF handles batching
+                let text = std::mem::take(&mut data.0);
+                let current_type = data.1;
+                drop(data);
 
-                    AgentEvent::ChatChunk(ChatChunkPayload {
-                        chat_id: chat_id_owned_2.clone(),
-                        delta: text,
-                        r#type: current_type.to_string(),
-                        done: false,
-                    })
-                    .emit_via(&app_clone_2, &maybe_channel_clone);
-                }
+                AgentEvent::ChatChunk(ChatChunkPayload {
+                    chat_id: chat_id_owned_2.clone(),
+                    delta: text,
+                    r#type: current_type.to_string(),
+                    done: false,
+                    message_id: None,
+                })
+                .emit_via(&app_clone_2, &maybe_channel_clone);
             }
         });
 
@@ -437,22 +446,18 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
             .await?;
 
         // Final flush: Send any remaining tokens in the buffer
-        let mut data = match buffer.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => {
-                error!("[orchestrator] buffer mutex poisoned during final flush");
-                poisoned.into_inner()
+        if let Ok(mut data) = buffer.lock() {
+            if !data.0.is_empty() {
+                let text = std::mem::take(&mut data.0);
+                let current_type = data.1;
+                let _ = self.emit(AgentEvent::ChatChunk(ChatChunkPayload {
+                    chat_id: chat_id.to_string(),
+                    delta: text,
+                    r#type: current_type.to_string(),
+                    done: true,
+                    message_id: None,
+                }));
             }
-        };
-        if !data.0.is_empty() {
-            let text = std::mem::take(&mut data.0);
-            let current_type = data.2;
-            let _ = self.emit(AgentEvent::ChatChunk(ChatChunkPayload {
-                chat_id: chat_id.to_string(),
-                delta: text,
-                r#type: current_type.to_string(),
-                done: true,
-            }));
         }
 
         // Flush the artifact detector

@@ -1,6 +1,6 @@
-import { Globe, Terminal, FileText, Code2, type LucideIcon } from "lucide-react";
-
 /* ── Types ─────────────────────────────────────────────────── */
+
+import { stripToolProtocolText } from "@/atlas/lib/toolProtocolText";
 
 export type MessageKind =
   | 'text'
@@ -142,6 +142,7 @@ export interface ActionMeta {
   };
   inlineThinkOpen?: boolean;
   inlineThinkPending?: string;
+  toolProtocolPending?: string;
   progressPercent?: number;
   toolCall?: ToolCallMeta;
   toolCallPreview?: {
@@ -365,12 +366,18 @@ export function normalizeVercelMessage(msg: unknown): Message {
   const role = msg.role === "user" || msg.role === "assistant" || msg.role === "system" || msg.role === "tool"
     ? msg.role
     : "assistant";
+  const rawContent = typeof msg.content === "string" ? msg.content : "";
+  const normalizedSteps = Array.isArray(msg.steps)
+    ? (msg.steps as Step[]).map((step) => role === "assistant" && step.type === "text"
+      ? { ...step, content: stripToolProtocolText(step.content || "") }
+      : step)
+    : undefined;
 
   const normalized: Message = {
     id: typeof msg.id === "string" ? msg.id : `message-${Date.now()}`,
     sessionId: typeof msg.sessionId === "string" ? msg.sessionId : "",
     role,
-    content: typeof msg.content === "string" ? msg.content : "",
+    content: role === "assistant" ? stripToolProtocolText(rawContent) : rawContent,
     reasoning: typeof msg.reasoning === "string" ? msg.reasoning : undefined,
     attachments: toAttachmentArray(msg.attachments),
     toolCalls: toToolCallArray(msg.toolCalls),
@@ -388,7 +395,7 @@ export function normalizeVercelMessage(msg: unknown): Message {
     kind: typeof msg.kind === "string" ? msg.kind as MessageKind : undefined,
     metadata: isRecord(msg.metadata) ? msg.metadata as ActionMeta : undefined,
     toolInvocations: toToolInvocationArray(msg.toolInvocations),
-    steps: Array.isArray(msg.steps) ? msg.steps as Step[] : undefined,
+    steps: normalizedSteps,
   };
 
   // If toolInvocations is present, populate toolCalls and steps
@@ -479,21 +486,3 @@ export const PROVIDERS = [
   { id: "lmstudio", label: "LM Studio (Local)", placeholder: "Not required", docsUrl: "https://lmstudio.ai/" },
   { id: "custom", label: "Custom OpenAI", placeholder: "sk-...", docsUrl: "" },
 ];
-
-export const TOOL_ICONS: Record<string, LucideIcon> = {
-  web_search: Globe,
-  googleSearch: Globe,
-  run_code: Terminal,
-  read_file: FileText,
-  create_artifact: Code2,
-};
-
-/* ── Utils ────────────────────────────────────────────────── */
-
-export function isOpenUILang(content: string): boolean {
-  if (!content) return false;
-  const trimmed = content.trim();
-  const hasRoot = /(?:^|\n)\s*root\s*=\s*\w+\s*\(/.test(trimmed);
-  const assignmentCount = (trimmed.match(/\w+\s*=\s*\w+\s*\(/g) || []).length;
-  return hasRoot || assignmentCount >= 3;
-}

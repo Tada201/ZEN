@@ -20,9 +20,28 @@ const INIT_STEPS: InitStep[] = [
     { id: 'updates', label: 'Update check', status: 'pending' },
 ];
 
+function waitForSettingsHydration(timeoutMs = 2000): Promise<boolean> {
+    if (useSettingsStore.getState().isHydrated) return Promise.resolve(true);
+    return new Promise((resolve) => {
+        let settled = false;
+        const finish = (hydrated: boolean) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            unsubscribe();
+            resolve(hydrated);
+        };
+        const unsubscribe = useSettingsStore.subscribe((state) => {
+            if (state.isHydrated) finish(true);
+        });
+        const timer = setTimeout(() => finish(false), timeoutMs);
+    });
+}
+
 export function useAppInit(onStepsUpdate?: (steps: InitStep[]) => void) {
     const [isInitialized, setIsInitialized] = useState(false);
     const stepsRef = useRef<InitStep[]>(INIT_STEPS.map(s => ({ ...s })));
+    const startedRef = useRef(false);
     const isHydrated = useSettingsStore(s => s.isHydrated);
 
     const setStep = useCallback((id: string, status: InitStep['status'], detail?: string) => {
@@ -35,12 +54,17 @@ export function useAppInit(onStepsUpdate?: (steps: InitStep[]) => void) {
     }, [onStepsUpdate]);
 
     useEffect(() => {
+        if (startedRef.current) return;
+        startedRef.current = true;
         let mounted = true;
         const init = async () => {
             try {
                 setStep('settings', 'loading');
                 if (!isHydrated) {
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                    const hydrated = await waitForSettingsHydration();
+                    if (!hydrated) {
+                        console.warn('[ZEN] Settings hydration timed out; continuing with cached defaults.');
+                    }
                 }
                 setStep('settings', 'done');
 
@@ -50,16 +74,11 @@ export function useAppInit(onStepsUpdate?: (steps: InitStep[]) => void) {
                 setStep('theme', 'done', s.themeId || 'dark');
 
                 setStep('provider', 'loading');
-                try {
-                    const models = await providersApi.getAllAvailableModels(null);
-                    if (models?.length > 0) {
-                        setStep('provider', 'done', 'Connected');
-                    } else {
-                        setStep('provider', 'done', 'No models');
-                    }
-                } catch {
-                    setStep('provider', 'done', 'Local mode');
-                }
+                // Model discovery is non-critical and can involve unavailable local servers.
+                // Start it in the background so it never blocks the first usable frame.
+                void providersApi.getAllAvailableModels(null)
+                    .then((models) => setStep('provider', 'done', models?.length ? 'Connected' : 'No models'))
+                    .catch(() => setStep('provider', 'done', 'Local mode'));
 
                 setStep('model', 'loading');
                 setStep('model', 'done', s.activeModel || 'default');

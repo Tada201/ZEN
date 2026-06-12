@@ -21,6 +21,12 @@ pub struct RunConfig {
     pub summarization_token_budget: usize,
     /// Threshold score for context drift detection (default: 0.3)
     pub drift_threshold: f32,
+    /// Whether this run is in voice mode (spawn display agent after completion)
+    pub voice_mode: bool,
+    /// Model override for the voice display agent (empty = same as main)
+    pub display_agent_model: Option<String>,
+    /// Maximum messages to keep in the agent's working conversation (None = unlimited)
+    pub max_messages_in_memory: Option<usize>,
 }
 
 impl Default for RunConfig {
@@ -36,6 +42,9 @@ impl Default for RunConfig {
             summarization_model: None,
             summarization_token_budget: 2000,
             drift_threshold: 0.3,
+            voice_mode: false,
+            display_agent_model: None,
+            max_messages_in_memory: None,
         }
     }
 }

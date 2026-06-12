@@ -61,7 +61,9 @@ export function mergeLiveToolState(fetched: Message, existing?: Message): Messag
   });
 
   existing.steps
-    ?.filter((step) => step.type === "tool-call" || step.type === "action")
+    // Exclude ephemeral chat_status steps — they're streaming-only indicators
+    // with no DB counterpart and would duplicate the live tool cards.
+    ?.filter((step) => (step.type === "tool-call" || step.type === "action") && step.kind !== "chat_status")
     .forEach((step) => {
       const key = stepKey(step);
       const existingIndex = stepIndexes.get(key);

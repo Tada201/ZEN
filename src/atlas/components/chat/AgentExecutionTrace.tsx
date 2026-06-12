@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, memo } from "react";
 import { CheckCircle2, ChevronRight, Loader2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ArtifactData, Step, ToolCall } from "./types";
@@ -79,6 +79,27 @@ export function AgentExecutionTrace({
     : trace.active || trace.errorCount > 0 || trace.approvalCount > 0;
   const [isExpanded, setIsExpanded] = useState(shouldDefaultOpen);
   const userToggledRef = useRef(false);
+  const collapsedSummary = useMemo(() => [
+    trace.activeLaneSummary && `batch ${trace.activeLaneSummary}`,
+    trace.runningToolSummaries.length > 0 && `active ${trace.runningToolSummaries.join(", ")}`,
+    trace.approvalToolSummaries.length > 0 && `approval ${trace.approvalToolSummaries.join(", ")}`,
+    trace.resultSummary && `results ${trace.resultSummary}`,
+    trace.agentHierarchySummary && `delegation ${trace.agentHierarchySummary}`,
+    trace.ownerSummary && `agents ${trace.ownerSummary}`,
+  ].filter(Boolean).join(" · "), [trace]);
+
+  // Map tool call IDs to streaming argument previews from chat_status steps
+  const streamingPreviews = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!executionSteps) return map;
+    for (const step of executionSteps) {
+      const preview = step.metadata?.toolCallPreview;
+      if (preview?.toolCallId && preview?.argumentsPreview) {
+        map.set(preview.toolCallId, typeof preview.argumentsPreview === "string" ? preview.argumentsPreview : JSON.stringify(preview.argumentsPreview));
+      }
+    }
+    return map;
+  }, [executionSteps]);
 
   useEffect(() => {
     if (!userToggledRef.current && (trace.active || trace.errorCount > 0)) {
@@ -95,7 +116,7 @@ export function AgentExecutionTrace({
           setIsExpanded(!isExpanded);
         }}
         aria-expanded={isExpanded}
-        className="flex min-h-8 w-full items-center gap-2 rounded-md px-1 text-left text-zinc-500 transition-colors hover:bg-white/[0.018]"
+        className="flex min-h-8 w-full items-center gap-2 rounded-md px-1 text-left text-zinc-500 transition-all duration-200 hover:bg-white/[0.018]"
       >
         <span className="flex h-5 w-5 shrink-0 items-center justify-center">
           {trace.active ? (
@@ -117,18 +138,31 @@ export function AgentExecutionTrace({
           {trace.errorCount > 0 && <span className="shrink-0 text-[11px] text-rose-400/80">{trace.errorCount} failed</span>}
           {!preferCompact && trace.completedCount > 0 && <span className="shrink-0 text-[11px] text-zinc-500">{trace.completedCount} done</span>}
           <span className="h-1 w-14 shrink-0 overflow-hidden rounded-full bg-white/[0.06]">
-            <span
-              className={cn("block h-full transition-all duration-500", trace.errorCount > 0 ? "bg-rose-400/70" : "bg-emerald-400/70")}
-              style={{ width: `${trace.progressPercent}%` }}
-            />
+            <span className="flex h-full">
+              <span
+                className="h-full bg-emerald-400/70 transition-all duration-500"
+                style={{ width: `${trace.completedPercent}%` }}
+              />
+              <span
+                className="h-full bg-rose-400/70 transition-all duration-500"
+                style={{ width: `${trace.errorPercent}%` }}
+              />
+            </span>
           </span>
         </span>
         <ChevronRight className={cn("h-3.5 w-3.5 shrink-0 text-zinc-400 transition-transform duration-200", isExpanded && "rotate-90")} />
       </button>
 
-      {isExpanded && (
-        <div className="mt-1 overflow-hidden">
-          {normalizedToolCalls.length > 1 && (
+      {!isExpanded && collapsedSummary && (
+        <div className="truncate px-8 pb-1 text-[11px] text-zinc-500" title={collapsedSummary}>
+          {collapsedSummary}
+        </div>
+      )}
+
+      <div className={cn("tool-expand-grid", isExpanded && "open")}>
+        <div className="tool-expand-inner">
+          <div className="mt-1">
+            {normalizedToolCalls.length > 1 && (
             <div className="mb-1.5 ml-1 flex flex-wrap items-center gap-2 text-[11px] text-zinc-400">
               <span>{trace.startedTogether || trace.runningCount + trace.approvalCount > 1 ? "Batch started in parallel" : "Sequential tool calls"}</span>
               {trace.batchSummary && <span>batch {trace.batchSummary}</span>}
@@ -182,38 +216,43 @@ export function AgentExecutionTrace({
               )}
             >
               {trace.shouldShowBatchLanes && !preferCompact
-                ? trace.batchLanes.map((lane) => (
+                  ? trace.batchLanes.map((lane) => (
                     <ToolBatchLane
                       key={lane.id}
                       lane={lane}
                       sessionId={sessionId}
                       onOpenArtifact={onOpenArtifact}
+                      streamingPreviews={streamingPreviews}
                     />
                   ))
-                : (preferCompact ? importantToolCalls : toolCalls).map((tc, idx) => (
+                  : (preferCompact ? importantToolCalls : toolCalls).map((tc, idx) => (
                     <ToolTraceRow
-                      key={`${tc.id}-${idx}`}
+                      key={tc.id || tc.runId || idx}
                       toolCall={tc}
                       sessionId={sessionId}
                       onOpenArtifact={onOpenArtifact}
+                      streamingPreview={streamingPreviews.get(tc.id) || undefined}
                     />
                   ))}
             </div>
           )}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
-function ToolTraceRow({
+function ToolTraceRowInner({
   toolCall,
   sessionId,
   onOpenArtifact,
+  streamingPreview,
 }: {
   toolCall: ToolCall;
   sessionId?: string;
   onOpenArtifact: (a: ArtifactData) => void;
+  streamingPreview?: string;
 }) {
   return (
     <div className="relative">
@@ -238,6 +277,7 @@ function ToolTraceRow({
         onViewArtifact={onOpenArtifact}
         onCancel={() => resolveToolApproval(toolCall.id, false)}
         onRetry={() => resolveToolApproval(toolCall.id, true)}
+        streamingPreview={streamingPreview}
         defaultExpanded={
           toolCall.status === "awaiting_approval" ||
           toolCall.status === "error"
@@ -246,15 +286,18 @@ function ToolTraceRow({
     </div>
   );
 }
+const ToolTraceRow = memo(ToolTraceRowInner);
 
-function ToolBatchLane({
+function ToolBatchLaneInner({
   lane,
   sessionId,
   onOpenArtifact,
+  streamingPreviews,
 }: {
   lane: ToolExecutionBatchLane;
   sessionId?: string;
   onOpenArtifact: (a: ArtifactData) => void;
+  streamingPreviews: Map<string, string>;
 }) {
   const active = lane.runningCount > 0 || lane.approvalCount > 0;
 
@@ -275,22 +318,30 @@ function ToolBatchLane({
         {lane.approvalToolSummaries.length > 0 && <span className="text-amber-300/80">waiting approval {lane.approvalToolSummaries.join(", ")}</span>}
         {lane.resultSummary && <span>results {lane.resultSummary}</span>}
         <span className="h-1 w-12 overflow-hidden rounded-full bg-white/[0.06]">
-          <span
-            className={cn("block h-full transition-all duration-500", lane.errorCount > 0 ? "bg-rose-400/70" : "bg-emerald-400/70")}
-            style={{ width: `${lane.progressPercent}%` }}
-          />
+          <span className="flex h-full">
+            <span
+              className="h-full bg-emerald-400/70 transition-all duration-500"
+              style={{ width: `${lane.completedPercent}%` }}
+            />
+            <span
+              className="h-full bg-rose-400/70 transition-all duration-500"
+              style={{ width: `${lane.errorPercent}%` }}
+            />
+          </span>
         </span>
       </div>
       <div className={cn("grid gap-1.5", lane.toolCount > 1 && "md:grid-cols-2")}>
         {lane.toolCalls.map((toolCall, index) => (
           <ToolTraceRow
-            key={`${toolCall.id || toolCall.name}-${toolCall.status}-${toolCall.completedAt ?? toolCall.lastUpdatedAt ?? index}-${index}`}
+            key={toolCall.id || toolCall.runId || index}
             toolCall={toolCall}
             sessionId={sessionId}
             onOpenArtifact={onOpenArtifact}
+            streamingPreview={streamingPreviews.get(toolCall.id) || undefined}
           />
         ))}
       </div>
     </div>
   );
 }
+const ToolBatchLane = memo(ToolBatchLaneInner);

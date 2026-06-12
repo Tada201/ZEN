@@ -1,4 +1,4 @@
-import React, { Suspense, useState, useCallback, useEffect, useTransition, useMemo } from "react";
+import React, { Suspense, useState, useCallback, useEffect, useTransition, useMemo, useRef } from "react";
 import { useChat } from "@/atlas/hooks/useChat";
 import { WorkspaceLayout } from "../layouts/WorkspaceLayout";
 import { MessageList } from "../components/chat/MessageList";
@@ -8,6 +8,7 @@ import type { ArtifactData } from "../components/chat/types";
 import { SessionSidebar } from "../components/chat/SessionSidebar";
 import { Settings, Hammer, PanelLeftOpen } from "lucide-react";
 import { useUIStore } from "@/lib/stores/useUIStore";
+import { useChatStore } from "@/lib/stores/useChatStore";
 import { getVisibleWorkspaceModeFeatures, isWorkspaceModeVisible } from "@/lib/features/frontendFeatures";
 
 import { MainArea } from "@/components/workbench/MainArea";
@@ -33,7 +34,7 @@ export function WorkspaceApp() {
   const [, startTransition] = useTransition();
   const {
     sessions, archivedSessions, folders, currentSessionId, setCurrentSessionId,
-    messages, search, setSearch, searchResults,
+    messages, search, setSearch, searchResults, setMessages,
     models, selectedModelId, setSelectedModelId,
     selectedProvider, setSelectedProvider, isStreaming,
     handleCreateSession, handleDeleteSession,
@@ -70,6 +71,52 @@ export function WorkspaceApp() {
       generativeUI: data.generativeUI ?? generativeUI
     });
   }, [handleSendMessage, generativeUI]);
+
+  const handleDismissError = useCallback((messageId: string) => {
+    if (!currentSessionId) return;
+    useChatStore.getState().setSessionMessages(currentSessionId, (prev) =>
+      prev.map((m) =>
+        m.id === messageId
+          ? { ...m, error: undefined, status: m.status === "sending" ? "cancelled" as const : m.status }
+          : m
+      )
+    );
+  }, [currentSessionId]);
+
+  const handleRegenerate = useCallback((messageId: string) => {
+    const msgIndex = messages.findIndex(m => m.id === messageId);
+    if (msgIndex === -1) return;
+    let lastUserMsg = null;
+    for (let i = msgIndex - 1; i >= 0; i--) {
+      if (messages[i].role === "user") {
+        lastUserMsg = messages[i];
+        break;
+      }
+    }
+    if (!lastUserMsg?.content) return;
+    setMessages(messages.slice(0, msgIndex));
+    handleSendMessageInternal({
+      message: lastUserMsg.content,
+      model: selectedModelId,
+      provider: selectedProvider,
+    });
+  }, [messages, setMessages, selectedModelId, selectedProvider, handleSendMessageInternal]);
+
+  // Stable ref for voice transcript callback to prevent cascading re-initialization
+  // of audio graph / rAF loop when parent re-renders during streaming.
+  const onTranscriptRef = useRef<(text: string) => void>(null);
+  onTranscriptRef.current = (text: string) => {
+    handleSendMessageInternal({
+      message: text,
+      model: selectedModelId,
+      provider: selectedProvider,
+      systemPrompt: VOICE_MODE_SYSTEM_PROMPT,
+      systemPromptMode: "replace",
+    });
+  };
+  const stableOnTranscript = useCallback((text: string) => {
+    onTranscriptRef.current?.(text);
+  }, []);
 
   // Derive loading state from both isStreaming (backend events flowing)
   // AND last message status (covers the gap between Send press and first event)
@@ -199,6 +246,8 @@ export function WorkspaceApp() {
                         messages={chatMessages}
                         onOpenArtifact={setActiveArtifact}
                         onOpenSettings={() => setSettingsOpen(true)}
+                        onDismissError={handleDismissError}
+                        onRegenerate={handleRegenerate}
                       />
                       <div className="w-full border-t border-border/15 bg-[#09090b]/85 rounded-t-2xl shrink-0">
                         <div className="max-w-3xl mx-auto w-full px-6 py-4">
@@ -238,6 +287,8 @@ export function WorkspaceApp() {
                             messages={chatMessages}
                             onOpenArtifact={setActiveArtifact}
                             onOpenSettings={() => setSettingsOpen(true)}
+                            onDismissError={handleDismissError}
+                            onRegenerate={handleRegenerate}
                           />
                           <div className="w-full border-t border-border/15 bg-[#09090b]/85 rounded-t-2xl shrink-0">
                             <div className="max-w-3xl mx-auto w-full px-6 py-4">
@@ -320,15 +371,7 @@ export function WorkspaceApp() {
             chatId={currentSessionId ?? undefined}
             messages={chatMessages}
             activeModel={selectedModelId}
-            onTranscript={(text: string) => {
-              handleSendMessageInternal({
-                message: text,
-                model: selectedModelId,
-                provider: selectedProvider,
-                systemPrompt: VOICE_MODE_SYSTEM_PROMPT,
-                systemPromptMode: "replace",
-              });
-            }}
+            onTranscript={stableOnTranscript}
           />
         </Suspense>
       )}

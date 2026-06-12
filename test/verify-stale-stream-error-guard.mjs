@@ -12,7 +12,7 @@ const bufferSource = readFileSync(
 
 assert(bufferSource.includes('function clearChunkTrackingForChat') || bufferSource.includes('export function clearChunkTrackingForChat'), 'stream hook should centralize per-chat chunk tracking cleanup');
 assert(
-  source.includes('clearChunkTrackingForChat(chatId, chunkBuffersRef.current, firstChunkDeltas.current, firstChunkTypesSent.current);'),
+  source.includes('clearChunkTrackingForChat(chatId, chunkBuffersRef.current, firstChunkDeltas.current);'),
   'stream error/done/reset paths should clear stale chunk tracking',
 );
 assert(source.includes('let appliedToSendingAssistant = false;'), 'chat:error should track whether it affected a live assistant');

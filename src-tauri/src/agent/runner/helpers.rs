@@ -209,6 +209,42 @@ pub fn parse_text_tool_calls(content: &str) -> Option<Vec<crate::db::models::Too
     }
 }
 
+/// Remove only fenced blocks that are valid text-mode tool calls. Ordinary
+/// JSON/code blocks remain visible to the user.
+pub fn strip_text_tool_call_blocks(content: &str) -> String {
+    let mut visible = String::with_capacity(content.len());
+    let mut cursor = 0;
+
+    while let Some(relative_start) = content[cursor..].find("```") {
+        let start = cursor + relative_start;
+        visible.push_str(&content[cursor..start]);
+
+        let after_fence = &content[start + 3..];
+        let Some(tag_end) = after_fence.find('\n') else {
+            visible.push_str(&content[start..]);
+            return visible;
+        };
+        let block_content = &after_fence[tag_end + 1..];
+        let Some(relative_end) = block_content.find("```") else {
+            visible.push_str(&content[start..]);
+            return visible;
+        };
+        let end = start + 3 + tag_end + 1 + relative_end + 3;
+        let tag = after_fence[..tag_end].trim().to_lowercase();
+        let json_str = block_content[..relative_end].trim();
+        let is_tool_call = (tag.is_empty() || tag == "json" || tag == "tool")
+            && try_parse_tool_json(json_str).is_some();
+
+        if !is_tool_call {
+            visible.push_str(&content[start..end]);
+        }
+        cursor = end;
+    }
+
+    visible.push_str(&content[cursor..]);
+    visible.trim().to_string()
+}
+
 /// Try to parse a JSON string as a tool call with "tool" and "args" keys.
 pub fn try_parse_tool_json(json_str: &str) -> Option<crate::db::models::ToolCall> {
     let val: serde_json::Value = serde_json::from_str(json_str).ok()?;
@@ -220,4 +256,25 @@ pub fn try_parse_tool_json(json_str: &str) -> Option<crate::db::models::ToolCall
         name: name.to_string(),
         args,
     })
+}
+
+#[cfg(test)]
+mod text_tool_call_tests {
+    use super::{parse_text_tool_calls, strip_text_tool_call_blocks};
+
+    #[test]
+    fn strips_tool_protocol_but_keeps_commentary() {
+        let input = "I will inspect the board.\n```json\n{\"tool\":\"tool_list\",\"args\":{\"query\":\"board\"}}\n```\nContinuing now.";
+        assert_eq!(
+            strip_text_tool_call_blocks(input),
+            "I will inspect the board.\n\nContinuing now."
+        );
+        assert_eq!(parse_text_tool_calls(input).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn preserves_normal_json_code_blocks() {
+        let input = "```json\n{\"name\":\"Zen\"}\n```";
+        assert_eq!(strip_text_tool_call_blocks(input), input);
+    }
 }

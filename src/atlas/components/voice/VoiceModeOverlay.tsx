@@ -14,6 +14,7 @@ import { useVoiceChatEvents } from './useVoiceChatEvents';
 import { usePushToTalk } from './usePushToTalk';
 import { useVoiceAudioGraph } from './useVoiceAudioGraph';
 import { useVoiceActivityLoop } from './useVoiceActivityLoop';
+import { useBoardEventListener } from './useBoardEventListener';
 import type { SttServiceStatus, TtsServiceStatus } from './voiceStatus';
 
 export function VoiceModeOverlay({
@@ -229,8 +230,9 @@ export function VoiceModeOverlay({
         workletNodeRef,
     });
 
-    useVoiceChatEvents({
+    const { resetSpokenTracking } = useVoiceChatEvents({
         appendLog,
+        chatId,
         fullAiResponseRef,
         isOpenRef,
         lastSpokenResponseRef,
@@ -357,6 +359,7 @@ export function VoiceModeOverlay({
             setUserSpeechText('');
             fullAiResponseRef.current = '';
             lastSpokenResponseRef.current = '';
+            resetSpokenTracking();
             speakingBackRef.current = false;
             setExitConfirmationOpen(false);
             if (document.activeElement instanceof HTMLElement) {
@@ -392,6 +395,8 @@ export function VoiceModeOverlay({
             }
         });
     }, [chatId]);
+
+    useBoardEventListener();
 
     useVoiceActivityLoop({
         aiSpeakingRef, amplitudeRef, appendLog, flushVadUtterance, flushingRef,

@@ -8,7 +8,7 @@ export function PackageCard({ data }: { data: any }) {
     : 2;
 
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-black/40 backdrop-blur-md p-5 shadow-lg max-w-sm">
+    <div className="rounded-2xl border border-white/[0.08] bg-black/40 backdrop-blur-md p-5 shadow-lg max-w-md">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Package className="text-primary h-4 w-4" />

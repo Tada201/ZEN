@@ -136,6 +136,7 @@ export interface AudioSlice {
   autoGainControl: boolean;
   vadThreshold: number;
   voiceDisplayAgentEnabled: boolean;
+  voiceDisplayAgentModel: string;
   voiceDisplayAgentContextTokens: number;
   voiceDisplayAgentMaxTurns: number;
   voiceDisplayAgentAutoCompactEnabled: boolean;

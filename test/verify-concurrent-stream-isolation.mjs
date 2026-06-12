@@ -9,8 +9,8 @@ const toolEvents = readFileSync("src/atlas/hooks/stream/useToolEvents.ts", "utf8
 assert(
   chunkHook.includes("chunkBuffersRef.current[chatId]") &&
     chunkHook.includes("firstChunkDeltas.current[chatId]") &&
-    chunkHook.includes("firstChunkTypeSentKey(chatId") &&
-    chunkHelper.includes("firstChunkTypeSentKey"),
+    chunkHelper.includes("firstChunkTypesMap = new Map<string, Set<string>>") &&
+    chunkHelper.includes("firstChunkTypesMap.delete(chatId)"),
   "token buffers and first-chunk de-dupe must be keyed by chat id",
 );
 assert(

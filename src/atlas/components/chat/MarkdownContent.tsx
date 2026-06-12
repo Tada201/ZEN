@@ -1,4 +1,4 @@
-import React, { Suspense, useMemo, memo, Component, type ReactNode } from "react";
+import React, { Suspense, useMemo, memo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { Components } from "react-markdown";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -11,6 +11,17 @@ import { FileTree } from "./FileTree";
 import { splitMarkdownIntoBlocks, type MarkdownBlock } from "./markdown-utils";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import { isSafeGeneratedHref } from "@/lib/security/generatedLinks";
+import {
+  MarkdownErrorBoundary,
+  flattenChildren,
+  normalizeCodeLanguage,
+  parseYoutubeId,
+  YoutubePreview,
+  ImageGallery,
+  extractImagesFromChildren,
+  stripCodeFence,
+  removeAlertTag
+} from "./MarkdownHelperComponents";
 
 const MermaidDiagram = React.lazy(() => import("./MermaidDiagram").then(m => ({ default: m.MermaidDiagram })));
 const ChartBlock = React.lazy(() => import("./ChartBlock").then(m => ({ default: m.ChartBlock })));
@@ -26,97 +37,6 @@ const RichBlockFallback = () => (
     <div className="mx-6 mt-3 h-3 w-1/2 rounded-full bg-muted/30" />
   </div>
 );
-
-/**
-/**
- * MarkdownErrorBoundary - Catches rendering errors in markdown blocks
- * and displays a safe fallback instead of crashing the entire message.
- */
-class MarkdownErrorBoundary extends Component<
-  { children: ReactNode; content?: string },
-  { hasError: boolean }
-> {
-  constructor(props: { children: ReactNode; content?: string }) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="my-4 p-4 rounded-xl border border-rose-500/20 bg-rose-500/5">
-          <div className="flex items-center gap-2 text-rose-400 text-[10px] font-mono uppercase tracking-widest mb-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-            Markdown Render Error
-          </div>
-          <pre className="text-[11px] font-mono text-rose-300/50 whitespace-pre-wrap overflow-auto max-h-32">
-            {this.props.content || "Content could not be rendered"}
-          </pre>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-function flattenChildren(children: any): string {
-  if (!children) return "";
-  if (typeof children === "string") return children;
-  if (Array.isArray(children)) return children.map(flattenChildren).join("");
-  if (typeof children === "object" && children.props?.children) {
-    return flattenChildren(children.props.children);
-  }
-  return String(children);
-}
-
-function normalizeCodeLanguage(language?: string): string {
-  const lang = (language || "").toLowerCase();
-  if (lang === "openui-lang" || lang === "openuilang" || lang === "genui") return "openui";
-  return lang;
-}
-
-function stripCodeFence(content: string): string {
-  return content
-    .replace(/^```[^\n]*\n/, '')
-    .replace(/\n```$/, '')
-    .replace(/\n$/, '');
-}
-
-// Helper to remove the [!TYPE] text from the React element tree
-function removeAlertTag(children: React.ReactNode): React.ReactNode {
-  return React.Children.map(children, (child) => {
-    if (React.isValidElement(child)) {
-      const element = child as React.ReactElement<any>;
-      const elementChildren = React.Children.toArray(element.props.children);
-      if (elementChildren.length > 0 && typeof elementChildren[0] === "string") {
-        const firstStr = elementChildren[0];
-        const match = firstStr.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i);
-        if (match) {
-          const newChildren = [...elementChildren];
-          newChildren[0] = firstStr.replace(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i, "").trimStart();
-          return React.cloneElement(element, element.props, ...newChildren);
-        }
-      }
-      if (element.props.children) {
-        return React.cloneElement(element, {
-          ...element.props,
-          children: removeAlertTag(element.props.children),
-        });
-      }
-    }
-    return child;
-  });
-}
-
-/**
- * MemoizedMarkdownBlock - Optimized unit of markdown rendering.
- * Each block renders independently with its own ReactMarkdown instance,
- * preventing re-parsing of already-rendered blocks during streaming.
- */
 const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
   block,
   isStreaming,
@@ -279,6 +199,9 @@ export function MarkdownContent({
           </span>
         );
       }
+      // YouTube link preview
+      const ytId = parseYoutubeId(href || "");
+      if (ytId) { return <YoutubePreview videoId={ytId} />; }
       if (!isSafeGeneratedHref(href)) {
         return <span>{children}</span>;
       }
@@ -292,10 +215,26 @@ export function MarkdownContent({
     h1: ({ children }) => <h1 className="mb-4 mt-8 text-2xl font-bold tracking-tight text-foreground">{children}</h1>,
     h2: ({ children }) => <h2 className="mb-3 mt-6 text-xl font-semibold tracking-tight text-foreground/90">{children}</h2>,
     h3: ({ children }) => <h3 className="mb-2 mt-5 text-lg font-semibold text-foreground/80">{children}</h3>,
-    p: ({ children }) => <p className="mb-4 last:mb-0">{children}</p>,
+    h4: ({ children }) => <h4 className="mb-2 mt-4 text-base font-semibold text-foreground/70">{children}</h4>,
+    h5: ({ children }) => <h5 className="mb-2 mt-3 text-sm font-semibold text-foreground/60">{children}</h5>,
+    h6: ({ children }) => <h6 className="mb-2 mt-2 text-xs font-semibold text-foreground/50">{children}</h6>,
+    p: ({ children }) => {
+      const galleryImages = extractImagesFromChildren(children);
+      if (galleryImages) return <ImageGallery images={galleryImages} />;
+      return <p className="mb-4 last:mb-0">{children}</p>;
+    },
     ul: ({ children }) => <ul className="mb-4 ml-6 list-disc space-y-2">{children}</ul>,
     ol: ({ children }) => <ol className="mb-4 ml-6 list-decimal space-y-2">{children}</ol>,
     li: ({ children }) => <li className="pl-1">{children}</li>,
+    img: ({ src, alt }) => {
+      if (!src) return null;
+      if (!isSafeGeneratedHref(src)) {
+        return <span className="text-muted-foreground italic text-xs">[Image: {alt || src}]</span>;
+      }
+      return (
+        <img src={src} alt={alt || ""} className="my-4 max-w-full rounded-lg border border-border/30" />
+      );
+    },
     blockquote: ({ children }) => {
       const text = flattenChildren(children).trim();
       const match = text.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i);

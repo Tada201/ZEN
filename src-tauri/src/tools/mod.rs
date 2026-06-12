@@ -487,7 +487,6 @@ pub fn init_tool_registry(permissions: ToolPermissions) -> ToolRegistry {
         "search_session_memory",
         "get_memory_stats",
         "spawn_agent",
-        "delegate_to_agent",
         "handoff_to_agent",
     ] {
         registry.register_known_tool(tool_id, default_tool_risk(tool_id));

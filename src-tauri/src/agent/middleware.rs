@@ -247,7 +247,7 @@ impl ContextMiddleware for SystemPromptMiddleware {
             && ctx
                 .authorized_tool_ids
                 .iter()
-                .any(|t| t == "spawn_agent" || t == "delegate_to_agent")
+                .any(|t| t == "spawn_agent")
         {
             if let Some(state) = self.app.try_state::<crate::commands::AppState>() {
                 let agents = state.agent_registry.list();

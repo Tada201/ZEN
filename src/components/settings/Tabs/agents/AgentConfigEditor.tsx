@@ -142,6 +142,8 @@ export const AgentConfigEditor = memo(({ agent, allTools, onSaved, onDeleted }: 
               agent_id: agent.id,
               model_name: '',
               max_iterations: 10,
+              context_window: 0,
+              max_messages_in_memory: 0,
               enabled_tools: [],
               system_prompt_override: undefined,
             };

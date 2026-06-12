@@ -37,6 +37,29 @@ export function parseCardTags(text: string): { cards: ParsedCard[]; cleanText: s
     return { cards, cleanText: text || "" };
   }
 
+  // Also detect OpenUI inside markdown code fences: ```openui\n{...}\n```
+  const codeFenceRegex = /```(?:openui|genui)\s*\n([\s\S]*?)```/gi;
+  let fenceMatch: RegExpExecArray | null;
+  while ((fenceMatch = codeFenceRegex.exec(text)) !== null) {
+    const jsonContent = fenceMatch[1].trim();
+    try {
+      const parsed = JSON.parse(jsonContent) as Record<string, unknown>;
+      if (parsed && typeof parsed === "object") {
+        cards.push({
+          type: typeof parsed.type === "string" ? parsed.type : typeof parsed.card === "string" ? parsed.card : "unknown",
+          data: parsed.data || parsed,
+        });
+      }
+    } catch {
+      // Not valid JSON — skip
+    }
+  }
+  // Strip code fence OpenUI blocks from text
+  text = text.replace(/```(?:openui|genui)\s*\n[\s\S]*?```/gi, "");
+
+  // Strip inline tool call XML blocks that failed to execute
+  text = text.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "");
+
   const startTagRegex = /<card(?:\s[^>]*)?>/gi;
   let match: RegExpExecArray | null;
   const replacements: { start: number; end: number }[] = [];
@@ -61,7 +84,7 @@ export function parseCardTags(text: string): { cards: ParsedCard[]; cleanText: s
         });
       }
     } catch {
-      replacementText = "_Unable to render generated card._";
+      replacementText = "> **Unable to render generated card.** The generated content was malformed.";
     }
     replacements.push({ start, end });
     if (replacementText) {

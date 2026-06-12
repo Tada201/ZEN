@@ -37,7 +37,12 @@ export function buildLiveAgentPanelModel(messages: Message[]): LiveAgentPanelMod
     const message = [...assistantMessages].reverse().find((candidate: Message) => candidate.status === 'sending')
         || assistantMessages[assistantMessages.length - 1];
     const actionSteps = (message?.steps || []).filter((step: Step) => step?.type === 'action');
-    const toolCalls = groupToolCalls(message?.toolCalls || []);
+    const stepToolCalls = (message?.steps || [])
+        .filter((step: Step) => step?.type === 'tool-call' && step.toolCall)
+        .map((step: Step) => step.toolCall as ToolCall);
+    const fallbackToolStatus: ToolCall['status'] = message?.status === 'sending' ? 'running' : 'completed';
+    const toolCalls = groupToolCalls([...(message?.toolCalls || []), ...stepToolCalls])
+        .map((tool) => ({ ...tool, status: tool.status || fallbackToolStatus }));
     const trace = buildAgentExecutionTraceModel(toolCalls, actionSteps);
     const laneSteps = actionSteps.filter((step: Step) => (
         step.kind === 'agent_spawn' ||

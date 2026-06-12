@@ -9,6 +9,12 @@ import { MovieCard } from './premium/MovieCard';
 import { BookCard } from './premium/BookCard';
 import { PersonCard } from './premium/PersonCard';
 import { NutritionCard } from './premium/NutritionCard';
+import { WeatherCard } from './premium/WeatherCard';
+import { SportsCard } from './premium/SportsCard';
+import { MetricCard } from './premium/MetricCard';
+import { DataRecordCard } from './premium/DataRecordCard';
+import { ComparisonCard } from './premium/ComparisonCard';
+import { StatusCard } from './premium/StatusCard';
 import { MapComponent } from './Map';
 import { MessageComposer } from './MessageComposer';
 
@@ -85,6 +91,31 @@ export function PremiumCard({ type, data }: CardProps) {
 
   if (t === 'nutrition' || t === 'food') {
     return <NutritionCard data={data} />;
+  }
+
+  if (t === 'weather' || t === 'forecast') {
+    return <WeatherCard data={data} />;
+  }
+
+  if (t === 'sports' || t === 'match' || t === 'game') {
+    return <SportsCard data={data} />;
+  }
+
+  // Claude-style structural cards
+  if (t === 'metric' || t === 'stat' || t === 'kpi') {
+    return <MetricCard data={data} />;
+  }
+
+  if (t === 'record' || t === 'datarecord' || t === 'entity') {
+    return <DataRecordCard data={data} />;
+  }
+
+  if (t === 'comparison' || t === 'compare' || t === 'plans') {
+    return <ComparisonCard data={data} />;
+  }
+
+  if (t === 'status' || t === 'alert' || t === 'notification' || t === 'event') {
+    return <StatusCard data={data} />;
   }
 
   // Fallback visual display for raw custom cards

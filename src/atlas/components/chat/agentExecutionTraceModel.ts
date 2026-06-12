@@ -10,6 +10,8 @@ export type AgentExecutionTraceModel = {
   approvalCount: number;
   finishedCount: number;
   progressPercent: number;
+  completedPercent: number;
+  errorPercent: number;
   startedTogether: boolean;
   explicitBatch: boolean;
   batchSummary: string;
@@ -49,6 +51,8 @@ export type ToolExecutionBatchLane = {
   runningCount: number;
   approvalCount: number;
   progressPercent: number;
+  completedPercent: number;
+  errorPercent: number;
   ownerSummary: string;
   runningToolNames: string[];
   approvalToolNames: string[];
@@ -253,6 +257,8 @@ function getBatchLanes(toolCalls: ToolCall[], startedTogether: boolean, ledger: 
       runningCount,
       approvalCount,
       progressPercent: lane.toolCalls.length > 0 ? Math.round((finishedCount / lane.toolCalls.length) * 100) : 0,
+      completedPercent: lane.toolCalls.length > 0 ? Math.round((completedCount / lane.toolCalls.length) * 100) : 0,
+      errorPercent: lane.toolCalls.length > 0 ? Math.round((errorCount / lane.toolCalls.length) * 100) : 0,
       ownerSummary: getOwnerSummary(lane.toolCalls),
       runningToolNames: lane.toolCalls.filter(isRunningTool).map((tc) => tc.name).slice(0, 3),
       approvalToolNames: lane.toolCalls.filter(isAwaitingApprovalTool).map((tc) => tc.name).slice(0, 3),
@@ -391,6 +397,8 @@ export function buildAgentExecutionTraceModel(toolCalls: ToolCall[], steps: Step
   const approvalCount = toolCalls.filter(isAwaitingApprovalTool).length;
   const finishedCount = completedCount + errorCount;
   const progressPercent = toolCalls.length > 0 ? Math.round((finishedCount / toolCalls.length) * 100) : 0;
+  const completedPercent = toolCalls.length > 0 ? Math.round((completedCount / toolCalls.length) * 100) : 0;
+  const errorPercent = toolCalls.length > 0 ? Math.round((errorCount / toolCalls.length) * 100) : 0;
   const startedTogether = getStartedTogether(toolCalls);
   const explicitBatchIds = getExplicitBatchIds(toolCalls);
   const explicitBatch = explicitBatchIds.length > 0;
@@ -421,6 +429,8 @@ export function buildAgentExecutionTraceModel(toolCalls: ToolCall[], steps: Step
     approvalCount,
     finishedCount,
     progressPercent,
+    completedPercent,
+    errorPercent,
     startedTogether,
     explicitBatch,
     batchSummary,

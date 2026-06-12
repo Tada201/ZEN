@@ -2,7 +2,12 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-/// Per-agent JSON config file stored in user app data directory.
+/// Per-agent JSON config file — the single authoritative config source.
+///
+/// Overrides are loaded from the user config dir (`~/.config/zen/agent_configs/`),
+/// falling back to bundled resource templates, then built-in defaults.
+/// This struct replaces the old `AgentConfig` (DB-backed) and merges the
+/// superset of fields from both systems.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentConfigFile {
     /// Agent ID this config applies to (e.g. "generalist")
@@ -13,6 +18,12 @@ pub struct AgentConfigFile {
     /// Maximum iterations for this agent's loop
     #[serde(default = "default_max_iterations")]
     pub max_iterations: u32,
+    /// Context window size in tokens (0 = use RunConfig default)
+    #[serde(default)]
+    pub context_window: u32,
+    /// Maximum messages to keep in agent memory (0 = use RunConfig default)
+    #[serde(default)]
+    pub max_messages_in_memory: u32,
     /// Tool IDs allowed for this agent (empty = use agent's default tools)
     #[serde(default)]
     pub enabled_tools: Vec<String>,
@@ -34,6 +45,8 @@ impl Default for AgentConfigFile {
             agent_id: String::new(),
             model_name: String::new(),
             max_iterations: default_max_iterations(),
+            context_window: 0,
+            max_messages_in_memory: 0,
             enabled_tools: Vec::new(),
             system_prompt_override: None,
             description: None,
@@ -272,6 +285,8 @@ mod tests {
             agent_id: "test".to_string(),
             model_name: "gpt-4o".to_string(),
             max_iterations: 15,
+            context_window: 128_000,
+            max_messages_in_memory: 50,
             enabled_tools: vec!["web_search".to_string(), "write_file".to_string()],
             system_prompt_override: Some("Custom prompt".to_string()),
             description: Some("Test config".to_string()),

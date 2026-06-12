@@ -1,4 +1,5 @@
 import { openuiLibrary, openuiPromptOptions } from "@openuidev/react-ui/genui-lib";
+import { buildCardCatalogPrompt } from "../chat/cardCatalog";
 
 let cachedOpenUISystemPrompt: string | null = null;
 
@@ -9,6 +10,7 @@ export function buildOpenUISystemPrompt(): string {
   let basePrompt = openuiLibrary.prompt(promptOptions);
   
   basePrompt += `
+${buildCardCatalogPrompt()}
 
 ### ZEN OPENUI RENDERING CONTRACT
 1. Output OpenUI Lang only, not JSX, HTML, CSS, JavaScript, React code, imports, or markdown fences.

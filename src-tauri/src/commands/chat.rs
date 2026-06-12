@@ -349,8 +349,9 @@ Always use these specialized code blocks for visual scenarios:
 1. 📊 CHARTS: Use ```chart with JSON schema: {\"type\":\"bar|line|area|pie\",\"title\":\"...\",\"xAxis\":\"x_key\",\"keys\":[\"y_key\"],\"data\":[{\"x_key\":\"val\",\"y_key\":num}]}.
 2. 📐 ARCHITECTURE: Use ```mermaid code blocks for flowcharts, sequences, or component relationships.
 3. 📁 STRUCTURE: Use ```tree with indentations to describe folder trees or directory structures.
-4. 🧪 CANVAS (openui): Use ```openui containing layout primitive tags to render live interactive canvas widgets (when Gen UI is enabled).
-5. 📢 ALERTS: Wrap callouts in standard blockquotes with headers (> [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION]).
+4. 🃏 RICH CARDS: Use <card> block with JSON data to display rich visual cards. Available types: weather, stock, sports, flight, product, event, movie, book, person, nutrition, package, job. Format: <card>{\"type\":\"weather\",\"data\":{\"location\":\"Tokyo\",\"temperature\":22}}</card>.
+5. 🧪 CANVAS (openui): Use ```openui containing layout primitive tags to render live interactive canvas widgets (when Gen UI is enabled).
+6. 📢 ALERTS: Wrap callouts in standard blockquotes with headers (> [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION]).
 
 ## 🚫 Critical Limitations & Strict Syntax Constraints
 - Do not render raw HTML/React tags directly in plain text. All designs must be enclosed in the structural markdown blocks listed above.
@@ -385,6 +386,27 @@ Always use these specialized code blocks for visual scenarios:
         instructions.push_str("\n\n[SYSTEM STATE WARNING]\nIMPORTANT: The Generative UI feature is currently DISABLED for this message turn. Do NOT generate any 'openui' or visual sandbox layout blocks. Provide all responses in plain, standard markdown or text.");
     }
 
+    // Detect voice mode and read display agent settings
+    let is_voice_mode = replace_system_prompt;
+    let display_agent_enabled = if is_voice_mode {
+        state.settings_manager.get("voiceDisplayAgentEnabled").await
+            .ok()
+            .flatten()
+            .or(state.settings_manager.get("voice_display_agent_enabled").await.ok().flatten())
+            .map(|v| v == "true").unwrap_or(true)
+    } else {
+        false
+    };
+    let display_agent_model = if is_voice_mode {
+        state.settings_manager.get("voiceDisplayAgentModel").await
+            .ok()
+            .flatten()
+            .or(state.settings_manager.get("voice_display_agent_model").await.ok().flatten())
+            .filter(|v| !v.is_empty())
+    } else {
+        None
+    };
+
     let agent = crate::agent::types::Agent {
         id: "zen_assistant".to_string(),
         name: "Zen".to_string(),
@@ -392,6 +414,7 @@ Always use these specialized code blocks for visual scenarios:
         tool_ids,
         model_override: None,
         max_iterations: Some(20),
+        context_window: None,
         description: Some("Customized assistant".to_string()),
         model_tier: crate::agent::types::ModelTier::Local,
     };
@@ -527,15 +550,30 @@ Always use these specialized code blocks for visual scenarios:
             "iteration": 0
         }),
     );
-    let runner = Runner::new(
-        app.clone(),
-        state.tool_registry_v1.clone(),
-        state.agent_registry.clone(),
-        state.hook_registry.clone(),
-        state.tools.clone(),
-        state.tool_manager.clone(),
-    )
-    .with_db_pool(db.clone());
+    let runner = {
+        let mut r = Runner::new(
+            app.clone(),
+            state.tool_registry_v1.clone(),
+            state.agent_registry.clone(),
+            state.hook_registry.clone(),
+            state.tools.clone(),
+            state.tool_manager.clone(),
+        )
+        .with_db_pool(db.clone())
+        .with_voice_mode(is_voice_mode && display_agent_enabled, display_agent_model);
+
+        // Apply per-agent overrides from AgentConfigFile
+        if let Ok(cfg) = crate::agent::config_file::load_agent_config(&agent.id) {
+            if cfg.context_window > 0 {
+                r = r.with_max_context_tokens(cfg.context_window as usize);
+            }
+            if cfg.max_messages_in_memory > 0 {
+                r = r.with_max_messages_in_memory(cfg.max_messages_in_memory as usize);
+            }
+        }
+
+        r
+    };
 
     let cancel_tokens_runner = cancel_tokens.clone();
     let app_error = app.clone();
@@ -883,7 +921,6 @@ fn default_yolo_tool_ids() -> Vec<String> {
         "system_metrics",
         "get_system_metrics",
         "spawn_agent",
-        "delegate_to_agent",
         "handoff_to_agent",
     ]
     .into_iter()

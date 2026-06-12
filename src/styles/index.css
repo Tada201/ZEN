@@ -1,22 +1,37 @@
 @import "tailwindcss";
 
 @keyframes premium-shimmer {
-  from { background-position: 200% 0; }
-  to { background-position: -200% 0; }
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
 }
 
 .text-premium-shimmer {
-  background: linear-gradient(
-    110deg,
-    rgba(255, 255, 255, 0.32) 20%,
-    rgba(255, 255, 255, 0.96) 50%,
-    rgba(255, 255, 255, 0.32) 80%
-  );
-  background-size: 200% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: premium-shimmer 2.2s linear infinite;
+  animation: premium-shimmer 1.8s ease-in-out infinite;
+}
+
+/* Animated expand/collapse via grid-template-rows (works in all modern browsers) */
+.tool-expand-grid {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 200ms ease-out, opacity 200ms ease-out;
+  opacity: 0;
+}
+.tool-expand-grid.open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.tool-expand-grid > .tool-expand-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+@keyframes shimmer-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+.animate-shimmer-slide {
+  animation: shimmer-slide 2s ease-in-out infinite;
 }
 
 @theme {

@@ -21,6 +21,8 @@ const inputControls = read("src/components/settings/Tabs/audio/InputControls.tsx
 const microphoneConfig = read("src/components/settings/Tabs/audio/MicrophoneConfig.tsx");
 const outputConfig = read("src/components/settings/Tabs/audio/OutputConfig.tsx");
 const voiceOverlay = read("src/atlas/components/voice/VoiceModeOverlay.tsx");
+const voiceAudioGraph = read("src/atlas/components/voice/useVoiceAudioGraph.ts");
+const whisperPcm = read("src/atlas/components/voice/whisperPcm.ts");
 const packageJson = read("package.json");
 
 for (const removed of ["STTConfig", "TTSConfig", "VoiceModulation", "SystemSoundsConfig", "FeedbackIntensityConfig"]) {
@@ -59,10 +61,10 @@ assertIncludes(outputConfig, "Speaker Level", "Output config must expose speaker
 assertIncludes(outputConfig, "masterVolume * speakerVolume", "Speaker test must apply speaker level.");
 
 assertIncludes(voiceOverlay, "const micVolume = useSettingsStore", "Voice overlay must read mic gain.");
-assertIncludes(voiceOverlay, "gain.gain.value = 1", "Voice overlay must keep the mic capture graph unmuted.");
-assertIncludes(voiceOverlay, "samples16k[i] * micVolume", "Voice overlay must apply mic gain during PCM conversion.");
-assertNotIncludes(voiceOverlay, "voiceInputMode ? 0 : micVolume", "Voice overlay must not mute capture in push-to-talk mode.");
-assertNotIncludes(voiceOverlay, "setTargetAtTime(0", "Voice overlay must not mute the capture graph on Space release.");
+assertIncludes(voiceAudioGraph, "gain.gain.value = 1", "Voice audio graph must keep mic capture unmuted.");
+assertIncludes(whisperPcm, "samples16k[i] * micVolume", "Whisper PCM conversion must apply mic gain.");
+assertNotIncludes(voiceAudioGraph, "voiceInputMode ? 0 : micVolume", "Push-to-talk must not mute the capture graph.");
+assertNotIncludes(voiceAudioGraph, "setTargetAtTime(0", "Space release must not mute the capture graph.");
 
 assertIncludes(packageJson, '"test:audio-settings-scope"', "Audio settings verifier must be registered in package.json.");
 

@@ -18,6 +18,8 @@ import { ModelSearchDropdown } from './chat/input/ModelSearchDropdown';
 import { PinnedActionBar } from './chat/input/PinnedActionBar';
 import { TaskChecklistPanel } from './chat/input/TaskChecklistPanel';
 import { SuggestedPromptStrip } from './chat/input/SuggestedPromptStrip';
+import { PromptPicker } from "./chat/PromptPicker";
+import type { PromptDefinition } from "./chat/promptRegistry";
 import type { PremiumChatInputProps, ThinkingPayload } from './chat/input/PremiumChatInputTypes';
 import { fileToAttachment } from './chat/input/fileAttachments';
 
@@ -73,6 +75,7 @@ export const PremiumChatInput = memo(({
     return false;
   });
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [selectedPrompt, setSelectedPrompt] = useState<PromptDefinition | null>(null);
 
   const [isModelOpen, setIsModelOpen] = useState(false);
   const [isPlusMenuOpen, setIsPlusMenuOpen] = useState(false);
@@ -234,8 +237,14 @@ export const PremiumChatInput = memo(({
 
     const attachments = await Promise.all(selectedFiles.map(fileToAttachment));
 
+    // Inject selected prompt
+    const prompt = selectedPrompt;
+    const finalMessage = prompt?.mode === "prepend"
+      ? `${prompt.content}\n\n---\n\n${message}`
+      : message;
+
     onSend({
-      message,
+      message: finalMessage,
       model: modelId,
       webSearch: isWebSearch,
       deepResearch: isDeepResearch,
@@ -245,10 +254,15 @@ export const PremiumChatInput = memo(({
       thinking: buildThinkingPayload(),
       tools: isToolsDisabled ? [] : undefined,
       provider: providerId,
+      ...(prompt?.mode === "system" ? {
+        systemPrompt: prompt.content,
+        systemPromptMode: "replace" as const,
+      } : {}),
     });
 
     setMessage('');
     setSelectedFiles([]);
+    setSelectedPrompt(null);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
@@ -318,6 +332,13 @@ export const PremiumChatInput = memo(({
       {!IS_TAURI && (
         <SuggestedPromptStrip isLoading={isLoading} onSelect={handleSuggestedClick} />
       )}
+
+      {/* Dynamic Prompt Picker */}
+      <PromptPicker
+        selectedId={selectedPrompt?.id ?? null}
+        onSelect={setSelectedPrompt}
+        compact
+      />
 
       <div
         ref={containerRef}
@@ -409,8 +430,8 @@ export const PremiumChatInput = memo(({
             </div>
           </div>
 
-          <div className="flex items-center justify-between px-3 py-2 bg-transparent">
-            <div className="flex items-center gap-1.5 overflow-visible">
+          <div className="flex items-center justify-between px-3 py-2 bg-transparent gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 overflow-visible flex-wrap">
               {!isSidebar && (
                 <ModelSearchDropdown
                   isOpen={isModelOpen}
@@ -479,14 +500,19 @@ export const PremiumChatInput = memo(({
                 disabled={!message.trim() && selectedFiles.length === 0 && !isLoading}
                 aria-label={isLoading ? "Stop response" : "Send message"}
                 className={cn(
-                  "p-1.5 rounded-full transition-all duration-300",
-                  (message.trim() || selectedFiles.length > 0 || isLoading)
-                    ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-sm hover:scale-105 active:scale-95"
-                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-300 dark:text-zinc-600 cursor-not-allowed"
+                  "relative p-1.5 rounded-full transition-all duration-300",
+                  isLoading
+                    ? "bg-rose-500/90 text-white shadow-lg shadow-rose-500/20 hover:bg-rose-500"
+                    : (message.trim() || selectedFiles.length > 0)
+                      ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-sm hover:scale-105 active:scale-95"
+                      : "bg-zinc-100 dark:bg-zinc-800 text-zinc-300 dark:text-zinc-600 cursor-not-allowed"
                 )}
               >
+                {isLoading && (
+                  <span className="absolute inset-0 rounded-full animate-ping bg-rose-400/30" />
+                )}
                 {isLoading ? (
-                  <div className="w-4 h-4 bg-current rounded-[2px]" />
+                  <div className="relative w-4 h-4 bg-current rounded-[2px]" />
                 ) : (
                   <ArrowUp className="w-4 h-4 stroke-[3px]" />
                 )}

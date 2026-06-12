@@ -7,18 +7,16 @@ import { providerOrder } from "@/lib/types/provider";
 import { WorkbenchButton } from "@/components/ui/WorkbenchButton";
 import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 import { SettingsSection } from "../SettingsSection";
-import { WorkbenchInput } from "@/components/settings/ui/WorkbenchInput";
 import { SettingsRow } from "../SettingsRow";
-import { WorkbenchSlider } from "@/components/settings/ui/WorkbenchSlider";
 import { WorkbenchSwitch } from "@/components/settings/ui/WorkbenchSwitch";
+import { WorkbenchInput } from "@/components/settings/ui/WorkbenchInput";
+import { WorkbenchSlider } from "@/components/settings/ui/WorkbenchSlider";
 import { WorkbenchTextArea } from "@/components/settings/ui/WorkbenchTextArea";
 import { STTConfig } from "./audio/STTConfig";
 import { TTSConfig } from "./audio/TTSConfig";
 
-function clampNumber(value: number, min: number, max: number) {
-  if (!Number.isFinite(value)) return min;
-  return Math.min(max, Math.max(min, value));
-}
+const clampNumber = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
 
 export const VoiceSettings = memo(() => {
   const activeProvider = useSettingsStore((s) => s.activeProvider);
@@ -30,6 +28,7 @@ export const VoiceSettings = memo(() => {
   const updateSetting = useSettingsStore((s) => s.updateSetting);
 
   const voiceDisplayAgentEnabled = useSettingsStore((s) => s.voiceDisplayAgentEnabled);
+  const displayAgentModel = useSettingsStore((s) => s.voiceDisplayAgentModel);
   const contextTokens = useSettingsStore((s) => s.voiceDisplayAgentContextTokens);
   const maxTurns = useSettingsStore((s) => s.voiceDisplayAgentMaxTurns);
   const autoCompactEnabled = useSettingsStore((s) => s.voiceDisplayAgentAutoCompactEnabled);
@@ -48,13 +47,9 @@ export const VoiceSettings = memo(() => {
     providerModels.find((model) => model.id === activeModel || model.name === activeModel) ?? null;
   const isTesting = Boolean(testingConnections[activeProvider]);
   const status = connectionStatuses[activeProvider] ?? "idle";
-
-  const setNumberSetting = useCallback(
-    (key: keyof SettingsState, value: number, min: number, max: number) => {
-      updateSetting(key, clampNumber(value, min, max) as never);
-    },
-    [updateSetting]
-  );
+  const setNumberSetting = useCallback((key: keyof SettingsState, value: number, min: number, max: number) => {
+    updateSetting(key, clampNumber(value, min, max) as never);
+  }, [updateSetting]);
 
   const handleProviderTest = useCallback(async () => {
     setTestMessage(null);
@@ -75,11 +70,6 @@ export const VoiceSettings = memo(() => {
       toast.error(message, { id: toastId });
     }
   }, [activeProvider, testProviderConnection]);
-
-  const resetPrompt = useCallback(() => {
-    updateSetting("voiceDisplayAgentPrompt", VOICE_DISPLAY_AGENT_DEFAULT_PROMPT);
-    toast.success("Voice display prompt reset");
-  }, [updateSetting]);
 
   return (
     <div className="space-y-6">
@@ -129,13 +119,13 @@ export const VoiceSettings = memo(() => {
 
       <SettingsSection
         title="Display Agent"
-        subtitle="Voice Stage"
+        subtitle="Voice Board"
         icon="lucide:panel-top"
-        description="Controls the render-only agent that prepares cards, charts, tables, and board updates for voice mode."
+        description="A fast, lightweight subagent that renders main-agent data on the voice board. It only has access to board rendering."
       >
         <SettingsRow
           label="Enable display agent"
-          description="The main agent owns data gathering and tools; this agent only renders the voice board."
+          description="When enabled, the model may spawn a separate display agent to render structured content on the voice board. Leave off if you prefer text-only voice responses."
           control={
             <WorkbenchSwitch
               checked={voiceDisplayAgentEnabled}
@@ -143,125 +133,81 @@ export const VoiceSettings = memo(() => {
             />
           }
         />
-        <SettingsRow
-          label="Context budget"
-          description="Default is 128k. This limits the render agent's retained voice-board context."
-          control={
-            <div className="flex w-[210px] items-center gap-2">
-              <WorkbenchInput
-                type="number"
-                min={4096}
-                max={1048576}
-                step={1024}
-                value={contextTokens}
-                onChangeText={(value) =>
-                  setNumberSetting("voiceDisplayAgentContextTokens", Number(value), 4096, 1048576)
-                }
-              />
-              <span className="w-12 text-right text-[10px] font-bold text-zinc-500">tokens</span>
+        {voiceDisplayAgentEnabled && (
+          <>
+            <div className="rounded-xl border border-white/[0.05] bg-zinc-950/40 p-4 mb-2 space-y-2">
+              <div className="flex items-center gap-2">
+                <WorkbenchIcon name="lucide:info" size={13} className="text-blue-400" />
+                <span className="text-[11px] font-semibold text-blue-300">How it works</span>
+              </div>
+              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                The display agent runs alongside the main conversation. It uses the <code className="text-zinc-300 bg-white/[0.04] px-1 rounded">manage_board</code> tool to update the scratch pad with notes, metrics, tables, charts, code, diagrams, SVGs, palettes, diffs, and more. The main agent handles your requests normally — the display agent just keeps the board populated visually.
+              </p>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                {[
+                  { icon: "lucide:check", text: "Render main-agent data" },
+                  { icon: "lucide:check", text: "Manage board (cards, charts, code)" },
+                  { icon: "lucide:x", text: "No filesystem access" },
+                  { icon: "lucide:x", text: "No shell or command execution" },
+                  { icon: "lucide:x", text: "No agent delegation" },
+                  { icon: "lucide:x", text: "No message sending" },
+                ].map((item) => (
+                  <div key={item.text} className="flex items-center gap-1.5 text-[10px]">
+                    <WorkbenchIcon name={item.icon} size={10} className={item.icon.includes("check") ? "text-emerald-400" : "text-zinc-600"} />
+                    <span className="text-zinc-500">{item.text}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          }
-        />
-        <SettingsRow
-          label="Max turns"
-          description="Conversation turns retained by the render agent before compaction. Hard max is 50."
-          control={
-            <div className="flex w-[160px] items-center gap-3">
-              <WorkbenchSlider
-                value={[maxTurns]}
-                min={1}
-                max={50}
-                step={1}
-                onValueChange={([value]) => setNumberSetting("voiceDisplayAgentMaxTurns", value, 1, 50)}
-                className="flex-1"
-              />
-              <span className="w-8 text-right text-[11px] font-bold text-zinc-300">{maxTurns}</span>
-            </div>
-          }
-        />
-        <SettingsRow
-          label="Auto compact context"
-          description="Compacts render-agent context before it grows large enough to slow voice mode."
-          control={
-            <WorkbenchSwitch
-              checked={autoCompactEnabled}
-              onCheckedChange={(checked) => updateSetting("voiceDisplayAgentAutoCompactEnabled", checked)}
+            <SettingsRow
+              label="Display agent model"
+              description="Choose which model powers the display agent. A fast local model is recommended — the agent only needs basic reasoning to structure data visually."
+              control={
+                <select
+                  value={displayAgentModel || ""}
+                  onChange={(e) => updateSetting("voiceDisplayAgentModel", e.target.value)}
+                  className="h-8 rounded-lg border border-white/[0.08] bg-zinc-950/60 px-2.5 text-xs text-zinc-200 outline-none focus:border-white/[0.15]"
+                >
+                  <option value="">Same as main agent</option>
+                  {providerModels.map((model) => (
+                    <option key={model.id || model.name} value={model.id || model.name || ""}>
+                      {model.name || model.id}
+                    </option>
+                  ))}
+                </select>
+              }
             />
-          }
-        />
-        <SettingsRow
-          label="Compact threshold"
-          description="Default is 75% of the configured render-agent context budget."
-          control={
-            <div className="flex w-[160px] items-center gap-3">
-              <WorkbenchSlider
-                value={[compactThreshold]}
-                min={50}
-                max={95}
-                step={5}
-                disabled={!autoCompactEnabled}
-                onValueChange={([value]) =>
-                  setNumberSetting("voiceDisplayAgentCompactThreshold", value, 50, 95)
-                }
-                className="flex-1"
-              />
-              <span className="w-8 text-right text-[11px] font-bold text-zinc-300">{compactThreshold}%</span>
+            <SettingsRow
+              label="Context budget"
+              description="Maximum context retained by the render agent."
+              control={<WorkbenchInput type="number" min={4096} max={1048576} step={1024} value={contextTokens} onChangeText={(value) => setNumberSetting("voiceDisplayAgentContextTokens", Number(value), 4096, 1048576)} />}
+            />
+            <SettingsRow
+              label="Max turns"
+              description="Turns retained before compaction. Maximum 50."
+              control={<div className="flex w-40 items-center gap-3"><WorkbenchSlider value={[maxTurns]} min={1} max={50} step={1} onValueChange={([value]) => setNumberSetting("voiceDisplayAgentMaxTurns", value, 1, 50)} /><span className="w-7 text-right text-xs">{maxTurns}</span></div>}
+            />
+            <SettingsRow
+              label="Auto compact context"
+              description="Compact retained context before it reaches the configured limit."
+              control={<WorkbenchSwitch checked={autoCompactEnabled} onCheckedChange={(checked) => updateSetting("voiceDisplayAgentAutoCompactEnabled", checked)} />}
+            />
+            <SettingsRow
+              label="Compact threshold"
+              description="Percentage of context usage that triggers compaction."
+              control={<div className="flex w-40 items-center gap-3"><WorkbenchSlider value={[compactThreshold]} min={50} max={95} step={5} disabled={!autoCompactEnabled} onValueChange={([value]) => setNumberSetting("voiceDisplayAgentCompactThreshold", value, 50, 95)} /><span className="w-8 text-right text-xs">{compactThreshold}%</span></div>}
+            />
+            <SettingsRow
+              label="Remembered boards"
+              description="Oldest retained board is removed when this limit is exceeded."
+              control={<div className="flex w-40 items-center gap-3"><WorkbenchSlider value={[boardMemoryLimit]} min={1} max={3} step={1} onValueChange={([value]) => setNumberSetting("voiceDisplayAgentBoardMemoryLimit", value, 1, 3)} /><span className="w-7 text-right text-xs">{boardMemoryLimit}</span></div>}
+            />
+            <div className="space-y-2 rounded-lg border border-white/[0.05] bg-black/20 p-3">
+              <div className="flex items-center justify-between"><span className="text-xs font-medium text-zinc-300">Render prompt</span><WorkbenchButton size="sm" variant="outline" onClick={() => updateSetting("voiceDisplayAgentPrompt", VOICE_DISPLAY_AGENT_DEFAULT_PROMPT)}>Reset Default</WorkbenchButton></div>
+              <WorkbenchTextArea value={voicePrompt} onChangeText={(value) => updateSetting("voiceDisplayAgentPrompt", value)} className="min-h-36 resize-y text-xs" />
             </div>
-          }
-        />
-      </SettingsSection>
-
-      <SettingsSection
-        title="Board Memory"
-        subtitle="Context Board"
-        icon="lucide:layout-dashboard"
-        description="Defines how many finished boards stay available for edit and replacement requests."
-      >
-        <SettingsRow
-          label="Remembered boards"
-          description="A new-board request clears old board context. Edit and replace requests can use retained boards."
-          control={
-            <div className="flex w-[160px] items-center gap-3">
-              <WorkbenchSlider
-                value={[boardMemoryLimit]}
-                min={1}
-                max={3}
-                step={1}
-                onValueChange={([value]) =>
-                  setNumberSetting("voiceDisplayAgentBoardMemoryLimit", value, 1, 3)
-                }
-                className="flex-1"
-              />
-              <span className="w-8 text-right text-[11px] font-bold text-zinc-300">{boardMemoryLimit}</span>
-            </div>
-          }
-        />
-        <div className="grid gap-2 sm:grid-cols-3">
-          {["New board clears old board context", "Edit/replace can reuse retained boards", "Excess boards are pruned oldest first"].map((text) => (
-            <div key={text} className="rounded-xl border border-white/[0.04] bg-zinc-950/40 p-3 text-[11px] text-zinc-400">
-              {text}
-            </div>
-          ))}
-        </div>
-      </SettingsSection>
-
-      <SettingsSection
-        title="Render Prompt"
-        subtitle="Prompt"
-        icon="lucide:file-pen-line"
-        description="Editable system prompt for the render-only voice display agent."
-      >
-        <WorkbenchTextArea
-          value={voicePrompt}
-          onChangeText={(value) => updateSetting("voiceDisplayAgentPrompt", value)}
-          className="min-h-[190px] resize-y rounded-xl border-white/[0.08] bg-zinc-950/60 text-xs leading-relaxed"
-        />
-        <div className="flex justify-end">
-          <WorkbenchButton size="sm" variant="outline" onClick={resetPrompt}>
-            <WorkbenchIcon name="lucide:rotate-ccw" size={13} />
-            Reset Default
-          </WorkbenchButton>
-        </div>
+          </>
+        )}
       </SettingsSection>
     </div>
   );

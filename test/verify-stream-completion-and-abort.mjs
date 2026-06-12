@@ -22,7 +22,7 @@ assert(
   chunkHookSource.includes('listenAppEvent("chat:done"') &&
     chunkHookSource.includes("clearHeartbeatTimeout(chatId)") &&
     chunkHookSource.includes("setStreamingForChat(chatId, false)") &&
-    chunkHookSource.includes("markMessageAsFinished(finalized, isCancelled)") &&
+    chunkHookSource.includes("markMessageAsFinished(finalized, isCancelled, reason)") &&
     messageTargetSource.includes('status: isCancelled ? "cancelled" : "sent"') &&
     chunkHookSource.includes("ttftReport(chatId, reason)"),
   "chat:done must clear heartbeat, stop loading state, finalize assistant status, and report TTFT completion",

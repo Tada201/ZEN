@@ -46,7 +46,7 @@ export function LiveSessionExecution({ model, isStreaming }: { model: LiveAgentP
                     <div className="live-agent-panel__section-title">Recent tools</div>
                     <div className="live-agent-panel__tools">
                         {recentTools.map((tool, index) => {
-                            const status = tool.status || 'running';
+                            const status = tool.status;
                             const key = [
                                 tool.id || 'tool',
                                 tool.name || 'unknown',

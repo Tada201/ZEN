@@ -10,12 +10,16 @@ export function MessageItem({
   onOpenArtifact,
   onRetry,
   onOpenSettings,
+  onDismissError,
+  onRegenerate,
   compact,
 }: {
   message: Message;
   onOpenArtifact: (a: ArtifactData) => void;
   onRetry?: (id: string) => void;
   onOpenSettings?: (tab: SettingsTabId, provider?: string) => void;
+  onDismissError?: (id: string) => void;
+  onRegenerate?: (id: string) => void;
   compact?: boolean;
 }) {
   const message = useMemo(() => normalizeVercelMessage(rawMessage), [rawMessage]);
@@ -37,7 +41,9 @@ export function MessageItem({
         message={message} 
         onOpenArtifact={onOpenArtifact} 
         onRetry={onRetry} 
-        onOpenSettings={onOpenSettings} 
+        onOpenSettings={onOpenSettings}
+        onDismissError={onDismissError}
+        onRegenerate={onRegenerate}
         compact={compact} 
       />
     );

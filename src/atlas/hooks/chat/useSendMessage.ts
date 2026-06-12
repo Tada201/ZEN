@@ -8,6 +8,7 @@ import type { Message, Attachment } from "../../components/chat/types";
 import { findWritableAssistantIndex, markMessageAsFailed } from "../stream/messageTarget";
 import { createOptimisticChatMessages } from "./optimisticChatMessages";
 import { preloadOpenUISystemPrompt } from "../../components/genui/promptLoader";
+import { useVoiceStageStore } from "../../components/voice/voiceStageStore";
 
 export function useSendMessage(
   currentSessionId: string | null,
@@ -76,6 +77,17 @@ export function useSendMessage(
       if (data.systemPrompt?.trim()) {
         systemPrompt = data.systemPrompt;
         systemPromptMode = data.systemPromptMode ?? "append";
+
+        if (systemPromptMode === "replace") {
+          const boardBlocks = useVoiceStageStore.getState().blocks;
+          const boardSummary = boardBlocks.length > 0
+            ? boardBlocks
+                .map((b, i) => `${i + 1}. [${b.kind}] ${b.title || ""}: ${(b as any).body || (b as any).value || ""}`)
+                .join("\n")
+            : "Board is currently empty.";
+
+          systemPrompt = `${systemPrompt}\n\n## Visual Board Capabilities\nYou have access to a visual board displayed next to the user. You can update the board directly using the \`manage_board\` tool, or delegate complex/async data-gathering tasks to the \`voice_display\` subagent using \`spawn_agent\`.\n\n## Current Board State\n${boardSummary}\n\nPrefer targeted edits over full rewrites.`;
+        }
       }
 
       await chatApi.sendMessage({

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 
-export type VoiceStageBlockKind = "note" | "metric" | "table" | "chart" | "equation" | "code" | "map-placeholder";
+export type VoiceStageBlockKind = "note" | "metric" | "table" | "chart" | "equation" | "code" | "map-placeholder" | "image" | "link-preview" | "progress" | "divider" | "svg" | "qr" | "palette" | "kroki" | "diff";
 export type VoiceStageLifecycle = "active" | "paused" | "cancelled" | "closed";
 export type VoiceStageBoardRequest = "new" | "edit" | "replace";
 
@@ -51,6 +51,63 @@ export interface VoiceStageMapPlaceholderBlock extends VoiceStageBlockBase {
   detail?: string;
 }
 
+export interface VoiceStageImageBlock extends VoiceStageBlockBase {
+  kind: "image";
+  url: string;
+  alt?: string;
+  caption?: string;
+}
+
+export interface VoiceStageLinkPreviewBlock extends VoiceStageBlockBase {
+  kind: "link-preview";
+  url: string;
+  description?: string;
+  thumbnail?: string;
+}
+
+export interface VoiceStageProgressBlock extends VoiceStageBlockBase {
+  kind: "progress";
+  value: number;
+  max?: number;
+  label?: string;
+}
+
+export interface VoiceStageDividerBlock extends VoiceStageBlockBase {
+  kind: "divider";
+}
+
+export interface VoiceStageSvgBlock extends VoiceStageBlockBase {
+  kind: "svg";
+  markup: string;
+  viewBox?: string;
+}
+
+export interface VoiceStageQrBlock extends VoiceStageBlockBase {
+  kind: "qr";
+  data: string;
+  size?: number;
+}
+
+export interface VoiceStagePaletteBlock extends VoiceStageBlockBase {
+  kind: "palette";
+  colors: string[];
+  names?: string[];
+}
+
+export interface VoiceStageKrokiBlock extends VoiceStageBlockBase {
+  kind: "kroki";
+  diagram: string;
+  content: string;
+}
+
+export interface VoiceStageDiffBlock extends VoiceStageBlockBase {
+  kind: "diff";
+  oldCode: string;
+  newCode: string;
+  oldLabel?: string;
+  newLabel?: string;
+}
+
 export type VoiceStageBlock =
   | VoiceStageNoteBlock
   | VoiceStageMetricBlock
@@ -58,7 +115,16 @@ export type VoiceStageBlock =
   | VoiceStageChartBlock
   | VoiceStageEquationBlock
   | VoiceStageCodeBlock
-  | VoiceStageMapPlaceholderBlock;
+  | VoiceStageMapPlaceholderBlock
+  | VoiceStageImageBlock
+  | VoiceStageLinkPreviewBlock
+  | VoiceStageProgressBlock
+  | VoiceStageDividerBlock
+  | VoiceStageSvgBlock
+  | VoiceStageQrBlock
+  | VoiceStagePaletteBlock
+  | VoiceStageKrokiBlock
+  | VoiceStageDiffBlock;
 
 export type VoiceStageInput = VoiceStageBlock extends infer Block
   ? Block extends VoiceStageBlock
@@ -103,8 +169,8 @@ const now = () => Date.now();
 const MAX_BOARD_MEMORY_LIMIT = 3;
 
 function boardMemoryLimit() {
-  const configured = useSettingsStore.getState().voiceDisplayAgentBoardMemoryLimit ?? MAX_BOARD_MEMORY_LIMIT;
-  return Math.min(MAX_BOARD_MEMORY_LIMIT, Math.max(1, configured));
+  const configured = useSettingsStore.getState().voiceDisplayAgentBoardMemoryLimit;
+  return Math.min(MAX_BOARD_MEMORY_LIMIT, Math.max(1, configured || MAX_BOARD_MEMORY_LIMIT));
 }
 
 function normalizeBlock(block: VoiceStageInput): VoiceStageBlock {

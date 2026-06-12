@@ -1,4 +1,6 @@
+pub mod child_runner;
 pub mod delegate_to_agent;
+pub mod manage_board;
 pub mod drawing_tools;
 pub mod fs_tools;
 pub mod geofence_tools;

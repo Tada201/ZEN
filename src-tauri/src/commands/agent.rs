@@ -1,15 +1,7 @@
-use crate::agent::instance::AgentInstance;
-use crate::agent::swarm::SwarmState;
 use crate::commands::AppState;
 use crate::error::ZenResult;
 use serde::Serialize;
 use tauri::State;
-
-#[derive(Debug, Serialize)]
-pub struct SwarmMetrics {
-    pub state: SwarmState,
-    pub agents: Vec<AgentInstance>,
-}
 
 #[derive(Debug, Serialize)]
 pub struct AgentInfoResponse {
@@ -19,18 +11,6 @@ pub struct AgentInfoResponse {
     pub tool_count: usize,
     pub model_override: Option<String>,
     pub max_iterations: Option<usize>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct AgentConfigResponse {
-    pub agent_id: String,
-    pub agent_name: String,
-    pub model_name: String,
-    pub context_window: i32,
-    pub max_messages_in_memory: i32,
-    pub max_iterations: i32,
-    pub enabled_tools: Vec<String>,
-    pub system_prompt_override: Option<String>,
 }
 
 #[tauri::command]
@@ -45,42 +25,6 @@ pub async fn list_agents(state: State<'_, AppState>) -> ZenResult<Vec<AgentInfoR
             tool_count: a.tool_ids.len(),
             model_override: a.model_override.clone(),
             max_iterations: a.max_iterations,
-        })
-        .collect())
-}
-
-#[tauri::command]
-pub async fn list_agents_with_configs(
-    state: State<'_, AppState>,
-) -> ZenResult<Vec<AgentConfigResponse>> {
-    let pool = state.db().await?;
-
-    let config_manager = crate::agent::config::AgentConfigManager::new(pool);
-    let configs = config_manager
-        .list_all_configs()
-        .await
-        .map_err(|e| crate::error::ZenError::Custom(e.to_string()))?;
-
-    // Enrich with agent names from the registry
-    Ok(configs
-        .into_iter()
-        .map(|c| {
-            let agent_name = state
-                .agent_registry
-                .get(&c.agent_id)
-                .map(|a| a.name.clone())
-                .unwrap_or_else(|| c.agent_id.clone());
-
-            AgentConfigResponse {
-                agent_id: c.agent_id,
-                agent_name,
-                model_name: c.model_name,
-                context_window: c.context_window,
-                max_messages_in_memory: c.max_messages_in_memory,
-                max_iterations: c.max_iterations,
-                enabled_tools: c.enabled_tools,
-                system_prompt_override: c.system_prompt_override,
-            }
         })
         .collect())
 }
@@ -113,30 +57,6 @@ pub async fn spawn_agent(
     ))
 }
 
-#[tauri::command]
-pub async fn swarm_get_all_metrics(state: State<'_, AppState>) -> ZenResult<SwarmMetrics> {
-    let swarm = &state.swarm;
-    let swarm_state = swarm.get_swarm_state().await;
-    let agents = swarm.get_agents().await;
-
-    Ok(SwarmMetrics {
-        state: swarm_state,
-        agents,
-    })
-}
-
-#[tauri::command]
-pub async fn swarm_scale_agents(
-    state: State<'_, AppState>,
-    agent_type: String,
-    count: i32,
-) -> ZenResult<()> {
-    state
-        .swarm
-        .scale_agents(&agent_type, count)
-        .await
-        .map_err(|e| e.into())
-}
 
 #[derive(Debug, Serialize)]
 pub struct OrchestratorStatus {

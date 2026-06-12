@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Search, ChevronDown, CheckCircle2, CircleDashed, Loader2 } from "lucide-react";
+import { Search, ChevronDown, CheckCircle2, CircleDashed, Loader2, XCircle } from "lucide-react";
 import { Message } from "./types";
 import { MarkdownContent } from "./MarkdownContent";
 import { cn } from "@/lib/utils";
@@ -73,11 +73,13 @@ export function DeepResearchMessage({
                 <div key={idx} className="flex items-start gap-2 text-xs py-1 px-2 rounded-sm bg-black/20">
                   {step.status === "completed" && <CheckCircle2 className="h-3.5 w-3.5 text-green-400 mt-0.5 shrink-0" />}
                   {step.status === "running" && <Loader2 className="h-3.5 w-3.5 text-indigo-400 animate-spin mt-0.5 shrink-0" />}
+                  {step.status === "error" && <XCircle className="h-3.5 w-3.5 text-rose-400 mt-0.5 shrink-0" />}
                   {step.status === "pending" && <CircleDashed className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />}
                   <span className={cn(
                     "text-muted-foreground",
                     step.status === "running" && "text-indigo-200",
-                    step.status === "completed" && "text-green-100"
+                    step.status === "completed" && "text-green-100",
+                    step.status === "error" && "text-rose-200"
                   )}>
                     {step.text}
                   </span>

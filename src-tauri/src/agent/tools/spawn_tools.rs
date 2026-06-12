@@ -4,12 +4,11 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::agent::hooks::HookRegistry;
-use crate::agent::runner::{Runner, MAX_SPAWN_DEPTH};
+use crate::agent::tools::child_runner;
 use crate::agent::tools::AgentTool;
 use crate::agent::tools::ToolRegistry;
 use crate::agent::types::{ActionMeta, AgentRegistry, MessageKind, SpawnMeta};
 use crate::commands::AppState;
-use crate::db::models::ChatMessage;
 use anyhow::Result;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -17,9 +16,6 @@ use uuid::Uuid;
 /// Tool that spawns a child agent runner for parallel sub-tasks.
 /// The child agent runs with its own conversation context and bounded iterations,
 /// then returns its final response as a tool result.
-///
-/// Unlike other tools, SpawnAgentTool accesses the LLM provider through the
-/// AppHandle's managed state, so it doesn't need a direct LLM reference.
 pub struct SpawnAgentTool {
     tool_registry: Arc<tokio::sync::RwLock<ToolRegistry>>,
     agent_registry: Arc<AgentRegistry>,
@@ -39,6 +35,196 @@ impl SpawnAgentTool {
             agent_registry,
             hook_registry,
             permissions,
+        }
+    }
+
+    /// Core child-agent execution logic. The deprecated delegate alias also
+    /// calls this implementation for compatibility with persisted references.
+    pub(crate) async fn do_spawn(
+        &self,
+        app: AppHandle,
+        chat_id: String,
+        agent_id: &str,
+        task: &str,
+        context: &str,
+        explicit_model: Option<&str>,
+        explicit_max_steps: Option<u64>,
+        depth: u32,
+        allowed_tools: Option<Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
+        token: CancellationToken,
+        label: &str,
+    ) -> Result<Value> {
+        child_runner::check_depth(depth)?;
+
+        let resolved =
+            child_runner::resolve_agent(&self.agent_registry, agent_id, explicit_model, explicit_max_steps)?;
+
+        let delegation_prompt = child_runner::build_delegation_prompt(&resolved, task, context);
+        let memory_scope = child_runner::subagent_memory_scope(agent_id, task);
+        let child_messages =
+            child_runner::build_child_messages(&app, &chat_id, &delegation_prompt).await;
+
+        let mut child_runner_instance = child_runner::build_child_runner(
+            &app,
+            self.tool_registry.clone(),
+            self.agent_registry.clone(),
+            self.hook_registry.clone(),
+            self.permissions.clone(),
+            depth,
+            &resolved,
+            allowed_tools,
+        )?;
+        child_runner_instance = child_runner_instance.with_memory_scope(memory_scope);
+
+        let state = app.state::<AppState>();
+        let provider = state.provider().await?;
+        let spawn_id = Uuid::new_v4().to_string();
+
+        // Emit spawn start
+        let spawn_meta = ActionMeta {
+            agent_id: agent_id.to_string(),
+            agent_name: resolved.agent.name.clone(),
+            iteration: 0,
+            depth: 0,
+            progress_percent: None,
+            tool_call: None,
+            tool_result: None,
+            handoff: None,
+            spawn: Some(SpawnMeta {
+                parent_agent: label.to_string(),
+                child_agent: resolved.agent.name.clone(),
+                task: task.to_string(),
+                status: "spawned".to_string(),
+                duration_ms: None,
+                spawn_id: Some(spawn_id.clone()),
+            }),
+            approval_request: None,
+            ..Default::default()
+        };
+
+        let _ = app.emit(
+            "chat:message",
+            json!({
+                "chat_id": chat_id,
+                "kind": MessageKind::AgentSpawn.to_string(),
+                "content": format!("{} to {} for: {}", label, resolved.agent.name, task.chars().take(80).collect::<String>()),
+                "metadata": spawn_meta,
+            }),
+        );
+
+        let subagent_token = CancellationToken::new();
+        {
+            let mut tokens = state.subagent_cancellation_tokens.lock().await;
+            tokens.insert(spawn_id.clone(), subagent_token.clone());
+        }
+
+        let _ = app.emit(
+            "agent:spawn",
+            json!({
+                "spawn_id": spawn_id,
+                "parent_agent": label,
+                "child_agent_id": resolved.agent.id,
+                "child_agent_name": resolved.agent.name,
+                "task": task,
+                "chat_id": chat_id,
+            }),
+        );
+
+        state
+            .agent
+            .event_bus
+            .emit(crate::agent::event_bus::AgentEvent::AgentSpawned {
+                agent_id: resolved.agent.id.clone(),
+                agent_type: resolved.agent.name.clone(),
+            });
+
+        // Run child agent with cancellation support
+        let spawn_start = std::time::Instant::now();
+        let result = tokio::select! {
+            biased;
+            _ = token.cancelled() => {
+                Err(anyhow::anyhow!("Parent cancelled — sub-agent aborted"))
+            }
+            _ = subagent_token.cancelled() => {
+                Err(anyhow::anyhow!("Sub-agent task cancelled by user"))
+            }
+            res = child_runner_instance.run(
+                provider.as_ref(),
+                chat_id.clone(),
+                resolved.model,
+                child_messages,
+                resolved.agent.clone(),
+                crate::llm::ChatRequestConfig::default(),
+                CancellationToken::child_token(&token),
+            ) => res
+        };
+
+        // Cleanup token
+        {
+            let mut tokens = state.subagent_cancellation_tokens.lock().await;
+            tokens.remove(&spawn_id);
+        }
+        let spawn_duration_ms = spawn_start.elapsed().as_millis() as u64;
+
+        match result {
+            Ok(response) => {
+                let content = response
+                    .content
+                    .unwrap_or_else(|| "Sub-agent completed with no output.".to_string());
+
+                let _ = emit_completion_events(
+                    &app,
+                    &chat_id,
+                    agent_id,
+                    &resolved.agent.name,
+                    task,
+                    &spawn_id,
+                    label,
+                    "completed",
+                    None,
+                    spawn_duration_ms,
+                );
+
+                let parsed: Result<serde_json::Value, _> = serde_json::from_str(&content);
+                let structured_result = match parsed {
+                    Ok(json) => json,
+                    Err(_) => {
+                        json!({
+                            "status": "success",
+                            "summary": content.chars().take(500).collect::<String>(),
+                            "full_content": content,
+                        })
+                    }
+                };
+
+                Ok(json!({
+                    "agent_id": agent_id,
+                    "status": "completed",
+                    "result": structured_result,
+                    "duration_ms": spawn_duration_ms,
+                }))
+            }
+            Err(e) => {
+                let _ = emit_completion_events(
+                    &app,
+                    &chat_id,
+                    agent_id,
+                    &resolved.agent.name,
+                    task,
+                    &spawn_id,
+                    label,
+                    "failed",
+                    Some(&e.to_string()),
+                    spawn_duration_ms,
+                );
+
+                Ok(json!({
+                    "agent_id": agent_id,
+                    "status": "error",
+                    "error": e.to_string(),
+                    "duration_ms": spawn_duration_ms,
+                }))
+            }
         }
     }
 }
@@ -88,7 +274,7 @@ impl AgentTool for SpawnAgentTool {
         input: Value,
         depth: u32,
         allowed_tools: Option<Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
-        token: tokio_util::sync::CancellationToken,
+        token: CancellationToken,
     ) -> Result<Value> {
         let agent_id = input
             .get("agent_id")
@@ -100,458 +286,101 @@ impl AgentTool for SpawnAgentTool {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("Missing required field: task"))?;
 
-        let max_steps = input
-            .get("max_steps")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(10) as usize;
+        let max_steps = input.get("max_steps").and_then(|v| v.as_u64());
+        let model = input.get("model").and_then(|v| v.as_str());
 
-        let model_override = input
-            .get("model")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-
-        // Load agent config file for model, max_iterations, and enabled_tools
-        let agent_config_file = crate::agent::config_file::load_agent_config(agent_id).ok();
-
-        // Look up the agent
-        let agent = self.agent_registry.get(agent_id).cloned().ok_or_else(|| {
-            anyhow::anyhow!(
-                "Agent '{}' not found. Available: {:?}",
-                agent_id,
-                self.agent_registry
-                    .list()
-                    .iter()
-                    .map(|a| &a.id)
-                    .collect::<Vec<_>>()
-            )
-        })?;
-
-        // Determine model to use (priority: explicit override > config file > agent override > active setting)
-        let state = app.state::<crate::commands::AppState>();
-        let model = if let Some(m) = model_override.clone() {
-            m
-        } else {
-            let config_file_model = agent_config_file.as_ref().and_then(|c| {
-                if c.model_name.is_empty() {
-                    None
-                } else {
-                    Some(c.model_name.clone())
-                }
-            });
-
-            if let Some(m) = config_file_model.or(agent.model_override.clone()) {
-                m
-            } else {
-                crate::db::queries::get_setting(
-                    &state
-                        .db()
-                        .await
-                        .map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?,
-                    "model_name",
-                )
-                .await?
-                .unwrap_or_default()
-            }
-        };
-
-        // Use config file max_iterations if no explicit max_steps override in input
-        let effective_max_steps = if input.get("max_steps").is_some() {
-            max_steps
-        } else if let Some(ref cfg) = agent_config_file {
-            cfg.max_iterations.max(1) as usize
-        } else {
-            max_steps
-        };
-
-        // Check depth limit before spawning (prevents infinite recursion)
-        if depth >= MAX_SPAWN_DEPTH {
-            return Ok(json!({
-                "error": format!("Maximum agent nesting depth ({}) reached. Cannot spawn more sub-agents.", MAX_SPAWN_DEPTH),
-                "hint": "Try completing the task with current agents or break the task into smaller steps."
-            }));
-        }
-
-        // Create child runner with bounded iterations via parent context if available
-        let state_ref = app.state::<crate::commands::AppState>();
-        let tool_manager = state_ref.tool_manager.clone();
-        let mut child_runner = Runner::new(
-            app.clone(),
-            self.tool_registry.clone(),
-            self.agent_registry.clone(),
-            self.hook_registry.clone(),
-            self.permissions.clone(),
-            tool_manager,
+        self.do_spawn(
+            app,
+            chat_id,
+            agent_id,
+            task,
+            "",
+            model,
+            max_steps,
+            depth,
+            allowed_tools,
+            token,
+            "Spawning",
         )
-        .with_depth(depth + 1)
-        .with_max_iterations(effective_max_steps);
+        .await
+    }
+}
 
-        if let Some(allowed) = allowed_tools {
-            child_runner = child_runner.with_allowed_tools(allowed);
-        } else if let Some(ref cfg) = agent_config_file {
-            if !cfg.enabled_tools.is_empty() {
-                child_runner = child_runner.with_allowed_tools(Arc::new(tokio::sync::Mutex::new(
-                    cfg.enabled_tools.iter().cloned().collect(),
-                )));
-            }
-        }
+/// Shared helper to emit completion events for spawn/delegate tools.
+fn emit_completion_events(
+    app: &AppHandle,
+    chat_id: &str,
+    agent_id: &str,
+    agent_name: &str,
+    task: &str,
+    spawn_id: &str,
+    label: &str,
+    status: &str,
+    error: Option<&str>,
+    duration_ms: u64,
+) -> Result<()> {
+    let state = app.state::<AppState>();
 
-        // Create unique memory scope for this subagent task
-        // Format: subagent:{agent_id}:{timestamp}:{task_hash}
-        let task_hash = {
-            use sha2::{Digest, Sha256};
-            let mut hasher = Sha256::new();
-            hasher.update(task.as_bytes());
-            format!("{:x}", hasher.finalize())[..8].to_string()
-        };
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-        let memory_scope = format!("subagent:{}:{}:{}", agent_id, timestamp, task_hash);
+    // Emit chat:message completion
+    let complete_meta = ActionMeta {
+        agent_id: agent_id.to_string(),
+        agent_name: agent_name.to_string(),
+        iteration: 0,
+        depth: 0,
+        progress_percent: None,
+        tool_call: None,
+        tool_result: None,
+        handoff: None,
+        spawn: Some(SpawnMeta {
+            parent_agent: label.to_string(),
+            child_agent: agent_name.to_string(),
+            task: task.to_string(),
+            status: status.to_string(),
+            duration_ms: Some(duration_ms),
+            spawn_id: Some(spawn_id.to_string()),
+        }),
+        approval_request: None,
+        ..Default::default()
+    };
 
-        let child_runner = child_runner.with_memory_scope(memory_scope.clone());
+    let content = if status == "completed" {
+        format!("{} completed in {}ms", agent_name, duration_ms)
+    } else {
+        format!("✗ {} session failed: {}", agent_name, error.unwrap_or("unknown"))
+    };
 
-        // Build structured delegation prompt for the sub-agent
-        let delegation_prompt = format!(
-            r#"## TASK DELEGATION
-
-### Your Role
-You are {}, a specialized AI agent.
-{}
-
-### Task to Execute
-{}
-
-### Output Requirements
-1. Provide a comprehensive response addressing the task
-2. If using tools, explain what you're doing and why
-3. If you need to hand off to another specialist, use handoff_to_agent
-4. Return your final result clearly formatted
-
-### Context
-This task was delegated to you by the main agent. Focus on completing this specific task.
-"#,
-            agent.name,
-            agent
-                .instructions
-                .lines()
-                .take(50)
-                .collect::<Vec<_>>()
-                .join("\n"),
-            task
-        );
-
-        // Build child conversation with parent context so sub-agent knows what's been discovered.
-        // Fetch last 10 messages from parent chat to avoid token bloat.
-        let mut child_messages = Vec::new();
-
-        let context_state = app.state::<crate::commands::AppState>();
-        if let Ok(db) = context_state.db().await {
-            if let Ok(parent_msgs) = crate::db::queries::get_messages(&db, &chat_id).await {
-                // Take last 10 messages (most recent context), skip system messages
-                let history: Vec<ChatMessage> = parent_msgs
-                    .into_iter()
-                    .filter(|m| m.role != "system")
-                    .rev()
-                    .take(10)
-                    .collect::<Vec<_>>()
-                    .into_iter()
-                    .rev()
-                    .map(|m| ChatMessage {
-                        role: m.role,
-                        content: m.content,
-                        reasoning_details: None,
-                        images: m.images.as_ref().and_then(|s| serde_json::from_str(s).ok()),
-                        tool_calls: m
-                            .tool_calls
-                            .as_ref()
-                            .and_then(|s| serde_json::from_str(s).ok()),
-                        tool_call_id: m.tool_call_id,
-                    })
-                    .collect();
-                child_messages.extend(history);
-            }
-        }
-
-        // Append the delegation task as the final user message
-        child_messages.push(ChatMessage {
-            role: "user".to_string(),
-            content: delegation_prompt,
-            reasoning_details: None,
-            images: None,
-            tool_calls: None,
-            tool_call_id: None,
-        });
-
-        // Access the LLM provider through AppHandle -> managed AppState
-        let state = app.state::<AppState>();
-        let provider = state.provider().await?;
-        let provider_clone = provider.clone();
-
-        // Generate unique spawn_id for event tracking and cancellation
-        let spawn_id = Uuid::new_v4().to_string();
-
-        // Emit spawn start action
-        let spawn_meta = ActionMeta {
-            agent_id: agent_id.to_string(),
-            agent_name: agent.name.clone(),
-            iteration: 0,
-            depth: 0,
-            progress_percent: None,
-            tool_call: None,
-            tool_result: None,
-            handoff: None,
-            spawn: Some(SpawnMeta {
-                parent_agent: "parent".to_string(),
-                child_agent: agent.name.clone(),
-                task: task.to_string(),
-                status: "spawned".to_string(),
-                duration_ms: None,
-                spawn_id: Some(spawn_id.clone()),
-            }),
-            approval_request: None,
-            ..Default::default()
-        };
-
-        // Emit chat:message for timeline display
-        let _ = app.emit("chat:message", json!({
+    let _ = app.emit(
+        "chat:message",
+        json!({
             "chat_id": chat_id,
             "kind": MessageKind::AgentSpawn.to_string(),
-            "content": format!("Spawning {} for: {}", agent.name, task.chars().take(80).collect::<String>()),
-            "metadata": spawn_meta,
-        }));
+            "content": content,
+            "metadata": complete_meta,
+        }),
+    );
 
-        let subagent_token = CancellationToken::new();
+    state
+        .agent
+        .event_bus
+        .emit(crate::agent::event_bus::AgentEvent::AgentTerminated {
+            agent_id: agent_id.to_string(),
+        });
 
-        // Track the sub-agent token for direct task cancellation
-        {
-            let mut tokens = state.subagent_cancellation_tokens.lock().await;
-            tokens.insert(spawn_id.clone(), subagent_token.clone());
-        }
+    let _ = app.emit(
+        "agent:complete",
+        json!({
+            "spawn_id": spawn_id,
+            "agent_id": agent_id,
+            "chat_id": chat_id,
+            "parent_agent": label,
+            "child_agent_id": agent_id,
+            "child_agent_name": agent_name,
+            "task": task,
+            "status": status,
+            "error": error,
+            "duration_ms": duration_ms,
+        }),
+    );
 
-        // Emit agent:spawn event for UI detection
-        let _ = app.emit(
-            "agent:spawn",
-            json!({
-                "spawn_id": spawn_id,
-                "parent_agent": agent_id,
-                "child_agent_id": agent.id,
-                "child_agent_name": agent.name,
-                "task": task,
-                "chat_id": chat_id,
-            }),
-        );
-
-        // Emit internal AgentEvent::AgentSpawned for backend coordination (ISSUE-008)
-        state
-            .agent
-            .event_bus
-            .emit(crate::agent::event_bus::AgentEvent::AgentSpawned {
-                agent_id: agent.id.clone(),
-                agent_type: agent.name.clone(),
-            });
-
-        // Wrap in tokio::select! to handle parent cancellation
-        let spawn_start = std::time::Instant::now();
-        let result = tokio::select! {
-            biased;
-            _ = token.cancelled() => {
-                Err(anyhow::anyhow!("Parent cancelled — sub-agent aborted"))
-            }
-            _ = subagent_token.cancelled() => {
-                Err(anyhow::anyhow!("Sub-agent task cancelled by user"))
-            }
-            res = child_runner.run(
-                provider_clone.as_ref(),
-                chat_id.clone(),
-                model,
-                child_messages,
-                agent.clone(),
-                crate::llm::ChatRequestConfig::default(),
-                CancellationToken::child_token(&token), // Pass a child token
-            ) => res
-        };
-
-        // Cleanup the token after completion
-        {
-            let mut tokens = state.subagent_cancellation_tokens.lock().await;
-            tokens.remove(&spawn_id);
-        }
-        let spawn_duration_ms = spawn_start.elapsed().as_millis() as u64;
-
-        match result {
-            Ok(response) => {
-                let content = response
-                    .content
-                    .unwrap_or_else(|| "Sub-agent completed with no output.".to_string());
-
-                // Emit spawn complete action
-                let complete_meta = ActionMeta {
-                    agent_id: agent_id.to_string(),
-                    agent_name: agent.name.clone(),
-                    iteration: 0,
-                    depth: 0,
-                    progress_percent: None,
-                    tool_call: None,
-                    tool_result: None,
-                    handoff: None,
-                    spawn: Some(SpawnMeta {
-                        parent_agent: "parent".to_string(),
-                        child_agent: agent.name.clone(),
-                        task: task.to_string(),
-                        status: "completed".to_string(),
-                        duration_ms: Some(spawn_duration_ms),
-                        spawn_id: Some(spawn_id.clone()),
-                    }),
-                    approval_request: None,
-                    ..Default::default()
-                };
-                let _ = app.emit(
-                    "chat:message",
-                    json!({
-                        "chat_id": chat_id,
-                        "kind": MessageKind::AgentSpawn.to_string(),
-                        "content": format!("{} completed in {}ms", agent.name, spawn_duration_ms),
-                        "metadata": complete_meta,
-                    }),
-                );
-
-                // ✅ FIX #1: Emit explicit session end marker
-                let session_end_meta = ActionMeta {
-                    agent_id: agent_id.to_string(),
-                    agent_name: agent.name.clone(),
-                    iteration: 0,
-                    depth: 0,
-                    progress_percent: None,
-                    tool_call: None,
-                    tool_result: None,
-                    handoff: None,
-                    spawn: Some(SpawnMeta {
-                        parent_agent: "parent".to_string(),
-                        child_agent: agent.name.clone(),
-                        task: task.to_string(),
-                        status: "session_ended".to_string(),
-                        duration_ms: Some(spawn_duration_ms),
-                        spawn_id: Some(spawn_id.clone()),
-                    }),
-                    approval_request: None,
-                    ..Default::default()
-                };
-                let _ = app.emit("chat:message", json!({
-                    "chat_id": chat_id,
-                    "kind": MessageKind::AgentSpawn.to_string(),
-                    "content": format!("─ {} session ended [{}: {} completion]", agent.name, agent_id, spawn_duration_ms),
-                    "metadata": session_end_meta,
-                }));
-
-                // Emit internal AgentEvent::AgentTerminated for backend coordination (ISSUE-008)
-                state
-                    .agent
-                    .event_bus
-                    .emit(crate::agent::event_bus::AgentEvent::AgentTerminated {
-                        agent_id: agent.id.clone(),
-                    });
-
-                let parsed: Result<serde_json::Value, _> = serde_json::from_str(&content);
-                let structured_result = match parsed {
-                    Ok(json) => json,
-                    Err(_) => {
-                        json!({
-                            "status": "success",
-                            "summary": content.chars().take(500).collect::<String>(),
-                            "full_content": content,
-                        })
-                    }
-                };
-
-                // Emit agent:complete event for UI task board tracking
-                let _ = app.emit(
-                    "agent:complete",
-                    json!({
-                        "spawn_id": spawn_id,
-                        "agent_id": agent.id, // Use consistent canonical ID
-                        "chat_id": chat_id,
-                        "parent_agent": "parent",
-                        "child_agent_id": agent.id,
-                        "child_agent_name": agent.name,
-                        "task": task,
-                        "status": "completed",
-                        "result": structured_result,
-                        "duration_ms": spawn_duration_ms,
-                    }),
-                );
-
-                Ok(json!({
-                    "agent_id": agent_id,
-                    "status": "completed",
-                    "result": structured_result,
-                    "duration_ms": spawn_duration_ms,
-                }))
-            }
-            Err(e) => {
-                // ✅ FIX #1: Emit explicit session end marker on error
-                let error_session_meta = ActionMeta {
-                    agent_id: agent_id.to_string(),
-                    agent_name: agent.name.clone(),
-                    iteration: 0,
-                    depth: 0,
-                    progress_percent: None,
-                    tool_call: None,
-                    tool_result: None,
-                    handoff: None,
-                    spawn: Some(SpawnMeta {
-                        parent_agent: "parent".to_string(),
-                        child_agent: agent.name.clone(),
-                        task: task.to_string(),
-                        status: "session_failed".to_string(),
-                        duration_ms: Some(spawn_duration_ms),
-                        spawn_id: Some(spawn_id.clone()),
-                    }),
-                    approval_request: None,
-                    ..Default::default()
-                };
-                let _ = app.emit(
-                    "chat:message",
-                    json!({
-                        "chat_id": chat_id,
-                        "kind": MessageKind::AgentSpawn.to_string(),
-                        "content": format!("✗ {} session failed: {}", agent.name, e),
-                        "metadata": error_session_meta,
-                    }),
-                );
-
-                // Emit internal AgentEvent::AgentTerminated for backend coordination (ISSUE-008)
-                state
-                    .agent
-                    .event_bus
-                    .emit(crate::agent::event_bus::AgentEvent::AgentTerminated {
-                        agent_id: agent.id.clone(),
-                    });
-
-                // Emit agent:complete event for UI task board tracking (error case)
-                let _ = app.emit(
-                    "agent:complete",
-                    json!({
-                        "spawn_id": spawn_id,
-                        "agent_id": agent.id, // Use consistent canonical ID
-                        "chat_id": chat_id,
-                        "parent_agent": "parent",
-                        "child_agent_id": agent.id,
-                        "child_agent_name": agent.name,
-                        "task": task,
-                        "status": "failed",
-                        "error": e.to_string(),
-                        "duration_ms": spawn_duration_ms,
-                    }),
-                );
-
-                Ok(json!({
-                    "agent_id": agent_id,
-                    "status": "error",
-                    "error": e.to_string(),
-                    "duration_ms": spawn_duration_ms,
-                }))
-            }
-        }
-    }
+    Ok(())
 }

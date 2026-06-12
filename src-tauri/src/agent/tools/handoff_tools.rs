@@ -5,6 +5,14 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tauri::AppHandle;
 
+/// Tool that signals the runner to transfer conversation control to
+/// another agent. The runner's main loop (`loop.rs`) detects this tool
+/// call and switches `current_agent` to the target, injecting a context
+/// bridge summary so the new agent knows what happened before it.
+///
+/// Unlike `spawn_agent`, handoff does NOT create a new runner — it
+/// continues the same runner with a different agent definition and
+/// fresh system prompt from the target agent's instructions.
 pub struct HandoffTool;
 
 #[derive(Debug, Deserialize)]
@@ -53,6 +61,9 @@ impl AgentTool for HandoffTool {
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         let args: HandoffArgs = serde_json::from_value(input)?;
+        // Return the target_agent_id so the runner loop can detect and
+        // switch agents. The runner will inject a context bridge summary
+        // and emit the handoff action event.
         Ok(json!({
             "status": "handoff_initiated",
             "target_agent_id": args.target_agent_id,

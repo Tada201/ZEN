@@ -26,12 +26,15 @@ const requiredModelSnippets = [
   'buildAgentExecutionTraceModel(toolCalls, actionSteps)',
   'buildAgentDelegationLaneModel',
   "step.kind === 'agent_chunk'",
+  'stepToolCalls',
+  'fallbackToolStatus',
+  'tool.status || fallbackToolStatus',
 ];
 
 const requiredLiveSessionSnippets = [
   '<AgentDelegationLane',
   'Recent tools',
-  "const status = tool.status || 'running'",
+  'const status = tool.status',
   "status.replace('_', ' ')",
 ];
 
@@ -53,6 +56,10 @@ for (const snippet of requiredLiveSessionSnippets) {
 
 if (panel.includes("invoke(") || panel.includes('invoke<')) {
   throw new Error('Right panel must not fetch orchestration state through raw invoke; it should use the live chat store.');
+}
+
+if (liveSession.includes("tool.status || 'running'")) {
+  throw new Error('Right panel must not label replayed tools as running merely because their persisted status is absent.');
 }
 
 const requiredCssSnippets = [

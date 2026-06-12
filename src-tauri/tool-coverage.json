@@ -45,8 +45,8 @@
     "id": "delegate_to_agent",
     "risk": "High",
     "owner": "backend/agent",
-    "status": "phase35-legacy-exemption",
-    "evidence": "Delegation compatibility tool retained; execution must stay behind ToolService permission checks."
+    "status": "deprecated-hidden",
+    "evidence": "Deprecated spawn_agent alias retained as source compatibility only; omitted from discovery metadata, factories, known-tool registration, and default agent allowlists."
   },
   {
     "id": "file_write",

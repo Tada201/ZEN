@@ -1,11 +1,11 @@
 import React, { Suspense, useMemo } from "react";
 import { 
-  Check, Copy, FileText, Code2, AlertTriangle, ChevronRight, RefreshCcw, Zap,
+  Check, Copy, FileText, Code2, AlertTriangle, ChevronRight, RefreshCcw, Zap, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { CHAT_STATUS_PHASES, type ChatStatusPhase } from "@/api/chatStatus";
+import { type ChatStatusPhase } from "@/api/chatStatus";
 import type { Message, ArtifactData, Step } from "./types";
 import type { SettingsTabId } from "@/lib/features/frontendFeatures";
 import type { ParsedCard } from "./assistantMessageParts";
@@ -26,10 +26,9 @@ const CardFallback = () => (
   <div className="h-24 w-64 rounded-xl border border-border/30 bg-card/20" aria-hidden="true" />
 );
 
-const VISIBLE_CHAT_STATUS_PHASES: ReadonlySet<ChatStatusPhase> = new Set([
-  CHAT_STATUS_PHASES.ToolCallStreaming,
-  CHAT_STATUS_PHASES.ToolCallReady,
-]);
+// ToolCallStreaming/ToolCallReady are rendered inline in the ToolCallCard header
+// via the streamingPreview prop — no need for separate AgentActionStep display.
+const VISIBLE_CHAT_STATUS_PHASES: ReadonlySet<ChatStatusPhase> = new Set([]);
 
 function isVisibleChatStatusStep(step: Step) {
   const phase = step.metadata?.phase;
@@ -63,12 +62,16 @@ export function AssistantMessage({
   onOpenArtifact,
   onRetry,
   onOpenSettings,
+  onDismissError,
+  onRegenerate,
   compact,
 }: {
   message: Message;
   onOpenArtifact: (a: ArtifactData) => void;
   onRetry?: (id: string) => void;
   onOpenSettings?: (tab: SettingsTabId, provider?: string) => void;
+  onDismissError?: (id: string) => void;
+  onRegenerate?: (id: string) => void;
   compact?: boolean;
 }) {
   const { copied, copy } = useCopy();
@@ -87,7 +90,7 @@ export function AssistantMessage({
 
   const executionActionSteps = useMemo<Step[]>(() => {
     return groupedSteps
-      .filter((step) => step.type === "action" && isVisibleChatStatusStep(step as Step))
+      .filter((step) => step.type === "action")
       .map((step) => step as Step);
   }, [groupedSteps]);
 
@@ -118,6 +121,7 @@ export function AssistantMessage({
 
   const showMessageActions = hasVisibleAnswer && !hasOnlyLiveProgress;
   const hasResearchProgress = Boolean(message.metadata?.researchSteps?.length);
+  const wasCancelled = message.status === "cancelled";
   return (
     <div
       className={cn(
@@ -126,10 +130,11 @@ export function AssistantMessage({
         "hover:bg-white/[0.015]"
       )}
     >
-      <div className={cn(
-        "mx-auto flex w-full items-start gap-0",
-        compact ? "max-w-full" : "max-w-[800px]"
-      )}>
+        <div className={cn(
+          "mx-auto flex w-full items-start gap-0",
+          compact ? "max-w-full" : "max-w-[800px]",
+          wasCancelled && "animate-out fade-out slide-out-to-top-2 duration-300 fill-mode-forwards"
+        )}>
         <div className="flex min-w-0 flex-col gap-2 flex-1">
           <div className="relative">
             <div className={cn("space-y-4", compact && "space-y-2")}>
@@ -250,10 +255,22 @@ export function AssistantMessage({
              {message.error && (
               <div className="flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-4 animate-in fade-in zoom-in-95 duration-200">
                 <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-                <div className="flex flex-1 flex-col gap-2">
+                <div className="flex flex-1 flex-col gap-2 min-w-0">
                   <div className="flex flex-col gap-1 font-sans">
-                    <span className="text-xs font-semibold text-destructive">Operation Failed</span>
-                    <p className="text-[12px] text-destructive/80 leading-relaxed font-mono mt-0.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-destructive">Operation Failed</span>
+                      {onDismissError && (
+                        <button
+                          type="button"
+                          onClick={() => onDismissError(message.id)}
+                          className="flex items-center justify-center h-5 w-5 rounded-md text-destructive/60 hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                          aria-label="Dismiss error"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[12px] text-destructive/80 leading-relaxed font-mono mt-0.5 max-h-48 overflow-y-auto whitespace-pre-wrap break-words">
                       {message.error}
                     </p>
                   </div>
@@ -300,7 +317,7 @@ export function AssistantMessage({
             </div>
           </div>
 
-          {showMessageActions && (
+            {showMessageActions && (
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity mt-1">
               <Button
                 size="sm"
@@ -324,6 +341,37 @@ export function AssistantMessage({
                   Retry
                 </Button>
               )}
+              {onRegenerate && message.status === "sent" && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  type="button"
+                  className="h-7 px-2 text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 gap-1.5"
+                  onClick={() => onRegenerate(message.id)}
+                >
+                  <RefreshCcw className="h-3 w-3" />
+                  Regenerate
+                </Button>
+              )}
+            </div>
+          )}
+
+          {(message.metadata as any)?.stopReason && (message.metadata as any).stopReason !== "complete" && (
+            <div className="mt-2">
+              <Button
+                size="sm"
+                variant="outline"
+                type="button"
+                className="h-7 px-3 text-[10px] font-medium border-amber-400/20 text-amber-300/80 hover:bg-amber-400/5 hover:text-amber-200 gap-1.5"
+                onClick={() => onRetry?.(message.id)}
+              >
+                <RefreshCcw className="h-3 w-3" />
+                {(message.metadata as any).stopReason === "max_tokens"
+                  ? "Continue generating..."
+                  : (message.metadata as any).stopReason === "tool_use"
+                    ? "Continue with tools..."
+                    : "Continue response..."}
+              </Button>
             </div>
           )}
         </div>

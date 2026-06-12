@@ -123,7 +123,7 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
     steps,
     createdAt: new Date(msg.createdAt).getTime(),
     model: msg.model,
-    status: msg.isComplete === 1 ? "sent" : "sending",
+    status: msg.isComplete === 1 ? "sent" : "failed",
     kind: msg.kind as any,
     metadata: parsedMetadata,
   };
@@ -198,6 +198,11 @@ function isMessageSemanticallyEqual(a: Message, b: Message): boolean {
   if (a.content !== b.content) return false;
   if (a.reasoning !== b.reasoning) return false;
   if (a.status !== b.status) return false;
+
+  // Terminal messages don't change — skip expensive deep comparison
+  if (a.status !== "sending" && b.status !== "sending") {
+    return true;
+  }
   
   if (JSON.stringify(a.metadata) !== JSON.stringify(b.metadata)) return false;
   

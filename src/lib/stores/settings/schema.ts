@@ -53,6 +53,7 @@ export const SettingsSchema = z.object({
   selectedMic: z.string().default(""),
   systemSoundsEnabled: z.boolean().default(true),
   voiceDisplayAgentEnabled: z.boolean().default(true),
+  voiceDisplayAgentModel: z.string().default(""),
   voiceDisplayAgentContextTokens: z.number().min(4096).max(1048576).default(VOICE_DISPLAY_AGENT_DEFAULT_CONTEXT_TOKENS),
   voiceDisplayAgentMaxTurns: z.number().min(1).max(50).default(VOICE_DISPLAY_AGENT_DEFAULT_MAX_TURNS),
   voiceDisplayAgentAutoCompactEnabled: z.boolean().default(true),

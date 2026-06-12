@@ -1,10 +1,13 @@
 use super::actions::{emit_action_only, persist_and_emit_action};
 use super::escalation::{EarlyToolExecutionContext, EarlyToolExecutionState};
-use super::helpers::{generate_handoff_summary, parse_file_changes, parse_text_tool_calls};
+use super::helpers::{
+    generate_handoff_summary, parse_file_changes, parse_text_tool_calls,
+    strip_text_tool_call_blocks,
+};
 use super::lifecycle::Runner;
 use super::memory_bootstrap::{
     cached_recall_context, compact_context_if_needed, load_initial_conversation,
-    load_memory_run_settings,
+    load_memory_run_settings, truncate_conversation_by_message_count,
 };
 use super::turn_persistence::{save_assistant_message, AssistantMessageSave};
 use crate::agent::chat_status::ChatStatusPhase;
@@ -146,6 +149,7 @@ impl Runner {
                     delta: final_msg.clone(),
                     r#type: "text".to_string(),
                     done: false,
+                    message_id: None,
                 }));
 
                 if !accumulated_commentary.is_empty() {
@@ -170,6 +174,13 @@ impl Runner {
                     })
                     .await;
                 }
+
+                self.spawn_voice_display_agent(
+                    &chat_id,
+                    &model,
+                    &accumulated_commentary,
+                    token.child_token(),
+                );
 
                 // Emit completion event to unlock the chat UI
                 self.emit(AgentEvent::ChatDone(ChatDonePayload {
@@ -220,6 +231,12 @@ impl Runner {
 
             // ── Context compaction (token-aware, fixes #23) ──
             compact_context_if_needed(&mut conversation, &run_config, summarization_enabled);
+
+            // ── Message-count truncation (per-agent config override) ──
+            truncate_conversation_by_message_count(
+                &mut conversation,
+                run_config.max_messages_in_memory,
+            );
 
             // ── Build authorized tools for current agent ──
             let (authorized_tool_ids, meta_tools) = self
@@ -374,6 +391,7 @@ impl Runner {
 
             // ── Parse tool calls ──
             let mut tool_calls = Vec::new();
+            let mut visible_response_content = response.content.clone();
 
             // Collect structured tool calls from the provider
             let mut raw_calls: Vec<crate::db::models::ToolCall> = Vec::new();
@@ -385,6 +403,7 @@ impl Runner {
             // from the response content (for models that don't support structured tools).
             if raw_calls.is_empty() && !tools_supported && !response.content.is_empty() {
                 if let Some(parsed) = parse_text_tool_calls(&response.content) {
+                    visible_response_content = strip_text_tool_call_blocks(&response.content);
                     raw_calls.extend(parsed);
                 }
             }
@@ -417,9 +436,9 @@ impl Runner {
                 // A response is "useless" if:
                 //   - It's very short (<100 chars) – likely just "Sure" or "Let me check"
                 //   - It doesn't contain any specific data from the tool results
-                let response_seems_empty = response.content.trim().len() < 100;
+                let response_seems_empty = visible_response_content.trim().len() < 100;
                 let response_is_non_answer = {
-                    let lower = response.content.to_lowercase();
+                    let lower = visible_response_content.to_lowercase();
                     lower.contains("let me")
                         || lower.contains("i'll check")
                         || lower.contains("i will")
@@ -430,7 +449,7 @@ impl Runner {
                         || (lower.contains("i cannot") && lower.contains("find"))
                 };
                 if just_received_tool_results && (response_seems_empty || response_is_non_answer) {
-                    tracing::info!("Model gave non-substantive response after tool results ({} chars) – nudging to use data", response.content.trim().len());
+                    tracing::info!("Model gave non-substantive response after tool results ({} chars) – nudging to use data", visible_response_content.trim().len());
 
                     // Collect a brief summary of what tool data is available
                     let tool_data_hint: String = conversation
@@ -444,7 +463,7 @@ impl Runner {
 
                     conversation.push(ChatMessage {
                         role: "assistant".to_string(),
-                        content: response.content.clone(),
+                        content: visible_response_content.clone(),
                         reasoning_details: response.reasoning_details.clone(),
                         images: None,
                         tool_calls: None,
@@ -469,11 +488,11 @@ impl Runner {
                     continue; // Re-run the LLM with the nudge
                 }
 
-                if !response.content.trim().is_empty() {
+                if !visible_response_content.trim().is_empty() {
                     if !accumulated_commentary.is_empty() {
                         accumulated_commentary.push('\n');
                     }
-                    accumulated_commentary.push_str(&response.content);
+                    accumulated_commentary.push_str(&visible_response_content);
                 }
 
                 // Save final completed assistant response to SQLite database
@@ -497,6 +516,13 @@ impl Runner {
                     })
                     .await;
                 }
+
+                self.spawn_voice_display_agent(
+                    &chat_id,
+                    &model,
+                    &accumulated_commentary,
+                    token.child_token(),
+                );
 
                 // Emit completion event to unlock the chat UI
                 self.emit(AgentEvent::ChatDone(ChatDonePayload {
@@ -546,15 +572,15 @@ impl Runner {
             // ── Emit intermediate commentary to the user ──
             // If the LLM produced text alongside tool calls, it was already streamed via callback.
             // We just need to ensure it's saved correctly if DB is enabled.
-            if !response.content.trim().is_empty() {
+            if !visible_response_content.trim().is_empty() {
                 tracing::info!(
                     "Recording intermediate commentary: {}...",
-                    &response.content[..response.content.len().min(80)]
+                    visible_response_content.chars().take(80).collect::<String>()
                 );
                 if !accumulated_commentary.is_empty() {
                     accumulated_commentary.push('\n');
                 }
-                accumulated_commentary.push_str(&response.content);
+                accumulated_commentary.push_str(&visible_response_content);
             }
 
             let serialized_tool_calls = if !models_tool_calls.is_empty() {
@@ -587,7 +613,7 @@ impl Runner {
 
             conversation.push(ChatMessage {
                 role: "assistant".to_string(),
-                content: response.content.clone(),
+                content: visible_response_content,
                 reasoning_details: response.reasoning_details.clone(),
                 images: None,
                 tool_calls: Some(models_tool_calls),
@@ -794,6 +820,20 @@ impl Runner {
                                     &self.on_event,
                                 );
                             }
+
+                            // Inject context bridge so the new agent knows what happened before it
+                            conversation.push(ChatMessage {
+                                role: "system".to_string(),
+                                content: format!(
+                                    "[Context bridge] You are now taking over from {}. {}",
+                                    current_agent.name,
+                                    handoff_summary
+                                ),
+                                reasoning_details: None,
+                                images: None,
+                                tool_calls: None,
+                                tool_call_id: None,
+                            });
 
                             current_agent = next_agent.clone();
                         }

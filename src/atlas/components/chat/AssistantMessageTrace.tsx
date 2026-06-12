@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import {
   Activity,
   ArrowRightLeft,
@@ -288,13 +288,13 @@ function getActionChips(step: Step): Array<{ label: string; tone?: "default" | "
   return chips;
 }
 
-export function AgentActionStep({ step, isStreaming }: { step: Step; isStreaming?: boolean }) {
+export function AgentActionStepInner({ step, isStreaming }: { step: Step; isStreaming?: boolean }) {
   const presentation = getActionPresentation(step);
   const Icon = presentation.Icon;
   const isRunning = step.status === "running" && isStreaming;
   const progress = step.metadata?.progressPercent;
   const approval = step.metadata?.approvalRequest;
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(step.status === "error");
   const canExpand = hasActionDetails(step);
   const eventTime = formatActionTime(step.timestamp);
   const chips = getActionChips(step);
@@ -389,6 +389,7 @@ export function AgentActionStep({ step, isStreaming }: { step: Step; isStreaming
     </div>
   );
 }
+export const AgentActionStep = memo(AgentActionStepInner);
 type ApprovalRequest = NonNullable<NonNullable<Step["metadata"]>["approvalRequest"]>;
 type ActionMetadata = NonNullable<Step["metadata"]>;
 

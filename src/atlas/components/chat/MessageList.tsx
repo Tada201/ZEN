@@ -14,9 +14,11 @@ const LIST_BOTTOM_PADDING = 192;
 export const MessageList = memo(function MessageList({
   messages,
   onOpenArtifact,
-  isStreaming,
+  isStreaming: _isStreaming,
   onRetry,
   onOpenSettings,
+  onDismissError,
+  onRegenerate,
   compact,
 }: {
   messages: Message[];
@@ -24,6 +26,8 @@ export const MessageList = memo(function MessageList({
   isStreaming?: boolean;
   onRetry?: (id: string) => void;
   onOpenSettings?: (tab: SettingsTabId, provider?: string) => void;
+  onDismissError?: (id: string) => void;
+  onRegenerate?: (id: string) => void;
   compact?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -61,7 +65,7 @@ export const MessageList = memo(function MessageList({
     count: filteredMessages.length,
     getScrollElement: getViewport,
     getItemKey: (index) => filteredMessages[index]?.id ?? index,
-    estimateSize: (index) => sizeCache.current.get(index) || 200,
+    estimateSize: (index) => sizeCache.current.get(index) || 400,
     overscan: 5,
   });
 
@@ -191,21 +195,46 @@ export const MessageList = memo(function MessageList({
     return () => viewport.removeEventListener("scroll", onScroll);
   }, [getViewport]);
 
-  // Fix #1 & #3: Auto-scroll using virtualizer API with throttle.
-  // Removed content.length dependency — virtualizer handles size changes via measureElement.
+  // Only auto-scroll on user-initiated sends, not on assistant responses.
+  // If user scrolled up to read history, don't yank them back.
+  const prevLengthRef = useRef(filteredMessages.length);
+  useEffect(() => {
+    if (filteredMessages.length > prevLengthRef.current) {
+      const lastMsg = filteredMessages[filteredMessages.length - 1];
+      if (lastMsg?.role === "user") {
+        isAutoScrolling.current = true;
+      }
+    }
+    prevLengthRef.current = filteredMessages.length;
+  }, [filteredMessages.length]);
+
+  // Recalculate virtualizer positions when content changes (prevents overlap
+  // when streaming messages grow beyond their initial height estimate).
+  useEffect(() => {
+    rowVirtualizer.measure();
+  }, [activeMessageSignature, filteredMessages.length, rowVirtualizer]);
+
+  // Auto-scroll with throttle: allow unthrottled scroll on new messages,
+  // throttle only during streaming content growth.
   useEffect(() => {
     if (!isAutoScrolling.current || filteredMessages.length === 0) return;
 
+    const isNewMessage = filteredMessages.length > prevLengthRef.current;
     const now = Date.now();
-    if (now - lastScrollTime.current < 50) return; // Max 20 scroll/sec
+
+    // Always scroll immediately for new messages (user just sent something)
+    if (isNewMessage) {
+      lastScrollTime.current = now;
+    } else if (now - lastScrollTime.current < 50) {
+      return; // Throttle during streaming content growth
+    }
     lastScrollTime.current = now;
 
-    rowVirtualizer.measure();
     rowVirtualizer.scrollToIndex(filteredMessages.length - 1, {
       align: 'end',
-      behavior: isStreaming ? 'auto' : 'smooth',
+      behavior: 'auto',
     });
-  }, [filteredMessages.length, activeMessageSignature, isStreaming, rowVirtualizer]);
+  }, [filteredMessages.length, activeMessageSignature, rowVirtualizer]);
 
   const virtualItems = rowVirtualizer.getVirtualItems();
 
@@ -251,6 +280,8 @@ export const MessageList = memo(function MessageList({
                   onOpenArtifact={onOpenArtifact}
                   onRetry={onRetry}
                   onOpenSettings={onOpenSettings}
+                  onDismissError={onDismissError}
+                  onRegenerate={onRegenerate}
                   compact={compact}
                 />
               </div>

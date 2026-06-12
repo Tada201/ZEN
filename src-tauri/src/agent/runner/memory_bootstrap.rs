@@ -123,6 +123,38 @@ pub(super) async fn cached_recall_context(
     guard.get(chat_id).map(|(block, _)| block.clone())
 }
 
+/// Truncate conversation to the last N non-system messages,
+/// keeping system messages at the front.
+pub(super) fn truncate_conversation_by_message_count(
+    conversation: &mut Vec<ChatMessage>,
+    max_messages: Option<usize>,
+) {
+    let Some(max) = max_messages else {
+        return;
+    };
+    if max == 0 || conversation.len() <= max {
+        return;
+    }
+
+    // Count non-system messages
+    let non_system_count = conversation.iter().filter(|m| m.role != "system").count();
+    if non_system_count <= max {
+        return;
+    }
+    let to_remove = non_system_count - max;
+
+    // Collect indices of non-system messages, remove oldest ones
+    let mut removed = 0;
+    conversation.retain(|m| {
+        if m.role != "system" && removed < to_remove {
+            removed += 1;
+            false
+        } else {
+            true
+        }
+    });
+}
+
 pub(super) fn compact_context_if_needed(
     conversation: &mut Vec<ChatMessage>,
     run_config: &RunConfig,

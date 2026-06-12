@@ -16,9 +16,9 @@ assert(
 );
 assert(
   assistant.includes("VISIBLE_CHAT_STATUS_PHASES") &&
-    assistant.includes("CHAT_STATUS_PHASES.ToolCallStreaming") &&
-    assistant.includes("CHAT_STATUS_PHASES.ToolCallReady") &&
-    !assistant.includes("CHAT_STATUS_PHASES.AgentStreaming"),
+    assistant.includes("isVisibleChatStatusStep") &&
+    assistant.includes('step.kind !== "chat_status"') &&
+    assistant.includes("new Set([])"),
   "assistant message rendering should keep the live agent phase out of chat_status cards",
 );
 assert(

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import {
   Archive,
   ArchiveRestore,
@@ -94,7 +95,7 @@ function renderSearchSnippet(snippet: string) {
   });
 }
 
-export function SessionSidebarItem({
+export function SessionSidebarItemInner({
   item,
   isSearchResult = false,
   currentId,
@@ -310,3 +311,4 @@ export function SessionSidebarItem({
     </div>
   );
 }
+export const SessionSidebarItem = memo(SessionSidebarItemInner);

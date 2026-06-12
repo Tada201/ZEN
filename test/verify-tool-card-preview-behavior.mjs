@@ -33,8 +33,9 @@ assert(cardSource.includes("<details") && cardSource.includes("<summary"), "raw 
 assert(cardSource.includes("onViewArtifact") && cardSource.includes("outputPreview.artifact"), "tool cards should expose generated artifacts from tool output");
 assert(cardSource.includes("ExternalLink") && cardSource.includes("> Open"), "artifact previews should include an open action");
 assert(
-  agentExecutionTraceSource.includes('totalToolCount <= 4') && agentExecutionTraceSource.includes('toolCall.status === "completed"') && agentExecutionTraceSource.includes("Boolean(toolCall.output)"),
-  "small completed tool batches with output should show previews without an extra click",
+  !agentExecutionTraceSource.includes('totalToolCount <= 4') &&
+    cardSource.includes("defaultExpanded ?? (status === 'awaiting_approval' || status === 'error')"),
+  "completed tool details should stay collapsed unless the user expands them",
 );
 assert(
   agentExecutionTraceSource.includes("Batch started in parallel") && agentExecutionTraceSource.includes("agents {trace.ownerSummary}") && agentExecutionTraceSource.includes("active {trace.runningToolSummaries.join"),

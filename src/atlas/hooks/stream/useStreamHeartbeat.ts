@@ -1,7 +1,8 @@
 import { useCallback, useRef, useEffect } from "react";
+import { toast } from "sonner";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { Message } from "../../components/chat/types";
-import { findWritableAssistantIndex } from "./messageTarget";
+import { findWritableAssistantIndex, markMessageAsFailed } from "./messageTarget";
 
 const STREAM_HEARTBEAT_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -30,11 +31,13 @@ export function useStreamHeartbeat() {
         if (assistant.status === "sent" || assistant.status === "failed") return prev;
 
         const next = [...prev];
-        next[assistantIdx] = {
-          ...assistant,
-          status: "failed",
-          error: "Connection interrupted. No response from model for 5 minutes."
-        };
+        next[assistantIdx] = markMessageAsFailed(
+          assistant,
+          "Connection interrupted. No response from model for 5 minutes."
+        );
+        toast.error("Connection interrupted — no response from model for 5 minutes.", {
+          id: `heartbeat-${chatId}`,
+        });
         return next;
       });
 

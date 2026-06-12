@@ -5,7 +5,7 @@ use super::Runner;
 use crate::agent::chat_status::ChatStatusPhase;
 use crate::agent::event_bus::{
     AgentChunkPayload, AgentEvent, ChatChunkFirstPayload, ChatChunkPayload, ChatErrorPayload,
-    ChatStatusPayload,
+    ChatMessagePayload, ChatStatusPayload,
 };
 use crate::db::models::ChatMessage;
 use crate::db::queries;
@@ -106,7 +106,7 @@ impl EarlyToolExecutionState {
 }
 
 fn redact_tool_preview_string(value: &str) -> String {
-    const MAX_PREVIEW_CHARS: usize = 2_000;
+    const MAX_PREVIEW_CHARS: usize = 500;
     let mut redacted = value.to_string();
     for marker in [
         "api_key",
@@ -437,6 +437,20 @@ impl Runner {
             Some(id) => id.clone(),
             None => {
                 let id = uuid::Uuid::new_v4().to_string();
+                // Emit bridge event so frontend can map its temp ID to server UUID
+                AgentEvent::ChatMessage(ChatMessagePayload {
+                    chat_id: chat_id.to_string(),
+                    id: id.clone(),
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    role: "assistant".to_string(),
+                    content: "".to_string(),
+                    kind: None,
+                    metadata: Some(serde_json::json!({
+                        "model": model,
+                        "isComplete": false,
+                    })),
+                })
+                .emit_via(&app_clone, &on_event_clone);
                 if let Some(db) = self.db_pool.clone() {
                     let chat_id = chat_id.to_string();
                     let model = model.to_string();
@@ -468,12 +482,11 @@ impl Runner {
             }
         };
 
-        // IPC token batching: ~20ms windows
         let first_chunk_sent = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let first_chunk_sent_clone = first_chunk_sent.clone();
+        // Text buffer: accumulates delta text and emits on every chunk (frontend rAF batches).
         let buffer = std::sync::Arc::new(std::sync::Mutex::new((
             String::new(),
-            std::time::Instant::now(),
             "text",
         )));
         let buffer_clone = buffer.clone();
@@ -498,6 +511,7 @@ impl Runner {
         let db_pool = self.db_pool.clone();
         let chat_id_str = chat_id.to_string();
         let msg_id_str = msg_id.clone();
+        let msg_id_for_chunks = msg_id.clone();
         let accumulated_text_task = accumulated_text.clone();
         let cancel_token = token.clone();
 
@@ -685,6 +699,7 @@ impl Runner {
                             chat_id: chat_id_clone.clone(),
                             delta: chunk_text.clone(),
                             r#type: chunk_type.to_string(),
+                            message_id: Some(msg_id_for_chunks.clone()),
                         })
                         .emit_via(&app_clone, &on_event_clone);
                     }
@@ -692,62 +707,58 @@ impl Runner {
                     let mut data = match buffer_clone.lock() {
                         Ok(guard) => guard,
                         Err(poisoned) => {
-                            error!("[runner] buffer mutex poisoned, recovering");
-                            poisoned.into_inner()
+                            error!("[runner] buffer mutex poisoned, discarding buffered data");
+                            // Discard the guard entirely — do not use into_inner()
+                            drop(poisoned);
+                            return;
                         }
                     };
 
-                    if data.2 != chunk_type && !data.0.is_empty() {
+                    // If type changed, flush the old type immediately
+                    if data.1 != chunk_type && !data.0.is_empty() {
                         let old_text = std::mem::take(&mut data.0);
-                        let old_type = data.2;
+                        let old_type = data.1;
                         AgentEvent::ChatChunk(ChatChunkPayload {
                             chat_id: chat_id_clone.clone(),
                             delta: old_text,
                             r#type: old_type.to_string(),
                             done: false,
+                            message_id: Some(msg_id_for_chunks.clone()),
                         })
                         .emit_via(&app_clone, &on_event_clone);
-                        data.1 = std::time::Instant::now();
                     }
 
                     data.0.push_str(&chunk_text);
-                    data.2 = chunk_type;
+                    data.1 = chunk_type;
 
-                    if data.1.elapsed().as_millis() >= 20 || data.0.len() > 1024 {
-                        let text = std::mem::take(&mut data.0);
-                        let current_type = data.2;
-                        data.1 = std::time::Instant::now();
-                        drop(data);
-                        AgentEvent::ChatChunk(ChatChunkPayload {
-                            chat_id: chat_id_clone.clone(),
-                            delta: text,
-                            r#type: current_type.to_string(),
-                            done: false,
-                        })
-                        .emit_via(&app_clone, &on_event_clone);
-                    }
+                    // Emit immediately — frontend rAF handles batching
+                    let text = std::mem::take(&mut data.0);
+                    let current_type = data.1;
+                    drop(data);
+                    AgentEvent::ChatChunk(ChatChunkPayload {
+                        chat_id: chat_id_clone.clone(),
+                        delta: text,
+                        r#type: current_type.to_string(),
+                        done: false,
+                        message_id: Some(msg_id_for_chunks.clone()),
+                    })
+                    .emit_via(&app_clone, &on_event_clone);
                 }),
                 token,
             )
             .await;
 
         // Final flush
-        {
-            let mut data = match buffer.lock() {
-                Ok(guard) => guard,
-                Err(poisoned) => {
-                    error!("[runner] buffer mutex poisoned during final flush");
-                    poisoned.into_inner()
-                }
-            };
+        if let Ok(mut data) = buffer.lock() {
             if !data.0.is_empty() {
                 let text = std::mem::take(&mut data.0);
-                let current_type = data.2;
+                let current_type = data.1;
                 AgentEvent::ChatChunk(ChatChunkPayload {
                     chat_id: chat_id.to_string(),
                     delta: text,
                     r#type: current_type.to_string(),
                     done: false,
+                    message_id: Some(msg_id.to_string()),
                 })
                 .emit_via(app, &self.on_event);
             }

@@ -42,7 +42,7 @@ export function markMessageAsFailed(message: Message, error: string): Message {
   };
 }
 
-export function markMessageAsFinished(message: Message, isCancelled: boolean): Message {
+export function markMessageAsFinished(message: Message, isCancelled: boolean, stopReason?: string): Message {
   const stepTargetStatus = isCancelled ? "cancelled" : "completed";
   const toolTargetStatus = isCancelled ? "error" : "completed";
 
@@ -71,6 +71,10 @@ export function markMessageAsFinished(message: Message, isCancelled: boolean): M
     ...message,
     status: isCancelled ? "cancelled" : "sent",
     isThinking: false,
+    metadata: {
+      ...message.metadata,
+      ...(stopReason ? { stopReason } : {}),
+    },
     ...(toolCalls ? { toolCalls } : {}),
     ...(steps ? { steps } : {}),
   };

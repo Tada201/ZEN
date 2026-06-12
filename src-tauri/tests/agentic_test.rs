@@ -77,6 +77,7 @@ async fn test_agentic_loop_execution() {
         tool_ids: vec![],
         model_override: None,
         max_iterations: Some(3),
+        context_window: None,
         description: None,
         model_tier: ModelTier::Local,
     };

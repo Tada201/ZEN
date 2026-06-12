@@ -26,10 +26,15 @@ const moduleUrl = `data:text/javascript;base64,${Buffer.from(transpiled.outputTe
 const { groupAssistantSteps, groupToolCalls, legacyMessageToActionStep, parseCardTags, toolResultMetaToOutput } = await import(moduleUrl);
 
 const typesSourcePath = new URL("../src/atlas/components/chat/types.ts", import.meta.url);
-const typesSource = readFileSync(typesSourcePath, "utf8").replace(
-  'import { Globe, Terminal, FileText, Code2, type LucideIcon } from "lucide-react";',
-  'const Globe = "Globe"; const Terminal = "Terminal"; const FileText = "FileText"; const Code2 = "Code2";',
-);
+const typesSource = readFileSync(typesSourcePath, "utf8")
+  .replace(
+    'import { Globe, Terminal, FileText, Code2, type LucideIcon } from "lucide-react";',
+    'const Globe = "Globe"; const Terminal = "Terminal"; const FileText = "FileText"; const Code2 = "Code2";',
+  )
+  .replace(
+    'import { stripToolProtocolText } from "@/atlas/lib/toolProtocolText";',
+    'const stripToolProtocolText = (text) => text;',
+  );
 const transpiledTypes = ts.transpileModule(typesSource, {
   compilerOptions: {
     module: ts.ModuleKind.ES2022,

@@ -171,6 +171,8 @@ pub struct ChatChunkPayload {
     #[serde(rename = "type")]
     pub r#type: String,
     pub done: bool,
+    /// Optional message_id for deterministic routing to the correct assistant
+    pub message_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -179,6 +181,8 @@ pub struct ChatChunkFirstPayload {
     pub delta: String,
     #[serde(rename = "type")]
     pub r#type: String,
+    /// Optional message_id for deterministic routing to the correct assistant
+    pub message_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -628,7 +632,7 @@ impl AgentEvent {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }
 
-    /// Emit via direct channel or fallback to app handle
+    /// Emit via direct channel or fallback to app handle (XOR — never both)
     pub fn emit_via(
         &self,
         app: &tauri::AppHandle,
@@ -638,17 +642,15 @@ impl AgentEvent {
         let payload = self.payload();
 
         if let Some(ref ch) = channel {
-            // Send direct channel event
-            let _ = ch.send(payload.clone());
+            let _ = ch.send(payload);
+        } else {
+            let event_name = self.event_name();
+            let flat_payload = match payload.get("payload") {
+                Some(p) => p.clone(),
+                None => payload,
+            };
+            let _ = app.emit(event_name, flat_payload);
         }
-
-        // Always broadcast globally to keep existing UI event listeners in sync
-        let event_name = self.event_name();
-        let flat_payload = match payload.get("payload") {
-            Some(p) => p.clone(),
-            None => payload,
-        };
-        let _ = app.emit(event_name, flat_payload);
     }
 }
 

@@ -15,6 +15,9 @@ pub struct Agent {
     /// Optional per-agent max iterations (overrides RunConfig default).
     #[serde(default)]
     pub max_iterations: Option<usize>,
+    /// Optional context window in tokens (overrides RunConfig default of 100K).
+    #[serde(default)]
+    pub context_window: Option<usize>,
     /// Short description for display in agent lists.
     #[serde(default)]
     pub description: Option<String>,

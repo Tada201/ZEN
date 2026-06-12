@@ -2,7 +2,7 @@ import { BookOpen, Star } from 'lucide-react';
 
 export function BookCard({ data }: { data: any }) {
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-black/40 backdrop-blur-md p-5 shadow-lg max-w-sm flex gap-4">
+    <div className="rounded-2xl border border-white/[0.08] bg-black/40 backdrop-blur-md p-5 shadow-lg max-w-md flex gap-4">
       <div className="w-20 h-28 bg-white/5 border border-white/10 rounded overflow-hidden flex-none shadow-md">
         {data.cover ? (
           <img src={data.cover} alt={data.title} className="h-full w-full object-cover" />

@@ -771,4 +771,14 @@ mod tests {
         assert!(tools.iter().any(|t| t.id == "web_search"));
         assert!(!tools.iter().any(|t| t.id == "run_command"));
     }
+
+    #[tokio::test]
+    async fn tool_list_hides_deprecated_delegate_alias() {
+        let manager = manager_for_tests();
+        let tools = manager.list_allowed(&[]).await;
+
+        assert!(tools.iter().any(|t| t.id == "spawn_agent"));
+        assert!(tools.iter().any(|t| t.id == "handoff_to_agent"));
+        assert!(!tools.iter().any(|t| t.id == "delegate_to_agent"));
+    }
 }

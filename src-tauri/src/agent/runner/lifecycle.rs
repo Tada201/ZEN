@@ -91,6 +91,12 @@ impl Runner {
         self
     }
 
+    pub fn with_voice_mode(mut self, voice_mode: bool, display_agent_model: Option<String>) -> Self {
+        self.config.voice_mode = voice_mode;
+        self.config.display_agent_model = display_agent_model;
+        self
+    }
+
     pub fn with_memory_scope(self, _scope: String) -> Self {
         self
     }
@@ -102,6 +108,16 @@ impl Runner {
 
     pub fn with_max_iterations(mut self, max_iterations: usize) -> Self {
         self.config.max_iterations = max_iterations;
+        self
+    }
+
+    pub fn with_max_context_tokens(mut self, max_tokens: usize) -> Self {
+        self.config.max_context_tokens = max_tokens;
+        self
+    }
+
+    pub fn with_max_messages_in_memory(mut self, max_messages: usize) -> Self {
+        self.config.max_messages_in_memory = Some(max_messages);
         self
     }
 

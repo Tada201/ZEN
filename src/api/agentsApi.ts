@@ -24,6 +24,8 @@ export interface AgentConfigFileData {
   agent_id: string;
   model_name: string;
   max_iterations: number;
+  context_window: number;
+  max_messages_in_memory: number;
   enabled_tools: string[];
   system_prompt_override?: string;
   description?: string;
@@ -43,8 +45,18 @@ export interface ToolMetadataItem {
 
 export const agentsApi = {
   listAgents: () => callCommand<AgentInfo[]>("list_agents"),
-  listAgentsWithConfigs: () =>
-    callCommand<AgentConfig[]>("list_agents_with_configs"),
+  listAgentsWithConfigs: async (): Promise<AgentConfig[]> => {
+    const agents = await callCommand<AgentInfo[]>("list_agents");
+    return Promise.all(agents.map(async (agent) => {
+      const config = await callCommand<AgentConfigFileData>("get_agent_config_file", {
+        agentId: agent.id,
+      });
+      return {
+        ...config,
+        agent_name: agent.name,
+      };
+    }));
+  },
   spawnAgent: (agentId: string, message: string, options: Record<string, unknown> = {}) =>
     callCommand<string>("spawn_agent", { agentId, message, options }),
 
