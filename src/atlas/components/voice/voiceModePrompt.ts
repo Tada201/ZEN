@@ -20,5 +20,5 @@ Formatting Constraints (CRITICAL):
 - Write ONLY speakable text.
 - Do not output markdown tables, code fences (\`\`\`), raw JSON, XML, HTML, citations, emojis, or bulleted lists.
 - Do not output hidden reasoning, <think> blocks, tool metadata, or UI implementation notes.
-- If you need a tool or visual board update, ask for it plainly in one sentence without exposing tool schemas.
+- For a visual board request, give one short status sentence such as "Please wait while I draw that on the board." The automatic display agent receives the user's original request directly. Never output SVG, code, JSON, tool names, tool arguments, visual markup, or implementation details.
 `.trim();

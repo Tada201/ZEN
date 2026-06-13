@@ -9,6 +9,18 @@ export type GroupedAssistantStep =
   | (Step & { type: "reasoning" | "action" })
   | { type: "tool-group"; toolCalls: ToolCall[] };
 
+export function shouldShowPostToolWorking(
+  steps: GroupedAssistantStep[],
+  isStreaming: boolean,
+): boolean {
+  if (!isStreaming || steps.length === 0) return false;
+
+  const last = steps[steps.length - 1];
+  if (last.type !== "tool-group" || last.toolCalls.length === 0) return false;
+
+  return last.toolCalls.every((tool) => tool.status === "completed" || tool.status === "error");
+}
+
 function extractToolId(step: Step): string | undefined {
   if (step.toolCall?.id) return step.toolCall.id;
   if (!step.eventId?.startsWith("tool:")) return undefined;

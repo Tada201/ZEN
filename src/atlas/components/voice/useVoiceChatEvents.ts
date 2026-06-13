@@ -3,7 +3,7 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import { listenAppEvent } from "@/api/events";
 import { speakText, stopSpeech } from "@/atlas/lib/webSpeech";
 import type { TtsServiceStatus } from "./voiceStatus";
-import { stripMarkdown } from "./voiceTextUtils";
+import { isSpeakableVoiceText, stripMarkdown } from "./voiceTextUtils";
 
 type SubtitleSpeaker = "user" | "agent" | "system";
 type AppendVoiceLog = (msg: string, status?: "OK" | "ERR") => void;
@@ -54,7 +54,11 @@ export function useVoiceChatEvents({
   const rawResponseRef = useRef("");
 
   const speakSentences = useCallback(async (sentences: string[]) => {
-    sentenceQueueRef.current.push(...sentences.filter(Boolean));
+    sentenceQueueRef.current.push(
+      ...sentences
+        .map((sentence) => stripMarkdown(sentence).trim())
+        .filter(isSpeakableVoiceText)
+    );
     if (speakingQueueRef.current) return;
     speakingQueueRef.current = true;
     setTtsStatus("starting");

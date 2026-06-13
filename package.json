@@ -81,7 +81,10 @@
     "test:voice-mode-hardening": "node test/verify-voice-mode-hardening.mjs",
     "test:voice-settings-page": "node test/verify-voice-settings-page.mjs",
     "test:voice-display-agent": "node test/verify-voice-display-agent.mjs",
+    "test:voice-board-widget-system": "node test/verify-voice-board-widget-system.mjs",
     "test:boot-screen": "node test/verify-boot-screen.mjs",
+    "test:chat-render-stability": "node test/verify-chat-render-stability.mjs",
+    "test:subagent-batch-contract": "node test/verify-subagent-batch-contract.mjs",
     "scan": "powershell -ExecutionPolicy Bypass -File scripts/scan-packages.ps1",
     "preview": "vite preview",
     "tauri": "tauri"

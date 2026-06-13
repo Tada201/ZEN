@@ -15,6 +15,7 @@ import { usePushToTalk } from './usePushToTalk';
 import { useVoiceAudioGraph } from './useVoiceAudioGraph';
 import { useVoiceActivityLoop } from './useVoiceActivityLoop';
 import { useBoardEventListener } from './useBoardEventListener';
+import { useVoiceAgentActivity } from './useVoiceAgentActivity';
 import type { SttServiceStatus, TtsServiceStatus } from './voiceStatus';
 
 export function VoiceModeOverlay({
@@ -46,8 +47,9 @@ export function VoiceModeOverlay({
     const vadThreshold = useSettingsStore(s => s.vadThreshold ?? 0.015);
     const aiSpeaking = useUIStore(s => s.aiSpeaking);
     const setAiSpeaking = useUIStore(s => s.setAiSpeaking);
-    const clearStage = useVoiceStageStore(s => s.clear);
+    const resetCurrentStage = useVoiceStageStore(s => s.resetCurrent);
     const startStage = useVoiceStageStore(s => s.start);
+    const saveCurrentBoard = useVoiceStageStore(s => s.saveCurrentBoard);
     const cancelStage = useVoiceStageStore(s => s.cancel);
     const upsertStageBlock = useVoiceStageStore(s => s.upsert);
     const appUptimeSecs = useAppUptime();
@@ -365,16 +367,19 @@ export function VoiceModeOverlay({
             if (document.activeElement instanceof HTMLElement) {
                 document.activeElement.blur();
             }
+            if (useVoiceStageStore.getState().document.widgets.length > 0) {
+                saveCurrentBoard();
+            }
             startStage();
             stageGenerationRef.current = useVoiceStageStore.getState().generation;
-            clearStage();
+            resetCurrentStage();
             stageGenerationRef.current = useVoiceStageStore.getState().generation;
             initMic();
             if (sttEngine === 'web' && !voiceInputMode) startWebRecognition();
         }
         else { cleanupAudio(); }
         return () => cleanupAudio();
-    }, [voiceModeOpen, initMic, cleanupAudio, clearStage, startStage, applyStageBlock, startWebRecognition, sttEngine, voiceInputMode]);
+    }, [voiceModeOpen, initMic, cleanupAudio, resetCurrentStage, saveCurrentBoard, startStage, applyStageBlock, startWebRecognition, sttEngine, voiceInputMode]);
 
     useEffect(() => {
         if (!voiceModeOpen || ttsEngine !== 'piper') return;
@@ -396,7 +401,8 @@ export function VoiceModeOverlay({
         });
     }, [chatId]);
 
-    useBoardEventListener();
+    useBoardEventListener(chatId);
+    const agentActivity = useVoiceAgentActivity(chatId);
 
     useVoiceActivityLoop({
         aiSpeakingRef, amplitudeRef, appendLog, flushVadUtterance, flushingRef,
@@ -431,6 +437,7 @@ export function VoiceModeOverlay({
     return (
         <VoiceModePanel
             activeModel={activeModel}
+            agentActivity={agentActivity}
             aiSpeaking={aiSpeaking}
             amplitude={amplitude}
             analyserRef={analyserRef}

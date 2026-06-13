@@ -14,6 +14,8 @@ export function stripMarkdown(text: string) {
     stripped = stripped.replace(/<boltAction[\s\S]*?<\/boltAction>/gi, '');
     stripped = stripped.replace(/<nexus_artifact[\s\S]*?<\/nexus_artifact>/gi, '');
     stripped = stripped.replace(/<card[\s\S]*?<\/card>/gi, '');
+    stripped = stripped.replace(/<svg\b[\s\S]*?(?:<\/svg>|$)/gi, '');
+    stripped = stripped.replace(/&lt;svg\b[\s\S]*?(?:&lt;\/svg&gt;|$)/gi, '');
 
     // 3. Strip tool execution trace lines (common patterns in agentic chat)
     stripped = stripped.replace(/^(?:Running|Searching|Reading|Writing|Executing)\s.*$/gim, '');
@@ -26,6 +28,11 @@ export function stripMarkdown(text: string) {
 
     // 4. Strip code blocks completely
     stripped = stripped.replace(/```[\s\S]*?(?:```|$)/g, '');
+
+    // Remove standalone tool envelopes and code-like payload lines. These can
+    // arrive unfenced or partially streamed by providers with weak tool mode.
+    stripped = stripped.replace(/^\s*\{?\s*"?(?:tool|tool_id|arguments|args|tool_call_id)"?\s*:[\s\S]*$/gim, '');
+    stripped = stripped.replace(/^\s*(?:<\/?(?:svg|path|circle|rect|line|polyline|polygon|g)\b|(?:const|let|var|function|class)\s+|[{}\[\]]\s*$).*$/gim, '');
 
     // 5. Strip JSON blocks (tool input/output)
     stripped = stripped.replace(/\{[\s\S]*?\}/g, (match) => {
@@ -56,4 +63,14 @@ export function stripMarkdown(text: string) {
         .trim();
 
     return stripped;
+}
+
+export function isSpeakableVoiceText(text: string) {
+    const candidate = text.trim();
+    if (!candidate) return false;
+    if (/\b(?:tool_call_id|tool_id|call_[a-z0-9_-]+)\b/i.test(candidate)) return false;
+    if (/<\/?(?:svg|path|circle|rect|line|polyline|polygon|g)\b/i.test(candidate)) return false;
+    if (/^\s*[<{\[]/.test(candidate) && /[>}:\]]/.test(candidate)) return false;
+    if (/"(?:tool|arguments|args|action|blocks?|markup)"\s*:/i.test(candidate)) return false;
+    return /[a-z0-9]/i.test(candidate);
 }

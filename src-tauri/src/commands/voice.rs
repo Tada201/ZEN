@@ -193,7 +193,9 @@ pub async fn transcribe_audio(
         "please subscribe",
         "thanks for watching",
     ];
-    if blacklist.iter().any(|&b| lower == b || lower.contains(b)) && transcript.split_whitespace().count() <= 5 {
+    if blacklist.iter().any(|&b| lower == b || lower.contains(b))
+        && transcript.split_whitespace().count() <= 5
+    {
         info!(transcript = %transcript, "Blocked suspected STT hallucination");
         return Ok(TranscriptionResult::NoSpeech);
     }
@@ -282,9 +284,10 @@ pub async fn transcribe_stream(
                 "locate france",
             ];
             let word_count = t.split_whitespace().count();
-            let is_hallucination = word_count <= 5 && blacklist.iter().any(|&b| {
-                lower == b || (word_count <= 3 && lower.contains(b))
-            });
+            let is_hallucination = word_count <= 5
+                && blacklist
+                    .iter()
+                    .any(|&b| lower == b || (word_count <= 3 && lower.contains(b)));
             if is_hallucination {
                 info!(transcript = %t, "Blocked suspected STT hallucination in stream");
                 return Ok(TranscriptionResult::NoSpeech);

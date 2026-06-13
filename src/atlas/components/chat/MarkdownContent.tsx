@@ -137,6 +137,10 @@ export function MarkdownContent({
     mainContent = extracted.content;
   }
 
+  const isPlainShortText = mainContent.length > 0
+    && mainContent.length < 48
+    && !/[\\`*_{}\[\]<>#|$~]/.test(mainContent);
+
   // 2. Split main content into memoizable blocks
   const blocks = useMemo(
     () => splitMarkdownIntoBlocks(mainContent, !!isStreaming),
@@ -292,13 +296,15 @@ export function MarkdownContent({
       {thought && (
         <ReasoningBlock content={thought} isThinking={isThinking} />
       )}
-      {blocks.length > 0 && (
+      {isPlainShortText ? (
+        <div className="whitespace-pre-wrap break-words text-foreground">{mainContent}</div>
+      ) : blocks.length > 0 && (
         <div className="space-y-6">
           {blocks.map((block) => (
             <MemoizedMarkdownBlock
               key={block.id}
               block={block}
-              isStreaming={Boolean(isStreaming && block.id.endsWith('streaming'))}
+              isStreaming={Boolean(isStreaming && !block.isComplete)}
               components={components}
               onOpenArtifact={onOpenArtifact}
               chatId={chatId}

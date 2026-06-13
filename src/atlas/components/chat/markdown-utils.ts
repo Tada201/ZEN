@@ -188,7 +188,7 @@ function createBlock(
   language?: string,
 ): MarkdownBlock {
   return {
-    id: `${type}-${blockIndex}-${isComplete ? 'done' : 'streaming'}`,
+    id: `${type}-${blockIndex}`,
     type,
     content,
     language,

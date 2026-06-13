@@ -389,19 +389,36 @@ Always use these specialized code blocks for visual scenarios:
     // Detect voice mode and read display agent settings
     let is_voice_mode = replace_system_prompt;
     let display_agent_enabled = if is_voice_mode {
-        state.settings_manager.get("voiceDisplayAgentEnabled").await
+        state
+            .settings_manager
+            .get("voiceDisplayAgentEnabled")
+            .await
             .ok()
             .flatten()
-            .or(state.settings_manager.get("voice_display_agent_enabled").await.ok().flatten())
-            .map(|v| v == "true").unwrap_or(true)
+            .or(state
+                .settings_manager
+                .get("voice_display_agent_enabled")
+                .await
+                .ok()
+                .flatten())
+            .map(|v| v == "true")
+            .unwrap_or(true)
     } else {
         false
     };
     let display_agent_model = if is_voice_mode {
-        state.settings_manager.get("voiceDisplayAgentModel").await
+        state
+            .settings_manager
+            .get("voiceDisplayAgentModel")
+            .await
             .ok()
             .flatten()
-            .or(state.settings_manager.get("voice_display_agent_model").await.ok().flatten())
+            .or(state
+                .settings_manager
+                .get("voice_display_agent_model")
+                .await
+                .ok()
+                .flatten())
             .filter(|v| !v.is_empty())
     } else {
         None

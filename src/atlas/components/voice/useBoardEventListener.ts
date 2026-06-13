@@ -23,6 +23,9 @@ interface BoardBlockUpdate {
   alt?: string;
   caption?: string;
   location?: string;
+  latitude?: number;
+  longitude?: number;
+  zoom?: number;
   markup?: string;
   data?: string;
   colors?: string[];
@@ -40,18 +43,29 @@ interface BoardBlockUpdate {
   code?: string;
   max?: number;
   label?: string;
+  layout?: { width?: "small" | "medium" | "wide" | "full"; order?: number };
+  card_type?: string;
+  card_data?: Record<string, unknown>;
+  cardType?: string;
+  cardData?: Record<string, unknown>;
 }
 
 interface BoardOperation {
+  version?: 1;
+  chat_id?: string;
   action: "set" | "add" | "update" | "remove" | "clear" | "focus";
   id?: string;
   blocks?: BoardBlockUpdate[];
   block?: BoardBlockUpdate;
   title?: string;
+  layout?: "grid" | "dashboard" | "focus";
 }
 
 function mapBlock(block: BoardBlockUpdate): VoiceStageBlock {
-  const kind = (block.kind ? block.kind.replace(/_/g, "-") : "") as VoiceStageBlock["kind"];
+  const normalizedKind = block.kind === "map_placeholder" || block.kind === "map-placeholder"
+    ? "map"
+    : block.kind?.replace(/_/g, "-");
+  const kind = (normalizedKind || "note") as VoiceStageBlock["kind"];
   
   let value = block.value;
   if (kind === "progress" && value !== undefined) {
@@ -77,6 +91,9 @@ function mapBlock(block: BoardBlockUpdate): VoiceStageBlock {
     alt: block.alt,
     caption: block.caption,
     location: block.location,
+    latitude: block.latitude,
+    longitude: block.longitude,
+    zoom: block.zoom,
     markup: block.markup,
     data: block.data,
     colors: block.colors,
@@ -91,6 +108,9 @@ function mapBlock(block: BoardBlockUpdate): VoiceStageBlock {
     code: block.code,
     max: block.max,
     label: block.label,
+    layout: block.layout,
+    cardType: block.card_type || block.cardType,
+    cardData: block.card_data || block.cardData,
     updatedAt: Date.now(),
   } as VoiceStageBlock;
 }
@@ -98,7 +118,7 @@ function mapBlock(block: BoardBlockUpdate): VoiceStageBlock {
 /**
  * Listens for board:update Tauri IPC events and applies them to the voice stage store.
  */
-export function useBoardEventListener() {
+export function useBoardEventListener(chatId?: string) {
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     let disposed = false;
@@ -106,6 +126,9 @@ export function useBoardEventListener() {
     void listenAppEvent("board:update", (event) => {
       const op = event.payload as unknown as BoardOperation;
       if (!op?.action) return;
+      if (chatId && op.chat_id && op.chat_id !== chatId && op.chat_id !== `voice-display:${chatId}`) {
+        return;
+      }
 
       const store = useVoiceStageStore.getState();
 
@@ -113,6 +136,7 @@ export function useBoardEventListener() {
         case "set":
           if (op.blocks) {
             store.replace(op.blocks.map(mapBlock), { requestType: "replace" });
+            if (op.layout) store.setLayout(op.layout);
           }
           break;
         case "add":
@@ -130,7 +154,7 @@ export function useBoardEventListener() {
         case "remove":
           if (op.id) {
             store.replace(
-              store.blocks.filter((b) => b.id !== op.id),
+              store.document.widgets.filter((b) => b.id !== op.id),
               { requestType: "edit" }
             );
           }
@@ -153,5 +177,5 @@ export function useBoardEventListener() {
       disposed = true;
       unlisten?.();
     };
-  }, []);
+  }, [chatId]);
 }

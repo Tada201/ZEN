@@ -14,6 +14,7 @@ export type LiveAgentPanelModel = {
     runningTools: number;
     approvals: number;
     completedAgents: number;
+    failedAgents: number;
     activeSummary: string;
 };
 
@@ -25,6 +26,7 @@ function isLiveAssistantMessage(message: Message) {
 
 function agentLaneKey(step: Step) {
     const spawn = step.metadata?.spawn;
+    if (spawn?.spawnId) return `spawn:${spawn.spawnId}`;
     return [
         spawn?.parentAgent || step.metadata?.parentAgentId || 'main',
         spawn?.childAgent || step.metadata?.agentName || step.metadata?.agentId || 'agent',
@@ -68,6 +70,7 @@ export function buildLiveAgentPanelModel(messages: Message[]): LiveAgentPanelMod
         runningTools: toolCalls.filter((tool) => tool.status === 'running').length,
         approvals: toolCalls.filter((tool) => tool.status === 'awaiting_approval').length,
         completedAgents: lanes.filter((lane) => lane.status === 'completed').length,
+        failedAgents: lanes.filter((lane) => lane.status === 'error' || lane.status === 'cancelled').length,
         activeSummary: trace.activeLaneSummary || (message?.status === 'sending' ? 'Assistant is streaming' : 'No active run'),
     };
 }

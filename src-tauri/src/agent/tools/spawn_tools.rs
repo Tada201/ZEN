@@ -13,6 +13,16 @@ use anyhow::Result;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+const MAX_PARALLEL_SUBAGENTS: usize = 8;
+
+fn result_summary(value: &Value) -> Option<String> {
+    value
+        .get("summary")
+        .or_else(|| value.get("result").and_then(|result| result.get("summary")))
+        .and_then(Value::as_str)
+        .map(|summary| summary.chars().take(500).collect())
+}
+
 /// Tool that spawns a child agent runner for parallel sub-tasks.
 /// The child agent runs with its own conversation context and bounded iterations,
 /// then returns its final response as a tool result.
@@ -56,8 +66,18 @@ impl SpawnAgentTool {
     ) -> Result<Value> {
         child_runner::check_depth(depth)?;
 
-        let resolved =
-            child_runner::resolve_agent(&self.agent_registry, agent_id, explicit_model, explicit_max_steps)?;
+        if agent_id == "voice_display" {
+            anyhow::bail!(
+                "voice_display is an internal render-only agent started automatically after a voice response; do not spawn it manually"
+            );
+        }
+
+        let resolved = child_runner::resolve_agent(
+            &self.agent_registry,
+            agent_id,
+            explicit_model,
+            explicit_max_steps,
+        )?;
 
         let delegation_prompt = child_runner::build_delegation_prompt(&resolved, task, context);
         let memory_scope = child_runner::subagent_memory_scope(agent_id, task);
@@ -172,19 +192,6 @@ impl SpawnAgentTool {
                     .content
                     .unwrap_or_else(|| "Sub-agent completed with no output.".to_string());
 
-                let _ = emit_completion_events(
-                    &app,
-                    &chat_id,
-                    agent_id,
-                    &resolved.agent.name,
-                    task,
-                    &spawn_id,
-                    label,
-                    "completed",
-                    None,
-                    spawn_duration_ms,
-                );
-
                 let parsed: Result<serde_json::Value, _> = serde_json::from_str(&content);
                 let structured_result = match parsed {
                     Ok(json) => json,
@@ -196,11 +203,29 @@ impl SpawnAgentTool {
                         })
                     }
                 };
+                let summary = result_summary(&structured_result);
+
+                let _ = emit_completion_events(
+                    &app,
+                    &chat_id,
+                    agent_id,
+                    &resolved.agent.name,
+                    task,
+                    &spawn_id,
+                    label,
+                    "completed",
+                    None,
+                    summary.as_deref(),
+                    spawn_duration_ms,
+                );
 
                 Ok(json!({
+                    "spawn_id": spawn_id,
                     "agent_id": agent_id,
+                    "agent_name": resolved.agent.name,
                     "status": "completed",
                     "result": structured_result,
+                    "summary": summary,
                     "duration_ms": spawn_duration_ms,
                 }))
             }
@@ -215,11 +240,14 @@ impl SpawnAgentTool {
                     label,
                     "failed",
                     Some(&e.to_string()),
+                    None,
                     spawn_duration_ms,
                 );
 
                 Ok(json!({
+                    "spawn_id": spawn_id,
                     "agent_id": agent_id,
+                    "agent_name": resolved.agent.name,
                     "status": "error",
                     "error": e.to_string(),
                     "duration_ms": spawn_duration_ms,
@@ -236,9 +264,9 @@ impl AgentTool for SpawnAgentTool {
     }
 
     fn description(&self) -> &str {
-        "Spawn a sub-agent to handle a specific task. The sub-agent runs independently with \
-         its own conversation context and returns the result. Use this for parallel or \
-         specialized subtasks like research, analysis, or operational mapping."
+        "Spawn one or more sub-agents for independent specialized tasks. A batch runs in \
+         parallel and returns all results, including failures, without discarding successful \
+         siblings. Use separate calls when tasks depend on earlier results."
     }
 
     fn input_schema(&self) -> Value {
@@ -261,9 +289,29 @@ impl AgentTool for SpawnAgentTool {
                 "model": {
                     "type": "string",
                     "description": "Optional model override for the sub-agent."
+                },
+                "agents": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": MAX_PARALLEL_SUBAGENTS,
+                    "description": "Independent sub-agents to run concurrently. Use agent_id/task for one child.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "agent_id": { "type": "string" },
+                            "task": { "type": "string" },
+                            "context": { "type": "string" },
+                            "max_steps": { "type": "integer", "minimum": 1 },
+                            "model": { "type": "string" }
+                        },
+                        "required": ["agent_id", "task"]
+                    }
                 }
             },
-            "required": ["agent_id", "task"]
+            "oneOf": [
+                { "required": ["agent_id", "task"] },
+                { "required": ["agents"] }
+            ]
         })
     }
 
@@ -276,6 +324,73 @@ impl AgentTool for SpawnAgentTool {
         allowed_tools: Option<Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
         token: CancellationToken,
     ) -> Result<Value> {
+        if let Some(agents) = input.get("agents").and_then(Value::as_array) {
+            if agents.is_empty() || agents.len() > MAX_PARALLEL_SUBAGENTS {
+                return Err(anyhow::anyhow!(
+                    "agents must contain between 1 and {} entries",
+                    MAX_PARALLEL_SUBAGENTS
+                ));
+            }
+
+            let futures = agents.iter().map(|request| {
+                let app = app.clone();
+                let chat_id = chat_id.clone();
+                let allowed_tools = allowed_tools.clone();
+                let token = token.clone();
+                async move {
+                    let agent_id =
+                        request
+                            .get("agent_id")
+                            .and_then(Value::as_str)
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("Missing required field: agents[].agent_id")
+                            })?;
+                    let task = request
+                        .get("task")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| anyhow::anyhow!("Missing required field: agents[].task"))?;
+                    let context = request.get("context").and_then(Value::as_str).unwrap_or("");
+                    let max_steps = request.get("max_steps").and_then(Value::as_u64);
+                    let model = request.get("model").and_then(Value::as_str);
+                    self.do_spawn(
+                        app,
+                        chat_id,
+                        agent_id,
+                        task,
+                        context,
+                        model,
+                        max_steps,
+                        depth,
+                        allowed_tools,
+                        token,
+                        "Spawning",
+                    )
+                    .await
+                }
+            });
+
+            let settled = futures::future::join_all(futures).await;
+            let results = settled
+                .into_iter()
+                .map(|result| match result {
+                    Ok(value) => value,
+                    Err(error) => json!({ "status": "error", "error": error.to_string() }),
+                })
+                .collect::<Vec<_>>();
+            let completed = results
+                .iter()
+                .filter(|result| result.get("status").and_then(Value::as_str) == Some("completed"))
+                .count();
+
+            return Ok(json!({
+                "status": if completed == results.len() { "completed" } else if completed == 0 { "error" } else { "partial" },
+                "parallel": true,
+                "completed": completed,
+                "failed": results.len() - completed,
+                "results": results,
+            }));
+        }
+
         let agent_id = input
             .get("agent_id")
             .and_then(|v| v.as_str())
@@ -317,6 +432,7 @@ fn emit_completion_events(
     label: &str,
     status: &str,
     error: Option<&str>,
+    result_summary: Option<&str>,
     duration_ms: u64,
 ) -> Result<()> {
     let state = app.state::<AppState>();
@@ -346,7 +462,11 @@ fn emit_completion_events(
     let content = if status == "completed" {
         format!("{} completed in {}ms", agent_name, duration_ms)
     } else {
-        format!("✗ {} session failed: {}", agent_name, error.unwrap_or("unknown"))
+        format!(
+            "✗ {} session failed: {}",
+            agent_name,
+            error.unwrap_or("unknown")
+        )
     };
 
     let _ = app.emit(
@@ -378,6 +498,7 @@ fn emit_completion_events(
             "task": task,
             "status": status,
             "error": error,
+            "result": result_summary.map(|summary| json!({ "summary": summary })),
             "duration_ms": duration_ms,
         }),
     );

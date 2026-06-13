@@ -203,11 +203,17 @@ impl ContextMiddleware for SystemPromptMiddleware {
         }
 
         // ── Tool system (deferred discovery) ──
-        let meta_tools: Vec<crate::tools::ToolInfo> = if ctx.tools_enabled {
+        let direct_board_agent = ctx.authorized_tool_ids.len() == 1
+            && ctx.authorized_tool_ids[0] == "manage_board";
+        let meta_tools: Vec<crate::tools::ToolInfo> = if ctx.tools_enabled && !direct_board_agent {
             crate::tools::manager::meta_tool_definitions()
         } else {
             Vec::new()
         };
+
+        if direct_board_agent {
+            ctx.system_content.push_str("\n\n## Direct Board Tool\nCall `manage_board` directly using its provided schema. Do not call tool_list, tool_info, or tool_exec. Do not finish until manage_board succeeds.\n");
+        }
 
         if !meta_tools.is_empty() {
             ctx.system_content
@@ -243,12 +249,7 @@ impl ContextMiddleware for SystemPromptMiddleware {
             ctx.system_content.push_str("For any task determined to be difficult or requiring 3 or more steps, you MUST call `write_todos` early on your first or second iteration to establish a trackable, visible checklist/todolist. Update it as steps complete. Skip it for simple questions or single-step actions.\n");
         }
 
-        if ctx.tools_enabled
-            && ctx
-                .authorized_tool_ids
-                .iter()
-                .any(|t| t == "spawn_agent")
-        {
+        if ctx.tools_enabled && ctx.authorized_tool_ids.iter().any(|t| t == "spawn_agent") {
             if let Some(state) = self.app.try_state::<crate::commands::AppState>() {
                 let agents = state.agent_registry.list();
                 if !agents.is_empty() {
@@ -256,7 +257,7 @@ impl ContextMiddleware for SystemPromptMiddleware {
                         .push_str("\n\n## Available Agent Roles\n");
                     ctx.system_content.push_str("Use delegation only when a specialized role clearly reduces uncertainty or parallelizes independent work.\n");
                     for agent in agents.into_iter().take(12) {
-                        if agent.id == "generalist" {
+                        if agent.id == "generalist" || agent.id == "voice_display" {
                             continue;
                         }
                         let description = agent

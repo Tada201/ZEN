@@ -255,6 +255,8 @@ export function normalizeMetadata(kind: string, payload: AgentActionEventPayload
   };
   if (kind === "agent_spawn" && !metadata.spawn) {
     metadata.spawn = {
+      spawnId: stringValue(payload.spawn_id),
+      batchId: stringValue(payload.batch_id, payload.batchId),
       parentAgent: payload.parent_agent || payload.parentAgent || "main",
       childAgent: payload.child_agent_name || payload.child_agent_id || payload.childAgent || "agent",
       task: payload.task || "",
@@ -264,6 +266,8 @@ export function normalizeMetadata(kind: string, payload: AgentActionEventPayload
   if (kind === "agent_complete" && !metadata.spawn) {
     const resultSummary = summarizeUnknownResult(payload.result) || payload.error;
     metadata.spawn = {
+      spawnId: stringValue(payload.spawn_id),
+      batchId: stringValue(payload.batch_id, payload.batchId),
       parentAgent: payload.parent_agent || "main",
       childAgent: payload.child_agent_name || payload.childAgent || payload.child_agent_id || payload.agent_id || "agent",
       task: payload.task || resultSummary || "",
@@ -285,6 +289,8 @@ export function normalizeMetadata(kind: string, payload: AgentActionEventPayload
     metadata.agentId = agentId;
     metadata.agentName = agentName;
     metadata.spawn = {
+      spawnId: stringValue(payload.spawn_id),
+      batchId: stringValue(payload.batch_id, payload.batchId),
       parentAgent: payload.parent_agent || payload.parentAgent || "parent",
       childAgent: agentName,
       task: payload.task || "",
@@ -428,15 +434,8 @@ function mergeActionStep(existing: Step, incoming: Step): Step {
   };
 }
 
-function insertActionStepBeforeText(steps: Step[] | undefined, actionStep: Step): Step[] {
-  const existingSteps = steps || [];
-  const firstTextIndex = existingSteps.findIndex((step) => step.type === "text");
-  if (firstTextIndex === -1) return [...existingSteps, actionStep];
-  return [
-    ...existingSteps.slice(0, firstTextIndex),
-    actionStep,
-    ...existingSteps.slice(firstTextIndex),
-  ];
+function appendActionStepInArrivalOrder(steps: Step[] | undefined, actionStep: Step): Step[] {
+  return [...(steps || []), actionStep];
 }
 
 function getStepAgentIdentity(step: Step): string {
@@ -505,7 +504,7 @@ export function appendActionStepToMessages(
     const target = next[targetIdx];
     next[targetIdx] = {
       ...target,
-      steps: insertActionStepBeforeText(target.steps, actionStep),
+      steps: appendActionStepInArrivalOrder(target.steps, actionStep),
       metadata: { ...(target.metadata || {}), ...(actionStep.metadata || {}) },
     };
     return completeMatchingAgentChunkSteps(next, actionStep);

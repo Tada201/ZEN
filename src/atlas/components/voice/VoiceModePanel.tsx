@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, Captions, CaptionsOff, Sparkles, Terminal } from "lucide-react";
+import { AlertTriangle, Bot, Captions, CaptionsOff, Sparkles, Terminal } from "lucide-react";
 import { useEffect, useState, memo } from "react";
 import { cn } from "@/lib/utils";
 import type { TtftMetricSnapshot } from "@/lib/ttft";
@@ -8,11 +8,13 @@ import { VoiceOscilloscope } from "./VoiceOscilloscope";
 import { VoiceStage } from "./VoiceStage";
 import { VoiceSubtitleBox } from "./VoiceSubtitleBox";
 import type { SttServiceStatus, TtsServiceStatus } from "./voiceStatus";
+import type { VoiceAgentActivity } from "./useVoiceAgentActivity";
 
 export type VoiceState = "initializing" | "listening" | "processing" | "speaking" | "idle";
 
 interface VoiceModePanelProps {
   activeModel: string;
+  agentActivity: VoiceAgentActivity;
   aiSpeaking: boolean;
   aiSpeechText: string;
   captionsAvailable: boolean;
@@ -76,6 +78,7 @@ const ttsStatusColors: Record<TtsServiceStatus, string> = {
 
 export function VoiceModePanelInner({
   activeModel,
+  agentActivity,
   aiSpeaking,
   captionsAvailable,
   amplitude,
@@ -324,7 +327,26 @@ export function VoiceModePanelInner({
           playbackEnergy={playbackEnergy}
         />
 
-        <div aria-hidden="true" />
+        <div className="flex items-center justify-start gap-2 font-mono text-[10px]">
+          <div
+            className={cn(
+              "flex h-9 items-center gap-2 rounded-full border px-3 transition-colors",
+              agentActivity.displayAgentRunning
+                ? "border-cyan-300/30 bg-cyan-300/10 text-cyan-100"
+                : "border-white/10 bg-white/[0.03] text-zinc-500"
+            )}
+            title={agentActivity.displayAgentRunning ? "Voice display agent is rendering the board" : "Voice display agent is idle"}
+          >
+            <span className={cn("h-1.5 w-1.5 rounded-full", agentActivity.displayAgentRunning ? "bg-cyan-300 motion-safe:animate-pulse" : "bg-zinc-700")} />
+            <Bot size={13} />
+            <span>{agentActivity.displayAgentRunning ? "DISPLAY" : "IDLE"}</span>
+          </div>
+          {agentActivity.otherAgentCount > 0 && (
+            <div className="flex h-9 items-center rounded-full border border-violet-300/25 bg-violet-300/10 px-3 text-violet-100" title={`${agentActivity.otherAgentCount} additional agent${agentActivity.otherAgentCount === 1 ? "" : "s"} running`}>
+              +{agentActivity.otherAgentCount} AGENT{agentActivity.otherAgentCount === 1 ? "" : "S"}
+            </div>
+          )}
+        </div>
       </div>
 
     </div>

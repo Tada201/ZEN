@@ -24,6 +24,8 @@ const running = buildAgentDelegationLaneModel({
   metadata: {
     iteration: 2,
     spawn: {
+      spawnId: "spawn-research-1",
+      batchId: "batch-analysis-1",
       parentAgent: "Coordinator",
       childAgent: "Researcher",
       task: "Inspect frontend streaming and execution trace behavior.",
@@ -38,6 +40,8 @@ assert.equal(running.parentName, "Coordinator", "lane should preserve parent age
 assert.equal(running.status, "running", "spawn lane should start running");
 assert.equal(running.task, "Inspect frontend streaming and execution trace behavior.", "lane should preserve delegated task");
 assert.equal(running.iteration, 2, "lane should preserve iteration");
+assert.equal(running.spawnId, "spawn-research-1", "lane should preserve stable spawn identity");
+assert.equal(running.batchId, "batch-analysis-1", "lane should preserve batch identity");
 assert.equal(running.hasTranscript, false, "plain spawn should not claim to have transcript content");
 
 const completed = buildAgentDelegationLaneModel({

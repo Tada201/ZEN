@@ -257,10 +257,16 @@ mod tests {
 
     #[test]
     fn hardware_gpu_identity_fields_are_present_for_detected_gpus() {
-        for (expected_index, gpu) in super::detect_gpus(super::detect_cuda_driver()).iter().enumerate() {
+        for (expected_index, gpu) in super::detect_gpus(super::detect_cuda_driver())
+            .iter()
+            .enumerate()
+        {
             assert!(!gpu.id.trim().is_empty());
             assert_eq!(gpu.system_index, expected_index as u32);
-            assert!(serde_json::to_value(gpu).expect("gpu should serialize").get("backend_device_index").is_some());
+            assert!(serde_json::to_value(gpu)
+                .expect("gpu should serialize")
+                .get("backend_device_index")
+                .is_some());
         }
     }
 }

@@ -43,55 +43,70 @@ export function mergeLiveToolState(fetched: Message, existing?: Message): Messag
     };
   };
 
-  const toolCallsById = new Map<string, ToolCall>();
-  (fetched.toolCalls || []).forEach((tool) => toolCallsById.set(tool.id, mergeTool(tool)));
-  liveTools.forEach((tool, id) => {
-    if (!toolCallsById.has(id)) {
-      toolCallsById.set(id, { ...tool, output: tool.output || "" });
+  const fetchedTools = new Map((fetched.toolCalls || []).map((tool) => [tool.id, tool]));
+  const toolCalls: ToolCall[] = [];
+  const seenToolIds = new Set<string>();
+  (existing.toolCalls || []).forEach((tool) => {
+    toolCalls.push(mergeTool(fetchedTools.get(tool.id) || tool));
+    seenToolIds.add(tool.id);
+  });
+  (existing.steps || []).forEach((step) => {
+    if (step.type !== "tool-call" || !step.toolCall || seenToolIds.has(step.toolCall.id)) return;
+    toolCalls.push(mergeTool(fetchedTools.get(step.toolCall.id) || step.toolCall));
+    seenToolIds.add(step.toolCall.id);
+  });
+  (fetched.toolCalls || []).forEach((tool) => {
+    if (!seenToolIds.has(tool.id)) toolCalls.push(mergeTool(tool));
+  });
+
+  const fetchedSteps = fetched.steps || [];
+  const consumedFetchedSteps = new Set<number>();
+  const findFetchedStep = (liveStep: Step) => {
+    if (liveStep.type === "tool-call" || liveStep.type === "action") {
+      const key = stepKey(liveStep);
+      return fetchedSteps.findIndex((step, index) => !consumedFetchedSteps.has(index) && stepKey(step) === key);
+    }
+    return fetchedSteps.findIndex((step, index) => !consumedFetchedSteps.has(index) && step.type === liveStep.type);
+  };
+
+  // The live sequence is the chronology authority. DB refreshes enrich these
+  // slots instead of rebuilding the sequence with persisted text first.
+  const steps = (existing.steps || [])
+    .filter((step) => step.kind !== "chat_status")
+    .map((liveStep) => {
+      const fetchedIndex = findFetchedStep(liveStep);
+      const persistedStep = fetchedIndex >= 0 ? fetchedSteps[fetchedIndex] : undefined;
+      if (fetchedIndex >= 0) consumedFetchedSteps.add(fetchedIndex);
+
+      if (liveStep.type === "tool-call" && liveStep.toolCall) {
+        const persistedTool = persistedStep?.type === "tool-call" ? persistedStep.toolCall : undefined;
+        return { ...persistedStep, ...liveStep, toolCall: mergeTool(persistedTool || liveStep.toolCall) };
+      }
+      if (liveStep.type === "action") {
+        if (persistedStep?.type !== "action") return liveStep;
+        const terminalLive = liveStep.status === "completed" || liveStep.status === "error" || liveStep.status === "cancelled";
+        return {
+          ...liveStep,
+          ...persistedStep,
+          status: terminalLive ? liveStep.status : persistedStep.status || liveStep.status,
+          metadata: { ...(liveStep.metadata || {}), ...(persistedStep.metadata || {}) },
+        };
+      }
+      if (persistedStep?.type === liveStep.type) {
+        return { ...liveStep, ...persistedStep, content: persistedStep.content || liveStep.content };
+      }
+      return liveStep;
+    });
+
+  fetchedSteps.forEach((step, index) => {
+    if (!consumedFetchedSteps.has(index)) {
+      steps.push(step.type === "tool-call" && step.toolCall
+        ? { ...step, toolCall: mergeTool(step.toolCall) }
+        : step);
     }
   });
 
-  const stepIndexes = new Map<string, number>();
-  const steps = (fetched.steps || []).map((step) => {
-    const mergedStep = step.type === "tool-call" && step.toolCall
-      ? { ...step, toolCall: mergeTool(step.toolCall) }
-      : step;
-    stepIndexes.set(stepKey(mergedStep), stepIndexes.size);
-    return mergedStep;
-  });
-
-  existing.steps
-    // Exclude ephemeral chat_status steps — they're streaming-only indicators
-    // with no DB counterpart and would duplicate the live tool cards.
-    ?.filter((step) => (step.type === "tool-call" || step.type === "action") && step.kind !== "chat_status")
-    .forEach((step) => {
-      const key = stepKey(step);
-      const existingIndex = stepIndexes.get(key);
-      if (existingIndex !== undefined) {
-        const current = steps[existingIndex];
-        if (
-          current.type === "action" &&
-          step.type === "action" &&
-          current.status !== "completed" &&
-          (step.status === "completed" || step.status === "error")
-        ) {
-          steps[existingIndex] = {
-            ...current,
-            ...step,
-            metadata: { ...(current.metadata || {}), ...(step.metadata || {}) },
-          };
-        }
-        return;
-      }
-      stepIndexes.set(key, steps.length);
-      if (step.type === "tool-call" && step.toolCall) {
-        steps.push({ ...step, toolCall: mergeTool(step.toolCall) });
-      } else {
-        steps.push(step);
-      }
-    });
-
-  return { ...fetched, toolCalls: Array.from(toolCallsById.values()), steps };
+  return { ...fetched, toolCalls, steps };
 }
 
 export function findLiveAssistantForFetched(

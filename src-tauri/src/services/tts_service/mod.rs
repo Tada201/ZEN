@@ -318,7 +318,8 @@ impl TtsService {
                                     }
                                     let rms = (sum_sq / frame.len() as f32).sqrt();
                                     let level = (rms * 5.0).min(1.0);
-                                    let _ = app.emit("tts:level", serde_json::json!({ "level": level }));
+                                    let _ = app
+                                        .emit("tts:level", serde_json::json!({ "level": level }));
                                 }
                             }
                             std::thread::sleep(std::time::Duration::from_millis(30));
@@ -343,7 +344,11 @@ impl TtsService {
                 let msg = format!(
                     "Piper failed (exit {:?}). stderr: {}",
                     output.status,
-                    if stderr_text.is_empty() { "(empty)".to_string() } else { stderr_text.to_string() }
+                    if stderr_text.is_empty() {
+                        "(empty)".to_string()
+                    } else {
+                        stderr_text.to_string()
+                    }
                 );
                 error!("{}", msg);
                 let _ = app.emit("tts:error", serde_json::json!({ "error": msg }));

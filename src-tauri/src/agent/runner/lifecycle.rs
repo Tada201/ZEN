@@ -91,7 +91,11 @@ impl Runner {
         self
     }
 
-    pub fn with_voice_mode(mut self, voice_mode: bool, display_agent_model: Option<String>) -> Self {
+    pub fn with_voice_mode(
+        mut self,
+        voice_mode: bool,
+        display_agent_model: Option<String>,
+    ) -> Self {
         self.config.voice_mode = voice_mode;
         self.config.display_agent_model = display_agent_model;
         self

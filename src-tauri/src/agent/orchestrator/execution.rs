@@ -346,10 +346,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
         let first_chunk_sent_clone = first_chunk_sent.clone();
 
         // Text buffer: accumulates delta text and emits on every chunk (frontend rAF batches).
-        let buffer = std::sync::Arc::new(std::sync::Mutex::new((
-            String::new(),
-            "text",
-        )));
+        let buffer = std::sync::Arc::new(std::sync::Mutex::new((String::new(), "text")));
         let buffer_clone = buffer.clone();
 
         let maybe_channel_clone = maybe_channel.clone();

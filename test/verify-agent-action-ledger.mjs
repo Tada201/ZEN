@@ -265,7 +265,7 @@ const lateToolStatus = appendActionStepToMessages(
   "chat_status",
 );
 assert.equal(lateToolStatus.length, 2, "late tool status should not create a bottom system row");
-assert.equal(lateToolStatus[1].steps[0].type, "action", "late tool status should render before final text");
-assert.equal(lateToolStatus[1].steps[1].type, "text", "final assistant text should remain after late tool status");
+assert.equal(lateToolStatus[1].steps[0].type, "text", "existing assistant text must keep its chronological position");
+assert.equal(lateToolStatus[1].steps[1].type, "action", "late tool status must append without jumping backward");
 
 console.log("agent action ledger ok");

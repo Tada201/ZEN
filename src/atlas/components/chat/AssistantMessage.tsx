@@ -1,6 +1,6 @@
 import React, { Suspense, useMemo } from "react";
-import { 
-  Check, Copy, FileText, Code2, AlertTriangle, ChevronRight, RefreshCcw, Zap, X,
+import {
+  Check, Copy, FileText, Code2, AlertTriangle, ChevronRight, RefreshCcw, Zap, X, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,7 @@ import { type ChatStatusPhase } from "@/api/chatStatus";
 import type { Message, ArtifactData, Step } from "./types";
 import type { SettingsTabId } from "@/lib/features/frontendFeatures";
 import type { ParsedCard } from "./assistantMessageParts";
-import { groupAssistantSteps, groupToolCalls, legacyMessageToActionStep, parseCardTags } from "./assistantMessageParts";
+import { groupAssistantSteps, groupToolCalls, legacyMessageToActionStep, parseCardTags, shouldShowPostToolWorking } from "./assistantMessageParts";
 import { MarkdownContent } from "./MarkdownContent";
 import { ReasoningBlock } from "./ReasoningBlock";
 import { useCopy } from "./CodeBlock";
@@ -97,6 +97,15 @@ export function AssistantMessage({
   const visibleGroupedSteps = useMemo(() => {
     return groupedSteps.filter((step) => step.type !== "action" || isVisibleChatActionStep(step as Step));
   }, [groupedSteps]);
+
+  const showPostToolWorking = useMemo(() => {
+    if (visibleGroupedSteps.length > 0) {
+      return shouldShowPostToolWorking(visibleGroupedSteps, message.status === "sending");
+    }
+    return message.status === "sending" && groupedToolCalls.length > 0 && groupedToolCalls.every(
+      (tool) => tool.status === "completed" || tool.status === "error",
+    );
+  }, [groupedToolCalls, message.status, visibleGroupedSteps]);
 
   const hasVisibleAnswer = Boolean(
     message.content?.trim() ||
@@ -247,6 +256,17 @@ export function AssistantMessage({
                         )}
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {showPostToolWorking && (
+                  <div
+                    className="flex min-h-7 items-center gap-2 text-[12px] text-muted-foreground"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin text-primary/70" />
+                    <span>Working on the response...</span>
                   </div>
                 )}
               </>

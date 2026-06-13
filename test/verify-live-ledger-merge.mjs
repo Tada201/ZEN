@@ -88,6 +88,34 @@ assert(
   merged.steps.some((step) => step.type === "action" && step.eventId === "agent:researcher-1" && step.status === "completed"),
   "subagent lifecycle row should survive and end completed",
 );
+assert.deepEqual(
+  merged.steps.map((step) => step.type),
+  ["action", "tool-call", "action", "text"],
+  "DB refresh must preserve live tool chronology instead of moving tools below completed text",
+);
+
+const interleavedLive = {
+  ...liveAssistant,
+  steps: [
+    { type: "text", content: "Starting analysis." },
+    liveAssistant.steps[1],
+    { type: "text", content: "Finished analysis." },
+  ],
+};
+const interleavedFetched = {
+  ...fetchedAssistant,
+  content: "Starting analysis. Finished analysis.",
+  steps: [
+    { type: "text", content: "Starting analysis." },
+    { type: "text", content: "Finished analysis." },
+  ],
+};
+const interleaved = mergeLiveToolState(interleavedFetched, interleavedLive);
+assert.deepEqual(
+  interleaved.steps.map((step) => step.type),
+  ["text", "tool-call", "text"],
+  "tool calls must remain between the text segments where they occurred",
+);
 
 const olderFetchedAssistant = {
   ...fetchedAssistant,

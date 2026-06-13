@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
+import type { BoardDocumentV1, BoardLayoutMode, BoardWidget, BoardWidgetKind } from "./board/types";
 
-export type VoiceStageBlockKind = "note" | "metric" | "table" | "chart" | "equation" | "code" | "map-placeholder" | "image" | "link-preview" | "progress" | "divider" | "svg" | "qr" | "palette" | "kroki" | "diff";
+export type VoiceStageBlockKind = BoardWidgetKind;
 export type VoiceStageLifecycle = "active" | "paused" | "cancelled" | "closed";
 export type VoiceStageBoardRequest = "new" | "edit" | "replace";
 
@@ -10,6 +11,7 @@ interface VoiceStageBlockBase {
   kind: VoiceStageBlockKind;
   title: string;
   updatedAt: number;
+  layout?: BoardWidget["layout"];
 }
 
 export interface VoiceStageNoteBlock extends VoiceStageBlockBase {
@@ -46,9 +48,12 @@ export interface VoiceStageCodeBlock extends VoiceStageBlockBase {
 }
 
 export interface VoiceStageMapPlaceholderBlock extends VoiceStageBlockBase {
-  kind: "map-placeholder";
+  kind: "map";
   location: string;
   detail?: string;
+  latitude?: number;
+  longitude?: number;
+  zoom?: number;
 }
 
 export interface VoiceStageImageBlock extends VoiceStageBlockBase {
@@ -63,6 +68,34 @@ export interface VoiceStageLinkPreviewBlock extends VoiceStageBlockBase {
   url: string;
   description?: string;
   thumbnail?: string;
+}
+
+export interface VoiceStageVideoBlock extends VoiceStageBlockBase {
+  kind: "video";
+  url: string;
+  thumbnail?: string;
+  description?: string;
+}
+
+export interface VoiceStageCameraBlock extends VoiceStageBlockBase {
+  kind: "camera";
+  description?: string;
+}
+
+export interface VoiceStageGenUiBlock extends VoiceStageBlockBase {
+  kind: "gen-ui";
+  content: string;
+}
+
+export interface VoiceStagePremiumCardBlock extends VoiceStageBlockBase {
+  kind: "premium-card";
+  cardType: string;
+  cardData: Record<string, unknown>;
+}
+
+export interface VoiceStageHtmlBlock extends VoiceStageBlockBase {
+  kind: "html";
+  content: string;
 }
 
 export interface VoiceStageProgressBlock extends VoiceStageBlockBase {
@@ -118,6 +151,11 @@ export type VoiceStageBlock =
   | VoiceStageMapPlaceholderBlock
   | VoiceStageImageBlock
   | VoiceStageLinkPreviewBlock
+  | VoiceStageVideoBlock
+  | VoiceStageCameraBlock
+  | VoiceStageGenUiBlock
+  | VoiceStagePremiumCardBlock
+  | VoiceStageHtmlBlock
   | VoiceStageProgressBlock
   | VoiceStageDividerBlock
   | VoiceStageSvgBlock
@@ -131,6 +169,8 @@ export type VoiceStageInput = VoiceStageBlock extends infer Block
     ? Omit<Block, "updatedAt"> & { updatedAt?: number }
     : never
   : never;
+
+type VoiceStageDocument = Omit<BoardDocumentV1, "widgets"> & { widgets: VoiceStageBlock[] };
 
 export interface VoiceStageBoardSnapshot {
   id: string;
@@ -146,19 +186,21 @@ interface VoiceStageReplaceOptions {
 }
 
 interface VoiceStageState {
-  blocks: VoiceStageBlock[];
+  document: VoiceStageDocument;
   retainedBoards: VoiceStageBoardSnapshot[];
   focusedBlockId: string | null;
   generation: number;
   lifecycle: VoiceStageLifecycle;
   start: () => void;
   clear: () => void;
+  resetCurrent: () => void;
   replace: (blocks: VoiceStageInput[], options?: VoiceStageReplaceOptions) => void;
   append: (block: VoiceStageInput) => void;
   upsert: (block: VoiceStageInput) => void;
   saveCurrentBoard: (title?: string) => void;
   forgetBoards: () => void;
   focus: (id: string | null) => void;
+  setLayout: (layout: BoardLayoutMode) => void;
   pause: () => void;
   cancel: (reason?: string) => void;
   close: () => void;
@@ -200,13 +242,22 @@ function rememberBoard(
 }
 
 export const useVoiceStageStore = create<VoiceStageState>((set) => ({
-  blocks: [],
+  document: {
+    version: 1,
+    id: "voice-board-current",
+    title: "Voice board",
+    layout: "grid",
+    widgets: [],
+    createdAt: now(),
+    updatedAt: now(),
+  },
   retainedBoards: [],
   focusedBlockId: null,
   generation: 0,
   lifecycle: "closed",
   start: () => set((state) => ({ lifecycle: "active", generation: state.generation + 1 })),
-  clear: () => set((state) => ({ blocks: [], retainedBoards: [], focusedBlockId: null, generation: state.generation + 1 })),
+  clear: () => set((state) => ({ document: { ...state.document, widgets: [], updatedAt: now() }, retainedBoards: [], focusedBlockId: null, generation: state.generation + 1 })),
+  resetCurrent: () => set((state) => ({ document: { ...state.document, widgets: [], updatedAt: now() }, focusedBlockId: null, generation: state.generation + 1 })),
   replace: (blocks, options = {}) => {
     const normalized = blocks.map(normalizeBlock);
     set((state) => {
@@ -215,11 +266,11 @@ export const useVoiceStageStore = create<VoiceStageState>((set) => ({
         requestType === "new"
           ? []
           : options.rememberCurrent
-            ? rememberBoard(state.retainedBoards, state.blocks)
+            ? rememberBoard(state.retainedBoards, state.document.widgets)
             : state.retainedBoards.slice(-boardMemoryLimit());
 
       return {
-        blocks: normalized,
+        document: { ...state.document, widgets: normalized, updatedAt: now() },
         retainedBoards,
         focusedBlockId: normalized[0]?.id ?? null,
       };
@@ -227,29 +278,32 @@ export const useVoiceStageStore = create<VoiceStageState>((set) => ({
   },
   append: (block) => {
     const normalized = normalizeBlock(block);
-    set((state) => ({
-      blocks: [...state.blocks, normalized].slice(-12),
-      focusedBlockId: normalized.id,
-    }));
+    set((state) => {
+      const widgets = [...state.document.widgets, normalized].slice(-12);
+      return { document: { ...state.document, widgets, updatedAt: now() }, focusedBlockId: normalized.id };
+    });
   },
   upsert: (block) => {
     const normalized = normalizeBlock(block);
     set((state) => {
-      const index = state.blocks.findIndex((item) => item.id === normalized.id);
+      const widgets = state.document.widgets;
+      const index = widgets.findIndex((item) => item.id === normalized.id);
       if (index === -1) {
-        return { blocks: [...state.blocks, normalized].slice(-12), focusedBlockId: normalized.id };
+        const next = [...widgets, normalized].slice(-12);
+        return { document: { ...state.document, widgets: next, updatedAt: now() }, focusedBlockId: normalized.id };
       }
-      const next = state.blocks.slice();
+      const next = widgets.slice();
       next[index] = normalized;
-      return { blocks: next, focusedBlockId: normalized.id };
+      return { document: { ...state.document, widgets: next, updatedAt: now() }, focusedBlockId: normalized.id };
     });
   },
   saveCurrentBoard: (title) =>
     set((state) => ({
-      retainedBoards: rememberBoard(state.retainedBoards, state.blocks, title),
+      retainedBoards: rememberBoard(state.retainedBoards, state.document.widgets, title),
     })),
   forgetBoards: () => set({ retainedBoards: [] }),
   focus: (id) => set({ focusedBlockId: id }),
+  setLayout: (layout) => set((state) => ({ document: { ...state.document, layout, updatedAt: now() } })),
   pause: () => set((state) => ({ lifecycle: "paused", generation: state.generation + 1 })),
   cancel: (reason = "Voice run stopped.") => {
     const stoppedBlock: VoiceStageNoteBlock = {
@@ -260,7 +314,11 @@ export const useVoiceStageStore = create<VoiceStageState>((set) => ({
       updatedAt: now(),
     };
     set((state) => ({
-      blocks: [...state.blocks.filter((block) => block.id !== stoppedBlock.id), stoppedBlock].slice(-12),
+      document: {
+        ...state.document,
+        widgets: [...state.document.widgets.filter((block) => block.id !== stoppedBlock.id), stoppedBlock].slice(-12),
+        updatedAt: now(),
+      },
       focusedBlockId: stoppedBlock.id,
       lifecycle: "cancelled",
       generation: state.generation + 1,

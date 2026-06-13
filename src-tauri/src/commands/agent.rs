@@ -57,7 +57,6 @@ pub async fn spawn_agent(
     ))
 }
 
-
 #[derive(Debug, Serialize)]
 pub struct OrchestratorStatus {
     pub initialized: bool,

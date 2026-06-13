@@ -598,7 +598,6 @@ impl ProgressiveToolRegistry {
                 )) as Arc<dyn AgentTool>
             }),
         );
-
     }
 
     fn register_metadata(&mut self, metadata: ToolMetadata) {

@@ -50,6 +50,12 @@ impl Runner {
         // fetch when the slice is empty (e.g. orchestrator path) or no DB is available.
         let mut conversation =
             load_initial_conversation(self.db_pool.as_ref(), &chat_id, messages).await;
+        let voice_user_request = conversation
+            .iter()
+            .rev()
+            .find(|message| message.role == "user")
+            .map(|message| message.content.clone())
+            .unwrap_or_default();
 
         // ── Fix #1: Pre-load cached recall from previous turn (zero-cost) ──
         // The heavy embedding work runs in a background task AFTER the LLM responds.
@@ -178,6 +184,7 @@ impl Runner {
                 self.spawn_voice_display_agent(
                     &chat_id,
                     &model,
+                    &voice_user_request,
                     &accumulated_commentary,
                     token.child_token(),
                 );
@@ -520,6 +527,7 @@ impl Runner {
                 self.spawn_voice_display_agent(
                     &chat_id,
                     &model,
+                    &voice_user_request,
                     &accumulated_commentary,
                     token.child_token(),
                 );
@@ -575,7 +583,10 @@ impl Runner {
             if !visible_response_content.trim().is_empty() {
                 tracing::info!(
                     "Recording intermediate commentary: {}...",
-                    visible_response_content.chars().take(80).collect::<String>()
+                    visible_response_content
+                        .chars()
+                        .take(80)
+                        .collect::<String>()
                 );
                 if !accumulated_commentary.is_empty() {
                     accumulated_commentary.push('\n');
@@ -826,8 +837,7 @@ impl Runner {
                                 role: "system".to_string(),
                                 content: format!(
                                     "[Context bridge] You are now taking over from {}. {}",
-                                    current_agent.name,
-                                    handoff_summary
+                                    current_agent.name, handoff_summary
                                 ),
                                 reasoning_details: None,
                                 images: None,

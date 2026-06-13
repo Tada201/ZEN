@@ -1,8 +1,21 @@
+import { lazy, Suspense } from "react";
 import { cn } from "@/lib/utils";
 import { useVoiceStageStore, type VoiceStageBlock } from "./voiceStageStore";
 import type { VoiceState } from "./VoiceModePanel";
 import { sanitizeGeneratedSvg } from "@/lib/security/generatedContent";
 import { isSafeGeneratedHref } from "@/lib/security/generatedLinks";
+import { preferredWidgetWidth, widgetWidthClass } from "./board/registry";
+
+const OpenUIRenderer = lazy(() => import("@/atlas/components/OpenUIRenderer").then((module) => ({ default: module.OpenUIRenderer })));
+const PremiumCard = lazy(() => import("@/atlas/components/genui/PremiumCard").then((module) => ({ default: module.PremiumCard })));
+const BoardMap = lazy(() => import("./board/BoardMediaWidgets").then((module) => ({ default: module.BoardMap })));
+const BoardVideo = lazy(() => import("./board/BoardMediaWidgets").then((module) => ({ default: module.BoardVideo })));
+const BoardCamera = lazy(() => import("./board/BoardMediaWidgets").then((module) => ({ default: module.BoardCamera })));
+const BoardHtml = lazy(() => import("./board/BoardMediaWidgets").then((module) => ({ default: module.BoardHtml })));
+
+function WidgetFallback() {
+  return <div className="flex min-h-32 items-center justify-center text-xs text-white/50">Loading presentation...</div>;
+}
 
 interface VoiceStageProps {
   voiceState: VoiceState;
@@ -106,16 +119,27 @@ function BoardBlock({ block }: { block: VoiceStageBlock }) {
         </div>
       );
 
-    case "map-placeholder":
+    case "map":
       return (
-        <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-lg">📍</span>
-            <span className="text-xs font-semibold text-white/70">{block.title || block.location}</span>
-          </div>
-          <div className="text-[10px] text-white/40">{block.detail || block.location}</div>
+        <div className="overflow-hidden rounded-lg border border-white/[0.08] bg-black">
+          <Suspense fallback={<WidgetFallback />}><BoardMap widget={block} /></Suspense>
         </div>
       );
+
+    case "video":
+      return <div className="overflow-hidden rounded-lg border border-white/[0.08]"><Suspense fallback={<WidgetFallback />}><BoardVideo widget={block} /></Suspense></div>;
+
+    case "camera":
+      return <div className="overflow-hidden rounded-lg border border-white/[0.08]"><Suspense fallback={<WidgetFallback />}><BoardCamera widget={block} /></Suspense></div>;
+
+    case "gen-ui":
+      return <div className="rounded-lg border border-white/[0.08] bg-black/30 p-4"><Suspense fallback={<WidgetFallback />}><OpenUIRenderer content={block.content} /></Suspense></div>;
+
+    case "premium-card":
+      return <div className="flex min-h-32 items-center justify-center"><Suspense fallback={<WidgetFallback />}><PremiumCard type={block.cardType} data={block.cardData} /></Suspense></div>;
+
+    case "html":
+      return <div className="overflow-hidden rounded-lg border border-white/[0.08]"><Suspense fallback={<WidgetFallback />}><BoardHtml widget={block} /></Suspense></div>;
 
     case "image":
       if (!isSafeGeneratedHref(block.url)) {
@@ -172,7 +196,7 @@ function BoardBlock({ block }: { block: VoiceStageBlock }) {
         <div className="rounded-lg border border-white/[0.04] overflow-hidden">
           {block.title && <div className="px-3 py-1.5 bg-white/[0.02] text-[10px] font-semibold text-white/40 uppercase tracking-wider">{block.title}</div>}
           <div
-            className="p-2 flex justify-center"
+            className="p-2 flex min-h-40 items-center justify-center [&_svg]:h-auto [&_svg]:max-h-[60vh] [&_svg]:w-full [&_svg]:max-w-full"
             // Model-generated SVG is untrusted; sanitize before injection.
             dangerouslySetInnerHTML={{ __html: sanitizeGeneratedSvg(block.markup) }}
           />
@@ -237,15 +261,16 @@ function BoardBlock({ block }: { block: VoiceStageBlock }) {
     default:
       return (
         <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] text-xs text-white/30 italic">
-          Unknown block: {(block as any).kind}
+          Unknown block: {(block as { kind: string }).kind}
         </div>
       );
   }
 }
 
 export function VoiceStage({ voiceState }: VoiceStageProps) {
-  const blocks = useVoiceStageStore((s) => s.blocks);
+  const blocks = useVoiceStageStore((s) => s.document.widgets);
   const focusedBlockId = useVoiceStageStore((s) => s.focusedBlockId);
+  const layout = useVoiceStageStore((s) => s.document.layout);
 
   return (
     <section
@@ -256,12 +281,13 @@ export function VoiceStage({ voiceState }: VoiceStageProps) {
       )}
     >
       {blocks.length > 0 && (
-        <div className="p-3 space-y-2">
-          {blocks.map((block) => (
+        <div className={cn("grid grid-cols-12 gap-3 p-3", layout === "focus" && "mx-auto max-w-5xl")}>
+          {[...blocks].sort((a, b) => (a.layout?.order ?? 0) - (b.layout?.order ?? 0)).map((block) => (
             <div
               key={block.id}
               className={cn(
-                "transition-all duration-200",
+                "min-w-0 transition-all duration-200",
+                layout === "focus" ? "col-span-12" : widgetWidthClass[preferredWidgetWidth(block)],
                 focusedBlockId === block.id && "ring-1 ring-primary/40 rounded-lg"
               )}
             >

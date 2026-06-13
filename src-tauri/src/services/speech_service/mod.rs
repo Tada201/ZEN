@@ -18,7 +18,9 @@ const PORT_FALLBACK_RANGE: u16 = 10;
 
 /// Returns true if the given TCP port is available (no process bound to it).
 async fn is_port_available(port: u16) -> bool {
-    tokio::net::TcpListener::bind(("127.0.0.1", port)).await.is_ok()
+    tokio::net::TcpListener::bind(("127.0.0.1", port))
+        .await
+        .is_ok()
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -413,8 +415,7 @@ impl SpeechService {
             }
             warn!(
                 port = candidate,
-                "Port {} is occupied, trying next...",
-                candidate
+                "Port {} is occupied, trying next...", candidate
             );
         }
         let port = bound_port.ok_or_else(|| {

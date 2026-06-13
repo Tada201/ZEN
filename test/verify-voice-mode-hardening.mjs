@@ -7,6 +7,7 @@ const files = {
   panel: "src/atlas/components/voice/VoiceModePanel.tsx",
   oscilloscope: "src/atlas/components/voice/VoiceOscilloscope.tsx",
   stage: "src/atlas/components/voice/VoiceStage.tsx",
+  generatedContent: "src/lib/security/generatedContent.ts",
   stageStore: "src/atlas/components/voice/voiceStageStore.ts",
   events: "src/api/events.ts",
   voiceCommand: "src-tauri/src/commands/voice.rs",
@@ -20,6 +21,7 @@ const files = {
   chatSection: "src/atlas/sections/ChatSection.tsx",
   workspaceSection: "src/atlas/sections/WorkspaceSection.tsx",
   voicePrompt: "src/atlas/components/voice/voiceModePrompt.ts",
+  voiceTextUtils: "src/atlas/components/voice/voiceTextUtils.ts",
   sendMessage: "src/atlas/hooks/chat/useSendMessage.ts",
   useChat: "src/atlas/hooks/useChat.ts",
   chatApi: "src/api/chatApi.ts",
@@ -136,6 +138,15 @@ const checks = [
       src.voiceChatEvents.includes("void speakAssistantResponse()") &&
       src.voiceChatEvents.includes("fullAiResponseRef.current = stripped") &&
       src.voiceChatEvents.includes("TTS readback failed"),
+  ],
+  [
+    "voice TTS rejects SVG, tool envelopes, and code-like streamed content",
+    src.voiceTextUtils.includes("isSpeakableVoiceText") &&
+      src.voiceTextUtils.includes("tool_call_id") &&
+      src.voiceTextUtils.includes("<svg") &&
+      src.voiceChatEvents.includes(".filter(isSpeakableVoiceText)") &&
+      src.voicePrompt.includes("automatic display agent receives the user's original request directly") &&
+      src.voicePrompt.includes("Never output SVG, code, JSON, tool names, tool arguments"),
   ],
   [
     "voice mode uses selected STT and TTS models",
@@ -301,7 +312,9 @@ const checks = [
   ],
   [
     "voice stage has a structured blackboard protocol",
-      src.stageStore.includes('VoiceStageBlockKind = "note" | "metric" | "table" | "chart" | "equation" | "code" | "map-placeholder"') &&
+      src.stageStore.includes("BoardDocumentV1") &&
+      src.stageStore.includes("BoardWidgetKind") &&
+      src.stageStore.includes('layout: "grid"') &&
       src.stageStore.includes("clear: () => void") &&
       src.stageStore.includes("replace: (blocks: VoiceStageInput[], options?: VoiceStageReplaceOptions) => void") &&
       src.stageStore.includes("append: (block: VoiceStageInput) => void") &&
@@ -309,6 +322,13 @@ const checks = [
       src.stageStore.includes("focus: (id: string | null) => void") &&
       !src.stage.includes("content bounds") &&
       !src.overlay.includes("voice-stage-contract"),
+  ],
+  [
+    "voice stage decodes escaped SVG before sanitizing and rendering",
+    src.generatedContent.includes("normalizeGeneratedSvg") &&
+      src.generatedContent.includes('document.createElement("textarea")') &&
+      src.generatedContent.includes('if (!/^\\s*<svg\\b/i.test(normalized)) return ""') &&
+      src.stage.includes("[&_svg]:max-h-[60vh]"),
   ],
   [
     "voice panel displays live TTFT metric",
@@ -361,7 +381,7 @@ const checks = [
       src.stageStore.includes("voiceDisplayAgentBoardMemoryLimit") &&
       src.stageStore.includes("MAX_BOARD_MEMORY_LIMIT = 3") &&
       src.stageStore.includes("requestType === \"new\"") &&
-      src.stageStore.includes("rememberBoard(state.retainedBoards, state.blocks"),
+      src.stageStore.includes("rememberBoard(state.retainedBoards, state.document.widgets"),
   ],
 ];
 

@@ -709,8 +709,7 @@ impl OpenAiCompatProvider {
         match p.as_str() {
             // Curated / official catalogs — all models support tools
             "openai" | "groq" | "mistral" | "gemini" | "google" | "deepseek" | "qwen" | "xai"
-            | "kilocode" | "opencode"
-            | "opencode_free" | "aihubmix" | "nvidia" => true,
+            | "kilocode" | "opencode" | "opencode_free" | "aihubmix" | "nvidia" => true,
 
             // Mixed catalogs — many models lack tool support
             "openrouter" | "together" | "perplexity" => false,

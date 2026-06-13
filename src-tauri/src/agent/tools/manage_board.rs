@@ -13,9 +13,28 @@ const MAX_TEXT_CHARS: usize = 32 * 1024;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BoardBlockKind {
-    Note, Metric, Table, Chart, Equation, Code, MapPlaceholder,
-    Image, LinkPreview, Progress, Divider,
-    Svg, Qr, Palette, Kroki, Diff,
+    Note,
+    Metric,
+    Table,
+    Chart,
+    Equation,
+    Code,
+    MapPlaceholder,
+    Map,
+    Image,
+    LinkPreview,
+    Video,
+    Camera,
+    GenUi,
+    PremiumCard,
+    Html,
+    Progress,
+    Divider,
+    Svg,
+    Qr,
+    Palette,
+    Kroki,
+    Diff,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -56,6 +75,12 @@ pub struct BoardBlock {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub location: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub latitude: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub longitude: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub zoom: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max: Option<f64>,
@@ -73,6 +98,12 @@ pub struct BoardBlock {
     pub diagram: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub card_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub card_data: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layout: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub old_code: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -97,26 +128,19 @@ pub enum BoardOperation {
         blocks: Vec<BoardBlock>,
         #[serde(default)]
         title: Option<String>,
+        #[serde(default)]
+        layout: Option<String>,
     },
     /// Add a single block to the board.
-    Add {
-        block: BoardBlock,
-    },
+    Add { block: BoardBlock },
     /// Update an existing block by ID.
-    Update {
-        id: String,
-        block: BoardBlock,
-    },
+    Update { id: String, block: BoardBlock },
     /// Remove a block by ID.
-    Remove {
-        id: String,
-    },
+    Remove { id: String },
     /// Clear all blocks.
     Clear,
     /// Focus a specific block by ID (UI scroll/focus).
-    Focus {
-        id: String,
-    },
+    Focus { id: String },
 }
 
 pub struct ManageBoardTool;
@@ -140,29 +164,75 @@ fn validate_block(block: &BoardBlock) -> Result<()> {
     validate_text("body", block.body.as_deref(), MAX_TEXT_CHARS)?;
     validate_text("code", block.code.as_deref(), MAX_TEXT_CHARS)?;
     validate_text("SVG", block.markup.as_deref(), 64 * 1024)?;
-    validate_text("diagram", block.content.as_deref(), MAX_TEXT_CHARS)?;
+    validate_text("content", block.content.as_deref(), 64 * 1024)?;
     validate_text("URL", block.url.as_deref(), 4096)?;
     validate_text("QR data", block.data.as_deref(), 4096)?;
-    if block.columns.as_ref().is_some_and(|columns| columns.len() > 12) {
+    if block
+        .columns
+        .as_ref()
+        .is_some_and(|columns| columns.len() > 12)
+    {
         anyhow::bail!("Board tables support at most 12 columns");
     }
     if block.rows.as_ref().is_some_and(|rows| rows.len() > 100) {
         anyhow::bail!("Board tables support at most 100 rows");
     }
-    if block.points.as_ref().is_some_and(|points| points.len() > 50) {
+    if block
+        .points
+        .as_ref()
+        .is_some_and(|points| points.len() > 50)
+    {
         anyhow::bail!("Board charts support at most 50 points");
     }
-    if block.colors.as_ref().is_some_and(|colors| colors.len() > 20) {
+    if block
+        .colors
+        .as_ref()
+        .is_some_and(|colors| colors.len() > 20)
+    {
         anyhow::bail!("Board palettes support at most 20 colors");
+    }
+    match block.kind {
+        BoardBlockKind::Map => {
+            if block.latitude.is_none() || block.longitude.is_none() {
+                anyhow::bail!("Map blocks require latitude and longitude");
+            }
+        }
+        BoardBlockKind::Video | BoardBlockKind::Image | BoardBlockKind::LinkPreview => {
+            if block.url.as_deref().map_or(true, str::is_empty) {
+                anyhow::bail!("Media and link blocks require url");
+            }
+        }
+        BoardBlockKind::GenUi | BoardBlockKind::Html => {
+            if block.content.as_deref().map_or(true, str::is_empty) {
+                anyhow::bail!("Gen UI and HTML blocks require content");
+            }
+        }
+        BoardBlockKind::PremiumCard => {
+            if block.card_type.as_deref().map_or(true, str::is_empty) || block.card_data.is_none() {
+                anyhow::bail!("Premium card blocks require card_type and card_data");
+            }
+        }
+        BoardBlockKind::Svg => {
+            if block.markup.as_deref().map_or(true, str::is_empty) {
+                anyhow::bail!("SVG blocks require markup");
+            }
+        }
+        _ => {}
     }
     Ok(())
 }
 
 fn validate_operation(operation: &BoardOperation) -> Result<()> {
     match operation {
-        BoardOperation::Set { blocks, .. } => {
+        BoardOperation::Set { blocks, layout, .. } => {
             if blocks.len() > MAX_BOARD_BLOCKS {
                 anyhow::bail!("Voice boards support at most {} blocks", MAX_BOARD_BLOCKS);
+            }
+            if layout
+                .as_deref()
+                .is_some_and(|value| !matches!(value, "grid" | "dashboard" | "focus"))
+            {
+                anyhow::bail!("Board layout must be grid, dashboard, or focus");
             }
             for block in blocks {
                 validate_block(block)?;
@@ -186,90 +256,139 @@ impl AgentTool for ManageBoardTool {
     }
 
     fn description(&self) -> &str {
-        "Update the scratch-pad board displayed in the voice/visual mode UI. You MUST specify an 'action' (set, add, update, remove, clear, focus). For 'add' or 'update', wrap the block properties (like id, kind, title, body, markup, url, etc.) inside the 'block' object field. Do not pass block properties at the root level. Always show data visually on the board when helpful instead of describing it in text."
+        "Update the voice-mode board. Required shapes: set => {action:'set', blocks:[...]}; add => {action:'add', block:{...}}; update => {action:'update', id:'...', block:{...}}; remove/focus => {action:'remove'|'focus', id:'...'}; clear => {action:'clear'}. A drawing should normally use action 'set' with an SVG block inside the required blocks array. Never put block fields at the root."
     }
 
     fn input_schema(&self) -> Value {
-        json!({
+        use serde_json::Map;
+
+        let field = |kind: &str, description: &str| {
+            json!({ "type": kind, "description": description })
+        };
+        let array_field = |description: &str| {
+            json!({ "type": "array", "items": { "type": "string" }, "description": description })
+        };
+
+        let mut block_properties = Map::new();
+        for (name, kind, description) in [
+            ("id", "string", "Unique block identifier"),
+            ("title", "string", "Block title"),
+            ("body", "string", "Text body"),
+            ("value", "string", "Metric value"),
+            ("detail", "string", "Detail text"),
+            ("language", "string", "Programming language"),
+            ("expression", "string", "Math expression"),
+            ("url", "string", "Media or link URL"),
+            ("thumbnail", "string", "Thumbnail URL"),
+            ("description", "string", "Description text"),
+            ("size", "integer", "Size in pixels"),
+            ("alt", "string", "Alternative text"),
+            ("caption", "string", "Caption text"),
+            ("location", "string", "Location name"),
+            ("latitude", "number", "Map latitude"),
+            ("longitude", "number", "Map longitude"),
+            ("zoom", "number", "Map zoom"),
+            ("code", "string", "Code content"),
+            ("max", "number", "Maximum progress value"),
+            ("label", "string", "Label text"),
+            ("markup", "string", "Sanitized SVG markup"),
+            ("data", "string", "QR data"),
+            ("diagram", "string", "Diagram type"),
+            ("content", "string", "Diagram, Gen UI, or HTML content"),
+            ("card_type", "string", "Premium card type"),
+            ("card_data", "object", "Structured premium-card data"),
+            ("old_code", "string", "Original code"),
+            ("new_code", "string", "New code"),
+            ("old_label", "string", "Original code label"),
+            ("new_label", "string", "New code label"),
+        ] {
+            block_properties.insert(name.to_string(), field(kind, description));
+        }
+        block_properties.insert("kind".to_string(), json!({
+            "type": "string",
+            "enum": ["note", "metric", "table", "chart", "equation", "code", "map", "map_placeholder", "image", "link_preview", "video", "camera", "gen_ui", "premium_card", "html", "progress", "divider", "svg", "qr", "palette", "kroki", "diff"]
+        }));
+        block_properties.insert("columns".to_string(), array_field("Table columns"));
+        block_properties.insert("colors".to_string(), array_field("Palette colors"));
+        block_properties.insert("names".to_string(), array_field("Palette names"));
+        block_properties.insert("rows".to_string(), json!({
+            "type": "array", "items": { "type": "array", "items": { "type": "string" } }
+        }));
+        block_properties.insert("points".to_string(), json!({
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": { "label": { "type": "string" }, "value": { "type": "number" } },
+                "required": ["label", "value"]
+            }
+        }));
+        block_properties.insert("layout".to_string(), json!({
             "type": "object",
             "properties": {
-                "action": {
-                    "type": "string",
-                    "enum": ["set", "add", "update", "remove", "clear", "focus"],
-                    "description": "The operation to perform on the board"
-                },
-                "id": {
-                    "type": "string",
-                    "description": "Block ID for update, remove, or focus operations"
-                },
-                "blocks": {
-                    "type": "array",
-                    "description": "Array of blocks for 'set' operation",
-                    "items": { "$ref": "#/$defs/block" }
-                },
-                "block": {
-                    "$ref": "#/$defs/block",
-                    "description": "Single block for 'add' or 'update' operations"
-                },
-                "title": {
-                    "type": "string",
-                    "description": "Optional title for the board"
-                }
+                "width": { "type": "string", "enum": ["small", "medium", "wide", "full"] },
+                "order": { "type": "integer" }
             },
-            "required": ["action"],
-            "$defs": {
-                "block": {
-                    "type": "object",
-                    "properties": {
-                        "id": { "type": "string", "description": "Unique block identifier (UUID recommended)" },
-                        "kind": {
-                            "type": "string",
-                            "enum": ["note", "metric", "table", "chart", "equation", "code", "map_placeholder", "image", "link_preview", "progress", "divider", "svg", "qr", "palette", "kroki", "diff"],
-                            "description": "Block type"
-                        },
-                        "title": { "type": "string", "description": "Block title" },
-                        "body": { "type": "string", "description": "Text body (for note blocks)" },
-                        "value": { "type": "string", "description": "Value display (for metric blocks)" },
-                        "detail": { "type": "string", "description": "Detail/description (for metric or map blocks)" },
-                        "language": { "type": "string", "description": "Programming language (for code blocks)" },
-                        "expression": { "type": "string", "description": "Math expression (for equation blocks)" },
-                        "columns": { "type": "array", "items": {"type": "string"}, "description": "Column headers (for table blocks)" },
-                        "rows": { "type": "array", "items": {"type": "array", "items": {"type": "string"}}, "description": "Row data (for table blocks)" },
-                        "points": { "type": "array", "items": {"type": "object", "properties": {"label": {"type": "string"}, "value": {"type": "number"}}}, "description": "Chart data points" },
-                        "url": { "type": "string", "description": "URL (for image/link_preview blocks)" },
-                        "thumbnail": { "type": "string", "description": "Thumbnail image URL (for link_preview blocks)" },
-                        "description": { "type": "string", "description": "Description text (for link_preview blocks)" },
-                        "size": { "type": "integer", "description": "Size in pixels (for qr blocks)" },
-                        "alt": { "type": "string", "description": "Alt text (for image blocks)" },
-                        "caption": { "type": "string", "description": "Caption text (for image blocks)" },
-                        "location": { "type": "string", "description": "Location name or coordinates (for map_placeholder blocks)" },
-                        "code": { "type": "string", "description": "Code content (for code blocks)" },
-                        "max": { "type": "number", "description": "Maximum value (for progress blocks)" },
-                        "label": { "type": "string", "description": "Label text (for progress blocks)" },
-                        "markup": { "type": "string", "description": "Raw SVG markup (for svg blocks)" },
-                        "data": { "type": "string", "description": "Data string (for qr blocks)" },
-                        "colors": { "type": "array", "items": {"type": "string"}, "description": "Hex color array (for palette blocks)" },
-                        "names": { "type": "array", "items": {"type": "string"}, "description": "Color names (for palette blocks)" },
-                        "diagram": { "type": "string", "description": "Diagram type: graphviz, blockdiag, seqdiag, actdiag, nwdiag, packetdiag, rackdiag, c4plantuml, d2, dbml, erd, excalidraw, mermaid, nomnoml, pikchr, plantuml, svgbob, umlet, vega, vegalite, wavedrom (for kroki blocks)" },
-                        "content": { "type": "string", "description": "Diagram source text (for kroki blocks)" },
-                        "old_code": { "type": "string", "description": "Original code (for diff blocks)" },
-                        "new_code": { "type": "string", "description": "New code (for diff blocks)" },
-                        "old_label": { "type": "string", "description": "Label for old code column (for diff blocks)" },
-                        "new_label": { "type": "string", "description": "Label for new code column (for diff blocks)" }
-                    },
-                    "required": ["id", "kind"]
-                }
+            "additionalProperties": false
+        }));
+
+        let mut block_schema = Map::new();
+        block_schema.insert("type".to_string(), json!("object"));
+        block_schema.insert("properties".to_string(), Value::Object(block_properties));
+        block_schema.insert("required".to_string(), json!(["id", "kind"]));
+
+        let mut properties = Map::new();
+        properties.insert("action".to_string(), json!({
+            "type": "string", "enum": ["set", "add", "update", "remove", "clear", "focus"]
+        }));
+        properties.insert("id".to_string(), field("string", "Block ID"));
+        properties.insert("blocks".to_string(), json!({
+            "type": "array", "items": { "$ref": "#/$defs/block" }
+        }));
+        properties.insert("block".to_string(), json!({ "$ref": "#/$defs/block" }));
+        properties.insert("title".to_string(), field("string", "Board title"));
+        properties.insert("layout".to_string(), json!({
+            "type": "string", "enum": ["grid", "dashboard", "focus"]
+        }));
+
+        let mut definitions = Map::new();
+        definitions.insert("block".to_string(), Value::Object(block_schema));
+        let mut root = Map::new();
+        root.insert("type".to_string(), json!("object"));
+        root.insert("properties".to_string(), Value::Object(properties));
+        root.insert("required".to_string(), json!(["action"]));
+        root.insert("$defs".to_string(), Value::Object(definitions));
+
+        let mut schema = Value::Object(root);
+        schema["allOf"] = json!([
+            {
+                "if": { "properties": { "action": { "const": "set" } } },
+                "then": { "required": ["blocks"] }
+            },
+            {
+                "if": { "properties": { "action": { "const": "add" } } },
+                "then": { "required": ["block"] }
+            },
+            {
+                "if": { "properties": { "action": { "const": "update" } } },
+                "then": { "required": ["id", "block"] }
+            },
+            {
+                "if": { "properties": { "action": { "enum": ["remove", "focus"] } } },
+                "then": { "required": ["id"] }
             }
-        })
+        ]);
+        schema
     }
 
     async fn run(
         &self,
         app: AppHandle,
-        _chat_id: String,
+        chat_id: String,
         input: Value,
         _depth: u32,
-        _allowed_tools: Option<std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
+        _allowed_tools: Option<
+            std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>,
+        >,
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         if serde_json::to_vec(&input)?.len() > MAX_BOARD_PAYLOAD_BYTES {
@@ -280,27 +399,31 @@ impl AgentTool for ManageBoardTool {
         validate_operation(&operation)?;
 
         // Emit board update event to frontend
-        let payload = serde_json::to_value(&operation)?;
+        let mut payload = serde_json::to_value(&operation)?;
+        if let Some(object) = payload.as_object_mut() {
+            object.insert("chat_id".to_string(), json!(chat_id));
+            object.insert("version".to_string(), json!(1));
+        }
         let _ = app.emit("board:update", payload);
 
         match &operation {
-            BoardOperation::Set { blocks, title } => {
+            BoardOperation::Set { blocks, title, .. } => {
                 let count = blocks.len();
                 let title_str = title.as_deref().unwrap_or("Untitled");
-                Ok(json!({ "status": "ok", "message": format!("Board set: {} with {} blocks", title_str, count) }))
+                Ok(
+                    json!({ "status": "ok", "message": format!("Board set: {} with {} blocks", title_str, count) }),
+                )
             }
-            BoardOperation::Add { block } => {
-                Ok(json!({ "status": "ok", "message": format!("Block '{}' added to board", block.id) }))
-            }
+            BoardOperation::Add { block } => Ok(
+                json!({ "status": "ok", "message": format!("Block '{}' added to board", block.id) }),
+            ),
             BoardOperation::Update { id, .. } => {
                 Ok(json!({ "status": "ok", "message": format!("Block '{}' updated", id) }))
             }
             BoardOperation::Remove { id } => {
                 Ok(json!({ "status": "ok", "message": format!("Block '{}' removed", id) }))
             }
-            BoardOperation::Clear => {
-                Ok(json!({ "status": "ok", "message": "Board cleared" }))
-            }
+            BoardOperation::Clear => Ok(json!({ "status": "ok", "message": "Board cleared" })),
             BoardOperation::Focus { id } => {
                 Ok(json!({ "status": "ok", "message": format!("Focusing block '{}'", id) }))
             }
@@ -337,6 +460,9 @@ mod tests {
             alt: None,
             caption: None,
             location: None,
+            latitude: None,
+            longitude: None,
+            zoom: None,
             code: None,
             max: None,
             label: None,
@@ -346,6 +472,9 @@ mod tests {
             names: None,
             diagram: None,
             content: None,
+            card_type: None,
+            card_data: None,
+            layout: None,
             old_code: None,
             new_code: None,
             old_label: None,
@@ -358,6 +487,7 @@ mod tests {
         let operation = BoardOperation::Set {
             blocks: vec![note_block("status")],
             title: Some("Voice board".to_string()),
+            layout: Some("grid".to_string()),
         };
         assert!(validate_operation(&operation).is_ok());
     }
@@ -369,6 +499,7 @@ mod tests {
                 .map(|index| note_block(&format!("block-{index}")))
                 .collect(),
             title: None,
+            layout: None,
         };
         assert!(validate_operation(&operation).is_err());
     }

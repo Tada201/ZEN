@@ -14,6 +14,33 @@ pub(super) struct PipelineCall {
     pub resolved: ToolCall,
 }
 
+fn normalize_direct_tool_args(tool_name: &str, args: &Value) -> Value {
+    let mut normalized = if args.get("tool_id").and_then(Value::as_str) == Some(tool_name) {
+        args.get("arguments")
+            .filter(|value| value.is_object())
+            .cloned()
+            .unwrap_or_else(|| args.clone())
+    } else {
+        args.clone()
+    };
+
+    if tool_name == "spawn_agent" {
+        if let Some(object) = normalized.as_object_mut() {
+            if !object.contains_key("agent_id") {
+                if let Some(role) = object.remove("role") {
+                    object.insert("agent_id".to_string(), role);
+                }
+            }
+        }
+    } else if tool_name == "write_todos" && normalized.get("todos").is_none() {
+        if let Some(task) = normalized.get("task").and_then(Value::as_str) {
+            normalized = json!({ "todos": [{ "task": task, "completed": false }] });
+        }
+    }
+
+    normalized
+}
+
 pub(super) async fn preprocess_tool_calls(
     tool_manager: &Arc<ToolManager>,
     tool_calls: &[ToolCall],
@@ -146,10 +173,12 @@ pub(super) async fn preprocess_tool_calls(
                 }
             }
             _ => {
+                let mut resolved = tc.clone();
+                resolved.args = normalize_direct_tool_args(&resolved.name, &resolved.args);
                 pipeline_calls.push(PipelineCall {
                     index,
                     original: tc.clone(),
-                    resolved: tc.clone(),
+                    resolved,
                 });
             }
         }

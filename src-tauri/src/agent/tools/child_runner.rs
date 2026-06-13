@@ -160,10 +160,7 @@ pub(crate) async fn fetch_parent_context(
             role: m.role,
             content: m.content,
             reasoning_details: None,
-            images: m
-                .images
-                .as_ref()
-                .and_then(|s| serde_json::from_str(s).ok()),
+            images: m.images.as_ref().and_then(|s| serde_json::from_str(s).ok()),
             tool_calls: m
                 .tool_calls
                 .as_ref()

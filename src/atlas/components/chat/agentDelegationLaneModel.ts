@@ -1,6 +1,8 @@
 import type { Step } from "./types";
 
 export type AgentDelegationLaneModel = {
+  spawnId?: string;
+  batchId?: string;
   agentName: string;
   parentName: string;
   status: "running" | "completed" | "error" | "cancelled";
@@ -32,6 +34,8 @@ export function buildAgentDelegationLaneModel(step: Step): AgentDelegationLaneMo
   const resultSummary = step.metadata?.resultSummary || "";
 
   return {
+    spawnId: spawn.spawnId,
+    batchId: spawn.batchId || step.metadata?.batchId,
     agentName: spawn.childAgent || step.metadata?.agentName || step.metadata?.agentId || "agent",
     parentName: spawn.parentAgent || "main",
     status,

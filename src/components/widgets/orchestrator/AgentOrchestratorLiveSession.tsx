@@ -25,6 +25,7 @@ export function LiveSessionExecution({ model, isStreaming }: { model: LiveAgentP
                 <MetricCell label="tools" value={model.runningTools} tone={model.runningTools > 0 ? 'active' : undefined} />
                 <MetricCell label="approval" value={model.approvals} tone={model.approvals > 0 ? 'warn' : undefined} />
                 <MetricCell label="done" value={model.completedAgents} />
+                <MetricCell label="failed" value={model.failedAgents} tone={model.failedAgents > 0 ? 'warn' : undefined} />
             </div>
 
             {model.lanes.length > 0 && (
@@ -33,7 +34,7 @@ export function LiveSessionExecution({ model, isStreaming }: { model: LiveAgentP
                     <div className="space-y-2">
                         {model.lanes.map((lane) => (
                             <AgentDelegationLane
-                                key={`${lane.parentName}:${lane.agentName}:${lane.iteration ?? 'root'}`}
+                                key={lane.spawnId || `${lane.parentName}:${lane.agentName}:${lane.iteration ?? 'root'}`}
                                 lane={lane}
                             />
                         ))}

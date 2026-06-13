@@ -79,14 +79,14 @@ export function useSendMessage(
         systemPromptMode = data.systemPromptMode ?? "append";
 
         if (systemPromptMode === "replace") {
-          const boardBlocks = useVoiceStageStore.getState().blocks;
+          const boardBlocks = useVoiceStageStore.getState().document.widgets;
           const boardSummary = boardBlocks.length > 0
             ? boardBlocks
                 .map((b, i) => `${i + 1}. [${b.kind}] ${b.title || ""}: ${(b as any).body || (b as any).value || ""}`)
                 .join("\n")
             : "Board is currently empty.";
 
-          systemPrompt = `${systemPrompt}\n\n## Visual Board Capabilities\nYou have access to a visual board displayed next to the user. You can update the board directly using the \`manage_board\` tool, or delegate complex/async data-gathering tasks to the \`voice_display\` subagent using \`spawn_agent\`.\n\n## Current Board State\n${boardSummary}\n\nPrefer targeted edits over full rewrites.`;
+          systemPrompt = `${systemPrompt}\n\n## Voice Display Contract\nA dedicated render-only display agent automatically receives the user's complete original request after your response and owns all visual-board updates. Do not call \`manage_board\`, do not spawn \`voice_display\`, and never output SVG, drawing code, JSON, tool arguments, or board markup. Use normal task subagents only when research, computation, or data preparation is needed. When the user requests a drawing or visualization, respond with one short speakable status sentence telling them to wait while the display agent draws it. Do not reproduce the visual specification as code.\n\n## Current Board State\n${boardSummary}\n\nYou may briefly acknowledge whether the request is a new board or an edit, but the automatic display agent receives the original request directly.`;
         }
       }
 

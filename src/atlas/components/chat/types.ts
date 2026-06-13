@@ -56,6 +56,8 @@ export interface HandoffMeta {
 }
 
 export interface SpawnMeta {
+  spawnId?: string;
+  batchId?: string;
   parentAgent: string;
   childAgent: string;
   task: string;

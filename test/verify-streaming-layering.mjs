@@ -11,18 +11,16 @@ const chatSection = readFileSync(
 );
 
 assert(
-  messageList.includes("getItemKey: (index) => filteredMessages[index]?.id ?? index") &&
-    messageList.includes("scheduleFullMeasure") &&
-    messageList.includes("followupMeasureFrame") &&
-    messageList.includes('contain: "style"'),
-  "virtualized message rows should use stable ids and remeasure after width changes without relying on high stacking order or layout containment",
+  messageList.includes("key={message.id}") &&
+    !messageList.includes("useVirtualizer") &&
+    !messageList.includes("translateY("),
+  "message rows should use stable ids in normal document flow so width changes cannot create stale virtual positions",
 );
 
 assert(
-  messageList.includes("zIndex: 0") &&
-    !messageList.includes("zIndex: isActiveStreamingRow ? 30 : 1") &&
-    !messageList.includes("absolute top-0 left-0 w-full isolate"),
-  "streaming rows should not stack above completed rows because stale virtual heights can otherwise overlap content",
+  !messageList.includes("absolute top-0 left-0") &&
+    !messageList.includes("zIndex: isActiveStreamingRow ? 30 : 1"),
+  "streaming rows should remain in document flow and never stack over completed messages",
 );
 
 assert(
