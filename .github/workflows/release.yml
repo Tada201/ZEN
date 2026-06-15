@@ -5,6 +5,16 @@ on:
     tags:
       - "v*.*.*"
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (build but do not publish release)"
+        required: false
+        default: "false"
+        type: boolean
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -13,12 +23,37 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # ──────────────────────────────────────────────────────────────
+  # Build Windows release bundles
+  # ──────────────────────────────────────────────────────────────
   build-windows:
     name: Build Windows release
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Extract version metadata
+        id: meta
+        shell: pwsh
+        run: |
+          $conf = Get-Content -Raw src-tauri/tauri.conf.json | ConvertFrom-Json
+          $version = $conf.version
+          $tag = "v$version"
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
+
+          # Validate tag matches tauri.conf.json version (on tag push)
+          if ($env:GITHUB_REF -like "refs/tags/v*") {
+            $pushTag = $env:GITHUB_REF -replace '^refs/tags/', ''
+            if ($pushTag -ne $tag) {
+              Write-Error "Tag mismatch: pushed '$pushTag' but tauri.conf.json has '$tag'"
+              exit 1
+            }
+          }
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -45,19 +80,37 @@ jobs:
         shell: pwsh
         run: npm run runtime:fetch -- -Clean
 
-      - name: Build frontend
-        run: npm run build
-
       - name: Check runtime binaries
         shell: pwsh
         run: npm run runtime:check
 
+      - name: Build frontend
+        run: npm run build
+
+      - name: Bundle size budget
+        shell: pwsh
+        run: npm run perf:budget
+
       - name: Build Tauri bundle
         run: npx tauri build
 
-      - name: Verify bundle has no secret artifacts
+      - name: Post-build secret artifact guard
         shell: pwsh
         run: npm run secret:artifacts
+
+      - name: Verify no DB files in bundle output
+        shell: pwsh
+        run: |
+          $bundlePath = "src-tauri/target/release/bundle"
+          if (Test-Path $bundlePath) {
+            $dbFiles = Get-ChildItem -Path $bundlePath -Recurse -Include "*.db","*.sqlite","*.sqlite3","*.db-journal","*.sqlite-journal",".env","*.env.*" -File
+            if ($dbFiles.Count -gt 0) {
+              Write-Error "FATAL: Database or secret files found in bundle output:"
+              $dbFiles | ForEach-Object { Write-Error " - $($_.FullName)" }
+              exit 1
+            }
+            Write-Host "Bundle output is clean — no database or secret files found."
+          }
 
       - name: Upload Windows bundles
         uses: actions/upload-artifact@v4
@@ -65,3 +118,146 @@ jobs:
           name: zen-windows-bundles
           path: src-tauri/target/release/bundle/**
           if-no-files-found: error
+
+      # Generate Tauri updater JSON for tauri-plugin-updater
+      - name: Generate updater manifest
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $version = "${{ steps.meta.outputs.version }}"
+          $tag = "${{ steps.meta.outputs.tag }}"
+          $repo = "${{ github.repository }}"
+
+          # Find the NSIS installer
+          $nsisDir = "src-tauri/target/release/bundle/nsis"
+          $nsisSetup = Get-ChildItem -Path $nsisDir -Filter "*.exe" -File | Select-Object -First 1
+
+          if ($null -eq $nsisSetup) {
+            Write-Warning "No NSIS installer found — skipping updater manifest."
+            exit 0
+          }
+
+          $setupName = $nsisSetup.Name
+
+          # Find the signature file if it exists
+          $sigFile = Join-Path $nsisDir "$($setupName).sig"
+          $signature = ""
+          if (Test-Path $sigFile) {
+            $signature = Get-Content -Raw $sigFile
+          }
+
+          $updater = @{
+            version = $version
+            notes = "Release $tag"
+            pub_date = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+            platforms = @{
+              "windows-x86_64" = @{
+                signature = $signature
+                url = "https://github.com/$repo/releases/download/$tag/$setupName"
+              }
+            }
+          } | ConvertTo-Json -Depth 5
+
+          $updater | Out-File -FilePath "latest.json" -Encoding utf8
+          Write-Host "Generated latest.json for updater."
+
+      - name: Upload updater manifest
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: updater-manifest
+          path: latest.json
+          if-no-files-found: warn
+
+  # ──────────────────────────────────────────────────────────────
+  # Publish GitHub Release
+  # ──────────────────────────────────────────────────────────────
+  publish:
+    name: Publish GitHub Release
+    needs: build-windows
+    if: startsWith(github.ref, 'refs/tags/v') && github.event.inputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Windows bundles
+        uses: actions/download-artifact@v4
+        with:
+          name: zen-windows-bundles
+          path: bundles
+
+      - name: Download updater manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: updater-manifest
+          path: .
+        continue-on-error: true
+
+      - name: Collect release assets
+        id: assets
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          # Collect NSIS installers
+          find bundles/nsis -name "*.exe" -exec cp {} release-assets/ \; 2>/dev/null || true
+          find bundles/nsis -name "*.exe.sig" -exec cp {} release-assets/ \; 2>/dev/null || true
+          # Collect MSI installers
+          find bundles/msi -name "*.msi" -exec cp {} release-assets/ \; 2>/dev/null || true
+          find bundles/msi -name "*.msi.sig" -exec cp {} release-assets/ \; 2>/dev/null || true
+          # Updater manifest
+          if [ -f latest.json ]; then cp latest.json release-assets/; fi
+          echo "Collected assets:"
+          ls -la release-assets/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.build-windows.outputs.tag }}
+          name: Zen ${{ needs.build-windows.outputs.tag }}
+          draft: false
+          prerelease: ${{ contains(needs.build-windows.outputs.tag, '-') }}
+          generate_release_notes: true
+          files: release-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ──────────────────────────────────────────────────────────────
+  # Future: macOS and Linux builds
+  # ──────────────────────────────────────────────────────────────
+  # build-macos:
+  #   name: Build macOS release
+  #   runs-on: macos-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with: { node-version: 22, cache: npm }
+  #     - uses: dtolnay/rust-toolchain@stable
+  #     - uses: Swatinem/rust-cache@v2
+  #       with: { workspaces: "src-tauri -> target" }
+  #     - run: npm ci
+  #     - run: npm run build
+  #     - run: npx tauri build
+  #     - uses: actions/upload-artifact@v4
+  #       with:
+  #         name: zen-macos-bundles
+  #         path: src-tauri/target/release/bundle/**
+
+  # build-linux:
+  #   name: Build Linux release
+  #   runs-on: ubuntu-22.04
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with: { node-version: 22, cache: npm }
+  #     - uses: dtolnay/rust-toolchain@stable
+  #     - uses: Swatinem/rust-cache@v2
+  #       with: { workspaces: "src-tauri -> target" }
+  #     - name: Install system deps
+  #       run: |
+  #         sudo apt-get update
+  #         sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+  #     - run: npm ci
+  #     - run: npm run build
+  #     - run: npx tauri build
+  #     - uses: actions/upload-artifact@v4
+  #       with:
+  #         name: zen-linux-bundles
+  #         path: src-tauri/target/release/bundle/**

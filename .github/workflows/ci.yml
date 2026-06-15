@@ -10,6 +10,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -17,8 +21,11 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # ──────────────────────────────────────────────────────────────
+  # Frontend: typecheck, build, tests, bundle size budget
+  # ──────────────────────────────────────────────────────────────
   frontend:
-    name: Frontend build
+    name: Frontend build & tests
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -33,17 +40,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Secret artifact guard
+      - name: Secret artifact guard (pre-build)
         shell: pwsh
         run: npm run secret:artifacts
 
-      - name: Build frontend
+      - name: Build frontend (tsc + vite)
         run: npm run build
 
-      - name: Verify build output has no secret artifacts
+      - name: Bundle size budget
+        shell: pwsh
+        run: npm run perf:budget
+
+      - name: Frontend feature tests
+        run: npm test
+
+      - name: Secret artifact guard (post-build)
         shell: pwsh
         run: npm run secret:artifacts
 
+  # ──────────────────────────────────────────────────────────────
+  # Backend: check, clippy, test, quality gates
+  # ──────────────────────────────────────────────────────────────
   backend:
     name: Backend gates
     runs-on: windows-latest
@@ -51,8 +68,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -67,6 +95,14 @@ jobs:
         working-directory: src-tauri
         run: cargo check --all-targets
 
+      - name: Cargo clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Cargo test
+        working-directory: src-tauri
+        run: cargo test --all-targets
+
       - name: Backend policy tests
         shell: pwsh
         run: npm run test:backend -- -NoKillStaleBuilds
@@ -75,6 +111,9 @@ jobs:
         shell: pwsh
         run: npm run quality:fast
 
+  # ──────────────────────────────────────────────────────────────
+  # Runtime binary manifest validation
+  # ──────────────────────────────────────────────────────────────
   runtime-binaries:
     name: Runtime binary manifest
     runs-on: windows-latest
@@ -103,6 +142,35 @@ jobs:
         shell: pwsh
         run: npm run runtime:check
 
-      - name: Verify fetched runtime binaries have no secret artifacts
+      - name: Verify fetched binaries have no secret artifacts
         shell: pwsh
         run: npm run secret:artifacts
+
+  # ──────────────────────────────────────────────────────────────
+  # Dependency audit (runs on ubuntu for speed)
+  # ──────────────────────────────────────────────────────────────
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: npm audit
+        run: npm audit --audit-level=high || true
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Cargo audit
+        working-directory: src-tauri
+        run: cargo audit

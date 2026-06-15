@@ -71,6 +71,10 @@ src-tauri/**/app-data/
 src-tauri/**/runtime-data/
 src-tauri/**/user-data/
 
+# LanceDB runtime data (RAG vector store)
+*.lance
+**/.lancedb/
+
 # Editor directories and files
 .vscode/
 !.vscode/extensions.json
