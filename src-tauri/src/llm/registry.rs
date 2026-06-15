@@ -77,13 +77,17 @@ impl ProviderRegistry {
             .get_secret(&api_key_key)
             .await?
             .unwrap_or_default();
+        let headers = self.settings
+            .get(&format!("{}_headers", p_type))
+            .await?
+            .and_then(|value| serde_json::from_str::<HashMap<String, String>>(&value).ok());
 
         Ok(ProviderConfig {
             provider_type: p_type,
             base_url,
             api_key,
             display_name: provider_name.to_string(),
-            headers: None,
+            headers,
         })
     }
 

@@ -59,6 +59,8 @@ pub struct BoardBlock {
     pub rows: Option<Vec<Vec<String>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub points: Option<Vec<BoardChartPoint>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chart_type: Option<String>,
     // New media types
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
@@ -167,6 +169,30 @@ fn validate_block(block: &BoardBlock) -> Result<()> {
     validate_text("content", block.content.as_deref(), 64 * 1024)?;
     validate_text("URL", block.url.as_deref(), 4096)?;
     validate_text("QR data", block.data.as_deref(), 4096)?;
+    if let Some(layout) = block.layout.as_ref().and_then(serde_json::Value::as_object) {
+        let integer = |name: &str| layout.get(name).and_then(serde_json::Value::as_i64);
+        let cell = integer("cell");
+        let row = integer("row").or_else(|| cell.map(|value| value / 4));
+        let column = integer("column").or_else(|| cell.map(|value| value % 4));
+        let col_span = integer("col_span").unwrap_or(1);
+        let row_span = integer("row_span").unwrap_or(1);
+        if cell.is_some_and(|value| !(0..=15).contains(&value)) {
+            anyhow::bail!("Board layout cell must be between 0 and 15");
+        }
+        if row.is_some_and(|value| !(0..=3).contains(&value))
+            || column.is_some_and(|value| !(0..=3).contains(&value))
+        {
+            anyhow::bail!("Board layout row and column must be between 0 and 3");
+        }
+        if !(1..=4).contains(&col_span) || !(1..=4).contains(&row_span) {
+            anyhow::bail!("Board layout spans must be between 1 and 4");
+        }
+        if column.is_some_and(|value| value + col_span > 4)
+            || row.is_some_and(|value| value + row_span > 4)
+        {
+            anyhow::bail!("Board widget span exceeds the 4x4 grid boundary");
+        }
+    }
     if block
         .columns
         .as_ref()
@@ -183,6 +209,13 @@ fn validate_block(block: &BoardBlock) -> Result<()> {
         .is_some_and(|points| points.len() > 50)
     {
         anyhow::bail!("Board charts support at most 50 points");
+    }
+    if block
+        .chart_type
+        .as_deref()
+        .is_some_and(|kind| !matches!(kind, "bar" | "line"))
+    {
+        anyhow::bail!("Board chart_type must be bar or line");
     }
     if block
         .colors
@@ -237,6 +270,28 @@ fn validate_operation(operation: &BoardOperation) -> Result<()> {
             for block in blocks {
                 validate_block(block)?;
             }
+            let mut occupied = std::collections::HashSet::new();
+            for block in blocks {
+                let Some(layout) = block.layout.as_ref().and_then(serde_json::Value::as_object) else {
+                    continue;
+                };
+                let cell = layout.get("cell").and_then(serde_json::Value::as_i64);
+                let row = layout.get("row").and_then(serde_json::Value::as_i64)
+                    .or_else(|| cell.map(|value| value / 4));
+                let column = layout.get("column").and_then(serde_json::Value::as_i64)
+                    .or_else(|| cell.map(|value| value % 4));
+                let (Some(row), Some(column)) = (row, column) else { continue };
+                let col_span = layout.get("col_span").and_then(serde_json::Value::as_i64).unwrap_or(1);
+                let row_span = layout.get("row_span").and_then(serde_json::Value::as_i64).unwrap_or(1);
+                for y in row..row + row_span {
+                    for x in column..column + col_span {
+                        let cell = y * 4 + x;
+                        if !occupied.insert(cell) {
+                            anyhow::bail!("Board widgets overlap at cell {}", cell);
+                        }
+                    }
+                }
+            }
         }
         BoardOperation::Add { block } | BoardOperation::Update { block, .. } => {
             validate_block(block)?;
@@ -278,6 +333,7 @@ impl AgentTool for ManageBoardTool {
             ("detail", "string", "Detail text"),
             ("language", "string", "Programming language"),
             ("expression", "string", "Math expression"),
+            ("chart_type", "string", "Chart type: bar or line"),
             ("url", "string", "Media or link URL"),
             ("thumbnail", "string", "Thumbnail URL"),
             ("description", "string", "Description text"),
@@ -308,6 +364,10 @@ impl AgentTool for ManageBoardTool {
             "type": "string",
             "enum": ["note", "metric", "table", "chart", "equation", "code", "map", "map_placeholder", "image", "link_preview", "video", "camera", "gen_ui", "premium_card", "html", "progress", "divider", "svg", "qr", "palette", "kroki", "diff"]
         }));
+        block_properties.insert("card_type".to_string(), json!({
+            "type": "string",
+            "enum": ["map", "composer", "stock", "financial", "flight", "package", "tracking", "product", "job", "event", "movie", "show", "book", "person", "contact", "nutrition", "food", "weather", "forecast", "sports", "match", "game", "metric", "stat", "kpi", "record", "datarecord", "entity", "comparison", "compare", "plans", "status", "alert", "notification"]
+        }));
         block_properties.insert("columns".to_string(), array_field("Table columns"));
         block_properties.insert("colors".to_string(), array_field("Palette colors"));
         block_properties.insert("names".to_string(), array_field("Palette names"));
@@ -326,7 +386,12 @@ impl AgentTool for ManageBoardTool {
             "type": "object",
             "properties": {
                 "width": { "type": "string", "enum": ["small", "medium", "wide", "full"] },
-                "order": { "type": "integer" }
+                "order": { "type": "integer" },
+                "col_span": { "type": "integer", "minimum": 1, "maximum": 4 },
+                "row_span": { "type": "integer", "minimum": 1, "maximum": 4 },
+                "cell": { "type": "integer", "minimum": 0, "maximum": 15 },
+                "row": { "type": "integer", "minimum": 0, "maximum": 3 },
+                "column": { "type": "integer", "minimum": 0, "maximum": 3 }
             },
             "additionalProperties": false
         }));
@@ -453,6 +518,7 @@ mod tests {
             columns: None,
             rows: None,
             points: None,
+            chart_type: None,
             url: None,
             thumbnail: None,
             description: None,

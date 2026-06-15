@@ -181,6 +181,11 @@ export interface AiSlice {
   strictGrounding: boolean;
   searchStrategy: "hybrid" | "vector" | "keyword" | "semantic" | "disabled";
   topK: number;
+  webSearchProvider: "auto" | "tavily" | "exa" | "duckduckgo";
+  tavilyApiKey: string;
+  exaApiKey: string;
+  tavilySearchDepth: "ultra-fast" | "fast" | "basic" | "advanced";
+  webSearchMaxResults: number;
   embeddingProvider: string;
   streamingSpeed: "instant" | "typewriter";
   structuredResponseEnabled: boolean;
@@ -248,10 +253,10 @@ export interface ProviderSlice {
 
   fetchModels: (providerOverride?: string) => Promise<string[]>;
   testProviderConnection: (providerOverride?: string) => Promise<void>;
-  addCustomProvider: (config: Omit<CustomProviderConfig, 'id' | 'enabled'>) => void;
-  removeCustomProvider: (id: string) => void;
+  addCustomProvider: (config: Omit<CustomProviderConfig, 'id' | 'enabled'>) => Promise<string>;
+  removeCustomProvider: (id: string) => Promise<void>;
   toggleCustomProvider: (id: string) => void;
-  updateCustomProvider: (id: string, updates: Partial<CustomProviderConfig>) => void;
+  updateCustomProvider: (id: string, updates: Partial<CustomProviderConfig>) => Promise<void>;
   
   syncModelCatalog: () => Promise<void>;
   setDiscoveryMode: (enabled: boolean) => void;

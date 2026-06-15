@@ -106,6 +106,16 @@ function formatDuration(durationMs?: number) {
   return durationMs < 1000 ? `${durationMs}ms` : `${(durationMs / 1000).toFixed(durationMs < 10_000 ? 1 : 0)}s`;
 }
 
+function safeExternalUrl(value?: string) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, onRetry, defaultExpanded, streamingPreview }: ToolCallCardProps) {
   const { id, name, status, input, output, durationMs, attempts, startTime, approvalContext, agentName, agentId, parentAgentId, iteration } = toolCall;
   const batchId = toolCall.toolBatchId || toolCall.batchId;
@@ -334,7 +344,18 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
                       <div key={`${result.title}-${index}`} className="min-w-0">
                         <div className="truncate text-[11px] font-medium leading-5 text-zinc-300">{result.title}</div>
                         {result.summary && <div className="line-clamp-2 text-[12px] leading-relaxed text-zinc-400">{result.summary}</div>}
-                        {result.url && <div className="truncate font-mono text-[11px] text-zinc-400">{result.url}</div>}
+                        {result.url && safeExternalUrl(result.url) && (
+                          <a
+                            href={safeExternalUrl(result.url) || undefined}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="flex min-w-0 items-center gap-1 truncate font-mono text-[11px] text-blue-300/80 hover:text-blue-200"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <ExternalLink className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{result.url}</span>
+                          </a>
+                        )}
                       </div>
                     ))}
                   </div>

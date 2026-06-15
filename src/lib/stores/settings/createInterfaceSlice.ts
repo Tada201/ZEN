@@ -3,7 +3,7 @@ import type { SettingsState, InterfaceSlice } from "./types";
 import { DEFAULT_WIDGET_SETTINGS } from "./types";
 
 export const createInterfaceSlice: StateCreator<SettingsState, [], [], InterfaceSlice> = (_set, get) => ({
-  themeId: "neon-grid",
+  themeId: "default-dark",
   customThemeSource: "",
   animationsEnabled: true,
   lowResourceMode: false,

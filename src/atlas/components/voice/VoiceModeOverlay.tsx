@@ -157,7 +157,6 @@ export function VoiceModeOverlay({
         setSttStatus,
         setSubtitleSpeaker,
         setUserSpeechText,
-        voiceInputModeRef,
     });
     const { moonshineReadyRef, startMoonshineRecognition, stopMoonshineRecognition } = useMoonshineStt({
         appendLog,

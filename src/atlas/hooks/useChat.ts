@@ -30,7 +30,7 @@ export function useChat() {
   const storeActiveModel = useSettingsStore(s => s.activeModel);
   const switchModel = useSettingsStore(s => s.switchModel);
 
-  const setSelectedModelId = (id: string) => switchModel(storeActiveProvider, id);
+  const setSelectedModelId = (id: string, provider = storeActiveProvider) => switchModel(provider, id);
   const setSelectedProvider = (provider: string) => switchModel(provider);
 
   const selectedModelId = storeActiveModel || "No Model";

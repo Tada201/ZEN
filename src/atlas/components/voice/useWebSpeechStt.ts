@@ -1,4 +1,4 @@
-import { useCallback, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
+import { useCallback, useRef, type Dispatch, type SetStateAction } from 'react';
 import {
     createWebSpeechRecognition,
     readWebSpeechResult,
@@ -15,19 +15,36 @@ export function useWebSpeechStt({
     setSttStatus,
     setSubtitleSpeaker,
     setUserSpeechText,
-    voiceInputModeRef,
 }: {
     appendLog: AppendVoiceLog;
     onTranscript: (text: string) => void;
     setSttStatus: Dispatch<SetStateAction<SttServiceStatus>>;
     setSubtitleSpeaker: Dispatch<SetStateAction<SubtitleSpeaker>>;
     setUserSpeechText: Dispatch<SetStateAction<string>>;
-    voiceInputModeRef: MutableRefObject<boolean>;
 }) {
     const recognitionRef = useRef<WebSpeechRecognitionLike | null>(null);
     const recognitionActiveRef = useRef(false);
     const restartTimerRef = useRef<number | null>(null);
     const shouldRunRef = useRef(false);
+    const finalTranscriptRef = useRef('');
+    const interimTranscriptRef = useRef('');
+
+    const commitTranscript = useCallback(() => {
+        const transcript = `${finalTranscriptRef.current} ${interimTranscriptRef.current}`.trim();
+        finalTranscriptRef.current = '';
+        interimTranscriptRef.current = '';
+        if (!transcript) {
+            setSttStatus('ready');
+            setUserSpeechText('No speech detected.');
+            setSubtitleSpeaker('system');
+            return;
+        }
+        setUserSpeechText(transcript);
+        setSubtitleSpeaker('user');
+        setSttStatus('ready');
+        appendLog(`Web Speech: transcript received (${transcript.length} chars).`);
+        onTranscript(transcript);
+    }, [appendLog, onTranscript, setSttStatus, setSubtitleSpeaker, setUserSpeechText]);
 
     const startWebRecognition = useCallback(() => {
         shouldRunRef.current = true;
@@ -43,21 +60,20 @@ export function useWebSpeechStt({
         }
 
         recognitionRef.current = recognition;
-        recognition.continuous = !voiceInputModeRef.current;
+        recognition.continuous = true;
         recognition.interimResults = true;
         recognition.lang = navigator.language || 'en-US';
+        finalTranscriptRef.current = '';
+        interimTranscriptRef.current = '';
         recognition.onresult = (event) => {
             const result = readWebSpeechResult(event);
-            if (result.interim) {
-                setUserSpeechText(result.interim);
-                setSubtitleSpeaker('user');
-            }
             if (result.final) {
-                setUserSpeechText(result.final);
-                setSubtitleSpeaker('user');
-                appendLog(`Web Speech: transcript received (${result.final.length} chars).`);
-                onTranscript(result.final);
+                finalTranscriptRef.current = `${finalTranscriptRef.current} ${result.final}`.trim();
             }
+            interimTranscriptRef.current = result.interim;
+            const preview = `${finalTranscriptRef.current} ${interimTranscriptRef.current}`.trim();
+            if (preview) setUserSpeechText(preview);
+            setSubtitleSpeaker('user');
         };
         recognition.onerror = (event) => {
             recognitionActiveRef.current = false;
@@ -68,8 +84,7 @@ export function useWebSpeechStt({
         };
         recognition.onend = () => {
             recognitionActiveRef.current = false;
-            // Auto-restart in continuous mode (voice activity detection) if voice mode is still open
-            if (shouldRunRef.current && !voiceInputModeRef.current) {
+            if (shouldRunRef.current) {
                 restartTimerRef.current = window.setTimeout(() => {
                     restartTimerRef.current = null;
                     if (shouldRunRef.current && !recognitionActiveRef.current) {
@@ -83,6 +98,8 @@ export function useWebSpeechStt({
                         }
                     }
                 }, 100);
+            } else {
+                commitTranscript();
             }
         };
 
@@ -98,7 +115,7 @@ export function useWebSpeechStt({
             appendLog(`Web Speech start failed: ${error instanceof Error ? error.message : String(error)}`, 'ERR');
             return false;
         }
-    }, [appendLog, onTranscript, setSttStatus, setSubtitleSpeaker, setUserSpeechText, voiceInputModeRef]);
+    }, [appendLog, commitTranscript, setSttStatus, setSubtitleSpeaker, setUserSpeechText]);
 
     const stopWebRecognition = useCallback((abort = false) => {
         shouldRunRef.current = false;
@@ -108,11 +125,18 @@ export function useWebSpeechStt({
             restartTimerRef.current = null;
         }
         const recognition = recognitionRef.current;
-        if (!recognition || !recognitionActiveRef.current) return;
+        if (!recognition || !recognitionActiveRef.current) {
+            if (!abort) commitTranscript();
+            return;
+        }
         recognitionActiveRef.current = false;
-        if (abort) recognition.abort();
+        if (abort) {
+            finalTranscriptRef.current = '';
+            interimTranscriptRef.current = '';
+            recognition.abort();
+        }
         else recognition.stop();
-    }, []);
+    }, [commitTranscript]);
 
     return { startWebRecognition, stopWebRecognition };
 }

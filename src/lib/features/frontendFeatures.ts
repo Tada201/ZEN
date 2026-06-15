@@ -31,7 +31,6 @@ export type SettingsTabId =
   | "general"
   | "appearance"
   | "chat"
-  | "ai-config"
   | "providers"
   | "capabilities"
   | "intelligence"
@@ -87,7 +86,6 @@ export const FRONTEND_FEATURES = [
   { id: "settings.general", label: "General", maturity: "production", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "none", settingsTabId: "general", icon: Settings },
   { id: "settings.appearance", label: "Appearance", maturity: "production", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "none", settingsTabId: "appearance", icon: Sun },
   { id: "settings.chat", label: "Chat", maturity: "production", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "none", settingsTabId: "chat", icon: MessageSquare },
-  { id: "settings.models", label: "Models", maturity: "production", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "none", settingsTabId: "ai-config", icon: Sparkles },
   { id: "settings.providers", label: "Providers", maturity: "production", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "secrets", settingsTabId: "providers", icon: Bot },
   { id: "settings.capabilities", label: "Capabilities", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "privileged", settingsTabId: "capabilities", icon: Sparkles },
   { id: "settings.intelligence", label: "Intelligence", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "heavy-runtime", settingsTabId: "intelligence", icon: Search },

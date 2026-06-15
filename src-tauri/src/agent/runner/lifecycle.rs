@@ -95,9 +95,13 @@ impl Runner {
         mut self,
         voice_mode: bool,
         display_agent_model: Option<String>,
+        display_agent_provider: Option<String>,
+        voice_display_context: Option<String>,
     ) -> Self {
         self.config.voice_mode = voice_mode;
         self.config.display_agent_model = display_agent_model;
+        self.config.display_agent_provider = display_agent_provider;
+        self.config.voice_display_context = voice_display_context;
         self
     }
 

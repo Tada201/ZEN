@@ -170,7 +170,8 @@ pub async fn get_all_available_models(
                 .get(&base_url_key)
                 .map(|v| !v.is_empty())
                 .unwrap_or(false);
-            let is_local = p_name == "ollama" || p_name == "lmstudio" || p_name == "nine_router";
+            let is_local_runtime = p_name == "ollama" || p_name == "lmstudio";
+            let is_local_gateway = p_name == "nine_router";
             let is_no_key_builtin = p_name == "opencode";
             let is_active = all_settings
                 .get("active_provider")
@@ -181,8 +182,13 @@ pub async fn get_all_available_models(
             // mount. Do not wake local servers unless the user selected that
             // local provider. Explicit provider refreshes still call the branch
             // above with provider=Some(...), so Settings/manual checks work.
-            let should_fetch = if is_local {
+            let should_fetch = if is_local_runtime {
                 is_active
+            } else if is_local_gateway {
+                // 9Router is the configured local gateway, not an optional model
+                // runtime. Probe it once during catalog hydration so its cached
+                // models are available before the user selects the provider.
+                true
             } else {
                 is_no_key_builtin || is_active || has_key || has_url
             };
@@ -215,20 +221,44 @@ pub async fn sync_tool_permissions(state: State<'_, AppState>) -> AppResult<()> 
 #[tauri::command]
 pub async fn test_provider_connection(
     _state: State<'_, AppState>,
-    config: ProviderConfig,
+    mut config: ProviderConfig,
 ) -> ZenResult<Vec<ModelInfo>> {
+    let parsed = url::Url::parse(config.base_url.trim()).map_err(|error| {
+        crate::error::ZenError::Custom(format!("Invalid provider endpoint: {error}"))
+    })?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err(crate::error::ZenError::Custom(
+            "Provider endpoint must use HTTP or HTTPS".to_string(),
+        ));
+    }
+    config.base_url = config
+        .base_url
+        .trim_end_matches('/')
+        .trim_end_matches("/models")
+        .trim_end_matches("/chat/completions")
+        .trim_end_matches('/')
+        .to_string();
     let provider_instance = crate::llm::make_provider(&config);
 
-    // Check health first
-    if !provider_instance.health_check().await {
+    let healthy = tokio::time::timeout(
+        std::time::Duration::from_secs(12),
+        provider_instance.health_check(),
+    )
+    .await
+    .map_err(|_| crate::error::ZenError::Custom("Provider connection timed out after 12 seconds".to_string()))?;
+    if !healthy {
         return Err(crate::error::ZenError::Internal(format!(
             "Node {} is unreachable",
             config.display_name
         )));
     }
 
-    // Return model list on success
-    provider_instance.list_models().await
+    tokio::time::timeout(
+        std::time::Duration::from_secs(12),
+        provider_instance.list_models(),
+    )
+    .await
+    .map_err(|_| crate::error::ZenError::Custom("Reading the provider model catalog timed out after 12 seconds".to_string()))?
 }
 
 async fn invalidate_provider_cache_if_needed<'a>(
@@ -247,7 +277,10 @@ async fn clear_provider_cache(state: &State<'_, AppState>) {
 }
 
 fn is_provider_setting_key(key: &str) -> bool {
-    key.ends_with("_base_url") || key.ends_with("_api_key") || key == "active_provider"
+    key.ends_with("_base_url")
+        || key.ends_with("_api_key")
+        || key.ends_with("_headers")
+        || key == "active_provider"
 }
 
 fn is_workspace_root_key(key: &str) -> bool {

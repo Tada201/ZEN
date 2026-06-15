@@ -9,7 +9,7 @@ import {
 
 export const SettingsSchema = z.object({
   // ─── Interface ───────────────────────────────────────────────────────────
-  themeId: z.string().default("neon-grid"),
+  themeId: z.string().default("default-dark"),
   customThemeSource: z.string().default(""),
   animationsEnabled: z.boolean().default(true),
   lowResourceMode: z.boolean().default(false),
@@ -137,6 +137,11 @@ export const SettingsSchema = z.object({
   strictGrounding: z.boolean().default(false),
   searchStrategy: z.enum(["hybrid", "vector", "keyword", "semantic", "disabled"]).default("hybrid"),
   topK: z.number().min(1).max(100).default(10),
+  webSearchProvider: z.enum(["auto", "tavily", "exa", "duckduckgo"]).default("auto"),
+  tavilyApiKey: z.string().default(""),
+  exaApiKey: z.string().default(""),
+  tavilySearchDepth: z.enum(["ultra-fast", "fast", "basic", "advanced"]).default("fast"),
+  webSearchMaxResults: z.number().min(1).max(20).default(10),
   minScore: z.number().min(0).max(1).default(0.5),
   embeddingModel: z.string().default("all-MiniLM-L6-v2"),
   chunkSize: z.number().min(128).max(4096).default(1024),

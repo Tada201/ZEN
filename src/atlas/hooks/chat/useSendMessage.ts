@@ -9,6 +9,7 @@ import { findWritableAssistantIndex, markMessageAsFailed } from "../stream/messa
 import { createOptimisticChatMessages } from "./optimisticChatMessages";
 import { preloadOpenUISystemPrompt } from "../../components/genui/promptLoader";
 import { useVoiceStageStore } from "../../components/voice/voiceStageStore";
+import { buildVoiceDisplayContext } from "../../components/voice/voiceDisplayContext";
 
 export function useSendMessage(
   currentSessionId: string | null,
@@ -86,7 +87,7 @@ export function useSendMessage(
                 .join("\n")
             : "Board is currently empty.";
 
-          systemPrompt = `${systemPrompt}\n\n## Voice Display Contract\nA dedicated render-only display agent automatically receives the user's complete original request after your response and owns all visual-board updates. Do not call \`manage_board\`, do not spawn \`voice_display\`, and never output SVG, drawing code, JSON, tool arguments, or board markup. Use normal task subagents only when research, computation, or data preparation is needed. When the user requests a drawing or visualization, respond with one short speakable status sentence telling them to wait while the display agent draws it. Do not reproduce the visual specification as code.\n\n## Current Board State\n${boardSummary}\n\nYou may briefly acknowledge whether the request is a new board or an edit, but the automatic display agent receives the original request directly.`;
+          systemPrompt = `${systemPrompt}\n\n## Voice Display Contract\nA dedicated render-only display agent automatically receives the user's complete original request after your response and owns all visual-board updates. Do not call \`manage_board\`, do not spawn \`voice_display\`, and never output SVG, drawing code, JSON, tool arguments, or board markup. Use normal task subagents only when research, computation, or data preparation is needed. When the user requests a drawing or visualization, respond with one short speakable status sentence telling them to wait while the display agent draws it. Never send the display agent an empty-content request: ask one concise clarification when required user-specific facts are missing, or authorize sensible labeled sample content when the user permits a demo, example, random data, or self-generation. For requests to search and display YouTube or external media, perform the search in the main pipeline; recent tool results are handed to the display agent, which must use a dedicated video widget rather than HTML. The display agent can place a live camera widget when the user asks to show, open, or enable their camera. In that case, say the camera panel is ready and ask the user to click "Enable camera" to grant permission; never claim the camera was activated automatically. Do not reproduce the visual specification as code.\n\n## Current Board State\n${boardSummary}\n\nYou may briefly acknowledge whether the request is a new board or an edit, but the automatic display agent receives the original request directly.`;
         }
       }
 
@@ -112,6 +113,7 @@ export function useSendMessage(
         attachments: data.attachments,
         systemPrompt: systemPrompt,
         systemPromptMode,
+        voiceDisplayContext: systemPromptMode === "replace" ? buildVoiceDisplayContext() : null,
       });
     } catch (e: unknown) {
       const errorMessage = getIpcErrorMessage(e, "Failed to send message");

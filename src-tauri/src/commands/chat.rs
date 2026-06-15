@@ -131,6 +131,7 @@ pub async fn send_message(
     _attachments: Option<Vec<crate::db::models::Attachment>>,
     system_prompt: Option<String>,
     system_prompt_mode: Option<String>,
+    voice_display_context: Option<String>,
 ) -> ZenResult<()> {
     info!(
         chat_id = %chat_id,
@@ -406,7 +407,7 @@ Always use these specialized code blocks for visual scenarios:
     } else {
         false
     };
-    let display_agent_model = if is_voice_mode {
+    let display_agent_selection = if is_voice_mode {
         state
             .settings_manager
             .get("voiceDisplayAgentModel")
@@ -423,6 +424,11 @@ Always use these specialized code blocks for visual scenarios:
     } else {
         None
     };
+    let (display_agent_provider, display_agent_model) = display_agent_selection
+        .as_deref()
+        .and_then(|selection| selection.split_once("::"))
+        .map(|(provider, model)| (Some(provider.to_string()), Some(model.to_string())))
+        .unwrap_or_else(|| (None, display_agent_selection));
 
     let agent = crate::agent::types::Agent {
         id: "zen_assistant".to_string(),
@@ -577,7 +583,12 @@ Always use these specialized code blocks for visual scenarios:
             state.tool_manager.clone(),
         )
         .with_db_pool(db.clone())
-        .with_voice_mode(is_voice_mode && display_agent_enabled, display_agent_model);
+        .with_voice_mode(
+            is_voice_mode && display_agent_enabled,
+            display_agent_model,
+            display_agent_provider.or_else(|| Some(resolved_provider_name.clone())),
+            voice_display_context,
+        );
 
         // Apply per-agent overrides from AgentConfigFile
         if let Ok(cfg) = crate::agent::config_file::load_agent_config(&agent.id) {

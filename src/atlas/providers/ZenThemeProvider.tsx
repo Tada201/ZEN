@@ -1,6 +1,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ACCENT_SWATCHES, RADIUS_PRESETS, THEME_PRESETS, type RadiusPreset, type StyleMode } from "../theme";
+import { ACCENT_SWATCHES, normalizeThemeId, RADIUS_PRESETS, THEME_PRESETS, type RadiusPreset, type StyleMode } from "../theme";
+import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 
 export type Density = "compact" | "cozy";
 
@@ -31,6 +32,32 @@ const MOTION_STORAGE_KEY = "ui-Zen-motion-enabled";
 const PRESS_STORAGE_KEY = "ui-Zen-press-enabled";
 const DENSITY_STORAGE_KEY = "ui-Zen-density";
 
+function applyThemeVariables(vars: Record<string, string>) {
+  const root = document.documentElement;
+  Object.entries(vars).forEach(([key, value]) => {
+    root.style.setProperty(key, value);
+    root.style.setProperty(`--color-${key.slice(2)}`, `hsl(${value})`);
+  });
+  const aliases = {
+    "--popover": vars["--card"],
+    "--popover-foreground": vars["--foreground"],
+    "--accent": vars["--muted"],
+    "--accent-foreground": vars["--foreground"],
+    "--sidebar": vars["--card"],
+    "--sidebar-foreground": vars["--foreground"],
+    "--sidebar-border": vars["--border"],
+    "--sidebar-accent": vars["--muted"],
+    "--sidebar-accent-foreground": vars["--foreground"],
+    "--sidebar-primary": vars["--primary"],
+    "--sidebar-ring": vars["--ring"],
+  };
+  Object.entries(aliases).forEach(([key, value]) => {
+    if (!value) return;
+    root.style.setProperty(key, value);
+    root.style.setProperty(`--color-${key.slice(2)}`, `hsl(${value})`);
+  });
+}
+
 function getInitialMotion(): boolean {
   if (typeof window === "undefined") return true;
   const stored = localStorage.getItem(MOTION_STORAGE_KEY);
@@ -50,6 +77,7 @@ function getInitialDensity(): Density {
 }
 
 export function ZenThemeProvider({ children }: { children: ReactNode }) {
+  const configuredThemeId = useSettingsStore((state) => state.themeId);
   const [mode, setModeState] = useState<"light" | "dark">("dark");
   const [preset, setPreset] = useState("default-dark");
   const [accent, setAccentState] = useState(ACCENT_SWATCHES[0].hsl);
@@ -96,12 +124,23 @@ export function ZenThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const applyPreset = useCallback((id: string) => {
-    const p = THEME_PRESETS.find((t) => t.id === id);
-    if (!p) return;
-    setPreset(id);
+    const resolvedId = normalizeThemeId(id);
+    const p = THEME_PRESETS.find((theme) => theme.id === resolvedId) ?? THEME_PRESETS[0];
+    setPreset(p.id);
     setMode(p.mode);
     const root = document.documentElement;
-    Object.entries(p.vars).forEach(([k, v]) => root.style.setProperty(k, v));
+    applyThemeVariables(p.vars);
+    root.dataset.theme = p.id;
+    root.dataset.vibe = p.vibe ?? "standard";
+    root.dataset.themeFont = p.font ?? "sans";
+    if (p.radius) {
+      setRadiusState(p.radius);
+      root.style.setProperty("--radius", RADIUS_PRESETS[p.radius]);
+    }
+    if (p.density) {
+      setDensityState(p.density);
+      root.dataset.density = p.density;
+    }
     if (p.vars["--primary"]) {
       setAccentState(p.vars["--primary"]);
       setAccentGlow(p.vars["--primary-glow"] ?? p.vars["--primary"]);
@@ -130,13 +169,8 @@ export function ZenThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    document.documentElement.classList.add("dark");
-    const defaultPreset = THEME_PRESETS.find((t) => t.id === "default-dark");
-    if (defaultPreset) {
-      const root = document.documentElement;
-      Object.entries(defaultPreset.vars).forEach(([k, v]) => root.style.setProperty(k, v));
-    }
-  }, []);
+    applyPreset(configuredThemeId || "default-dark");
+  }, [applyPreset, configuredThemeId]);
 
   const exportCSS = useCallback(() => {
     const root = document.documentElement;

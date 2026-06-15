@@ -19,7 +19,7 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/componen
 const loadSettingsModal = () => import("../components/SettingsModal");
 const preloadSettingsModal = () => {
   void loadSettingsModal().then((module) => {
-    module.preloadSettingsTab("ai-config");
+    module.preloadSettingsTab("providers");
   });
 };
 const SettingsModal = React.lazy(() => loadSettingsModal().then(m => ({ default: m.SettingsModal })));
@@ -36,7 +36,7 @@ export function WorkspaceApp() {
     sessions, archivedSessions, folders, currentSessionId, setCurrentSessionId,
     messages, search, setSearch, searchResults, setMessages,
     models, selectedModelId, setSelectedModelId,
-    selectedProvider, setSelectedProvider, isStreaming,
+    selectedProvider, isStreaming,
     handleCreateSession, handleDeleteSession,
     handleRenameSession, handlePinSession, handleArchiveSession,
     handleUnarchiveSession, handleExportSession,
@@ -223,7 +223,7 @@ export function WorkspaceApp() {
                 <div className="flex items-center gap-2 pointer-events-auto">
                   <button
                     onClick={() => {
-                      setActiveSettingsTab("ai-config");
+                      setActiveSettingsTab("providers");
                       setSettingsOpen(true);
                     }}
                     className="h-8 w-8 rounded-lg hover:bg-white/[0.1] backdrop-blur-md flex items-center justify-center transition-colors"
@@ -260,8 +260,7 @@ export function WorkspaceApp() {
                             selectedModelId={selectedModelId}
                             selectedProvider={selectedProvider}
                             onSelectModel={(id, prov) => {
-                              setSelectedModelId(id);
-                              setSelectedProvider(prov);
+                              setSelectedModelId(id, prov);
                             }}
                             generativeUI={generativeUI}
                             onGenerativeUIChange={setGenerativeUI}
@@ -301,8 +300,7 @@ export function WorkspaceApp() {
                                 selectedModelId={selectedModelId}
                                 selectedProvider={selectedProvider}
                                 onSelectModel={(id, prov) => {
-                                  setSelectedModelId(id);
-                                  setSelectedProvider(prov);
+                                  setSelectedModelId(id, prov);
                                 }}
                                 generativeUI={generativeUI}
                                 onGenerativeUIChange={setGenerativeUI}

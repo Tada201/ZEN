@@ -32,13 +32,20 @@ export function BoardMap({ widget }: { widget: BoardWidget }) {
     new maplibregl.Marker({ color: "#ffffff" })
       .setLngLat([widget.longitude, widget.latitude])
       .addTo(map);
-    return () => map.remove();
+    const observer = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(() => map.resize());
+    observer?.observe(containerRef.current);
+    return () => {
+      observer?.disconnect();
+      map.remove();
+    };
   }, [widget.latitude, widget.longitude, widget.zoom]);
 
   if (widget.latitude == null || widget.longitude == null) {
     return <div className="p-4 text-sm text-white/60">{widget.location || "Map coordinates unavailable."}</div>;
   }
-  return <div ref={containerRef} className="h-64 w-full bg-black" aria-label={widget.title || "Map"} />;
+  return <div ref={containerRef} className="h-full min-h-0 w-full bg-black" aria-label={widget.title || "Map"} />;
 }
 
 function youtubeEmbed(url: string): string | null {
@@ -67,13 +74,13 @@ export function BoardVideo({ widget }: { widget: BoardWidget }) {
         src={embed}
         sandbox="allow-scripts allow-same-origin allow-presentation"
         allow="encrypted-media; picture-in-picture"
-        className="aspect-video w-full border-0"
+        className="h-full min-h-0 w-full border-0"
       />
     );
   }
 
   return (
-    <div className="relative flex aspect-video items-center justify-center overflow-hidden bg-black">
+    <div className="relative flex h-full min-h-0 items-center justify-center overflow-hidden bg-black">
       {widget.thumbnail && isSafeGeneratedHref(widget.thumbnail) && <img src={widget.thumbnail} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />}
       <button type="button" onClick={() => embed ? setPlaying(true) : window.open(widget.url, "_blank", "noopener,noreferrer")} className="relative z-10 flex h-12 w-12 items-center justify-center rounded-full border border-white/30 bg-black/70 text-white" aria-label={embed ? "Play video" : "Open video"}>
         {embed ? <Play className="h-5 w-5 fill-current" /> : <ExternalLink className="h-5 w-5" />}
@@ -99,21 +106,41 @@ export function BoardCamera({ widget }: { widget: BoardWidget }) {
 
   const start = async () => {
     setError(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError("Camera access is not supported by this runtime.");
+      return;
+    }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: "user",
+        },
+        audio: false,
+      });
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
       setActive(true);
-    } catch {
-      setError("Camera permission was denied or no camera is available.");
+    } catch (cause) {
+      const name = cause instanceof DOMException ? cause.name : "";
+      setError(
+        name === "NotAllowedError"
+          ? "Camera permission was denied. Allow camera access and try again."
+          : name === "NotReadableError"
+            ? "The camera is busy in another application."
+            : name === "NotFoundError"
+              ? "No camera was detected."
+              : "The camera could not be started."
+      );
     }
   };
 
   return (
-    <div className="relative flex min-h-64 items-center justify-center overflow-hidden bg-black">
+    <div className="relative flex h-full min-h-0 items-center justify-center overflow-hidden bg-black">
       <video ref={videoRef} autoPlay muted playsInline className={active ? "h-full w-full object-cover" : "hidden"} />
-      {!active && <button type="button" onClick={start} className="flex items-center gap-2 rounded-md border border-white/20 bg-white/[0.04] px-3 py-2 text-sm text-white"><Camera className="h-4 w-4" />Enable camera</button>}
-      {active && <button type="button" onClick={stop} className="absolute right-3 top-3 flex items-center gap-2 rounded-md bg-black/70 px-3 py-2 text-xs text-white"><Square className="h-3 w-3" />Stop</button>}
+      {!active && <button type="button" onClick={(event) => { event.stopPropagation(); void start(); }} className="flex items-center gap-2 rounded-md border border-white/20 bg-white/[0.04] px-3 py-2 text-sm text-white"><Camera className="h-4 w-4" />Enable camera</button>}
+      {active && <button type="button" onClick={(event) => { event.stopPropagation(); stop(); }} className="absolute right-3 top-3 flex items-center gap-2 rounded-md bg-black/70 px-3 py-2 text-xs text-white"><Square className="h-3 w-3" />Stop</button>}
       {error && <div className="absolute bottom-3 text-xs text-red-300">{error}</div>}
       <span className="sr-only">{widget.description}</span>
     </div>
@@ -121,5 +148,5 @@ export function BoardCamera({ widget }: { widget: BoardWidget }) {
 }
 
 export function BoardHtml({ widget }: { widget: BoardWidget }) {
-  return <SandboxedIframe content={widget.content || ""} title={widget.title || "HTML artifact"} className="h-80 w-full" />;
+  return <SandboxedIframe content={widget.content || ""} title={widget.title || "HTML artifact"} className="h-full min-h-0 w-full" />;
 }

@@ -197,7 +197,7 @@ export const SessionSidebar = memo(({
           size="icon" 
           className="h-9 w-9 text-zinc-500 hover:text-white hover:bg-white/5"
           onClick={() => {
-            setSettingsTab("ai-config");
+            setSettingsTab("providers");
             setShowSettingsModal(true);
           }}
           aria-label="Settings"
@@ -405,7 +405,7 @@ export const SessionSidebar = memo(({
               onPointerEnter={onPreloadSettings}
               onFocus={onPreloadSettings}
               onClick={() => {
-                setSettingsTab("ai-config");
+                setSettingsTab("providers");
                 setShowSettingsModal(true);
               }}
             >

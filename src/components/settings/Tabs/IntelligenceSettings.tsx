@@ -3,6 +3,8 @@ import { SettingsRow } from "../SettingsRow";
 import { WorkbenchSwitch } from "../ui/WorkbenchSwitch";
 import { WorkbenchSelect } from "../ui/WorkbenchSelect";
 import { WorkbenchSlider } from "../ui/WorkbenchSlider";
+import { WorkbenchInput } from "../ui/WorkbenchInput";
+import { SECRET_PRESENT_VALUE } from "@/api/settingsApi";
 
 interface IntelligenceSettingsProps {
   settings: Record<string, string>;
@@ -84,6 +86,90 @@ export function IntelligenceSettings({ settings, onUpdate }: IntelligenceSetting
             />
           }
           icon="lucide:layers"
+        />
+      </SettingsSection>
+
+      <SettingsSection title="Web Search" icon="lucide:globe" description="External search providers used by the web_search tool">
+        <SettingsRow
+          label="Provider Priority"
+          description="Automatic uses Tavily, then Exa, then keyless DuckDuckGo fallback"
+          control={
+            <WorkbenchSelect
+              value={settings.web_search_provider || "auto"}
+              onValueChange={value => onUpdate("web_search_provider", value)}
+              options={[
+                { value: "auto", label: "Automatic" },
+                { value: "tavily", label: "Tavily first" },
+                { value: "exa", label: "Exa first" },
+                { value: "duckduckgo", label: "DuckDuckGo only" },
+              ]}
+              width={160}
+            />
+          }
+          icon="lucide:route"
+        />
+
+        <SettingsRow
+          label="Tavily API Key"
+          description="Stored in the operating-system keyring"
+          control={
+            <WorkbenchInput
+              type="password"
+              value={settings.tavily_api_key === SECRET_PRESENT_VALUE ? "" : settings.tavily_api_key || ""}
+              placeholder={settings.tavily_api_key === SECRET_PRESENT_VALUE ? "Configured" : "tvly-..."}
+              onChangeText={value => onUpdate("tavily_api_key", value)}
+              className="h-9 w-[220px] font-mono text-xs"
+            />
+          }
+          icon="lucide:key-round"
+        />
+
+        <SettingsRow
+          label="Exa API Key"
+          description="Stored in the operating-system keyring"
+          control={
+            <WorkbenchInput
+              type="password"
+              value={settings.exa_api_key === SECRET_PRESENT_VALUE ? "" : settings.exa_api_key || ""}
+              placeholder={settings.exa_api_key === SECRET_PRESENT_VALUE ? "Configured" : "exa-..."}
+              onChangeText={value => onUpdate("exa_api_key", value)}
+              className="h-9 w-[220px] font-mono text-xs"
+            />
+          }
+          icon="lucide:key-round"
+        />
+
+        <SettingsRow
+          label="Tavily Search Depth"
+          description="Fast is the default low-latency mode; advanced costs more credits"
+          control={
+            <WorkbenchSelect
+              value={settings.tavily_search_depth || "fast"}
+              onValueChange={value => onUpdate("tavily_search_depth", value)}
+              options={[
+                { value: "ultra-fast", label: "Ultra fast" },
+                { value: "fast", label: "Fast" },
+                { value: "basic", label: "Basic" },
+                { value: "advanced", label: "Advanced" },
+              ]}
+              width={140}
+            />
+          }
+          icon="lucide:gauge"
+        />
+
+        <SettingsRow
+          label="Maximum Results"
+          description="Shared result limit for Tavily, Exa, and DuckDuckGo"
+          control={
+            <WorkbenchSelect
+              value={settings.web_search_max_results || "10"}
+              onValueChange={value => onUpdate("web_search_max_results", value)}
+              options={[5, 8, 10, 15, 20].map(value => ({ value: String(value), label: String(value) }))}
+              width={100}
+            />
+          }
+          icon="lucide:list-ordered"
         />
       </SettingsSection>
 

@@ -36,6 +36,9 @@ fn normalize_direct_tool_args(tool_name: &str, args: &Value) -> Value {
         if let Some(task) = normalized.get("task").and_then(Value::as_str) {
             normalized = json!({ "todos": [{ "task": task, "completed": false }] });
         }
+    } else if tool_name == "manage_board" {
+        normalized = super::voice_display::normalize_board_operation(normalized)
+            .unwrap_or_else(|| args.clone());
     }
 
     normalized

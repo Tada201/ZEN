@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import type { BoardDocumentV1, BoardLayoutMode, BoardWidget, BoardWidgetKind } from "./board/types";
+import { canPlace, placeInFirstFreeSlot } from "./board/gridLayout";
 
 export type VoiceStageBlockKind = BoardWidgetKind;
 export type VoiceStageLifecycle = "active" | "paused" | "cancelled" | "closed";
@@ -34,6 +35,7 @@ export interface VoiceStageTableBlock extends VoiceStageBlockBase {
 export interface VoiceStageChartBlock extends VoiceStageBlockBase {
   kind: "chart";
   points: Array<{ label: string; value: number }>;
+  chartType?: "bar" | "line";
 }
 
 export interface VoiceStageEquationBlock extends VoiceStageBlockBase {
@@ -197,10 +199,13 @@ interface VoiceStageState {
   replace: (blocks: VoiceStageInput[], options?: VoiceStageReplaceOptions) => void;
   append: (block: VoiceStageInput) => void;
   upsert: (block: VoiceStageInput) => void;
+  remove: (id: string) => void;
   saveCurrentBoard: (title?: string) => void;
   forgetBoards: () => void;
   focus: (id: string | null) => void;
   setLayout: (layout: BoardLayoutMode) => void;
+  resizeBlock: (id: string, colSpan: number, rowSpan: number) => void;
+  moveBlock: (id: string, cell: number) => void;
   pause: () => void;
   cancel: (reason?: string) => void;
   close: () => void;
@@ -279,8 +284,14 @@ export const useVoiceStageStore = create<VoiceStageState>((set) => ({
   append: (block) => {
     const normalized = normalizeBlock(block);
     set((state) => {
-      const widgets = [...state.document.widgets, normalized].slice(-12);
-      return { document: { ...state.document, widgets, updatedAt: now() }, focusedBlockId: normalized.id };
+      const existing = state.document.widgets.filter((item) => item.id !== normalized.id);
+      const placed = placeInFirstFreeSlot(normalized, existing);
+      if (!placed) return state;
+      const widgets = [
+        ...existing,
+        placed,
+      ].slice(-12);
+      return { document: { ...state.document, widgets, updatedAt: now() }, focusedBlockId: placed.id };
     });
   },
   upsert: (block) => {
@@ -289,21 +300,74 @@ export const useVoiceStageStore = create<VoiceStageState>((set) => ({
       const widgets = state.document.widgets;
       const index = widgets.findIndex((item) => item.id === normalized.id);
       if (index === -1) {
-        const next = [...widgets, normalized].slice(-12);
+        const placed = placeInFirstFreeSlot(normalized, widgets);
+        if (!placed) return state;
+        const next = [...widgets, placed].slice(-12);
         return { document: { ...state.document, widgets: next, updatedAt: now() }, focusedBlockId: normalized.id };
       }
       const next = widgets.slice();
-      next[index] = normalized;
+      const merged = { ...widgets[index], ...normalized } as VoiceStageBlock;
+      next[index] = placeInFirstFreeSlot(merged, widgets) ?? widgets[index];
       return { document: { ...state.document, widgets: next, updatedAt: now() }, focusedBlockId: normalized.id };
     });
   },
+  remove: (id) => set((state) => {
+    const widgets = state.document.widgets.filter((block) => block.id !== id);
+    return {
+      document: { ...state.document, widgets, updatedAt: now() },
+      focusedBlockId: state.focusedBlockId === id ? null : state.focusedBlockId,
+    };
+  }),
   saveCurrentBoard: (title) =>
     set((state) => ({
       retainedBoards: rememberBoard(state.retainedBoards, state.document.widgets, title),
     })),
   forgetBoards: () => set({ retainedBoards: [] }),
-  focus: (id) => set({ focusedBlockId: id }),
+  focus: (id) => set((state) => ({
+    document: {
+      ...state.document,
+      layout: id ? "focus" : "grid",
+      updatedAt: now(),
+    },
+    focusedBlockId: id,
+  })),
   setLayout: (layout) => set((state) => ({ document: { ...state.document, layout, updatedAt: now() } })),
+  resizeBlock: (id, colSpan, rowSpan) => set((state) => {
+    const index = state.document.widgets.findIndex((block) => block.id === id);
+    if (index === -1) return state;
+    const block = state.document.widgets[index];
+    const cell = block.layout?.cell;
+    const row = cell != null ? Math.floor(cell / 4) : block.layout?.row ?? 0;
+    const column = cell != null ? cell % 4 : block.layout?.column ?? 0;
+    const candidate = {
+      ...block,
+      layout: {
+        ...block.layout,
+        colSpan: Math.min(4 - column, Math.max(1, colSpan)),
+        rowSpan: Math.min(4 - row, Math.max(1, rowSpan)),
+      },
+      updatedAt: now(),
+    } as VoiceStageBlock;
+    if (!canPlace(candidate, state.document.widgets)) return state;
+    const widgets = state.document.widgets.slice();
+    widgets[index] = candidate;
+    return { document: { ...state.document, widgets, updatedAt: now() } };
+  }),
+  moveBlock: (id, cell) => set((state) => {
+    const index = state.document.widgets.findIndex((block) => block.id === id);
+    if (index === -1) return state;
+    const row = Math.floor(Math.min(15, Math.max(0, cell)) / 4);
+    const column = Math.min(15, Math.max(0, cell)) % 4;
+    const candidate = {
+      ...state.document.widgets[index],
+      layout: { ...state.document.widgets[index].layout, cell: row * 4 + column, row, column },
+      updatedAt: now(),
+    } as VoiceStageBlock;
+    if (!canPlace(candidate, state.document.widgets)) return state;
+    const widgets = state.document.widgets.slice();
+    widgets[index] = candidate;
+    return { document: { ...state.document, widgets, updatedAt: now() }, focusedBlockId: id };
+  }),
   pause: () => set((state) => ({ lifecycle: "paused", generation: state.generation + 1 })),
   cancel: (reason = "Voice run stopped.") => {
     const stoppedBlock: VoiceStageNoteBlock = {

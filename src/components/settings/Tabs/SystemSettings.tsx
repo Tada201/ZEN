@@ -60,7 +60,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
             </button>
           ))}
         </div>
-        {hardwareView === "overview" ? <div className="grid grid-cols-2 gap-2 px-3 py-2">
+        {hardwareView === "overview" ? <div className="grid grid-cols-1 gap-2 py-2 sm:grid-cols-2">
           {[
             {
               label: "CPU",
@@ -119,7 +119,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
             )}
           </div>
         )}
-        <div className="mx-3 mb-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+        <div className="mb-2 rounded-md border border-border/50 bg-muted/20 px-3 py-2">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[11px] font-medium text-foreground/80">
@@ -165,7 +165,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
         />
       </SettingsSection>
 
-      <SettingsSection title="Maintenance" icon="lucide:activity" description="System upkeep and diagnostics">
+      <SettingsSection title="Maintenance" icon="lucide:activity" description="Automatic system upkeep">
         <SettingsRow
           label="Auto-Cleanup"
           description="Automatically remove temporary files and old logs"
@@ -177,17 +177,6 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
           }
           icon="lucide:trash-2"
         />
-
-        <div className="px-3 py-2 space-y-2">
-          <WorkbenchButton variant="outline" className="w-full justify-start gap-3 h-9 text-[13px]">
-            <WorkbenchIcon name="lucide:download" size={16} className="text-muted-foreground" />
-            Export Database
-          </WorkbenchButton>
-          <WorkbenchButton variant="outline" className="w-full justify-start gap-3 h-9 text-[13px] hover:bg-red-500/5 text-red-400 hover:text-red-300">
-            <WorkbenchIcon name="lucide:trash-2" size={16} />
-            Reset Factory Settings
-          </WorkbenchButton>
-        </div>
       </SettingsSection>
     </div>
   );

@@ -29,7 +29,7 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
     sessions, archivedSessions, folders, currentSessionId, setCurrentSessionId,
     messages, setMessages, search, setSearch, searchResults,
     models, selectedModelId, setSelectedModelId,
-    selectedProvider, setSelectedProvider, isStreaming,
+    selectedProvider, isStreaming,
     handleCreateSession, handleDeleteSession,
     handleRenameSession, handlePinSession, handleArchiveSession,
     handleUnarchiveSession, handleExportSession,
@@ -122,9 +122,8 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
   }, []);
 
   const onSelectModel = useCallback((id: string, provider: string) => {
-    setSelectedModelId(id);
-    setSelectedProvider(provider);
-  }, [setSelectedModelId, setSelectedProvider]);
+    setSelectedModelId(id, provider);
+  }, [setSelectedModelId]);
 
   const onToggleSidebar = useCallback(() => setIsSidebarOpen(false), []);
 

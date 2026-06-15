@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { useShallow } from "zustand/react/shallow";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import {
   storeToSettingsRecord,
@@ -28,7 +29,6 @@ import { normalizeSettingsTab, type TabId } from "./settingsNavigation";
 export type { TabId } from "./settingsNavigation";
 
 const ProvidersSettings = React.lazy(() => import("@/components/settings/Tabs/ProvidersSettings").then(m => ({ default: m.ProvidersSettings })));
-const ModelsSettings = React.lazy(() => import("@/components/settings/Tabs/ModelsSettings").then(m => ({ default: m.ModelsSettings })));
 const SkillsSettingsContent = React.lazy(() => import("./SkillsSettingsContent").then(m => ({ default: m.SkillsSettingsContent })));
 const FolderBrowser = React.lazy(() => import("./FolderBrowser").then(m => ({ default: m.FolderBrowser })));
 const VoiceSettings = React.lazy(() => import("@/components/settings/Tabs/VoiceSettings").then(m => ({ default: m.VoiceSettings })));
@@ -58,11 +58,6 @@ function SettingsTabFallback() {
 }
 
 export function preloadSettingsTab(tab: TabId) {
-  if (tab === "ai-config") {
-    void import("@/components/settings/Tabs/ModelsSettings");
-    void import("@/components/settings/ui/WorkbenchInput");
-    void import("@/components/settings/ui/WorkbenchSelect");
-  }
   if (tab === "providers") {
     void import("@/components/settings/Tabs/ProvidersSettings");
   }
@@ -79,7 +74,7 @@ export function SettingsModal({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl p-0 gap-0 overflow-hidden bg-background border-border/[0.06] shadow-2xl flex flex-col md:flex-row h-full max-h-[85vh] md:h-[580px] w-[92vw] focus:outline-none focus-visible:outline-none">
+      <DialogContent className="h-[94vh] max-h-[820px] w-[96vw] max-w-[1180px] gap-0 overflow-hidden border-border/60 bg-background p-0 shadow-2xl focus:outline-none focus-visible:outline-none">
         <DialogTitle className="sr-only">Settings</DialogTitle>
         <DialogDescription className="sr-only">Configure application preferences.</DialogDescription>
         <SettingsContent
@@ -109,14 +104,18 @@ export function SettingsContent({
   // ── Zustand store ───────────────────────────────────────────────
   const isHydrated = useSettingsStore(s => s.isHydrated);
   const isSyncing = useSettingsStore(s => s.isSyncing);
-  const store = useSettingsStore(); // Still needed for actions, but we'll use it sparingly
+  const updateSetting = useSettingsStore(s => s.updateSetting);
+  const applyChanges = useSettingsStore(s => s.applyChanges);
+  const discardChanges = useSettingsStore(s => s.discardChanges);
   const reducedMotion = useSettingsStore(s => s.reducedMotion);
+  const pendingChangeCount = useSettingsStore(s => Object.keys(s.activeSettings).length);
 
+  const settingsRecord = useSettingsStore(useShallow(storeToSettingsRecord));
   const settings = useMemo(() => {
-    const record = storeToSettingsRecord(store);
+    const record = { ...settingsRecord };
     record["ui.animations"] = reducedMotion ? "false" : "true";
     return record;
-  }, [store, reducedMotion]); // Recalculate on any store update or motion change
+  }, [settingsRecord, reducedMotion]);
 
   // ── Theme context ────────────────────────────────────────────────
 
@@ -137,7 +136,7 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
       // Special case: ui.animations maps to reducedMotion (inverted)
       if (key === "ui.animations") {
         const enabled = value === "true";
-        store.updateSetting("reducedMotion", !enabled);
+        updateSetting("reducedMotion", !enabled);
         theme.setMotionEnabled(enabled);
         return;
       }
@@ -145,19 +144,19 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
       // Dynamic tool permission keys → store in toolSettings
       const toolPerm = parseToolPermissionKey(key);
       if (toolPerm) {
-        const current = (store as any).toolSettings || {};
-        store.updateSetting("toolSettings" as any, {
+        const current = useSettingsStore.getState().toolSettings || {};
+        updateSetting("toolSettings", {
           ...current,
           [key]: value,
-        } as never);
+        });
         return;
       }
 
       const storeField = dotKeyToStoreField(key);
       const coerced = coerceBridgeValue(key, value);
-      store.updateSetting(storeField as keyof typeof store, coerced as never);
+      updateSetting(storeField, coerced as never);
     },
-    [store, theme]
+    [updateSetting, theme]
   );
 
   // ── Save / Cancel ───────────────────────────────────────────────
@@ -168,7 +167,7 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
     setSaving(true);
     const toastId = toast.loading("Saving settings…");
     try {
-      const { syncFailed } = await store.applyChanges();
+      const { syncFailed } = await applyChanges();
       if (syncFailed) {
         toast.warning("Settings saved locally, but some changes failed to sync to the backend", {
           id: toastId,
@@ -183,12 +182,12 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
     } finally {
       setSaving(false);
     }
-  }, [store]);
+  }, [applyChanges]);
 
   const handleCancel = useCallback(() => {
-    store.discardChanges();
+    discardChanges();
     onClose();
-  }, [store, onClose]);
+  }, [discardChanges, onClose]);
 
   // ── Loading state (wait for hydration) ──────────────────────────
 
@@ -203,13 +202,13 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
   // ── Render ──────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col md:flex-row h-full w-full overflow-hidden bg-background">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-background md:flex-row">
       <SettingsSidebar activeTab={activeTab} onSelectTab={setActiveTab} />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden bg-background">
         <ScrollArea className="flex-1">
-          <div className="max-w-2xl mx-auto p-6 md:p-8 space-y-6">
+          <div className="mx-auto w-full max-w-3xl space-y-6 p-5 md:p-8 lg:p-10">
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeTab}
@@ -239,7 +238,7 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4 pt-2">
+                      <div className="grid grid-cols-1 gap-2 pt-2 lg:grid-cols-2">
                         <div className="flex items-center justify-between p-3 rounded-xl border border-white/[0.06] bg-white/[0.02]">
                           <Label className="text-[13px] font-medium text-zinc-300">Interface Theme</Label>
                           <Select
@@ -288,10 +287,6 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
 
                 {activeTab === "chat" && (
                   <ChatSettings settings={settings} onUpdate={handleUpdate} />
-                )}
-
-                {activeTab === "ai-config" && (
-                  <ModelsSettings settings={settings} onUpdate={handleUpdate} />
                 )}
 
                 {activeTab === "providers" && (
@@ -391,11 +386,17 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
         </ScrollArea>
 
         {/* Footer Actions */}
-        <div className="p-3 border-t border-white/[0.06] flex justify-end gap-2 bg-background/50 backdrop-blur-sm">
+        <div className="flex min-h-14 items-center justify-between gap-3 border-t border-border/60 bg-background px-4 py-3 md:px-6">
+          <div className="min-w-0 text-xs text-muted-foreground" aria-live="polite">
+            {pendingChangeCount > 0
+              ? `${pendingChangeCount} unsaved ${pendingChangeCount === 1 ? "change" : "changes"}`
+              : "All changes saved"}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
           <Button variant="ghost" className="h-8 text-[11px] px-3 text-muted-foreground hover:text-foreground" onClick={handleCancel}>
-            Cancel
+            {pendingChangeCount > 0 ? "Discard" : "Close"}
           </Button>
-          <Button className="h-8 text-[11px] px-5 font-bold shadow-md shadow-primary/10" onClick={handleSave} disabled={saving}>
+          <Button className="h-8 px-5 text-xs font-semibold" onClick={handleSave} disabled={saving || pendingChangeCount === 0}>
             {saving ? (
               <>
                 <WorkbenchIcon name="lucide:loader-2" size={12} className="animate-spin mr-1" />
@@ -404,10 +405,11 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
             ) : (
               <>
                 <WorkbenchIcon name="lucide:save" size={14} className="mr-1" />
-                Save
+                Save changes
               </>
             )}
           </Button>
+          </div>
         </div>
       </div>
     </div>

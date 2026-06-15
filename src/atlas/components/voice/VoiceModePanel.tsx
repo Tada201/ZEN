@@ -120,10 +120,10 @@ export function VoiceModePanelInner({
   const ttftLabel = ttftMetric?.ttftMs != null ? `${Math.round(ttftMetric.ttftMs)}ms` : "—";
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black p-5 text-zinc-100 transition-all duration-300 md:p-8">
+    <div className="fixed inset-0 z-50 flex flex-col bg-black p-3 text-zinc-100 transition-all duration-300 md:p-4">
 
       {/* 1. Top Bar — Agent | Speech | TTS | STT | Status */}
-      <header className="z-10 flex w-full items-center justify-between gap-4 border-b border-white/5 pb-4">
+      <header className="z-10 flex w-full items-center justify-between gap-3 border-b border-white/5 pb-2">
         <div className="flex items-center gap-2 sm:gap-4 font-mono text-[11px] text-zinc-400 flex-wrap">
           {/* Agent Model */}
           <div className="flex items-center gap-1.5">
@@ -207,7 +207,7 @@ export function VoiceModePanelInner({
       </header>
 
       {/* 2. Voice Stage */}
-      <main className="relative min-h-0 flex-1 py-5">
+      <main className="relative min-h-0 flex-1 py-1.5">
         {/* Diagnostics overlay in Canvas Zone if toggled */}
         <AnimatePresence>
           {showDiagnostics && (
@@ -301,7 +301,7 @@ export function VoiceModePanelInner({
       </main>
 
       {/* 3. Voice Dock - CC | Waveform */}
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-5 pb-6 pt-2 shrink-0">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-2 pb-3 pt-1 shrink-0">
         {/* Left: Closed Captions */}
         <div className="min-w-0">
           <AnimatePresence>

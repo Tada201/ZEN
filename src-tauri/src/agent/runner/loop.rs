@@ -27,6 +27,20 @@ use tokio_util::sync::CancellationToken;
 /// Maximum recursion depth for sub-agent spawning (prevents infinite loops)
 pub const MAX_SPAWN_DEPTH: u32 = 3;
 
+fn voice_display_tool_evidence(conversation: &[ChatMessage]) -> String {
+    conversation
+        .iter()
+        .rev()
+        .filter(|message| message.role == "tool")
+        .take(4)
+        .map(|message| message.content.chars().take(3_000).collect::<String>())
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
 impl Runner {
     pub async fn run(
         &self,
@@ -186,6 +200,7 @@ impl Runner {
                     &model,
                     &voice_user_request,
                     &accumulated_commentary,
+                    &voice_display_tool_evidence(&conversation),
                     token.child_token(),
                 );
 
@@ -529,6 +544,7 @@ impl Runner {
                     &model,
                     &voice_user_request,
                     &accumulated_commentary,
+                    &voice_display_tool_evidence(&conversation),
                     token.child_token(),
                 );
 

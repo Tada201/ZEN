@@ -5,6 +5,34 @@ import { DIRECT_PROVIDER_URLS } from "./types";
 import { ModelInfo, CustomProviderConfig, PROVIDER_KEY_MAP, PROVIDER_BASE_URL_MAP, providerOrder } from "../../types/provider";
 
 const isLocalUrl = (url: string) => url.includes('localhost') || url.includes('127.0.0.1');
+const MODEL_CACHE_KEY = 'zen:model-catalog:v1';
+const MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
+let modelFetchGeneration = 0;
+
+function readCachedModels(): ModelInfo[] {
+    if (typeof window === 'undefined') return [];
+    try {
+        const cached = JSON.parse(localStorage.getItem(MODEL_CACHE_KEY) || 'null') as { models?: ModelInfo[] } | null;
+        return Array.isArray(cached?.models) ? cached.models.map(normalizeModelInfo) : [];
+    } catch {
+        return [];
+    }
+}
+
+function isModelCacheFresh(): boolean {
+    if (typeof window === 'undefined') return false;
+    try {
+        const cached = JSON.parse(localStorage.getItem(MODEL_CACHE_KEY) || 'null') as { timestamp?: number } | null;
+        return typeof cached?.timestamp === 'number' && Date.now() - cached.timestamp < MODEL_CACHE_TTL_MS;
+    } catch {
+        return false;
+    }
+}
+
+function writeCachedModels(models: ModelInfo[]) {
+    if (typeof window === 'undefined' || models.length === 0) return;
+    localStorage.setItem(MODEL_CACHE_KEY, JSON.stringify({ timestamp: Date.now(), models }));
+}
 
 const customProviderApiKeySetting = (id: string) => `${id}_api_key`;
 const customProviderBaseUrlSetting = (id: string) => `${id}_base_url`;
@@ -18,17 +46,30 @@ function metadataApiKey(value: string | undefined): string {
     return value && value.trim() ? SECRET_PRESENT_VALUE : "";
 }
 
-function syncCustomProviderBackendSettings(id: string, baseUrl?: string, apiKey?: string) {
+function normalizeProviderBaseUrl(value: string) {
+    const url = new URL(value.trim());
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('Endpoint must use HTTP or HTTPS.');
+    url.pathname = url.pathname.replace(/\/(models|chat\/completions)\/?$/, '').replace(/\/$/, '');
+    return url.toString().replace(/\/$/, '');
+}
+
+function customProviderId(name: string, existingIds: Set<string>) {
+    const base = name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'custom';
+    let id = `custom-${base}`;
+    let suffix = 2;
+    while (existingIds.has(id)) id = `custom-${base}-${suffix++}`;
+    return id;
+}
+
+async function syncCustomProviderBackendSettings(id: string, baseUrl?: string, apiKey?: string, headers?: Record<string, string>) {
     const settings: Record<string, string> = {};
     if (baseUrl !== undefined) settings[customProviderBaseUrlSetting(id)] = baseUrl;
     if (apiKey !== undefined && !isSecretPresentValue(apiKey)) {
         settings[customProviderApiKeySetting(id)] = apiKey;
     }
+    if (headers !== undefined) settings[`${id}_headers`] = JSON.stringify(headers);
     if (Object.keys(settings).length === 0) return;
-
-    settingsApi.setSettings(settings).catch((err) => {
-        console.warn(`[SettingsStore] Failed to sync custom provider ${id}:`, err);
-    });
+    await settingsApi.setSettings(settings);
 }
 
 function normalizeModelInfo(model: BackendModelInfo): ModelInfo {
@@ -77,15 +118,20 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
   agentConfigs: [],
   toolAutoApprove: [],
   
-  availableModels: [],
-  availableModelsByProvider: {},
+  availableModels: readCachedModels(),
+  availableModelsByProvider: groupModelsByProvider(readCachedModels()),
   fetchingModels: false,
   connectionStatuses: {},
   testingConnections: {},
 
   fetchModels: async (providerOverride) => {
-    if (get().fetchingModels) return [];
     const provider = providerOverride || get().activeProvider;
+    const cachedProviderModels = get().availableModelsByProvider[provider] || [];
+    if (!providerOverride && isModelCacheFresh() && get().availableModels.length > 0) {
+        // Keep Atomic-style immediate hydration, then let explicit refreshes
+        // invalidate or replace the cache instead of flashing an empty picker.
+        return cachedProviderModels.map(model => model.id);
+    }
     
     // Safety check: Don't fetch from cloud providers without an API key to avoid 401 noise
     const providerInfo = providerOrder.find(p => p.key === provider);
@@ -98,6 +144,7 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
         }
     }
 
+    const requestGeneration = ++modelFetchGeneration;
     set({ fetchingModels: true });
     try {
         const backendModels = (await providersApi.getAllAvailableModels(providerOverride || null))
@@ -117,12 +164,22 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
             }
         });
 
-        const allModels = [...backendModels, ...customModels];
+        const fetchedModels = [...backendModels, ...customModels];
+        const allModels = providerOverride
+            ? [
+                ...get().availableModels.filter(model => model.provider !== providerOverride),
+                ...fetchedModels,
+              ]
+            : fetchedModels;
         const groupedModels = groupModelsByProvider(allModels);
 
         // Provider-specific filtered view (for per-provider settings tabs)
         const perProvider = groupedModels[provider] || [];
         
+        if (requestGeneration !== modelFetchGeneration) {
+            return (groupedModels[provider] || []).map(model => model.id);
+        }
+        writeCachedModels(allModels);
         set({ 
             availableModels: allModels,
             availableModelsByProvider: groupedModels,
@@ -136,7 +193,7 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
         if (!errMsg.includes('401') && !errMsg.includes('Unauthorized')) {
             console.error('Failed to fetch models:', err);
         }
-        set({ fetchingModels: false });
+        if (requestGeneration === modelFetchGeneration) set({ fetchingModels: false });
         return [];
     }
   },
@@ -238,24 +295,30 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
     }
   },
 
-  addCustomProvider: (config) => {
-    const id = `custom-${Date.now()}`;
-    syncCustomProviderBackendSettings(id, config.baseUrl, config.apiKey);
+  addCustomProvider: async (config) => {
+    const current = get().customProviders;
+    if (current.some(provider => provider.displayName.trim().toLowerCase() === config.displayName.trim().toLowerCase())) {
+        throw new Error(`A provider named "${config.displayName}" already exists.`);
+    }
+    const id = customProviderId(config.displayName, new Set(current.map(provider => provider.id)));
+    const baseUrl = normalizeProviderBaseUrl(config.baseUrl);
+    await syncCustomProviderBackendSettings(id, baseUrl, config.apiKey, config.headers || {});
     const newProvider: CustomProviderConfig = {
         ...config,
         id,
+        baseUrl,
         apiKey: metadataApiKey(config.apiKey),
         enabled: true,
         customModels: config.customModels || []
     };
-    const current = get().customProviders;
     get().updateSetting({ customProviders: [...current, newProvider] } as any);
+    return id;
   },
 
-  removeCustomProvider: (id) => {
+  removeCustomProvider: async (id) => {
     const state = get();
     const current = state.customProviders;
-    syncCustomProviderBackendSettings(id, "", "");
+    await syncCustomProviderBackendSettings(id, "", "", {});
     
     if (state.activeProvider === id) {
         const fallback = providerOrder.find(p => {
@@ -299,15 +362,19 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
     } as any);
   },
 
-  updateCustomProvider: (id, updates) => {
+  updateCustomProvider: async (id, updates) => {
     const current = get().customProviders;
-    if (updates.baseUrl !== undefined || updates.apiKey !== undefined) {
-        syncCustomProviderBackendSettings(id, updates.baseUrl, updates.apiKey);
+    const normalizedUpdates = {
+        ...updates,
+        ...(updates.baseUrl !== undefined ? { baseUrl: normalizeProviderBaseUrl(updates.baseUrl) } : {}),
+    };
+    if (normalizedUpdates.baseUrl !== undefined || normalizedUpdates.apiKey !== undefined || normalizedUpdates.headers !== undefined) {
+        await syncCustomProviderBackendSettings(id, normalizedUpdates.baseUrl, normalizedUpdates.apiKey, normalizedUpdates.headers);
     }
     const publicUpdates = {
-        ...updates,
-        ...(updates.apiKey !== undefined
-            ? { apiKey: isSecretPresentValue(updates.apiKey) ? SECRET_PRESENT_VALUE : metadataApiKey(updates.apiKey) }
+        ...normalizedUpdates,
+        ...(normalizedUpdates.apiKey !== undefined
+            ? { apiKey: isSecretPresentValue(normalizedUpdates.apiKey) ? SECRET_PRESENT_VALUE : metadataApiKey(normalizedUpdates.apiKey) }
             : {}),
     };
     get().updateSetting({ 

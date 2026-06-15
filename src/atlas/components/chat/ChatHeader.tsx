@@ -59,7 +59,7 @@ export function ChatHeader({
           variant="outline" 
           type="button"
           className="h-8 gap-2 rounded-lg border-primary/10 bg-primary/5 text-primary hover:bg-primary/10"
-          onClick={() => onOpenSettings("ai-config")}
+          onClick={() => onOpenSettings("providers")}
         >
           <Bot className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Model</span>

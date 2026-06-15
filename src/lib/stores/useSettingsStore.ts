@@ -71,11 +71,17 @@ export const useSettingsStore = create<SettingsState>()(
           }
           // Mark the store as hydrated after successful rehydration
           // setTimeout(0) avoids calling setState during persist callback
-          setTimeout(() => {
+          setTimeout(async () => {
             state?.seedSettings({});
             // After local rehydration, hydrate from SQLite backend (async, best-effort)
             // SQLite values override localStorage as the authoritative source.
-            state?.hydrateFromBackend();
+            await state?.hydrateFromBackend();
+
+            // Use the final SQLite-backed provider selection for discovery.
+            // Otherwise the initial chat query can race hydration and omit
+            // no-key local providers such as 9Router until Settings is saved.
+            const hydratedState = useSettingsStore.getState();
+            await hydratedState.fetchModels(hydratedState.activeProvider);
           }, 0);
         };
       },

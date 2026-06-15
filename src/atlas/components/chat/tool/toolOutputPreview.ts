@@ -82,7 +82,7 @@ function findFromCandidates(candidates: Record<string, unknown>[], keys: string[
 
 function normalizeResults(value: unknown): ToolPreviewResultItem[] {
   if (!Array.isArray(value)) return [];
-  return value.slice(0, 3).map((item, index) => {
+  return value.slice(0, 5).map((item, index) => {
     const record = asRecord(item);
     return {
       title: compactText(record.title || record.name || record.url || `Result ${index + 1}`, 120),

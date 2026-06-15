@@ -17,6 +17,11 @@ export interface AiSlice {
   ragEnabled: boolean;
   searchStrategy: "hybrid" | "vector" | "keyword" | "semantic" | "disabled";
   topK: number;
+  webSearchProvider: "auto" | "tavily" | "exa" | "duckduckgo";
+  tavilyApiKey: string;
+  exaApiKey: string;
+  tavilySearchDepth: "ultra-fast" | "fast" | "basic" | "advanced";
+  webSearchMaxResults: number;
   embeddingProvider: string;
   citationsEnabled: boolean;
   strictGrounding: boolean;
@@ -67,6 +72,11 @@ export const createAISlice: StateCreator<SettingsState, [], [], AiSlice> = (set,
   ragEnabled: false,
   searchStrategy: "hybrid",
   topK: 10,
+  webSearchProvider: "auto",
+  tavilyApiKey: "",
+  exaApiKey: "",
+  tavilySearchDepth: "fast",
+  webSearchMaxResults: 10,
   embeddingProvider: "ollama",
   citationsEnabled: false,
   strictGrounding: false,

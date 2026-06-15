@@ -43,6 +43,10 @@ export const VoiceSettings = memo(() => {
   }, [activeProvider]);
 
   const providerModels = availableModelsByProvider[activeProvider] ?? [];
+  const displayAgentModels = useMemo(() =>
+    Object.entries(availableModelsByProvider).flatMap(([provider, models]) =>
+      models.map((model) => ({ ...model, provider }))
+    ), [availableModelsByProvider]);
   const selectedModel =
     providerModels.find((model) => model.id === activeModel || model.name === activeModel) ?? null;
   const isTesting = Boolean(testingConnections[activeProvider]);
@@ -143,7 +147,7 @@ export const VoiceSettings = memo(() => {
               <p className="text-[11px] text-zinc-400 leading-relaxed">
                 The display agent runs alongside the main conversation. It uses the <code className="text-zinc-300 bg-white/[0.04] px-1 rounded">manage_board</code> tool to update the scratch pad with notes, metrics, tables, charts, code, diagrams, SVGs, palettes, diffs, and more. The main agent handles your requests normally — the display agent just keeps the board populated visually.
               </p>
-              <div className="grid grid-cols-2 gap-2 mt-2">
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {[
                   { icon: "lucide:check", text: "Render main-agent data" },
                   { icon: "lucide:check", text: "Manage board (cards, charts, code)" },
@@ -169,9 +173,9 @@ export const VoiceSettings = memo(() => {
                   className="h-8 rounded-lg border border-white/[0.08] bg-zinc-950/60 px-2.5 text-xs text-zinc-200 outline-none focus:border-white/[0.15]"
                 >
                   <option value="">Same as main agent</option>
-                  {providerModels.map((model) => (
-                    <option key={model.id || model.name} value={model.id || model.name || ""}>
-                      {model.name || model.id}
+                  {displayAgentModels.map((model) => (
+                    <option key={`${model.provider}::${model.id || model.name}`} value={`${model.provider}::${model.id || model.name || ""}`}>
+                      {model.provider} / {model.name || model.id}
                     </option>
                   ))}
                 </select>

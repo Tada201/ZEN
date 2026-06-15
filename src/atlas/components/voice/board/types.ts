@@ -4,6 +4,11 @@ export type BoardWidgetWidth = "small" | "medium" | "wide" | "full";
 export interface BoardWidgetLayout {
   width?: BoardWidgetWidth;
   order?: number;
+  colSpan?: number;
+  rowSpan?: number;
+  cell?: number;
+  row?: number;
+  column?: number;
 }
 
 export type BoardWidgetKind =
@@ -46,6 +51,7 @@ export type BoardWidget = BoardWidgetBase & {
   columns?: string[];
   rows?: string[][];
   points?: Array<{ label: string; value: number }>;
+  chartType?: "bar" | "line";
   url?: string;
   thumbnail?: string;
   description?: string;

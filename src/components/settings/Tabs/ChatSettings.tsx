@@ -84,7 +84,7 @@ export function ChatSettings({ settings, onUpdate }: ChatSettingsProps) {
         />
       </SettingsSection>
 
-      <SettingsSection title="Streaming & Reasoning" icon="lucide:brain" description="Advanced response behavior">
+      <SettingsSection title="Streaming & reasoning" icon="lucide:brain" description="Advanced response behavior">
         <SettingsRow
           label="Response Streaming"
           description="Stream responses token-by-token as they're generated"
@@ -98,8 +98,8 @@ export function ChatSettings({ settings, onUpdate }: ChatSettingsProps) {
         />
 
         <SettingsRow
-          label="Chain-of-Thought"
-          description="Show the AI's step-by-step reasoning process"
+          label="Reasoning mode"
+          description="Allow supported models to provide concise reasoning summaries"
           control={
             <WorkbenchSwitch
               checked={settings["chat.chain-of-thought"] === "true"}

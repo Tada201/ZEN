@@ -19,14 +19,14 @@ export function WorkspaceSettings({ settings, onUpdate }: WorkspaceSettingsProps
       </div>
 
       <SettingsSection title="Directories" icon="lucide:folder-open" description="Workspace and data paths">
-        <div className="px-3 py-2 space-y-3">
+        <div className="space-y-4 py-2">
           <div className="space-y-1.5">
             <label className="text-[13px] font-medium text-foreground/80">Workspace Root</label>
             <FolderBrowser
               value={settings["workspace.root"] || ""}
               onChange={(path) => onUpdate("workspace.root", path)}
             />
-            <p className="text-[10px] text-muted-foreground/60">
+            <p className="text-xs text-muted-foreground">
               File tools apply this workspace root after settings are saved.
             </p>
           </div>
@@ -39,7 +39,7 @@ export function WorkspaceSettings({ settings, onUpdate }: WorkspaceSettingsProps
               placeholder="~/.zen"
               className="h-8 text-xs bg-background/50"
             />
-            <p className="text-[10px] text-muted-foreground/60">
+            <p className="text-xs text-muted-foreground">
               Application data, vector stores, and cached models.
             </p>
           </div>
@@ -47,12 +47,12 @@ export function WorkspaceSettings({ settings, onUpdate }: WorkspaceSettingsProps
       </SettingsSection>
 
       <SettingsSection title="Security Architecture" icon="lucide:shield" description="Sandboxing and file access controls">
-        <div className="mx-3 rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+        <div className="rounded-md border border-border/50 bg-muted/20 px-3 py-3">
           <div className="flex items-center gap-2 text-[13px] font-medium text-foreground/80">
             <WorkbenchIcon name="lucide:lock" size={14} />
             Workspace sandbox enforced
           </div>
-          <p className="mt-1 text-[10px] leading-4 text-muted-foreground/70">
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             File tools can read and write only inside the active workspace root. External paths are blocked by the backend.
           </p>
         </div>
@@ -79,12 +79,12 @@ export function WorkspaceSettings({ settings, onUpdate }: WorkspaceSettingsProps
       </SettingsSection>
 
       <SettingsSection title="Git Integration" icon="lucide:git-branch" description="Version control preferences">
-        <div className="mx-3 rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+        <div className="rounded-md border border-border/50 bg-muted/20 px-3 py-3">
           <div className="flex items-center gap-2 text-[13px] font-medium text-foreground/80">
             <WorkbenchIcon name="lucide:git-branch" size={14} />
             Git automation is not enabled
           </div>
-          <p className="mt-1 text-[10px] leading-4 text-muted-foreground/70">
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             File tools return diffs, but they do not stage or commit changes automatically.
           </p>
         </div>

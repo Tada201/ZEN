@@ -1,4 +1,4 @@
-import { useMemo, memo } from 'react';
+import { useMemo, memo, useState } from 'react';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
 
@@ -111,6 +111,7 @@ const EMPTY_PARAMS = {};
 export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string }) => {
     const providerParams = useSettingsStore(s => s.providerParams[providerKey] || EMPTY_PARAMS);
     const updateProviderParams = useSettingsStore(s => s.updateProviderParams);
+    const [showAdvanced, setShowAdvanced] = useState(false);
 
     const supportedParams = useMemo(() => {
         const keys = PROVIDER_SUPPORTED_PARAMS[providerKey] || ['temperature', 'topP', 'maxTokens'];
@@ -132,12 +133,19 @@ export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string
                     <WorkbenchIcon name="lucide:settings-2" size={14} className="text-white/40" />
                     <h4 className="text-[11px] font-bold uppercase tracking-widest text-white/40">Model Parameters</h4>
                 </div>
+                <button
+                    type="button"
+                    onClick={() => setShowAdvanced(value => !value)}
+                    className="rounded px-2 py-1 text-[10px] font-medium text-white/45 hover:bg-white/[0.04] hover:text-white/70"
+                >
+                    {showAdvanced ? 'Hide advanced' : 'Advanced'}
+                </button>
             </div>
 
             <div className="space-y-4">
                 {/* Main Settings Group */}
                 <div className="space-y-5 px-1">
-                    {supportedParams.filter(p => !['topK', 'repeatPenalty', 'presencePenalty', 'topP'].includes(p.id)).map(param => (
+                    {supportedParams.filter(p => ['temperature', 'maxTokens'].includes(p.id)).map(param => (
                         <div key={param.id} className="group space-y-2">
                             <div className="flex items-center justify-between gap-4">
                                 <div className="flex items-center gap-1.5 min-w-0">
@@ -200,14 +208,14 @@ export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string
                 </div>
 
                 {/* Sampling Group */}
-                <div className="mt-6 border-t border-white/[0.04] pt-4">
+                {showAdvanced && <div className="mt-6 border-t border-white/[0.04] pt-4">
                     <div className="flex items-center gap-2 mb-4 px-1">
                         <WorkbenchIcon name="lucide:git-branch" size={12} className="text-white/20 rotate-90" />
                         <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Sampling</span>
                     </div>
                     
                     <div className="space-y-4 px-1">
-                        {supportedParams.filter(p => ['topK', 'repeatPenalty', 'presencePenalty', 'topP'].includes(p.id)).map(param => (
+                        {supportedParams.filter(p => !['temperature', 'maxTokens', 'stop'].includes(p.id)).map(param => (
                             <div key={param.id} className="group space-y-2">
                                 <div className="flex items-center justify-between gap-4">
                                     <div className="flex items-center gap-1.5 min-w-0">
@@ -249,7 +257,7 @@ export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string
                             </div>
                         ))}
                     </div>
-                </div>
+                </div>}
             </div>
 
             <div className="mx-1 p-2.5 rounded-lg bg-blue-500/[0.02] border border-blue-500/10 flex gap-2.5">

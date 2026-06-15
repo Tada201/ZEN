@@ -14,6 +14,8 @@ const middlewareSource = readFileSync(new URL("../src-tauri/src/agent/middleware
 const spawnToolSource = readFileSync(new URL("../src-tauri/src/agent/tools/spawn_tools.rs", import.meta.url), "utf8");
 const toolPipelineSource = readFileSync(new URL("../src-tauri/src/agent/runner/tool_pipeline.rs", import.meta.url), "utf8");
 const toolDispatchSource = readFileSync(new URL("../src-tauri/src/agent/runner/tool_dispatch.rs", import.meta.url), "utf8");
+const displayContextSource = readFileSync(new URL("../src/atlas/components/voice/voiceDisplayContext.ts", import.meta.url), "utf8");
+const boardEventSource = readFileSync(new URL("../src/atlas/components/voice/useBoardEventListener.ts", import.meta.url), "utf8");
 
 assert.deepEqual(resource.tool_ids, ["manage_board"], "voice display agent must remain render-only");
 assert(loopSource.includes("spawn_voice_display_agent"), "completed voice runs must launch the display agent");
@@ -40,5 +42,17 @@ assert(stageStoreSource.includes("resetCurrent: () =>") && overlaySource.include
 assert(middlewareSource.includes('agent.id == "generalist" || agent.id == "voice_display"'), "internal voice display agent must not be advertised as a delegatable role");
 assert(spawnToolSource.includes('if agent_id == "voice_display"'), "manual voice display spawns must be rejected before child execution");
 assert(toolPipelineSource.includes("normalize_direct_tool_args") && toolPipelineSource.includes('object.remove("role")'), "provider tool-envelope and legacy role arguments must be normalized before validation");
+assert(toolPipelineSource.includes('tool_name == "manage_board"') && toolPipelineSource.includes("voice_display::normalize_board_operation"), "native manage_board calls must use the same compatibility normalization as fallback JSON");
+assert(runnerSource.includes('starts_with("<svg")') && runnerSource.includes('Some("html")') && runnerSource.includes('Some("gen_ui")'), "board normalization must infer media kinds from content when providers omit kind");
+assert(runnerSource.includes("content_is_empty") && runnerSource.includes("Example content generated for the requested board"), "empty Gen UI and HTML blocks must receive safe displayable fallback content");
+assert(runnerSource.includes("RECENT TOOL EVIDENCE") && runnerSource.includes("first_youtube_url") && runnerSource.includes("deterministic_block_operation"), "display agent must receive searched URLs and deterministically handle video and replacement requests");
+assert(runnerSource.includes("CURRENT BOARD MANIFEST") && runnerSource.includes("Always update, remove, or focus using the exact existing widget ID") && runnerSource.includes("voice_display_context"), "display agent must receive stable widget IDs and explicit non-destructive edit rules");
+assert(runnerSource.includes("if !board_updated.load") && runnerSource.includes("Voice display native tool call failed"), "structured recovery must run after malformed native tool calls, not only successful prose completion");
+assert(runnerSource.includes("execute_deterministic_board_fallback") && runnerSource.includes('"circle", "square", "rectangle", "triangle", "line"'), "simple drawings must survive providers that fail both native and structured tool output");
+assert(displayContextSource.includes("estimatedPixelCost") && displayContextSource.includes("estimatedOccupiedPercent") && displayContextSource.includes("getBoundingClientRect"), "voice display context must include viewport-aware pixel budgeting");
+assert(displayContextSource.includes("contentHint") && displayContextSource.includes("block.id"), "board manifest must identify existing objects well enough for targeted edits");
+assert(stageStoreSource.includes("filter((item) => item.id !== normalized.id)") && stageStoreSource.includes("remove: (id) =>"), "duplicate adds must replace the same ID and removals must have a targeted store mutation");
+assert(stageStoreSource.includes("const merged = { ...widgets[index], ...normalized }") && stageStoreSource.includes("placeInFirstFreeSlot(merged, widgets)") && boardEventSource.includes("hasPayloadForKind"), "partial updates must merge with existing widgets without accidentally changing their media kind");
+assert(boardEventSource.includes("store.remove(op.id)") && boardEventSource.includes("store.resetCurrent()"), "remove must target one widget and clear must preserve retained board memory");
 
 console.log("voice display agent wiring verified");

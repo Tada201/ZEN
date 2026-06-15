@@ -25,6 +25,10 @@ pub struct RunConfig {
     pub voice_mode: bool,
     /// Model override for the voice display agent (empty = same as main)
     pub display_agent_model: Option<String>,
+    /// Provider paired with the voice display model (empty = main provider)
+    pub display_agent_provider: Option<String>,
+    /// Compact current-board manifest supplied by the voice UI.
+    pub voice_display_context: Option<String>,
     /// Maximum messages to keep in the agent's working conversation (None = unlimited)
     pub max_messages_in_memory: Option<usize>,
 }
@@ -44,6 +48,8 @@ impl Default for RunConfig {
             drift_threshold: 0.3,
             voice_mode: false,
             display_agent_model: None,
+            display_agent_provider: None,
+            voice_display_context: None,
             max_messages_in_memory: None,
         }
     }

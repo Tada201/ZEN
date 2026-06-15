@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 import { useGlobalStreamListener } from "./atlas/hooks/useGlobalStreamListener";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BootScreen } from "./components/BootScreen";
+import { useFullscreen } from "./lib/hooks/useFullscreen";
 
 /**
  * Root Application Component.
@@ -15,6 +16,7 @@ function App() {
 
   // Mount the global Tauri event listeners so they survive chat session transitions
   useGlobalStreamListener();
+  useFullscreen();
 
   return (
     <ZenProvider>

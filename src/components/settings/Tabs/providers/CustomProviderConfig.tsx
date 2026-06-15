@@ -12,9 +12,10 @@ interface CustomProviderConfigProps {
     displayName: string;
     baseUrl: string;
     apiKey?: string;
+    headers?: Record<string, string>;
 }
 
-export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, apiKey }: CustomProviderConfigProps) => {
+export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, apiKey, headers = {} }: CustomProviderConfigProps) => {
     const [showKey, setShowKey] = useState(false);
     const updateCustomProvider = useSettingsStore(s => s.updateCustomProvider);
     const removeCustomProvider = useSettingsStore(s => s.removeCustomProvider);
@@ -25,6 +26,8 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
     const [localUrl, setLocalUrl] = useState(baseUrl);
     const [localKey, setLocalKey] = useState(isSecretPresentValue(apiKey) ? '' : apiKey || '');
     const [keyDirty, setKeyDirty] = useState(false);
+    const [headersText, setHeadersText] = useState(Object.entries(headers).map(([key, value]) => `${key}: ${value}`).join('\n'));
+    const [saveError, setSaveError] = useState<string | null>(null);
     const keyPlaceholder = isSecretPresentValue(apiKey) ? 'Saved key present. Enter a new key to replace it.' : 'Optional secure key...';
 
     const isEnabled = useSettingsStore(s => s.customProviders.find(cp => cp.id === providerId)?.enabled ?? true);
@@ -59,7 +62,7 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                 <WorkbenchInput
                     value={localName}
                     onChangeText={setLocalName}
-                    onBlur={() => updateCustomProvider(providerId, { displayName: localName } as any)}
+                    onBlur={() => { void updateCustomProvider(providerId, { displayName: localName } as any).catch(error => setSaveError(String(error))); }}
                     className="max-w-lg h-9 bg-muted/20 border-border/60 rounded-lg"
                 />
             </div>
@@ -72,7 +75,7 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                 <WorkbenchInput
                     value={localUrl}
                     onChangeText={setLocalUrl}
-                    onBlur={() => updateCustomProvider(providerId, { baseUrl: localUrl } as any)}
+                    onBlur={() => { void updateCustomProvider(providerId, { baseUrl: localUrl } as any).catch(error => setSaveError(String(error))); }}
                     className={cn(
                         "max-w-lg h-9 font-mono text-xs bg-muted/20 border-border/60 rounded-lg",
                         providerError && "border-red-500/30 bg-red-500/5"
@@ -102,7 +105,7 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                         }}
                         onBlur={() => {
                             if (!keyDirty) return;
-                            updateCustomProvider(providerId, { apiKey: localKey } as any);
+                            void updateCustomProvider(providerId, { apiKey: localKey } as any).catch(error => setSaveError(String(error)));
                             setKeyDirty(false);
                         }}
                         className="w-full h-9 pr-10 font-mono text-xs bg-muted/20 border-border/60 rounded-lg"
@@ -118,6 +121,30 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                 </div>
             </div>
 
+            <details className="rounded-md border border-border/40 p-3">
+                <summary className="cursor-pointer text-[11px] font-medium text-foreground">Advanced headers</summary>
+                <textarea
+                    value={headersText}
+                    onChange={(event) => setHeadersText(event.target.value)}
+                    onBlur={() => {
+                        try {
+                            const parsed = Object.fromEntries(headersText.split('\n').map(line => line.trim()).filter(Boolean).map(line => {
+                                const separator = line.indexOf(':');
+                                if (separator < 1) throw new Error(`Invalid header: ${line}`);
+                                return [line.slice(0, separator).trim(), line.slice(separator + 1).trim()];
+                            }));
+                            void updateCustomProvider(providerId, { headers: parsed }).catch(error => setSaveError(String(error)));
+                            setSaveError(null);
+                        } catch (error) {
+                            setSaveError(error instanceof Error ? error.message : String(error));
+                        }
+                    }}
+                    className="mt-3 min-h-20 w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-[12px] outline-none"
+                />
+            </details>
+
+            {saveError && <div className="rounded-md border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-[11px] text-rose-300">{saveError}</div>}
+
             <div className="pt-3 border-t border-border/40 flex justify-end">
                 <WorkbenchButton
                     variant="ghost"
@@ -128,7 +155,7 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                             kind: 'warning' 
                         });
                         if (confirmed) {
-                            removeCustomProvider(providerId);
+                            await removeCustomProvider(providerId);
                         }
                     }}
                 >

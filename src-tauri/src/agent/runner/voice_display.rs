@@ -22,6 +22,7 @@ impl Runner {
         main_model: &str,
         user_request: &str,
         response: &str,
+        tool_evidence: &str,
         token: CancellationToken,
     ) {
         if !self.config.voice_mode || user_request.trim().is_empty() || token.is_cancelled() {
@@ -34,10 +35,13 @@ impl Runner {
         let hook_registry = self.hook_registry.clone();
         let permissions = self.permissions.clone();
         let configured_model = self.config.display_agent_model.clone();
+        let configured_provider = self.config.display_agent_provider.clone();
         let main_model = main_model.to_string();
         let source_chat_id = chat_id.to_string();
         let user_request = user_request.to_string();
         let response = response.to_string();
+        let tool_evidence = tool_evidence.to_string();
+        let voice_display_context = self.config.voice_display_context.clone();
         let depth = self.depth;
 
         tokio::spawn(async move {
@@ -133,13 +137,19 @@ impl Runner {
                 usize::MAX
             };
 
+            let board_context = voice_display_context
+                .as_deref()
+                .filter(|context| !context.trim().is_empty())
+                .unwrap_or("{\"version\":1,\"board\":null,\"widgets\":[]}");
             let task = format!(
-                "{}\n\nThe ORIGINAL USER REQUEST is authoritative and must be handled completely. You MUST execute manage_board at least once. A prose-only response is a failure. Render any requested visual, drawing, board clear, replacement, or edit with manage_board, then stop. The main-agent response is supporting context only and may be a short spoken wait message. Do not output prose.\n\nORIGINAL USER REQUEST:\n{}\n\nMAIN AGENT RESPONSE:\n{}",
+                "{}\n\nThe ORIGINAL USER REQUEST is authoritative and must be handled completely. You MUST execute manage_board at least once. A prose-only response is a failure. Render any requested visual, drawing, board clear, replacement, or edit with manage_board, then stop. The main-agent response is supporting context only and may be a short spoken wait message. Recent tool evidence contains data found by the main pipeline and may include URLs. Do not output prose.\n\nBOARD EDITING RULES:\n- CURRENT BOARD MANIFEST lists stable widget IDs, coordinates, occupied cells, and pixel cost.\n- The board is a zero-based 4x4 grid: cells 0..15, row=floor(cell/4), column=cell%4.\n- Widget IDs identify objects. Always update, remove, or focus using the exact existing widget ID, never a cell number.\n- For a new object, call add and choose free cells from occupiedCells.\n- Use set when the user says delete/clear/replace the old board and requests new content in the same turn.\n- For YouTube or video requests, use a video block with the exact safe URL from RECENT TOOL EVIDENCE. Never invent a URL.\n- When the user asks to show, open, or enable their camera, add or update a block with kind camera. The widget asks the user for permission; never claim the camera is already active.\n- Use cell or row+column with col_span and row_span from 1..4. Never cross row or column 3.\n\nCURRENT BOARD MANIFEST:\n{}\n\nORIGINAL USER REQUEST:\n{}\n\nMAIN AGENT RESPONSE:\n{}\n\nRECENT TOOL EVIDENCE:\n{}",
                 custom_prompt.unwrap_or_else(|| {
                     "Use only the supplied original request and supporting response. Do not browse or infer missing facts.".to_string()
                 }),
+                board_context,
                 user_request,
-                response
+                response,
+                tool_evidence,
             );
             let messages = vec![ChatMessage {
                 role: "user".to_string(),
@@ -150,10 +160,20 @@ impl Runner {
                 tool_call_id: None,
             }];
             let synthetic_chat_id = format!("voice-display:{}", source_chat_id);
-            let provider = match state.provider().await {
+            let provider_name = configured_provider
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or_else(|| "ollama".to_string());
+            let db = match state.db.get().await {
+                Ok(db) => db,
+                Err(error) => {
+                    tracing::warn!(error = %error, "Voice display database is unavailable");
+                    return;
+                }
+            };
+            let provider = match state.provider_by_name(&provider_name, &db).await {
                 Ok(provider) => provider,
                 Err(error) => {
-                    tracing::warn!(error = %error, "Voice display provider is unavailable");
+                    tracing::warn!(provider = %provider_name, model = %selected_model, error = %error, "Voice display provider is unavailable");
                     return;
                 }
             };
@@ -184,13 +204,19 @@ impl Runner {
                 )
                 .await;
 
-            if result.is_ok() && !board_updated.load(Ordering::Acquire) && !token.is_cancelled() {
-                tracing::warn!(chat_id = %source_chat_id, "Voice display agent completed without updating the board; requesting a structured board operation");
+            if !board_updated.load(Ordering::Acquire) && !token.is_cancelled() {
+                if let Err(error) = &result {
+                    tracing::warn!(chat_id = %source_chat_id, error = %error, "Voice display native tool call failed; requesting a structured board operation");
+                } else {
+                    tracing::warn!(chat_id = %source_chat_id, "Voice display agent completed without updating the board; requesting a structured board operation");
+                }
                 let retry_messages = vec![ChatMessage {
                     role: "user".to_string(),
                     content: format!(
-                        "Convert the request below into exactly one raw JSON object matching the manage_board input schema. Output JSON only: no markdown fence, prose, tool call, or explanation. For a drawing, use action set and one svg block with safe SVG markup. Request:\n{}",
-                        user_request
+                        "Convert the request below into exactly one raw JSON object matching the manage_board input schema. Output JSON only: no markdown fence, prose, tool call, or explanation. Use update with an existing ID for edits, add for a new object, and set only for board replacement. If the request says delete, clear, replace, fresh, or new board while requesting new content, use set with blocks. Preserve unrelated widgets otherwise. For YouTube, use kind video with the exact URL from TOOL EVIDENCE; never use html or gen_ui for video playback. For a drawing, use an svg block with safe SVG markup. Exact new-drawing example: {{\"action\":\"add\",\"block\":{{\"id\":\"drawing\",\"kind\":\"svg\",\"title\":\"Drawing\",\"markup\":\"<svg viewBox='0 0 400 300' xmlns='http://www.w3.org/2000/svg'>...</svg>\",\"layout\":{{\"width\":\"wide\",\"order\":0}}}}}}.\nCURRENT BOARD MANIFEST:\n{}\nREQUEST:\n{}\nTOOL EVIDENCE:\n{}",
+                        board_context,
+                        user_request,
+                        tool_evidence,
                     ),
                     reasoning_details: None,
                     images: None,
@@ -229,11 +255,38 @@ impl Runner {
                             )
                             .await
                             .map(|_| response),
-                        None => Err(anyhow::anyhow!(
-                            "Voice display model returned no valid board operation JSON"
-                        )),
+                        None => execute_deterministic_board_fallback(
+                            &app,
+                            &synthetic_chat_id,
+                            user_request.as_str(),
+                            tool_evidence.as_str(),
+                            depth,
+                            token.clone(),
+                        )
+                        .await
+                        .map(|_| response),
                     },
-                    Err(error) => Err(error),
+                    Err(error) => match execute_deterministic_board_fallback(
+                        &app,
+                        &synthetic_chat_id,
+                        user_request.as_str(),
+                        tool_evidence.as_str(),
+                        depth,
+                        token.clone(),
+                    )
+                    .await
+                    {
+                        Ok(()) => Ok(crate::agent::types::AgentResponse {
+                            content: None,
+                            tool_calls: Vec::new(),
+                            reasoning: None,
+                            handoff: None,
+                            tokens_in: None,
+                            tokens_out: None,
+                            message_persisted: false,
+                        }),
+                        Err(_) => Err(error),
+                    },
                 };
             }
             app.unlisten(board_listener_id);
@@ -261,6 +314,85 @@ impl Runner {
             );
         });
     }
+}
+
+async fn execute_deterministic_board_fallback(
+    app: &tauri::AppHandle,
+    chat_id: &str,
+    user_request: &str,
+    tool_evidence: &str,
+    depth: u32,
+    token: CancellationToken,
+) -> anyhow::Result<()> {
+    let request = user_request.to_ascii_lowercase();
+    let replace_board = ["delete", "clear", "replace", "fresh", "new board"]
+        .into_iter()
+        .any(|term| request.contains(term));
+    if request.contains("youtube") || request.contains("video") {
+        let url = first_youtube_url(user_request)
+            .or_else(|| first_youtube_url(tool_evidence))
+            .ok_or_else(|| anyhow::anyhow!("YouTube video request did not include a usable URL"))?;
+        let block = serde_json::json!({
+                "id": "voice-display-video",
+                "kind": "video",
+                "title": "YouTube video",
+                "url": url,
+                "layout": { "cell": 0, "col_span": 2, "row_span": 2, "order": 0 }
+        });
+        let operation = deterministic_block_operation(replace_board, block);
+        return ManageBoardTool::new().run(app.clone(), chat_id.to_string(), operation, depth, None, token).await.map(|_| ());
+    }
+    if request.contains("ui") || request.contains("dashboard") || request.contains("interface") {
+        let block = serde_json::json!({
+                "id": "voice-display-ui",
+                "kind": "gen_ui",
+                "title": "Modern UI",
+                "content": "title = Text(\"Modern UI\", variant=\"heading\")\nbody = Text(\"A generated interface preview ready for refinement.\", variant=\"body\")\nroot = Stack(children=[title, body], gap=4)",
+                "layout": { "cell": 0, "col_span": 2, "row_span": 2, "order": 0 }
+        });
+        let operation = deterministic_block_operation(replace_board, block);
+        return ManageBoardTool::new().run(app.clone(), chat_id.to_string(), operation, depth, None, token).await.map(|_| ());
+    }
+    let shape = ["circle", "square", "rectangle", "triangle", "line"]
+        .into_iter()
+        .find(|shape| request.contains(shape))
+        .ok_or_else(|| anyhow::anyhow!("Voice display model returned no valid board operation JSON"))?;
+    let markup = simple_shape_svg(shape)
+        .ok_or_else(|| anyhow::anyhow!("Unsupported deterministic board shape"))?;
+    let block = serde_json::json!({
+            "id": format!("voice-display-{}", shape),
+            "kind": "svg",
+            "title": shape,
+            "markup": markup,
+            "layout": { "width": "wide", "order": 0 }
+    });
+    let operation = deterministic_block_operation(replace_board, block);
+    ManageBoardTool::new()
+        .run(
+            app.clone(),
+            chat_id.to_string(),
+            operation,
+            depth,
+            None,
+            token,
+        )
+        .await?;
+    Ok(())
+}
+
+fn deterministic_block_operation(replace_board: bool, block: serde_json::Value) -> serde_json::Value {
+    if replace_board {
+        serde_json::json!({ "action": "set", "blocks": [block] })
+    } else {
+        serde_json::json!({ "action": "add", "block": block })
+    }
+}
+
+fn first_youtube_url(text: &str) -> Option<String> {
+    text.split_whitespace()
+        .map(|token| token.trim_matches(|ch: char| matches!(ch, '"' | '\'' | '(' | ')' | '[' | ']' | ',')))
+        .find(|token| token.starts_with("https://www.youtube.com/watch?") || token.starts_with("https://youtu.be/"))
+        .map(|token| token.trim_end_matches(|ch: char| matches!(ch, '.' | ';' | '}')).to_string())
 }
 
 fn extract_board_operation(content: &str) -> Option<serde_json::Value> {
@@ -301,7 +433,7 @@ fn extract_board_operation(content: &str) -> Option<serde_json::Value> {
     None
 }
 
-fn normalize_board_operation(mut value: serde_json::Value) -> Option<serde_json::Value> {
+pub(super) fn normalize_board_operation(mut value: serde_json::Value) -> Option<serde_json::Value> {
     if value.get("action").is_none() {
         if let Some(arguments) = value
             .get("arguments")
@@ -333,12 +465,32 @@ fn normalize_board_operation(mut value: serde_json::Value) -> Option<serde_json:
         }
     }
 
+    // ── Fix: Extract root-level id from block for update/remove/focus ──
+    // LLMs often place the id inside the block rather than at the root.
+    // Serde's BoardOperation::Update/Remove/Focus expects id at the root level.
+    match action.as_str() {
+        "update" | "remove" | "focus" => {
+            if !object.contains_key("id") {
+                if let Some(block_id) = object
+                    .get("block")
+                    .and_then(|b| b.get("id"))
+                    .and_then(|v| v.as_str())
+                    .filter(|id| !id.is_empty())
+                    .map(str::to_string)
+                {
+                    object.insert("id".to_string(), serde_json::json!(block_id));
+                }
+            }
+        }
+        _ => {}
+    }
+
     Some(value)
 }
 
 fn extract_root_block(operation: &mut serde_json::Map<String, serde_json::Value>) -> Option<serde_json::Value> {
     const BLOCK_FIELDS: &[&str] = &[
-        "id", "kind", "type", "block_type", "shape", "title", "body", "value", "detail", "language", "expression",
+        "id", "kind", "type", "block_type", "shape", "title", "body", "value", "detail", "language", "expression", "chart_type",
         "columns", "rows", "points", "url", "thumbnail", "description", "size", "alt",
         "caption", "location", "latitude", "longitude", "zoom", "code", "max", "label",
         "markup", "svg", "data", "colors", "names", "diagram", "content", "card_type",
@@ -369,19 +521,40 @@ fn normalize_block_aliases(block: &mut serde_json::Value) {
         return;
     };
 
+    // 1. Rename type/block_type → kind
     if !object.contains_key("kind") {
         if let Some(kind) = object.remove("type").or_else(|| object.remove("block_type")) {
             object.insert("kind".to_string(), kind);
         }
     }
 
+    // 2. Infer markup from svg field, content (for SVG kind), SVG-looking content, or body (for SVG kind)
     if !object.contains_key("markup") {
         if let Some(svg) = object.remove("svg") {
             object.insert("markup".to_string(), svg);
         } else if object.get("kind").and_then(|kind| kind.as_str()) == Some("svg") {
             if let Some(content) = object.remove("content") {
                 object.insert("markup".to_string(), content);
+            } else if let Some(body_val) = object.remove("body") {
+                // Explicit svg kind may have markup in body instead of content/markup
+                if body_val.as_str().is_some_and(|s| s.trim_start().starts_with("<svg")) {
+                    object.insert("markup".to_string(), body_val);
+                } else {
+                    object.insert("body".to_string(), body_val); // put it back
+                }
             }
+        }
+    }
+    if !object.contains_key("markup") {
+        let svg_content = object
+            .get("content")
+            .and_then(|content| content.as_str())
+            .is_some_and(|content| content.trim_start().starts_with("<svg"));
+        if svg_content {
+            if let Some(content) = object.remove("content") {
+                object.insert("markup".to_string(), content);
+            }
+            object.insert("kind".to_string(), serde_json::json!("svg"));
         }
     }
     if !object.contains_key("markup") {
@@ -392,6 +565,7 @@ fn normalize_block_aliases(block: &mut serde_json::Value) {
         }
     }
 
+    // 3. Infer kind from available fields (only if still missing)
     if !object.contains_key("kind") {
         let inferred = if object.contains_key("markup") {
             Some("svg")
@@ -409,6 +583,15 @@ fn normalize_block_aliases(block: &mut serde_json::Value) {
             Some("diff")
         } else if object.contains_key("diagram") && object.contains_key("content") {
             Some("kroki")
+        } else if let Some(content) = object.get("content").and_then(|value| value.as_str()) {
+            let trimmed = content.trim_start();
+            if trimmed.starts_with("<!DOCTYPE html") || trimmed.starts_with("<html") {
+                Some("html")
+            } else if trimmed.contains("root =") || trimmed.starts_with("Stack(") {
+                Some("gen_ui")
+            } else {
+                Some("note")
+            }
         } else if object.contains_key("card_type") && object.contains_key("card_data") {
             Some("premium_card")
         } else if object.contains_key("latitude") && object.contains_key("longitude") {
@@ -420,7 +603,7 @@ fn normalize_block_aliases(block: &mut serde_json::Value) {
                 "image"
             })
         } else if object.contains_key("location") {
-            Some("map")
+            Some("map_placeholder")
         } else if object.contains_key("data") {
             Some("qr")
         } else if object.contains_key("value") && (object.contains_key("max") || object.contains_key("label")) {
@@ -430,15 +613,70 @@ fn normalize_block_aliases(block: &mut serde_json::Value) {
         } else if object.contains_key("body") {
             Some("note")
         } else {
-            None
+            Some("note")
         };
-        if let Some(kind) = inferred {
-            object.insert("kind".to_string(), serde_json::json!(kind));
-        }
+        object.insert(
+            "kind".to_string(),
+            serde_json::json!(inferred.unwrap_or("note")),
+        );
     }
+
+    // 4. Ensure note blocks have a body
+    if object.get("kind").and_then(|kind| kind.as_str()) == Some("note")
+        && !object.contains_key("body")
+    {
+        let body = object
+            .remove("content")
+            .or_else(|| object.get("description").cloned())
+            .or_else(|| object.get("detail").cloned())
+            .or_else(|| object.get("title").cloned())
+            .unwrap_or_else(|| serde_json::json!(""));
+        object.insert("body".to_string(), body);
+    }
+
+    // 5. Never allow renderable containers to reach validation empty. Models
+    // occasionally choose Gen UI or HTML correctly but omit their payload.
+    let kind = object.get("kind").and_then(|kind| kind.as_str());
+    let content_is_empty = object
+        .get("content")
+        .and_then(|content| content.as_str())
+        .map_or(true, |content| content.trim().is_empty());
+    if content_is_empty && matches!(kind, Some("gen_ui") | Some("html")) {
+        let label = object
+            .get("title")
+            .or_else(|| object.get("body"))
+            .and_then(|value| value.as_str())
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or("Generated content preview");
+        let content = if kind == Some("html") {
+            format!(
+                "<section><h2>{}</h2><p>Example content generated for the requested board.</p></section>",
+                escape_html(label)
+            )
+        } else {
+            let quoted = serde_json::to_string(label)
+                .unwrap_or_else(|_| "\"Generated content preview\"".to_string());
+            format!(
+                "title = Text({}, variant=\"heading\")\nbody = Text(\"Example content generated for the requested board.\", variant=\"body\")\nroot = Stack(children=[title, body], gap=4)",
+                quoted
+            )
+        };
+        object.insert("content".to_string(), serde_json::json!(content));
+    }
+
+    // 6. Ensure every block has an id
     if !object.contains_key("id") {
         object.insert("id".to_string(), serde_json::json!("voice-display-content"));
     }
+}
+
+fn escape_html(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
 }
 
 fn simple_shape_svg(shape: &str) -> Option<String> {
@@ -460,6 +698,10 @@ fn simple_shape_svg(shape: &str) -> Option<String> {
         element
     ))
 }
+
+#[cfg(test)]
+#[path = "voice_display_tests.rs"]
+mod tests;
 
 async fn read_usize_setting(
     state: &AppState,

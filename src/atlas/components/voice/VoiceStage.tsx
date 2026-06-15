@@ -4,7 +4,8 @@ import { useVoiceStageStore, type VoiceStageBlock } from "./voiceStageStore";
 import type { VoiceState } from "./VoiceModePanel";
 import { sanitizeGeneratedSvg } from "@/lib/security/generatedContent";
 import { isSafeGeneratedHref } from "@/lib/security/generatedLinks";
-import { preferredWidgetWidth, widgetWidthClass } from "./board/registry";
+import { gridCoordinates, preferredGridSpan } from "./board/registry";
+import { Maximize2, Minimize2, Minus, Plus } from "lucide-react";
 
 const OpenUIRenderer = lazy(() => import("@/atlas/components/OpenUIRenderer").then((module) => ({ default: module.OpenUIRenderer })));
 const PremiumCard = lazy(() => import("@/atlas/components/genui/PremiumCard").then((module) => ({ default: module.PremiumCard })));
@@ -12,6 +13,10 @@ const BoardMap = lazy(() => import("./board/BoardMediaWidgets").then((module) =>
 const BoardVideo = lazy(() => import("./board/BoardMediaWidgets").then((module) => ({ default: module.BoardVideo })));
 const BoardCamera = lazy(() => import("./board/BoardMediaWidgets").then((module) => ({ default: module.BoardCamera })));
 const BoardHtml = lazy(() => import("./board/BoardMediaWidgets").then((module) => ({ default: module.BoardHtml })));
+const BoardChart = lazy(() => import("./board/BoardVisualizations").then((module) => ({ default: module.BoardChart })));
+const BoardEquation = lazy(() => import("./board/BoardVisualizations").then((module) => ({ default: module.BoardEquation })));
+const BoardDiagram = lazy(() => import("./board/BoardVisualizations").then((module) => ({ default: module.BoardDiagram })));
+const BoardQr = lazy(() => import("./board/BoardQr").then((module) => ({ default: module.BoardQr })));
 
 function WidgetFallback() {
   return <div className="flex min-h-32 items-center justify-center text-xs text-white/50">Loading presentation...</div>;
@@ -37,13 +42,13 @@ function safePaletteColor(value: string): string {
     : "transparent";
 }
 
-function BoardBlock({ block }: { block: VoiceStageBlock }) {
+function BoardBlock({ block, focused = false }: { block: VoiceStageBlock; focused?: boolean }) {
   switch (block.kind) {
     case "note":
       return (
         <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
           {block.title && <div className="text-xs font-semibold text-white/70 mb-1">{block.title}</div>}
-          <div className="text-xs text-white/50 whitespace-pre-wrap leading-relaxed">{block.body}</div>
+          <div className={cn("text-xs text-white/50 whitespace-pre-wrap leading-relaxed", !focused && "line-clamp-6")}>{block.body}</div>
         </div>
       );
 
@@ -68,7 +73,7 @@ function BoardBlock({ block }: { block: VoiceStageBlock }) {
               </tr>
             </thead>
             <tbody>
-              {block.rows.map((row, i) => (
+              {(focused ? block.rows : block.rows.slice(0, 6)).map((row, i) => (
                 <tr key={i} className="border-t border-white/[0.02]">
                   {row.map((cell, j) => (
                     <td key={j} className="px-2 py-1 text-white/60">{cell}</td>
@@ -81,41 +86,16 @@ function BoardBlock({ block }: { block: VoiceStageBlock }) {
       );
 
     case "chart":
-      return (
-        <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-          {block.title && <div className="text-xs font-semibold text-white/70 mb-2">{block.title}</div>}
-          <div className="flex items-end gap-1 h-24">
-            {block.points.map((pt, i) => {
-              const max = Math.max(...block.points.map((p) => p.value), 1);
-              const h = Math.max(4, (pt.value / max) * 80);
-              return (
-                <div key={i} className="flex-1 flex flex-col items-center justify-end min-w-0">
-                  <span className="text-[9px] text-white/40 mb-0.5">{pt.value}</span>
-                  <div
-                    className="w-full rounded-sm bg-primary/50 min-w-[8px] transition-all duration-300"
-                    style={{ height: `${h}%` }}
-                  />
-                  <span className="text-[8px] text-white/30 mt-0.5 truncate w-full text-center">{pt.label}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      );
+      return <Suspense fallback={<WidgetFallback />}><BoardChart block={block} /></Suspense>;
 
     case "equation":
-      return (
-        <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] text-center">
-          {block.title && <div className="text-xs font-semibold text-white/70 mb-1">{block.title}</div>}
-          <div className="text-sm font-mono text-white/80">{block.expression}</div>
-        </div>
-      );
+      return <Suspense fallback={<WidgetFallback />}><BoardEquation block={block} /></Suspense>;
 
     case "code":
       return (
         <div className="rounded-lg border border-white/[0.04] overflow-hidden">
           {block.title && <div className="px-3 py-1.5 bg-white/[0.02] text-[10px] font-semibold text-white/40 uppercase tracking-wider">{block.title} {block.language && <span className="text-white/20">· {block.language}</span>}</div>}
-          <pre className="p-3 text-[11px] font-mono text-white/60 overflow-x-auto whitespace-pre-wrap">{block.code}</pre>
+          <pre className={cn("p-3 text-[11px] font-mono text-white/60 whitespace-pre-wrap break-words", !focused && "line-clamp-[12]")}>{block.code}</pre>
         </div>
       );
 
@@ -147,7 +127,7 @@ function BoardBlock({ block }: { block: VoiceStageBlock }) {
       }
       return (
         <div className="rounded-lg border border-white/[0.04] overflow-hidden">
-          <img src={block.url} alt={block.alt || block.title || ""} className="w-full max-h-64 object-cover" loading="lazy" />
+          <img src={block.url} alt={block.alt || block.title || ""} className="h-full max-h-full w-full object-contain" loading="lazy" />
           {block.caption && <div className="px-3 py-1.5 text-[10px] text-white/40">{block.caption}</div>}
         </div>
       );
@@ -196,7 +176,7 @@ function BoardBlock({ block }: { block: VoiceStageBlock }) {
         <div className="rounded-lg border border-white/[0.04] overflow-hidden">
           {block.title && <div className="px-3 py-1.5 bg-white/[0.02] text-[10px] font-semibold text-white/40 uppercase tracking-wider">{block.title}</div>}
           <div
-            className="p-2 flex min-h-40 items-center justify-center [&_svg]:h-auto [&_svg]:max-h-[60vh] [&_svg]:w-full [&_svg]:max-w-full"
+            className="flex h-full min-h-0 items-center justify-center p-2 [&_svg]:h-full [&_svg]:max-h-full [&_svg]:w-full [&_svg]:max-w-full"
             // Model-generated SVG is untrusted; sanitize before injection.
             dangerouslySetInnerHTML={{ __html: sanitizeGeneratedSvg(block.markup) }}
           />
@@ -204,13 +184,7 @@ function BoardBlock({ block }: { block: VoiceStageBlock }) {
       );
 
     case "qr": {
-      return (
-        <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-          {block.title && <div className="mb-1 text-xs font-semibold text-white/70">{block.title}</div>}
-          <div className="break-all font-mono text-[11px] text-white/55">{block.data}</div>
-          <div className="mt-2 text-[10px] text-white/35">QR rendering is unavailable offline.</div>
-        </div>
-      );
+      return <Suspense fallback={<WidgetFallback />}><BoardQr block={block} /></Suspense>;
     }
 
     case "palette":
@@ -236,12 +210,7 @@ function BoardBlock({ block }: { block: VoiceStageBlock }) {
       );
 
     case "kroki": {
-      return (
-        <div className="rounded-lg border border-white/[0.04] overflow-hidden">
-          {block.title && <div className="px-3 py-1.5 bg-white/[0.02] text-[10px] font-semibold text-white/40 uppercase tracking-wider">{block.title} · {block.diagram}</div>}
-          <pre className="max-h-64 overflow-auto whitespace-pre-wrap p-3 font-mono text-[11px] text-white/55">{block.content}</pre>
-        </div>
-      );
+      return <Suspense fallback={<WidgetFallback />}><BoardDiagram block={block} /></Suspense>;
     }
 
     case "diff":
@@ -252,8 +221,8 @@ function BoardBlock({ block }: { block: VoiceStageBlock }) {
             <div className="flex-1 px-3 py-1 text-[10px] font-semibold text-emerald-400/60 uppercase tracking-wider bg-emerald-500/[0.03]">{block.newLabel || "After"}</div>
           </div>
           <div className="flex">
-            <pre className="flex-1 p-2 text-rose-300/60 whitespace-pre-wrap overflow-x-auto bg-rose-500/[0.02]">{block.oldCode}</pre>
-            <pre className="flex-1 p-2 text-emerald-300/60 whitespace-pre-wrap overflow-x-auto bg-emerald-500/[0.02]">{block.newCode}</pre>
+            <pre className={cn("min-w-0 flex-1 break-words whitespace-pre-wrap bg-rose-500/[0.02] p-2 text-rose-300/60", !focused && "line-clamp-[12]")}>{block.oldCode}</pre>
+            <pre className={cn("min-w-0 flex-1 break-words whitespace-pre-wrap bg-emerald-500/[0.02] p-2 text-emerald-300/60", !focused && "line-clamp-[12]")}>{block.newCode}</pre>
           </div>
         </div>
       );
@@ -271,29 +240,85 @@ export function VoiceStage({ voiceState }: VoiceStageProps) {
   const blocks = useVoiceStageStore((s) => s.document.widgets);
   const focusedBlockId = useVoiceStageStore((s) => s.focusedBlockId);
   const layout = useVoiceStageStore((s) => s.document.layout);
+  const resizeBlock = useVoiceStageStore((s) => s.resizeBlock);
+  const moveBlock = useVoiceStageStore((s) => s.moveBlock);
+  const focus = useVoiceStageStore((s) => s.focus);
+  const visibleBlocks = layout === "focus" && focusedBlockId
+    ? blocks.filter((block) => block.id === focusedBlockId)
+    : blocks;
 
   return (
     <section
+      data-voice-stage
       aria-label="Voice display canvas"
       className={cn(
-        "h-full w-full rounded-sm border bg-transparent transition-colors overflow-y-auto",
+        "h-full w-full min-h-0 rounded-sm border bg-transparent transition-colors",
+        layout === "focus" ? "overflow-auto" : "overflow-hidden",
         borderStyles[voiceState] || "border-white/[0.06]"
       )}
     >
       {blocks.length > 0 && (
-        <div className={cn("grid grid-cols-12 gap-3 p-3", layout === "focus" && "mx-auto max-w-5xl")}>
-          {[...blocks].sort((a, b) => (a.layout?.order ?? 0) - (b.layout?.order ?? 0)).map((block) => (
-            <div
-              key={block.id}
-              className={cn(
-                "min-w-0 transition-all duration-200",
-                layout === "focus" ? "col-span-12" : widgetWidthClass[preferredWidgetWidth(block)],
-                focusedBlockId === block.id && "ring-1 ring-primary/40 rounded-lg"
-              )}
-            >
-              <BoardBlock block={block} />
-            </div>
-          ))}
+        <div className={cn(
+          "grid h-full min-h-0 w-full grid-cols-4 grid-rows-4 gap-2 p-2",
+          layout === "focus" && "min-h-full h-auto grid-cols-1 grid-rows-1 p-3"
+        )}>
+          {[...visibleBlocks].sort((a, b) => (a.layout?.order ?? 0) - (b.layout?.order ?? 0)).map((block) => {
+            const span = preferredGridSpan(block);
+            const coordinates = gridCoordinates(block);
+            return (
+              <div
+                key={block.id}
+                draggable={layout !== "focus"}
+                onDragStart={(event) => event.dataTransfer.setData("application/x-zen-board-widget", block.id)}
+                onClick={layout === "focus" ? undefined : () => focus(block.id)}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const id = event.dataTransfer.getData("application/x-zen-board-widget");
+                  const target = event.currentTarget.parentElement?.getBoundingClientRect();
+                  if (!id || !target) return;
+                  const column = Math.min(3, Math.max(0, Math.floor(((event.clientX - target.left) / target.width) * 4)));
+                  const row = Math.min(3, Math.max(0, Math.floor(((event.clientY - target.top) / target.height) * 4)));
+                  moveBlock(id, row * 4 + column);
+                }}
+                className={cn(
+                  "group relative min-h-0 min-w-0 overflow-hidden rounded-lg transition-[box-shadow] duration-150",
+                  layout !== "focus" && "cursor-zoom-in",
+                  focusedBlockId === block.id && "ring-1 ring-primary/40"
+                )}
+                style={layout === "focus" ? { gridColumn: "1 / -1", gridRow: "1 / -1" } : coordinates ? {
+                  gridColumn: `${coordinates.column + 1} / span ${Math.min(span.colSpan, 4 - coordinates.column)}`,
+                  gridRow: `${coordinates.row + 1} / span ${Math.min(span.rowSpan, 4 - coordinates.row)}`,
+                } : {
+                  gridColumn: `span ${span.colSpan}`,
+                  gridRow: `span ${span.rowSpan}`,
+                }}
+              >
+                <div className={cn("min-h-0 [&>*]:min-h-0", layout === "focus" ? "min-h-full" : "h-full [&>*]:h-full")}><BoardBlock block={block} focused={layout === "focus"} /></div>
+                {layout === "focus" && (
+                  <button
+                    type="button"
+                    title="Restore board grid"
+                    aria-label="Restore board grid"
+                    onClick={() => focus(null)}
+                    className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-md border border-white/15 bg-black/80 text-white/70 shadow-sm hover:text-white"
+                  >
+                    <Minimize2 className="h-4 w-4" />
+                  </button>
+                )}
+                {layout !== "focus" && (
+                  <div onClick={(event) => event.stopPropagation()} className="sticky bottom-1 ml-auto mr-1 flex w-fit items-center gap-0.5 rounded-md border border-white/10 bg-black/85 p-0.5 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                    <button type="button" title="Focus widget" aria-label="Focus widget" onClick={() => focus(block.id)} className="flex h-7 w-7 items-center justify-center text-white/65 hover:text-white"><Maximize2 className="h-3.5 w-3.5" /></button>
+                    <button type="button" title="Reduce width" aria-label="Reduce widget width" onClick={() => resizeBlock(block.id, span.colSpan - 1, span.rowSpan)} className="flex h-7 w-7 items-center justify-center text-white/65 hover:text-white"><Minus className="h-3.5 w-3.5" /></button>
+                    <span className="min-w-12 text-center font-mono text-[10px] text-white/55">{coordinates ? `#${coordinates.cell} ` : ""}{span.colSpan}×{span.rowSpan}</span>
+                    <button type="button" title="Increase width" aria-label="Increase widget width" onClick={() => resizeBlock(block.id, span.colSpan + 1, span.rowSpan)} className="flex h-7 w-7 items-center justify-center text-white/65 hover:text-white"><Plus className="h-3.5 w-3.5" /></button>
+                    <button type="button" title="Reduce height" aria-label="Reduce widget height" onClick={() => resizeBlock(block.id, span.colSpan, span.rowSpan - 1)} className="flex h-7 w-7 items-center justify-center text-white/65 hover:text-white"><Minus className="h-3.5 w-3.5 rotate-90" /></button>
+                    <button type="button" title="Increase height" aria-label="Increase widget height" onClick={() => resizeBlock(block.id, span.colSpan, span.rowSpan + 1)} className="flex h-7 w-7 items-center justify-center text-white/65 hover:text-white"><Plus className="h-3.5 w-3.5 rotate-90" /></button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </section>

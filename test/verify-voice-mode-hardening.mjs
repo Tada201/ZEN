@@ -140,6 +140,13 @@ const checks = [
       src.voiceChatEvents.includes("TTS readback failed"),
   ],
   [
+    "voice agent knows camera widgets require explicit user permission",
+    src.voicePrompt.includes("live camera widget") &&
+      src.voicePrompt.includes('click "Enable camera"') &&
+      src.sendMessage.includes("camera panel is ready") &&
+      src.sendMessage.includes("never claim the camera was activated automatically"),
+  ],
+  [
     "voice TTS rejects SVG, tool envelopes, and code-like streamed content",
     src.voiceTextUtils.includes("isSpeakableVoiceText") &&
       src.voiceTextUtils.includes("tool_call_id") &&
@@ -258,6 +265,14 @@ const checks = [
       src.sttCapabilities.includes("Current device compatibility"),
   ],
   [
+    "web STT accumulates phrase-final segments until push-to-talk release",
+    src.webSpeechStt.includes("finalTranscriptRef") &&
+      src.webSpeechStt.includes("commitTranscript") &&
+      src.webSpeechStt.includes("recognition.continuous = true") &&
+      src.webSpeechStt.includes("if (shouldRunRef.current)") &&
+      !src.webSpeechStt.includes("onTranscript(result.final)"),
+  ],
+  [
     "Moonshine Tiny is selectable and wired to committed voice transcripts",
     src.sttConfig.includes("Moonshine Tiny (Local)") &&
       src.sttConfig.includes("value: 'moonshine'") &&
@@ -328,7 +343,7 @@ const checks = [
     src.generatedContent.includes("normalizeGeneratedSvg") &&
       src.generatedContent.includes('document.createElement("textarea")') &&
       src.generatedContent.includes('if (!/^\\s*<svg\\b/i.test(normalized)) return ""') &&
-      src.stage.includes("[&_svg]:max-h-[60vh]"),
+      src.stage.includes("[&_svg]:max-h-full"),
   ],
   [
     "voice panel displays live TTFT metric",

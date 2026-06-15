@@ -26,8 +26,8 @@ export function SettingsSidebar({
   }, [searchQuery]);
 
   return (
-    <div className="w-full md:w-56 bg-background border-b md:border-b-0 md:border-r border-white/[0.06] flex flex-col shrink-0">
-      <div className="p-4 border-b border-white/[0.06]">
+    <aside className="flex w-full shrink-0 flex-col border-b border-border/60 bg-muted/10 md:w-60 md:border-b-0 md:border-r">
+      <div className="border-b border-border/60 p-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-bold text-sm flex items-center gap-2 tracking-tight text-zinc-100">
             <WorkbenchIcon name="lucide:settings-2" size={16} className="text-primary" />
@@ -50,12 +50,30 @@ export function SettingsSidebar({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-2 pr-1 custom-scrollbar">
+      <div className="p-3 md:hidden">
+        <label htmlFor="mobile-settings-page" className="mb-1.5 block text-xs font-medium text-foreground">
+          Settings page
+        </label>
+        <select
+          id="mobile-settings-page"
+          value={activeTab}
+          onChange={(event) => onSelectTab(event.target.value as TabId)}
+          className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-primary"
+        >
+          {filteredTabGroups.flatMap((group) =>
+            group.tabs.map((tab) => (
+              <option key={tab.id} value={tab.id}>{group.label} · {tab.label}</option>
+            ))
+          )}
+        </select>
+      </div>
+
+      <nav aria-label="Settings sections" className="hidden flex-1 overflow-y-auto py-2 pr-1 custom-scrollbar md:block">
         {filteredTabGroups.length > 0 ? (
           filteredTabGroups.map((group) => (
             <div key={group.label} className="mb-2">
               <div className="px-3 py-1.5">
-                <span className="text-[11px] font-black uppercase tracking-[0.15em] text-zinc-400">
+                <span className="text-xs font-semibold text-muted-foreground">
                   {group.label}
                 </span>
               </div>
@@ -65,7 +83,9 @@ export function SettingsSidebar({
                   return (
                     <button
                       key={tab.id}
+                      type="button"
                       onClick={() => onSelectTab(tab.id)}
+                      aria-current={isActive ? "page" : undefined}
                       className={cn(
                         "relative w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-colors duration-150 text-left group",
                         isActive
@@ -75,7 +95,7 @@ export function SettingsSidebar({
                     >
                       {isActive && <div className="nav-rail-indicator" />}
                       <WorkbenchIcon name={tab.icon} size={14} className={cn("shrink-0", isActive ? "text-primary" : "opacity-40 group-hover:opacity-100")} />
-                      <span className="text-[12.5px] tracking-tight truncate">{tab.label}</span>
+                      <span className="truncate text-[13px]">{tab.label}</span>
                     </button>
                   );
                 })}
@@ -87,15 +107,15 @@ export function SettingsSidebar({
             No settings found
           </div>
         )}
-      </div>
+      </nav>
 
       <div className="hidden md:block p-4 border-t border-white/[0.06]">
         <div className="flex items-center gap-2 mb-1">
           <WorkbenchIcon name="lucide:sparkles" size={12} className="text-primary" />
-          <span className="text-[11px] font-black uppercase tracking-[0.15em] text-primary">Zen Engine</span>
+          <span className="text-xs font-semibold text-primary">Zen</span>
         </div>
         <p className="text-[11px] text-zinc-400">v1.0 Stable Build</p>
       </div>
-    </div>
+    </aside>
   );
 }

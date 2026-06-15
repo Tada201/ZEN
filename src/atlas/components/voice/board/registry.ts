@@ -2,6 +2,8 @@ import type { BoardWidget, BoardWidgetKind, BoardWidgetWidth } from "./types";
 
 interface BoardWidgetDefinition {
   width: BoardWidgetWidth;
+  colSpan: number;
+  rowSpan: number;
   maturity: "production" | "partial" | "preview";
 }
 
@@ -11,28 +13,48 @@ const wide: BoardWidgetKind[] = [
 const small: BoardWidgetKind[] = ["metric", "progress", "qr", "palette"];
 
 export const boardWidgetRegistry: Record<BoardWidgetKind, BoardWidgetDefinition> = {
-  note: { width: "medium", maturity: "production" },
-  metric: { width: "small", maturity: "production" },
-  table: { width: "wide", maturity: "production" },
-  chart: { width: "wide", maturity: "production" },
-  equation: { width: "medium", maturity: "production" },
-  code: { width: "wide", maturity: "production" },
-  map: { width: "wide", maturity: "preview" },
-  image: { width: "medium", maturity: "production" },
-  "link-preview": { width: "medium", maturity: "production" },
-  video: { width: "wide", maturity: "preview" },
-  camera: { width: "wide", maturity: "preview" },
-  "gen-ui": { width: "full", maturity: "partial" },
-  "premium-card": { width: "medium", maturity: "partial" },
-  html: { width: "full", maturity: "preview" },
-  progress: { width: "small", maturity: "production" },
-  divider: { width: "full", maturity: "production" },
-  svg: { width: "wide", maturity: "production" },
-  qr: { width: "small", maturity: "partial" },
-  palette: { width: "small", maturity: "production" },
-  kroki: { width: "wide", maturity: "partial" },
-  diff: { width: "wide", maturity: "production" },
+  note: { width: "medium", colSpan: 2, rowSpan: 1, maturity: "production" },
+  metric: { width: "small", colSpan: 1, rowSpan: 1, maturity: "production" },
+  table: { width: "wide", colSpan: 2, rowSpan: 2, maturity: "production" },
+  chart: { width: "wide", colSpan: 2, rowSpan: 2, maturity: "production" },
+  equation: { width: "medium", colSpan: 2, rowSpan: 1, maturity: "production" },
+  code: { width: "wide", colSpan: 2, rowSpan: 2, maturity: "production" },
+  map: { width: "wide", colSpan: 2, rowSpan: 2, maturity: "preview" },
+  image: { width: "medium", colSpan: 2, rowSpan: 2, maturity: "production" },
+  "link-preview": { width: "medium", colSpan: 2, rowSpan: 1, maturity: "production" },
+  video: { width: "wide", colSpan: 2, rowSpan: 2, maturity: "preview" },
+  camera: { width: "wide", colSpan: 2, rowSpan: 2, maturity: "preview" },
+  "gen-ui": { width: "full", colSpan: 2, rowSpan: 2, maturity: "partial" },
+  "premium-card": { width: "medium", colSpan: 2, rowSpan: 2, maturity: "partial" },
+  html: { width: "full", colSpan: 2, rowSpan: 2, maturity: "preview" },
+  progress: { width: "small", colSpan: 1, rowSpan: 1, maturity: "production" },
+  divider: { width: "full", colSpan: 2, rowSpan: 1, maturity: "production" },
+  svg: { width: "wide", colSpan: 2, rowSpan: 2, maturity: "production" },
+  qr: { width: "small", colSpan: 1, rowSpan: 1, maturity: "partial" },
+  palette: { width: "small", colSpan: 1, rowSpan: 1, maturity: "production" },
+  kroki: { width: "wide", colSpan: 2, rowSpan: 2, maturity: "partial" },
+  diff: { width: "wide", colSpan: 2, rowSpan: 2, maturity: "production" },
 };
+
+export function preferredGridSpan(widget: BoardWidget) {
+  const definition = boardWidgetRegistry[widget.kind];
+  return {
+    colSpan: Math.min(4, Math.max(1, widget.layout?.colSpan ?? definition.colSpan)),
+    rowSpan: Math.min(4, Math.max(1, widget.layout?.rowSpan ?? definition.rowSpan)),
+  };
+}
+
+export function gridCoordinates(widget: BoardWidget) {
+  const explicitCell = widget.layout?.cell;
+  const row = explicitCell != null ? Math.floor(explicitCell / 4) : widget.layout?.row;
+  const column = explicitCell != null ? explicitCell % 4 : widget.layout?.column;
+  if (row == null || column == null) return null;
+  return {
+    row: Math.min(3, Math.max(0, row)),
+    column: Math.min(3, Math.max(0, column)),
+    cell: Math.min(15, Math.max(0, explicitCell ?? row * 4 + column)),
+  };
+}
 
 export function preferredWidgetWidth(widget: BoardWidget): BoardWidgetWidth {
   if (widget.layout?.width) return widget.layout.width;

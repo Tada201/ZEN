@@ -1,41 +1,15 @@
 import { SettingsSection } from "../SettingsSection";
 import { SettingsRow } from "../SettingsRow";
-import { WorkbenchSwitch } from "../ui/WorkbenchSwitch";
-import { WorkbenchSelect } from "../ui/WorkbenchSelect";
 import { WorkbenchSlider } from "../ui/WorkbenchSlider";
 import { WorkbenchInput } from "../ui/WorkbenchInput";
 import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 import { cn } from "@/lib/utils";
+import { normalizeThemeId, THEME_PRESETS } from "@/atlas/theme";
 
 interface GUISettingsProps {
   settings: Record<string, string>;
   onUpdate: (key: string, value: string) => void;
 }
-
-const THEMES = [
-  { id: "dark", label: "Dark", icon: "lucide:moon", description: "Deep dark interface" },
-  { id: "light", label: "Light", icon: "lucide:sun", description: "Bright clean surface" },
-  { id: "tactical", label: "Tactical", icon: "lucide:monitor", description: "Green-tinted tactical" },
-  { id: "ocean", label: "Ocean Depth", icon: "lucide:monitor", description: "Deep blue tones" },
-  { id: "cyberpunk", label: "Cyberpunk", icon: "lucide:monitor", description: "Neon accents" },
-  { id: "mono", label: "Minimal Mono", icon: "lucide:monitor", description: "Monochrome minimal" },
-];
-
-const ACCENTS = [
-  { id: "violet", label: "Violet", class: "bg-violet-500" },
-  { id: "blue", label: "Blue", class: "bg-blue-500" },
-  { id: "emerald", label: "Emerald", class: "bg-emerald-500" },
-  { id: "amber", label: "Amber", class: "bg-amber-500" },
-  { id: "rose", label: "Rose", class: "bg-rose-500" },
-  { id: "cyan", label: "Cyan", class: "bg-cyan-500" },
-];
-
-const BORDER_RADII = [
-  { id: "sharp", label: "Sharp", value: "0px" },
-  { id: "smooth", label: "Smooth", value: "8px" },
-  { id: "round", label: "Round", value: "16px" },
-  { id: "pill", label: "Pill", value: "9999px" },
-];
 
 export function GUISettings({ settings, onUpdate }: GUISettingsProps) {
   return (
@@ -45,101 +19,54 @@ export function GUISettings({ settings, onUpdate }: GUISettingsProps) {
         <p className="text-[13px] text-muted-foreground">Customize the look and feel of the interface.</p>
       </div>
 
-      <SettingsSection title="Theme" icon="lucide:palette" description="Visual theme and accent colors">
-        <div className="grid grid-cols-3 gap-2 px-3 py-2">
-          {THEMES.map(theme => {
-            const isActive = (settings["ui.theme"] || "dark") === theme.id;
+      <SettingsSection title="Interface theme" icon="lucide:palette" description="Change the atmosphere across the complete application">
+        <div className="grid grid-cols-1 gap-3 py-2 sm:grid-cols-2">
+          {THEME_PRESETS.map(theme => {
+            const isActive = normalizeThemeId(settings["ui.theme"]) === theme.id;
+            const background = theme.vars["--background"];
+            const card = theme.vars["--card"];
+            const primary = theme.vars["--primary"];
+            const foreground = theme.vars["--foreground"];
             return (
               <button
+                type="button"
                 key={theme.id}
                 onClick={() => onUpdate("ui.theme", theme.id)}
                 className={cn(
-                  "flex flex-col items-center gap-1.5 p-3 rounded-lg border transition-all cursor-pointer",
+                  "overflow-hidden rounded-md border text-left transition-colors",
                   isActive
-                    ? "border-primary/40 bg-primary/10 text-primary"
-                    : "border-white/[0.06] hover:bg-white/[0.03] text-muted-foreground hover:text-foreground"
+                    ? "border-primary ring-1 ring-primary/30"
+                    : "border-border hover:border-border-strong"
                 )}
               >
-                <WorkbenchIcon name={theme.icon} size={16} />
-                <span className="text-[10px] font-medium">{theme.label}</span>
+                <div
+                  className="relative h-20 overflow-hidden border-b"
+                  style={{ background: `hsl(${background})`, borderColor: `hsl(${theme.vars["--border"]})` }}
+                >
+                  <div className="absolute inset-x-3 top-3 flex h-3 gap-1">
+                    <span className="w-8 border" style={{ borderColor: `hsl(${primary})` }} />
+                    <span className="flex-1 border" style={{ borderColor: `hsl(${theme.vars["--border"]})`, background: `hsl(${card})` }} />
+                  </div>
+                  <div className="absolute inset-x-3 bottom-3 grid grid-cols-[1fr_2fr] gap-2">
+                    <span className="h-8 border" style={{ borderColor: `hsl(${theme.vars["--border"]})`, background: `hsl(${card})` }} />
+                    <span className="h-8 border p-2" style={{ borderColor: `hsl(${primary})`, background: `hsl(${card})` }}>
+                      <span className="block h-0.5 w-2/3" style={{ background: `hsl(${foreground})` }} />
+                      <span className="mt-1.5 block h-0.5 w-1/3" style={{ background: `hsl(${primary})` }} />
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-start justify-between gap-3 p-3">
+                  <div>
+                    <span className="block text-sm font-medium text-foreground">{theme.name}</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">{theme.description}</span>
+                  </div>
+                  {isActive && <WorkbenchIcon name="lucide:check" size={15} className="mt-0.5 shrink-0 text-primary" />}
+                </div>
               </button>
             );
           })}
         </div>
 
-        <div className="px-3 py-2">
-          <label className="text-[11px] font-medium text-muted-foreground mb-2 block">Accent Color</label>
-          <div className="flex gap-2">
-            {ACCENTS.map(accent => (
-              <button
-                key={accent.id}
-                onClick={() => onUpdate("ui.accent", accent.id)}
-                className={cn(
-                  "h-7 w-7 rounded-full transition-all border-2 cursor-pointer",
-                  accent.class,
-                  (settings["ui.accent"] || "violet") === accent.id
-                    ? "border-white scale-110"
-                    : "border-transparent hover:scale-110"
-                )}
-                aria-label={accent.label}
-              />
-            ))}
-          </div>
-        </div>
-      </SettingsSection>
-
-      <SettingsSection title="Layout" icon="lucide:layout" description="Interface density and sizing">
-        <SettingsRow
-          label="Interface Density"
-          description="Controls spacing and element sizing"
-          control={
-            <WorkbenchSelect
-              value={settings["ui.density"] || "normal"}
-              onValueChange={v => onUpdate("ui.density", v)}
-              options={[
-                { value: "compact", label: "Compact" },
-                { value: "normal", label: "Normal" },
-                { value: "comfortable", label: "Comfortable" },
-              ]}
-              width={140}
-            />
-          }
-          icon="lucide:maximize-2"
-        />
-
-        <SettingsRow
-          label="Sidebar Width"
-          description="Width of the navigation sidebar"
-          control={
-            <div className="flex items-center gap-2 w-[140px]">
-              <WorkbenchIcon name="lucide:minimize-2" className="text-muted-foreground shrink-0" size={12} />
-              <WorkbenchSlider
-                value={[parseInt(settings["ui.sidebar-width"] || "240")]}
-                onValueChange={([v]) => onUpdate("ui.sidebar-width", String(v))}
-                min={180}
-                max={400}
-                step={10}
-                className="flex-1"
-              />
-              <WorkbenchIcon name="lucide:maximize-2" className="text-muted-foreground shrink-0" size={12} />
-            </div>
-          }
-          icon="lucide:sidebar"
-        />
-
-        <SettingsRow
-          label="Border Radius"
-          description="Corner rounding style for UI elements"
-          control={
-            <WorkbenchSelect
-              value={settings["ui.border-radius"] || "smooth"}
-              onValueChange={v => onUpdate("ui.border-radius", v)}
-              options={BORDER_RADII.map(r => ({ value: r.id, label: r.label }))}
-              width={140}
-            />
-          }
-          icon="lucide:layout"
-        />
       </SettingsSection>
 
       <SettingsSection title="Workspace Wallpaper" icon="lucide:palette" description="Custom wallpaper aesthetics settings">
@@ -152,7 +79,7 @@ export function GUISettings({ settings, onUpdate }: GUISettingsProps) {
               placeholder="e.g., https://example.com/wallpaper.jpg"
               value={settings["ui.background-image"] || ""}
               onChange={e => onUpdate("ui.background-image", e.target.value)}
-              className="w-[180px] h-8 px-2 text-xs bg-black/40 border border-white/10 rounded-lg text-foreground focus:outline-none focus:border-primary/40 transition-all font-mono"
+              className="h-9 w-full min-w-0 px-3 text-xs sm:w-[240px]"
             />
           }
           icon="lucide:palette"
@@ -162,7 +89,7 @@ export function GUISettings({ settings, onUpdate }: GUISettingsProps) {
           label="Wallpaper Opacity"
           description="Adjust visibility from translucent to vivid"
           control={
-            <div className="flex items-center gap-2 w-[180px]">
+            <div className="flex w-full items-center gap-2 sm:w-[200px]">
               <span className="text-[10px] text-muted-foreground w-8 text-right font-mono">
                 {Math.round(parseFloat(settings["ui.background-opacity"] || "0.15") * 100)}%
               </span>
@@ -183,7 +110,7 @@ export function GUISettings({ settings, onUpdate }: GUISettingsProps) {
           label="Wallpaper Blur"
           description="Soften details to maximize text contrast"
           control={
-            <div className="flex items-center gap-2 w-[180px]">
+            <div className="flex w-full items-center gap-2 sm:w-[200px]">
               <span className="text-[10px] text-muted-foreground w-8 text-right font-mono">
                 {parseInt(settings["ui.background-blur"] || "0")}px
               </span>
@@ -201,55 +128,6 @@ export function GUISettings({ settings, onUpdate }: GUISettingsProps) {
         />
       </SettingsSection>
 
-      <SettingsSection title="Interface" icon="lucide:eye" description="Visibility and behavior preferences">
-        <SettingsRow
-          label="Interface Animations"
-          description="Shimmer effects, pulses, and transitions"
-          control={
-            <WorkbenchSwitch
-              checked={settings["ui.animations"] !== "false"}
-              onCheckedChange={v => onUpdate("ui.animations", String(v))}
-            />
-          }
-          icon="lucide:eye"
-        />
-
-        <SettingsRow
-          label="Reduced Motion"
-          description="Minimize animations for accessibility"
-          control={
-            <WorkbenchSwitch
-              checked={settings["ui.reduced-motion"] === "true"}
-              onCheckedChange={v => onUpdate("ui.reduced-motion", String(v))}
-            />
-          }
-          icon="lucide:eye-off"
-        />
-
-        <SettingsRow
-          label="Status Bar"
-          description="Show the status bar at the bottom"
-          control={
-            <WorkbenchSwitch
-              checked={settings["ui.status-bar"] !== "false"}
-              onCheckedChange={v => onUpdate("ui.status-bar", String(v))}
-            />
-          }
-          icon="lucide:eye"
-        />
-
-        <SettingsRow
-          label="Compact Mode"
-          description="Reduce padding and spacing throughout"
-          control={
-            <WorkbenchSwitch
-              checked={settings["ui.compact-mode"] === "true"}
-              onCheckedChange={v => onUpdate("ui.compact-mode", String(v))}
-            />
-          }
-          icon="lucide:minimize-2"
-        />
-      </SettingsSection>
     </div>
   );
 }

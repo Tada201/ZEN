@@ -6,6 +6,8 @@
   "permissions": [
     "core:default",
     "core:event:default",
+    "core:window:allow-is-fullscreen",
+    "core:window:allow-set-fullscreen",
     "opener:default",
     "notification:default",
     "dialog:default"

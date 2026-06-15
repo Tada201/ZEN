@@ -125,7 +125,7 @@ function ToolPermissionCard({
                 placeholder=".*\.txt$&#10;^/tmp/"
                 className="min-h-[52px] text-[10px] font-mono bg-background/50 resize-none"
               />
-              <p className="text-[8px] text-zinc-600">Regex patterns that auto-allow</p>
+              <p className="text-xs text-muted-foreground">Regex patterns that are automatically allowed</p>
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center gap-1.5">
@@ -138,7 +138,7 @@ function ToolPermissionCard({
                 placeholder="\.env$&#10;secret"
                 className="min-h-[52px] text-[10px] font-mono bg-background/50 resize-none"
               />
-              <p className="text-[8px] text-zinc-600">Regex patterns that auto-deny</p>
+              <p className="text-xs text-muted-foreground">Regex patterns that are automatically denied</p>
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center gap-1.5">
@@ -151,7 +151,7 @@ function ToolPermissionCard({
                 placeholder="rm .*&#10;write:.*"
                 className="min-h-[52px] text-[10px] font-mono bg-background/50 resize-none"
               />
-              <p className="text-[8px] text-zinc-600">Regex patterns requiring confirmation</p>
+              <p className="text-xs text-muted-foreground">Regex patterns that require confirmation</p>
             </div>
           </div>
         </div>
@@ -331,7 +331,7 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
           )}
 
           <div className="mt-3 p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-            <p className="text-[9px] text-zinc-600 leading-relaxed">
+            <p className="text-xs leading-relaxed text-muted-foreground">
               <strong className="text-zinc-500">Pattern precedence:</strong> Within each tool, deny patterns take priority over confirm patterns, which take priority over allow patterns. The tool-specific default (if set) only applies when no pattern matches. Otherwise the global default is used.
             </p>
           </div>
@@ -354,7 +354,7 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
             >
               <WorkbenchIcon name="lucide:lock" size={20} className="text-red-400" />
               <span className="text-[11px] font-bold text-foreground">Locked Down</span>
-              <span className="text-[9px] text-zinc-500 text-center leading-relaxed">All tools require confirmation. Maximum safety.</span>
+              <span className="text-xs text-center leading-relaxed text-muted-foreground">All tools require confirmation. Maximum safety.</span>
             </button>
 
             <button
@@ -368,7 +368,7 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
             >
               <WorkbenchIcon name="lucide:shield-check" size={20} className="text-amber-400" />
               <span className="text-[11px] font-bold text-foreground">Balanced</span>
-              <span className="text-[9px] text-zinc-500 text-center leading-relaxed">Confirm by default, auto-approve low risk.</span>
+              <span className="text-xs text-center leading-relaxed text-muted-foreground">Confirm by default and approve low-risk tools automatically.</span>
             </button>
 
             <button
@@ -383,7 +383,7 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
             >
               <WorkbenchIcon name="lucide:rocket" size={20} className="text-emerald-400" />
               <span className="text-[11px] font-bold text-foreground">Full Auto</span>
-              <span className="text-[9px] text-zinc-500 text-center leading-relaxed">All tools auto-approved. Maximum speed, use with care.</span>
+              <span className="text-xs text-center leading-relaxed text-muted-foreground">All tools are automatically approved. Use with care.</span>
             </button>
           </div>
         </div>

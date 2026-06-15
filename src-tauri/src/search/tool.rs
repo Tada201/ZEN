@@ -2,6 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use tauri::AppHandle;
+use tokio_util::sync::CancellationToken;
 
 use crate::agent::tools::AgentTool;
 use crate::tools::permission::RiskLevel;
@@ -42,6 +43,151 @@ struct SearchResult {
     title: String,
     snippet: String,
     url: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct TavilyResponse {
+    results: Vec<TavilyResult>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct TavilyResult {
+    title: String,
+    url: String,
+    #[serde(default)]
+    content: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ExaResponse {
+    results: Vec<ExaResult>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ExaResult {
+    title: Option<String>,
+    url: String,
+    #[serde(default)]
+    highlights: Vec<String>,
+    summary: Option<String>,
+    text: Option<String>,
+}
+
+async fn tavily_search(api_key: &str, query: &str, max_results: usize, depth: &str) -> Result<Vec<SearchResult>, String> {
+    let response = crate::utils::default_http_client()
+        .post("https://api.tavily.com/search")
+        .bearer_auth(api_key)
+        .json(&json!({
+            "query": query,
+            "search_depth": depth,
+            "max_results": max_results,
+            "include_answer": false,
+            "include_raw_content": false,
+            "include_images": false
+        }))
+        .send()
+        .await
+        .map_err(|error| format!("Tavily request failed: {error}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!("Tavily returned {}", response.status()));
+    }
+
+    let payload = response.json::<TavilyResponse>().await
+        .map_err(|error| format!("Invalid Tavily response: {error}"))?;
+    Ok(payload.results.into_iter().take(max_results).map(|result| SearchResult {
+        title: result.title,
+        snippet: result.content,
+        url: result.url,
+    }).collect())
+}
+
+async fn exa_search(api_key: &str, query: &str, max_results: usize) -> Result<Vec<SearchResult>, String> {
+    let response = crate::utils::default_http_client()
+        .post("https://api.exa.ai/search")
+        .header("x-api-key", api_key)
+        .json(&json!({
+            "query": query,
+            "type": "auto",
+            "numResults": max_results,
+            "contents": {
+                "highlights": { "maxCharacters": 800 },
+                "summary": { "query": query }
+            }
+        }))
+        .send()
+        .await
+        .map_err(|error| format!("Exa request failed: {error}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!("Exa returned {}", response.status()));
+    }
+
+    let payload = response.json::<ExaResponse>().await
+        .map_err(|error| format!("Invalid Exa response: {error}"))?;
+    Ok(payload.results.into_iter().take(max_results).map(|result| SearchResult {
+        title: result.title.unwrap_or_else(|| result.url.clone()),
+        snippet: result.summary
+            .or_else(|| result.highlights.first().cloned())
+            .or(result.text)
+            .unwrap_or_default(),
+        url: result.url,
+    }).collect())
+}
+
+async fn configured_search(
+    app: &AppHandle,
+    query: &str,
+    input: &Value,
+    token: &CancellationToken,
+) -> Result<Value, String> {
+    use tauri::Manager;
+    let state = app.try_state::<crate::AppState>()
+        .ok_or_else(|| "AppState not found in Tauri manager".to_string())?;
+    let provider = state.settings_manager.get("web_search_provider").await
+        .unwrap_or_default().unwrap_or_else(|| "auto".to_string());
+    let depth = state.settings_manager.get("tavily_search_depth").await
+        .unwrap_or_default().unwrap_or_else(|| "fast".to_string());
+    let configured_max = state.settings_manager.get("web_search_max_results").await
+        .unwrap_or_default().and_then(|value| value.parse::<usize>().ok()).unwrap_or(MAX_RESULTS);
+    let max_results = input.get("max_results").and_then(Value::as_u64)
+        .map(|value| value as usize).unwrap_or(configured_max).clamp(1, 20);
+    let tavily_key = state.secret_manager.get_secret("tavily_api_key").await
+        .unwrap_or_default().unwrap_or_default();
+    let exa_key = state.secret_manager.get_secret("exa_api_key").await
+        .unwrap_or_default().unwrap_or_default();
+
+    let providers: Vec<&str> = match provider.as_str() {
+        "tavily" => vec!["tavily", "exa", "duckduckgo"],
+        "exa" => vec!["exa", "tavily", "duckduckgo"],
+        "duckduckgo" => vec!["duckduckgo"],
+        _ => vec!["tavily", "exa", "duckduckgo"],
+    };
+    let mut errors = Vec::new();
+
+    for candidate in providers {
+        if token.is_cancelled() {
+            return Err("Web search cancelled".to_string());
+        }
+        let result = match candidate {
+            "tavily" if !tavily_key.is_empty() => tavily_search(&tavily_key, query, max_results, &depth).await,
+            "exa" if !exa_key.is_empty() => exa_search(&exa_key, query, max_results).await,
+            "duckduckgo" => duckduckgo_search(query).await,
+            _ => continue,
+        };
+        match result {
+            Ok(results) if !results.is_empty() => return Ok(json!({
+                "query": query,
+                "provider": candidate,
+                "result_count": results.len(),
+                "results": results
+            })),
+            Ok(_) => errors.push(format!("{candidate} returned no results")),
+            Err(error) => errors.push(error),
+        }
+    }
+
+    Err(format!("Web search failed: {}", errors.join("; ")))
 }
 
 async fn nine_router_search_fallback(
@@ -292,6 +438,12 @@ impl AgentTool for WebSearchTool {
                 "query": {
                     "type": "string",
                     "description": "The search query"
+                },
+                "max_results": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "description": "Optional result limit. Defaults to the configured web-search limit."
                 }
             },
             "required": ["query"]
@@ -307,47 +459,16 @@ impl AgentTool for WebSearchTool {
         _allowed_tools: Option<
             std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>,
         >,
-        _token: tokio_util::sync::CancellationToken,
+        token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         let query = input.get("query").and_then(|v| v.as_str()).unwrap_or("");
         if query.is_empty() {
             return Ok(json!("No search query provided."));
         }
 
-        match duckduckgo_search(query).await {
-            Ok(results) => {
-                if results.is_empty() {
-                    match nine_router_search_fallback(&app, query).await {
-                        Ok(fallback_results) => Ok(json!({
-                            "query": query,
-                            "results": fallback_results,
-                            "result_count": fallback_results.len()
-                        })),
-                        Err(_) => Ok(json!(format!(
-                            "Web search for '{}' returned no results.",
-                            query
-                        ))),
-                    }
-                } else {
-                    Ok(json!({
-                        "query": query,
-                        "results": results,
-                        "result_count": results.len()
-                    }))
-                }
-            }
-            Err(err) => match nine_router_search_fallback(&app, query).await {
-                Ok(fallback_results) => Ok(json!({
-                    "query": query,
-                    "results": fallback_results,
-                    "result_count": fallback_results.len()
-                })),
-                Err(fallback_err) => Ok(json!(format!(
-                    "Web search failed: {}. Fallback search failed: {}",
-                    err, fallback_err
-                ))),
-            },
-        }
+        configured_search(&app, query, &input, &token)
+            .await
+            .map_err(anyhow::Error::msg)
     }
 }
 
@@ -372,6 +493,12 @@ impl Tool for WebSearchTool {
                 "query": {
                     "type": "string",
                     "description": "The search query"
+                },
+                "max_results": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "description": "Optional result limit. Defaults to the configured web-search limit."
                 }
             },
             "required": ["query"]
@@ -396,54 +523,10 @@ impl Tool for WebSearchTool {
             });
         }
 
-        match duckduckgo_search(query).await {
-            Ok(results) => {
-                if results.is_empty() {
-                    match nine_router_search_fallback(&app, query).await {
-                        Ok(fallback_results) => Ok(ToolOutput {
-                            content: json!({
-                                "query": query,
-                                "results": fallback_results,
-                                "result_count": fallback_results.len()
-                            }),
-                            metadata: None,
-                        }),
-                        Err(_) => Ok(ToolOutput {
-                            content: json!(format!(
-                                "Web search for '{}' returned no results.",
-                                query
-                            )),
-                            metadata: None,
-                        }),
-                    }
-                } else {
-                    Ok(ToolOutput {
-                        content: json!({
-                            "query": query,
-                            "results": results,
-                            "result_count": results.len()
-                        }),
-                        metadata: None,
-                    })
-                }
-            }
-            Err(err) => match nine_router_search_fallback(&app, query).await {
-                Ok(fallback_results) => Ok(ToolOutput {
-                    content: json!({
-                        "query": query,
-                        "results": fallback_results,
-                        "result_count": fallback_results.len()
-                    }),
-                    metadata: None,
-                }),
-                Err(fallback_err) => Ok(ToolOutput {
-                    content: json!(format!(
-                        "Web search failed: {}. Fallback search failed: {}",
-                        err, fallback_err
-                    )),
-                    metadata: None,
-                }),
-            },
-        }
+        let token = CancellationToken::new();
+        configured_search(&app, query, &args, &token)
+            .await
+            .map(|content| ToolOutput { content, metadata: None })
+            .map_err(|message| ToolError::ExecutionFailed { message })
     }
 }

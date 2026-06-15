@@ -33,6 +33,8 @@ export const ProvidersSettings = memo(() => {
     );
     const connectionStatuses = useSettingsStore(s => s.connectionStatuses);
     const fetchModels = useSettingsStore(s => s.fetchModels);
+    const fetchingModels = useSettingsStore(s => s.fetchingModels);
+    const availableModelsByProvider = useSettingsStore(s => s.availableModelsByProvider);
     const addCustomProvider = useSettingsStore(s => s.addCustomProvider);
     const allProviderParams = useSettingsStore(s => s.providerParams);
     const updateProviderParams = useSettingsStore(s => s.updateProviderParams);
@@ -42,6 +44,8 @@ export const ProvidersSettings = memo(() => {
         displayName: '',
         baseUrl: '',
         apiKey: '',
+        headersText: '',
+        manualModels: '',
         testStatus: 'idle' as 'idle' | 'testing' | 'success' | 'error',
         discoveredModels: [] as any[],
         validationError: null as string | null,
@@ -106,32 +110,52 @@ export const ProvidersSettings = memo(() => {
         if (addForm.testStatus === 'testing') return;
         setAddForm(prev => ({ ...prev, testStatus: 'testing', validationError: null }));
         try {
+            const headers = Object.fromEntries(addForm.headersText.split('\n').map(line => line.trim()).filter(Boolean).map(line => {
+                const separator = line.indexOf(':');
+                if (separator < 1) throw new Error(`Invalid header: ${line}`);
+                return [line.slice(0, separator).trim(), line.slice(separator + 1).trim()];
+            }));
             const models = await providersApi.testProviderConnection({
                 providerType: 'custom',
                 baseUrl: addForm.baseUrl,
                 apiKey: addForm.apiKey,
                 displayName: addForm.displayName || 'Custom Node',
+                headers,
             });
             setAddForm(prev => ({ 
                 ...prev, 
                 testStatus: models && models.length > 0 ? 'success' : 'error',
                 discoveredModels: models || []
             }));
-        } catch (err: any) {
-            setAddForm(prev => ({ ...prev, testStatus: 'error', discoveredModels: [] }));
+        } catch (err) {
+            setAddForm(prev => ({ ...prev, testStatus: 'error', discoveredModels: [], validationError: err instanceof Error ? err.message : String(err) }));
         }
     }, [addForm]);
 
-    const handleAddFormRegister = useCallback(() => {
+    const handleAddFormRegister = useCallback(async () => {
         if (!addForm.displayName || !addForm.baseUrl) return;
-        addCustomProvider({ 
-            displayName: addForm.displayName, 
-            baseUrl: addForm.baseUrl, 
-            apiKey: addForm.apiKey, 
-            customModels: addForm.discoveredModels 
-        } as any);
-        setIsAddingCustom(false);
-        setAddForm({ displayName: '', baseUrl: '', apiKey: '', testStatus: 'idle', discoveredModels: [], validationError: null });
+        try {
+            const headers = Object.fromEntries(addForm.headersText.split('\n').map(line => line.trim()).filter(Boolean).map(line => {
+                const separator = line.indexOf(':');
+                if (separator < 1) throw new Error(`Invalid header: ${line}`);
+                return [line.slice(0, separator).trim(), line.slice(separator + 1).trim()];
+            }));
+            const manualModels = addForm.manualModels.split(/[\n,]/).map(id => id.trim()).filter(Boolean).map(id => ({ id, name: id, provider: '', source: 'direct', state: 'unloaded', capabilities: ['text'] }));
+            if (addForm.testStatus !== 'success' && manualModels.length === 0) {
+                throw new Error('Test the connection or enter at least one manual model ID.');
+            }
+            await addCustomProvider({
+                displayName: addForm.displayName,
+                baseUrl: addForm.baseUrl,
+                apiKey: addForm.apiKey,
+                headers,
+                customModels: addForm.discoveredModels.length ? addForm.discoveredModels : manualModels,
+            } as any);
+            setIsAddingCustom(false);
+            setAddForm({ displayName: '', baseUrl: '', apiKey: '', headersText: '', manualModels: '', testStatus: 'idle', discoveredModels: [], validationError: null });
+        } catch (err) {
+            setAddForm(prev => ({ ...prev, validationError: err instanceof Error ? err.message : String(err) }));
+        }
     }, [addForm, addCustomProvider]);
 
     if (isAddingCustom) {
@@ -150,15 +174,15 @@ export const ProvidersSettings = memo(() => {
                         <WorkbenchIcon name="lucide:plus" size={18} className="text-blue-400" />
                     </div>
                     <div>
-                        <h3 className="text-base font-bold tracking-tight text-white/90 leading-tight">Register Custom Node</h3>
-                        <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">New OAI-Compatible Endpoint</p>
+                        <h3 className="text-base font-semibold leading-tight text-foreground">Add custom provider</h3>
+                        <p className="text-xs text-muted-foreground">Connect an OpenAI-compatible endpoint</p>
                     </div>
                 </div>
 
                 <ScrollArea className="flex-1 px-8 pb-12">
                     <div className="max-w-xl space-y-6">
                         <div className="flex flex-col gap-2">
-                            <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest">Node Alias</label>
+                            <label className="text-xs font-medium text-foreground">Provider name</label>
                             <WorkbenchInput
                                 value={addForm.displayName}
                                 placeholder="e.g., Private Research Cluster"
@@ -168,7 +192,28 @@ export const ProvidersSettings = memo(() => {
                         </div>
 
                         <div className="flex flex-col gap-2">
-                            <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest">Endpoint URL</label>
+                            <label className="text-[11px] font-semibold text-muted-foreground">Manual model IDs</label>
+                            <textarea
+                                value={addForm.manualModels}
+                                onChange={(event) => setAddForm(prev => ({ ...prev, manualModels: event.target.value, validationError: null }))}
+                                placeholder="model-id-one, model-id-two"
+                                className="min-h-20 resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-[12px] text-foreground outline-none focus:border-primary/50"
+                            />
+                            <p className="text-[11px] text-muted-foreground">Optional fallback when the endpoint does not expose /models.</p>
+                        </div>
+
+                        <details className="rounded-md border border-border/60 bg-muted/10 p-3">
+                            <summary className="cursor-pointer text-[12px] font-medium text-foreground">Advanced headers</summary>
+                            <textarea
+                                value={addForm.headersText}
+                                onChange={(event) => setAddForm(prev => ({ ...prev, headersText: event.target.value, testStatus: 'idle', validationError: null }))}
+                                placeholder={'anthropic-version: 2023-06-01\nX-Organization: example'}
+                                className="mt-3 min-h-24 w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-[12px] text-foreground outline-none focus:border-primary/50"
+                            />
+                        </details>
+
+                        <div className="flex flex-col gap-2">
+                            <label className="text-xs font-medium text-foreground">Endpoint URL</label>
                             <WorkbenchInput
                                 value={addForm.baseUrl}
                                 placeholder="https://api.domain.ai/v1"
@@ -178,7 +223,7 @@ export const ProvidersSettings = memo(() => {
                         </div>
 
                         <div className="flex flex-col gap-2">
-                            <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest">Secret Key (Optional)</label>
+                            <label className="text-xs font-medium text-foreground">API key <span className="font-normal text-muted-foreground">(optional)</span></label>
                             <WorkbenchInput
                                 type="password"
                                 value={addForm.apiKey}
@@ -203,6 +248,11 @@ export const ProvidersSettings = memo(() => {
                                 <span className="text-[10px] font-bold uppercase tracking-wider">
                                     {addForm.testStatus === 'testing' ? 'Synchronizing Handshake...' : addForm.testStatus === 'success' ? 'Telemetry Established' : 'Connection Refused'}
                                 </span>
+                            </div>
+                        )}
+                        {addForm.validationError && (
+                            <div className="rounded-md border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-[12px] text-rose-300">
+                                {addForm.validationError}
                             </div>
                         )}
 
@@ -260,7 +310,7 @@ export const ProvidersSettings = memo(() => {
                     </div>
                     <div className="min-w-0">
                         <h3 className="text-base font-bold tracking-tight text-white/90 truncate leading-tight">{displayData.name}</h3>
-                        <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Provider Configuration</p>
+                        <p className="text-xs text-muted-foreground">Provider configuration</p>
                     </div>
                 </div>
 
@@ -272,6 +322,7 @@ export const ProvidersSettings = memo(() => {
                                 displayName={(providerData as any).displayName}
                                 baseUrl={(providerData as any).baseUrl}
                                 apiKey={(providerData as any).apiKey}
+                                headers={(providerData as any).headers}
                             />
                         ) : (
                             <>
@@ -296,7 +347,7 @@ export const ProvidersSettings = memo(() => {
                                     <WorkbenchIcon name="lucide:sliders" size={14} className="text-pink-400" />
                                     <span className="text-[11px] font-bold text-white/80 uppercase tracking-wider">Gateway Model Mappings</span>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div className="flex flex-col gap-1.5">
                                         <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Embeddings Model</label>
                                         <WorkbenchSelect
@@ -362,7 +413,7 @@ export const ProvidersSettings = memo(() => {
                                     <WorkbenchIcon name="lucide:sliders" size={14} className="text-blue-400" />
                                     <span className="text-[11px] font-bold text-white/80 uppercase tracking-wider">Proxy Capabilities Config</span>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div className="flex flex-col gap-1.5">
                                         <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Embeddings Model</label>
                                         <WorkbenchSelect
@@ -438,8 +489,11 @@ export const ProvidersSettings = memo(() => {
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             getProviderStatus={getProviderStatus}
+            getModelCount={(id) => availableModelsByProvider[id]?.length || 0}
             onProviderClick={handleProviderClick}
             onAddCustom={() => setIsAddingCustom(true)}
+            onRefresh={() => { void fetchModels(); }}
+            refreshing={fetchingModels}
         />
     );
 });

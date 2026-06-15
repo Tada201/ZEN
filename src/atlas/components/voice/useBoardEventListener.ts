@@ -14,6 +14,8 @@ interface BoardBlockUpdate {
   columns?: string[];
   rows?: string[][];
   points?: Array<{ label: string; value: number }>;
+  chart_type?: "bar" | "line";
+  chartType?: "bar" | "line";
   
   // Media & new properties
   url?: string;
@@ -43,7 +45,17 @@ interface BoardBlockUpdate {
   code?: string;
   max?: number;
   label?: string;
-  layout?: { width?: "small" | "medium" | "wide" | "full"; order?: number };
+  layout?: {
+    width?: "small" | "medium" | "wide" | "full";
+    order?: number;
+    col_span?: number;
+    row_span?: number;
+    colSpan?: number;
+    rowSpan?: number;
+    cell?: number;
+    row?: number;
+    column?: number;
+  };
   card_type?: string;
   card_data?: Record<string, unknown>;
   cardType?: string;
@@ -84,6 +96,7 @@ function mapBlock(block: BoardBlockUpdate): VoiceStageBlock {
     columns: block.columns,
     rows: block.rows,
     points: block.points,
+    chartType: block.chart_type || block.chartType,
     url: block.url,
     thumbnail: block.thumbnail,
     description: block.description,
@@ -108,11 +121,79 @@ function mapBlock(block: BoardBlockUpdate): VoiceStageBlock {
     code: block.code,
     max: block.max,
     label: block.label,
-    layout: block.layout,
+    layout: block.layout ? {
+      width: block.layout.width,
+      order: block.layout.order,
+      colSpan: block.layout.col_span ?? block.layout.colSpan,
+      rowSpan: block.layout.row_span ?? block.layout.rowSpan,
+      cell: block.layout.cell,
+      row: block.layout.row,
+      column: block.layout.column,
+    } : undefined,
     cardType: block.card_type || block.cardType,
     cardData: block.card_data || block.cardData,
     updatedAt: Date.now(),
   } as VoiceStageBlock;
+}
+
+function hasPayloadForKind(block: BoardBlockUpdate, kind: VoiceStageBlock["kind"]): boolean {
+  switch (kind) {
+    case "svg": return Boolean(block.markup);
+    case "chart": return Boolean(block.points);
+    case "table": return Boolean(block.columns || block.rows);
+    case "equation": return Boolean(block.expression);
+    case "code": return Boolean(block.code);
+    case "map": return block.latitude != null && block.longitude != null;
+    case "image":
+    case "link-preview":
+    case "video": return Boolean(block.url);
+    case "gen-ui":
+    case "html": return Boolean(block.content);
+    case "premium-card": return Boolean(block.card_type || block.cardType);
+    default: return true;
+  }
+}
+
+export function applyBoardOperation(op: BoardOperation) {
+  if (!op?.action) return;
+  const store = useVoiceStageStore.getState();
+
+  switch (op.action) {
+    case "set":
+      if (op.blocks) {
+        store.replace(op.blocks.map(mapBlock), { requestType: "replace" });
+        if (op.layout) store.setLayout(op.layout);
+      }
+      break;
+    case "add":
+      if (op.block) store.append(mapBlock(op.block));
+      break;
+    case "update":
+      if (op.id && op.block) {
+        const current = store.document.widgets.find((block) => block.id === op.id);
+        const requestedKind = op.block.kind?.replace(/_/g, "-") as VoiceStageBlock["kind"] | undefined;
+        const kind = current && requestedKind && !hasPayloadForKind(op.block, requestedKind)
+          ? current.kind
+          : requestedKind || current?.kind || "note";
+        const updated = mapBlock({
+          ...(current as BoardBlockUpdate | undefined),
+          ...op.block,
+          id: op.id,
+          kind,
+        });
+        store.upsert(updated);
+      }
+      break;
+    case "remove":
+      if (op.id) store.remove(op.id);
+      break;
+    case "clear":
+      store.resetCurrent();
+      break;
+    case "focus":
+      if (op.id) store.focus(op.id);
+      break;
+  }
 }
 
 /**
@@ -130,44 +211,7 @@ export function useBoardEventListener(chatId?: string) {
         return;
       }
 
-      const store = useVoiceStageStore.getState();
-
-      switch (op.action) {
-        case "set":
-          if (op.blocks) {
-            store.replace(op.blocks.map(mapBlock), { requestType: "replace" });
-            if (op.layout) store.setLayout(op.layout);
-          }
-          break;
-        case "add":
-          if (op.block) {
-            store.append(mapBlock(op.block));
-          }
-          break;
-        case "update":
-          if (op.id && op.block) {
-            const updated = mapBlock(op.block);
-            updated.id = op.id;
-            store.upsert(updated);
-          }
-          break;
-        case "remove":
-          if (op.id) {
-            store.replace(
-              store.document.widgets.filter((b) => b.id !== op.id),
-              { requestType: "edit" }
-            );
-          }
-          break;
-        case "clear":
-          store.clear();
-          break;
-        case "focus":
-          if (op.id) {
-            store.focus(op.id);
-          }
-          break;
-      }
+      applyBoardOperation(op);
     }).then((fn) => {
       if (disposed) fn();
       else unlisten = fn;
