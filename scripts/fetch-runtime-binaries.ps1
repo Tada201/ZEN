@@ -5,6 +5,20 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Portable SHA256 helper – works on all PowerShell versions including
+# runners where Get-FileHash may not be available (PS < 4.0).
+function Get-Sha256 {
+    param([string]$FilePath)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $stream = [System.IO.File]::OpenRead($FilePath)
+        try {
+            $bytes = $sha.ComputeHash($stream)
+            return ([BitConverter]::ToString($bytes) -replace '-','').ToUpperInvariant()
+        } finally { $stream.Dispose() }
+    } finally { $sha.Dispose() }
+}
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $manifestPath = Join-Path $PSScriptRoot "runtime-binaries.json"
 $manifest = Get-Content -Raw $manifestPath | ConvertFrom-Json
@@ -40,7 +54,7 @@ foreach ($archive in $platformConfig.archives) {
         Invoke-WebRequest -Uri $archive.url -OutFile $archiveFile
     }
 
-    $actualHash = (Get-FileHash -LiteralPath $archiveFile -Algorithm SHA256).Hash.ToUpperInvariant()
+    $actualHash = Get-Sha256 -FilePath $archiveFile
     $expectedHash = $archive.sha256.ToUpperInvariant()
     if ($actualHash -ne $expectedHash) {
         throw "SHA256 mismatch for $($archive.id). Expected $expectedHash, got $actualHash."

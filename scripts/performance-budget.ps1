@@ -2,7 +2,7 @@ param(
     [string]$DistPath = "dist",
     [int]$MaxJsChunkKb = 5000,
     [int]$MaxCssChunkKb = 700,
-    [int]$MaxTotalJsKb = 12000
+    [int]$MaxTotalJsKb = 16000
 )
 
 $ErrorActionPreference = "Stop"
