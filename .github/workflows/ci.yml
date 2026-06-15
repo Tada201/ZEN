@@ -96,6 +96,10 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Fetch runtime binaries
+        shell: pwsh
+        run: npm run runtime:fetch -- -Clean
+
       - name: Cargo check
         working-directory: src-tauri
         run: cargo check --all-targets
