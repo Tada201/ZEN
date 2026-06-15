@@ -8,8 +8,8 @@ const parserSource = readFileSync(parserSourcePath, "utf8")
   .replace(/export interface ParsedCard \{[\s\S]*?\n\}/, "")
   .replace(/export function parseCardTags/, "export function parseCardTags");
 const source = `${parserSource}\n${readFileSync(sourcePath, "utf8")
-  .replace('import { parseCardTags, type ParsedCard } from "./assistantCardParser";\n', "")
-  .replace('export { parseCardTags, type ParsedCard } from "./assistantCardParser";\n', "")}`.replace(
+  .replace(/import\s+\{\s*parseCardTags,\s*type\s+ParsedCard\s*\}\s+from\s+"[^"]+";\r?\n/, "")
+  .replace(/export\s+\{\s*parseCardTags,\s*type\s+ParsedCard\s*\}\s+from\s+"[^"]+";\r?\n/, "")}`.replace(
   'import { CHAT_STATUS_PHASES } from "@/api/chatStatus";',
   'const CHAT_STATUS_PHASES = { AgentStreaming: "agent_streaming", ToolCallStreaming: "tool_call_streaming", ToolCallReady: "tool_call_ready" };',
 );
