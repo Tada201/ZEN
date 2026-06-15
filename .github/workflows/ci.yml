@@ -91,6 +91,11 @@ jobs:
         shell: pwsh
         run: npm run secret:artifacts
 
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Cargo check
         working-directory: src-tauri
         run: cargo check --all-targets
