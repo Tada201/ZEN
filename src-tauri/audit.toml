@@ -1,0 +1,6 @@
+# Configuration for cargo-audit
+
+[advisories]
+ignore = [
+    "RUSTSEC-2023-0071" # Marvin Attack on rsa crate (no fixed upgrade is available)
+]
