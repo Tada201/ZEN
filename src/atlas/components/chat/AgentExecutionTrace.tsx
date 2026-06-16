@@ -6,6 +6,41 @@ import { ToolCallCard } from "./ToolCallCard";
 import { resolveToolApproval } from "./AssistantMessageTrace";
 import { buildAgentExecutionTraceModel, type ToolExecutionBatchLane } from "./agentExecutionTraceModel";
 import { buildToolOutputPreview as buildToolOutputPreviewImported } from "./tool/toolOutputPreview";
+import { isToolVisibleInChat } from "./assistantMessageParts";
+
+function asInputRecord(input: ToolCall["input"]): Record<string, unknown> {
+  if (!input) return {};
+  if (typeof input !== "string") return input;
+  try {
+    const parsed = JSON.parse(input);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function compactToolDisplayName(tool: ToolCall): string {
+  const name = tool.name.toLowerCase();
+  const input = asInputRecord(tool.input);
+  const args = input.arguments && typeof input.arguments === "object" && !Array.isArray(input.arguments)
+    ? input.arguments as Record<string, unknown>
+    : {};
+  const innerTool = String(input.tool_id || input.tool || input.name || "").toLowerCase();
+  const hasSearchArgs = Boolean(input.query || args.query || input.url || args.url);
+  const outputLooksLikeSearch = Boolean(tool.output && buildToolOutputPreviewImported(tool.output).results.length > 0);
+
+  if (
+    name.includes("search") ||
+    name.includes("web") ||
+    innerTool.includes("search") ||
+    innerTool.includes("web") ||
+    (name === "tool_exec" && (hasSearchArgs || outputLooksLikeSearch))
+  ) {
+    return "Web search";
+  }
+
+  return tool.name;
+}
 
 function isEmptyObject(value: unknown) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0);
@@ -68,7 +103,7 @@ export function AgentExecutionTrace({
   isStreaming?: boolean;
   preferCompact?: boolean;
 }) {
-  const normalizedToolCalls = useMemo(() => dedupeTraceToolCalls(toolCalls), [toolCalls]);
+  const normalizedToolCalls = useMemo(() => dedupeTraceToolCalls(toolCalls).filter(isToolVisibleInChat), [toolCalls]);
   const trace = useMemo(() => buildAgentExecutionTraceModel(normalizedToolCalls, executionSteps), [normalizedToolCalls, executionSteps]);
   const importantToolCalls = useMemo(
     () => normalizedToolCalls.filter((tool) => tool.status === "awaiting_approval" || tool.status === "error"),
@@ -107,6 +142,8 @@ export function AgentExecutionTrace({
     }
   }, [trace.errorCount, trace.active]);
 
+  if (normalizedToolCalls.length === 0) return null;
+
   return (
     <div className="font-sans">
       <button
@@ -116,7 +153,7 @@ export function AgentExecutionTrace({
           setIsExpanded(!isExpanded);
         }}
         aria-expanded={isExpanded}
-        className="flex min-h-8 w-full items-center gap-2 rounded-md px-1 text-left text-zinc-500 transition-all duration-200 hover:bg-white/[0.018]"
+        className="flex min-h-8 w-full items-center gap-2 rounded-md border border-white/[0.08] bg-black/35 px-2 py-1 text-left text-zinc-400 backdrop-blur-sm transition-all duration-200 hover:bg-black/45"
       >
         <span className="flex h-5 w-5 shrink-0 items-center justify-center">
           {trace.active ? (
@@ -154,7 +191,7 @@ export function AgentExecutionTrace({
       </button>
 
       {!isExpanded && collapsedSummary && (
-        <div className="truncate px-8 pb-1 text-[11px] text-zinc-500" title={collapsedSummary}>
+        <div className="truncate px-9 pb-1 pt-1 text-[11px] text-zinc-400" title={collapsedSummary}>
           {collapsedSummary}
         </div>
       )}
@@ -167,7 +204,7 @@ export function AgentExecutionTrace({
               <span>{trace.startedTogether || trace.runningCount + trace.approvalCount > 1 ? "Batch started in parallel" : "Sequential tool calls"}</span>
               {trace.batchSummary && <span>batch {trace.batchSummary}</span>}
               {trace.finishedCount > 0 && <span>{trace.finishedCount}/{normalizedToolCalls.length} finished</span>}
-              {trace.latestFinishedTool && <span>latest {trace.latestFinishedTool.name}</span>}
+              {trace.latestFinishedTool && <span>latest {compactToolDisplayName(trace.latestFinishedTool)}</span>}
               {trace.completionSummary && trace.completionOrder.length > 1 && <span>completed {trace.completionSummary}</span>}
               {trace.resultSummary && <span>results {trace.resultSummary}</span>}
               {trace.agentHierarchySummary && <span>delegation {trace.agentHierarchySummary}</span>}
@@ -182,7 +219,7 @@ export function AgentExecutionTrace({
           {preferCompact && importantToolCalls.length === 0 ? (
             <div className="grid gap-0.5">
               {normalizedToolCalls.map((tc, idx) => (
-                <div key={`${tc.id}-${idx}`} className="flex min-w-0 items-center gap-2 rounded px-1.5 py-0.5 text-[11px] leading-5">
+                <div key={`${tc.id}-${idx}`} className="flex min-w-0 items-center gap-2 rounded-md bg-black/30 px-2 py-1 text-[11px] leading-5">
                   <span
                     className={cn(
                       "h-1.5 w-1.5 shrink-0 rounded-full",
@@ -192,8 +229,8 @@ export function AgentExecutionTrace({
                         : "bg-emerald-400",
                     )}
                   />
-                  <code className="shrink-0 rounded bg-white/[0.035] px-1 py-0.5 font-mono text-[11px] text-zinc-400">
-                    {tc.name}
+                  <code className="shrink-0 rounded bg-white/[0.08] px-1 py-0.5 font-mono text-[11px] text-zinc-300">
+                    {compactToolDisplayName(tc)}
                   </code>
                   <span className="min-w-0 flex-1 truncate text-zinc-500">
                     {tc.status === "completed" || tc.status === "error"
@@ -225,7 +262,7 @@ export function AgentExecutionTrace({
                       streamingPreviews={streamingPreviews}
                     />
                   ))
-                  : (preferCompact ? importantToolCalls : toolCalls).map((tc, idx) => (
+                  : (preferCompact ? importantToolCalls : normalizedToolCalls).map((tc, idx) => (
                     <ToolTraceRow
                       key={tc.id || tc.runId || idx}
                       toolCall={tc}
@@ -302,7 +339,7 @@ function ToolBatchLaneInner({
   const active = lane.runningCount > 0 || lane.approvalCount > 0;
 
   return (
-    <div className="relative rounded-md border border-zinc-800/70 bg-white/[0.01] px-2 py-1.5">
+    <div className="relative rounded-md border border-white/[0.08] bg-black/35 px-2 py-1.5 backdrop-blur-sm">
       <span className="absolute -left-[15px] top-3 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-black">
         <span className={cn("h-1.5 w-1.5 rounded-full", lane.approvalCount > 0 ? "bg-amber-400" : active ? "bg-blue-400" : lane.errorCount > 0 ? "bg-rose-400" : "bg-emerald-400")} />
       </span>

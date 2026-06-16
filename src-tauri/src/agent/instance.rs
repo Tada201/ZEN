@@ -2,19 +2,14 @@ use crate::agent::types::Agent;
 use crate::agent::utils::now_ms;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentStatus {
+    #[default]
     Active,
     Busy,
     Idle,
     Terminated,
-}
-
-impl Default for AgentStatus {
-    fn default() -> Self {
-        AgentStatus::Active
-    }
 }
 
 /// Runtime agent wrapper: config + live status.

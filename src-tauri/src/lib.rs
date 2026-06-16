@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 extern crate pdf_inspector;
 
 pub mod agent;
@@ -23,7 +25,7 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let _builder = tauri::Builder::default()
+    tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
@@ -253,6 +255,7 @@ pub fn run() {
             commands::terminal::terminal_write,
             commands::terminal::terminal_kill,
             commands::terminal::terminal_resize,
+            commands::dependency::list_dependency_status,
             commands::document::ingest_document,
             commands::document::list_documents,
             commands::document::list_documents_page,

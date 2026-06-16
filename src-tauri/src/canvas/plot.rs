@@ -252,9 +252,8 @@ pub fn simplify_path(points: &[[f64; 2]], tolerance: f64) -> Vec<[f64; 2]> {
 
     let mut simplified = vec![points[0]];
 
-    for i in 1..points.len() {
+    for current in points.iter().copied().skip(1) {
         let last = simplified[simplified.len() - 1];
-        let current = points[i];
 
         // Always keep NaN sentinels
         if current[0].is_nan() || current[1].is_nan() {

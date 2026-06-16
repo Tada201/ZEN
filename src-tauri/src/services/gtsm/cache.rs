@@ -247,3 +247,9 @@ impl GtsmCache {
         );
     }
 }
+
+impl Default for GtsmCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}

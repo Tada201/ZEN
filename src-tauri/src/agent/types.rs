@@ -29,20 +29,17 @@ pub struct Agent {
 /// Model tier for auto-escalation
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum ModelTier {
     /// Simple tasks - can use lightweight models or Agent Booster (no LLM)
     Simple,
     /// Local models (Ollama, LM Studio) - free, offline, but may be less capable
+    #[default]
     Local,
     /// Cloud models (GPT-4, Claude) - expensive, reliable, high capability
     Cloud,
 }
 
-impl Default for ModelTier {
-    fn default() -> Self {
-        ModelTier::Local
-    }
-}
 
 impl ModelTier {
     pub fn description(&self) -> &'static str {
@@ -56,6 +53,12 @@ impl ModelTier {
 
 pub struct AgentRegistry {
     agents: HashMap<String, Agent>,
+}
+
+impl Default for AgentRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AgentRegistry {

@@ -114,7 +114,7 @@ impl HybridMemoryBackend {
             }
 
             // Deserialize embedding from BLOB (little-endian f32 bytes)
-            let stored_embedding = deserialize_embedding(&embedding_blob);
+            let stored_embedding = deserialize_embedding(embedding_blob);
 
             // Skip if embedding dimensions don't match
             if stored_embedding.len() != query_embedding.len() {
@@ -203,7 +203,7 @@ impl HybridMemoryBackend {
                 }
             }
 
-            let stored_embedding = deserialize_embedding(&embedding_blob);
+            let stored_embedding = deserialize_embedding(embedding_blob);
 
             if stored_embedding.len() != query_embedding.len() {
                 continue;
@@ -282,7 +282,7 @@ fn memory_entry_from_row(row: queries::SessionMemoryRow) -> MemoryEntry {
 
 /// Deserialize embedding from BLOB (little-endian f32 bytes)
 fn deserialize_embedding(blob: &[u8]) -> Vec<f32> {
-    if blob.len() % 4 != 0 {
+    if !blob.len().is_multiple_of(4) {
         tracing::warn!("Invalid embedding blob size: {}", blob.len());
         return vec![];
     }
@@ -303,7 +303,7 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
         return 0.0;
     }
     let similarity = dot_product / (norm_a * norm_b);
-    similarity.max(-1.0).min(1.0)
+    similarity.clamp(-1.0, 1.0)
 }
 
 /// Memory search result with similarity score

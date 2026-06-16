@@ -47,6 +47,26 @@ impl DocumentService {
             .as_str()
         {
             "pdf" => "application/pdf".to_string(),
+            "doc" => "application/msword".to_string(),
+            "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                .to_string(),
+            "ppt" => "application/vnd.ms-powerpoint".to_string(),
+            "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                .to_string(),
+            "xls" => "application/vnd.ms-excel".to_string(),
+            "xlsx" => {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet".to_string()
+            }
+            "rtf" => "application/rtf".to_string(),
+            "odt" => "application/vnd.oasis.opendocument.text".to_string(),
+            "ods" => "application/vnd.oasis.opendocument.spreadsheet".to_string(),
+            "odp" => "application/vnd.oasis.opendocument.presentation".to_string(),
+            "epub" => "application/epub+zip".to_string(),
+            "png" => "image/png".to_string(),
+            "jpg" | "jpeg" => "image/jpeg".to_string(),
+            "webp" => "image/webp".to_string(),
+            "tif" | "tiff" => "image/tiff".to_string(),
+            "bmp" => "image/bmp".to_string(),
             "txt" => "text/plain".to_string(),
             "md" => "text/markdown".to_string(),
             "csv" => "text/csv".to_string(),
@@ -74,7 +94,11 @@ impl DocumentService {
         {
             "pdf" => "pdf",
             "md" => "md",
-            "txt" | "csv" | "json" => "txt",
+            "doc" | "docx" | "rtf" | "odt" | "epub" => "document",
+            "ppt" | "pptx" | "odp" => "presentation",
+            "xls" | "xlsx" | "ods" | "csv" => "spreadsheet",
+            "png" | "jpg" | "jpeg" | "webp" | "tif" | "tiff" | "bmp" => "image",
+            "txt" | "json" => "txt",
             _ => "txt", // code files and others treated as plain text
         }
     }
@@ -248,5 +272,11 @@ impl DocumentService {
 
         // Remove from SQLite (cascades to document_chunks)
         crate::db::queries::delete_document(&pool, doc_id).await
+    }
+}
+
+impl Default for DocumentService {
+    fn default() -> Self {
+        Self::new()
     }
 }

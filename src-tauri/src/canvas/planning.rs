@@ -96,13 +96,13 @@ pub fn resolve_placement(
     };
 
     // Apply explicit offset
-    let final_pos = if let Some([dx, dy]) = hint.offset {
+    
+
+    if let Some([dx, dy]) = hint.offset {
         [adjusted[0] + dx as f64, adjusted[1] + dy as f64]
     } else {
         adjusted
-    };
-
-    final_pos
+    }
 }
 
 /// Convert size hint to actual dimensions

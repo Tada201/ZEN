@@ -245,7 +245,9 @@ pub async fn test_provider_connection(
         provider_instance.health_check(),
     )
     .await
-    .map_err(|_| crate::error::ZenError::Custom("Provider connection timed out after 12 seconds".to_string()))?;
+    .map_err(|_| {
+        crate::error::ZenError::Custom("Provider connection timed out after 12 seconds".to_string())
+    })?;
     if !healthy {
         return Err(crate::error::ZenError::Internal(format!(
             "Node {} is unreachable",
@@ -258,7 +260,11 @@ pub async fn test_provider_connection(
         provider_instance.list_models(),
     )
     .await
-    .map_err(|_| crate::error::ZenError::Custom("Reading the provider model catalog timed out after 12 seconds".to_string()))?
+    .map_err(|_| {
+        crate::error::ZenError::Custom(
+            "Reading the provider model catalog timed out after 12 seconds".to_string(),
+        )
+    })?
 }
 
 async fn invalidate_provider_cache_if_needed<'a>(

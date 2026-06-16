@@ -246,16 +246,18 @@ pub async fn send_message(
     );
 
     // 3. Prepare config
-    let mut config = ChatRequestConfig::default();
-    config.temperature = temperature;
-    config.max_tokens = max_tokens;
-    config.top_p = top_p;
-    config.top_k = top_k;
-    config.presence_penalty = presence_penalty;
-    config.frequency_penalty = frequency_penalty;
-    config.repeat_penalty = repeat_penalty;
-    config.seed = seed;
-    config.stop = stop;
+    let mut config = ChatRequestConfig {
+        temperature,
+        max_tokens,
+        top_p,
+        top_k,
+        presence_penalty,
+        frequency_penalty,
+        repeat_penalty,
+        seed,
+        stop,
+        ..ChatRequestConfig::default()
+    };
 
     if let Some(t) = thinking {
         if t.enabled {

@@ -37,6 +37,8 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
     ]);
     const [wordWrap, setWordWrap] = useState(true);
     const [scrollLock, setScrollLock] = useState(false);
+    const [spawnError, setSpawnError] = useState<string | null>(null);
+    const [pendingSpawnName, setPendingSpawnName] = useState<string | null>(null);
     
     // Telemetry indicators
     const [ticks, setTicks] = useState(0);
@@ -80,11 +82,13 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
 
     // Spawn new session
     const spawnNewSession = useCallback(async (customName?: string) => {
+        setSpawnError(null);
+        setPendingSpawnName(null);
         try {
             const cols = lastResizeRef.current.cols || DEFAULT_COLS;
             const rows = lastResizeRef.current.rows || DEFAULT_ROWS;
             
-            const id = await terminalApi.spawn(cols, rows, null);
+            const id = await terminalApi.spawn(cols, rows, null, true);
 
             const name = customName || `Shell ${sessions.length + 1}`;
             const newSession: Session = {
@@ -103,7 +107,7 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
             setActiveSessionId(id);
 
             // Listen for stdout
-            const unlisten = await listen<string>(`terminal-stdout-${id}`, (event) => {
+            const unlisten = await listen<string>(`terminal:output:${id}`, (event) => {
                 setSessions(prev => prev.map(s => {
                     if (s.id === id) {
                         return { ...s, output: [...s.output, event.payload] };
@@ -113,18 +117,19 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
             });
 
             listenersMapRef.current[id] = unlisten;
-        } catch (err: any) {
-            const msg = typeof err === 'string' ? err : err?.message || 'Unknown error';
+        } catch (err: unknown) {
+            const msg = typeof err === 'string' ? err : err instanceof Error ? err.message : 'Unknown error';
+            setSpawnError(msg);
             console.error("Failed to spawn session:", msg);
         }
     }, [sessions.length]);
 
-    // Initial session setup
-    useEffect(() => {
-        if (sessions.length === 0) {
-            spawnNewSession('Shell 1');
-        }
+    const requestSpawn = useCallback((customName?: string) => {
+        setSpawnError(null);
+        setPendingSpawnName(customName || `Shell ${sessions.length + 1}`);
+    }, [sessions.length]);
 
+    useEffect(() => {
         return () => {
             // Clean up all active listeners
             Object.keys(listenersMapRef.current).forEach(id => {
@@ -133,7 +138,6 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
             });
             listenersMapRef.current = {};
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Close session
@@ -302,7 +306,7 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
                     </span>
                     
                     {/* Segmented Pill Container */}
-                    <div className="flex items-center bg-muted/40 p-0.5 rounded-full border border-border">
+                    <div className="flex items-center border border-border bg-black/30">
                         {sessions.map((session) => {
                             const isActive = session.id === activeSessionId;
                             return (
@@ -310,14 +314,14 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
                                     key={session.id}
                                     onClick={() => setActiveSessionId(session.id)}
                                     className={cn(
-                                        "px-3 py-1 text-[9px] font-bold font-mono uppercase tracking-wider rounded-full transition-all select-none flex items-center gap-1.5 press",
+                                        "px-3 py-1 text-[9px] font-bold font-mono uppercase tracking-wider transition-all select-none flex items-center gap-1.5 press border-r border-border/70 last:border-r-0",
                                         isActive 
-                                            ? "bg-background text-primary border border-border shadow-sm" 
-                                            : "text-muted-foreground hover:text-foreground border border-transparent"
+                                            ? "bg-primary/10 text-primary" 
+                                            : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
                                     )}
                                 >
                                     <span className={cn(
-                                        "w-1 h-1 rounded-full shrink-0",
+                                        "h-1.5 w-1.5 shrink-0",
                                         session.connected ? "bg-success" : "bg-warning animate-pulse"
                                     )} />
                                     <span className="truncate max-w-[70px]">{session.name}</span>
@@ -336,8 +340,8 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
 
                     {/* Spawn Tab Plus button */}
                     <button
-                        onClick={() => spawnNewSession()}
-                        className="p-1 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted/60 transition-all ml-1 press"
+                        onClick={() => requestSpawn()}
+                        className="p-1 text-muted-foreground hover:bg-white/[0.06] hover:text-foreground transition-all ml-1 press"
                         title="Spawn new shell session"
                     >
                         <Plus size={11} />
@@ -352,7 +356,7 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
                     <button
                         onClick={() => setShowDrawer(!showDrawer)}
                         className={cn(
-                            "p-1 rounded-full text-muted-foreground hover:text-foreground transition-all border press",
+                            "p-1 text-muted-foreground hover:text-foreground transition-all border press",
                             showDrawer ? "bg-muted border-border text-primary" : "border-transparent hover:bg-muted/60"
                         )}
                         title="Tuning & Telemetry Drawer"
@@ -396,7 +400,7 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
                                 wordWrap ? "break-all whitespace-pre-wrap" : "whitespace-pre overflow-x-auto"
                             )}>
                                 {activeSession.output.map((line, idx) => (
-                                    <div key={idx} className="transition-all hover:bg-muted/10 px-1.5 py-[1px] rounded">
+                                    <div key={idx} className="transition-all hover:bg-muted/10 px-1.5 py-[1px]">
                                         {renderFormattedTerminalLine(line)}
                                     </div>
                                 ))}
@@ -408,9 +412,23 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
                                 )}
                             </div>
                         ) : (
-                            <div className="flex flex-col items-center justify-center h-full text-muted-foreground font-mono text-[9px] gap-2 select-none uppercase tracking-widest">
+                            <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-muted-foreground">
                                 <Terminal size={14} className="animate-pulse" />
-                                <span>No active session</span>
+                                <span className="text-xs font-medium text-foreground">No active terminal session</span>
+                                <span className="max-w-xs text-xs leading-relaxed">Start a shell only when you need it. Zen will ask for explicit approval before opening the process.</span>
+                                {spawnError && <span className="max-w-sm text-xs text-destructive">{spawnError}</span>}
+                                {!pendingSpawnName ? (
+                                    <button type="button" onClick={() => requestSpawn('Shell 1')} className="border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/15">Open terminal</button>
+                                ) : (
+                                    <div className="max-w-sm border border-amber-400/25 bg-amber-400/10 p-3 text-left">
+                                        <div className="text-[11px] font-bold uppercase tracking-wider text-amber-300">Approve interactive shell</div>
+                                        <div className="mt-1 text-xs text-zinc-300">This opens a terminal in the active workspace with your user permissions.</div>
+                                        <div className="mt-3 flex gap-2">
+                                            <button type="button" onClick={() => spawnNewSession(pendingSpawnName)} className="border border-primary/40 bg-primary/15 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20">Approve</button>
+                                            <button type="button" onClick={() => setPendingSpawnName(null)} className="border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">Cancel</button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -419,23 +437,38 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
                     {(scrollLock || !wordWrap) && (
                         <div className="absolute right-4 bottom-14 flex items-center gap-2 select-none">
                             {scrollLock && (
-                                <span className="px-1.5 py-0.5 rounded bg-warning/10 border border-warning/20 text-warning text-[8px] font-mono uppercase tracking-widest">
+                                <span className="px-1.5 py-0.5 bg-warning/10 border border-warning/20 text-warning text-[8px] font-mono uppercase tracking-widest">
                                     SCROLL_LOCK
                                 </span>
                             )}
                             {!wordWrap && (
-                                <span className="px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20 text-primary text-[8px] font-mono uppercase tracking-widest">
+                                <span className="px-1.5 py-0.5 bg-primary/10 border border-primary/20 text-primary text-[8px] font-mono uppercase tracking-widest">
                                     NO_WRAP
                                 </span>
                             )}
                         </div>
                     )}
 
-                    {/* Rounded Capsule Input Field */}
+                    {pendingSpawnName && activeSession && (
+                        <div className="border-t border-amber-400/20 bg-amber-400/10 px-3 py-2">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="min-w-0">
+                                    <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300">Approve interactive shell</div>
+                                    <div className="truncate text-xs text-zinc-300">Open {pendingSpawnName} in the active workspace with your user permissions.</div>
+                                </div>
+                                <div className="flex shrink-0 gap-2">
+                                    <button type="button" onClick={() => spawnNewSession(pendingSpawnName)} className="border border-primary/40 bg-primary/15 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20">Approve</button>
+                                    <button type="button" onClick={() => setPendingSpawnName(null)} className="border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Command Input */}
                     <div className="p-3 bg-background border-t border-border shrink-0">
                         <form
                             onSubmit={handleSubmit}
-                            className="flex items-center gap-2.5 px-4 h-9.5 bg-muted/20 border border-border/80 rounded-full focus-within:border-primary/30 focus-within:bg-muted/30 focus-within:ring-4 focus-within:ring-primary/5 transition-all select-none"
+                            className="flex h-10 items-center gap-2.5 border border-border/80 bg-black/40 px-3 transition-all focus-within:border-primary/40 focus-within:bg-black/60 select-none"
                         >
                             {/* Dynamic styled path prompt */}
                             <div className="flex items-center gap-1.5 text-primary font-mono text-[10px] font-bold select-none shrink-0">
@@ -461,7 +494,7 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
                                 <button
                                     type="submit"
                                     disabled={!activeSession?.connected || !input.trim()}
-                                    className="p-1.5 rounded-full text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed transition-all press"
+                                    className="p-1.5 text-muted-foreground hover:bg-white/[0.06] hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed transition-all press"
                                     title="Send command"
                                 >
                                     <Send size={11} />

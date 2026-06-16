@@ -188,7 +188,7 @@ impl TaskQueue {
             .collect();
 
         // Sort by priority (Critical first)
-        tasks.sort_by(|a, b| a.task.priority.cmp(&b.task.priority));
+        tasks.sort_by_key(|a| a.task.priority);
 
         // Mark all as started
         for task in &mut tasks {
@@ -291,7 +291,7 @@ impl TaskQueue {
 
         for task_id in failed_task_ids {
             // Find the task in history to get error details
-            if let Some(record) = self.history.iter().filter(|r| r.task_id == task_id).last() {
+            if let Some(record) = self.history.iter().rfind(|r| r.task_id == task_id) {
                 if let Some(error) = &record.error {
                     // Find original task definition (if still available)
                     if let Some(pos) = self.tasks.iter().position(|t| t.task.id == task_id) {
@@ -395,10 +395,10 @@ pub struct TaskQueueSummary {
     pub progress: f64,
 }
 
-impl TaskQueueSummary {
-    /// Get a human-readable summary string
-    pub fn to_string(&self) -> String {
-        format!(
+impl std::fmt::Display for TaskQueueSummary {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
             "Tasks: {} total | {} pending | {} in progress | {} completed | {} failed ({:.1}% complete)",
             self.total,
             self.pending,

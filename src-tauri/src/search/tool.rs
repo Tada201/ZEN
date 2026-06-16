@@ -73,7 +73,12 @@ struct ExaResult {
     text: Option<String>,
 }
 
-async fn tavily_search(api_key: &str, query: &str, max_results: usize, depth: &str) -> Result<Vec<SearchResult>, String> {
+async fn tavily_search(
+    api_key: &str,
+    query: &str,
+    max_results: usize,
+    depth: &str,
+) -> Result<Vec<SearchResult>, String> {
     let response = crate::utils::default_http_client()
         .post("https://api.tavily.com/search")
         .bearer_auth(api_key)
@@ -93,16 +98,27 @@ async fn tavily_search(api_key: &str, query: &str, max_results: usize, depth: &s
         return Err(format!("Tavily returned {}", response.status()));
     }
 
-    let payload = response.json::<TavilyResponse>().await
+    let payload = response
+        .json::<TavilyResponse>()
+        .await
         .map_err(|error| format!("Invalid Tavily response: {error}"))?;
-    Ok(payload.results.into_iter().take(max_results).map(|result| SearchResult {
-        title: result.title,
-        snippet: result.content,
-        url: result.url,
-    }).collect())
+    Ok(payload
+        .results
+        .into_iter()
+        .take(max_results)
+        .map(|result| SearchResult {
+            title: result.title,
+            snippet: result.content,
+            url: result.url,
+        })
+        .collect())
 }
 
-async fn exa_search(api_key: &str, query: &str, max_results: usize) -> Result<Vec<SearchResult>, String> {
+async fn exa_search(
+    api_key: &str,
+    query: &str,
+    max_results: usize,
+) -> Result<Vec<SearchResult>, String> {
     let response = crate::utils::default_http_client()
         .post("https://api.exa.ai/search")
         .header("x-api-key", api_key)
@@ -123,16 +139,24 @@ async fn exa_search(api_key: &str, query: &str, max_results: usize) -> Result<Ve
         return Err(format!("Exa returned {}", response.status()));
     }
 
-    let payload = response.json::<ExaResponse>().await
+    let payload = response
+        .json::<ExaResponse>()
+        .await
         .map_err(|error| format!("Invalid Exa response: {error}"))?;
-    Ok(payload.results.into_iter().take(max_results).map(|result| SearchResult {
-        title: result.title.unwrap_or_else(|| result.url.clone()),
-        snippet: result.summary
-            .or_else(|| result.highlights.first().cloned())
-            .or(result.text)
-            .unwrap_or_default(),
-        url: result.url,
-    }).collect())
+    Ok(payload
+        .results
+        .into_iter()
+        .take(max_results)
+        .map(|result| SearchResult {
+            title: result.title.unwrap_or_else(|| result.url.clone()),
+            snippet: result
+                .summary
+                .or_else(|| result.highlights.first().cloned())
+                .or(result.text)
+                .unwrap_or_default(),
+            url: result.url,
+        })
+        .collect())
 }
 
 async fn configured_search(
@@ -142,20 +166,46 @@ async fn configured_search(
     token: &CancellationToken,
 ) -> Result<Value, String> {
     use tauri::Manager;
-    let state = app.try_state::<crate::AppState>()
+    let state = app
+        .try_state::<crate::AppState>()
         .ok_or_else(|| "AppState not found in Tauri manager".to_string())?;
-    let provider = state.settings_manager.get("web_search_provider").await
-        .unwrap_or_default().unwrap_or_else(|| "auto".to_string());
-    let depth = state.settings_manager.get("tavily_search_depth").await
-        .unwrap_or_default().unwrap_or_else(|| "fast".to_string());
-    let configured_max = state.settings_manager.get("web_search_max_results").await
-        .unwrap_or_default().and_then(|value| value.parse::<usize>().ok()).unwrap_or(MAX_RESULTS);
-    let max_results = input.get("max_results").and_then(Value::as_u64)
-        .map(|value| value as usize).unwrap_or(configured_max).clamp(1, 20);
-    let tavily_key = state.secret_manager.get_secret("tavily_api_key").await
-        .unwrap_or_default().unwrap_or_default();
-    let exa_key = state.secret_manager.get_secret("exa_api_key").await
-        .unwrap_or_default().unwrap_or_default();
+    let provider = state
+        .settings_manager
+        .get("web_search_provider")
+        .await
+        .unwrap_or_default()
+        .unwrap_or_else(|| "auto".to_string());
+    let depth = state
+        .settings_manager
+        .get("tavily_search_depth")
+        .await
+        .unwrap_or_default()
+        .unwrap_or_else(|| "fast".to_string());
+    let configured_max = state
+        .settings_manager
+        .get("web_search_max_results")
+        .await
+        .unwrap_or_default()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(MAX_RESULTS);
+    let max_results = input
+        .get("max_results")
+        .and_then(Value::as_u64)
+        .map(|value| value as usize)
+        .unwrap_or(configured_max)
+        .clamp(1, 20);
+    let tavily_key = state
+        .secret_manager
+        .get_secret("tavily_api_key")
+        .await
+        .unwrap_or_default()
+        .unwrap_or_default();
+    let exa_key = state
+        .secret_manager
+        .get_secret("exa_api_key")
+        .await
+        .unwrap_or_default()
+        .unwrap_or_default();
 
     let providers: Vec<&str> = match provider.as_str() {
         "tavily" => vec!["tavily", "exa", "duckduckgo"],
@@ -170,18 +220,22 @@ async fn configured_search(
             return Err("Web search cancelled".to_string());
         }
         let result = match candidate {
-            "tavily" if !tavily_key.is_empty() => tavily_search(&tavily_key, query, max_results, &depth).await,
+            "tavily" if !tavily_key.is_empty() => {
+                tavily_search(&tavily_key, query, max_results, &depth).await
+            }
             "exa" if !exa_key.is_empty() => exa_search(&exa_key, query, max_results).await,
             "duckduckgo" => duckduckgo_search(query).await,
             _ => continue,
         };
         match result {
-            Ok(results) if !results.is_empty() => return Ok(json!({
-                "query": query,
-                "provider": candidate,
-                "result_count": results.len(),
-                "results": results
-            })),
+            Ok(results) if !results.is_empty() => {
+                return Ok(json!({
+                    "query": query,
+                    "provider": candidate,
+                    "result_count": results.len(),
+                    "results": results
+                }))
+            }
             Ok(_) => errors.push(format!("{candidate} returned no results")),
             Err(error) => errors.push(error),
         }
@@ -190,6 +244,7 @@ async fn configured_search(
     Err(format!("Web search failed: {}", errors.join("; ")))
 }
 
+#[allow(dead_code)]
 async fn nine_router_search_fallback(
     app: &AppHandle,
     query: &str,
@@ -526,7 +581,10 @@ impl Tool for WebSearchTool {
         let token = CancellationToken::new();
         configured_search(&app, query, &args, &token)
             .await
-            .map(|content| ToolOutput { content, metadata: None })
+            .map(|content| ToolOutput {
+                content,
+                metadata: None,
+            })
             .map_err(|message| ToolError::ExecutionFailed { message })
     }
 }

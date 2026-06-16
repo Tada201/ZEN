@@ -5,6 +5,7 @@ import { WorkbenchInput } from "../ui/WorkbenchInput";
 import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 import { cn } from "@/lib/utils";
 import { normalizeThemeId, THEME_PRESETS } from "@/atlas/theme";
+import { open } from "@tauri-apps/plugin-dialog";
 
 interface GUISettingsProps {
   settings: Record<string, string>;
@@ -71,16 +72,35 @@ export function GUISettings({ settings, onUpdate }: GUISettingsProps) {
 
       <SettingsSection title="Workspace Wallpaper" icon="lucide:palette" description="Custom wallpaper aesthetics settings">
         <SettingsRow
-          label="Custom Wallpaper URL"
-          description="Remote HTTP URL or local filesystem path"
+          label="Custom Wallpaper"
+          description="Remote URL or browse a local image file"
           control={
-            <WorkbenchInput
-              type="text"
-              placeholder="e.g., https://example.com/wallpaper.jpg"
-              value={settings["ui.background-image"] || ""}
-              onChange={e => onUpdate("ui.background-image", e.target.value)}
-              className="h-9 w-full min-w-0 px-3 text-xs sm:w-[240px]"
-            />
+            <div className="flex w-full items-center gap-2 sm:w-[300px]">
+              <WorkbenchInput
+                type="text"
+                placeholder="e.g., https://example.com/wallpaper.jpg"
+                value={settings["ui.background-image"] || ""}
+                onChange={e => onUpdate("ui.background-image", e.target.value)}
+                className="h-9 w-full min-w-0 px-3 text-xs flex-1"
+              />
+              <button
+                type="button"
+                className="h-9 shrink-0 rounded-md border border-border bg-card px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                onClick={async () => {
+                  const selected = await open({
+                    multiple: false,
+                    title: "Select Wallpaper Image",
+                    filters: [{
+                      name: "Images",
+                      extensions: ["png", "jpg", "jpeg", "gif", "webp", "bmp", "avif"],
+                    }],
+                  });
+                  if (selected) onUpdate("ui.background-image", selected);
+                }}
+              >
+                <WorkbenchIcon name="lucide:folder-open" size={14} />
+              </button>
+            </div>
           }
           icon="lucide:palette"
         />

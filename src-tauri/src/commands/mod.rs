@@ -4,6 +4,7 @@ pub mod artifacts;
 pub mod audio;
 pub mod canvas;
 pub mod chat;
+pub mod dependency;
 pub mod document;
 pub mod mcp;
 pub mod memory;
@@ -78,6 +79,12 @@ pub struct AgentState {
     pub event_bus: Arc<EventBus>,
 }
 
+impl Default for AgentState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AgentState {
     pub fn new() -> Self {
         Self {
@@ -93,6 +100,12 @@ pub struct SysInfoState {
     pub hardware: Arc<RwLock<Option<HardwareService>>>,
 }
 
+impl Default for SysInfoState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SysInfoState {
     pub fn new() -> Self {
         Self {
@@ -104,6 +117,7 @@ impl SysInfoState {
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub struct AppState {
     pub db: InitState<SqlitePool>,
     pub llm: InitState<Arc<dyn LlmProvider>>,
@@ -153,6 +167,12 @@ pub struct AppState {
     pub provider_registry: Arc<ProviderRegistry>,
 }
 
+impl Default for AppState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AppState {
     pub fn new() -> Self {
         let progressive = Arc::new(RwLock::new(
@@ -183,11 +203,10 @@ impl AppState {
             }
         }
         for path in paths_to_try {
-            if path.exists() && path.is_dir() {
-                if agent_registry_inner.load_from_dir(&path) > 0 {
+            if path.exists() && path.is_dir()
+                && agent_registry_inner.load_from_dir(&path) > 0 {
                     break;
                 }
-            }
         }
         let agent_registry = Arc::new(agent_registry_inner);
         let hook_registry = Arc::new(HookRegistry::new());
@@ -293,11 +312,11 @@ impl AppState {
     }
 
     pub async fn db(&self) -> ZenResult<SqlitePool> {
-        self.db.get().await.map(|p| p.clone())
+        self.db.get().await
     }
 
     pub async fn rag(&self) -> ZenResult<Arc<dyn crate::rag::VectorStore>> {
-        self.rag.get().await.map(|r| r.clone())
+        self.rag.get().await
     }
 
     pub async fn provider(&self) -> ZenResult<Arc<dyn LlmProvider>> {
@@ -325,7 +344,7 @@ impl AppState {
 
     pub async fn set_workspace_folder(&self, path: impl AsRef<std::path::Path>) -> ZenResult<()> {
         let canonical = crate::workspace::canonicalize_workspace_root(path.as_ref())
-            .map_err(|e| ZenError::Custom(format!("Invalid workspace root: {}", e).into()))?;
+            .map_err(|e| ZenError::Custom(format!("Invalid workspace root: {}", e)))?;
 
         {
             let mut workspace = self.workspace_folder.write().await;
@@ -351,6 +370,6 @@ impl AppState {
         let rag = self.rag.get().await?;
         rag.search(query_vec, limit)
             .await
-            .map_err(|e| ZenError::Custom(format!("RAG search failed: {}", e).into()))
+            .map_err(|e| ZenError::Custom(format!("RAG search failed: {}", e)))
     }
 }

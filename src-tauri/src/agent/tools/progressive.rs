@@ -17,17 +17,14 @@ use vector_search::VectorSearchStandalone;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum DetailLevel {
+    #[default]
     Minimal,
     Standard,
     Full,
 }
 
-impl Default for DetailLevel {
-    fn default() -> Self {
-        DetailLevel::Minimal
-    }
-}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ToolMetadata {

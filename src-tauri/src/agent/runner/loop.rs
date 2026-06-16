@@ -718,7 +718,7 @@ impl Runner {
 
             for (index, result) in remaining_indexes
                 .into_iter()
-                .zip(remaining_results.into_iter())
+                .zip(remaining_results)
             {
                 ordered_results[index] = Some(result);
             }
@@ -766,7 +766,7 @@ impl Runner {
                             tracing::info!("HANDOFF: {} → {}", current_agent.id, next_agent.id);
 
                             // Emit chat:status for general status updates
-                            let _ = self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
+                            self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
                                 message: format!("Transferring to {}", next_agent.name),
                                 chat_id: chat_id.clone(),
                                 iteration: Some(iteration),

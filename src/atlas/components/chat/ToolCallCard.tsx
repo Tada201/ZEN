@@ -79,6 +79,26 @@ function humanizeToolName(name: string) {
   return name.replace(/[_-]+/g, ' ').trim() || 'tool';
 }
 
+function isWrappedWebSearch(name: string, input: Record<string, unknown>, outputPreview?: { results: unknown[] }) {
+  const normalized = name.toLowerCase();
+  const innerTool = String(input.tool_id || input.tool || input.name || '').toLowerCase();
+  const args = input.arguments && typeof input.arguments === 'object' && !Array.isArray(input.arguments)
+    ? input.arguments as Record<string, unknown>
+    : {};
+  const hasSearchArgs = Boolean(input.query || args.query || input.url || args.url);
+  return (
+    normalized.includes('search') ||
+    normalized.includes('web') ||
+    innerTool.includes('search') ||
+    innerTool.includes('web') ||
+    (normalized === 'tool_exec' && (hasSearchArgs || Boolean(outputPreview?.results.length)))
+  );
+}
+
+function displayToolName(name: string, input: Record<string, unknown>, outputPreview?: { results: unknown[] }) {
+  return isWrappedWebSearch(name, input, outputPreview) ? 'Web search' : humanizeToolName(name);
+}
+
 function getToolActionVerb(name: string, status: ToolCall['status']) {
   if (status === 'awaiting_approval') return 'Needs approval';
   if (status === 'error') return 'Failed';
@@ -119,11 +139,13 @@ function safeExternalUrl(value?: string) {
 export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, onRetry, defaultExpanded, streamingPreview }: ToolCallCardProps) {
   const { id, name, status, input, output, durationMs, attempts, startTime, approvalContext, agentName, agentId, parentAgentId, iteration } = toolCall;
   const batchId = toolCall.toolBatchId || toolCall.batchId;
-  const ToolIcon = getToolIcon(name);
 
   const safeInput = useMemo(() => toRecord(input), [input]);
   const displayInput = useMemo(() => redactDisplayValue(safeInput) as Record<string, unknown>, [safeInput]);
   const outputPreview = useMemo(() => buildToolOutputPreview(output || ''), [output]);
+  const effectiveName = displayToolName(name, displayInput, outputPreview);
+  const isWebSearch = effectiveName === 'Web search';
+  const ToolIcon = getToolIcon(effectiveName);
   const checklistPreview = useMemo(() => buildToolChecklistPreview(displayInput), [displayInput]);
   const argPreview = String(
     displayInput.query ||
@@ -142,9 +164,10 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
       if (streamingPreview) return `${toolActionVerb} ${streamingPreview}`;
       return argPreview ? `${toolActionVerb} ${argPreview}` : toolActionVerb;
     }
-    if (status === 'error') return outputSummary || `${humanizeToolName(name)} failed`;
-    return outputSummary || `${humanizeToolName(name)} completed`;
-  }, [argPreview, name, outputSummary, status, streamingPreview, toolActionVerb]);
+    if (status === 'error') return outputSummary || `${effectiveName} failed`;
+    if (isWebSearch && outputSummary) return `Web search — ${outputSummary}`;
+    return outputSummary || `${effectiveName} completed`;
+  }, [argPreview, effectiveName, isWebSearch, outputSummary, status, streamingPreview, toolActionVerb]);
 
   const copyValue = (value: unknown, label: string) => {
     navigator.clipboard.writeText(typeof value === 'string' ? value : JSON.stringify(value, null, 2));
@@ -167,7 +190,7 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
     medium: 'border-amber-400/20 bg-amber-400/10 text-amber-200',
     high: 'border-orange-400/25 bg-orange-400/10 text-orange-200',
     critical: 'border-rose-400/25 bg-rose-400/10 text-rose-200',
-  }[approvalContext?.riskLevel || ''] || 'border-zinc-600/40 bg-white/[0.025] text-zinc-400';
+  }[approvalContext?.riskLevel || ''] || 'border-zinc-500/50 bg-black/45 text-zinc-300';
   const exactCommand = displayInput.command || displayInput.cmd || displayInput.script || displayInput.query || displayInput.path || displayInput.url || displayInput._previewError;
   const exactCommandText = exactCommand === undefined || exactCommand === null ? "" : String(exactCommand);
   const inputDetail = stringifyDetail(displayInput);
@@ -212,8 +235,8 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
         type="button"
         onClick={handleToggle}
         className={cn(
-          'group flex min-h-8 w-full min-w-0 items-center gap-2 rounded-md border border-white/[0.04] px-2 py-1 text-left transition-all duration-200',
-          'hover:border-white/[0.08] hover:bg-white/[0.015]'
+          'group flex min-h-8 w-full min-w-0 items-center gap-2 rounded-md border border-white/[0.08] bg-black/40 px-2 py-1 text-left backdrop-blur-sm transition-all duration-200',
+          'hover:border-white/[0.12] hover:bg-black/50'
         )}
       >
         <span className={cn(
@@ -268,7 +291,7 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
             <div className="flex min-w-0 flex-wrap items-center gap-2 text-[12px] leading-5">
               <ToolIcon className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
               <code className="min-w-0 max-w-full truncate rounded bg-white/[0.035] px-1.5 py-0.5 font-mono text-zinc-300">
-                {name}
+                {effectiveName}
               </code>
               <span className={cn('shrink-0 rounded border px-1.5 py-0.5 text-[11px] uppercase leading-none', statusStyle)}>
                 {statusLabel}

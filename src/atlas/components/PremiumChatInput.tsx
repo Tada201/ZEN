@@ -18,7 +18,6 @@ import { ModelSearchDropdown } from './chat/input/ModelSearchDropdown';
 import { PinnedActionBar } from './chat/input/PinnedActionBar';
 import { TaskChecklistPanel } from './chat/input/TaskChecklistPanel';
 import { SuggestedPromptStrip } from './chat/input/SuggestedPromptStrip';
-import { PromptPicker } from "./chat/PromptPicker";
 import type { PromptDefinition } from "./chat/promptRegistry";
 import type { PremiumChatInputProps, ThinkingPayload } from './chat/input/PremiumChatInputTypes';
 import { fileToAttachment } from './chat/input/fileAttachments';
@@ -333,17 +332,18 @@ export const PremiumChatInput = memo(({
         <SuggestedPromptStrip isLoading={isLoading} onSelect={handleSuggestedClick} />
       )}
 
-      {/* Dynamic Prompt Picker */}
+      {/* DISABLED: PromptPicker pills above input — feature hidden per design review.
       <PromptPicker
         selectedId={selectedPrompt?.id ?? null}
         onSelect={setSelectedPrompt}
         compact
       />
+      */}
 
       <div
         ref={containerRef}
         className={cn(
-          "w-full relative bg-white dark:bg-[#141415] rounded-2xl shadow-[0_2px_14px_-4px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_14px_-4px_rgba(0,0,0,0.2)] ring-1 ring-black/5 dark:ring-white/10 overflow-visible transition-all duration-200",
+          "w-full relative bg-white/80 dark:bg-white/[0.12] backdrop-blur-2xl backdrop-saturate-150 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.05)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.05)] ring-1 ring-black/5 dark:ring-white/20 overflow-visible transition-all duration-200",
           isLoading && "ring-primary/40 dark:ring-primary/50 shadow-[0_0_15px_-3px_rgba(var(--primary-rgb),0.1)]"
         )}
       >

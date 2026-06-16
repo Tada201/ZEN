@@ -112,6 +112,12 @@ impl SettingsService {
     }
 }
 
+impl Default for SettingsService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

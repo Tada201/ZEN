@@ -5,6 +5,10 @@ const source = readFileSync(
   new URL("../src/atlas/components/chat/ReasoningBlock.tsx", import.meta.url),
   "utf8",
 );
+const groupingSource = readFileSync(
+  new URL("../src/atlas/components/chat/assistantMessageParts.ts", import.meta.url),
+  "utf8",
+);
 
 assert(
   source.includes("Collapse reasoning details") &&
@@ -35,6 +39,12 @@ assert(
   source.includes("!isThinking && !defaultOpen && !userToggled") &&
     source.includes("setExpanded(false)"),
   "reasoning block should auto-collapse after completion unless the user manually opened it",
+);
+
+assert(
+  groupingSource.includes('grouped.findIndex((item) => item.type === "reasoning")') &&
+    groupingSource.includes("one reasoning capsule per assistant message"),
+  "interleaved reasoning chunks should render in one reasoning block per assistant message",
 );
 
 console.log("reasoning block ux verifier passed");

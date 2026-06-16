@@ -107,8 +107,8 @@ assert.equal(parallelTrace.approvalCount, 0, "approval count should not include 
 assert.equal(parallelTrace.completedCount, 2, "completed count should include finished tools");
 assert.equal(parallelTrace.progressPercent, 67, "progress should reflect finished tools");
 assert.equal(parallelTrace.ownerSummary, "Researcher x2, Verifier", "owner summary should show subagent lanes and counts");
-assert.deepEqual(parallelTrace.runningToolNames, ["web_search"], "active tool names should be scan-friendly");
-assert.deepEqual(parallelTrace.runningToolSummaries, ["web_search: codebuff"], "active tool summaries should include exact query/command/path previews");
+assert.deepEqual(parallelTrace.runningToolNames, ["Web search"], "active tool names should be user-friendly");
+assert.deepEqual(parallelTrace.runningToolSummaries, ["Web search: codebuff"], "active tool summaries should include exact query/command/path previews");
 assert.equal(parallelTrace.latestFinishedTool.name, "read_file", "latest finished tool should use completion timestamp, not array order");
 assert.equal(parallelTrace.completionSummary, "run_command -> read_file", "completion summary should expose as-finished order");
 assert.equal(parallelTrace.resultSummary, "passed", "batch result summary should preserve explicit command success previews");
@@ -117,9 +117,9 @@ assert.equal(parallelTrace.batchLanes.length, 1, "timing-inferred parallel tools
 assert.equal(parallelTrace.batchLanes[0].label, "Parallel batch 1", "timing-inferred lane should have a readable label");
 assert.equal(parallelTrace.batchLanes[0].runningCount, 1, "lane should preserve running tool count");
 assert.equal(parallelTrace.batchLanes[0].ownerSummary, "Researcher x2, Verifier", "lane should summarize owners");
-assert.deepEqual(parallelTrace.batchLanes[0].runningToolNames, ["web_search"], "lane should expose active tool names");
-assert.deepEqual(parallelTrace.batchLanes[0].runningToolSummaries, ["web_search: codebuff"], "lane should expose active tool summaries with exact input previews");
-assert.equal(parallelTrace.activeLaneSummary, "Parallel batch 1: running web_search: codebuff", "trace should expose the active batch lane and exact running tool target for collapsed status");
+assert.deepEqual(parallelTrace.batchLanes[0].runningToolNames, ["Web search"], "lane should expose active tool names");
+assert.deepEqual(parallelTrace.batchLanes[0].runningToolSummaries, ["Web search: codebuff"], "lane should expose active tool summaries with exact input previews");
+assert.equal(parallelTrace.activeLaneSummary, "Parallel batch 1: running Web search: codebuff", "trace should expose the active batch lane and exact running tool target for collapsed status");
 assert.deepEqual(
   parallelTrace.completionOrder.map((tool) => tool.name),
   ["run_command", "read_file"],

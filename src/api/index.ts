@@ -21,6 +21,8 @@ export { artifactsApi } from "./artifactsApi";
 export type { BackendArtifact } from "./artifactsApi";
 export { documentsApi } from "./documentsApi";
 export type { BackendDocument } from "./documentsApi";
+export { dependenciesApi } from "./dependenciesApi";
+export type { DependencyStatus } from "./dependenciesApi";
 export {
   mapBackendToolMeta,
   normalizeToolRiskLevel,

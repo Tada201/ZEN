@@ -226,12 +226,12 @@ impl LlmProvider for OllamaProvider {
                     thinking,
                     images: m.images.map(|imgs| {
                         imgs.into_iter()
-                            .filter_map(|url| {
+                            .map(|url| {
                                 // Ollama expects raw base64, so strip data URL prefix if present
                                 if let Some(comma_pos) = url.find(',') {
-                                    Some(url[comma_pos + 1..].to_string())
+                                    url[comma_pos + 1..].to_string()
                                 } else {
-                                    Some(url)
+                                    url
                                 }
                             })
                             .collect()

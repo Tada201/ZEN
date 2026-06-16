@@ -113,6 +113,7 @@ impl TerminalService {
         cols: u16,
         rows: u16,
         cwd: Option<String>,
+        user_approved: bool,
     ) -> ZenResult<String> {
         let resolved_cwd = match cwd {
             Some(path) => Some(
@@ -140,7 +141,8 @@ impl TerminalService {
             reason: Some("frontend requested interactive terminal shell".to_string()),
         });
 
-        if decision != PermissionDecision::Allow {
+        let explicitly_allowed = decision == PermissionDecision::Ask && user_approved;
+        if decision != PermissionDecision::Allow && !explicitly_allowed {
             security
                 .record_audit(AuditEvent {
                     operation: PrivilegedOperation::ShellCommand,
@@ -153,6 +155,18 @@ impl TerminalService {
             return Err(ZenError::Custom(
                 "Terminal spawn requires explicit approval by security policy".to_string(),
             ));
+        }
+
+        if explicitly_allowed {
+            security
+                .record_audit(AuditEvent {
+                    operation: PrivilegedOperation::ShellCommand,
+                    decision: PermissionDecision::Allow,
+                    caller: "terminal_spawn".to_string(),
+                    target: Some("interactive_shell".to_string()),
+                    reason: Some("user explicitly approved interactive terminal spawn".to_string()),
+                })
+                .await;
         }
 
         let mut manager = manager.write().await;
@@ -245,5 +259,11 @@ impl TerminalService {
         } else {
             Err(ZenError::Custom("Terminal session not found".to_string()))
         }
+    }
+}
+
+impl Default for TerminalService {
+    fn default() -> Self {
+        Self::new()
     }
 }

@@ -107,6 +107,8 @@ export const useCesiumMapControls = ({
         const viewer = viewerRef.current;
         if (!viewer || viewer.isDestroyed()) return;
 
+        let destroyed = false;
+
         viewer.imageryLayers.removeAll();
 
         if (googleTilesetRef.current) {
@@ -139,7 +141,7 @@ export const useCesiumMapControls = ({
                     onlyUsingWithGoogleGeocoder: true,
                     ...({ enableCollision: true } as Record<string, unknown>),
                 }).then((tileset) => {
-                    if (viewer.isDestroyed() || imageryProvider !== 'google-3d') {
+                    if (destroyed || imageryProvider !== 'google-3d') {
                         tileset.destroy();
                         return;
                     }
@@ -149,7 +151,9 @@ export const useCesiumMapControls = ({
                     googleTilesetRef.current = tileset;
                     viewer.scene.requestRender();
                 }).catch((err) => {
-                    console.error("[CesiumMapRenderer] Failed to load Google Photorealistic 3D Tileset:", err);
+                    if (!destroyed) {
+                        console.error("[CesiumMapRenderer] Failed to load Google Photorealistic 3D Tileset:", err);
+                    }
                 });
             } else {
                 viewer.imageryLayers.addImageryProvider(
@@ -161,6 +165,8 @@ export const useCesiumMapControls = ({
         } else {
             viewer.scene.globe.baseColor = Cesium.Color.BLACK;
         }
+
+        return () => { destroyed = true; };
     }, [viewerRef, googleTilesetRef, imageryProvider, googleMapsApiKey]);
 
     useEffect(() => {

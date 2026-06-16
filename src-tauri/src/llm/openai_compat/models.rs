@@ -61,6 +61,51 @@ impl OpenAiCompatProvider {
     }
 
     pub async fn do_list_models(&self) -> ZenResult<Vec<ModelInfo>> {
+        let provider_lower = self.provider_name.to_lowercase();
+
+        if provider_lower == "mimo" || provider_lower == "mimo-free" {
+            let hardcoded_models = vec![
+                ("mimo-auto", "MiMo Auto"),
+                ("mimo-v2.5-pro", "MiMo V2.5 Pro"),
+                ("mimo-v2.5", "MiMo V2.5"),
+                ("mimo-v2-pro", "MiMo V2 Pro"),
+                ("mimo-v2-omni", "MiMo V2 Omni"),
+                ("mimo-v2-flash", "MiMo V2 Flash"),
+            ];
+            
+            return Ok(hardcoded_models.into_iter().map(|(id, name)| {
+                // Populate capability cache for runtime request gating
+                if let Ok(mut cache) = self.model_capabilities.write() {
+                    cache.insert(
+                        id.to_string(),
+                        ModelCapabilities {
+                            supports_tools: true,
+                            supports_reasoning: true,
+                        },
+                    );
+                }
+
+                ModelInfo {
+                    id: id.to_string(),
+                    name: id.to_string(),
+                    display_name: Some(name.to_string()),
+                    description: None,
+                    size: None,
+                    modified_at: None,
+                    provider: Some(self.provider_name.clone()),
+                    model_type: None,
+                    arch: None,
+                    quantization: None,
+                    max_context_length: Some(32768),
+                    state: None,
+                    supports_vision: Some(false),
+                    supports_tools: Some(true),
+                    supports_reasoning: Some(true),
+                    reasoning_config_type: Some("none".to_string()),
+                }
+            }).collect());
+        }
+
         let url = self.url("/models");
         info!(provider = %self.provider_name, url = %url, "Fetching model list");
 

@@ -57,9 +57,16 @@ pub(super) async fn preprocess_tool_calls(
         match tc.name.as_str() {
             "tool_list" => {
                 let query = tc.args.get("query").and_then(|v| v.as_str());
-                let descriptors = tool_manager
+                let limit = tc
+                    .args
+                    .get("limit")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(16)
+                    .clamp(1, 24) as usize;
+                let mut descriptors = tool_manager
                     .list_allowed_matching(authorized_tool_ids, query)
                     .await;
+                descriptors.truncate(limit);
                 let content = serde_json::to_value(&descriptors).unwrap_or_default();
                 ordered_results[index] = Some(normalize_tool_result(
                     tc.id.clone(),

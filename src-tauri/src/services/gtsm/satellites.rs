@@ -107,7 +107,7 @@ pub async fn fetch_satellites(tx: &Sender<String>) -> Result<Vec<Satellite>> {
     let mut sent_count = 0;
 
     for (name, elements) in &cache.elements {
-        if let Ok(constants) = Constants::from_elements(&elements) {
+        if let Ok(constants) = Constants::from_elements(elements) {
             let now = Utc::now();
             let t_since =
                 (now.timestamp() as f64 - elements.datetime.and_utc().timestamp() as f64) / 60.0;

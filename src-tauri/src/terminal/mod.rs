@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 const OUTPUT_BUFFER_LIMIT: usize = 64 * 1024; // 64KB max buffer per session
+type OutputCallback = Box<dyn Fn(&str, &str) + Send + 'static>;
 
 /// A single PTY session — holds only Send+Sync-safe handles.
 /// The MasterPty is consumed during construction; we only keep the writer + reader task.
@@ -88,7 +89,7 @@ impl TerminalManager {
         cwd: Option<String>,
         cols: u16,
         rows: u16,
-        on_output: Option<Box<dyn Fn(&str, &str) + Send + 'static>>,
+        on_output: Option<OutputCallback>,
     ) -> Result<String> {
         // Build shell command (PowerShell on Windows, bash/zsh on Unix)
         let cmd = if cfg!(target_os = "windows") {
@@ -110,7 +111,7 @@ impl TerminalManager {
         cwd: Option<String>,
         cols: u16,
         rows: u16,
-        on_output: Option<Box<dyn Fn(&str, &str) + Send + 'static>>,
+        on_output: Option<OutputCallback>,
     ) -> Result<String> {
         let session_id = uuid::Uuid::new_v4().to_string();
 
@@ -351,6 +352,12 @@ impl TerminalManager {
 
         self.sessions.clear();
         tracing::info!("All terminal sessions cleaned up");
+    }
+}
+
+impl Default for TerminalManager {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

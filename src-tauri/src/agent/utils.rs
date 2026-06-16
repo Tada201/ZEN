@@ -1,5 +1,4 @@
-/// Shared utilities for the agent system.
-
+//! Shared utilities for the agent system.
 /// Returns the current Unix epoch time in milliseconds.
 pub fn now_ms() -> i64 {
     std::time::SystemTime::now()

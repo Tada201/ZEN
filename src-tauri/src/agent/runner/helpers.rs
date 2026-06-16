@@ -78,6 +78,7 @@ pub fn is_tool_capability_error(error: &str) -> bool {
 }
 
 /// Compact old tool results in conversation to reduce context size.
+#[allow(clippy::ptr_arg)]
 pub fn compact_conversation(conversation: &mut Vec<ChatMessage>, keep_recent: usize) {
     if conversation.len() <= keep_recent {
         return;
@@ -115,14 +116,16 @@ pub fn compact_conversation_token_aware(
 
         let mut removed_any = false;
         for i in removable_start..removable_end.saturating_sub(1) {
-            if conversation[i].tool_calls.is_some() && conversation[i].role == "assistant" {
-                if i + 1 < removable_end && conversation[i + 1].role == "tool" {
-                    conversation.remove(i);
-                    conversation.remove(i);
-                    removable_end -= 2;
-                    removed_any = true;
-                    break;
-                }
+            if conversation[i].tool_calls.is_some()
+                && conversation[i].role == "assistant"
+                && i + 1 < removable_end
+                && conversation[i + 1].role == "tool"
+            {
+                conversation.remove(i);
+                conversation.remove(i);
+                removable_end -= 2;
+                removed_any = true;
+                break;
             }
         }
 

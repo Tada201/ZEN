@@ -49,6 +49,12 @@ impl HookRegistry {
     }
 }
 
+impl Default for HookRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 struct SecurityHook;
 
 impl ToolHook for SecurityHook {

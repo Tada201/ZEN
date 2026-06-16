@@ -455,6 +455,7 @@ export function normalizeVercelMessage(msg: unknown): Message {
       normalized.content = finalContent;
     }
     normalized.steps = steps;
+
   }
 
   return normalized as Message;
@@ -483,6 +484,7 @@ export const PROVIDERS = [
   { id: "deepseek", label: "DeepSeek", placeholder: "sk-...", docsUrl: "https://platform.deepseek.com/" },
   { id: "openrouter", label: "OpenRouter", placeholder: "sk-or-...", docsUrl: "https://openrouter.ai/keys" },
   { id: "opencode", label: "OpenCode Free", placeholder: "Not required", docsUrl: "https://opencode.ai/docs/zen" },
+  { id: "mimo", label: "MiMo Code Free", placeholder: "Not required", docsUrl: "https://mimo.xiaomi.com" },
   { id: "together", label: "Together AI", placeholder: "API Key...", docsUrl: "https://api.together.xyz/" },
   { id: "ollama", label: "Ollama (Local)", placeholder: "Not required", docsUrl: "https://ollama.com/" },
   { id: "lmstudio", label: "LM Studio (Local)", placeholder: "Not required", docsUrl: "https://lmstudio.ai/" },

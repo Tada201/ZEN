@@ -21,6 +21,7 @@ import {
 import { AgentExecutionTrace } from "./AgentExecutionTrace";
 
 const PremiumCard = React.lazy(() => import("../genui/PremiumCard").then(m => ({ default: m.PremiumCard })));
+const OpenUIRenderer = React.lazy(() => import("../OpenUIRenderer").then(m => ({ default: m.OpenUIRenderer })));
 
 const CardFallback = () => (
   <div className="h-24 w-64 rounded-xl border border-border/30 bg-card/20" aria-hidden="true" />
@@ -29,6 +30,13 @@ const CardFallback = () => (
 // ToolCallStreaming/ToolCallReady are rendered inline in the ToolCallCard header
 // via the streamingPreview prop — no need for separate AgentActionStep display.
 const VISIBLE_CHAT_STATUS_PHASES: ReadonlySet<ChatStatusPhase> = new Set([]);
+
+function completedStepDisplayRank(step: ReturnType<typeof groupAssistantSteps>[number]) {
+  if (step.type === "reasoning") return 0;
+  if (step.type === "tool-group") return 1;
+  if (step.type === "action") return 2;
+  return 3;
+}
 
 function isVisibleChatStatusStep(step: Step) {
   const phase = step.metadata?.phase;
@@ -95,8 +103,16 @@ export function AssistantMessage({
   }, [groupedSteps]);
 
   const visibleGroupedSteps = useMemo(() => {
-    return groupedSteps.filter((step) => step.type !== "action" || isVisibleChatActionStep(step as Step));
-  }, [groupedSteps]);
+    const visible = groupedSteps.filter((step) => step.type !== "action" || isVisibleChatActionStep(step as Step));
+    if (message.status === "sending") return visible;
+    if (!visible.some((step) => step.type === "tool-group") || !visible.some((step) => step.type === "text")) {
+      return visible;
+    }
+    return visible
+      .map((step, index) => ({ step, index }))
+      .sort((a, b) => completedStepDisplayRank(a.step) - completedStepDisplayRank(b.step) || a.index - b.index)
+      .map(({ step }) => step);
+  }, [groupedSteps, message.status]);
 
   const showPostToolWorking = useMemo(() => {
     if (visibleGroupedSteps.length > 0) {
@@ -147,23 +163,23 @@ export function AssistantMessage({
         <div className="flex min-w-0 flex-col gap-2 flex-1">
           <div className="relative">
             <div className={cn("space-y-4", compact && "space-y-2")}>
-            {(message.model || message.provider) && (
+              {(message.model || message.provider) && (
                 <div className="flex items-center gap-2 mb-2 select-none">
-                <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-bold uppercase tracking-wider bg-primary/5 border-primary/10 text-primary/60 hover:bg-primary/10 transition-colors">
-                  <Zap className="mr-1 h-3 w-3" />
-                  {message.model || "Default"}
-                  {message.provider && (
-                    <span className="ml-1 opacity-40 border-l border-primary/20 pl-1">
-                      {message.provider}
-                    </span>
-                  )}
-                </Badge>
-              </div>
-            )}
+                  <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-bold uppercase tracking-wider bg-primary/20 backdrop-blur-sm border-primary/20 text-primary/70 hover:bg-primary/30 transition-colors shadow-sm">
+                    <Zap className="mr-1 h-3 w-3" />
+                    {message.model || "Default"}
+                    {message.provider && (
+                      <span className="ml-1 opacity-40 border-l border-primary/20 pl-1">
+                        {message.provider}
+                      </span>
+                    )}
+                  </Badge>
+                </div>
+              )}
 
-            {message.metadata?.researchSteps && message.metadata.researchSteps.length > 0 && (
-              <ResearchTimeline steps={message.metadata.researchSteps} />
-            )}
+              {message.metadata?.researchSteps && message.metadata.researchSteps.length > 0 && (
+                <ResearchTimeline steps={message.metadata.researchSteps} />
+              )}
 
             {message.status === "sending" && !hasVisibleAnswer && !hasResearchProgress && !hasVisibleProgress ? (
               <StreamingSkeleton compact={compact} />
@@ -310,19 +326,28 @@ export function AssistantMessage({
               </div>
             )}
 
-            {message.artifact && (
+            {message.artifact?.type === "openui" && (
+              <div className="min-w-0 overflow-visible rounded-lg border border-border/40 bg-card/20 p-3">
+                <Suspense fallback={<CardFallback />}>
+                  <OpenUIRenderer
+                    content={message.artifact.content}
+                    isStreaming={message.status === "sending"}
+                    chatId={message.sessionId}
+                  />
+                </Suspense>
+              </div>
+            )}
+
+            {message.artifact && message.artifact.type !== "openui" && (
               <div 
                 className="flex items-center gap-4 rounded-xl border border-border/40 bg-card/40 p-4 cursor-pointer hover:bg-muted/40 transition-all group/art"
                 onClick={() => onOpenArtifact(message.artifact!)}
               >
                 <div className={cn(
                   "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-transform group-hover/art:scale-105",
-                  message.artifact.type === "openui" 
-                    ? "bg-purple-500/10 text-purple-500"
-                    : "bg-blue-500/10 text-blue-500"
+                  "bg-blue-500/10 text-blue-500"
                 )}>
                   {message.artifact.type === "code" ? <Code2 className="h-5 w-5" /> : 
-                    message.artifact.type === "openui" ? <Zap className="h-5 w-5" /> :
                     <FileText className="h-5 w-5" />}
                 </div>
                 <div className="flex flex-1 flex-col min-w-0">

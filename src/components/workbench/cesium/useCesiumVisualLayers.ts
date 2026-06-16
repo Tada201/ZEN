@@ -91,6 +91,8 @@ export const useCesiumVisualLayers = ({
         const ds = dataSourcesRef.current.cables;
         if (!viewer || viewer.isDestroyed() || !ds) return;
 
+        let destroyed = false;
+
         ds.entities.suspendEvents();
         ds.entities.removeAll();
 
@@ -105,14 +107,14 @@ export const useCesiumVisualLayers = ({
                 return res.json();
             })
             .then(geoJson => {
-                if (viewer.isDestroyed() || !selectedLayers.includes('cables')) return;
+                if (destroyed || !selectedLayers.includes('cables')) return;
 
                 Cesium.GeoJsonDataSource.load(geoJson, {
                     stroke: Cesium.Color.fromCssColorString('rgba(0, 240, 180, 0.75)'),
                     strokeWidth: 2,
                     clampToGround: true
                 }).then(loadedDs => {
-                    if (viewer.isDestroyed() || !selectedLayers.includes('cables')) return;
+                    if (destroyed || !selectedLayers.includes('cables')) return;
 
                     loadedDs.entities.values.forEach(entity => {
                         if (entity.polyline) {
@@ -128,7 +130,9 @@ export const useCesiumVisualLayers = ({
                 });
             })
             .catch(err => {
-                console.warn("[CesiumMapRenderer] Undersea cables fetch failed, using fallback high-traffic lanes:", err);
+                if (!destroyed) {
+                    console.warn("[CesiumMapRenderer] Undersea cables fetch failed, using fallback high-traffic lanes:", err);
+                }
 
                 const fallbacks = [
                     { name: "Atlantic Crossing 1 (AC-1)", coords: [[-74.0060, 40.7128], [-4.2181, 50.7978], [8.6821, 50.1109]] },
@@ -155,8 +159,10 @@ export const useCesiumVisualLayers = ({
                 viewer.scene.requestRender();
             })
             .finally(() => {
-                ds.entities.resumeEvents();
+                if (!destroyed) ds.entities.resumeEvents();
             });
+
+        return () => { destroyed = true; };
     }, [viewerRef, dataSourcesRef, selectedLayers]);
 
     useEffect(() => {

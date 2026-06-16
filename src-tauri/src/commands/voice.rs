@@ -45,7 +45,7 @@ pub async fn download_whisper_model(
     speech
         .download_model(&model_name)
         .await
-        .map_err(|e| ZenError::Internal(e))
+        .map_err(ZenError::Internal)
 }
 
 #[derive(Debug, Serialize)]
@@ -121,19 +121,16 @@ pub async fn transcribe_audio(
 
         for chunk in pcm_i16.chunks(frame_len) {
             if chunk.len() == frame_len {
-                match vad.is_voice_segment(chunk) {
-                    Ok(is_voice) => {
-                        if is_voice {
-                            voiced_frames += 1;
-                            consecutive_voiced += 1;
-                            if consecutive_voiced > max_consecutive_voiced {
-                                max_consecutive_voiced = consecutive_voiced;
-                            }
-                        } else {
-                            consecutive_voiced = 0;
+                if let Ok(is_voice) = vad.is_voice_segment(chunk) {
+                    if is_voice {
+                        voiced_frames += 1;
+                        consecutive_voiced += 1;
+                        if consecutive_voiced > max_consecutive_voiced {
+                            max_consecutive_voiced = consecutive_voiced;
                         }
+                    } else {
+                        consecutive_voiced = 0;
                     }
-                    Err(_) => {}
                 }
             }
         }
@@ -177,7 +174,7 @@ pub async fn transcribe_audio(
     let transcript = speech
         .transcribe(samples, &requested_model, gpu_device)
         .await
-        .map_err(|e| ZenError::Internal(e))?;
+        .map_err(ZenError::Internal)?;
     info!(
         model = %requested_model,
         elapsed_ms = started_at.elapsed().as_millis(),
@@ -308,7 +305,7 @@ pub async fn speak_text(
     if let Some(tts) = tts_lock.as_ref() {
         tts.speak(&text, app)
             .await
-            .map_err(|e| ZenError::Internal(e))?;
+            .map_err(ZenError::Internal)?;
     } else {
         return Err(ZenError::Internal(
             "TTS service is not initialized. Check Settings → Audio to configure TTS.".into(),
@@ -366,22 +363,20 @@ pub async fn list_voice_models(app: AppHandle) -> Result<Vec<VoiceModel>, ZenErr
         let entries = std::fs::read_dir(&voices_dir)
             .map_err(|e| ZenError::Internal(format!("Failed to read voices dir: {}", e)))?;
 
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if path.extension().map(|e| e == "onnx").unwrap_or(false) {
-                    let name = path
-                        .file_stem()
-                        .map(|s| s.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "Unknown".to_string());
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().map(|e| e == "onnx").unwrap_or(false) {
+                let name = path
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "Unknown".to_string());
 
-                    voices.push(VoiceModel {
-                        id: name.clone(),
-                        name,
-                        path: path.to_string_lossy().to_string(),
-                        is_default: false,
-                    });
-                }
+                voices.push(VoiceModel {
+                    id: name.clone(),
+                    name,
+                    path: path.to_string_lossy().to_string(),
+                    is_default: false,
+                });
             }
         }
     }

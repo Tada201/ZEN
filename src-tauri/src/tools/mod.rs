@@ -1,3 +1,4 @@
+pub mod capability;
 pub mod fs_tools;
 pub mod manager;
 pub mod operational_map;
@@ -417,6 +418,12 @@ impl ToolRegistry {
 
     pub fn update_permissions(&mut self, permissions: ToolPermissions) {
         self.permissions = permissions;
+    }
+}
+
+impl Default for ToolRegistry {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

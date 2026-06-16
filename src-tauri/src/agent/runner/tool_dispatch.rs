@@ -139,7 +139,7 @@ impl Runner {
 
             let pipeline_call = effective_pipeline_call.as_ref().unwrap_or(pipeline_call);
             let tool_call = &pipeline_call.resolved;
-            let _ = self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
+            self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
                 message: format!("Executing: {}", tool_call.name),
                 chat_id: chat_id.to_string(),
                 iteration: Some(iteration),
@@ -370,7 +370,7 @@ impl Runner {
 
                             // Phase 3.3: Check session-scoped permission memory first
                             let cache_key =
-                                format!("{}:{:x}", tc_name, Sha256::digest(&tc_args.to_string()));
+                                format!("{}:{:x}", tc_name, Sha256::digest(tc_args.to_string()));
                             let always_allow = {
                                 let mut session_perms = state.session_permissions.lock().await;
                                 if !session_perms.contains_key(chat_id) {
@@ -418,7 +418,7 @@ impl Runner {
                                 // Schedule the approval wait inside this tool task so
                                 // one high-risk tool does not block the rest of the
                                 // parallel batch from starting.
-                                let _ = self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
+                                self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
                                     message: format!("Awaiting approval: {}", v2_tool_call.name),
                                     chat_id: chat_id.to_string(),
                                     iteration: Some(iteration),

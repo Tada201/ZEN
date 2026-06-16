@@ -4,10 +4,9 @@ import { useGTSMStore } from "@/lib/stores/useGTSMStore";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Activity, BarChart3, Cpu, Box, Terminal as TerminalIcon, Map as MapIcon, Zap, X, Paintbrush, Database, Workflow, Telescope, PenLine, Sigma
+  Activity, Cpu, Box, Terminal as TerminalIcon, Map as MapIcon, Zap, X, Paintbrush, PenLine, Sigma
 } from 'lucide-react';
 import { getDefaultRightPanelTab, getRightPanelFeature, isRightPanelFeatureVisible } from "@/lib/features/frontendFeatures";
-import { ChatAnalyticsPanel, WorkflowPanel } from "./right-panel/RightPanelInsights";
 // Lazy load heavy components to prevent main thread blocking and high INP
 const SystemDiagnostics = React.lazy(() => import("@/components/shared/SystemDiagnostics").then(m => ({ default: m.SystemDiagnostics })));
 const XTermPanel = React.lazy(() => import("@/components/Zen/XTermPanel").then(m => ({ default: m.XTermPanel })));
@@ -15,7 +14,6 @@ const CesiumCanvas = React.lazy(() => import("@/components/workbench/MapContaine
 const ArtifactPanel = React.lazy(() => import("@/components/shared/ArtifactPanel").then(m => ({ default: m.ArtifactPanel })));
 const AgentOrchestratorPanel = React.lazy(() => import("@/components/widgets/orchestrator/AgentOrchestratorPanel").then(m => ({ default: m.AgentOrchestratorPanel })));
 const InteractiveDrawingCanvas = React.lazy(() => import("@/components/widgets/workbench/InteractiveDrawingCanvas"));
-const MemoryStatsWidget = React.lazy(() => import("@/components/widgets/memory/MemoryStatsWidget").then(m => ({ default: m.MemoryStatsWidget })));
 
 const LoadingFallback = () => (
   <div className="flex flex-col items-center justify-center h-full py-32 text-zinc-500 italic opacity-60">
@@ -50,6 +48,7 @@ const MathGraphPlaceholder = () => (
 export function RightPanel() {
   const { activeRightTab, setActiveRightTab, setRightPanelOpen, operationalParams, rightPanelCanvasMode, setRightPanelCanvasMode } = useUIStore();
   const [mapActivated, setMapActivated] = React.useState(false);
+  const [mapClosing, setMapClosing] = React.useState(false);
 
   const viewMode = useGTSMStore(state => state.viewMode);
   const setViewMode = useGTSMStore(state => state.setViewMode);
@@ -85,16 +84,12 @@ export function RightPanel() {
             <SystemDiagnostics />
           </div>
         );
-      case 'analytics':
-        return <ChatAnalyticsPanel />;
       case 'artifacts':
         return <ArtifactPanel isEmbedded={true} />;
       case 'terminal':
         return <XTermPanel />;
       case 'agents':
         return <AgentOrchestratorPanel />;
-      case 'workflows':
-        return <WorkflowPanel />;
       case 'drawing':
         return (
           <div className="flex-grow flex flex-col relative w-full h-full overflow-hidden">
@@ -104,10 +99,7 @@ export function RightPanel() {
           </div>
         );
       case 'map':
-      case 'space':
         return null;
-      case 'memory':
-        return <MemoryStatsWidget />;
       default:
         return (
           <div className="flex flex-col items-center justify-center h-full py-32 text-slate-500 italic opacity-40">
@@ -129,15 +121,11 @@ export function RightPanel() {
 
     const titles: Record<string, string> = {
       metrics: 'System Health',
-      analytics: 'Chat Analytics',
       agents: 'Active Agents',
-      workflows: 'Workflows',
       artifacts: 'Artifacts',
       terminal: 'Terminal',
       map: 'Operational Map',
-      space: 'Space View',
       drawing: 'Canvas Workspace',
-      memory: 'Memory Stats'
     };
     return titles[visibleActiveRightTab] || 'Utility';
   };
@@ -151,15 +139,11 @@ export function RightPanel() {
 
     const icons: Record<string, any> = {
       metrics: Activity,
-      analytics: BarChart3,
       agents: Cpu,
-      workflows: Workflow,
       artifacts: Box,
       terminal: TerminalIcon,
       map: MapIcon,
-      space: Telescope,
       drawing: Paintbrush,
-      memory: Database
     };
     const IconComp = icons[visibleActiveRightTab] || Activity;
     return <IconComp size={16} className="text-primary" />;
@@ -193,21 +177,32 @@ export function RightPanel() {
               </button>
             </div>
           )}
-          {(visibleActiveRightTab === 'map' || visibleActiveRightTab === 'space') && mapActivated && (
-            <div className="flex bg-black/60 border border-white/5 p-0.5 rounded ml-4 font-mono select-none">
+          {visibleActiveRightTab === 'map' && mapActivated && (
+            <div className="flex items-center gap-2 ml-4">
+              <div className="flex bg-black/60 border border-white/5 p-0.5 rounded font-mono select-none">
+                <button
+                  type="button"
+                  className={`px-2 py-0.5 text-[11px] font-bold font-mono tracking-widest cursor-pointer border-0 rounded transition-all ${viewMode === 'globe' ? 'bg-primary/20 text-primary' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
+                  onClick={() => setViewMode('globe')}
+                >
+                  3D_GLOBE
+                </button>
+                <button
+                  type="button"
+                  className={`px-2 py-0.5 text-[11px] font-bold font-mono tracking-widest cursor-pointer border-0 rounded transition-all ${viewMode === 'navigation' ? 'bg-primary/20 text-primary' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
+                  onClick={() => setViewMode('navigation')}
+                >
+                  2D_NAV
+                </button>
+              </div>
               <button
                 type="button"
-                className={`px-2 py-0.5 text-[11px] font-bold font-mono tracking-widest cursor-pointer border-0 rounded transition-all ${viewMode === 'globe' ? 'bg-primary/20 text-primary' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
-                onClick={() => setViewMode('globe')}
+                onClick={() => setMapClosing(true)}
+                disabled={mapClosing}
+                className="px-2 py-0.5 text-[11px] font-bold font-mono tracking-widest cursor-pointer border border-red-500/30 rounded transition-all text-red-400/80 hover:bg-red-500/15 hover:text-red-300 hover:border-red-500/50 disabled:opacity-50 disabled:pointer-events-none"
+                title="Close map and free GPU resources"
               >
-                3D_GLOBE
-              </button>
-              <button
-                type="button"
-                className={`px-2 py-0.5 text-[11px] font-bold font-mono tracking-widest cursor-pointer border-0 rounded transition-all ${viewMode === 'navigation' ? 'bg-primary/20 text-primary' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
-                onClick={() => setViewMode('navigation')}
-              >
-                2D_NAV
+                {mapClosing ? 'CLOSING…' : 'CLOSE_MAP'}
               </button>
             </div>
           )}
@@ -218,22 +213,33 @@ export function RightPanel() {
         >
           <X size={16} />
         </button>
-      </header>
-
-      {visibleActiveRightTab === 'map' || visibleActiveRightTab === 'space' ? (
+      </header>          {visibleActiveRightTab === 'map' ? (
         <div className="flex-1 flex flex-col relative overflow-hidden bg-black select-none">
           <div className="flex-1 relative w-full h-full flex flex-col">
             {mapActivated ? (
-              <Suspense fallback={<LoadingFallback />}>
-                <CesiumCanvas />
-              </Suspense>
+              <motion.div
+                className="flex-1 flex flex-col w-full h-full"
+                initial={false}
+                animate={{ opacity: mapClosing ? 0 : 1, scale: mapClosing ? 0.96 : 1 }}
+                transition={{ duration: 0.3, ease: 'easeInOut' }}
+                onAnimationComplete={() => {
+                  if (mapClosing) {
+                    setMapActivated(false);
+                    setMapClosing(false);
+                  }
+                }}
+              >
+                <Suspense fallback={<LoadingFallback />}>
+                  <CesiumCanvas />
+                </Suspense>
+              </motion.div>
             ) : (
               <div className="flex-grow flex flex-col items-center justify-center p-6 text-center bg-background">
                 <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-4 motion-safe:animate-pulse">
-                  {visibleActiveRightTab === 'space' ? <Telescope size={24} /> : <MapIcon size={24} />}
+                  <MapIcon size={24} />
                 </div>
                 <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-200">
-                  {visibleActiveRightTab === 'space' ? 'Space View' : 'Operational Map'}
+                  Operational Map
                 </h3>
                 <p className="text-[12px] text-zinc-400 max-w-[260px] mt-2 leading-relaxed">
                   Initializing this viewer loads heavy WebGL and Cesium 3D asset engines. Click below to confirm and activate the canvas.
@@ -252,7 +258,7 @@ export function RightPanel() {
             <span className="truncate max-w-[180px]">Target: {operationalParams?.label || "Active Search"}</span>
           </div>
         </div>
-      ) : visibleActiveRightTab === 'drawing' || visibleActiveRightTab === 'agents' || visibleActiveRightTab === 'workflows' || visibleActiveRightTab === 'analytics' || visibleActiveRightTab === 'terminal' || visibleActiveRightTab === 'artifacts' || visibleActiveRightTab === 'memory' ? (
+      ) : visibleActiveRightTab === 'drawing' || visibleActiveRightTab === 'agents' || visibleActiveRightTab === 'terminal' || visibleActiveRightTab === 'artifacts' ? (
         <div className="flex-grow flex-1 relative overflow-hidden bg-black flex flex-col">
           <AnimatePresence mode="wait">
             <motion.div

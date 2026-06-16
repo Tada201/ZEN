@@ -120,7 +120,7 @@ impl super::LmStudioProvider {
                 } else {
                     None
                 };
-                let max_context = m.loaded_instances.get(0).and_then(|i| i.context_length);
+                let max_context = m.loaded_instances.first().and_then(|i| i.context_length);
 
                 // In v1, arch is often part of the key or publisher.
                 // We'll try to infer it for supports_tools() if not explicitly provided.

@@ -174,7 +174,7 @@ pub async fn update_message(
             if let Ok(new_tcs) = serde_json::from_str::<Vec<serde_json::Value>>(new_tc_str) {
                 if let Some(prev_str) = prev_tool_calls.as_deref() {
                     if let Ok(mut prev_tcs) =
-                        serde_json::from_str::<Vec<serde_json::Value>>(&prev_str)
+                        serde_json::from_str::<Vec<serde_json::Value>>(prev_str)
                     {
                         prev_tcs.extend(new_tcs);
                         if let Ok(merged) = serde_json::to_string(&prev_tcs) {

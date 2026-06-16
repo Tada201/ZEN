@@ -49,6 +49,7 @@ const TAB_GROUPS: SettingsTabGroup[] = [
     label: "Advanced",
     tabs: [
       { id: "tools", label: "Tools", icon: "lucide:shield", description: "Tool permissions & safety" },
+      { id: "dependencies", label: "Dependencies", icon: "lucide:package-check", description: "Runtime requirements" },
       { id: "commands", label: "Commands", icon: "lucide:zap", description: "Slash commands" },
       { id: "hooks", label: "Hooks", icon: "lucide:link-2", description: "Event hooks" },
       { id: "mcp", label: "MCP", icon: "lucide:cpu", description: "MCP servers" },

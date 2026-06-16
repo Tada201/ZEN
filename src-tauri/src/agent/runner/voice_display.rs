@@ -184,7 +184,12 @@ impl Runner {
             let board_listener_id = app.listen("board:update", move |event| {
                 if serde_json::from_str::<serde_json::Value>(event.payload())
                     .ok()
-                    .and_then(|payload| payload.get("chat_id").and_then(|value| value.as_str()).map(str::to_string))
+                    .and_then(|payload| {
+                        payload
+                            .get("chat_id")
+                            .and_then(|value| value.as_str())
+                            .map(str::to_string)
+                    })
                     .as_deref()
                     == Some(expected_chat_id.as_str())
                 {
@@ -340,7 +345,17 @@ async fn execute_deterministic_board_fallback(
                 "layout": { "cell": 0, "col_span": 2, "row_span": 2, "order": 0 }
         });
         let operation = deterministic_block_operation(replace_board, block);
-        return ManageBoardTool::new().run(app.clone(), chat_id.to_string(), operation, depth, None, token).await.map(|_| ());
+        return ManageBoardTool::new()
+            .run(
+                app.clone(),
+                chat_id.to_string(),
+                operation,
+                depth,
+                None,
+                token,
+            )
+            .await
+            .map(|_| ());
     }
     if request.contains("ui") || request.contains("dashboard") || request.contains("interface") {
         let block = serde_json::json!({
@@ -351,12 +366,24 @@ async fn execute_deterministic_board_fallback(
                 "layout": { "cell": 0, "col_span": 2, "row_span": 2, "order": 0 }
         });
         let operation = deterministic_block_operation(replace_board, block);
-        return ManageBoardTool::new().run(app.clone(), chat_id.to_string(), operation, depth, None, token).await.map(|_| ());
+        return ManageBoardTool::new()
+            .run(
+                app.clone(),
+                chat_id.to_string(),
+                operation,
+                depth,
+                None,
+                token,
+            )
+            .await
+            .map(|_| ());
     }
     let shape = ["circle", "square", "rectangle", "triangle", "line"]
         .into_iter()
         .find(|shape| request.contains(shape))
-        .ok_or_else(|| anyhow::anyhow!("Voice display model returned no valid board operation JSON"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("Voice display model returned no valid board operation JSON")
+        })?;
     let markup = simple_shape_svg(shape)
         .ok_or_else(|| anyhow::anyhow!("Unsupported deterministic board shape"))?;
     let block = serde_json::json!({
@@ -380,7 +407,10 @@ async fn execute_deterministic_board_fallback(
     Ok(())
 }
 
-fn deterministic_block_operation(replace_board: bool, block: serde_json::Value) -> serde_json::Value {
+fn deterministic_block_operation(
+    replace_board: bool,
+    block: serde_json::Value,
+) -> serde_json::Value {
     if replace_board {
         serde_json::json!({ "action": "set", "blocks": [block] })
     } else {
@@ -390,9 +420,18 @@ fn deterministic_block_operation(replace_board: bool, block: serde_json::Value) 
 
 fn first_youtube_url(text: &str) -> Option<String> {
     text.split_whitespace()
-        .map(|token| token.trim_matches(|ch: char| matches!(ch, '"' | '\'' | '(' | ')' | '[' | ']' | ',')))
-        .find(|token| token.starts_with("https://www.youtube.com/watch?") || token.starts_with("https://youtu.be/"))
-        .map(|token| token.trim_end_matches(|ch: char| matches!(ch, '.' | ';' | '}')).to_string())
+        .map(|token| {
+            token.trim_matches(|ch: char| matches!(ch, '"' | '\'' | '(' | ')' | '[' | ']' | ','))
+        })
+        .find(|token| {
+            token.starts_with("https://www.youtube.com/watch?")
+                || token.starts_with("https://youtu.be/")
+        })
+        .map(|token| {
+            token
+                .trim_end_matches(['.', ';', '}'])
+                .to_string()
+        })
 }
 
 fn extract_board_operation(content: &str) -> Option<serde_json::Value> {
@@ -459,7 +498,10 @@ pub(super) fn normalize_board_operation(mut value: serde_json::Value) -> Option<
         normalize_block_aliases(block);
     }
 
-    if let Some(blocks) = object.get_mut("blocks").and_then(|blocks| blocks.as_array_mut()) {
+    if let Some(blocks) = object
+        .get_mut("blocks")
+        .and_then(|blocks| blocks.as_array_mut())
+    {
         for block in blocks {
             normalize_block_aliases(block);
         }
@@ -469,8 +511,8 @@ pub(super) fn normalize_board_operation(mut value: serde_json::Value) -> Option<
     // LLMs often place the id inside the block rather than at the root.
     // Serde's BoardOperation::Update/Remove/Focus expects id at the root level.
     match action.as_str() {
-        "update" | "remove" | "focus" => {
-            if !object.contains_key("id") {
+        "update" | "remove" | "focus"
+            if !object.contains_key("id") => {
                 if let Some(block_id) = object
                     .get("block")
                     .and_then(|b| b.get("id"))
@@ -481,20 +523,58 @@ pub(super) fn normalize_board_operation(mut value: serde_json::Value) -> Option<
                     object.insert("id".to_string(), serde_json::json!(block_id));
                 }
             }
-        }
         _ => {}
     }
 
     Some(value)
 }
 
-fn extract_root_block(operation: &mut serde_json::Map<String, serde_json::Value>) -> Option<serde_json::Value> {
+fn extract_root_block(
+    operation: &mut serde_json::Map<String, serde_json::Value>,
+) -> Option<serde_json::Value> {
     const BLOCK_FIELDS: &[&str] = &[
-        "id", "kind", "type", "block_type", "shape", "title", "body", "value", "detail", "language", "expression", "chart_type",
-        "columns", "rows", "points", "url", "thumbnail", "description", "size", "alt",
-        "caption", "location", "latitude", "longitude", "zoom", "code", "max", "label",
-        "markup", "svg", "data", "colors", "names", "diagram", "content", "card_type",
-        "card_data", "layout", "old_code", "new_code", "old_label", "new_label",
+        "id",
+        "kind",
+        "type",
+        "block_type",
+        "shape",
+        "title",
+        "body",
+        "value",
+        "detail",
+        "language",
+        "expression",
+        "chart_type",
+        "columns",
+        "rows",
+        "points",
+        "url",
+        "thumbnail",
+        "description",
+        "size",
+        "alt",
+        "caption",
+        "location",
+        "latitude",
+        "longitude",
+        "zoom",
+        "code",
+        "max",
+        "label",
+        "markup",
+        "svg",
+        "data",
+        "colors",
+        "names",
+        "diagram",
+        "content",
+        "card_type",
+        "card_data",
+        "layout",
+        "old_code",
+        "new_code",
+        "old_label",
+        "new_label",
     ];
 
     let has_visual_content = BLOCK_FIELDS
@@ -523,7 +603,10 @@ fn normalize_block_aliases(block: &mut serde_json::Value) {
 
     // 1. Rename type/block_type → kind
     if !object.contains_key("kind") {
-        if let Some(kind) = object.remove("type").or_else(|| object.remove("block_type")) {
+        if let Some(kind) = object
+            .remove("type")
+            .or_else(|| object.remove("block_type"))
+        {
             object.insert("kind".to_string(), kind);
         }
     }
@@ -537,7 +620,10 @@ fn normalize_block_aliases(block: &mut serde_json::Value) {
                 object.insert("markup".to_string(), content);
             } else if let Some(body_val) = object.remove("body") {
                 // Explicit svg kind may have markup in body instead of content/markup
-                if body_val.as_str().is_some_and(|s| s.trim_start().starts_with("<svg")) {
+                if body_val
+                    .as_str()
+                    .is_some_and(|s| s.trim_start().starts_with("<svg"))
+                {
                     object.insert("markup".to_string(), body_val);
                 } else {
                     object.insert("body".to_string(), body_val); // put it back
@@ -597,21 +683,23 @@ fn normalize_block_aliases(block: &mut serde_json::Value) {
         } else if object.contains_key("latitude") && object.contains_key("longitude") {
             Some("map")
         } else if object.contains_key("url") {
-            Some(if object.contains_key("description") || object.contains_key("thumbnail") {
-                "link_preview"
-            } else {
-                "image"
-            })
+            Some(
+                if object.contains_key("description") || object.contains_key("thumbnail") {
+                    "link_preview"
+                } else {
+                    "image"
+                },
+            )
         } else if object.contains_key("location") {
             Some("map_placeholder")
         } else if object.contains_key("data") {
             Some("qr")
-        } else if object.contains_key("value") && (object.contains_key("max") || object.contains_key("label")) {
+        } else if object.contains_key("value")
+            && (object.contains_key("max") || object.contains_key("label"))
+        {
             Some("progress")
         } else if object.contains_key("value") {
             Some("metric")
-        } else if object.contains_key("body") {
-            Some("note")
         } else {
             Some("note")
         };
@@ -640,7 +728,7 @@ fn normalize_block_aliases(block: &mut serde_json::Value) {
     let content_is_empty = object
         .get("content")
         .and_then(|content| content.as_str())
-        .map_or(true, |content| content.trim().is_empty());
+        .is_none_or(|content| content.trim().is_empty());
     if content_is_empty && matches!(kind, Some("gen_ui") | Some("html")) {
         let label = object
             .get("title")

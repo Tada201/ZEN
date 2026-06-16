@@ -50,7 +50,7 @@ export const PlusActionMenu = memo(({
         className="hidden" 
         ref={fileInputRef} 
         onChange={onFileSelect} 
-        accept="image/*,text/*,application/pdf"
+        accept="image/*,text/*,application/pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.rtf,.odt,.ods,.odp,.epub,.xml,.yaml,.yml,.toml"
       />
       <button 
         onClick={() => setIsOpen(!isOpen)}

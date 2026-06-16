@@ -36,6 +36,25 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+function inputRecord(value: ToolCall["input"]): Record<string, unknown> {
+  if (!value) return {};
+  if (typeof value !== "string") return asRecord(value);
+  try {
+    return asRecord(JSON.parse(value));
+  } catch {
+    return {};
+  }
+}
+
+export function isToolVisibleInChat(tool: ToolCall) {
+  const name = tool.name.toLowerCase();
+  const input = inputRecord(tool.input);
+  const innerToolId = String(input.tool_id || input.tool || input.name || "").toLowerCase();
+  if (name === "tool_list" || name === "tool_info") return false;
+  if (name === "tool_exec" && (innerToolId === "tool_list" || innerToolId === "tool_info")) return false;
+  return true;
+}
+
 function firstDefined<T = unknown>(...values: T[]): T | undefined {
   return values.find((value) => value !== undefined && value !== null && value !== "") as T | undefined;
 }
@@ -258,14 +277,11 @@ function findOpenToolGroup(grouped: MutableGroupedStep[], incoming: ToolCall): {
       const groupBatchIds = new Set(item.toolCalls.map(explicitToolBatchId).filter(Boolean));
       if (incomingBatchId && groupBatchIds.has(incomingBatchId)) return item;
       if (incomingBatchId && groupBatchIds.size > 0 && !groupBatchIds.has(incomingBatchId)) return undefined;
-      const startTimes = item.toolCalls
-        .map((tool) => tool.startTime)
-        .filter((time): time is number => typeof time === "number");
-      if (typeof incoming.startTime !== "number" || startTimes.length === 0) return item;
-      const minStart = Math.min(...startTimes);
-      const maxStart = Math.max(...startTimes);
-      if (Math.max(maxStart, incoming.startTime) - Math.min(minStart, incoming.startTime) < 750) return item;
-      return undefined;
+      // If the user never saw visible commentary between tool calls, keep the
+      // whole contiguous run collapsed into one batch regardless of timing.
+      // This preserves interleaved text as a hard boundary while preventing
+      // long search/tool runs from exploding into many separate cards.
+      return item;
     }
     if (!shouldKeepToolBatchOpen(item)) return undefined;
   }
@@ -311,9 +327,21 @@ function pushGroupedStep(grouped: MutableGroupedStep[], step: Step) {
   const last = grouped[grouped.length - 1];
   if (last && last.type === "text" && step.type === "text") {
     last.content = (last.content || "") + (step.content || "");
-  } else if (last && last.type === "reasoning" && step.type === "reasoning") {
-    last.content = `${(last.content || "").trim()}\n${(step.content || "").trim()}`;
+  } else if (step.type === "reasoning") {
+    // Providers can interleave status bookkeeping between reasoning deltas.
+    // Keep one reasoning capsule per assistant message without mutating the
+    // underlying chronological event ledger.
+    const existingReasoningIndex = grouped.findIndex((item) => item.type === "reasoning");
+    const existingReasoning = grouped[existingReasoningIndex];
+    if (existingReasoningIndex !== -1 && existingReasoning.type === "reasoning") {
+      const previous = (existingReasoning.content || "").trimEnd();
+      const incoming = (step.content || "").trimStart();
+      existingReasoning.content = previous && incoming ? `${previous}\n${incoming}` : previous || incoming;
+    } else {
+      grouped.push({ ...step });
+    }
   } else if (step.type === "tool-call" && step.toolCall) {
+    if (!isToolVisibleInChat(step.toolCall)) return;
     const openGroup = findOpenToolGroup(grouped, step.toolCall);
     if (openGroup) {
       const existingIndex = openGroup.toolCalls.findIndex((tool) => tool.id === step.toolCall?.id);
@@ -393,6 +421,7 @@ export function groupToolCalls(toolCalls: ToolCall[] | undefined): ToolCall[] {
 
   const grouped: ToolCall[] = [];
   toolCalls.forEach((tc) => {
+    if (!isToolVisibleInChat(tc)) return;
     const sameIdIndex = grouped.findIndex((tool) => tool.id === tc.id);
     if (sameIdIndex !== -1) {
       grouped[sameIdIndex] = mergeGroupedToolCall(grouped[sameIdIndex], tc);

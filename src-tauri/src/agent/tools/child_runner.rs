@@ -75,7 +75,7 @@ pub(crate) fn resolve_agent(
         .as_ref()
         .filter(|c| c.context_window > 0)
         .map(|c| c.context_window as usize)
-        .or_else(|| agent.context_window);
+        .or(agent.context_window);
 
     let effective_max_messages = config_file
         .as_ref()

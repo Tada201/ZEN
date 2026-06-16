@@ -51,6 +51,7 @@ impl MiddlewareChain {
         Self { steps: Vec::new() }
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn add(mut self, mw: Box<dyn ContextMiddleware>) -> Self {
         self.steps.push(mw);
         self.sort();
@@ -203,8 +204,8 @@ impl ContextMiddleware for SystemPromptMiddleware {
         }
 
         // ── Tool system (deferred discovery) ──
-        let direct_board_agent = ctx.authorized_tool_ids.len() == 1
-            && ctx.authorized_tool_ids[0] == "manage_board";
+        let direct_board_agent =
+            ctx.authorized_tool_ids.len() == 1 && ctx.authorized_tool_ids[0] == "manage_board";
         let meta_tools: Vec<crate::tools::ToolInfo> = if ctx.tools_enabled && !direct_board_agent {
             crate::tools::manager::meta_tool_definitions()
         } else {

@@ -53,7 +53,7 @@ pub async fn create_clarification_request(
     let pool = app_state.db().await?;
 
     // Store in database
-    let options_json = serde_json::to_string(&options).map_err(|e| ZenError::Json(e))?;
+    let options_json = serde_json::to_string(&options).map_err(ZenError::Json)?;
 
     queries::add_clarification_request(
         &pool,

@@ -137,7 +137,12 @@ assert(escalation.includes("sig:{index}:{name}") && escalation.includes("Some(in
 assert(terminalService.includes("decision != PermissionDecision::Allow") && terminalService.includes("requires explicit approval"), "terminal spawn must not treat Ask as an allow decision");
 assert(escalation.includes("redact_tool_preview_string") && escalation.includes("redact_tool_preview_args"), "streamed tool-call previews should be redacted before reaching the renderer");
 assert(chatInput.includes("Enable YOLO mode?") && chatInput.includes("YOLO mode is enabled") && chatInput.includes("YOLO"), "chat input should confirm and visibly indicate YOLO mode");
-assert(toolsSettings.includes("confirmYoloEnable") && toolsSettings.includes("Enable YOLO mode?"), "settings should confirm YOLO/full-auto activation");
+assert(
+  toolsSettings.includes('nextMode === "autonomous"') &&
+    toolsSettings.includes("Enable Autonomous mode?") &&
+    toolsSettings.includes("Hard security blocks still apply"),
+  "settings should confirm autonomous activation and explain the non-bypassable security floor",
+);
 assert(
   dbQueries.includes("pub mod session_permissions") &&
     dbMod.includes("init_session_permissions(pool)") &&

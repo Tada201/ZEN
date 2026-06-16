@@ -7,6 +7,12 @@ use tauri::{AppHandle, Emitter};
 
 pub struct MapTool;
 
+impl Default for MapTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MapTool {
     pub fn new() -> Self {
         Self

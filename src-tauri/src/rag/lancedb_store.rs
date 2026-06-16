@@ -87,7 +87,7 @@ impl VectorStore for LanceDbStore {
         let mut metadatas = Vec::new();
         let mut flat_embeddings = Vec::new();
 
-        for (chunk, vector) in chunks.into_iter().zip(embeddings.into_iter()) {
+        for (chunk, vector) in chunks.into_iter().zip(embeddings) {
             ids.push(chunk.id);
             sources.push(chunk.source);
             texts.push(chunk.text);

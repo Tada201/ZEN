@@ -145,7 +145,11 @@ pub fn make_provider(config: &ProviderConfig) -> Arc<dyn LlmProvider> {
                 }
             }
             if let Some(headers) = &config.headers {
-                extra_headers.extend(headers.iter().map(|(key, value)| (key.clone(), value.clone())));
+                extra_headers.extend(
+                    headers
+                        .iter()
+                        .map(|(key, value)| (key.clone(), value.clone())),
+                );
             }
             Arc::new(OpenAiCompatProvider::with_headers(
                 &config.base_url,

@@ -23,7 +23,7 @@ const transpiled = ts.transpileModule(source, {
 });
 
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(transpiled.outputText).toString("base64")}`;
-const { groupAssistantSteps, groupToolCalls, legacyMessageToActionStep, parseCardTags, toolResultMetaToOutput } = await import(moduleUrl);
+const { groupAssistantSteps, groupToolCalls, isToolVisibleInChat, legacyMessageToActionStep, parseCardTags, toolResultMetaToOutput } = await import(moduleUrl);
 
 const typesSourcePath = new URL("../src/atlas/components/chat/types.ts", import.meta.url);
 const typesSource = readFileSync(typesSourcePath, "utf8")
@@ -92,6 +92,30 @@ assert.equal(steps[1].type, "tool-group", "parallel tool calls should become one
 assert.equal(steps[1].toolCalls.length, 2, "tool group should contain both parallel tools");
 assert.equal(steps[2].cleanText, "Answer stream", "adjacent text chunks should merge");
 
+assert.equal(isToolVisibleInChat({ id: "list", name: "tool_list", status: "completed", input: {}, output: "[]" }), false, "tool_list should stay out of the chat transcript");
+assert.equal(isToolVisibleInChat({ id: "info", name: "tool_info", status: "completed", input: {}, output: "{}" }), false, "tool_info should stay out of the chat transcript");
+assert.equal(isToolVisibleInChat({ id: "wrapped-list", name: "tool_exec", status: "completed", input: { tool_id: "tool_list" }, output: "[]" }), false, "wrapped tool_list executions should stay out of the chat transcript");
+assert.equal(isToolVisibleInChat({ id: "search", name: "tool_exec", status: "completed", input: { tool_id: "web_search", arguments: { query: "latest news" } }, output: '{"results":[{"title":"News"}]}' }), true, "actual web search executions should remain visible");
+
+const filteredToolGroups = groupAssistantSteps([
+  { type: "tool-call", toolCall: { id: "list", name: "tool_list", status: "completed", input: {}, output: "[]" } },
+  { type: "tool-call", toolCall: { id: "info", name: "tool_info", status: "completed", input: {}, output: "{}" } },
+  { type: "tool-call", toolCall: { id: "wrapped-list", name: "tool_exec", status: "completed", input: { tool_id: "tool_list" }, output: "[]" } },
+  { type: "tool-call", toolCall: { id: "search", name: "tool_exec", status: "completed", input: { tool_id: "web_search", arguments: { query: "latest news" } }, output: '{"results":[{"title":"News"}]}' } },
+]);
+assert.equal(filteredToolGroups.length, 1, "only user-meaningful tool calls should render in grouped steps");
+assert.equal(filteredToolGroups[0].type, "tool-group", "visible web search should still render as a tool group");
+assert.equal(filteredToolGroups[0].toolCalls.length, 1, "discovery tools should be removed from the visible group");
+
+const filteredPersistedTools = groupToolCalls([
+  { id: "list", name: "tool_list", status: "completed", input: {}, output: "[]" },
+  { id: "info", name: "tool_info", status: "completed", input: {}, output: "{}" },
+  { id: "wrapped-list", name: "tool_exec", status: "completed", input: { tool_id: "tool_list" }, output: "[]" },
+  { id: "search", name: "tool_exec", status: "completed", input: { tool_id: "web_search", arguments: { query: "latest news" } }, output: '{"results":[{"title":"News"}]}' },
+]);
+assert.equal(filteredPersistedTools.length, 1, "persisted discovery tool calls should not render after reload");
+assert.equal(filteredPersistedTools[0].id, "search", "web search execution should remain visible after filtering");
+
 const mergedAgentLifecycleSteps = groupAssistantSteps([
   {
     type: "action",
@@ -153,6 +177,17 @@ const separatedToolSteps = groupAssistantSteps([
 assert.equal(separatedToolSteps.length, 3, "answer text should split separate tool phases");
 assert.equal(separatedToolSteps[0].type, "tool-group", "first tool phase should remain visible");
 assert.equal(separatedToolSteps[2].type, "tool-group", "second tool phase should remain visible");
+
+const contiguousFarApartToolSteps = groupAssistantSteps([
+  { type: "tool-call", toolCall: { id: "tool-e", name: "web_search", status: "completed", input: { query: "weather ho chi minh" }, output: "{}", startTime: 1000 } },
+  { type: "action", kind: "chat_status", content: "Searching again", status: "running", metadata: { phase: "tool_batch_running" } },
+  { type: "tool-call", toolCall: { id: "tool-f", name: "web_search", status: "completed", input: { query: "weather vung tau" }, output: "{}", startTime: 9000 } },
+  { type: "action", kind: "orchestrator_progress", content: "Collecting results", status: "running" },
+  { type: "tool-call", toolCall: { id: "tool-g", name: "web_search", status: "completed", input: { query: "weather route ho chi minh to vung tau" }, output: "{}", startTime: 18000 } },
+]);
+const contiguousFarApartVisibleGroups = contiguousFarApartToolSteps.filter((step) => step.type === "tool-group");
+assert.equal(contiguousFarApartVisibleGroups.length, 1, "hidden status updates should not split a contiguous tool-only stretch");
+assert.equal(contiguousFarApartVisibleGroups[0].toolCalls.length, 3, "far-apart tools without visible commentary should collapse into one batch");
 
 const explicitBatchToolSteps = groupAssistantSteps([
   { type: "tool-call", toolCall: { id: "batch-tool-a", name: "read_file", status: "running", input: { path: "a" }, output: "", startTime: 1000, batchId: "batch-1" } },

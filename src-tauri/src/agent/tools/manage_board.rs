@@ -147,6 +147,12 @@ pub enum BoardOperation {
 
 pub struct ManageBoardTool;
 
+impl Default for ManageBoardTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ManageBoardTool {
     pub fn new() -> Self {
         Self
@@ -225,31 +231,26 @@ fn validate_block(block: &BoardBlock) -> Result<()> {
         anyhow::bail!("Board palettes support at most 20 colors");
     }
     match block.kind {
-        BoardBlockKind::Map => {
-            if block.latitude.is_none() || block.longitude.is_none() {
+        BoardBlockKind::Map
+            if (block.latitude.is_none() || block.longitude.is_none()) => {
                 anyhow::bail!("Map blocks require latitude and longitude");
             }
-        }
-        BoardBlockKind::Video | BoardBlockKind::Image | BoardBlockKind::LinkPreview => {
-            if block.url.as_deref().map_or(true, str::is_empty) {
+        BoardBlockKind::Video | BoardBlockKind::Image | BoardBlockKind::LinkPreview
+            if block.url.as_deref().is_none_or(str::is_empty) => {
                 anyhow::bail!("Media and link blocks require url");
             }
-        }
-        BoardBlockKind::GenUi | BoardBlockKind::Html => {
-            if block.content.as_deref().map_or(true, str::is_empty) {
+        BoardBlockKind::GenUi | BoardBlockKind::Html
+            if block.content.as_deref().is_none_or(str::is_empty) => {
                 anyhow::bail!("Gen UI and HTML blocks require content");
             }
-        }
-        BoardBlockKind::PremiumCard => {
-            if block.card_type.as_deref().map_or(true, str::is_empty) || block.card_data.is_none() {
+        BoardBlockKind::PremiumCard
+            if (block.card_type.as_deref().is_none_or(str::is_empty) || block.card_data.is_none()) => {
                 anyhow::bail!("Premium card blocks require card_type and card_data");
             }
-        }
-        BoardBlockKind::Svg => {
-            if block.markup.as_deref().map_or(true, str::is_empty) {
+        BoardBlockKind::Svg
+            if block.markup.as_deref().is_none_or(str::is_empty) => {
                 anyhow::bail!("SVG blocks require markup");
             }
-        }
         _ => {}
     }
     Ok(())
@@ -272,17 +273,30 @@ fn validate_operation(operation: &BoardOperation) -> Result<()> {
             }
             let mut occupied = std::collections::HashSet::new();
             for block in blocks {
-                let Some(layout) = block.layout.as_ref().and_then(serde_json::Value::as_object) else {
+                let Some(layout) = block.layout.as_ref().and_then(serde_json::Value::as_object)
+                else {
                     continue;
                 };
                 let cell = layout.get("cell").and_then(serde_json::Value::as_i64);
-                let row = layout.get("row").and_then(serde_json::Value::as_i64)
+                let row = layout
+                    .get("row")
+                    .and_then(serde_json::Value::as_i64)
                     .or_else(|| cell.map(|value| value / 4));
-                let column = layout.get("column").and_then(serde_json::Value::as_i64)
+                let column = layout
+                    .get("column")
+                    .and_then(serde_json::Value::as_i64)
                     .or_else(|| cell.map(|value| value % 4));
-                let (Some(row), Some(column)) = (row, column) else { continue };
-                let col_span = layout.get("col_span").and_then(serde_json::Value::as_i64).unwrap_or(1);
-                let row_span = layout.get("row_span").and_then(serde_json::Value::as_i64).unwrap_or(1);
+                let (Some(row), Some(column)) = (row, column) else {
+                    continue;
+                };
+                let col_span = layout
+                    .get("col_span")
+                    .and_then(serde_json::Value::as_i64)
+                    .unwrap_or(1);
+                let row_span = layout
+                    .get("row_span")
+                    .and_then(serde_json::Value::as_i64)
+                    .unwrap_or(1);
                 for y in row..row + row_span {
                     for x in column..column + col_span {
                         let cell = y * 4 + x;
@@ -317,12 +331,9 @@ impl AgentTool for ManageBoardTool {
     fn input_schema(&self) -> Value {
         use serde_json::Map;
 
-        let field = |kind: &str, description: &str| {
-            json!({ "type": kind, "description": description })
-        };
-        let array_field = |description: &str| {
-            json!({ "type": "array", "items": { "type": "string" }, "description": description })
-        };
+        let field =
+            |kind: &str, description: &str| json!({ "type": kind, "description": description });
+        let array_field = |description: &str| json!({ "type": "array", "items": { "type": "string" }, "description": description });
 
         let mut block_properties = Map::new();
         for (name, kind, description) in [
@@ -371,30 +382,39 @@ impl AgentTool for ManageBoardTool {
         block_properties.insert("columns".to_string(), array_field("Table columns"));
         block_properties.insert("colors".to_string(), array_field("Palette colors"));
         block_properties.insert("names".to_string(), array_field("Palette names"));
-        block_properties.insert("rows".to_string(), json!({
-            "type": "array", "items": { "type": "array", "items": { "type": "string" } }
-        }));
-        block_properties.insert("points".to_string(), json!({
-            "type": "array",
-            "items": {
+        block_properties.insert(
+            "rows".to_string(),
+            json!({
+                "type": "array", "items": { "type": "array", "items": { "type": "string" } }
+            }),
+        );
+        block_properties.insert(
+            "points".to_string(),
+            json!({
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": { "label": { "type": "string" }, "value": { "type": "number" } },
+                    "required": ["label", "value"]
+                }
+            }),
+        );
+        block_properties.insert(
+            "layout".to_string(),
+            json!({
                 "type": "object",
-                "properties": { "label": { "type": "string" }, "value": { "type": "number" } },
-                "required": ["label", "value"]
-            }
-        }));
-        block_properties.insert("layout".to_string(), json!({
-            "type": "object",
-            "properties": {
-                "width": { "type": "string", "enum": ["small", "medium", "wide", "full"] },
-                "order": { "type": "integer" },
-                "col_span": { "type": "integer", "minimum": 1, "maximum": 4 },
-                "row_span": { "type": "integer", "minimum": 1, "maximum": 4 },
-                "cell": { "type": "integer", "minimum": 0, "maximum": 15 },
-                "row": { "type": "integer", "minimum": 0, "maximum": 3 },
-                "column": { "type": "integer", "minimum": 0, "maximum": 3 }
-            },
-            "additionalProperties": false
-        }));
+                "properties": {
+                    "width": { "type": "string", "enum": ["small", "medium", "wide", "full"] },
+                    "order": { "type": "integer" },
+                    "col_span": { "type": "integer", "minimum": 1, "maximum": 4 },
+                    "row_span": { "type": "integer", "minimum": 1, "maximum": 4 },
+                    "cell": { "type": "integer", "minimum": 0, "maximum": 15 },
+                    "row": { "type": "integer", "minimum": 0, "maximum": 3 },
+                    "column": { "type": "integer", "minimum": 0, "maximum": 3 }
+                },
+                "additionalProperties": false
+            }),
+        );
 
         let mut block_schema = Map::new();
         block_schema.insert("type".to_string(), json!("object"));
@@ -402,18 +422,27 @@ impl AgentTool for ManageBoardTool {
         block_schema.insert("required".to_string(), json!(["id", "kind"]));
 
         let mut properties = Map::new();
-        properties.insert("action".to_string(), json!({
-            "type": "string", "enum": ["set", "add", "update", "remove", "clear", "focus"]
-        }));
+        properties.insert(
+            "action".to_string(),
+            json!({
+                "type": "string", "enum": ["set", "add", "update", "remove", "clear", "focus"]
+            }),
+        );
         properties.insert("id".to_string(), field("string", "Block ID"));
-        properties.insert("blocks".to_string(), json!({
-            "type": "array", "items": { "$ref": "#/$defs/block" }
-        }));
+        properties.insert(
+            "blocks".to_string(),
+            json!({
+                "type": "array", "items": { "$ref": "#/$defs/block" }
+            }),
+        );
         properties.insert("block".to_string(), json!({ "$ref": "#/$defs/block" }));
         properties.insert("title".to_string(), field("string", "Board title"));
-        properties.insert("layout".to_string(), json!({
-            "type": "string", "enum": ["grid", "dashboard", "focus"]
-        }));
+        properties.insert(
+            "layout".to_string(),
+            json!({
+                "type": "string", "enum": ["grid", "dashboard", "focus"]
+            }),
+        );
 
         let mut definitions = Map::new();
         definitions.insert("block".to_string(), Value::Object(block_schema));

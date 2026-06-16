@@ -15,22 +15,21 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum TaskPriority {
     Critical = 0,
     High = 1,
+    #[default]
     Medium = 2,
     Low = 3,
 }
 
-impl Default for TaskPriority {
-    fn default() -> Self {
-        TaskPriority::Medium
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum TaskStatus {
+    #[default]
     Pending,
     InProgress,
     Completed,
@@ -38,11 +37,6 @@ pub enum TaskStatus {
     Cancelled,
 }
 
-impl Default for TaskStatus {
-    fn default() -> Self {
-        TaskStatus::Pending
-    }
-}
 
 impl TaskStatus {
     pub fn is_terminal(&self) -> bool {
@@ -55,7 +49,9 @@ impl TaskStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum TaskType {
+    #[default]
     ToolCall,
     AgentHandoff,
     SubAgentSpawn,
@@ -63,11 +59,6 @@ pub enum TaskType {
     Custom(String),
 }
 
-impl Default for TaskType {
-    fn default() -> Self {
-        TaskType::ToolCall
-    }
-}
 
 // ─── Task ───
 
@@ -175,7 +166,7 @@ impl Task {
 
     /// Sort tasks by priority (highest priority first: Critical < High < Medium < Low).
     pub fn sort_by_priority(tasks: &mut [Task]) {
-        tasks.sort_by(|a, b| a.priority.cmp(&b.priority));
+        tasks.sort_by_key(|a| a.priority);
     }
 
     /// Resolve execution order using topological sort (Kahn's algorithm).
@@ -356,7 +347,7 @@ mod tests {
         let t2 = Task::new("Second", TaskType::ToolCall).with_dependency(t1.id.as_str());
         let t3 = Task::new("Third", TaskType::ToolCall).with_dependency(t2.id.as_str());
 
-        let ids = vec![t1.id.clone(), t2.id.clone(), t3.id.clone()];
+        let ids = [t1.id.clone(), t2.id.clone(), t3.id.clone()];
         let result =
             Task::resolve_execution_order(vec![t3.clone(), t1.clone(), t2.clone()]).unwrap();
 

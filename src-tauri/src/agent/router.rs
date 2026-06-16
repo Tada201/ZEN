@@ -344,7 +344,7 @@ impl ComplexityRouter {
                 prompt_lower.contains(keyword)
             } else {
                 // Single-word: whole-word match via tokens
-                tokens.contains(&keyword.to_string())
+                tokens.contains(*keyword)
             };
             if matched {
                 tier3_matches += 1;
@@ -358,7 +358,7 @@ impl ComplexityRouter {
             let matched = if is_multi_word {
                 prompt_lower.contains(keyword)
             } else {
-                tokens.contains(&keyword.to_string())
+                tokens.contains(*keyword)
             };
             if matched && !keywords_found.contains(&keyword.to_string()) {
                 tier2_matches += 1;
@@ -373,7 +373,7 @@ impl ComplexityRouter {
             let matched = if is_multi_word {
                 prompt_lower.contains(keyword)
             } else {
-                tokens.contains(&keyword.to_string())
+                tokens.contains(*keyword)
             };
             if matched {
                 if !agents_needed.contains(&agent.to_string()) {
@@ -621,7 +621,7 @@ impl ComplexityRouter {
 fn generate_battle_plan(prompt: &str, agents: &[String], complexity: usize) -> BattlePlan {
     // Estimate based on complexity
     let base_tokens = 2000;
-    let complexity_multiplier = 1000 * complexity as usize;
+    let complexity_multiplier = 1000 * complexity;
     let agent_multiplier = 500 * agents.len();
 
     let estimated_tokens = base_tokens + complexity_multiplier + agent_multiplier;

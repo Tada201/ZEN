@@ -102,6 +102,12 @@ impl GeofenceEngine {
     }
 }
 
+impl Default for GeofenceEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Ray-casting algorithm for point-in-polygon
 fn point_in_polygon(lat: f64, lon: f64, vertices: &[[f64; 2]]) -> bool {
     let n = vertices.len();

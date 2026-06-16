@@ -1,4 +1,6 @@
+import { useMemo } from 'react';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
+import { toAssetUrl } from '@/lib/utils/assetUrl';
 
 /**
  * WorkspaceBackground - A modular background component that renders solid backdrops,
@@ -9,6 +11,9 @@ export function WorkspaceBackground() {
   const backgroundOpacity = useSettingsStore(s => s.backgroundOpacity ?? 0.15);
   const backgroundBlur = useSettingsStore(s => s.backgroundBlur ?? 0);
 
+  // Convert local file paths to Tauri asset-protocol URLs the webview can load
+  const resolvedUrl = useMemo(() => toAssetUrl(backgroundImageUrl), [backgroundImageUrl]);
+
   return (
     <div className="absolute inset-0 z-0 pointer-events-none w-full h-full overflow-hidden select-none">
       {/* Deep baseline solid color */}
@@ -18,11 +23,11 @@ export function WorkspaceBackground() {
       <div className="absolute inset-0 bg-vignette-grid opacity-[0.25] mix-blend-overlay" />
 
       {/* User Custom Wallpaper */}
-      {backgroundImageUrl && (
+      {resolvedUrl && (
         <div 
           className="absolute inset-0 bg-cover bg-center transition-all duration-500 ease-in-out [will-change:transform,opacity,filter]"
           style={{ 
-            backgroundImage: `url(${backgroundImageUrl})`,
+            backgroundImage: `url(${resolvedUrl})`,
             opacity: backgroundOpacity,
             filter: backgroundBlur > 0 ? `blur(${backgroundBlur}px)` : 'none',
             // Scale and translate3d to force dedicated GPU composite layer isolation and eliminate edge bleeds

@@ -81,7 +81,7 @@ pub async fn set_active_output_device(
             warn!(error = %e, "Failed to set output device; falling back to default");
             tts.set_output_device(None)
                 .await
-                .map_err(|e2| ZenError::Internal(format!("{e2}")))
+                .map_err(|e2| ZenError::Internal(e2.to_string()))
         }
     }
 }

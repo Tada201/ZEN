@@ -4,6 +4,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::agent::tools::ToolRegistry as V1ToolRegistry;
+use crate::tools::capability::{tool_aliases, tool_status};
 use crate::tools::permission::{PermissionDefault, ToolPermissionRules, ToolPermissions};
 use crate::tools::GlobalToolRegistry;
 
@@ -16,6 +17,8 @@ pub struct ToolDescriptor {
     pub category: String,
     pub tags: Vec<String>,
     pub risk_level: Option<String>,
+    pub status: String,
+    pub status_detail: String,
 }
 
 /// Full detail returned by tool_info
@@ -62,7 +65,7 @@ fn apply_permission_key(
 
         let rules = tool_overrides
             .entry(tool_id)
-            .or_insert_with(ToolPermissionRules::default);
+            .or_default();
 
         match field {
             "default" => {
@@ -113,6 +116,9 @@ pub struct ToolMetadata {
     pub icon: String,
     pub risk_level: String,
     pub description: String,
+    pub status: String,
+    pub status_detail: String,
+    pub user_configurable: bool,
 }
 
 impl ToolManager {
@@ -288,6 +294,8 @@ impl ToolManager {
                     {
                         descriptors.push(ToolDescriptor {
                             risk_level: Some(id_to_risk_label(&id)),
+                            status: tool_status(&id).status.to_string(),
+                            status_detail: tool_status(&id).detail.to_string(),
                             id,
                             name: meta.name,
                             description: meta.description,
@@ -306,6 +314,8 @@ impl ToolManager {
                         descriptors.push(ToolDescriptor {
                             name: id_to_display_name(&id),
                             risk_level: Some(id_to_risk_label(&id)),
+                            status: tool_status(&id).status.to_string(),
+                            status_detail: tool_status(&id).detail.to_string(),
                             id,
                             description: tool.description().to_string(),
                             category: "agent".to_string(),
@@ -330,6 +340,8 @@ impl ToolManager {
                     descriptors.push(ToolDescriptor {
                         name: id_to_display_name(&id),
                         risk_level: Some(id_to_risk_label(&id)),
+                        status: tool_status(&id).status.to_string(),
+                        status_detail: tool_status(&id).detail.to_string(),
                         id,
                         description: info.description,
                         category: "tool".to_string(),
@@ -344,6 +356,8 @@ impl ToolManager {
             let perms = self.permissions.read().await;
             descriptors.retain(|d| perms.is_visible_in_list(&d.id));
         }
+
+        descriptors.retain(|d| tool_status(&d.id).agent_visible);
 
         if let Some(query) = query.map(str::trim).filter(|q| !q.is_empty()) {
             let terms: Vec<String> = query
@@ -360,6 +374,7 @@ impl ToolManager {
                     let category = d.category.to_lowercase();
                     let description = d.description.to_lowercase();
                     let tags = d.tags.join(" ").to_lowercase();
+                    let aliases = tool_aliases(&d.id).join(" ").to_lowercase();
                     let mut score = 0;
                     for term in &terms {
                         if id.contains(term) {
@@ -374,6 +389,9 @@ impl ToolManager {
                         if tags.contains(term) {
                             score += 15;
                         }
+                        if aliases.contains(term) {
+                            score += 18;
+                        }
                         if description.contains(term) {
                             score += 10;
                         }
@@ -383,7 +401,7 @@ impl ToolManager {
                 .filter(|(_, score)| *score > 0)
                 .collect();
             scored.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.id.cmp(&b.0.id)));
-            descriptors = scored.into_iter().map(|(d, _)| d).collect();
+            descriptors = scored.into_iter().map(|(d, _)| d).take(16).collect();
         } else {
             descriptors.sort_by(|a, b| a.id.cmp(&b.id));
         }
@@ -411,6 +429,9 @@ impl ToolManager {
                             icon: id_to_icon(&id),
                             risk_level: id_to_risk_label(&id),
                             description: meta.description.clone(),
+                            status: tool_status(&id).status.to_string(),
+                            status_detail: tool_status(&id).detail.to_string(),
+                            user_configurable: tool_status(&id).user_configurable,
                         });
                     }
                 }
@@ -424,6 +445,9 @@ impl ToolManager {
                             icon: id_to_icon(&id),
                             risk_level: id_to_risk_label(&id),
                             description: tool.description().to_string(),
+                            status: tool_status(&id).status.to_string(),
+                            status_detail: tool_status(&id).detail.to_string(),
+                            user_configurable: tool_status(&id).user_configurable,
                         });
                     }
                 }
@@ -449,6 +473,9 @@ impl ToolManager {
                         icon: id_to_icon(&def.name),
                         risk_level: risk,
                         description: def.description,
+                        status: tool_status(&def.name).status.to_string(),
+                        status_detail: tool_status(&def.name).detail.to_string(),
+                        user_configurable: tool_status(&def.name).user_configurable,
                     });
                 } else {
                     // Merge with v2 definitions for supplemental schema or risk data
@@ -614,6 +641,13 @@ pub fn meta_tool_definitions() -> Vec<crate::tools::ToolInfo> {
                     "query": {
                         "type": "string",
                         "description": "Optional intent/search phrase such as 'web fetch', 'read documents', 'map route', or 'delegate task'. Use this to find specialized tools without loading every schema."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of tools to return. Defaults to 16 and is capped at 24.",
+                        "minimum": 1,
+                        "maximum": 24,
+                        "default": 16
                     }
                 },
                 "required": [],
@@ -780,5 +814,28 @@ mod tests {
         assert!(tools.iter().any(|t| t.id == "spawn_agent"));
         assert!(tools.iter().any(|t| t.id == "handoff_to_agent"));
         assert!(!tools.iter().any(|t| t.id == "delegate_to_agent"));
+    }
+
+    #[tokio::test]
+    async fn tool_list_hides_frontend_missing_tools() {
+        let manager = manager_for_tests();
+        let tools = manager.list_allowed(&[]).await;
+
+        assert!(!tools.iter().any(|t| t.id == "draw"));
+        assert!(!tools.iter().any(|t| t.id == "activate_2d_operational_map"));
+        assert!(tools.iter().any(|t| t.id == "manage_board"));
+    }
+
+    #[tokio::test]
+    async fn metadata_marks_frontend_missing_tools() {
+        let manager = manager_for_tests();
+        let tools = manager.list_metadata().await;
+        let draw = tools
+            .iter()
+            .find(|t| t.id == "draw")
+            .expect("draw metadata should still be visible for audit");
+
+        assert_eq!(draw.status, "frontend_missing");
+        assert!(!draw.user_configurable);
     }
 }

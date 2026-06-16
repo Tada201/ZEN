@@ -65,6 +65,15 @@ export function WorkspaceApp() {
   const visibleWorkspaceModes = getVisibleWorkspaceModeFeatures();
   const currentWorkspaceTab = isWorkspaceModeVisible(activeTab) ? activeTab : "chat";
 
+  const openArtifactInRightPanel = useCallback((artifact: ArtifactData) => {
+    const artifactId = artifact.id || `art_${Date.now()}`;
+    useChatStore.getState().addArtifact({ ...artifact, id: artifactId });
+    useChatStore.getState().setActiveArtifact(artifactId);
+    setActiveArtifact(null);
+    useUIStore.getState().setRightPanelOpen(true);
+    useUIStore.getState().setActiveRightTab("artifacts");
+  }, []);
+
   const handleSendMessageInternal = useCallback(async (data: any) => {
     handleSendMessage({
       ...data,
@@ -244,13 +253,12 @@ export function WorkspaceApp() {
                     <div className="w-full flex flex-col flex-1 overflow-hidden bg-transparent">
                       <MessageList
                         messages={chatMessages}
-                        onOpenArtifact={setActiveArtifact}
+                        onOpenArtifact={openArtifactInRightPanel}
                         onOpenSettings={() => setSettingsOpen(true)}
                         onDismissError={handleDismissError}
                         onRegenerate={handleRegenerate}
                       />
-                      <div className="w-full border-t border-border/15 bg-[#09090b]/85 rounded-t-2xl shrink-0">
-                        <div className="max-w-3xl mx-auto w-full px-6 py-4">
+                      <div className="max-w-3xl mx-auto w-full px-6 py-4 shrink-0">
                           <PremiumChatInput
                             activeChatId={currentSessionId}
                             onSend={handleSendMessageInternal}
@@ -273,7 +281,6 @@ export function WorkspaceApp() {
                               setSettingsOpen(true);
                             }}
                           />
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -284,13 +291,12 @@ export function WorkspaceApp() {
                         <div className="w-full flex flex-col flex-1 overflow-hidden bg-transparent">
                           <MessageList
                             messages={chatMessages}
-                            onOpenArtifact={setActiveArtifact}
+                            onOpenArtifact={openArtifactInRightPanel}
                             onOpenSettings={() => setSettingsOpen(true)}
                             onDismissError={handleDismissError}
                             onRegenerate={handleRegenerate}
                           />
-                          <div className="w-full border-t border-border/15 bg-[#09090b]/85 rounded-t-2xl shrink-0">
-                            <div className="max-w-3xl mx-auto w-full px-6 py-4">
+                          <div className="max-w-3xl mx-auto w-full px-6 py-4 shrink-0">
                               <PremiumChatInput
                                 activeChatId={currentSessionId}
                                 onSend={handleSendMessageInternal}
@@ -313,7 +319,6 @@ export function WorkspaceApp() {
                                   setSettingsOpen(true);
                                 }}
                               />
-                            </div>
                           </div>
                         </div>
                       </div>

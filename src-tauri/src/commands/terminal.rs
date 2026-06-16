@@ -9,6 +9,7 @@ pub async fn terminal_spawn(
     cols: u16,
     rows: u16,
     cwd: Option<String>,
+    user_approved: bool,
 ) -> ZenResult<String> {
     let workspace = state.workspace_folder.read().await.clone();
     state
@@ -21,6 +22,7 @@ pub async fn terminal_spawn(
             cols,
             rows,
             cwd,
+            user_approved,
         )
         .await
 }

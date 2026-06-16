@@ -32,7 +32,7 @@ export function UserMessage({ message, compact }: { message: Message; compact?: 
               >
                 {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
               </Button>
-              <div className="rounded-2xl border border-primary/20 bg-primary/10 px-5 py-3 shadow-md text-[14px] leading-relaxed text-foreground/90 font-medium ring-1 ring-primary/5">
+              <div className="rounded-2xl border border-white/20 dark:border-white/10 bg-primary/10 dark:bg-primary/20 backdrop-blur-xl backdrop-saturate-150 px-5 py-3 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.08)] text-[14px] leading-relaxed text-foreground/90 font-medium ring-1 ring-black/5 dark:ring-white/10">
                 {message.content}
               </div>
             </div>

@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::any::Any;
+use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 use thiserror::Error;
@@ -163,8 +164,11 @@ pub trait Plugin: Any + Send + Sync {
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
+type PluginHandle = Arc<RwLock<Box<dyn Plugin>>>;
+type PluginMap = HashMap<String, PluginHandle>;
+
 pub struct PluginManager {
-    plugins: RwLock<HashMap<String, Arc<RwLock<Box<dyn Plugin>>>>>,
+    plugins: RwLock<PluginMap>,
     extension_points: RwLock<HashMap<String, Vec<ExtensionHandler>>>,
     loaded_plugins: RwLock<HashSet<String>>,
 }
@@ -218,7 +222,7 @@ impl PluginManager {
 
         plugin.initialize(None)?;
 
-        let plugin_arc: Arc<RwLock<Box<dyn Plugin>>> = Arc::new(RwLock::new(plugin));
+        let plugin_arc: PluginHandle = Arc::new(RwLock::new(plugin));
 
         {
             let mut plugins = self.plugins.write().unwrap();
@@ -318,9 +322,9 @@ impl PluginManager {
 
         let mut ext_points = self.extension_points.write().unwrap();
 
-        let handlers = ext_points.entry(point.to_string()).or_insert_with(Vec::new);
+        let handlers = ext_points.entry(point.to_string()).or_default();
         handlers.push(handler);
-        handlers.sort_by(|a, b| b.priority.cmp(&a.priority));
+        handlers.sort_by_key(|handler| Reverse(handler.priority));
 
         Ok(())
     }
@@ -369,7 +373,7 @@ impl PluginManager {
         Ok(results)
     }
 
-    pub fn get_plugin(&self, plugin_id: &str) -> PluginResult<Arc<RwLock<Box<dyn Plugin>>>> {
+    pub fn get_plugin(&self, plugin_id: &str) -> PluginResult<PluginHandle> {
         let plugins = self.plugins.read().unwrap();
         plugins
             .get(plugin_id)
@@ -473,7 +477,7 @@ impl PluginManager {
 
     fn register_extension_point(&self, point: &str) -> PluginResult<()> {
         let mut ext_points = self.extension_points.write().unwrap();
-        ext_points.entry(point.to_string()).or_insert_with(Vec::new);
+        ext_points.entry(point.to_string()).or_default();
         Ok(())
     }
 

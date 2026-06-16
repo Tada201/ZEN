@@ -74,7 +74,7 @@ assert(
 assert(
   traceSource.includes("ToolTraceRow") &&
     traceSource.includes("ToolCallCard") &&
-    traceSource.includes("preferCompact ? importantToolCalls : toolCalls") &&
+    traceSource.includes("preferCompact ? importantToolCalls : normalizedToolCalls") &&
     !traceSource.includes("totalToolCount <= 4"),
   "batch lanes should keep tool cards available without auto-expanding completed details",
 );

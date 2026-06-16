@@ -61,6 +61,7 @@ export const PROVIDER_BASE_URL_MAP: Record<string, string> = {
     lmstudio: 'lmstudioBaseUrl',
     nine_router: 'nineRouterBaseUrl',
     opencode: 'opencodeBaseUrl',
+    mimo: 'mimoBaseUrl',
 };
 
 
@@ -105,6 +106,16 @@ export const providerOrder: ProviderInfo[] = [
         baseUrl: 'https://opencode.ai/zen/v1',
         category: 'cloud',
         icon: 'lucide:code-2'
+    },
+    {
+        key: 'mimo',
+        name: 'MiMo Code Free',
+        description: 'Direct MiMo Auto endpoint. No account key required.',
+        isLocal: false,
+        requiresKey: false,
+        baseUrl: 'https://api.xiaomimimo.com/api/free-ai/openai/chat',
+        category: 'cloud',
+        icon: 'simple-icons:xiaomi'
     },
     {
         key: 'openai',

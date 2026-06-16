@@ -103,6 +103,12 @@ impl HardwareService {
     }
 }
 
+impl Default for HardwareService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn detect_cuda_driver() -> bool {
     #[cfg(target_os = "windows")]
     {

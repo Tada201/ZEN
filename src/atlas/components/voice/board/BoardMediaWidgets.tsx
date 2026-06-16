@@ -94,20 +94,33 @@ export function BoardCamera({ widget }: { widget: BoardWidget }) {
   const streamRef = useRef<MediaStream | null>(null);
   const [active, setActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
+  const mountedRef = useRef(true);
 
   const stop = () => {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
     if (videoRef.current) videoRef.current.srcObject = null;
     setActive(false);
   };
 
-  useEffect(() => stop, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      stop();
+    };
+  }, []);
 
   const start = async () => {
+    if (isStarting || active || streamRef.current) return;
     setError(null);
+    setIsStarting(true);
     if (!navigator.mediaDevices?.getUserMedia) {
       setError("Camera access is not supported by this runtime.");
+      setIsStarting(false);
       return;
     }
     try {
@@ -119,10 +132,15 @@ export function BoardCamera({ widget }: { widget: BoardWidget }) {
         },
         audio: false,
       });
+      if (!mountedRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
       setActive(true);
     } catch (cause) {
+      if (!mountedRef.current) return;
       const name = cause instanceof DOMException ? cause.name : "";
       setError(
         name === "NotAllowedError"
@@ -133,13 +151,15 @@ export function BoardCamera({ widget }: { widget: BoardWidget }) {
               ? "No camera was detected."
               : "The camera could not be started."
       );
+    } finally {
+      if (mountedRef.current) setIsStarting(false);
     }
   };
 
   return (
     <div className="relative flex h-full min-h-0 items-center justify-center overflow-hidden bg-black">
       <video ref={videoRef} autoPlay muted playsInline className={active ? "h-full w-full object-cover" : "hidden"} />
-      {!active && <button type="button" onClick={(event) => { event.stopPropagation(); void start(); }} className="flex items-center gap-2 rounded-md border border-white/20 bg-white/[0.04] px-3 py-2 text-sm text-white"><Camera className="h-4 w-4" />Enable camera</button>}
+      {!active && <button type="button" disabled={isStarting} onClick={(event) => { event.stopPropagation(); void start(); }} className="flex items-center gap-2 rounded-md border border-white/20 bg-white/[0.04] px-3 py-2 text-sm text-white disabled:opacity-50"><Camera className="h-4 w-4" />{isStarting ? "Starting..." : "Enable camera"}</button>}
       {active && <button type="button" onClick={(event) => { event.stopPropagation(); stop(); }} className="absolute right-3 top-3 flex items-center gap-2 rounded-md bg-black/70 px-3 py-2 text-xs text-white"><Square className="h-3 w-3" />Stop</button>}
       {error && <div className="absolute bottom-3 text-xs text-red-300">{error}</div>}
       <span className="sr-only">{widget.description}</span>

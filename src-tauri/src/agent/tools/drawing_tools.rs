@@ -52,8 +52,7 @@ fn resolve_color(s: &str) -> Result<String> {
         "brown" => return Ok("#8b4513".into()),
         _ => {}
     }
-    if s.starts_with('#') {
-        let hex = &s[1..];
+    if let Some(hex) = s.strip_prefix('#') {
         let valid = matches!(hex.len(), 3 | 6 | 8) && hex.chars().all(|c| c.is_ascii_hexdigit());
         if valid {
             return Ok(s.to_string());
@@ -236,7 +235,7 @@ fn parse_toon(input: &str) -> Result<Vec<Value>> {
 
             // ── polygon ───────────────────────────────────────────────
             "p" => {
-                if args.len() < 4 || args.len() % 2 != 0 {
+                if args.len() < 4 || !args.len().is_multiple_of(2) {
                     bail!("line {ln}: 'p' requires an even number of coords (at least 4)");
                 }
                 let mut pts = Vec::new();
@@ -255,7 +254,7 @@ fn parse_toon(input: &str) -> Result<Vec<Value>> {
 
             // ── freehand path ─────────────────────────────────────────
             "f" => {
-                if args.len() < 4 || args.len() % 2 != 0 {
+                if args.len() < 4 || !args.len().is_multiple_of(2) {
                     bail!("line {ln}: 'f' requires an even number of coords (at least 4)");
                 }
                 let mut pts = Vec::new();

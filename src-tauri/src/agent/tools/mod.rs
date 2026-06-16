@@ -51,6 +51,12 @@ pub struct ToolRegistry {
     progressive: Option<Arc<RwLock<crate::agent::tools::progressive::ProgressiveToolRegistry>>>,
 }
 
+impl Default for ToolRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ToolRegistry {
     pub fn new() -> Self {
         Self {

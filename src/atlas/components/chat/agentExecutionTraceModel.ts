@@ -101,10 +101,13 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function firstInputLabel(input: ToolCall["input"]) {
   const record = asRecord(input);
+  const args = asRecord(record.arguments);
   return compactText(
     record.command ||
       record.cmd ||
       record.script ||
+      args.query ||
+      args.url ||
       record.query ||
       record.url ||
       record.path ||
@@ -117,9 +120,31 @@ function firstInputLabel(input: ToolCall["input"]) {
   );
 }
 
+function getDisplayToolName(toolCall: ToolCall) {
+  const name = toolCall.name.toLowerCase();
+  const input = asRecord(toolCall.input);
+  const args = asRecord(input.arguments);
+  const innerTool = String(input.tool_id || input.tool || input.name || "").toLowerCase();
+  const hasSearchArgs = Boolean(input.query || args.query || input.url || args.url);
+  const outputLooksLikeSearch = Boolean(toolCall.output && buildToolOutputPreview(toolCall.output).results.length > 0);
+
+  if (
+    name.includes("search") ||
+    name.includes("web") ||
+    innerTool.includes("search") ||
+    innerTool.includes("web") ||
+    (name === "tool_exec" && (hasSearchArgs || outputLooksLikeSearch))
+  ) {
+    return "Web search";
+  }
+
+  return toolCall.name;
+}
+
 function getToolActivitySummary(toolCall: ToolCall) {
   const label = firstInputLabel(toolCall.input);
-  return label ? `${toolCall.name}: ${label}` : toolCall.name;
+  const name = getDisplayToolName(toolCall);
+  return label ? `${name}: ${label}` : name;
 }
 
 function getStartedTogether(toolCalls: ToolCall[]) {
@@ -260,8 +285,8 @@ function getBatchLanes(toolCalls: ToolCall[], startedTogether: boolean, ledger: 
       completedPercent: lane.toolCalls.length > 0 ? Math.round((completedCount / lane.toolCalls.length) * 100) : 0,
       errorPercent: lane.toolCalls.length > 0 ? Math.round((errorCount / lane.toolCalls.length) * 100) : 0,
       ownerSummary: getOwnerSummary(lane.toolCalls),
-      runningToolNames: lane.toolCalls.filter(isRunningTool).map((tc) => tc.name).slice(0, 3),
-      approvalToolNames: lane.toolCalls.filter(isAwaitingApprovalTool).map((tc) => tc.name).slice(0, 3),
+      runningToolNames: lane.toolCalls.filter(isRunningTool).map(getDisplayToolName).slice(0, 3),
+      approvalToolNames: lane.toolCalls.filter(isAwaitingApprovalTool).map(getDisplayToolName).slice(0, 3),
       runningToolSummaries: lane.toolCalls.filter(isRunningTool).map(getToolActivitySummary).slice(0, 3),
       approvalToolSummaries: lane.toolCalls.filter(isAwaitingApprovalTool).map(getToolActivitySummary).slice(0, 3),
       resultSummary: getResultSummary(lane.toolCalls),
@@ -334,7 +359,7 @@ const CATEGORY_LABELS: Record<ToolCategory, [string, string]> = {
 function getToolCategoryCounts(toolCalls: ToolCall[]): string {
   const counts = new Map<ToolCategory, number>();
   toolCalls.forEach((tc) => {
-    const cat = classifyTool(tc.name);
+    const cat = classifyTool(getDisplayToolName(tc));
     counts.set(cat, (counts.get(cat) || 0) + 1);
   });
   return Array.from(counts.entries())
@@ -357,20 +382,21 @@ function getCompactLabel(
 
   if (toolCalls.length === 1) {
     const tc = toolCalls[0];
+    const name = getDisplayToolName(tc);
     const inputLabel = firstInputLabel(tc.input);
     const suffix = inputLabel ? ` — ${inputLabel}` : "";
-    if (tc.status === "running") return `${tc.name}${suffix}`;
-    if (tc.status === "awaiting_approval") return `${tc.name} — needs approval`;
+    if (tc.status === "running") return `${name}${suffix}`;
+    if (tc.status === "awaiting_approval") return `${name} — needs approval`;
     if (tc.status === "error") {
       const preview = buildToolOutputPreview(tc.output || "");
       const errMsg = preview.summary || "failed";
-      return `${tc.name} — ${errMsg}`;
+      return `${name} — ${errMsg}`;
     }
     // completed
     const preview = buildToolOutputPreview(tc.output || "");
     return preview.summary
-      ? `${tc.name} — ${preview.summary}`
-      : `${tc.name}${suffix}`;
+      ? `${name} — ${preview.summary}`
+      : `${name}${suffix}`;
   }
 
   // Multi-tool
@@ -417,7 +443,7 @@ export function buildAgentExecutionTraceModel(toolCalls: ToolCall[], steps: Step
   const shouldShowBatchLanes =
     toolCalls.length > 1 &&
     (explicitBatch || startedTogether || batchLanes.some((lane) => lane.toolCount > 1));
-  const compactToolNames = Array.from(new Set(toolCalls.map((tc) => tc.name))).slice(0, 6);
+  const compactToolNames = Array.from(new Set(toolCalls.map(getDisplayToolName))).slice(0, 6);
   const compactCategoryLabel = getToolCategoryCounts(toolCalls);
   const compactLabel = getCompactLabel(toolCalls, compactCategoryLabel, runningCount, approvalCount, errorCount);
 
@@ -438,8 +464,8 @@ export function buildAgentExecutionTraceModel(toolCalls: ToolCall[], steps: Step
     executionLabel: explicitBatch || startedTogether || runningCount > 1 ? "Parallel tool execution" : "Tool execution",
     ownerLabels,
     ownerSummary: getOwnerSummary(toolCalls),
-    runningToolNames: toolCalls.filter(isRunningTool).map((tc) => tc.name).slice(0, 4),
-    approvalToolNames: toolCalls.filter(isAwaitingApprovalTool).map((tc) => tc.name).slice(0, 4),
+    runningToolNames: toolCalls.filter(isRunningTool).map(getDisplayToolName).slice(0, 4),
+    approvalToolNames: toolCalls.filter(isAwaitingApprovalTool).map(getDisplayToolName).slice(0, 4),
     runningToolSummaries: toolCalls.filter(isRunningTool).map(getToolActivitySummary).slice(0, 4),
     approvalToolSummaries: toolCalls.filter(isAwaitingApprovalTool).map(getToolActivitySummary).slice(0, 4),
     completionSummary: getCompletionSummary(completionOrder),

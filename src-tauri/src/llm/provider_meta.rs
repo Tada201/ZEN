@@ -99,6 +99,13 @@ pub static PROVIDER_CATALOG: &[ProviderMeta] = &[
         extra_headers: &[],
     },
     ProviderMeta {
+        name: "mimo",
+        default_base_url: "https://api.xiaomimimo.com/api/free-ai/openai/chat",
+        api_key_key: None,
+        http_referer: None,
+        extra_headers: &[],
+    },
+    ProviderMeta {
         name: "opencode_free",
         default_base_url: "https://opencode.ai/zen/v1",
         api_key_key: None,

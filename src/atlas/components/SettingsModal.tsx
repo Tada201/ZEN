@@ -44,6 +44,7 @@ const UpdatesSettings = React.lazy(() => import("@/components/settings/Tabs/syst
 const SkillRegistry = React.lazy(() => import("@/components/settings/Tabs/skills/SkillRegistry").then(m => ({ default: m.SkillRegistry })));
 const MapConfiguration = React.lazy(() => import("@/components/GTSM/MapConfiguration").then(m => ({ default: m.MapConfiguration })));
 const ToolsSettings = React.lazy(() => import("@/components/settings/Tabs/ToolsSettings").then(m => ({ default: m.ToolsSettings })));
+const DependenciesSettings = React.lazy(() => import("@/components/settings/Tabs/DependenciesSettings").then(m => ({ default: m.DependenciesSettings })));
 const MCPSettings = React.lazy(() => import("@/components/settings/Tabs/plugins/MCPSettings").then(m => ({ default: m.MCPSettings })));
 const EmbeddingModelDownloader = React.lazy(() => import("@/components/settings/Tabs/intelligence/EmbeddingModelDownloader").then(m => ({ default: m.EmbeddingModelDownloader })));
 const CommandsSettings = React.lazy(() => import("@/components/settings/Tabs/plugins/CommandsSettings").then(m => ({ default: m.CommandsSettings })));
@@ -133,6 +134,12 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
 
   const handleUpdate = useCallback(
     (key: string, value: string) => {
+      if (key === "ui.theme") {
+        updateSetting("themeId", value);
+        theme.applyPreset(value);
+        return;
+      }
+
       // Special case: ui.animations maps to reducedMotion (inverted)
       if (key === "ui.animations") {
         const enabled = value === "true";
@@ -186,8 +193,9 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
 
   const handleCancel = useCallback(() => {
     discardChanges();
+    theme.applyPreset(useSettingsStore.getState().themeId);
     onClose();
-  }, [discardChanges, onClose]);
+  }, [discardChanges, onClose, theme]);
 
   // ── Loading state (wait for hydration) ──────────────────────────
 
@@ -346,6 +354,10 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
 
                 {activeTab === "tools" && (
                   <ToolsSettings settings={settings} onUpdate={handleUpdate} />
+                )}
+
+                {activeTab === "dependencies" && (
+                  <DependenciesSettings />
                 )}
 
                 {activeTab === "system" && (

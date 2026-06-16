@@ -68,7 +68,7 @@ pub async fn get_agent_config_file(
 ) -> ZenResult<AgentConfigFileResponse> {
     config_file::load_agent_config(&agent_id)
         .map(AgentConfigFileResponse::from)
-        .map_err(|e| crate::error::ZenError::Custom(e.to_string().into()))
+        .map_err(|e| crate::error::ZenError::Custom(e.to_string()))
 }
 
 /// Save (create/update) a per-agent config file.
@@ -80,7 +80,7 @@ pub async fn save_agent_config_file(
 ) -> ZenResult<()> {
     let c: config_file::AgentConfigFile = config.into();
     config_file::save_agent_config(&agent_id, &c)
-        .map_err(|e| crate::error::ZenError::Custom(e.to_string().into()))
+        .map_err(|e| crate::error::ZenError::Custom(e.to_string()))
 }
 
 /// Delete a per-agent config file (falls back to defaults).
@@ -90,7 +90,7 @@ pub async fn delete_agent_config_file(
     agent_id: String,
 ) -> ZenResult<()> {
     config_file::delete_agent_config(&agent_id)
-        .map_err(|e| crate::error::ZenError::Custom(e.to_string().into()))
+        .map_err(|e| crate::error::ZenError::Custom(e.to_string()))
 }
 
 /// List all agent config files on disk.
@@ -99,7 +99,7 @@ pub async fn list_agent_config_files(
     _state: State<'_, AppState>,
 ) -> ZenResult<Vec<AgentConfigFileInfo>> {
     let configs = config_file::list_agent_configs()
-        .map_err(|e| crate::error::ZenError::Custom(e.to_string().into()))?;
+        .map_err(|e| crate::error::ZenError::Custom(e.to_string()))?;
 
     Ok(configs
         .into_iter()
@@ -118,7 +118,7 @@ pub async fn export_agent_config_file(
     export_path: String,
 ) -> ZenResult<()> {
     config_file::export_agent_config(&agent_id, &export_path)
-        .map_err(|e| crate::error::ZenError::Custom(e.to_string().into()))
+        .map_err(|e| crate::error::ZenError::Custom(e.to_string()))
 }
 
 /// Import an agent config from a file path.
@@ -130,7 +130,7 @@ pub async fn import_agent_config_file(
 ) -> ZenResult<AgentConfigFileResponse> {
     config_file::import_agent_config(&import_path, target_agent_id)
         .map(AgentConfigFileResponse::from)
-        .map_err(|e| crate::error::ZenError::Custom(e.to_string().into()))
+        .map_err(|e| crate::error::ZenError::Custom(e.to_string()))
 }
 
 /// List available tools from the tool registry for config UI.
@@ -145,7 +145,7 @@ pub async fn list_tools_for_config(
             id: m.id,
             name: m.name,
             description: m.description,
-            risk_level: format!("{:?}", m.risk_level),
+            risk_level: m.risk_level,
         })
         .collect())
 }

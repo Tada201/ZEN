@@ -370,7 +370,7 @@ impl Runner {
                                         error: format!("Cloud provider failed: {}", cloud_err),
                                         recoverable: true,
                                     }));
-                                    Err(e.into())
+                                    Err(e)
                                 }
                             }
                         }
@@ -388,7 +388,7 @@ impl Runner {
                                 error: "No cloud provider configured for escalation".to_string(),
                                 recoverable: false,
                             }));
-                            Err(e.into())
+                            Err(e)
                         }
                     }
                 } else {
@@ -400,7 +400,7 @@ impl Runner {
                             "recoverable": false
                         }),
                     );
-                    Err(e.into())
+                    Err(e)
                 }
             }
         }

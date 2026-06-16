@@ -13,6 +13,15 @@ pub enum AnchorType {
     Object { object_id: String, point: String },
 }
 
+impl std::fmt::Display for AnchorType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AnchorType::Canvas(point) => write!(f, "canvas.{}", point),
+            AnchorType::Object { object_id, point } => write!(f, "{}.{}", object_id, point),
+        }
+    }
+}
+
 impl AnchorType {
     /// Parse anchor string: "canvas.center" or "circle1.bottom"
     pub fn parse(anchor_str: &str) -> Result<Self> {
@@ -32,13 +41,6 @@ impl AnchorType {
                 object_id: base.to_string(),
                 point: point.to_string(),
             })
-        }
-    }
-
-    pub fn to_string(&self) -> String {
-        match self {
-            AnchorType::Canvas(point) => format!("canvas.{}", point),
-            AnchorType::Object { object_id, point } => format!("{}.{}", object_id, point),
         }
     }
 }

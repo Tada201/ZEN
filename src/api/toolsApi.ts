@@ -8,6 +8,9 @@ export interface BackendToolMeta {
   icon: string;
   risk_level: string;
   description: string;
+  status?: string;
+  status_detail?: string;
+  user_configurable?: boolean;
 }
 
 export interface ToolMeta {
@@ -16,6 +19,9 @@ export interface ToolMeta {
   icon: string;
   riskLevel: ToolRiskLevel;
   description: string;
+  status: string;
+  statusDetail: string;
+  userConfigurable: boolean;
 }
 
 export interface RunToolCommandRequest {
@@ -39,6 +45,9 @@ export function mapBackendToolMeta(tool: BackendToolMeta): ToolMeta {
     icon: tool.icon,
     riskLevel: normalizeToolRiskLevel(tool.risk_level),
     description: tool.description,
+    status: tool.status || "ready",
+    statusDetail: tool.status_detail || "",
+    userConfigurable: tool.user_configurable !== false,
   };
 }
 
