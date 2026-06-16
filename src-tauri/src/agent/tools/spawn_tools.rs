@@ -15,6 +15,36 @@ use uuid::Uuid;
 
 const MAX_PARALLEL_SUBAGENTS: usize = 8;
 
+/// Parameters for spawning a child agent.
+pub(crate) struct SpawnParams<'a> {
+    pub app: AppHandle,
+    pub chat_id: String,
+    pub agent_id: &'a str,
+    pub task: &'a str,
+    pub context: &'a str,
+    pub explicit_model: Option<&'a str>,
+    pub explicit_max_steps: Option<u64>,
+    pub depth: u32,
+    pub allowed_tools: Option<Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
+    pub token: CancellationToken,
+    pub label: &'a str,
+}
+
+/// Parameters for emitting spawn completion events.
+struct CompletionParams<'a> {
+    app: &'a AppHandle,
+    chat_id: &'a str,
+    agent_id: &'a str,
+    agent_name: &'a str,
+    task: &'a str,
+    spawn_id: &'a str,
+    label: &'a str,
+    status: &'a str,
+    error: Option<&'a str>,
+    result_summary: Option<&'a str>,
+    duration_ms: u64,
+}
+
 fn result_summary(value: &Value) -> Option<String> {
     value
         .get("summary")
@@ -50,20 +80,8 @@ impl SpawnAgentTool {
 
     /// Core child-agent execution logic. The deprecated delegate alias also
     /// calls this implementation for compatibility with persisted references.
-    pub(crate) async fn do_spawn(
-        &self,
-        app: AppHandle,
-        chat_id: String,
-        agent_id: &str,
-        task: &str,
-        context: &str,
-        explicit_model: Option<&str>,
-        explicit_max_steps: Option<u64>,
-        depth: u32,
-        allowed_tools: Option<Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
-        token: CancellationToken,
-        label: &str,
-    ) -> Result<Value> {
+    pub(crate) async fn do_spawn(&self, params: SpawnParams<'_>) -> Result<Value> {
+        let SpawnParams { app, chat_id, agent_id, task, context, explicit_model, explicit_max_steps, depth, allowed_tools, token, label } = params;
         child_runner::check_depth(depth)?;
 
         if agent_id == "voice_display" {
@@ -84,16 +102,16 @@ impl SpawnAgentTool {
         let child_messages =
             child_runner::build_child_messages(&app, &chat_id, &delegation_prompt).await;
 
-        let mut child_runner_instance = child_runner::build_child_runner(
-            &app,
-            self.tool_registry.clone(),
-            self.agent_registry.clone(),
-            self.hook_registry.clone(),
-            self.permissions.clone(),
-            depth,
-            &resolved,
+        let mut child_runner_instance = child_runner::build_child_runner(child_runner::ChildRunnerParams {
+            app: &app,
+            tool_registry: self.tool_registry.clone(),
+            agent_registry: self.agent_registry.clone(),
+            hook_registry: self.hook_registry.clone(),
+            permissions: self.permissions.clone(),
+            parent_depth: depth,
+            resolved: &resolved,
             allowed_tools,
-        )?;
+        })?;
         child_runner_instance = child_runner_instance.with_memory_scope(memory_scope);
 
         let state = app.state::<AppState>();
@@ -205,19 +223,19 @@ impl SpawnAgentTool {
                 };
                 let summary = result_summary(&structured_result);
 
-                let _ = emit_completion_events(
-                    &app,
-                    &chat_id,
+                let _ = emit_completion_events(CompletionParams {
+                    app: &app,
+                    chat_id: &chat_id,
                     agent_id,
-                    &resolved.agent.name,
+                    agent_name: &resolved.agent.name,
                     task,
-                    &spawn_id,
+                    spawn_id: &spawn_id,
                     label,
-                    "completed",
-                    None,
-                    summary.as_deref(),
-                    spawn_duration_ms,
-                );
+                    status: "completed",
+                    error: None,
+                    result_summary: summary.as_deref(),
+                    duration_ms: spawn_duration_ms,
+                });
 
                 Ok(json!({
                     "spawn_id": spawn_id,
@@ -230,19 +248,19 @@ impl SpawnAgentTool {
                 }))
             }
             Err(e) => {
-                let _ = emit_completion_events(
-                    &app,
-                    &chat_id,
+                let _ = emit_completion_events(CompletionParams {
+                    app: &app,
+                    chat_id: &chat_id,
                     agent_id,
-                    &resolved.agent.name,
+                    agent_name: &resolved.agent.name,
                     task,
-                    &spawn_id,
+                    spawn_id: &spawn_id,
                     label,
-                    "failed",
-                    Some(&e.to_string()),
-                    None,
-                    spawn_duration_ms,
-                );
+                    status: "failed",
+                    error: Some(&e.to_string()),
+                    result_summary: None,
+                    duration_ms: spawn_duration_ms,
+                });
 
                 Ok(json!({
                     "spawn_id": spawn_id,
@@ -352,19 +370,19 @@ impl AgentTool for SpawnAgentTool {
                     let context = request.get("context").and_then(Value::as_str).unwrap_or("");
                     let max_steps = request.get("max_steps").and_then(Value::as_u64);
                     let model = request.get("model").and_then(Value::as_str);
-                    self.do_spawn(
+                    self.do_spawn(SpawnParams {
                         app,
                         chat_id,
                         agent_id,
                         task,
                         context,
-                        model,
-                        max_steps,
+                        explicit_model: model,
+                        explicit_max_steps: max_steps,
                         depth,
                         allowed_tools,
                         token,
-                        "Spawning",
-                    )
+                        label: "Spawning",
+                    })
                     .await
                 }
             });
@@ -404,37 +422,26 @@ impl AgentTool for SpawnAgentTool {
         let max_steps = input.get("max_steps").and_then(|v| v.as_u64());
         let model = input.get("model").and_then(|v| v.as_str());
 
-        self.do_spawn(
+        self.do_spawn(SpawnParams {
             app,
             chat_id,
             agent_id,
             task,
-            "",
-            model,
-            max_steps,
+            context: "",
+            explicit_model: model,
+            explicit_max_steps: max_steps,
             depth,
             allowed_tools,
             token,
-            "Spawning",
-        )
+            label: "Spawning",
+        })
         .await
     }
 }
 
 /// Shared helper to emit completion events for spawn/delegate tools.
-fn emit_completion_events(
-    app: &AppHandle,
-    chat_id: &str,
-    agent_id: &str,
-    agent_name: &str,
-    task: &str,
-    spawn_id: &str,
-    label: &str,
-    status: &str,
-    error: Option<&str>,
-    result_summary: Option<&str>,
-    duration_ms: u64,
-) -> Result<()> {
+fn emit_completion_events(params: CompletionParams<'_>) -> Result<()> {
+    let CompletionParams { app, chat_id, agent_id, agent_name, task, spawn_id, label, status, error, result_summary, duration_ms } = params;
     let state = app.state::<AppState>();
 
     // Emit chat:message completion

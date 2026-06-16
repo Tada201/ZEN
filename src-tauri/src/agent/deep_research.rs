@@ -9,16 +9,19 @@ use crate::db::queries;
 use crate::llm::{ChatRequestConfig, LlmProvider};
 use crate::tools::ToolCall;
 
-pub async fn run_deep_research(
-    app: AppHandle,
-    db: sqlx::SqlitePool,
-    llm_provider: &dyn LlmProvider,
-    chat_id: String,
-    model: String,
-    query: String,
-    config: ChatRequestConfig,
-    token: CancellationToken,
-) {
+pub struct DeepResearchParams<'a> {
+    pub app: AppHandle,
+    pub db: sqlx::SqlitePool,
+    pub llm_provider: &'a dyn LlmProvider,
+    pub chat_id: String,
+    pub model: String,
+    pub query: String,
+    pub config: ChatRequestConfig,
+    pub token: CancellationToken,
+}
+
+pub async fn run_deep_research(params: DeepResearchParams<'_>) {
+    let DeepResearchParams { app, db, llm_provider, chat_id, model, query, config, token } = params;
     info!(chat_id = %chat_id, query = %query, "Starting Deep Research orchestrator");
 
     // Helper to emit research step events
@@ -39,21 +42,14 @@ pub async fn run_deep_research(
     // 1. Create a placeholder assistant message in the database with kind='deep_research'
     let message = match queries::add_message(
         &db,
-        &chat_id,
-        None,
-        "assistant",
-        "",
-        Some(&model),
-        false,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        Some("deep_research"),
-        None,
-        None,
+        &queries::NewMessage {
+            chat_id: &chat_id,
+            role: "assistant",
+            model: Some(&model),
+            is_complete: false,
+            kind: Some("deep_research"),
+            ..Default::default()
+        },
     )
     .await
     {
@@ -248,14 +244,13 @@ pub async fn run_deep_research(
     // Finalize the message
     if let Err(e) = queries::update_message(
         &db,
-        &message_id,
-        &chat_id,
-        &full_response,
-        true, // is_complete
-        None,
-        None,
-        None, // tool_calls
-        None, // reasoning_details
+        &queries::UpdateMessage {
+            id: &message_id,
+            chat_id: &chat_id,
+            content: &full_response,
+            is_complete: true,
+            ..Default::default()
+        },
     )
     .await
     {

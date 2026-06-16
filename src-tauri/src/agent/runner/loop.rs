@@ -1,4 +1,4 @@
-use super::actions::{emit_action_only, persist_and_emit_action};
+use super::actions::{emit_action_only, persist_and_emit_action, ActionEmitParams, ActionPersistParams};
 use super::escalation::{EarlyToolExecutionContext, EarlyToolExecutionState};
 use super::helpers::{
     generate_handoff_summary, parse_file_changes, parse_text_tool_calls,
@@ -42,6 +42,7 @@ fn voice_display_tool_evidence(conversation: &[ChatMessage]) -> String {
 }
 
 impl Runner {
+    #[allow(clippy::too_many_arguments)]
     pub async fn run(
         &self,
         provider: &dyn LlmProvider,
@@ -817,35 +818,35 @@ impl Runner {
                             };
 
                             if let Some(ref db) = self.db_pool {
-                                let _ = persist_and_emit_action(
-                                    &self.app,
-                                    db,
-                                    &chat_id,
-                                    None,
-                                    MessageKind::AgentHandoff,
-                                    format!(
+                                let _ = persist_and_emit_action(ActionPersistParams {
+                                    app: &self.app,
+                                    db_pool: db,
+                                    chat_id: &chat_id,
+                                    id: None,
+                                    kind: MessageKind::AgentHandoff,
+                                    content: format!(
                                         "{} handing off to {}",
                                         current_agent.name, next_agent.name
                                     ),
-                                    action_meta,
-                                    None,
-                                    None,
-                                    &self.on_event,
-                                )
+                                    meta: action_meta,
+                                    role: None,
+                                    tool_call_id: None,
+                                    channel: &self.on_event,
+                                })
                                 .await;
                             } else {
-                                let _ = emit_action_only(
-                                    &self.app,
-                                    &chat_id,
-                                    None,
-                                    MessageKind::AgentHandoff,
-                                    format!(
+                                let _ = emit_action_only(ActionEmitParams {
+                                    app: &self.app,
+                                    chat_id: &chat_id,
+                                    id: None,
+                                    kind: MessageKind::AgentHandoff,
+                                    content: format!(
                                         "{} handing off to {}",
                                         current_agent.name, next_agent.name
                                     ),
-                                    action_meta,
-                                    &self.on_event,
-                                );
+                                    meta: action_meta,
+                                    channel: &self.on_event,
+                                });
                             }
 
                             // Inject context bridge so the new agent knows what happened before it
@@ -948,29 +949,29 @@ impl Runner {
                 );
 
                 if let Some(ref db) = self.db_pool {
-                    let _ = persist_and_emit_action(
-                        &self.app,
-                        db,
-                        &chat_id,
-                        None,
-                        MessageKind::ToolResult,
-                        result_content,
-                        action_meta,
-                        Some("tool"),
-                        Some(result.tool_call_id.clone()),
-                        &self.on_event,
-                    )
+                    let _ = persist_and_emit_action(ActionPersistParams {
+                        app: &self.app,
+                        db_pool: db,
+                        chat_id: &chat_id,
+                        id: None,
+                        kind: MessageKind::ToolResult,
+                        content: result_content,
+                        meta: action_meta,
+                        role: Some("tool"),
+                        tool_call_id: Some(result.tool_call_id.clone()),
+                        channel: &self.on_event,
+                    })
                     .await;
                 } else {
-                    let _ = emit_action_only(
-                        &self.app,
-                        &chat_id,
-                        None,
-                        MessageKind::ToolResult,
-                        result_content,
-                        action_meta,
-                        &self.on_event,
-                    );
+                    let _ = emit_action_only(ActionEmitParams {
+                        app: &self.app,
+                        chat_id: &chat_id,
+                        id: None,
+                        kind: MessageKind::ToolResult,
+                        content: result_content,
+                        meta: action_meta,
+                        channel: &self.on_event,
+                    });
                 }
             }
 

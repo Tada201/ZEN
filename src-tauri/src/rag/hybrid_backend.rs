@@ -65,13 +65,15 @@ impl HybridMemoryBackend {
         // 3. Store in SQLite with embedding
         queries::add_session_memory(
             &self.config.sqlite_pool,
-            &entry.id,
-            &entry.session_id,
-            &entry.content,
-            entry.metadata.as_deref().unwrap_or("{}"),
-            &entry.written_by,
-            entry.timestamp as i64,
-            &embedding_bytes,
+            &queries::NewSessionMemory {
+                id: &entry.id,
+                session_id: &entry.session_id,
+                content: &entry.content,
+                metadata: entry.metadata.as_deref().unwrap_or("{}"),
+                written_by: &entry.written_by,
+                timestamp: entry.timestamp as i64,
+                embedding: &embedding_bytes,
+            },
         )
         .await
         .context("Failed to insert memory into SQLite")?;

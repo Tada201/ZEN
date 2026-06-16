@@ -229,15 +229,17 @@ pub async fn apply_session_action(
 
     let _ = crate::db::queries::save_graph_session(
         &state.db().await?,
-        &session_id,
-        &expressions_json,
-        &variables_json,
-        session.viewport.x_min,
-        session.viewport.x_max,
-        session.viewport.y_min,
-        session.viewport.y_max,
-        session.current_version as i64,
-        &history_json,
+        &crate::db::queries::GraphSessionUpdate {
+            session_id: &session_id,
+            expressions_json: &expressions_json,
+            variables_json: &variables_json,
+            viewport_x_min: session.viewport.x_min,
+            viewport_x_max: session.viewport.x_max,
+            viewport_y_min: session.viewport.y_min,
+            viewport_y_max: session.viewport.y_max,
+            current_version: session.current_version as i64,
+            history_json: &history_json,
+        },
     )
     .await;
 
@@ -282,15 +284,17 @@ pub async fn rollback_session(
 
     let _ = crate::db::queries::save_graph_session(
         &state.db().await?,
-        &session_id,
-        &expressions_json,
-        &variables_json,
-        session.viewport.x_min,
-        session.viewport.x_max,
-        session.viewport.y_min,
-        session.viewport.y_max,
-        session.current_version as i64,
-        &history_json,
+        &crate::db::queries::GraphSessionUpdate {
+            session_id: &session_id,
+            expressions_json: &expressions_json,
+            variables_json: &variables_json,
+            viewport_x_min: session.viewport.x_min,
+            viewport_x_max: session.viewport.x_max,
+            viewport_y_min: session.viewport.y_min,
+            viewport_y_max: session.viewport.y_max,
+            current_version: session.current_version as i64,
+            history_json: &history_json,
+        },
     )
     .await;
 

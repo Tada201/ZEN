@@ -5,25 +5,50 @@ use uuid::Uuid;
 
 // --- Messages ---
 
-pub async fn add_message(
-    pool: &SqlitePool,
-    chat_id: &str,
-    id: Option<&str>,
-    role: &str,
-    content: &str,
-    model: Option<&str>,
-    is_complete: bool,
-    tool_calls: Option<&str>,
-    tool_call_id: Option<&str>,
-    images: Option<&str>,
-    attachments: Option<&str>,
-    tokens_in: Option<i64>,
-    tokens_out: Option<i64>,
-    kind: Option<&str>,
-    metadata: Option<&str>,
-    reasoning_details: Option<&str>,
-) -> ZenResult<Message> {
-    let id = id
+/// Parameters for inserting a new message into the database.
+pub struct NewMessage<'a> {
+    pub chat_id: &'a str,
+    pub id: Option<&'a str>,
+    pub role: &'a str,
+    pub content: &'a str,
+    pub model: Option<&'a str>,
+    pub is_complete: bool,
+    pub tool_calls: Option<&'a str>,
+    pub tool_call_id: Option<&'a str>,
+    pub images: Option<&'a str>,
+    pub attachments: Option<&'a str>,
+    pub tokens_in: Option<i64>,
+    pub tokens_out: Option<i64>,
+    pub kind: Option<&'a str>,
+    pub metadata: Option<&'a str>,
+    pub reasoning_details: Option<&'a str>,
+}
+
+impl<'a> Default for NewMessage<'a> {
+    fn default() -> Self {
+        Self {
+            chat_id: "",
+            id: None,
+            role: "assistant",
+            content: "",
+            model: None,
+            is_complete: true,
+            tool_calls: None,
+            tool_call_id: None,
+            images: None,
+            attachments: None,
+            tokens_in: None,
+            tokens_out: None,
+            kind: None,
+            metadata: None,
+            reasoning_details: None,
+        }
+    }
+}
+
+pub async fn add_message(pool: &SqlitePool, msg: &NewMessage<'_>) -> ZenResult<Message> {
+    let id = msg
+        .id
         .map(|s| s.to_string())
         .unwrap_or_else(|| Uuid::new_v4().to_string());
 
@@ -40,20 +65,20 @@ pub async fn add_message(
         "#,
     )
     .bind(&id)
-    .bind(chat_id)
-    .bind(role)
-    .bind(content)
-    .bind(model)
-    .bind(is_complete as i32)
-    .bind(tool_calls)
-    .bind(tool_call_id)
-    .bind(images)
-    .bind(attachments)
-    .bind(tokens_in)
-    .bind(tokens_out)
-    .bind(kind)
-    .bind(metadata)
-    .bind(reasoning_details)
+    .bind(msg.chat_id)
+    .bind(msg.role)
+    .bind(msg.content)
+    .bind(msg.model)
+    .bind(msg.is_complete as i32)
+    .bind(msg.tool_calls)
+    .bind(msg.tool_call_id)
+    .bind(msg.images)
+    .bind(msg.attachments)
+    .bind(msg.tokens_in)
+    .bind(msg.tokens_out)
+    .bind(msg.kind)
+    .bind(msg.metadata)
+    .bind(msg.reasoning_details)
     .execute(&mut *tx)
     .await?;
 
@@ -67,9 +92,9 @@ pub async fn add_message(
                total_tokens_out = total_tokens_out + ?
            WHERE id = ?"#,
     )
-    .bind(tokens_in.unwrap_or(0))
-    .bind(tokens_out.unwrap_or(0))
-    .bind(chat_id)
+    .bind(msg.tokens_in.unwrap_or(0))
+    .bind(msg.tokens_out.unwrap_or(0))
+    .bind(msg.chat_id)
     .execute(&mut *tx)
     .await?;
 

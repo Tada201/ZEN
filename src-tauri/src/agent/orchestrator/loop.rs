@@ -21,6 +21,7 @@ impl Orchestrator {
     ///
     /// This is the main entry point for orchestrator-mode execution
     #[instrument(skip(self, provider, messages), fields(chat_id = %chat_id))]
+    #[allow(clippy::too_many_arguments)]
     pub async fn run_orchestrator_loop(
         &self,
         provider: Arc<dyn LlmProvider>,

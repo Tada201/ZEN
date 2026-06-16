@@ -19,34 +19,33 @@ pub(super) async fn save_assistant_message(params: AssistantMessageSave<'_>) -> 
     let save_res = if let Some(ref msg_id) = params.message_id {
         queries::update_message(
             params.db,
-            msg_id,
-            params.chat_id,
-            params.content,
-            params.is_complete,
-            params.tokens_in,
-            params.tokens_out,
-            params.tool_calls,
-            params.reasoning_details,
+            &queries::UpdateMessage {
+                id: msg_id,
+                chat_id: params.chat_id,
+                content: params.content,
+                is_complete: params.is_complete,
+                tokens_in: params.tokens_in,
+                tokens_out: params.tokens_out,
+                tool_calls: params.tool_calls,
+                reasoning_details: params.reasoning_details,
+            },
         )
         .await
     } else {
         queries::add_message(
             params.db,
-            params.chat_id,
-            None,
-            "assistant",
-            params.content,
-            Some(params.model),
-            params.is_complete,
-            params.tool_calls,
-            None,
-            None,
-            None,
-            params.tokens_in,
-            params.tokens_out,
-            None,
-            None,
-            params.reasoning_details,
+            &queries::NewMessage {
+                chat_id: params.chat_id,
+                role: "assistant",
+                content: params.content,
+                model: Some(params.model),
+                is_complete: params.is_complete,
+                tool_calls: params.tool_calls,
+                tokens_in: params.tokens_in,
+                tokens_out: params.tokens_out,
+                reasoning_details: params.reasoning_details,
+                ..Default::default()
+            },
         )
         .await
         .map(|msg| {

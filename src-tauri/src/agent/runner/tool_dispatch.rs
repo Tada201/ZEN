@@ -1,4 +1,7 @@
-use super::tool_actions::{emit_cached_tool_result_action, emit_tool_call_action};
+use super::tool_actions::{
+    emit_cached_tool_result_action, emit_tool_call_action, CachedResultParams,
+    ToolActionParams,
+};
 use super::tool_pipeline::{
     cache_key_for, normalize_tool_result, preprocess_tool_calls, should_read_cache,
     should_write_cache, PipelineCall,
@@ -68,6 +71,7 @@ impl Runner {
     /// Execute tool calls with P3 lifecycle hooks (pre/post).
     /// For high-risk tools like `run_command`, emits an authorization request
     /// and waits for user approval before executing.
+    #[allow(clippy::too_many_arguments)]
     pub(super) async fn execute_tools_with_hooks(
         &self,
         tool_calls: &[ToolCall],
@@ -156,17 +160,17 @@ impl Runner {
                 })),
             }));
 
-            emit_tool_call_action(
-                &self.app,
-                self.db_pool.as_ref(),
-                &self.on_event,
+            emit_tool_call_action(ToolActionParams {
+                app: &self.app,
+                db_pool: self.db_pool.as_ref(),
+                channel: &self.on_event,
                 chat_id,
                 tool_call,
                 agent_id,
                 agent_name,
                 iteration,
-                self.depth,
-            )
+                depth: self.depth,
+            })
             .await;
 
             // ── Phase 3.2: Tool Cache Lookup ──
@@ -182,18 +186,18 @@ impl Runner {
             if let Some(cached_result) = cached_result {
                 tracing::info!("Cache HIT for tool '{}'", tool_call.name);
 
-                emit_cached_tool_result_action(
-                    &self.app,
-                    self.db_pool.as_ref(),
-                    &self.on_event,
+                emit_cached_tool_result_action(CachedResultParams {
+                    app: &self.app,
+                    db_pool: self.db_pool.as_ref(),
+                    channel: &self.on_event,
                     chat_id,
                     tool_call,
-                    &cached_result,
+                    cached_result: &cached_result,
                     agent_id,
                     agent_name,
                     iteration,
-                    self.depth,
-                )
+                    depth: self.depth,
+                })
                 .await;
 
                 let tc_id_inner = tc_id.clone();
@@ -310,19 +314,19 @@ impl Runner {
                         let start = std::time::Instant::now();
                         let started_at = chrono::Utc::now();
                         let mut result = tool_service
-                            .execute_agent_tool(
+                            .execute_agent_tool(crate::services::tool::AgentToolParams {
                                 tool,
                                 app,
-                                chat_id_inner,
-                                ToolCall {
+                                chat_id: chat_id_inner,
+                                tool_call: ToolCall {
                                     id: tc_id.clone(),
                                     name: tc_name.clone(),
                                     args: new_args.clone(),
                                 },
-                                token_inner,
+                                token: token_inner,
                                 depth,
-                                Some(allowed_tools),
-                            )
+                                allowed_tools: Some(allowed_tools),
+                            })
                             .await;
                         result.duration_ms = start.elapsed().as_millis() as u64;
                         hook_reg.post_tool_use(
@@ -546,19 +550,19 @@ impl Runner {
 
                                     let start = std::time::Instant::now();
                                     let mut result = tool_service
-                                        .execute_agent_tool(
+                                        .execute_agent_tool(crate::services::tool::AgentToolParams {
                                             tool,
                                             app,
-                                            chat_id_inner,
-                                            ToolCall {
+                                            chat_id: chat_id_inner,
+                                            tool_call: ToolCall {
                                                 id: tc_id.clone(),
                                                 name: tc_name.clone(),
                                                 args: tc_args_inner.clone(),
                                             },
-                                            token_inner,
+                                            token: token_inner,
                                             depth,
-                                            Some(allowed_tools),
-                                        )
+                                            allowed_tools: Some(allowed_tools),
+                                        })
                                         .await;
                                     result.duration_ms = start.elapsed().as_millis() as u64;
 
@@ -736,19 +740,19 @@ impl Runner {
                         let start = std::time::Instant::now();
                         let started_at = chrono::Utc::now();
                         let mut result = tool_service
-                            .execute_agent_tool(
+                            .execute_agent_tool(crate::services::tool::AgentToolParams {
                                 tool,
                                 app,
-                                chat_id_inner,
-                                ToolCall {
+                                chat_id: chat_id_inner,
+                                tool_call: ToolCall {
                                     id: tc_id.clone(),
                                     name: tc_name.clone(),
                                     args: tc_args_inner,
                                 },
-                                token_inner,
+                                token: token_inner,
                                 depth,
-                                Some(allowed_tools),
-                            )
+                                allowed_tools: Some(allowed_tools),
+                            })
                             .await;
                         result.duration_ms = start.elapsed().as_millis() as u64;
 

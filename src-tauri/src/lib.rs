@@ -1,4 +1,3 @@
-#![allow(clippy::too_many_arguments)]
 
 extern crate pdf_inspector;
 

@@ -8,6 +8,7 @@ use super::Orchestrator;
 use super::OrchestratorPhase;
 use crate::agent::event_bus::{AgentEvent, ChatChunkFirstPayload, ChatChunkPayload};
 use crate::agent::runner;
+use crate::agent::runner::actions::{ActionPersistParams, ActionEmitParams};
 use crate::agent::task::Task;
 use crate::agent::types::{ActionMeta, AgentResponse, MessageKind, SpawnMeta};
 use crate::db::models::ChatMessage;
@@ -15,6 +16,7 @@ use crate::llm::{ChatRequestConfig, LlmChunk, LlmProvider};
 
 impl Orchestrator {
     /// Execute a single task with the assigned agent
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn execute_task_with_agent(
         &self,
         provider: &dyn LlmProvider,
@@ -46,16 +48,16 @@ impl Orchestrator {
         )?;
 
         // Create runner for this agent using the unified child runner builder
-        let mut runner = crate::agent::tools::child_runner::build_child_runner(
-            &self.app,
-            self.tool_registry.clone(),
-            self.agent_registry.clone(),
-            self.hook_registry.clone(),
-            self.permissions.clone(),
-            0, // Orchestrator tasks are spawned at parent depth 0
-            &resolved,
-            None,
-        )?;
+        let mut runner = crate::agent::tools::child_runner::build_child_runner(crate::agent::tools::child_runner::ChildRunnerParams {
+            app: &self.app,
+            tool_registry: self.tool_registry.clone(),
+            agent_registry: self.agent_registry.clone(),
+            hook_registry: self.hook_registry.clone(),
+            permissions: self.permissions.clone(),
+            parent_depth: 0, // Orchestrator tasks are spawned at parent depth 0
+            resolved: &resolved,
+            allowed_tools: None,
+        })?;
 
         // Pass direct channel for high-performance streaming if available
         if let Some(ref channel) = self.on_event {
@@ -117,29 +119,29 @@ impl Orchestrator {
             task.description.chars().take(80).collect::<String>()
         );
         let spawn_id = if let Some(ref pool) = self.db_pool {
-            runner::persist_and_emit_action(
-                &self.app,
-                pool,
+            runner::persist_and_emit_action(ActionPersistParams {
+                app: &self.app,
+                db_pool: pool,
                 chat_id,
-                None,
-                MessageKind::AgentSpawn,
-                spawn_content,
-                spawn_meta,
-                Some("assistant"),
-                None,
-                &self.on_event,
-            )
+                id: None,
+                kind: MessageKind::AgentSpawn,
+                content: spawn_content,
+                meta: spawn_meta,
+                role: Some("assistant"),
+                tool_call_id: None,
+                channel: &self.on_event,
+            })
             .await?
         } else {
-            runner::emit_action_only(
-                &self.app,
+            runner::emit_action_only(ActionEmitParams {
+                app: &self.app,
                 chat_id,
-                None,
-                MessageKind::AgentSpawn,
-                spawn_content,
-                spawn_meta,
-                &self.on_event,
-            )?
+                id: None,
+                kind: MessageKind::AgentSpawn,
+                content: spawn_content,
+                meta: spawn_meta,
+                channel: &self.on_event,
+            })?
         };
 
         let start_time = std::time::Instant::now();
@@ -187,29 +189,29 @@ impl Orchestrator {
 
                 let complete_content = format!("{} completed in {}ms", agent.name, duration_ms);
                 if let Some(ref pool) = self.db_pool {
-                    let _ = runner::persist_and_emit_action(
-                        &self.app,
-                        pool,
+                    let _ = runner::persist_and_emit_action(ActionPersistParams {
+                        app: &self.app,
+                        db_pool: pool,
                         chat_id,
-                        None,
-                        MessageKind::AgentComplete,
-                        complete_content,
-                        complete_meta,
-                        Some("assistant"),
-                        None,
-                        &self.on_event,
-                    )
+                        id: None,
+                        kind: MessageKind::AgentComplete,
+                        content: complete_content,
+                        meta: complete_meta,
+                        role: Some("assistant"),
+                        tool_call_id: None,
+                        channel: &self.on_event,
+                    })
                     .await;
                 } else {
-                    let _ = runner::emit_action_only(
-                        &self.app,
+                    let _ = runner::emit_action_only(ActionEmitParams {
+                        app: &self.app,
                         chat_id,
-                        None,
-                        MessageKind::AgentComplete,
-                        complete_content,
-                        complete_meta,
-                        &self.on_event,
-                    );
+                        id: None,
+                        kind: MessageKind::AgentComplete,
+                        content: complete_content,
+                        meta: complete_meta,
+                        channel: &self.on_event,
+                    });
                 }
 
                 Ok(response)
@@ -240,29 +242,29 @@ impl Orchestrator {
                 let failed_content =
                     format!("{} failed after {}ms: {}", agent.name, duration_ms, e);
                 if let Some(ref pool) = self.db_pool {
-                    let _ = runner::persist_and_emit_action(
-                        &self.app,
-                        pool,
+                    let _ = runner::persist_and_emit_action(ActionPersistParams {
+                        app: &self.app,
+                        db_pool: pool,
                         chat_id,
-                        None,
-                        MessageKind::AgentComplete,
-                        failed_content,
-                        failed_meta,
-                        Some("assistant"),
-                        None,
-                        &self.on_event,
-                    )
+                        id: None,
+                        kind: MessageKind::AgentComplete,
+                        content: failed_content,
+                        meta: failed_meta,
+                        role: Some("assistant"),
+                        tool_call_id: None,
+                        channel: &self.on_event,
+                    })
                     .await;
                 } else {
-                    let _ = runner::emit_action_only(
-                        &self.app,
+                    let _ = runner::emit_action_only(ActionEmitParams {
+                        app: &self.app,
                         chat_id,
-                        None,
-                        MessageKind::AgentComplete,
-                        failed_content,
-                        failed_meta,
-                        &self.on_event,
-                    );
+                        id: None,
+                        kind: MessageKind::AgentComplete,
+                        content: failed_content,
+                        meta: failed_meta,
+                        channel: &self.on_event,
+                    });
                 }
 
                 Err(e)
@@ -272,6 +274,7 @@ impl Orchestrator {
 
     /// Synthesize all task results into a final comprehensive response.
     /// Streams output to the frontend via chat:partial events.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn synthesize_results(
         &self,
         provider: &dyn LlmProvider,

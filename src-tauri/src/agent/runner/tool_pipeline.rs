@@ -209,6 +209,7 @@ pub(super) fn should_write_cache(tool_name: &str, is_error: bool) -> bool {
     !is_error && tool_name != "write_todos"
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn normalize_tool_result(
     tool_call_id: String,
     tool_id: &str,

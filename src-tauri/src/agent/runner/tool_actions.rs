@@ -1,21 +1,24 @@
-use super::actions::{emit_action_only, persist_and_emit_action};
+use super::actions::{emit_action_only, persist_and_emit_action, ActionEmitParams, ActionPersistParams};
 use super::helpers::parse_file_changes;
 use crate::agent::types::{ActionMeta, MessageKind, ToolCall, ToolCallMeta, ToolResultMeta};
 use serde_json::Value;
 use sqlx::SqlitePool;
 use tauri::AppHandle;
 
-pub(super) async fn emit_tool_call_action(
-    app: &AppHandle,
-    db_pool: Option<&SqlitePool>,
-    channel: &Option<tauri::ipc::Channel<Value>>,
-    chat_id: &str,
-    tool_call: &ToolCall,
-    agent_id: &str,
-    agent_name: &str,
-    iteration: usize,
-    depth: u32,
-) {
+pub(super) struct ToolActionParams<'a> {
+    pub app: &'a AppHandle,
+    pub db_pool: Option<&'a SqlitePool>,
+    pub channel: &'a Option<tauri::ipc::Channel<Value>>,
+    pub chat_id: &'a str,
+    pub tool_call: &'a ToolCall,
+    pub agent_id: &'a str,
+    pub agent_name: &'a str,
+    pub iteration: usize,
+    pub depth: u32,
+}
+
+pub(super) async fn emit_tool_call_action(params: ToolActionParams<'_>) {
+    let ToolActionParams { app, db_pool, channel, chat_id, tool_call, agent_id, agent_name, iteration, depth } = params;
     let action_meta = ActionMeta {
         agent_id: agent_id.to_string(),
         agent_name: agent_name.to_string(),
@@ -37,44 +40,47 @@ pub(super) async fn emit_tool_call_action(
 
     let content = format!("{} calling {}...", agent_name, tool_call.name);
     if let Some(db) = db_pool {
-        let _ = persist_and_emit_action(
+        let _ = persist_and_emit_action(ActionPersistParams {
             app,
-            db,
+            db_pool: db,
             chat_id,
-            None,
-            MessageKind::ToolCall,
+            id: None,
+            kind: MessageKind::ToolCall,
             content,
-            action_meta,
-            None,
-            None,
+            meta: action_meta,
+            role: None,
+            tool_call_id: None,
             channel,
-        )
+        })
         .await;
     } else {
-        let _ = emit_action_only(
+        let _ = emit_action_only(ActionEmitParams {
             app,
             chat_id,
-            None,
-            MessageKind::ToolCall,
+            id: None,
+            kind: MessageKind::ToolCall,
             content,
-            action_meta,
+            meta: action_meta,
             channel,
-        );
+        });
     }
 }
 
-pub(super) async fn emit_cached_tool_result_action(
-    app: &AppHandle,
-    db_pool: Option<&SqlitePool>,
-    channel: &Option<tauri::ipc::Channel<Value>>,
-    chat_id: &str,
-    tool_call: &ToolCall,
-    cached_result: &Value,
-    agent_id: &str,
-    agent_name: &str,
-    iteration: usize,
-    depth: u32,
-) {
+pub(super) struct CachedResultParams<'a> {
+    pub app: &'a AppHandle,
+    pub db_pool: Option<&'a SqlitePool>,
+    pub channel: &'a Option<tauri::ipc::Channel<Value>>,
+    pub chat_id: &'a str,
+    pub tool_call: &'a ToolCall,
+    pub cached_result: &'a Value,
+    pub agent_id: &'a str,
+    pub agent_name: &'a str,
+    pub iteration: usize,
+    pub depth: u32,
+}
+
+pub(super) async fn emit_cached_tool_result_action(params: CachedResultParams<'_>) {
+    let CachedResultParams { app, db_pool, channel, chat_id, tool_call, cached_result, agent_id, agent_name, iteration, depth } = params;
     let tool_result_meta = ToolResultMeta {
         tool_name: tool_call.name.clone(),
         status: "ok".to_string(),
@@ -107,28 +113,28 @@ pub(super) async fn emit_cached_tool_result_action(
 
     let content = format!("{}: Success (cached)", tool_call.name);
     if let Some(db) = db_pool {
-        let _ = persist_and_emit_action(
+        let _ = persist_and_emit_action(ActionPersistParams {
             app,
-            db,
+            db_pool: db,
             chat_id,
-            None,
-            MessageKind::ToolResult,
+            id: None,
+            kind: MessageKind::ToolResult,
             content,
-            action_meta,
-            Some("tool"),
-            Some(tool_call.id.clone()),
+            meta: action_meta,
+            role: Some("tool"),
+            tool_call_id: Some(tool_call.id.clone()),
             channel,
-        )
+        })
         .await;
     } else {
-        let _ = emit_action_only(
+        let _ = emit_action_only(ActionEmitParams {
             app,
             chat_id,
-            None,
-            MessageKind::ToolResult,
+            id: None,
+            kind: MessageKind::ToolResult,
             content,
-            action_meta,
+            meta: action_meta,
             channel,
-        );
+        });
     }
 }

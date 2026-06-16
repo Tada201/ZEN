@@ -131,17 +131,34 @@ pub async fn complete_message(
     Ok(())
 }
 
-pub async fn update_message(
-    pool: &SqlitePool,
-    id: &str,
-    chat_id: &str,
-    content: &str,
-    is_complete: bool,
-    tokens_in: Option<i64>,
-    tokens_out: Option<i64>,
-    tool_calls: Option<&str>,
-    reasoning_details: Option<&str>,
-) -> ZenResult<()> {
+/// Parameters for updating an existing message.
+pub struct UpdateMessage<'a> {
+    pub id: &'a str,
+    pub chat_id: &'a str,
+    pub content: &'a str,
+    pub is_complete: bool,
+    pub tokens_in: Option<i64>,
+    pub tokens_out: Option<i64>,
+    pub tool_calls: Option<&'a str>,
+    pub reasoning_details: Option<&'a str>,
+}
+
+impl<'a> Default for UpdateMessage<'a> {
+    fn default() -> Self {
+        Self {
+            id: "",
+            chat_id: "",
+            content: "",
+            is_complete: true,
+            tokens_in: None,
+            tokens_out: None,
+            tool_calls: None,
+            reasoning_details: None,
+        }
+    }
+}
+
+pub async fn update_message(pool: &SqlitePool, msg: &UpdateMessage<'_>) -> ZenResult<()> {
     use sqlx::Row;
 
     let mut tx = pool.begin().await?;
@@ -149,13 +166,13 @@ pub async fn update_message(
     // 1. Get original message to find previous token counts & tool calls
     let original =
         sqlx::query("SELECT tokens_in, tokens_out, tool_calls FROM messages WHERE id = ?")
-            .bind(id)
+            .bind(msg.id)
             .fetch_optional(&mut *tx)
             .await?;
 
     let mut prev_tokens_in = 0;
     let mut prev_tokens_out = 0;
-    let mut merged_tool_calls = tool_calls.map(|s| s.to_string());
+    let mut merged_tool_calls = msg.tool_calls.map(|s| s.to_string());
 
     if let Some(row) = original {
         prev_tokens_in = row
@@ -170,7 +187,7 @@ pub async fn update_message(
             .try_get::<Option<String>, _>("tool_calls")
             .unwrap_or(None);
 
-        if let Some(new_tc_str) = tool_calls {
+        if let Some(new_tc_str) = msg.tool_calls {
             if let Ok(new_tcs) = serde_json::from_str::<Vec<serde_json::Value>>(new_tc_str) {
                 if let Some(prev_str) = prev_tool_calls.as_deref() {
                     if let Ok(mut prev_tcs) =
@@ -192,19 +209,19 @@ pub async fn update_message(
     sqlx::query(
         "UPDATE messages SET content = ?, is_complete = ?, tokens_in = ?, tokens_out = ?, tool_calls = ?, reasoning_details = COALESCE(?, reasoning_details) WHERE id = ?"
     )
-    .bind(content)
-    .bind(is_complete as i32)
-    .bind(tokens_in)
-    .bind(tokens_out)
+    .bind(msg.content)
+    .bind(msg.is_complete as i32)
+    .bind(msg.tokens_in)
+    .bind(msg.tokens_out)
     .bind(merged_tool_calls)
-    .bind(reasoning_details)
-    .bind(id)
+    .bind(msg.reasoning_details)
+    .bind(msg.id)
     .execute(&mut *tx)
     .await?;
 
     // 3. Update chat with the token delta
-    let delta_in = tokens_in.unwrap_or(0) - prev_tokens_in;
-    let delta_out = tokens_out.unwrap_or(0) - prev_tokens_out;
+    let delta_in = msg.tokens_in.unwrap_or(0) - prev_tokens_in;
+    let delta_out = msg.tokens_out.unwrap_or(0) - prev_tokens_out;
 
     sqlx::query(
         r#"UPDATE chats 
@@ -216,7 +233,7 @@ pub async fn update_message(
     )
     .bind(delta_in)
     .bind(delta_out)
-    .bind(chat_id)
+    .bind(msg.chat_id)
     .execute(&mut *tx)
     .await?;
 

@@ -113,16 +113,16 @@ impl Runner {
             let allowed_tools = Arc::new(tokio::sync::Mutex::new(HashSet::from([
                 "manage_board".to_string()
             ])));
-            let mut runner = match child_runner::build_child_runner(
-                &app,
+            let mut runner = match child_runner::build_child_runner(child_runner::ChildRunnerParams {
+                app: &app,
                 tool_registry,
                 agent_registry,
                 hook_registry,
                 permissions,
-                depth,
-                &resolved,
-                Some(allowed_tools),
-            ) {
+                parent_depth: depth,
+                resolved: &resolved,
+                allowed_tools: Some(allowed_tools),
+            }) {
                 Ok(runner) => runner
                     .with_max_context_tokens(context_tokens)
                     .with_max_messages_in_memory(max_turns),

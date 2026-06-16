@@ -12,6 +12,28 @@ use crate::services::{
 };
 use crate::tools::{GlobalToolRegistry, ToolCall, ToolError};
 
+/// Parameters for recording a tool execution audit event.
+pub struct AuditResultParams<'a> {
+    pub caller: &'a str,
+    pub resolved_name: &'a str,
+    pub tool_call_id: &'a str,
+    pub success: bool,
+    pub duration_ms: u64,
+    pub output: Option<&'a serde_json::Value>,
+    pub error: Option<&'a str>,
+}
+
+/// Parameters for executing an agent tool call.
+pub struct AgentToolParams {
+    pub tool: Option<Arc<dyn crate::agent::tools::AgentTool>>,
+    pub app: AppHandle,
+    pub chat_id: String,
+    pub tool_call: crate::agent::types::ToolCall,
+    pub token: CancellationToken,
+    pub depth: u32,
+    pub allowed_tools: Option<Arc<Mutex<HashSet<String>>>>,
+}
+
 pub struct ToolService {
     registry: GlobalToolRegistry,
     security: Arc<SecurityService>,
@@ -374,16 +396,8 @@ impl ToolService {
         }
     }
 
-    pub async fn execute_agent_tool(
-        &self,
-        tool: Option<Arc<dyn crate::agent::tools::AgentTool>>,
-        app: AppHandle,
-        chat_id: String,
-        tool_call: crate::agent::types::ToolCall,
-        token: CancellationToken,
-        depth: u32,
-        allowed_tools: Option<Arc<Mutex<HashSet<String>>>>,
-    ) -> crate::agent::types::ToolResult {
+    pub async fn execute_agent_tool(&self, params: AgentToolParams) -> crate::agent::types::ToolResult {
+        let AgentToolParams { tool, app, chat_id, tool_call, token, depth, allowed_tools } = params;
         let tool = if tool.is_some() {
             tool
         } else {
@@ -510,15 +524,15 @@ impl ToolService {
 
             match result_outcome {
                 Ok(val) => {
-                    self.audit_execution_result(
-                        "agent_tool",
-                        &tool_call.name,
-                        &tool_call.id,
-                        true,
+                    self.audit_execution_result(AuditResultParams {
+                        caller: "agent_tool",
+                        resolved_name: &tool_call.name,
+                        tool_call_id: &tool_call.id,
+                        success: true,
                         duration_ms,
-                        Some(&val),
-                        None,
-                    )
+                        output: Some(&val),
+                        error: None,
+                    })
                     .await;
                     crate::agent::types::ToolResult {
                         tool_call_id: tool_call.id,
@@ -533,15 +547,15 @@ impl ToolService {
                         "tool": tool_call.name,
                         "hint": "This tool call failed or was interrupted. You may retry with different arguments or approach."
                     });
-                    self.audit_execution_result(
-                        "agent_tool",
-                        &tool_call.name,
-                        &tool_call.id,
-                        false,
+                    self.audit_execution_result(AuditResultParams {
+                        caller: "agent_tool",
+                        resolved_name: &tool_call.name,
+                        tool_call_id: &tool_call.id,
+                        success: false,
                         duration_ms,
-                        Some(&content),
-                        content.get("error").and_then(|v| v.as_str()),
-                    )
+                        output: Some(&content),
+                        error: content.get("error").and_then(|v| v.as_str()),
+                    })
                     .await;
                     crate::agent::types::ToolResult {
                         tool_call_id: tool_call.id.clone(),
@@ -721,15 +735,15 @@ impl ToolService {
             },
         )
         .await;
-        self.audit_execution_result(
-            "tool_service",
-            &tool_name,
-            &tool_call_id,
-            result.is_ok(),
+        self.audit_execution_result(AuditResultParams {
+            caller: "tool_service",
+            resolved_name: &tool_name,
+            tool_call_id: &tool_call_id,
+            success: result.is_ok(),
             duration_ms,
-            result.as_ref().ok(),
-            result.as_ref().err().map(String::as_str),
-        )
+            output: result.as_ref().ok(),
+            error: result.as_ref().err().map(String::as_str),
+        })
         .await;
 
         result
@@ -759,16 +773,16 @@ impl ToolService {
             .await;
     }
 
-    async fn audit_execution_result(
-        &self,
-        caller: &str,
-        resolved_name: &str,
-        tool_call_id: &str,
-        success: bool,
-        duration_ms: u64,
-        output: Option<&serde_json::Value>,
-        error: Option<&str>,
-    ) {
+    async fn audit_execution_result(&self, params: AuditResultParams<'_>) {
+        let AuditResultParams {
+            caller,
+            resolved_name,
+            tool_call_id,
+            success,
+            duration_ms,
+            output,
+            error,
+        } = params;
         let reason = serde_json::json!({
             "event": "tool_execution_result",
             "resolved_name": resolved_name,

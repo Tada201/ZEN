@@ -173,16 +173,19 @@ pub(crate) async fn fetch_parent_context(
 /// Build a fully configured child `Runner` with depth limits, tool
 /// permissions, db_pool, and direct IPC channel inherited from a
 /// temporary parent runner via `Runner::child()`.
-pub(crate) fn build_child_runner(
-    app: &AppHandle,
-    tool_registry: Arc<tokio::sync::RwLock<ToolRegistry>>,
-    agent_registry: Arc<AgentRegistry>,
-    hook_registry: Arc<HookRegistry>,
-    permissions: GlobalToolRegistry,
-    parent_depth: u32,
-    resolved: &ResolvedAgent,
-    allowed_tools: Option<Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
-) -> Result<Runner> {
+pub(crate) struct ChildRunnerParams<'a> {
+    pub app: &'a AppHandle,
+    pub tool_registry: Arc<tokio::sync::RwLock<ToolRegistry>>,
+    pub agent_registry: Arc<AgentRegistry>,
+    pub hook_registry: Arc<HookRegistry>,
+    pub permissions: GlobalToolRegistry,
+    pub parent_depth: u32,
+    pub resolved: &'a ResolvedAgent,
+    pub allowed_tools: Option<Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
+}
+
+pub(crate) fn build_child_runner(params: ChildRunnerParams<'_>) -> Result<Runner> {
+    let ChildRunnerParams { app, tool_registry, agent_registry, hook_registry, permissions, parent_depth, resolved, allowed_tools } = params;
     let state = app.state::<AppState>();
     let tool_manager = state.tool_manager.clone();
 

@@ -41,17 +41,22 @@ pub async fn get_or_create_graph_session(
     Ok(session)
 }
 
+/// Parameters for saving/updating a graph session.
+pub struct GraphSessionUpdate<'a> {
+    pub session_id: &'a str,
+    pub expressions_json: &'a str,
+    pub variables_json: &'a str,
+    pub viewport_x_min: f64,
+    pub viewport_x_max: f64,
+    pub viewport_y_min: f64,
+    pub viewport_y_max: f64,
+    pub current_version: i64,
+    pub history_json: &'a str,
+}
+
 pub async fn save_graph_session(
     pool: &SqlitePool,
-    session_id: &str,
-    expressions_json: &str,
-    variables_json: &str,
-    viewport_x_min: f64,
-    viewport_x_max: f64,
-    viewport_y_min: f64,
-    viewport_y_max: f64,
-    current_version: i64,
-    history_json: &str,
+    update: &GraphSessionUpdate<'_>,
 ) -> ZenResult<()> {
     sqlx::query(
         r#"UPDATE graph_sessions 
@@ -60,15 +65,15 @@ pub async fn save_graph_session(
                updated_at = datetime('now')
            WHERE id = ?"#,
     )
-    .bind(expressions_json)
-    .bind(variables_json)
-    .bind(viewport_x_min)
-    .bind(viewport_x_max)
-    .bind(viewport_y_min)
-    .bind(viewport_y_max)
-    .bind(current_version)
-    .bind(history_json)
-    .bind(session_id)
+    .bind(update.expressions_json)
+    .bind(update.variables_json)
+    .bind(update.viewport_x_min)
+    .bind(update.viewport_x_max)
+    .bind(update.viewport_y_min)
+    .bind(update.viewport_y_max)
+    .bind(update.current_version)
+    .bind(update.history_json)
+    .bind(update.session_id)
     .execute(pool)
     .await?;
     Ok(())

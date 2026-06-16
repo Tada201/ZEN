@@ -35,16 +35,16 @@ impl Runner {
             let summarization_token_budget = self.config.summarization_token_budget;
 
             tokio::spawn(async move {
-                if let Err(e) = perform_background_compaction(
-                    app_clone,
-                    db_clone,
-                    chat_id_clone,
-                    model_clone,
+                if let Err(e) = perform_background_compaction(CompactionParams {
+                    app: app_clone,
+                    db: db_clone,
+                    chat_id: chat_id_clone,
+                    active_model: model_clone,
                     summarization_model,
                     compaction_threshold,
                     compaction_token_threshold,
                     summarization_token_budget,
-                )
+                })
                 .await
                 {
                     tracing::error!("Background conversation compaction failed: {:?}", e);
@@ -245,7 +245,7 @@ impl Runner {
 // ─── Async worker functions ────────────────────────────────────────────────────
 
 /// Summarize old messages and mark them as compacted in SQLite.
-async fn perform_background_compaction(
+struct CompactionParams {
     app: AppHandle,
     db: SqlitePool,
     chat_id: String,
@@ -254,7 +254,10 @@ async fn perform_background_compaction(
     compaction_threshold: usize,
     compaction_token_threshold: usize,
     summarization_token_budget: usize,
-) -> Result<()> {
+}
+
+async fn perform_background_compaction(params: CompactionParams) -> Result<()> {
+    let CompactionParams { app, db, chat_id, active_model, summarization_model, compaction_threshold, compaction_token_threshold, summarization_token_budget } = params;
     let active_msgs = queries::get_active_messages(&db, &chat_id).await?;
 
     let active_chat_msgs: Vec<ChatMessage> = active_msgs

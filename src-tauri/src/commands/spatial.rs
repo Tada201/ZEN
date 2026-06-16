@@ -391,6 +391,7 @@ pub async fn list_geofences_db_page(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn save_geofence_db(
     state: State<'_, AppState>,
     id: String,
@@ -456,6 +457,7 @@ pub async fn list_markers_db_page(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn save_marker_db(
     state: State<'_, AppState>,
     id: String,

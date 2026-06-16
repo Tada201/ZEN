@@ -100,19 +100,19 @@ impl AgentTool for DelegateToAgentTool {
         let max_steps = input.get("max_steps").and_then(|v| v.as_u64());
 
         self.inner
-            .do_spawn(
+            .do_spawn(crate::agent::tools::spawn_tools::SpawnParams {
                 app,
                 chat_id,
                 agent_id,
                 task,
                 context,
-                None,
-                max_steps,
+                explicit_model: None,
+                explicit_max_steps: max_steps,
                 depth,
                 allowed_tools,
                 token,
-                "Delegating",
-            )
+                label: "Delegating",
+            })
             .await
     }
 }

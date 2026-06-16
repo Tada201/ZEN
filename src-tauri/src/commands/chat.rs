@@ -107,6 +107,7 @@ pub struct ThinkingConfig {
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn send_message(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -157,21 +158,13 @@ pub async fn send_message(
     info!(chat_id = %chat_id, "Inserting user message into database");
     queries::add_message(
         &db,
-        &chat_id,
-        None,
-        "user",
-        &content,
-        model.as_deref(),
-        true,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
+        &queries::NewMessage {
+            chat_id: &chat_id,
+            content: &content,
+            model: model.as_deref(),
+            is_complete: true,
+            ..Default::default()
+        },
     )
     .await?;
     info!(chat_id = %chat_id, "User message successfully saved to database");
@@ -466,16 +459,16 @@ Always use these specialized code blocks for visual scenarios:
             }),
         );
         tokio::spawn(async move {
-            crate::agent::deep_research::run_deep_research(
-                app.clone(),
-                db_clone,
-                &*provider_clone,
-                chat_id_inner.clone(),
-                active_model_inner,
-                content_inner,
+            crate::agent::deep_research::run_deep_research(crate::agent::deep_research::DeepResearchParams {
+                app: app.clone(),
+                db: db_clone,
+                llm_provider: &*provider_clone,
+                chat_id: chat_id_inner.clone(),
+                model: active_model_inner,
+                query: content_inner,
                 config,
                 token,
-            )
+            })
             .await;
 
             let mut tokens = cancel_tokens_clone.lock().await;
@@ -865,21 +858,22 @@ pub async fn import_chat(state: State<'_, AppState>, source_path: String) -> Zen
     for msg in export.messages {
         queries::add_message(
             &db,
-            &new_chat.id,
-            Some(&msg.id),
-            &msg.role,
-            &msg.content,
-            msg.model.as_deref(),
-            msg.is_complete.unwrap_or(1) == 1,
-            msg.tool_calls.as_deref(),
-            msg.tool_call_id.as_deref(),
-            msg.images.as_deref(),
-            msg.attachments.as_deref(),
-            msg.tokens_in,
-            msg.tokens_out,
-            None,
-            None,
-            msg.reasoning_details.as_deref(),
+            &queries::NewMessage {
+                chat_id: &new_chat.id,
+                id: Some(&msg.id),
+                role: &msg.role,
+                content: &msg.content,
+                model: msg.model.as_deref(),
+                is_complete: msg.is_complete.unwrap_or(1) == 1,
+                tool_calls: msg.tool_calls.as_deref(),
+                tool_call_id: msg.tool_call_id.as_deref(),
+                images: msg.images.as_deref(),
+                attachments: msg.attachments.as_deref(),
+                tokens_in: msg.tokens_in,
+                tokens_out: msg.tokens_out,
+                reasoning_details: msg.reasoning_details.as_deref(),
+                ..Default::default()
+            },
         )
         .await?;
     }

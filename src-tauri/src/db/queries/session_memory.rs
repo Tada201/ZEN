@@ -41,15 +41,20 @@ pub async fn init_session_memories(pool: &SqlitePool) -> ZenResult<()> {
     Ok(())
 }
 
+/// Parameters for inserting a new session memory.
+pub struct NewSessionMemory<'a> {
+    pub id: &'a str,
+    pub session_id: &'a str,
+    pub content: &'a str,
+    pub metadata: &'a str,
+    pub written_by: &'a str,
+    pub timestamp: i64,
+    pub embedding: &'a [u8],
+}
+
 pub async fn add_session_memory(
     pool: &SqlitePool,
-    id: &str,
-    session_id: &str,
-    content: &str,
-    metadata: &str,
-    written_by: &str,
-    timestamp: i64,
-    embedding: &[u8],
+    mem: &NewSessionMemory<'_>,
 ) -> ZenResult<()> {
     sqlx::query(
         r#"
@@ -57,13 +62,13 @@ pub async fn add_session_memory(
         VALUES (?, ?, ?, ?, ?, ?, ?)
         "#,
     )
-    .bind(id)
-    .bind(session_id)
-    .bind(content)
-    .bind(metadata)
-    .bind(written_by)
-    .bind(timestamp)
-    .bind(embedding)
+    .bind(mem.id)
+    .bind(mem.session_id)
+    .bind(mem.content)
+    .bind(mem.metadata)
+    .bind(mem.written_by)
+    .bind(mem.timestamp)
+    .bind(mem.embedding)
     .execute(pool)
     .await?;
 

@@ -190,6 +190,7 @@ fn redact_tool_preview_args(value: &serde_json::Value) -> serde_json::Value {
 impl Runner {
     /// Call LLM with auto-escalation from local to cloud models.
     /// If the local model fails, automatically retry with a cloud model.
+    #[allow(clippy::too_many_arguments)]
     pub(super) async fn call_llm_with_escalation(
         &self,
         provider: &dyn crate::llm::LlmProvider,
@@ -407,6 +408,7 @@ impl Runner {
     }
 
     /// Helper to call LLM with standard chunk emission callback and 20ms IPC batching.
+    #[allow(clippy::too_many_arguments)]
     pub(super) async fn call_llm_with_callback(
         &self,
         provider: &dyn crate::llm::LlmProvider,
@@ -458,21 +460,15 @@ impl Runner {
                     placeholder_insert = Some(tokio::spawn(async move {
                         let _ = queries::add_message(
                             &db,
-                            &chat_id,
-                            Some(&id_for_insert),
-                            "assistant",
-                            "",
-                            Some(&model),
-                            false,
-                            None,
-                            None,
-                            None,
-                            None,
-                            None,
-                            None,
-                            None,
-                            None,
-                            None,
+                            &queries::NewMessage {
+                                chat_id: &chat_id,
+                                id: Some(&id_for_insert),
+                                role: "assistant",
+                                content: "",
+                                model: Some(&model),
+                                is_complete: false,
+                                ..Default::default()
+                            },
                         )
                         .await;
                     }));

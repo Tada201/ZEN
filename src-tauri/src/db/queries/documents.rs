@@ -7,30 +7,35 @@ const MAX_CHAT_LIST_ITEMS: i64 = 500;
 
 // --- Documents ---
 
+/// Parameters for inserting a new document.
+pub struct NewDocument<'a> {
+    pub id: &'a str,
+    pub filename: &'a str,
+    pub file_path: &'a str,
+    pub file_size: i64,
+    pub doc_type: &'a str,
+    pub embedding_model: &'a str,
+    pub mime_type: &'a str,
+}
+
 pub async fn add_document(
     pool: &SqlitePool,
-    id: &str,
-    filename: &str,
-    file_path: &str,
-    file_size: i64,
-    doc_type: &str,
-    embedding_model: &str,
-    mime_type: &str,
+    doc: &NewDocument<'_>,
 ) -> ZenResult<crate::db::models::Document> {
     sqlx::query(
         "INSERT INTO documents (id, filename, file_path, file_size, doc_type, embedding_model, mime_type, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'processing')"
     )
-    .bind(id)
-    .bind(filename)
-    .bind(file_path)
-    .bind(file_size)
-    .bind(doc_type)
-    .bind(embedding_model)
-    .bind(mime_type)
+    .bind(doc.id)
+    .bind(doc.filename)
+    .bind(doc.file_path)
+    .bind(doc.file_size)
+    .bind(doc.doc_type)
+    .bind(doc.embedding_model)
+    .bind(doc.mime_type)
     .execute(pool)
     .await?;
 
-    get_document(pool, id).await
+    get_document(pool, doc.id).await
 }
 
 pub async fn link_document_to_workspace(

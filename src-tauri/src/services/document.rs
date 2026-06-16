@@ -153,13 +153,15 @@ impl DocumentService {
         // 4. Store document metadata in SQLite
         let _doc = crate::db::queries::add_document(
             &pool,
-            &doc_id,
-            &filename,
-            &path.to_string_lossy(),
-            file_size,
-            doc_type,
-            "nomic-embed-text", // default embedding model name
-            &mime_type,
+            &crate::db::queries::NewDocument {
+                id: &doc_id,
+                filename: &filename,
+                file_path: &path.to_string_lossy(),
+                file_size,
+                doc_type,
+                embedding_model: "nomic-embed-text",
+                mime_type: &mime_type,
+            },
         )
         .await?;
 

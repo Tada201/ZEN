@@ -104,6 +104,7 @@ impl TerminalService {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn spawn_interactive(
         &self,
         manager: &RwLock<TerminalManager>,
