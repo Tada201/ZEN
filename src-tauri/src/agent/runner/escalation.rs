@@ -187,38 +187,71 @@ fn redact_tool_preview_args(value: &serde_json::Value) -> serde_json::Value {
     redact_tool_preview_value(value.clone())
 }
 
+/// Parameters for calling the LLM with auto-escalation from local to cloud.
+pub(super) struct EscalationParams<'a> {
+    pub provider: &'a dyn crate::llm::LlmProvider,
+    pub model: &'a str,
+    pub messages: Vec<ChatMessage>,
+    pub tools: Option<Vec<crate::tools::ToolInfo>>,
+    pub config: crate::llm::ChatRequestConfig,
+    pub token: CancellationToken,
+    pub app: &'a AppHandle,
+    pub chat_id: &'a str,
+    pub stream_channel: Option<tauri::ipc::Channel<ChatChunkPayload>>,
+    pub early_tools: Option<EarlyToolExecutionContext>,
+    pub agent_stream: Option<(String, String)>,
+}
+
+/// Parameters for the LLM streaming callback wrapper.
+struct LlmCallbackParams<'a> {
+    pub provider: &'a dyn crate::llm::LlmProvider,
+    pub model: &'a str,
+    pub messages: Vec<ChatMessage>,
+    pub tools: Option<Vec<crate::tools::ToolInfo>>,
+    pub config: crate::llm::ChatRequestConfig,
+    pub token: CancellationToken,
+    pub app: &'a AppHandle,
+    pub chat_id: &'a str,
+    pub early_tools: Option<EarlyToolExecutionContext>,
+    pub agent_stream: Option<(String, String)>,
+}
+
 impl Runner {
     /// Call LLM with auto-escalation from local to cloud models.
     /// If the local model fails, automatically retry with a cloud model.
-    #[allow(clippy::too_many_arguments)]
     pub(super) async fn call_llm_with_escalation(
         &self,
-        provider: &dyn crate::llm::LlmProvider,
-        model: &str,
-        messages: Vec<ChatMessage>,
-        tools: Option<Vec<crate::tools::ToolInfo>>,
-        config: crate::llm::ChatRequestConfig,
-        token: CancellationToken,
-        app: &AppHandle,
-        chat_id: &str,
         assistant_message_id: &mut Option<String>,
-        _stream_channel: Option<tauri::ipc::Channel<ChatChunkPayload>>,
-        early_tools: Option<EarlyToolExecutionContext>,
-        agent_stream: Option<(String, String)>,
+        params: EscalationParams<'_>,
     ) -> Result<crate::db::models::ChatResponse, anyhow::Error> {
+        let EscalationParams {
+            provider,
+            model,
+            messages,
+            tools,
+            config,
+            token,
+            app,
+            chat_id,
+            stream_channel: _,
+            early_tools,
+            agent_stream,
+        } = params;
         match self
             .call_llm_with_callback(
-                provider,
-                model,
-                messages.clone(),
-                tools.clone(),
-                config.clone(),
-                token.clone(),
-                app,
-                chat_id,
                 assistant_message_id,
-                early_tools.clone(),
-                agent_stream.clone(),
+                LlmCallbackParams {
+                    provider,
+                    model,
+                    messages: messages.clone(),
+                    tools: tools.clone(),
+                    config: config.clone(),
+                    token: token.clone(),
+                    app,
+                    chat_id,
+                    early_tools: early_tools.clone(),
+                    agent_stream: agent_stream.clone(),
+                },
             )
             .await
         {
@@ -252,17 +285,19 @@ impl Runner {
 
                     match self
                         .call_llm_with_callback(
-                            provider,
-                            model,
-                            messages.clone(),
-                            None,
-                            config.clone(),
-                            token.clone(),
-                            app,
-                            chat_id,
                             assistant_message_id,
-                            None,
-                            agent_stream.clone(),
+                            LlmCallbackParams {
+                                provider,
+                                model,
+                                messages: messages.clone(),
+                                tools: None,
+                                config: config.clone(),
+                                token: token.clone(),
+                                app,
+                                chat_id,
+                                early_tools: None,
+                                agent_stream: agent_stream.clone(),
+                            },
                         )
                         .await
                     {
@@ -334,17 +369,19 @@ impl Runner {
 
                             match self
                                 .call_llm_with_callback(
-                                    cloud_provider.as_ref(),
-                                    &fallback_model,
-                                    messages,
-                                    tools,
-                                    config,
-                                    token,
-                                    app,
-                                    chat_id,
                                     assistant_message_id,
-                                    early_tools,
-                                    agent_stream,
+                                    LlmCallbackParams {
+                                        provider: cloud_provider.as_ref(),
+                                        model: &fallback_model,
+                                        messages,
+                                        tools,
+                                        config,
+                                        token,
+                                        app,
+                                        chat_id,
+                                        early_tools,
+                                        agent_stream,
+                                    },
                                 )
                                 .await
                             {
@@ -408,21 +445,23 @@ impl Runner {
     }
 
     /// Helper to call LLM with standard chunk emission callback and 20ms IPC batching.
-    #[allow(clippy::too_many_arguments)]
     pub(super) async fn call_llm_with_callback(
         &self,
-        provider: &dyn crate::llm::LlmProvider,
-        model: &str,
-        messages: Vec<ChatMessage>,
-        tools: Option<Vec<crate::tools::ToolInfo>>,
-        config: crate::llm::ChatRequestConfig,
-        token: CancellationToken,
-        app: &AppHandle,
-        chat_id: &str,
         assistant_message_id: &mut Option<String>,
-        early_tools: Option<EarlyToolExecutionContext>,
-        agent_stream: Option<(String, String)>,
+        params: LlmCallbackParams<'_>,
     ) -> Result<crate::db::models::ChatResponse, anyhow::Error> {
+        let LlmCallbackParams {
+            provider,
+            model,
+            messages,
+            tools,
+            config,
+            token,
+            app,
+            chat_id,
+            early_tools,
+            agent_stream,
+        } = params;
         let app_clone = app.clone();
         let on_event_clone = self.on_event.clone();
         let chat_id_clone = chat_id.to_string();

@@ -9,3 +9,4 @@
 # Local protoc compiler for dependencies
 /.protoc/
 
+cargo-clippy-error.md

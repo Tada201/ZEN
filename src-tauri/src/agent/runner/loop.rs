@@ -1,5 +1,5 @@
 use super::actions::{emit_action_only, persist_and_emit_action, ActionEmitParams, ActionPersistParams};
-use super::escalation::{EarlyToolExecutionContext, EarlyToolExecutionState};
+use super::escalation::{EarlyToolExecutionContext, EarlyToolExecutionState, EscalationParams};
 use super::helpers::{
     generate_handoff_summary, parse_file_changes, parse_text_tool_calls,
     strip_text_tool_call_blocks,
@@ -376,18 +376,20 @@ impl Runner {
             // Auto-escalation: try current model, fallback to cloud if local fails
             let response = match self
                 .call_llm_with_escalation(
-                    provider,
-                    &model,
-                    full_context.clone(),
-                    tools_arg.clone(),
-                    config.clone(),
-                    token.clone(),
-                    &app_inner,
-                    &chat_id_inner,
                     &mut assistant_message_id,
-                    None,
-                    early_tools,
-                    agent_stream,
+                    EscalationParams {
+                        provider,
+                        model: &model,
+                        messages: full_context.clone(),
+                        tools: tools_arg.clone(),
+                        config: config.clone(),
+                        token: token.clone(),
+                        app: &app_inner,
+                        chat_id: &chat_id_inner,
+                        stream_channel: None,
+                        early_tools,
+                        agent_stream,
+                    },
                 )
                 .await
             {
