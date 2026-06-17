@@ -160,6 +160,7 @@ pub async fn send_message(
         &db,
         &queries::NewMessage {
             chat_id: &chat_id,
+            role: "user",
             content: &content,
             model: model.as_deref(),
             is_complete: true,
@@ -507,16 +508,16 @@ Always use these specialized code blocks for visual scenarios:
                 let token_for_error = token_clone.clone();
                 tokio::spawn(async move {
                     let result = orchestrator
-                        .run_orchestrator_loop(
-                            provider_clone,
-                            &model_inner,
-                            chat_messages,
-                            &chat_id_inner,
-                            &content_inner,
-                            config_clone,
-                            token_clone,
-                            None,
-                        )
+                        .run_orchestrator_loop(crate::agent::orchestrator::execution::OrchestratorRunParams {
+                            provider: provider_clone,
+                            model: &model_inner,
+                            messages: chat_messages,
+                            chat_id: &chat_id_inner,
+                            goal: &content_inner,
+                            config: config_clone,
+                            token: token_clone,
+                            approval_rx: None,
+                        })
                         .await;
                     // Clean up cancellation token on completion
                     let mut tokens = cancel_tokens_clone.lock().await;

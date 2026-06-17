@@ -1,5 +1,6 @@
 use crate::commands::AppState;
 use crate::error::ZenResult;
+use crate::services::terminal::TerminalSpawnParams;
 use tauri::{AppHandle, State};
 
 #[tauri::command]
@@ -14,16 +15,16 @@ pub async fn terminal_spawn(
     let workspace = state.workspace_folder.read().await.clone();
     state
         .terminal
-        .spawn_interactive(
-            &state.terminal_sessions,
-            &state.security,
+        .spawn_interactive(TerminalSpawnParams {
+            manager: &state.terminal_sessions,
+            security: &state.security,
             app,
             workspace,
             cols,
             rows,
             cwd,
             user_approved,
-        )
+        })
         .await
 }
 

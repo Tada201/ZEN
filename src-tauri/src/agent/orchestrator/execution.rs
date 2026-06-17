@@ -1,5 +1,6 @@
 use anyhow::Result;
 use serde_json::json;
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
@@ -14,20 +15,58 @@ use crate::agent::types::{ActionMeta, AgentResponse, MessageKind, SpawnMeta};
 use crate::db::models::ChatMessage;
 use crate::llm::{ChatRequestConfig, LlmChunk, LlmProvider};
 
+/// Parameters for executing a task with a specific agent.
+pub(crate) struct TaskAgentParams<'a> {
+    pub provider: &'a dyn LlmProvider,
+    pub model: &'a str,
+    pub task: &'a Task,
+    pub agent_id: &'a str,
+    pub chat_id: &'a str,
+    pub messages: &'a [ChatMessage],
+    pub config: ChatRequestConfig,
+    pub token: CancellationToken,
+}
+
+/// Parameters for synthesizing task results into a final response.
+pub(crate) struct SynthesizeParams<'a> {
+    pub provider: &'a dyn LlmProvider,
+    pub model: &'a str,
+    pub original_goal: &'a str,
+    pub task_results: &'a [(String, String)],
+    pub messages: &'a [ChatMessage],
+    pub config: ChatRequestConfig,
+    pub token: CancellationToken,
+    pub chat_id: &'a str,
+}
+
+/// Parameters for running the orchestrator loop.
+pub struct OrchestratorRunParams<'a> {
+    pub provider: Arc<dyn LlmProvider>,
+    pub model: &'a str,
+    pub messages: Vec<ChatMessage>,
+    pub chat_id: &'a str,
+    pub goal: &'a str,
+    pub config: ChatRequestConfig,
+    pub token: CancellationToken,
+    pub approval_rx: Option<tokio::sync::oneshot::Receiver<bool>>,
+}
+
 impl Orchestrator {
     /// Execute a single task with the assigned agent
-    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn execute_task_with_agent(
         &self,
-        provider: &dyn LlmProvider,
-        model: &str,
-        task: &Task,
-        agent_id: &str,
-        chat_id: &str,
-        messages: &[ChatMessage],
-        config: ChatRequestConfig,
-        token: CancellationToken,
+        params: TaskAgentParams<'_>,
     ) -> Result<AgentResponse> {
+        let TaskAgentParams {
+            provider,
+            model,
+            task,
+            agent_id,
+            chat_id,
+            messages,
+            config,
+            token,
+        } = params;
         // Get agent definition
         let agent = self
             .agent_registry
@@ -274,18 +313,20 @@ impl Orchestrator {
 
     /// Synthesize all task results into a final comprehensive response.
     /// Streams output to the frontend via chat:partial events.
-    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn synthesize_results(
         &self,
-        provider: &dyn LlmProvider,
-        model: &str,
-        original_goal: &str,
-        task_results: &[(String, String)],
-        messages: &[ChatMessage],
-        config: ChatRequestConfig,
-        token: CancellationToken,
-        chat_id: &str,
+        params: SynthesizeParams<'_>,
     ) -> Result<AgentResponse> {
+        let SynthesizeParams {
+            provider,
+            model,
+            original_goal,
+            task_results,
+            messages,
+            config,
+            token,
+            chat_id,
+        } = params;
         info!("Synthesizing {} task results", task_results.len());
 
         let system_prompt = r#"You are synthesizing the results of a multi-agent orchestration.

@@ -1,12 +1,12 @@
 use anyhow::Result;
 use chrono::Utc;
 use futures::stream::{FuturesUnordered, StreamExt};
-use std::sync::Arc;
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, instrument, warn};
 use uuid::Uuid;
 
+use super::execution::{OrchestratorRunParams, SynthesizeParams, TaskAgentParams};
 use super::Orchestrator;
 use super::OrchestratorPhase;
 use crate::agent::event_bus::{AgentEvent, ChatDonePayload, ChatErrorPayload};
@@ -20,19 +20,21 @@ impl Orchestrator {
     /// Run the orchestrator loop for a complex goal
     ///
     /// This is the main entry point for orchestrator-mode execution
-    #[instrument(skip(self, provider, messages), fields(chat_id = %chat_id))]
-    #[allow(clippy::too_many_arguments)]
+    #[instrument(skip_all)]
     pub async fn run_orchestrator_loop(
         &self,
-        provider: Arc<dyn LlmProvider>,
-        model: &str,
-        messages: Vec<ChatMessage>,
-        chat_id: &str,
-        goal: &str,
-        config: ChatRequestConfig,
-        token: CancellationToken,
-        approval_rx: Option<tokio::sync::oneshot::Receiver<bool>>,
+        params: OrchestratorRunParams<'_>,
     ) -> Result<AgentResponse> {
+        let OrchestratorRunParams {
+            provider,
+            model,
+            messages,
+            chat_id,
+            goal,
+            config,
+            token,
+            approval_rx,
+        } = params;
         info!("Starting orchestrator loop for goal: {}", goal);
 
         // Phase 1: Analyze
@@ -237,16 +239,16 @@ impl Orchestrator {
                 running_tasks.push(async move {
                     let result = timeout(
                         std::time::Duration::from_secs(120),
-                        self.execute_task_with_agent(
-                            &*provider_clone,
-                            &model_clone,
-                            &next_ready.task,
-                            &agent_id,
-                            &chat_id_clone,
-                            &messages_clone,
-                            config_clone,
-                            token_clone,
-                        ),
+                        self.execute_task_with_agent(TaskAgentParams {
+                            provider: &*provider_clone,
+                            model: &model_clone,
+                            task: &next_ready.task,
+                            agent_id: &agent_id,
+                            chat_id: &chat_id_clone,
+                            messages: &messages_clone,
+                            config: config_clone,
+                            token: token_clone,
+                        }),
                     )
                     .await;
 
@@ -385,16 +387,16 @@ impl Orchestrator {
         }
 
         let final_response = match self
-            .synthesize_results(
-                &*provider,
+            .synthesize_results(SynthesizeParams {
+                provider: &*provider,
                 model,
-                goal,
-                &task_results,
-                &all_messages,
+                original_goal: goal,
+                task_results: &task_results,
+                messages: &all_messages,
                 config,
                 token,
                 chat_id,
-            )
+            })
             .await
         {
             Ok(response) => response,

@@ -17,6 +17,18 @@ pub struct TerminalSession {
     pub writer: Box<dyn Write + Send>,
 }
 
+/// Parameters for spawning an interactive terminal session.
+pub struct TerminalSpawnParams<'a> {
+    pub manager: &'a RwLock<TerminalManager>,
+    pub security: &'a SecurityService,
+    pub app: AppHandle,
+    pub workspace: PathBuf,
+    pub cols: u16,
+    pub rows: u16,
+    pub cwd: Option<String>,
+    pub user_approved: bool,
+}
+
 pub struct TerminalService {
     pub sessions: Arc<Mutex<Vec<TerminalSession>>>,
 }
@@ -104,18 +116,20 @@ impl TerminalService {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub async fn spawn_interactive(
         &self,
-        manager: &RwLock<TerminalManager>,
-        security: &SecurityService,
-        app: AppHandle,
-        workspace: PathBuf,
-        cols: u16,
-        rows: u16,
-        cwd: Option<String>,
-        user_approved: bool,
+        params: TerminalSpawnParams<'_>,
     ) -> ZenResult<String> {
+        let TerminalSpawnParams {
+            manager,
+            security,
+            app,
+            workspace,
+            cols,
+            rows,
+            cwd,
+            user_approved,
+        } = params;
         let resolved_cwd = match cwd {
             Some(path) => Some(
                 crate::workspace::resolve_workspace_path(&workspace, &path)

@@ -26,7 +26,7 @@ export function MessageItem({
   const isAssistant = message.role === "assistant";
   const hasExecutionLedger = message.steps?.some((step) => step.type === "action" || step.type === "tool-call" || step.type === "reasoning");
 
-  if (isAssistant || hasExecutionLedger) {
+  if (message.role !== "user" && (isAssistant || hasExecutionLedger)) {
     if (message.kind === "deep_research") {
       return (
         <DeepResearchMessage 
