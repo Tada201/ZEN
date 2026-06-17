@@ -42,9 +42,9 @@ assert(
 );
 
 assert(
-  groupingSource.includes('grouped.findIndex((item) => item.type === "reasoning")') &&
-    groupingSource.includes("one reasoning capsule per assistant message"),
-  "interleaved reasoning chunks should render in one reasoning block per assistant message",
+  groupingSource.includes('item.type === "reasoning"') &&
+    groupingSource.includes("merge with an existing reasoning block"),
+  "interleaved reasoning chunks should render in reasoning blocks properly grouped",
 );
 
 console.log("reasoning block ux verifier passed");

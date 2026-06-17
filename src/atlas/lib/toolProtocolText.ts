@@ -15,8 +15,8 @@ function isToolProtocolFence(fence: string): boolean {
     return Boolean(
       value &&
       typeof value === "object" &&
-      typeof value.tool === "string" &&
-      (value.args === undefined || (typeof value.args === "object" && value.args !== null))
+      ((typeof value.tool === "string" && (value.args === undefined || typeof value.args === "object")) ||
+       (typeof value.name === "string" && typeof value.arguments === "object"))
     );
   } catch {
     return false;
@@ -65,7 +65,15 @@ export function filterToolProtocolStream(delta: string, pending = ""): ToolProto
     if (isMdFirst) {
       visible += input.slice(cursor, startMd);
       const end = input.indexOf("```", startMd + 3);
-      if (end === -1) return { visible, pending: input.slice(startMd) };
+      if (end === -1) {
+        // Safety valve: don't buffer indefinitely if missing closing fence
+        if (input.length - startMd > 2000) {
+          visible += input.slice(startMd, startMd + 3);
+          cursor = startMd + 3;
+          continue;
+        }
+        return { visible, pending: input.slice(startMd) };
+      }
 
       const fence = input.slice(startMd, end + 3);
       if (!isToolProtocolFence(fence)) visible += fence;
@@ -73,7 +81,15 @@ export function filterToolProtocolStream(delta: string, pending = ""): ToolProto
     } else {
       visible += input.slice(cursor, startXml);
       const end = lowerInput.indexOf("</tool_call>", startXml + 11);
-      if (end === -1) return { visible, pending: input.slice(startXml) };
+      if (end === -1) {
+        // Safety valve: don't buffer indefinitely if missing closing xml
+        if (input.length - startXml > 2000) {
+          visible += input.slice(startXml, startXml + 11);
+          cursor = startXml + 11;
+          continue;
+        }
+        return { visible, pending: input.slice(startXml) };
+      }
 
       cursor = end + 12;
     }
@@ -83,13 +99,37 @@ export function filterToolProtocolStream(delta: string, pending = ""): ToolProto
 }
 
 export function stripToolProtocolText(text: string): string {
-  const filtered = filterToolProtocolStream(text);
-  if (!filtered.pending) return filtered.visible;
+  let result = text;
 
-  const lowerPending = filtered.pending.toLowerCase();
-  const isXml = lowerPending.startsWith("<tool_call") || (lowerPending.startsWith("<") && "<tool_call>".startsWith(lowerPending));
-  if (isXml || isToolProtocolFence(filtered.pending)) {
-    return filtered.visible;
-  }
-  return filtered.visible + filtered.pending;
+  // 1. Strip closed markdown tool blocks
+  result = result.replace(/```(?:json|tool)?\s*\{[\s\S]*?\}\s*```/ig, (match) => {
+    return isToolProtocolFence(match) ? "" : match;
+  });
+
+  // 2. Strip unclosed markdown tool blocks at the very end
+  result = result.replace(/```(?:json|tool)?\s*\{[^`]*$/i, (match) => {
+    if (match.includes('"tool"') || match.includes('"name"')) return "";
+    return match;
+  });
+
+  // 3. Strip closed XML blocks
+  result = result.replace(/<tool_call>[\s\S]*?<\/tool_call>/ig, "");
+
+  // 4. Strip unclosed XML blocks at the very end
+  result = result.replace(/<tool_call>[\s\S]*$/i, (match) => {
+    // Only strip if it's mostly JSON. If there's lots of normal text after it, 
+    // we don't want to swallow the user's answer.
+    const hasManyWords = match.split(/\s+/).length > 20;
+    if (!match.includes('}') && hasManyWords) {
+      // Looks like broken XML followed by text, just strip the tag itself
+      return match.replace(/<tool_call>/i, "");
+    }
+    // Safe to strip the trailing incomplete tool call
+    return "";
+  });
+
+  // 5. Clean up any leftover `<tool_call>` tags that were orphaned
+  result = result.replace(/<tool_call>/ig, "");
+
+  return result.trim();
 }

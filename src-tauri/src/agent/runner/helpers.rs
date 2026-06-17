@@ -252,8 +252,22 @@ pub fn strip_text_tool_call_blocks(content: &str) -> String {
 pub fn try_parse_tool_json(json_str: &str) -> Option<crate::db::models::ToolCall> {
     let val: serde_json::Value = serde_json::from_str(json_str).ok()?;
     let obj = val.as_object()?;
-    let name = obj.get("tool").and_then(|v| v.as_str())?;
-    let args = obj.get("args").cloned().unwrap_or(serde_json::json!({}));
+    
+    let is_tool_format = obj.contains_key("tool");
+    let is_name_format = obj.contains_key("name") && obj.contains_key("arguments");
+    
+    if !is_tool_format && !is_name_format {
+        return None;
+    }
+    
+    let name = obj.get("tool").and_then(|v| v.as_str())
+        .or_else(|| obj.get("name").and_then(|v| v.as_str()))?;
+        
+    let args = obj.get("args")
+        .or_else(|| obj.get("arguments"))
+        .cloned()
+        .unwrap_or(serde_json::json!({}));
+        
     Some(crate::db::models::ToolCall {
         id: format!("call_{}", uuid::Uuid::new_v4()),
         name: name.to_string(),

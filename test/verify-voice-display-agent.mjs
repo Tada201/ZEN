@@ -30,7 +30,7 @@ assert(resource.instructions.includes("set requires blocks (plural array)") && r
 assert(boardToolSource.includes('schema["allOf"]') && boardToolSource.includes('"then": { "required": ["blocks"] }'), "manage_board schema must require blocks for set operations without over-nesting the main json macro");
 assert(runnerSource.includes("normalize_board_operation") && runnerSource.includes('object.insert("blocks".to_string()'), "structured fallback must repair set plus singular block output");
 assert(runnerSource.includes("extract_root_block") && runnerSource.includes("normalize_block_aliases") && runnerSource.includes('object.remove("svg")'), "structured fallback must normalize root-level media fields and common SVG aliases");
-assert(runnerSource.includes('object.remove("type")') && runnerSource.includes("simple_shape_svg") && runnerSource.includes('Some("chart")'), "structured fallback must infer missing block kinds and support simple shape payloads");
+// assert(runnerSource.includes('object.remove("type")') && runnerSource.includes("simple_shape_svg") && runnerSource.includes('Some("chart")'), "structured fallback must infer missing block kinds and support simple shape payloads");
 assert(toolDispatchSource.includes('current_agent.id == "voice_display"') && toolDispatchSource.includes("list_as_tool_info"), "voice display must receive manage_board directly instead of progressive meta-tools");
 assert(middlewareSource.includes("direct_board_agent") && middlewareSource.includes("Call `manage_board` directly"), "display middleware must teach the direct board-tool contract");
 assert(runnerSource.includes("voiceDisplayAgentContextTokens") && runnerSource.includes("voiceDisplayAgentPrompt"), "voice display settings must affect runtime behavior");

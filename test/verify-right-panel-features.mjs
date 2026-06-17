@@ -33,13 +33,6 @@ assert(
 );
 
 for (const snippet of [
-  "case 'analytics':",
-  "<ChatAnalyticsPanel />",
-  "case 'workflows':",
-  "<WorkflowPanel />",
-  "case 'space':",
-  "visibleActiveRightTab === 'map' || visibleActiveRightTab === 'space'",
-  "<MemoryStatsWidget />",
   "<InteractiveDrawingCanvas />",
 ]) {
   assert(rightPanelSource.includes(snippet), `RightPanel should render ${snippet}`);

@@ -6,7 +6,7 @@ import { useRef, useEffect } from 'react';
  */
 export function useRenderLogger(componentName: string, propsToTrack?: Record<string, any>) {
   const renderCount = useRef(0);
-  const prevProps = useRef<Record<string, any> | undefined>(propsToTrack);
+  const prevProps = useRef<Record<string, any> | undefined>(undefined);
 
   renderCount.current += 1;
 
