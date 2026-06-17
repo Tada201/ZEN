@@ -1,11 +1,22 @@
-/* ─── DENSE SYSTEM WIDGETS (PHASE 9) ─── */
+/* ─── VERCEL / NEXT.JS / VS CODE STYLE SYSTEM WIDGETS ─── */
+
+:root {
+    --widget-primary: var(--color-primary, hsl(262 83% 65%));
+    --widget-success: var(--color-success, hsl(142 65% 50%));
+    --widget-warning: var(--color-warning, hsl(38 92% 55%));
+    --widget-destructive: var(--color-destructive, hsl(0 72% 55%));
+    --widget-border: var(--color-border, hsl(240 6% 15%));
+    --widget-muted-border: rgba(255, 255, 255, 0.05);
+    --widget-muted-fg: var(--color-muted-foreground, hsl(240 5% 70%));
+    --widget-bg-card: var(--color-card, hsl(225 8% 11%));
+}
 
 .widget-cpu,
 .widget-mem {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 4px 0;
+    gap: 4px;
+    padding: 0;
     width: 100%;
 }
 
@@ -14,7 +25,6 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid rgba(0, 255, 159, 0.1);
     padding-bottom: 4px;
     margin-bottom: 2px;
 }
@@ -22,9 +32,9 @@
 .widget-cpu__brand {
     flex: 1;
     text-align: center;
-    font-size: 9px;
+    font-size: 8.5px;
     letter-spacing: 0.05em;
-    color: rgba(0, 255, 159, 0.7);
+    color: var(--widget-muted-fg);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -35,15 +45,16 @@
     display: grid;
     grid-template-columns: repeat(8, 1fr);
     gap: 2px;
-    min-height: 24px;
+    min-height: 18px;
     width: 100%;
 }
 
 .widget-cpu__core {
-    background: rgba(0, 255, 159, 0.05);
-    border: 1px solid rgba(0, 255, 159, 0.1);
+    background: rgba(255, 255, 255, 0.03);
     position: relative;
     overflow: hidden;
+    border-radius: 2px;
+    height: 20px;
 }
 
 .widget-cpu__core-fill {
@@ -51,30 +62,29 @@
     bottom: 0;
     left: 0;
     width: 100%;
-    background: var(--neon_primary);
-    box-shadow: 0 0 5px var(--neon_primary);
+    background: var(--widget-primary);
     transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .widget-cpu__charts {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    gap: 6px;
 }
 
 .widget-cpu__sparkline {
     flex: 1;
     display: flex;
     flex-direction: column;
-    padding: 6px 4px;
-    background: rgba(0, 255, 159, 0.02);
-    border: 1px solid rgba(0, 255, 159, 0.1);
-    min-height: 54px;
+    padding: 4px;
+    background: rgba(255, 255, 255, 0.015);
+    min-height: 40px;
+    border-radius: 6px;
 }
 
 .widget-cpu__canvas {
     width: 100%;
-    height: 40px;
+    height: 32px;
     display: block;
 }
 
@@ -93,21 +103,22 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: rgba(0, 255, 159, 0.05);
-    border: 1px solid rgba(0, 255, 159, 0.1);
+    background: rgba(255, 255, 255, 0.02);
     padding: 4px 2px;
+    border-radius: 4px;
 }
 
 .widget-cpu__stat-label {
     font-size: 7px;
-    color: rgba(0, 255, 159, 0.5);
+    color: var(--widget-muted-fg);
     font-family: var(--font_mono), monospace;
+    text-transform: uppercase;
 }
 
 .widget-cpu__stat-value {
-    font-size: 10px;
-    font-weight: bold;
-    color: var(--neon_primary);
+    font-size: 9.5px;
+    font-weight: 600;
+    color: var(--color-foreground);
     font-family: var(--font_mono), monospace;
 }
 
@@ -115,20 +126,20 @@
 .widget-mem__info {
     flex: 1;
     text-align: center;
-    font-size: 9px;
-    color: var(--neon_primary);
+    font-size: 8.5px;
+    color: var(--widget-primary);
     font-family: var(--font_mono), monospace;
 }
 
 .widget-mem__grid-container {
-    padding: 10px 4px;
-    background: rgba(0, 255, 159, 0.02);
-    border: 1px solid rgba(0, 255, 159, 0.1);
+    padding: 6px 4px;
+    background: rgba(255, 255, 255, 0.015);
     width: 100%;
     display: flex;
     justify-content: center;
     overflow: hidden;
-    margin: 4px 0;
+    margin: 2px 0;
+    border-radius: 6px;
 }
 
 .widget-mem__canvas {
@@ -137,38 +148,39 @@
 }
 
 .widget-mem__swap {
-    margin-top: 4px;
+    margin-top: 2px;
 }
 
 .widget-mem__swap-header {
     display: flex;
     justify-content: space-between;
     font-size: 8px;
-    color: rgba(0, 255, 159, 0.6);
+    color: var(--widget-muted-fg);
     margin-bottom: 2px;
     font-family: var(--font_mono), monospace;
 }
 
 .widget-mem__swap-bar {
     height: 4px;
-    background: rgba(0, 255, 159, 0.05);
-    border: 1px solid rgba(0, 255, 159, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 99px;
+    overflow: hidden;
 }
 
 .widget-mem__swap-fill {
     height: 100%;
-    background: var(--accent_amber);
-    box-shadow: 0 0 4px var(--accent_amber);
+    background: var(--widget-warning);
     transition: width 1s ease;
+    border-radius: 99px;
 }
 
-/* ─── DENSE NETWORK MONITOR (PHASE 10) ─── */
+/* ─── NETWORK MONITOR ─── */
 
 .widget-net {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 4px 0;
+    gap: 6px;
+    padding: 2px 0;
     width: 100%;
 }
 
@@ -176,7 +188,6 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid rgba(0, 255, 159, 0.1);
     padding-bottom: 4px;
     margin-bottom: 2px;
 }
@@ -184,68 +195,67 @@
 .widget-net__iface {
     flex: 1;
     text-align: center;
-    font-size: 9px;
+    font-size: 8.5px;
     letter-spacing: 0.05em;
-    color: rgba(0, 255, 159, 0.7);
+    color: var(--widget-muted-fg);
     font-family: var(--font_mono), monospace;
 }
 
 .widget-net__status {
     font-size: 8px;
-    padding: 1px 4px;
-    background: rgba(0, 255, 159, 0.1);
-    color: var(--neon_primary);
-    border: 1px solid var(--neon_primary);
-    border-radius: 2px;
+    padding: 1px 5px;
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--widget-primary);
+    border-radius: 99px;
+    font-weight: 500;
 }
 
 .widget-net--error .widget-net__status {
-    background: rgba(255, 34, 102, 0.1);
-    color: var(--accent_pink);
-    border-color: var(--accent_pink);
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--widget-destructive);
 }
 
 .widget-net__charts {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 8px;
+    gap: 6px;
     width: 100%;
 }
 
 .widget-net__chart-group {
-    background: rgba(0, 255, 159, 0.02);
-    border: 1px solid rgba(0, 255, 159, 0.1);
+    background: rgba(255, 255, 255, 0.015);
     padding: 6px;
     width: 100%;
+    border-radius: 6px;
 }
 
 .widget-net__sparkline-canvas-box {
     width: 100%;
-    height: 30px;
-    margin-top: 4px;
+    height: 24px;
+    margin-top: 2px;
 }
 
 .widget-net__chart-label {
     display: flex;
     justify-content: space-between;
     font-size: 8px;
-    color: rgba(0, 255, 159, 0.5);
+    color: var(--widget-muted-fg);
     margin-bottom: 2px;
     font-family: var(--font_mono), monospace;
 }
 
 .widget-net__rate {
-    color: var(--neon_primary);
-    font-weight: bold;
+    color: var(--widget-primary);
+    font-weight: 600;
 }
 
 .widget-net__sparkline {
-    height: 20px;
+    height: 18px;
 }
 
 .widget-net__sparkline svg {
     width: 100%;
-    height: 20px;
+    height: 18px;
 }
 
 .widget-net__totals {
@@ -257,28 +267,29 @@
 .widget-net__total-item {
     display: flex;
     flex-direction: column;
-    background: rgba(0, 255, 159, 0.05);
-    border: 1px solid rgba(0, 255, 159, 0.1);
-    padding: 4px;
+    background: rgba(255, 255, 255, 0.02);
+    padding: 4px 6px;
+    border-radius: 4px;
 }
 
 .widget-net__total-label {
     font-size: 7px;
-    color: rgba(0, 255, 159, 0.5);
+    color: var(--widget-muted-fg);
     font-family: var(--font_mono), monospace;
 }
 
 .widget-net__total-value {
-    font-size: 10px;
-    color: var(--neon_primary);
+    font-size: 9.5px;
+    color: var(--color-foreground);
     font-family: var(--font_mono), monospace;
+    font-weight: 500;
 }
 
 .widget-net__footer {
     display: flex;
     justify-content: space-between;
     font-size: 8px;
-    color: rgba(0, 255, 159, 0.4);
+    color: var(--widget-muted-fg);
     margin-top: 2px;
     font-family: var(--font_mono), monospace;
 }
@@ -288,12 +299,12 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 4px;
-    padding: 8px 0;
+    gap: 3px;
+    padding: 4px 0;
     font-family: var(--font_mono), monospace;
-    font-size: 24px;
-    color: var(--neon_primary);
-    text-shadow: 0 0 10px rgba(0, 255, 159, 0.3);
+    font-size: 20px;
+    color: var(--widget-primary);
+    font-weight: 500;
 }
 
 .widget-clock__digit {
@@ -302,59 +313,49 @@
 }
 
 .widget-clock__sep {
-    opacity: 0.5;
-    animation: clockBlink 1s step-end infinite;
-}
-
-@keyframes clockBlink {
-    50% {
-        opacity: 0;
-    }
+    opacity: 0.4;
 }
 
 /* ─── Token Widget ─── */
 .widget-tokens {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 8px;
-    background: rgba(0, 255, 159, 0.02);
-    border: 1px solid rgba(0, 255, 159, 0.1);
+    gap: 6px;
+    padding: 2px 0;
     width: 100%;
 }
 
 .widget-tokens__bar-wrap {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
 }
 
 .widget-tokens__bar {
     flex: 1;
-    height: 6px;
-    background: rgba(0, 255, 159, 0.05);
-    border: 1px solid rgba(0, 255, 159, 0.2);
-    border-radius: 0;
+    height: 5px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 99px;
     overflow: hidden;
 }
 
 .widget-tokens__fill {
     height: 100%;
     transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-    box-shadow: 0 0 8px currentColor;
+    border-radius: 99px;
 }
 
 .widget-tokens__pct {
-    font-size: 10px;
-    font-weight: bold;
-    min-width: 28px;
+    font-size: 9.5px;
+    font-weight: 600;
+    min-width: 24px;
     text-align: right;
     font-family: var(--font_mono), monospace;
 }
 
 .widget-tokens__usage {
-    font-size: 9px;
-    color: var(--fg_dim);
+    font-size: 8.5px;
+    color: var(--widget-muted-fg);
     letter-spacing: 0.05em;
     text-align: center;
     font-family: var(--font_mono), monospace;
@@ -368,123 +369,99 @@
 
 .widget-tokens__tag {
     font-size: 8px;
-    padding: 4px 6px;
-    background: rgba(0, 255, 159, 0.05);
-    border: 1px solid rgba(0, 255, 159, 0.15);
+    padding: 2px 4px;
+    background: rgba(255, 255, 255, 0.02);
     text-align: center;
-    color: var(--neon_primary);
+    color: var(--color-foreground);
     font-family: var(--font_mono), monospace;
+    border-radius: 3px;
 }
 
 .widget-tokens__tag--user {
-    border-left: 2px solid var(--accent);
+    border-left: 2px solid var(--widget-primary);
 }
 
 .widget-tokens__tag--ai {
-    border-left: 2px solid var(--neon_primary);
+    border-left: 2px solid var(--widget-success);
 }
 
 .widget-tokens__tag--think {
-    border-left: 2px solid var(--warning);
+    border-left: 2px solid var(--widget-warning);
 }
 
-/* ─── Unified Status Cards (Streaming, Latency, Model, Provider, etc.) ─── */
+/* ─── Unified Status Cards ─── */
 .widget-status-card {
     display: flex;
     align-items: center;
-    gap: 8px;
-    background: rgba(0, 255, 159, 0.02);
-    border: 1px solid rgba(0, 255, 159, 0.1);
-    padding: 8px 10px;
-    transition: all 0.3s ease;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.015);
+    padding: 6px 10px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
     justify-content: flex-end;
     width: 100%;
 }
 
 .widget-status-card--good {
-    border-color: rgba(0, 255, 159, 0.4);
-    background: rgba(0, 255, 159, 0.08);
+    background: rgba(16, 185, 129, 0.03);
 }
 
 .widget-status-card--warn {
-    border-color: rgba(255, 204, 0, 0.4);
-    background: rgba(255, 204, 0, 0.08);
+    background: rgba(245, 158, 11, 0.03);
 }
 
 .widget-status-card--error {
-    border-color: rgba(255, 68, 68, 0.4);
-    background: rgba(255, 68, 68, 0.08);
+    background: rgba(239, 68, 68, 0.03);
 }
 
 .widget-status-card--active {
-    border-color: var(--accent);
-    box-shadow: 0 0 10px rgba(0, 204, 255, 0.1);
+    background: rgba(139, 92, 246, 0.04);
 }
 
 .widget-status-card__indicator {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
-    background: var(--fg_dim);
+    background: var(--widget-muted-fg);
     transition: all 0.3s ease;
 }
 
 .widget-status-card__indicator[data-active] {
-    background: var(--neon_primary);
-    box-shadow: 0 0 8px var(--neon_primary);
+    background: var(--widget-success);
 }
 
 .widget-status-card--active .widget-status-card__indicator {
-    background: var(--accent);
-    box-shadow: 0 0 8px var(--accent);
-    animation: widgetStatusPulse 2s infinite;
+    background: var(--widget-primary);
 }
 
 .widget-status-card__value {
-    font-size: 11px;
-    font-weight: bold;
-    color: var(--neon_primary);
-    letter-spacing: 0.1em;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-foreground);
+    letter-spacing: 0.05em;
     font-family: var(--font_mono), monospace;
 }
 
 .widget-status-card--active .widget-status-card__value,
 .widget-status-card--good .widget-status-card__value {
-    color: var(--neon_primary);
+    color: var(--color-foreground);
 }
 
 .widget-status-card--warn .widget-status-card__value {
-    color: var(--warning);
+    color: var(--widget-warning);
 }
 
 .widget-status-card--error .widget-status-card__value {
-    color: var(--error);
+    color: var(--widget-destructive);
 }
 
-@keyframes widgetStatusPulse {
-    0% {
-        transform: scale(1);
-        opacity: 1;
-    }
-
-    50% {
-        transform: scale(1.2);
-        opacity: 0.7;
-    }
-
-    100% {
-        transform: scale(1);
-        opacity: 1;
-    }
-}
-
-/* ─── DENSE GPU WIDGET ─── */
+/* ─── GPU WIDGET ─── */
 
 .widget-gpu {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 4px 0;
+    gap: 6px;
+    padding: 2px 0;
     width: 100%;
 }
 
@@ -492,16 +469,15 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid rgba(0, 255, 159, 0.1);
     padding-bottom: 4px;
     margin-bottom: 2px;
 }
 
 .widget-gpu__name {
     flex: 1;
-    font-size: 9px;
+    font-size: 8.5px;
     letter-spacing: 0.05em;
-    color: rgba(0, 255, 159, 0.7);
+    color: var(--widget-muted-fg);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -522,21 +498,21 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: rgba(0, 255, 159, 0.05);
-    border: 1px solid rgba(0, 255, 159, 0.1);
+    background: rgba(255, 255, 255, 0.02);
     padding: 4px 2px;
+    border-radius: 4px;
 }
 
 .widget-gpu__stat-label {
     font-size: 7px;
-    color: rgba(0, 255, 159, 0.5);
+    color: var(--widget-muted-fg);
     font-family: var(--font_mono), monospace;
 }
 
 .widget-gpu__stat-value {
-    font-size: 10px;
-    font-weight: bold;
-    color: var(--neon_primary);
+    font-size: 9.5px;
+    font-weight: 600;
+    color: var(--color-foreground);
     font-family: var(--font_mono), monospace;
 }
 
@@ -544,18 +520,18 @@
     display: flex;
     justify-content: space-between;
     font-size: 8px;
-    color: rgba(0, 255, 159, 0.6);
+    color: var(--widget-muted-fg);
     margin-bottom: 2px;
     font-family: var(--font_mono), monospace;
 }
 
-/* ─── DENSE DISK WIDGET ─── */
+/* ─── STORAGE VOLUMES WIDGET ─── */
 
 .widget-disk {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 4px 0;
+    gap: 6px;
+    padding: 2px 0;
     width: 100%;
 }
 
@@ -563,89 +539,88 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    background: rgba(0, 255, 159, 0.02);
-    border: 1px solid rgba(0, 255, 159, 0.1);
+    background: rgba(255, 255, 255, 0.015);
     padding: 6px;
+    border-radius: 6px;
 }
 
 .widget-disk__header {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    border-bottom: 1px dashed rgba(0, 255, 159, 0.1);
+    border-bottom: 1px dashed var(--widget-border);
     padding-bottom: 4px;
 }
 
 .widget-disk__id {
-    font-size: 14px;
-    font-weight: bold;
-    color: var(--neon_primary);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-foreground);
     font-family: var(--font_mono), monospace;
 }
 
 .widget-disk__type {
     font-size: 8px;
-    color: rgba(0, 255, 159, 0.5);
+    color: var(--widget-muted-fg);
     letter-spacing: 0.1em;
     font-family: var(--font_mono), monospace;
-    margin-left: 6px;
+    margin-left: 4px;
 }
 
 .widget-disk__pct {
-    font-size: 10px;
-    font-weight: bold;
-    color: var(--neon_primary);
+    font-size: 9.5px;
+    font-weight: 600;
+    color: var(--color-foreground);
     font-family: var(--font_mono), monospace;
 }
 
 .widget-disk__pct--alert {
-    color: #ff4d6d;
+    color: var(--widget-destructive);
 }
 
 .widget-disk__bar-bg {
     height: 4px;
-    background: rgba(0, 255, 159, 0.05);
-    border: 1px solid rgba(0, 255, 159, 0.1);
+    background: rgba(255, 255, 255, 0.03);
     overflow: hidden;
+    border-radius: 99px;
 }
 
 .widget-disk__bar-fill {
     height: 100%;
-    background: var(--neon_primary);
-    box-shadow: 0 0 4px var(--neon_primary);
+    background: var(--widget-primary);
     transition: width 0.3s ease;
+    border-radius: 99px;
 }
 
 .widget-disk__bar-fill--alert {
-    background: #ff4d6d;
-    box-shadow: 0 0 4px #ff4d6d;
+    background: var(--widget-destructive);
 }
 
 .widget-disk__stat-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 4px;
-    margin-top: 4px;
+    gap: 3px;
+    margin-top: 2px;
 }
 
 .widget-disk__stat {
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: rgba(0, 255, 159, 0.05);
-    border: 1px solid rgba(0, 255, 159, 0.05);
+    background: rgba(255, 255, 255, 0.02);
     padding: 4px 2px;
+    border-radius: 3px;
 }
 
 .widget-disk__stat-label {
     font-size: 6px;
-    color: rgba(0, 255, 159, 0.5);
+    color: var(--widget-muted-fg);
     font-family: var(--font_mono), monospace;
 }
 
 .widget-disk__stat-value {
-    font-size: 9px;
-    color: var(--fg_dim);
+    font-size: 8.5px;
+    color: var(--color-foreground);
     font-family: var(--font_mono), monospace;
     white-space: nowrap;
     overflow: hidden;
@@ -653,8 +628,7 @@
     max-width: 100%;
 }
 
-
-/* ─── Information Dense Utilities (eDEX-UI Style) ─── */
+/* ─── diagnostic structures ─── */
 
 .edex-data-grid {
     display: grid;
@@ -664,104 +638,85 @@
 .edex-diagnostic-label {
     font-size: 9px;
     letter-spacing: 0.1em;
-    color: var(--fg-ghost);
+    color: var(--widget-muted-fg);
     text-transform: uppercase;
 }
 
 .edex-diagnostic-value {
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 500;
-    color: var(--fg);
+    color: var(--color-foreground);
     font-family: var(--font-mono);
 }
 
 .edex-dashed-separator {
-    border-top: 1px dashed rgba(var(--neon_primary_rgb, 0, 255, 159), 0.2);
-    margin: 8px 0;
+    border-top: 1px dashed var(--widget-border);
+    margin: 6px 0;
 }
 
 .edex-packet {
-    border-top: 1px solid rgba(var(--neon_primary_rgb, 0, 255, 159), 0.3);
-    padding-top: 6px;
+    border-top: 1px solid var(--widget-border);
+    padding-top: 4px;
     position: relative;
-    margin-top: 10px;
-}
-
-.edex-packet::before {
-    content: "";
-    position: absolute;
-    top: -4px;
-    left: 0;
-    width: 1px;
-    height: 4px;
-    background: rgba(var(--neon_primary_rgb, 0, 255, 159), 0.3);
-}
-
-.edex-packet::after {
-    content: "";
-    position: absolute;
-    top: -4px;
-    right: 0;
-    width: 1px;
-    height: 4px;
-    background: rgba(var(--neon_primary_rgb, 0, 255, 159), 0.3);
+    margin-top: 8px;
 }
 
 .edex-mini-id {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--fg);
-    margin-right: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-foreground);
+    margin-right: 6px;
 }
 
 /* CPU / MEM Widget (Compact Bars) */
 .widget-cpu-mem {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
     width: 100%;
 }
 
 .widget-cpu-mem__row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
 }
 
 .widget-cpu-mem__label {
-    width: 45px;
-    font-size: 9px;
-    color: var(--fg_dim);
+    width: 40px;
+    font-size: 8.5px;
+    color: var(--widget-muted-fg);
     font-family: var(--font_mono), monospace;
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
     flex-shrink: 0;
 }
 
 .widget-cpu-mem__bar {
     flex: 1;
     height: 4px;
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.05);
     overflow: hidden;
+    border-radius: 99px;
 }
 
 .widget-cpu-mem__fill {
     height: 100%;
-    background: var(--neon_primary);
+    background: var(--widget-primary);
     transition: width 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+    border-radius: 99px;
 }
 
 .widget-cpu-mem__fill[data-warn] {
-    background: #ff4d6d;
+    background: var(--widget-destructive);
 }
 
 .widget-cpu-mem__pct {
-    width: 30px;
+    width: 24px;
     text-align: right;
-    font-size: 9px;
+    font-size: 8.5px;
     font-family: var(--font_mono), monospace;
-    color: var(--fg_dim);
+    color: var(--widget-muted-fg);
     flex-shrink: 0;
 }
-

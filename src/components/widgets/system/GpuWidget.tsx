@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, memo } from 'react';
 import type { WidgetContext } from './types';
 import { Sparkline } from '@/components/shared/Sparkline';
+import { useRenderLogger } from '@/hooks/useRenderLogger';
 
-export function GpuWidget({ context }: { context: WidgetContext }) {
+export const GpuWidget = memo(function GpuWidget({ context }: { context: WidgetContext }) {
+    useRenderLogger("GpuWidget", { gpuUsage: context.gpu?.usage });
     const [selectedGpuType, setSelectedGpuType] = useState<'dgpu' | 'igpu'>(
         context.dgpu ? 'dgpu' : 'igpu'
     );
@@ -37,14 +39,14 @@ export function GpuWidget({ context }: { context: WidgetContext }) {
         <div className="flex flex-col gap-3 p-1">
             <div className="flex flex-col gap-1 px-1">
                 <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-mono font-bold text-slate-500 px-1 border border-slate-800 rounded bg-slate-800/20">GPU</span>
+                    <span className="text-[9px] font-mono font-bold text-slate-500 px-1 border border-zinc-800 rounded bg-zinc-900/40">GPU</span>
                     {context.dgpu && (
-                        <div className="flex border border-slate-850 rounded bg-slate-950 p-[1px] shadow-sm">
+                        <div className="flex border border-zinc-850 rounded bg-zinc-955 p-[1px] shadow-sm">
                             <button
                                 onClick={() => setSelectedGpuType('igpu')}
-                                className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded-sm transition-all duration-200 ${
+                                className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded transition-all duration-200 ${
                                     selectedGpuType === 'igpu'
-                                        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                        ? 'bg-violet-500/10 text-violet-400 border border-violet-500/20'
                                         : 'text-slate-500 hover:text-slate-400 border border-transparent'
                                 }`}
                             >
@@ -52,9 +54,9 @@ export function GpuWidget({ context }: { context: WidgetContext }) {
                             </button>
                             <button
                                 onClick={() => setSelectedGpuType('dgpu')}
-                                className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded-sm transition-all duration-200 ${
+                                className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded transition-all duration-200 ${
                                     selectedGpuType === 'dgpu'
-                                        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                        ? 'bg-violet-500/10 text-violet-400 border border-violet-500/20'
                                         : 'text-slate-500 hover:text-slate-400 border border-transparent'
                                 }`}
                             >
@@ -70,10 +72,10 @@ export function GpuWidget({ context }: { context: WidgetContext }) {
                 </div>
             </div>
 
-            <div className="bg-slate-900/40 border border-slate-800/40 rounded p-1">
+            <div className="bg-zinc-950/40 border border-zinc-800 rounded-lg p-1">
                 <Sparkline
                     data={activeHistory}
-                    color="#3b82f6" // blue-500
+                    color="#8b5cf6" // violet-500
                     height={32}
                     showDot={true}
                     maxValue={100}
@@ -93,7 +95,7 @@ export function GpuWidget({ context }: { context: WidgetContext }) {
                 </div>
                 <div className="flex flex-col items-end">
                     <span className="text-[9px] font-mono text-slate-500 leading-none">VRAM</span>
-                    <span className="text-xs font-mono text-blue-400 font-bold">{Math.round(memPercent)}%</span>
+                    <span className="text-xs font-mono text-violet-400 font-bold">{Math.round(memPercent)}%</span>
                 </div>
             </div>
 
@@ -104,13 +106,13 @@ export function GpuWidget({ context }: { context: WidgetContext }) {
                         {(activeGpu.memoryUsed / 1024 / 1024 / 1024).toFixed(1)}G / {(activeGpu.memoryTotal / 1024 / 1024 / 1024).toFixed(0)}G
                     </span>
                 </div>
-                <div className="h-1 bg-slate-800/50 rounded-full overflow-hidden">
+                <div className="h-1 bg-zinc-850 rounded-full overflow-hidden border border-zinc-800/25">
                     <div
-                        className="h-full bg-blue-500/60 transition-all duration-300"
+                        className="h-full bg-violet-500/60 transition-all duration-300 rounded-full"
                         style={{ width: `${memPercent}%` }}
                     />
                 </div>
             </div>
         </div>
     );
-}
+});

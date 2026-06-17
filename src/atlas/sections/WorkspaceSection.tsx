@@ -10,6 +10,8 @@ import { Settings, Hammer, PanelLeftOpen } from "lucide-react";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { getVisibleWorkspaceModeFeatures, isWorkspaceModeVisible } from "@/lib/features/frontendFeatures";
+import { useShallow } from 'zustand/react/shallow';
+import { useRenderLogger } from "@/hooks/useRenderLogger";
 
 import { MainArea } from "@/components/workbench/MainArea";
 import { VOICE_MODE_SYSTEM_PROMPT } from "../components/voice/voiceModePrompt";
@@ -44,6 +46,8 @@ export function WorkspaceApp() {
     handleSendMessage, abortStream
   } = useChat();
 
+  useRenderLogger("WorkspaceApp", { currentSessionId, isStreaming });
+
   const chatMessages = useMemo(() => {
     return messages.filter(m => m.role !== "tool");
   }, [messages]);
@@ -61,7 +65,19 @@ export function WorkspaceApp() {
     activeTab,
     setActiveTab,
     isCommandPaletteOpen,
-  } = useUIStore();
+  } = useUIStore(
+    useShallow((s) => ({
+      settingsOpen: s.settingsOpen,
+      setSettingsOpen: s.setSettingsOpen,
+      setActiveSettingsTab: s.setActiveSettingsTab,
+      activeSettingsTab: s.activeSettingsTab,
+      voiceModeOpen: s.voiceModeOpen,
+      toggleVoiceMode: s.toggleVoiceMode,
+      activeTab: s.activeTab,
+      setActiveTab: s.setActiveTab,
+      isCommandPaletteOpen: s.isCommandPaletteOpen,
+    }))
+  );
   const visibleWorkspaceModes = getVisibleWorkspaceModeFeatures();
   const currentWorkspaceTab = isWorkspaceModeVisible(activeTab) ? activeTab : "chat";
 
@@ -287,7 +303,7 @@ export function WorkspaceApp() {
                 ) : (
                   <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
                     <ResizablePanel defaultSize={60} minSize={30} className="flex flex-col h-full relative">
-                      <div className="flex-1 flex flex-col items-center justify-between overflow-hidden h-full w-full">
+                      <div className="flex-1 flex flex-col items-center justify-end overflow-hidden h-full w-full">
                         <div className="w-full flex flex-col flex-1 overflow-hidden bg-transparent">
                           <MessageList
                             messages={chatMessages}

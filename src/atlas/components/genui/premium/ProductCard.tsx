@@ -26,7 +26,12 @@ export function ProductCard({ data }: { data: any }) {
         </div>
 
         <div className="flex items-center justify-between border-t border-white/[0.06] pt-3 mt-1">
-          <span className="text-lg font-black text-white">${data.price?.toFixed(2) || '0.00'}</span>
+          <span className="text-lg font-black text-white">
+            ${(() => {
+              const priceVal = typeof data.price === 'number' ? data.price : parseFloat(data.price);
+              return !isNaN(priceVal) ? priceVal.toFixed(2) : '0.00';
+            })()}
+          </span>
           <button className="flex items-center justify-center h-8 w-8 rounded-lg bg-primary text-black hover:bg-primary-glow active:scale-95 transition-all">
             <ShoppingCart size={14} className="stroke-[2.5]" />
           </button>

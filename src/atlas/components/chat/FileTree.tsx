@@ -106,8 +106,8 @@ export const FileTree = ({ content }: { content: string }) => {
   const nodes = React.useMemo(() => parseTree(content), [content]);
 
   return (
-    <div className="my-6 rounded-xl border border-border/40 bg-card/30 shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border/20 bg-muted/20">
+    <div className="my-6 rounded-xl border border-border/40 bg-card/90 shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border/20 bg-muted/80">
         <div className="flex items-center gap-2">
           <div className="h-2 w-2 rounded-full bg-primary/40 animate-pulse" />
           <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Workspace Tree</span>

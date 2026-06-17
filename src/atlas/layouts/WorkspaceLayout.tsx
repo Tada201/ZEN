@@ -154,13 +154,13 @@ export function WorkspaceLayout({
           </div>
         )}
 
-        {/* Right Sidebar Panel: Stays permanently mounted but scales width */}
+        {/* Right Sidebar Panel: Mounted conditionally to prevent background render cycles */}
         <div 
           style={{ width: !isMobile && rightPanelOpen && rightPanel ? `${rightPanelWidth}px` : "0px" }}
           className={`h-full relative overflow-hidden shrink-0 ${isResizing ? "transition-none" : "transition-[width] duration-300 ease-in-out"}`}
         >
           <div className="h-full" style={{ width: `${rightPanelWidth}px` }}>
-            {!isMobile && rightPanel}
+            {!isMobile && rightPanelOpen && rightPanel}
           </div>
         </div>
 

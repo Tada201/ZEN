@@ -329,11 +329,20 @@ function pushGroupedStep(grouped: MutableGroupedStep[], step: Step) {
     last.content = (last.content || "") + (step.content || "");
   } else if (step.type === "reasoning") {
     // Providers can interleave status bookkeeping between reasoning deltas.
-    // Keep one reasoning capsule per assistant message without mutating the
-    // underlying chronological event ledger.
-    const existingReasoningIndex = grouped.findIndex((item) => item.type === "reasoning");
-    const existingReasoning = grouped[existingReasoningIndex];
-    if (existingReasoningIndex !== -1 && existingReasoning.type === "reasoning") {
+    // Only merge with an existing reasoning block if we don't cross any text or tool-group boundaries.
+    let existingReasoningIndex = -1;
+    for (let i = grouped.length - 1; i >= 0; i -= 1) {
+      const item = grouped[i];
+      if (item.type === "reasoning") {
+        existingReasoningIndex = i;
+        break;
+      }
+      if (item.type === "text" || item.type === "tool-group") {
+        break;
+      }
+    }
+    const existingReasoning = existingReasoningIndex !== -1 ? grouped[existingReasoningIndex] : undefined;
+    if (existingReasoning && existingReasoning.type === "reasoning") {
       const previous = (existingReasoning.content || "").trimEnd();
       const incoming = (step.content || "").trimStart();
       existingReasoning.content = previous && incoming ? `${previous}\n${incoming}` : previous || incoming;

@@ -197,13 +197,14 @@ pub(super) struct EscalationParams<'a> {
     pub token: CancellationToken,
     pub app: &'a AppHandle,
     pub chat_id: &'a str,
+    #[allow(dead_code)]
     pub stream_channel: Option<tauri::ipc::Channel<ChatChunkPayload>>,
     pub early_tools: Option<EarlyToolExecutionContext>,
     pub agent_stream: Option<(String, String)>,
 }
 
 /// Parameters for the LLM streaming callback wrapper.
-struct LlmCallbackParams<'a> {
+pub(super) struct LlmCallbackParams<'a> {
     pub provider: &'a dyn crate::llm::LlmProvider,
     pub model: &'a str,
     pub messages: Vec<ChatMessage>,

@@ -97,7 +97,7 @@ export const MessageList = memo(function MessageList({
           </p>
         </div>
       ) : (
-        <div className="w-full pb-48 pt-24">
+        <div className="w-full pb-8">
           {filteredMessages.map((message) => (
             <MemoizedMessageItem
               key={message.id}

@@ -113,12 +113,13 @@ export const ReasoningBlock = memo(function ReasoningBlock({ content, isThinking
           setUserToggled(true);
           setExpanded(next);
         }}
+        className="border border-border/40 bg-card/90 rounded-lg overflow-hidden shadow-sm"
       >
         <CollapsibleTrigger
           aria-label={expanded ? "Collapse reasoning details" : "Expand reasoning details"}
           className={cn(
-            "group/reasoning flex min-h-8 w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left outline-none transition-colors",
-            "border-border/45 bg-muted/20 hover:bg-muted/35 focus-visible:ring-2 focus-visible:ring-ring/50",
+            "group/reasoning flex min-h-8 w-full items-center justify-between px-2.5 py-1.5 text-left outline-none transition-colors hover:bg-muted/10",
+            expanded && "border-b border-border/25 bg-muted/5"
           )}
         >
           <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -133,7 +134,7 @@ export const ReasoningBlock = memo(function ReasoningBlock({ content, isThinking
               <div className="flex min-w-0 items-center gap-2">
                 <span className={cn(
                   "truncate text-[12.5px] font-medium tracking-tight",
-                  isThinking ? "text-foreground" : "text-muted-foreground/85"
+                  isThinking ? "animate-text-shimmer font-semibold" : "text-muted-foreground/85"
                 )}>
                   {statusLabel}
                 </span>
@@ -152,16 +153,19 @@ export const ReasoningBlock = memo(function ReasoningBlock({ content, isThinking
         </CollapsibleTrigger>
         
         <CollapsibleContent>
-          <div className="mt-1.5 overflow-hidden rounded-lg border border-border/35 bg-card/35">
-            <div className="flex items-center justify-between border-b border-border/25 px-3 py-2">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/60">
+          <div className="overflow-hidden">
+            <div className="flex items-center justify-between border-b border-border/25 px-3.5 py-2 bg-muted/5">
+              <span className={cn(
+                "text-[10px] font-bold uppercase tracking-[0.18em]",
+                isThinking ? "animate-text-shimmer" : "text-muted-foreground/60"
+              )}>
                 Reasoning
               </span>
               <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground/45">
                 {isThinking ? "live" : "complete"}
               </span>
             </div>
-            <div className="max-h-[260px] overflow-y-auto px-3 py-2">
+            <div className="max-h-[260px] overflow-y-auto px-3.5 pt-2 pb-4">
               <MemoReasoningContent content={displayContent} />
             </div>
           </div>

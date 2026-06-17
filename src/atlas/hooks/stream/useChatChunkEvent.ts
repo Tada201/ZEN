@@ -163,6 +163,9 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         if (!chatId) return;
 
         clearHeartbeatTimeout(chatId);
+        
+        // Ensure any pending chunks are flushed before finalization
+        flushAllChunkBuffers();
 
         const buf = chunkBuffersRef.current[chatId];
         let finalDelta = buf?.delta || "";

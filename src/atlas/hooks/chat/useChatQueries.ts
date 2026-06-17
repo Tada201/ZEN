@@ -267,6 +267,8 @@ export function useChatQueries() {
       const page = await chatApi.listChatsPage(500, 0);
       return page.items.map(mapChatToSession);
     },
+    staleTime: 30000,
+    gcTime: 5 * 60000,
   });
 
   const { data: archivedSessions = [] } = useQuery({
@@ -275,6 +277,8 @@ export function useChatQueries() {
       const page = await chatApi.listArchivedChatsPage(500, 0);
       return page.items.map(mapChatToSession);
     },
+    staleTime: 60000,
+    gcTime: 5 * 60000,
   });
 
   const { data: folders = [] } = useQuery({
@@ -283,6 +287,8 @@ export function useChatQueries() {
       const fds = await chatApi.listFolders();
       return fds.map(mapChatFolderToFolder);
     },
+    staleTime: 60000,
+    gcTime: 5 * 60000,
   });
 
   const { customProviders, storeAvailableModels } = useSettingsStore(useShallow((s) => ({

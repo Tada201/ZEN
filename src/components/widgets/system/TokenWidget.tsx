@@ -1,14 +1,16 @@
 import { useMemo, memo } from 'react';
 import type { WidgetContext } from './types';
+import { useRenderLogger } from '@/hooks/useRenderLogger';
 
 function getStatusColor(pct: number): string {
-    if (pct < 50) return '#10b981';
+    if (pct < 50) return '#8b5cf6';
     if (pct < 80) return '#f59e0b';
     return '#ef4444';
 }
 
 export const TokenWidget = memo(function TokenWidget({ context }: { context: WidgetContext }) {
     const { tokensUsed, tokensLimit, promptTokens, completionTokens, thinkingTokens } = context;
+    useRenderLogger("TokenWidget", { tokensUsed });
 
     const pct = useMemo(() => {
         if (tokensLimit <= 0) return 0;

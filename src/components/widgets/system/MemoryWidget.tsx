@@ -1,8 +1,10 @@
 import { useEffect, useRef, useMemo, useState, memo } from 'react';
 import type { SystemMetrics } from '@/hooks/useSysMetrics';
+import { useRenderLogger } from '@/hooks/useRenderLogger';
 
 export const MemoryWidget = memo(function MemoryWidget({ context }: { context: SystemMetrics }) {
     const { memoryUsed, memoryTotal, memoryPercent, swapUsed, swapTotal, memoryAvailable } = context;
+    useRenderLogger("MemoryWidget", { memoryPercent });
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [containerWidth, setContainerWidth] = useState(280);
@@ -71,11 +73,11 @@ export const MemoryWidget = memo(function MemoryWidget({ context }: { context: S
             ctx.arc(x, y, dotSize, 0, Math.PI * 2);
 
             if (i < activeLimit) {
-                ctx.fillStyle = '#10b981'; // emerald-500
+                ctx.fillStyle = '#8b5cf6'; // violet-500
             } else if (i < activeLimit + availableLimit) {
-                ctx.fillStyle = 'rgba(16, 185, 129, 0.35)'; // emerald-500/35
+                ctx.fillStyle = 'rgba(139, 92, 246, 0.35)'; // violet-500/35
             } else {
-                ctx.fillStyle = 'rgba(16, 185, 129, 0.08)'; // emerald-500/08
+                ctx.fillStyle = 'rgba(139, 92, 246, 0.08)'; // violet-500/08
             }
 
             ctx.fill();
@@ -93,7 +95,7 @@ export const MemoryWidget = memo(function MemoryWidget({ context }: { context: S
                 </span>
             </div>
 
-            <div ref={containerRef} className="bg-slate-900/40 border border-slate-800/40 rounded p-1 flex justify-center overflow-hidden">
+            <div ref={containerRef} className="bg-zinc-950/40 border border-zinc-800/60 rounded-lg p-1 flex justify-center overflow-hidden">
                 <canvas
                     ref={canvasRef}
                     style={{ width: '100%', height: '64px' }}
@@ -105,9 +107,9 @@ export const MemoryWidget = memo(function MemoryWidget({ context }: { context: S
                     <span className="text-[9px] font-mono text-slate-500">SWAP</span>
                     <span className="text-[9px] font-mono text-slate-400">{Math.round(swapPercent)}%</span>
                 </div>
-                <div className="h-1 bg-slate-800/50 rounded-full overflow-hidden">
+                <div className="h-1 bg-zinc-850 rounded-full overflow-hidden border border-zinc-800/25">
                     <div
-                        className="h-full bg-emerald-500/60 transition-all duration-300"
+                        className="h-full bg-violet-500/60 transition-all duration-300 rounded-full"
                         style={{ width: `${swapPercent}%` }}
                     />
                 </div>

@@ -2,9 +2,11 @@ import { useRef, useMemo, useEffect, useState, memo } from 'react';
 import type { WidgetContext } from './types';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { Sparkline } from '@/components/shared/Sparkline';
+import { useRenderLogger } from '@/hooks/useRenderLogger';
 
 export const NetworkWidget = memo(function NetworkWidget({ context }: { context: WidgetContext }) {
     const { networkInterfaces } = context;
+    useRenderLogger("NetworkWidget", { ifacesCount: networkInterfaces.length });
     const preferredIface = useSettingsStore((s) => (s.widgetSettings as any).preferredNetworkInterface as string | undefined);
     const lockedIfaceName = useRef<string | null>(null);
 
@@ -103,28 +105,28 @@ export const NetworkWidget = memo(function NetworkWidget({ context }: { context:
                 <span className="text-[10px] font-mono font-bold text-slate-500 tracking-wider">
                     {activeIface.name.toUpperCase()}
                 </span>
-                <span className="text-[10px] font-mono text-emerald-500/80">ONLINE</span>
+                <span className="text-[10px] font-mono text-violet-400/80">ONLINE</span>
             </div>
 
             {/* Throughput Charts */}
             <div className="flex flex-col gap-2">
-                <div className="flex flex-col gap-1 bg-slate-900/40 border border-slate-800/40 rounded p-1.5">
+                <div className="flex flex-col gap-1 bg-zinc-950/40 border border-zinc-800/60 rounded-lg p-1.5">
                     <div className="flex items-center justify-between px-1">
                         <span className="text-[9px] font-mono text-slate-500">SENT</span>
                         <span className="text-[10px] font-mono text-slate-300">{formatBitrate(activeIface.txSec)}</span>
                     </div>
                     <div className="h-8">
-                        <Sparkline data={history.tx} color="#3b82f6" height={32} />
+                        <Sparkline data={history.tx} color="#a78bfa" height={32} />
                     </div>
                 </div>
 
-                <div className="flex flex-col gap-1 bg-slate-900/40 border border-slate-800/40 rounded p-1.5">
+                <div className="flex flex-col gap-1 bg-zinc-950/40 border border-zinc-800/60 rounded-lg p-1.5">
                     <div className="flex items-center justify-between px-1">
                         <span className="text-[9px] font-mono text-slate-500">RECV</span>
                         <span className="text-[10px] font-mono text-slate-300">{formatBitrate(activeIface.rxSec)}</span>
                     </div>
                     <div className="h-8">
-                        <Sparkline data={history.rx} color="#10b981" height={32} />
+                        <Sparkline data={history.rx} color="#8b5cf6" height={32} />
                     </div>
                 </div>
             </div>
@@ -142,7 +144,7 @@ export const NetworkWidget = memo(function NetworkWidget({ context }: { context:
             </div>
 
             {/* Connection Metadata */}
-            <div className="flex items-center justify-between px-1 pt-1 border-t border-slate-800/30">
+            <div className="flex items-center justify-between px-1 pt-1 border-t border-zinc-800/60">
                 <span className="text-[9px] font-mono text-slate-500 truncate max-w-[160px]">
                     {activeIface.ipAddresses.find(ip => !ip.includes(':')) || activeIface.ipAddresses[0] || '127.0.0.1'}
                 </span>

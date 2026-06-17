@@ -66,9 +66,9 @@ export function YoutubePreview({ videoId }: { videoId: string }) {
       href={`https://www.youtube.com/watch?v=${videoId}`}
       target="_blank"
       rel="noreferrer"
-      className="block my-4 group relative overflow-hidden rounded-xl border border-border/30 bg-card/20 hover:border-primary/30 transition-all duration-200 max-w-[480px]"
+      className="block my-4 group relative overflow-hidden rounded-xl border border-border/30 bg-card/90 hover:border-primary/30 transition-all duration-200 max-w-[480px]"
     >
-      <div className="relative aspect-video bg-black/40 overflow-hidden">
+      <div className="relative aspect-video bg-black/90 overflow-hidden">
         <img
           src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
           alt="YouTube video preview"

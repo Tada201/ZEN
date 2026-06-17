@@ -157,7 +157,7 @@ export function ChartBlock({ content, isStreaming }: ChartBlockProps) {
   };
 
   return (
-    <div className="my-6 p-6 bg-card/30 rounded-xl border border-border/40 shadow-sm overflow-hidden">
+    <div className="my-6 p-6 bg-card/90 rounded-xl border border-border/40 shadow-sm overflow-hidden">
       {title && (
         <div className="mb-4 text-center font-bold text-sm text-foreground/80 tracking-tight">
           {title}

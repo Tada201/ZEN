@@ -21,6 +21,7 @@ import { SuggestedPromptStrip } from './chat/input/SuggestedPromptStrip';
 import type { PromptDefinition } from "./chat/promptRegistry";
 import type { PremiumChatInputProps, ThinkingPayload } from './chat/input/PremiumChatInputTypes';
 import { fileToAttachment } from './chat/input/fileAttachments';
+import { useRenderLogger } from "@/hooks/useRenderLogger";
 
 export const PremiumChatInput = memo(({
   onSend,
@@ -39,6 +40,8 @@ export const PremiumChatInput = memo(({
   onGenerativeUIChange,
   isSidebar
 }: PremiumChatInputProps) => {
+  useRenderLogger("PremiumChatInput", { activeChatId, isLoading });
+
   const [internalMessage, setInternalMessage] = useState('');
   const message = externalInput !== undefined ? externalInput : internalMessage;
   const setMessage = onInputChange || setInternalMessage;
@@ -343,7 +346,7 @@ export const PremiumChatInput = memo(({
       <div
         ref={containerRef}
         className={cn(
-          "w-full relative bg-white/80 dark:bg-white/[0.12] backdrop-blur-2xl backdrop-saturate-150 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.05)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.05)] ring-1 ring-black/5 dark:ring-white/20 overflow-visible transition-all duration-200",
+          "w-full relative bg-white/80 dark:bg-white/[0.12] backdrop-blur-xl dark:backdrop-blur-xl backdrop-saturate-150 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.05)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.05)] ring-1 ring-black/5 dark:ring-white/20 overflow-visible transition-all duration-200",
           isLoading && "ring-primary/40 dark:ring-primary/50 shadow-[0_0_15px_-3px_rgba(var(--primary-rgb),0.1)]"
         )}
       >

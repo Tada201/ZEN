@@ -121,7 +121,7 @@ export function MermaidDiagram({ code, isStreaming }: { code: string; isStreamin
     return (
       <div
         ref={containerRef}
-        className="my-6 h-32 rounded-xl border border-border/40 bg-card/30"
+        className="my-6 h-32 rounded-xl border border-border/40 bg-card/90"
         aria-hidden="true"
       />
     );
@@ -131,7 +131,7 @@ export function MermaidDiagram({ code, isStreaming }: { code: string; isStreamin
     return (
       <div
         ref={containerRef}
-        className="my-6 h-32 motion-safe:animate-pulse rounded-xl border border-border/40 bg-card/30 shadow-sm"
+        className="my-6 h-32 motion-safe:animate-pulse rounded-xl border border-border/40 bg-card/90 shadow-sm"
         aria-hidden="true"
       />
     );
@@ -140,7 +140,7 @@ export function MermaidDiagram({ code, isStreaming }: { code: string; isStreamin
   return (
     <div
       ref={containerRef}
-      className="my-6 overflow-hidden flex justify-center bg-card/30 p-6 rounded-xl border border-border/40 shadow-sm min-h-[128px] transition-[height,opacity] duration-300 ease-in-out"
+      className="my-6 overflow-hidden flex justify-center bg-card/90 p-6 rounded-xl border border-border/40 shadow-sm min-h-[128px] transition-[height,opacity] duration-300 ease-in-out"
       // Mermaid is strict-mode rendered and then DOMPurify-sanitized before SVG injection.
       dangerouslySetInnerHTML={{ __html: svg }}
     />

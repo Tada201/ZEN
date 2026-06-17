@@ -30,7 +30,7 @@ const SmoothMarkdown = React.lazy(() => import("./SmoothMarkdown").then(m => ({ 
 
 const RichBlockFallback = () => (
   <div
-    className="my-6 h-24 animate-pulse rounded-xl border border-border/30 bg-card/20"
+    className="my-6 h-24 animate-pulse rounded-xl border border-border/30 bg-card/90"
     aria-hidden="true"
   >
     <div className="m-6 h-3 w-2/3 rounded-full bg-muted/40" />
@@ -276,7 +276,7 @@ export function MarkdownContent({
       );
     },
     table: ({ children }) => (
-      <div className="my-6 overflow-hidden rounded-xl border border-border/40 bg-card/30 shadow-sm">
+      <div className="my-6 overflow-hidden rounded-xl border border-border/40 bg-card/90 shadow-sm">
         <ScrollArea className="w-full">
           <Table className="w-full text-[13px] border-collapse">{children}</Table>
         </ScrollArea>

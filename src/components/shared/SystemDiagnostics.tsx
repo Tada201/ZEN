@@ -6,6 +6,7 @@ import { useUIStore } from '@/lib/stores/useUIStore';
 import { useChatStore } from '@/lib/stores/useChatStore';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
 import { useAppUptime } from '@/hooks/useAppUptime';
+import { useRenderLogger } from '@/hooks/useRenderLogger';
 
 // Widget component imports
 import { ClockWidget } from '@/components/widgets/system/ClockWidget';
@@ -71,6 +72,8 @@ export function SystemDiagnostics() {
     const appUptimeSecs = useAppUptime();
     const messages = useChatStore((s) => s.messages) || [];
     const isStreaming = useChatStore((s) => s.isStreaming) || false;
+
+    useRenderLogger("SystemDiagnostics", { isStreaming, activeModel });
     const { data: sessions = [] } = useQuery({
         queryKey: ['sessions'],
         queryFn: async () => (await chatApi.listChatsPage(500, 0)).items,
@@ -155,42 +158,30 @@ export function SystemDiagnostics() {
     }), [metrics, activeModel, activeProvider, isStreaming, simulatedLatency, tokenStats, sessions.length, appUptimeSecs]);
 
     return (
-        <div className="flex flex-col gap-4 p-1 text-zinc-300 select-none">
-            {/* Global Header */}
-            <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2 px-1">
-                <div className="flex items-center gap-2">
-                    <WorkbenchIcon name="solar:widget-bold" size={14} className="text-emerald-400 animate-pulse" />
-                    <span className="text-[10px] font-mono font-bold tracking-[0.2em] text-emerald-400">TELEMETRY LINK ACTIVE</span>
-                </div>
-                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded border border-emerald-500/20 bg-emerald-500/5 text-[9px] font-mono font-bold text-emerald-400 uppercase">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
-                    <span>STABLE</span>
-                </div>
-            </div>
-
+        <div className="flex flex-col gap-2 p-1 text-zinc-300 select-none">
             {/* Widget Groups */}
             {WIDGET_GROUPS.map((group) => {
                 const isCollapsed = collapsedGroups[group.id];
                 return (
-                    <div key={group.id} className="flex flex-col border border-zinc-800/40 rounded bg-zinc-950/20 overflow-hidden">
+                    <div key={group.id} className="flex flex-col border border-zinc-850 rounded-lg bg-zinc-950/40 overflow-hidden shadow-sm">
                         <button
                             type="button"
                             onClick={() => toggleGroup(group.id)}
-                            className="flex items-center justify-between px-3 py-2 bg-zinc-900/40 hover:bg-zinc-800/30 transition-colors border-b border-zinc-800/40 cursor-pointer w-full text-left"
+                            className="flex items-center justify-between px-2.5 py-1.5 bg-zinc-900/30 hover:bg-zinc-900/50 transition-colors border-b border-zinc-850 cursor-pointer w-full text-left focus:outline-none focus-visible:outline-none"
                         >
-                            <div className="flex items-center gap-2 text-[10px] font-mono font-bold tracking-widest text-zinc-400">
-                                <WorkbenchIcon name={group.icon} size={12} className="text-emerald-400/80" />
+                            <div className="flex items-center gap-1.5 text-[9.5px] font-mono font-bold tracking-widest text-zinc-400">
+                                <WorkbenchIcon name={group.icon} size={11} className="text-violet-400/80" />
                                 <span>{group.title}</span>
                             </div>
                             <WorkbenchIcon
                                 name={isCollapsed ? "solar:alt-arrow-down-bold" : "solar:alt-arrow-up-bold"}
-                                size={12}
+                                size={11}
                                 className="text-zinc-500"
                             />
                         </button>
 
                         {!isCollapsed && (
-                            <div className="p-2 grid grid-cols-4 gap-2 transition-all duration-300">
+                            <div className="p-1.5 grid grid-cols-4 gap-1.5 transition-all duration-300">
                                 {group.widgets.map((widget) => {
                                     const colSpanClass =
                                         widget.span === 1 ? 'col-span-1' :
@@ -200,10 +191,10 @@ export function SystemDiagnostics() {
                                     return (
                                         <div
                                             key={widget.id}
-                                            className={`${colSpanClass} bg-zinc-900/10 border border-zinc-800/20 rounded p-2 flex flex-col gap-1.5 hover:border-zinc-700/30 transition-all`}
+                                            className={`${colSpanClass} bg-zinc-900/20 border border-zinc-850 rounded-lg p-2 flex flex-col gap-1.5`}
                                         >
-                                            <div className="flex items-center gap-1.5 border-b border-zinc-800/40 pb-1 text-zinc-500 text-[8.5px] font-mono tracking-wider font-bold uppercase">
-                                                <WorkbenchIcon name={widget.icon} size={10} className="text-emerald-400/60" />
+                                            <div className="flex items-center gap-1.5 border-b border-zinc-850 pb-0.5 text-zinc-500 text-[8px] font-mono tracking-wider font-bold uppercase">
+                                                <WorkbenchIcon name={widget.icon} size={9} className="text-violet-500/60" />
                                                 <span>{widget.label}</span>
                                             </div>
                                             <div className="pt-0.5 flex-1 flex flex-col justify-center">

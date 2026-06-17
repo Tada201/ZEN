@@ -20,7 +20,7 @@ export function Sparkline({
     showDot = false,
     millisPerPixel = 50,
     lineWidth = 1.5,
-    shadowBlur = 4,
+    shadowBlur = 0,
     maxValue,
     delay = 1000
 }: SparklineProps) {
@@ -128,8 +128,10 @@ export function Sparkline({
             ctx.strokeStyle = resolvedColor;
             ctx.lineJoin = 'round';
             ctx.lineCap = 'round';
-            ctx.shadowBlur = shadowBlur;
-            ctx.shadowColor = resolvedColor;
+            if (shadowBlur > 0) {
+                ctx.shadowBlur = shadowBlur;
+                ctx.shadowColor = resolvedColor;
+            }
 
             // Filter points: We need points up to the renderTime
             const ptsToDraw = points.filter(p => p.time <= renderTime + 500);

@@ -1,8 +1,10 @@
 import { memo } from "react";
+import { useRenderLogger } from '@/hooks/useRenderLogger';
 import type { WidgetContext } from './types';
 
 export const DiskWidget = memo(function DiskWidget({ context }: { context: WidgetContext }) {
     const { disks } = context;
+    useRenderLogger("DiskWidget", { diskCount: disks.length });
 
     if (disks.length === 0) {
         return (
@@ -32,18 +34,18 @@ export const DiskWidget = memo(function DiskWidget({ context }: { context: Widge
                                 <span className="text-[10px] font-mono font-bold text-slate-400">
                                     {driveLetter}:
                                 </span>
-                                <span className="text-[9px] font-mono text-slate-600 px-1 border border-slate-800 rounded bg-slate-800/10">
+                                <span className="text-[9px] font-mono text-slate-600 px-1 border border-zinc-800 rounded bg-zinc-900/40">
                                     {disk.isRemovable ? 'REMOVABLE' : 'FIXED'}
                                 </span>
                             </div>
-                            <span className={`text-[10px] font-mono font-bold ${isAlert ? 'text-rose-500' : 'text-slate-400'}`}>
+                            <span className={`text-[10px] font-mono font-bold ${isAlert ? 'text-rose-500' : 'text-zinc-400'}`}>
                                 {Math.round(percent)}%
                             </span>
                         </div>
 
-                        <div className="h-1 bg-slate-800/50 rounded-full overflow-hidden">
+                        <div className="h-1 bg-zinc-850 rounded-full overflow-hidden border border-zinc-800/25">
                             <div
-                                className={`h-full transition-all duration-500 ${isAlert ? 'bg-rose-500/60' : 'bg-slate-500/60'}`}
+                                className={`h-full transition-all duration-500 rounded-full ${isAlert ? 'bg-rose-500/60' : 'bg-violet-500/60'}`}
                                 style={{ width: `${percent}%` }}
                             />
                         </div>

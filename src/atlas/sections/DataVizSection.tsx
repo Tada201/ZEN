@@ -1,5 +1,10 @@
 
-import { useMemo, useState } from "react";
+/*
+ * [DEMO-ONLY] DataVizSection - Chart showcase
+ * High GPU impact: 4 simultaneous Recharts SVG charts
+ * Only renders in design system explorer, NOT in main chat flow
+ */
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BarChart, Bar, AreaChart, Area, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, RadialBarChart, RadialBar, PolarAngleAxis } from "recharts";
 import { DemoCard, Section } from "../Section";
 
@@ -30,7 +35,27 @@ const PIE_DATA = [
 
 const PIE_COLORS = ["hsl(var(--primary))", "hsl(var(--primary-glow))", "hsl(var(--muted-foreground))"];
 
+function VisibilityWrapper({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setVisible(entry.isIntersecting),
+      { threshold: 0.1 }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+  return <div ref={ref}>{visible && children}</div>;
+}
+
 export function DataVizSection() {
+  const memoizedBarData = useMemo(() => BAR_DATA, []);
+  const memoizedLineData = useMemo(() => LINE_DATA, []);
+  const memoizedPieData = useMemo(() => PIE_DATA, []);
+
   return (
     <Section id="data-viz" title="Data Visualization" description="Charts, graphs, and interactive data displays.">
       <DemoCard
@@ -43,17 +68,19 @@ export function DataVizSection() {
         className="md:col-span-2 xl:col-span-2"
       >
         <div onClick={(e) => e.stopPropagation()} className="h-56">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={BAR_DATA}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="name" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
-              <YAxis tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
-              <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
-              <Legend wrapperStyle={{ fontSize: "12px" }} />
-              <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="cost" fill="hsl(var(--muted-foreground))" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <VisibilityWrapper>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={memoizedBarData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="name" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                <YAxis tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
+                <Legend wrapperStyle={{ fontSize: "12px" }} />
+                <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="cost" fill="hsl(var(--muted-foreground))" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </VisibilityWrapper>
         </div>
       </DemoCard>
 
@@ -66,8 +93,9 @@ export function DataVizSection() {
         }}
       >
         <div onClick={(e) => e.stopPropagation()} className="h-56">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={LINE_DATA}>
+          <VisibilityWrapper>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={memoizedLineData}>
               <defs>
                 <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
@@ -82,6 +110,7 @@ export function DataVizSection() {
               <Line type="monotone" dataKey="sessions" stroke="hsl(var(--primary-glow))" strokeWidth={2} dot={false} />
             </AreaChart>
           </ResponsiveContainer>
+        </VisibilityWrapper>
         </div>
       </DemoCard>
 
@@ -94,15 +123,17 @@ export function DataVizSection() {
         }}
       >
         <div onClick={(e) => e.stopPropagation()} className="h-56">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={PIE_DATA} cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={4} dataKey="value" stroke="none">
-                {PIE_DATA.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-              </Pie>
-              <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
-              <Legend wrapperStyle={{ fontSize: "12px" }} />
-            </PieChart>
-          </ResponsiveContainer>
+          <VisibilityWrapper>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={memoizedPieData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={4} dataKey="value" stroke="none">
+                  {memoizedPieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                </Pie>
+                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
+                <Legend wrapperStyle={{ fontSize: "12px" }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </VisibilityWrapper>
         </div>
       </DemoCard>
 
@@ -114,7 +145,9 @@ export function DataVizSection() {
           jsx: '<RadialBarChart><RadialBar dataKey="value" /></RadialBarChart>',
         }}
       >
-        <RadialGauges />
+        <VisibilityWrapper>
+          <RadialGauges />
+        </VisibilityWrapper>
       </DemoCard>
 
       <DemoCard

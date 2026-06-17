@@ -220,7 +220,7 @@ export function AssistantMessage({
                         ) : step.type === "reasoning" ? (
                           <ReasoningBlock 
                             content={step.content || ""} 
-                            isThinking={message.status === "sending" && idx === groupedSteps.length - 1}
+                            isThinking={message.status === "sending" && idx === visibleGroupedSteps.length - 1}
                           />
                         ) : step.type === "tool-group" && step.toolCalls ? (
                           <AgentExecutionTrace 

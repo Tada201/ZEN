@@ -2,7 +2,6 @@ use anyhow::Result;
 use chrono::Utc;
 use futures::stream::{FuturesUnordered, StreamExt};
 use tokio::time::timeout;
-use tokio_util::sync::CancellationToken;
 use tracing::{info, instrument, warn};
 use uuid::Uuid;
 
@@ -14,7 +13,6 @@ use crate::agent::task_queue::TaskQueue;
 use crate::agent::types::AgentResponse;
 use crate::db::models::{ChatMessage, OrchestrationPlan, OrchestrationTask};
 use crate::db::queries;
-use crate::llm::{ChatRequestConfig, LlmProvider};
 
 impl Orchestrator {
     /// Run the orchestrator loop for a complex goal

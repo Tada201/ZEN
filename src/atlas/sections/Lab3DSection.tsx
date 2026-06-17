@@ -1,3 +1,10 @@
+/* 
+ * [DEMO-ONLY] Lab3DSection - 3D component showcase
+ * This is NOT used in the main application flow.
+ * Location: /src/atlas/sections/ - Design system demos
+ * High GPU impact: 5 concurrent Three.js canvases with continuous animations
+ * Only renders when navigating to the design system explorer (viewMode="page" with activePage="lab-3d")
+ */
 import { Suspense, useMemo, useRef, useState } from "react";
 import type { Group, InstancedMesh, Mesh } from "three";
 import * as THREE from "three";

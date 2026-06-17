@@ -1,4 +1,4 @@
-@import "tailwindcss";
+﻿@import "tailwindcss";
 
 @keyframes premium-shimmer {
   0%, 100% { opacity: 0.55; }
@@ -50,6 +50,9 @@
   --color-destructive-foreground: hsl(0 0% 98%);
   --color-success: hsl(142 65% 50%);
   --color-warning: hsl(38 92% 55%);
+
+  --color-zinc-850: hsl(240 6% 13%);
+  --color-zinc-955: hsl(240 6% 7%);
 
   /* Popover and dropdown components (fix transparent select dropdowns) */
   --color-popover: hsl(225 8% 11%);
@@ -268,4 +271,81 @@ html[data-vibe="edex"] ::selection {
 .token.italic {
   font-style: italic;
 }
+.animate-text-shimmer {
+  background: linear-gradient(
+    90deg,
+    hsl(0 0% 98%) 0%,
+    hsl(262 83% 75%) 25%,
+    hsl(239 84% 75%) 50%,
+    hsl(262 83% 75%) 75%,
+    hsl(0 0% 98%) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: text-shimmer 4s linear infinite;
+}
 
+@keyframes text-shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer-text {
+  background: linear-gradient(
+    to right,
+    hsl(var(--muted-foreground)) 0%,
+    hsl(var(--foreground)) 50%,
+    hsl(var(--muted-foreground)) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 3s infinite linear;
+}
+
+@keyframes border-pulse {
+  0% { border-color: hsl(var(--primary) / 0.3); }
+  50% { border-color: hsl(var(--primary) / 0.8); }
+  100% { border-color: hsl(var(--primary) / 0.3); }
+}
+
+.animate-border-pulse {
+  animation: border-pulse 2s infinite ease-in-out;
+}
+
+@keyframes slow-shimmer {
+  0% { background-position: 160% 0; }
+  45% { background-position: -60% 0; }
+  100% { background-position: -60% 0; }
+}
+
+.animate-slow-shimmer {
+  background-image: linear-gradient(
+    105deg,
+    hsl(var(--muted-foreground)) 0%,
+    hsl(var(--muted-foreground)) 38%,
+    hsl(var(--foreground)) 48%,
+    hsl(var(--background)) 50%,
+    hsl(var(--foreground)) 52%,
+    hsl(var(--muted-foreground)) 62%,
+    hsl(var(--muted-foreground)) 100%
+  );
+  background-size: 420% 100%;
+  background-position: 160% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: slow-shimmer 4.8s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}

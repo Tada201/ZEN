@@ -1,14 +1,28 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+/*
+ * [DEMO-ONLY] MediaVisualDemos - Media showcase
+ * Medium GPU impact: Webcam video, canvas operations, image lightbox
+ * Only renders in design system explorer, NOT in main chat flow
+ */
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Camera, CameraOff, Download, LayoutGrid, Music, Rows3, Search, Share2, Upload, X } from "lucide-react";
+import { toast } from "sonner";
 import Lightbox from "yet-another-react-lightbox";
 import Thumbnails from "yet-another-react-lightbox/plugins/thumbnails";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import Slideshow from "yet-another-react-lightbox/plugins/slideshow";
 import Captions_ from "yet-another-react-lightbox/plugins/captions";
-import "yet-another-react-lightbox/styles.css";
-import "yet-another-react-lightbox/plugins/thumbnails.css";
-import "yet-another-react-lightbox/plugins/captions.css";
-import { toast } from "sonner";
+
+// Simple throttle utility
+function throttle<T extends (...args: any[]) => void>(fn: T, delay: number): T {
+  let lastCall = 0;
+  return ((...args: any[]) => {
+    const now = Date.now();
+    if (now - lastCall >= delay) {
+      lastCall = now;
+      fn(...args);
+    }
+  }) as T;
+}
 
 const SAMPLE_IMAGES = [
   { src: "https://picsum.photos/seed/Zen1/1200/800", title: "Mountain Vista", desc: "Morning light over alpine peaks", tag: "Nature" },
@@ -363,14 +377,15 @@ export function CompareSlider() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState(50);
   const dragging = useRef(false);
-
-  const update = (clientX: number) => {
+  
+  // Throttle updates to 60fps
+  const update = useCallback(throttle((clientX: number) => {
     const el = wrapRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const pct = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
     setPos(pct);
-  };
+  }, 16), []);
 
   useEffect(() => {
     const onMove = (e: MouseEvent | TouchEvent) => {
@@ -379,9 +394,9 @@ export function CompareSlider() {
       update(x);
     };
     const stop = () => { dragging.current = false; };
-    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mousemove", onMove, { passive: true });
     window.addEventListener("mouseup", stop);
-    window.addEventListener("touchmove", onMove);
+    window.addEventListener("touchmove", onMove, { passive: true });
     window.addEventListener("touchend", stop);
     return () => {
       window.removeEventListener("mousemove", onMove);
@@ -389,7 +404,7 @@ export function CompareSlider() {
       window.removeEventListener("touchmove", onMove);
       window.removeEventListener("touchend", stop);
     };
-  }, []);
+  }, [update]);
 
   return (
     <div onClick={(e) => e.stopPropagation()} className="space-y-2">

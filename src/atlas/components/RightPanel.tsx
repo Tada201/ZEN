@@ -120,7 +120,7 @@ export function RightPanel() {
     if (feature) return feature.label;
 
     const titles: Record<string, string> = {
-      metrics: 'System Health',
+      metrics: 'System Metrics',
       agents: 'Active Agents',
       artifacts: 'Artifacts',
       terminal: 'Terminal',

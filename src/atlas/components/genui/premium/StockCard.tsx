@@ -2,7 +2,12 @@ import { TrendingUp, TrendingDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function StockCard({ data }: { data: any }) {
-  const isUp = (data.change ?? 0) >= 0;
+  const priceVal = typeof data.price === 'number' ? data.price : parseFloat(data.price);
+  const changeVal = typeof data.change === 'number' ? data.change : parseFloat(data.change);
+  const changePercentVal = typeof data.changePercent === 'number' ? data.changePercent : parseFloat(data.changePercent);
+
+  const isUp = (!isNaN(changeVal) ? changeVal : 0) >= 0;
+
   return (
     <div className="rounded-2xl border border-white/[0.08] bg-black/40 backdrop-blur-md p-5 shadow-lg max-w-md">
       <div className="flex items-center justify-between mb-3">
@@ -11,13 +16,13 @@ export function StockCard({ data }: { data: any }) {
           <p className="text-[10px] text-white/40 uppercase tracking-wider">{data.companyName || 'Company Inc.'}</p>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-bold tracking-tighter text-white">${data.price?.toFixed(2) || '0.00'}</div>
+          <div className="text-2xl font-bold tracking-tighter text-white">${!isNaN(priceVal) ? priceVal.toFixed(2) : '0.00'}</div>
           <div className={cn(
             "flex items-center justify-end gap-1 text-xs font-semibold mt-0.5",
             isUp ? "text-emerald-400" : "text-rose-400"
           )}>
             {isUp ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-            <span>{isUp ? '+' : ''}{data.change?.toFixed(2) || '0.00'} ({data.changePercent?.toFixed(2) || '0.00'}%)</span>
+            <span>{isUp ? '+' : ''}{!isNaN(changeVal) ? changeVal.toFixed(2) : '0.00'} ({!isNaN(changePercentVal) ? changePercentVal.toFixed(2) : '0.00'}%)</span>
           </div>
         </div>
       </div>

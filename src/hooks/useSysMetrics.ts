@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { systemApi, type BackendSystemMetrics } from '@/api';
+import { useUIStore } from '@/lib/stores/useUIStore';
 
 export interface SystemMetrics {
     cpuBrand: string;
@@ -120,6 +121,9 @@ function detectActualGPU(): { name: string; memoryTotal: number } {
 
 export function useSysMetrics(intervalMs = 2000) {
     const gpuSpecs = useRef(detectActualGPU());
+    const rightPanelOpen = useUIStore(s => s.rightPanelOpen);
+    const activeRightTab = useUIStore(s => s.activeRightTab);
+    const isPaused = !rightPanelOpen || activeRightTab !== 'metrics';
 
     // Hardware specifications ref populated dynamically once from Tauri's Rust layer
     const hwInfoRef = useRef<{
@@ -444,10 +448,12 @@ export function useSysMetrics(intervalMs = 2000) {
             });
         };
 
+        if (isPaused) return;
+
         fetchMetrics();
         const timer = setInterval(fetchMetrics, intervalMs);
         return () => clearInterval(timer);
-    }, [intervalMs]);
+    }, [intervalMs, isPaused]);
 
     return metrics;
 }

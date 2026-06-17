@@ -14,7 +14,7 @@ export function MainArea({ children, className }: MainAreaProps) {
       <WorkspaceBackground />
 
       {/* Content overlay */}
-      <div className="relative z-10 w-full h-full flex flex-col bg-[#0b0b0d]/15 backdrop-blur-[0.5px]">
+      <div className="relative z-10 w-full h-full flex flex-col bg-[#0b0b0d]/15">
         {children}
       </div>
     </div>

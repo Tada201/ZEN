@@ -29,27 +29,54 @@ function trailingFencePrefix(text: string): string {
   return "";
 }
 
+function trailingXmlTagPrefix(text: string): string {
+  const lastLt = text.lastIndexOf("<");
+  if (lastLt === -1) return "";
+  const suffix = text.slice(lastLt).toLowerCase();
+  const target = "<tool_call>";
+  if (target.startsWith(suffix) && suffix !== target) {
+    return text.slice(lastLt);
+  }
+  return "";
+}
+
 export function filterToolProtocolStream(delta: string, pending = ""): ToolProtocolFilterResult {
   const input = pending + delta;
   let visible = "";
   let cursor = 0;
 
   while (cursor < input.length) {
-    const start = input.indexOf("```", cursor);
-    if (start === -1) {
+    const lowerInput = input.toLowerCase();
+    const startMd = input.indexOf("```", cursor);
+    const startXml = lowerInput.indexOf("<tool_call>", cursor);
+
+    if (startMd === -1 && startXml === -1) {
       const remainder = input.slice(cursor);
-      const trailing = trailingFencePrefix(remainder);
+      const trailingMd = trailingFencePrefix(remainder);
+      const trailingXml = trailingXmlTagPrefix(remainder);
+      const trailing = trailingMd.length > trailingXml.length ? trailingMd : trailingXml;
+
       visible += trailing ? remainder.slice(0, -trailing.length) : remainder;
       return { visible, pending: trailing };
     }
 
-    visible += input.slice(cursor, start);
-    const end = input.indexOf("```", start + 3);
-    if (end === -1) return { visible, pending: input.slice(start) };
+    const isMdFirst = startMd !== -1 && (startXml === -1 || startMd < startXml);
 
-    const fence = input.slice(start, end + 3);
-    if (!isToolProtocolFence(fence)) visible += fence;
-    cursor = end + 3;
+    if (isMdFirst) {
+      visible += input.slice(cursor, startMd);
+      const end = input.indexOf("```", startMd + 3);
+      if (end === -1) return { visible, pending: input.slice(startMd) };
+
+      const fence = input.slice(startMd, end + 3);
+      if (!isToolProtocolFence(fence)) visible += fence;
+      cursor = end + 3;
+    } else {
+      visible += input.slice(cursor, startXml);
+      const end = lowerInput.indexOf("</tool_call>", startXml + 11);
+      if (end === -1) return { visible, pending: input.slice(startXml) };
+
+      cursor = end + 12;
+    }
   }
 
   return { visible, pending: "" };
@@ -58,5 +85,11 @@ export function filterToolProtocolStream(delta: string, pending = ""): ToolProto
 export function stripToolProtocolText(text: string): string {
   const filtered = filterToolProtocolStream(text);
   if (!filtered.pending) return filtered.visible;
-  return isToolProtocolFence(filtered.pending) ? filtered.visible : filtered.visible + filtered.pending;
+
+  const lowerPending = filtered.pending.toLowerCase();
+  const isXml = lowerPending.startsWith("<tool_call") || (lowerPending.startsWith("<") && "<tool_call>".startsWith(lowerPending));
+  if (isXml || isToolProtocolFence(filtered.pending)) {
+    return filtered.visible;
+  }
+  return filtered.visible + filtered.pending;
 }

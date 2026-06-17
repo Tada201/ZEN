@@ -236,7 +236,8 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
         onClick={handleToggle}
         className={cn(
           'group flex min-h-8 w-full min-w-0 items-center gap-2 rounded-md border border-white/[0.08] bg-black/40 px-2 py-1 text-left backdrop-blur-sm transition-all duration-200',
-          'hover:border-white/[0.12] hover:bg-black/50'
+          'hover:border-white/[0.12] hover:bg-black/50',
+          status === 'running' && 'animate-border-pulse'
         )}
       >
         <span className={cn(
@@ -251,7 +252,7 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
 
         <span className={cn(
           'min-w-0 flex-1 truncate text-[12px] leading-5',
-          status === 'running' ? 'text-premium-shimmer text-zinc-300' : status === 'error' ? 'text-rose-300' : 'text-zinc-400'
+          status === 'running' ? 'animate-text-shimmer font-semibold' : status === 'error' ? 'text-rose-300' : 'text-zinc-400'
         )}>
           {actionText}
         </span>
