@@ -75,7 +75,7 @@ impl HardwareService {
                 .first()
                 .map(|c| c.brand().to_string())
                 .unwrap_or_else(|| "Unknown".to_string()),
-            cores: self.sys.physical_core_count().unwrap_or(0),
+            cores: System::physical_core_count().unwrap_or(0),
             threads: self.sys.cpus().len(),
             memory_gb: (self.sys.total_memory() as f64) / (1024.0 * 1024.0 * 1024.0),
             os: System::long_os_version().unwrap_or_else(|| "Unknown".to_string()),
