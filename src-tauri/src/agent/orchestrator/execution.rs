@@ -389,8 +389,8 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
         let first_chunk_sent = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let first_chunk_sent_clone = first_chunk_sent.clone();
 
-        // Text buffer: accumulates delta text and emits on every chunk (frontend rAF batches).
-        let buffer = std::sync::Arc::new(std::sync::Mutex::new((String::new(), "text")));
+        // Text buffer: accumulates delta text and emits on batch timer to prevent Tauri IPC drops.
+        let buffer = std::sync::Arc::new(std::sync::Mutex::new((String::new(), "text", std::time::Instant::now())));
         let buffer_clone = buffer.clone();
 
         let maybe_channel_clone = maybe_channel.clone();
@@ -448,6 +448,8 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                     }
                 };
 
+                let now = std::time::Instant::now();
+                
                 // If type changed, flush the old type immediately
                 if data.1 != chunk_type && !data.0.is_empty() {
                     let old_text = std::mem::take(&mut data.0);
@@ -461,24 +463,31 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                         message_id: None,
                     })
                     .emit_via(&app_clone_2, &maybe_channel_clone);
+                    
+                    data.0.push_str(&chunk_text);
+                    data.1 = chunk_type;
+                    data.2 = now;
+                } else {
+                    data.0.push_str(&chunk_text);
+                    data.1 = chunk_type;
+                    
+                    // Batch emits to prevent Tauri IPC drops
+                    if now.duration_since(data.2).as_millis() > 30 {
+                        let text = std::mem::take(&mut data.0);
+                        let current_type = data.1;
+                        data.2 = now;
+                        drop(data);
+
+                        AgentEvent::ChatChunk(ChatChunkPayload {
+                            chat_id: chat_id_owned_2.clone(),
+                            delta: text,
+                            r#type: current_type.to_string(),
+                            done: false,
+                            message_id: None,
+                        })
+                        .emit_via(&app_clone_2, &maybe_channel_clone);
+                    }
                 }
-
-                data.0.push_str(&chunk_text);
-                data.1 = chunk_type;
-
-                // Emit immediately — frontend rAF handles batching
-                let text = std::mem::take(&mut data.0);
-                let current_type = data.1;
-                drop(data);
-
-                AgentEvent::ChatChunk(ChatChunkPayload {
-                    chat_id: chat_id_owned_2.clone(),
-                    delta: text,
-                    r#type: current_type.to_string(),
-                    done: false,
-                    message_id: None,
-                })
-                .emit_via(&app_clone_2, &maybe_channel_clone);
             }
         });
 
