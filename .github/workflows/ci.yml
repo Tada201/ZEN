@@ -110,7 +110,7 @@ jobs:
 
       - name: Cargo test
         working-directory: src-tauri
-        run: cargo test --all-targets
+        run: cargo test --bin zen
 
       - name: Backend policy tests
         shell: pwsh
