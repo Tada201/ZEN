@@ -1,13 +1,6 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - master
-      - main
-      - "codex/**"
-      - "*integrated*"
-  pull_request:
   workflow_dispatch:
 
 concurrency:
