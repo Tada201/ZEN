@@ -116,6 +116,9 @@ jobs:
         shell: pwsh
         run: npm run test:backend -- -NoKillStaleBuilds
 
+      - name: Install ripgrep
+        run: choco install ripgrep -y
+
       - name: Quality gates
         shell: pwsh
         run: npm run quality:fast
