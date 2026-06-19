@@ -22,6 +22,84 @@ import {
   stripCodeFence,
   removeAlertTag
 } from "./MarkdownHelperComponents";
+import { ExternalLink } from "lucide-react";
+
+// ── References grid component ──────────────────────────────────────────────
+
+interface ReferenceItem {
+  number: number;
+  title: string;
+  url: string;
+}
+
+function ReferencesGrid({ items }: { items: ReferenceItem[] }) {
+  return (
+    <div className="my-6">
+      <h2 className="mb-3 text-xl font-semibold tracking-tight text-foreground/90">
+        References
+      </h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {items.map((ref) => (
+          <a
+            key={ref.number}
+            href={ref.url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-start gap-2.5 rounded-lg border border-border/30 bg-card/60 px-3 py-2 text-[13px] leading-snug transition-all hover:border-border/60 hover:bg-card hover:shadow-sm"
+          >
+            <span className="mt-[1px] flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+              {ref.number}
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block truncate text-foreground/90">{ref.title}</span>
+              <span className="block truncate text-[11px] text-muted-foreground/60">{ref.url}</span>
+            </span>
+            <ExternalLink className="mt-1 h-3 w-3 shrink-0 text-muted-foreground/40" />
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/// Parse a markdown ## References section into structured items.
+/// Returns the items and the content with the references section removed.
+function parseReferencesSection(content: string): {
+  clean: string;
+  items: ReferenceItem[] | null;
+} {
+  // Match ## References heading followed by a blank line and numbered list items
+  const refMatch = content.match(
+    /## References\n\n((?:\d+\.\s+[^\n]+(?:\n|$))+)/
+  );
+  if (!refMatch) return { clean: content, items: null };
+
+  const items: ReferenceItem[] = refMatch[1]
+    .trim()
+    .split('\n')
+    .map((line) => {
+      const numMatch = line.match(/^(\d+)\.\s+/);
+      const number = numMatch ? parseInt(numMatch[1], 10) : 0;
+      const text = line.replace(/^\d+\.\s+/, '').trim();
+      const linkMatch = text.match(/^\[(.+?)\]\((.+?)\)$/);
+      if (linkMatch) {
+        return { number, title: linkMatch[1], url: linkMatch[2] };
+      }
+      // Fallback: use the whole text as both title and url
+      return { number, title: text, url: text };
+    })
+    .filter((item) => item.number > 0);
+
+  if (items.length === 0) return { clean: content, items: null };
+
+  // Remove the references section from the content (heading + list)
+  const clean = content.replace(
+    /## References\n\n(?:\d+\.\s+[^\n]+(?:\n|$))+/,
+    ''
+  );
+
+  return { clean, items };
+}
 
 const MermaidDiagram = React.lazy(() => import("./MermaidDiagram").then(m => ({ default: m.MermaidDiagram })));
 const ChartBlock = React.lazy(() => import("./ChartBlock").then(m => ({ default: m.ChartBlock })));
@@ -141,10 +219,16 @@ export function MarkdownContent({
     && mainContent.length < 48
     && !/[\\`*_{}\[\]<>#|$~]/.test(mainContent);
 
-  // 2. Split main content into memoizable blocks
+  // 2a. Parse & extract ## References section for compact grid rendering
+  const { clean: refStrippedContent, items: refItems } = useMemo(
+    () => parseReferencesSection(mainContent),
+    [mainContent]
+  );
+
+  // 2b. Split main content into memoizable blocks (with references removed)
   const blocks = useMemo(
-    () => splitMarkdownIntoBlocks(mainContent, !!isStreaming),
-    [mainContent, isStreaming]
+    () => splitMarkdownIntoBlocks(refStrippedContent, !!isStreaming),
+    [refStrippedContent, isStreaming]
   );
 
   // 3. Build stable components reference for markdown rendering
@@ -311,6 +395,10 @@ export function MarkdownContent({
             />
           ))}
         </div>
+      )}
+      {/* Two-column References grid (always shown, even if blocks are empty) */}
+      {refItems && refItems.length > 0 && (
+        <ReferencesGrid items={refItems} />
       )}
       {!mainContent && isStreaming && (
         <div className="flex items-center gap-2 opacity-50 py-4" aria-live="polite">

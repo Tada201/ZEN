@@ -204,6 +204,17 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
           // Guard: if already failed (chat:error fired first), don't overwrite
           if (assistant.status === "failed") return prev;
 
+          // Guard: for deep_research messages, the final content arrives
+          // via the chat:message event (not chat:done). Don't blank it
+          // if we haven't received chat:message yet — let that handler
+          // populate the content. Also skip query invalidation since
+          // the chat:message handler will update the message in-place.
+          if (assistant.kind === "deep_research") {
+            const next = [...prev];
+            next[assistantIdx] = markMessageAsFinished(assistant, isCancelled, reason);
+            return next;
+          }
+
           const finalContent = isCancelled && event.payload.content
             ? assistant.content
             : (event.payload.content || assistant.content);
@@ -216,7 +227,14 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
           return next;
         });
 
-        queryClient.invalidateQueries({ queryKey: ["messages", chatId] });
+        // Skip query invalidation for deep_research — the chat:message
+        // handler (in useAgentEvents.ts) updates the message in-place,
+        // and we don't want the refetch to replace the live state.
+        const currentMessages = useChatStore.getState().sessionMessages[chatId];
+        const hasDeepResearch = currentMessages?.some((m) => m.kind === "deep_research");
+        if (!hasDeepResearch) {
+          queryClient.invalidateQueries({ queryKey: ["messages", chatId] });
+        }
         ttftReport(chatId, reason);
       });
 
@@ -254,37 +272,12 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         useChatStore.getState().setStreamingForChat(chatId, false);
       });
 
-      const unlistenResearchStep = await listenAppEvent("chat:research-step", (event) => {
-        const chatId = event.payload.chat_id;
-        if (!chatId) return;
-
-        useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-          const assistantIdx = findWritableAssistantIndex(prev);
-          if (assistantIdx === -1) return prev;
-          const assistant = prev[assistantIdx];
-
-          const prevResearchSteps = assistant.metadata?.researchSteps || [];
-          const existingStepIdx = prevResearchSteps.findIndex(s => s.text === event.payload.text);
-          const researchSteps = existingStepIdx >= 0
-            ? prevResearchSteps.map((s, i) => i === existingStepIdx ? { ...s, status: event.payload.status } : s)
-            : [...prevResearchSteps, { text: event.payload.text, status: event.payload.status }];
-
-          const next = [...prev];
-          next[assistantIdx] = {
-            ...assistant,
-            metadata: { ...assistant.metadata, researchSteps }
-          };
-          return next;
-        });
-      });
-
       const unlisteners = [
         unlistenChunkFirst,
         unlistenChunk,
         unlistenDone,
         unlistenError,
         unlistenStreamReset,
-        unlistenResearchStep,
       ];
 
       if (didCancel) {

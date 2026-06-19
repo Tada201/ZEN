@@ -31,7 +31,6 @@ const INLINE_ACTION_KINDS = new Set([
   "agent_complete",
   "approval_request",
   "clarification_request",
-  "deep_research",
   "error",
   "system",
   "orchestrator_progress",
@@ -158,8 +157,72 @@ export function useAgentEvents() {
         }
 
         useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
+          // Special handling for deep_research: find by kind, not by id
+          // The optimistic placeholder has a temp ID ("temp-assistant-..."),
+          // while the backend emits the real DB message_id. Matching by id
+          // would fail, creating a duplicate message. Instead, find the
+          // existing deep_research message by kind and update it in-place.
+          // Prefer the actively-streaming (sending) one to avoid overwriting
+          // a completed message if multiple deep research queries coexist.
+          // Note: findIndex returns -1 (not null/undefined), so explicit
+          // conditional fallback is required — ?? won't work.
+          if (kind === "deep_research" && payload.content) {
+            let researchIdx = prev.findIndex(
+              (m) => m.kind === "deep_research" && m.status === "sending"
+            );
+            if (researchIdx === -1) {
+              researchIdx = prev.findIndex((m) => m.kind === "deep_research");
+            }
+            if (researchIdx !== -1) {
+              const next = [...prev];
+              next[researchIdx] = {
+                ...next[researchIdx],
+                id: payload.id,  // Replace temp ID with real DB ID
+                content: payload.content,
+                status: "sent",
+                createdAt: payload.timestamp
+                  ? new Date(payload.timestamp).getTime()
+                  : next[researchIdx].createdAt,
+              };
+              return next;
+            }
+            // No existing deep_research message found — fall through
+            // to create a new one as a regular message
+          }
+
           if (prev.some((m) => m.id === payload.id)) {
             return prev;
+          }
+
+          // User messages: replace the optimistic temp-user entry in-place
+          // when the backend emits the persisted message with a real DB ID.
+          // The optimistic placeholder has "temp-user-{timestamp}" while the
+          // backend emits the real message_id, so matching by id would fail
+          // and create a duplicate. Instead, find the last temp-user message
+          // and swap its id with the persisted one.
+          if (payload.role === "user") {
+            // Find the last user message with a temp ID — that's our optimistic
+            // placeholder that needs to be replaced by the persisted version.
+            // Use findLastIndex to get the most recent user message.
+            let tempUserIdx = -1;
+            for (let i = prev.length - 1; i >= 0; i--) {
+              if (prev[i].role === "user" && prev[i].id.startsWith("temp-user-")) {
+                tempUserIdx = i;
+                break;
+              }
+            }
+            if (tempUserIdx !== -1) {
+              const next = [...prev];
+              next[tempUserIdx] = {
+                ...next[tempUserIdx],
+                id: payload.id,
+                content: payload.content || next[tempUserIdx].content,
+                createdAt: payload.timestamp
+                  ? new Date(payload.timestamp).getTime()
+                  : next[tempUserIdx].createdAt,
+              };
+              return next;
+            }
           }
 
           const newMessage: Message = {
@@ -330,11 +393,35 @@ export function useAgentEvents() {
             const msg = next[lastIdx];
             const meta = msg.metadata || {};
             const prevSteps = meta.researchSteps || [];
+
+            // Preserve agent_index and agent_name when present
+            const step = payload.agent_index !== undefined
+              ? {
+                  text: payload.text,
+                  status: payload.status,
+                  agentIndex: payload.agent_index,
+                  agentName: payload.agent_name,
+                  phase: payload.phase,
+                }
+              : {
+                  text: payload.text,
+                  status: payload.status,
+                  phase: payload.phase,
+                };
             
-            const existingIdx = prevSteps.findIndex((s) => s.text === payload.text);
+            // When agent_index is present, also match by agentIndex to prevent
+            // step-dedup collisions between parallel sub-agents fetching the
+            // same URL title.
+            const existingIdx = payload.agent_index !== undefined
+              ? prevSteps.findIndex(
+                  (s) =>
+                    s.text === payload.text &&
+                    (s as { agentIndex?: number }).agentIndex === payload.agent_index
+                )
+              : prevSteps.findIndex((s) => s.text === payload.text);
             const steps = existingIdx !== -1
               ? prevSteps.map((s, i) => i === existingIdx ? { ...s, status: payload.status } : s)
-              : [...prevSteps, { text: payload.text, status: payload.status }];
+              : [...prevSteps, step];
             
             next[lastIdx] = { ...msg, metadata: { ...meta, researchSteps: steps } };
           }

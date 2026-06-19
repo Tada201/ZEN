@@ -1,3 +1,4 @@
+pub mod calculator;
 pub mod capability;
 pub mod fs_tools;
 pub mod manager;
@@ -451,6 +452,7 @@ pub fn init_tool_registry(permissions: ToolPermissions) -> ToolRegistry {
     let mut registry = ToolRegistry::with_permissions(permissions);
 
     // Register built-in tools
+    registry.register(Arc::new(self::calculator::CalculatorTool));
     registry.register(Arc::new(SystemMetricsTool));
     registry.register(Arc::new(WebFetchTool));
     registry.register(Arc::new(crate::search::WebSearchTool));

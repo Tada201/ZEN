@@ -149,6 +149,19 @@ impl ProgressiveToolRegistry {
         );
 
         self.register_metadata(ToolMetadata::new(
+            "web_fetch",
+            "Web Fetch",
+            "Fetch and retrieve the full content of a web page or URL. Use when you need to read the complete content of a specific web page.",
+            "search",
+            vec!["fetch", "web", "url", "page", "content", "download"],
+            DetailLevel::Standard,
+        ));
+        self.tool_factory.insert(
+            "web_fetch".to_string(),
+            Box::new(|| Arc::new(crate::tools::web_fetch::WebFetchTool) as Arc<dyn AgentTool>),
+        );
+
+        self.register_metadata(ToolMetadata::new(
             "list_tools",
             "List Available Tools",
             "Lists all available tools with their descriptions. Use to see what tools are currently accessible.",
@@ -535,6 +548,10 @@ impl ProgressiveToolRegistry {
         guard.insert(
             "web_search".to_string(),
             Arc::new(crate::search::tool::WebSearchTool),
+        );
+        guard.insert(
+            "web_fetch".to_string(),
+            Arc::new(crate::tools::web_fetch::WebFetchTool),
         );
         guard.insert(
             "vector_search".to_string(),

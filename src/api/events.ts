@@ -147,6 +147,9 @@ export interface ChatResearchStepEventPayload {
   message_id?: string;
   text: string;
   status: ResearchStep["status"];
+  phase?: string;
+  agent_index?: number;
+  agent_name?: string;
 }
 
 export interface AgentChunkEventPayload {

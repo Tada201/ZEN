@@ -1,9 +1,16 @@
+use std::sync::Arc;
+
+use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{json, Value};
 use tauri::AppHandle;
+use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 use url::Url;
+
+use crate::agent::tools::AgentTool;
 
 use super::url_safety::{
     resolve_redirect_url, validate_public_http_url, validate_public_ip, MAX_DIRECT_RESPONSE_BYTES,
@@ -338,6 +345,36 @@ impl Tool for WebFetchTool {
             }),
             metadata: None,
         })
+    }
+}
+
+#[async_trait]
+impl AgentTool for WebFetchTool {
+    fn id(&self) -> &str {
+        "web_fetch"
+    }
+
+    fn description(&self) -> &str {
+        "Fetches the text content of a given HTTP/HTTPS URL. Use this to read web pages or APIs."
+    }
+
+    fn input_schema(&self) -> Value {
+        self.parameters_schema()
+    }
+
+    async fn run(
+        &self,
+        app: AppHandle,
+        chat_id: String,
+        input: Value,
+        _depth: u32,
+        _allowed_tools: Option<Arc<Mutex<std::collections::HashSet<String>>>>,
+        _token: CancellationToken,
+    ) -> Result<Value> {
+        self.execute(app, chat_id, input)
+            .await
+            .map(|output| output.content)
+            .map_err(|e| anyhow::anyhow!("{}", e))
     }
 }
 

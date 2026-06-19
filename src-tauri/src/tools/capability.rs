@@ -112,6 +112,10 @@ pub(crate) fn tool_aliases(id: &str) -> &'static [&'static str] {
         "get_weather" => &["forecast", "weather"],
         "get_earthquakes" => &["seismic", "earthquake", "quake"],
         "get_military_aircraft" => &["aircraft", "adsb", "radar", "planes"],
+        "calculator" => &[
+            "math", "calc", "compute", "arithmetic", "statistics", "stats",
+            "mean", "median", "standard deviation", "percentage",
+        ],
         _ => &[],
     }
 }

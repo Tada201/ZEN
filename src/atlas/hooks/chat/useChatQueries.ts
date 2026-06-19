@@ -359,6 +359,12 @@ export function useChatQueries() {
     if (fetchedMessages && currentSessionId && !isSessionStreaming) {
       if (isMessagesFetching) return;
       const currentMessages = useChatStore.getState().sessionMessages[currentSessionId] ?? [];
+
+      // Guard: deep_research messages are updated in-place by the chat:message
+      // and chat:done event handlers. Don't let stale fetched data overwrite
+      // the live message state that still contains deep research content.
+      if (currentMessages.some((m) => m.kind === "deep_research")) return;
+
       const latestFetchedAssistantIndex = fetchedMessages.reduce((latestIndex, message, index) =>
         message.role === "assistant" ? index : latestIndex,
       -1);

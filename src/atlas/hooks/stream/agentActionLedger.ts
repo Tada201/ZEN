@@ -142,13 +142,7 @@ function getActiveAssistantIndex(messages: Message[], preferredMessageId?: strin
     if (exact !== -1) return exact;
   }
 
-  const writable = findWritableAssistantIndex(messages);
-  if (writable !== -1) return writable;
-
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === "assistant") return i;
-  }
-  return -1;
+  return findWritableAssistantIndex(messages);
 }
 
 export function summarizeAction(payload: AgentActionEventPayload, kind: string): string {
