@@ -17,6 +17,7 @@ import { useVoiceActivityLoop } from './useVoiceActivityLoop';
 import { useBoardEventListener } from './useBoardEventListener';
 import { useVoiceAgentActivity } from './useVoiceAgentActivity';
 import type { SttServiceStatus, TtsServiceStatus } from './voiceStatus';
+import { isWebSpeechRecognitionSupported } from '@/lib/voice/webSpeechRecognition';
 
 export function VoiceModeOverlay({
     isOpen,
@@ -76,6 +77,7 @@ export function VoiceModeOverlay({
     const [logLines, setLogLines] = useState<string[]>([]);
     const [micStatus, setMicStatus] = useState<'inactive' | 'live' | 'error'>('inactive');
     const [sttStatus, setSttStatus] = useState<SttServiceStatus>('idle');
+    const [moonshineFallback, setMoonshineFallback] = useState(false);
     const [ttsStatus, setTtsStatus] = useState<TtsServiceStatus>('idle');
     const [toolAction, setToolAction] = useState<string | null>(null);
     const [pttHeld, setPttHeld] = useState(false);
@@ -158,13 +160,19 @@ export function VoiceModeOverlay({
         setSubtitleSpeaker,
         setUserSpeechText,
     });
-    const { moonshineReadyRef, startMoonshineRecognition, stopMoonshineRecognition } = useMoonshineStt({
+    const handleMoonshineFallbackState = useCallback((active: boolean) => {
+        if (active && !isWebSpeechRecognitionSupported()) return false;
+        setMoonshineFallback(active);
+        return true;
+    }, []);
+    const { moonshineFallbackRef, moonshineReadyRef, resetMoonshineFallback, startMoonshineRecognition, stopMoonshineRecognition } = useMoonshineStt({
         appendLog,
         onTranscript,
         setSttStatus,
         setSubtitleSpeaker,
         setUserSpeechText,
         setVoiceState,
+        onFallbackStateChange: handleMoonshineFallbackState,
     });
     useEffect(() => {
         if (!voiceModeOpen || sttEngine !== 'whisper') {
@@ -291,6 +299,7 @@ export function VoiceModeOverlay({
         gainNodeRef,
         heardSpeechRef,
         isOpenRef,
+        moonshineFallbackRef,
         moonshineGateRef,
         moonshineReadyRef,
         moonshineStreamRef,
@@ -378,7 +387,7 @@ export function VoiceModeOverlay({
         }
         else { cleanupAudio(); }
         return () => cleanupAudio();
-    }, [voiceModeOpen, initMic, cleanupAudio, resetCurrentStage, saveCurrentBoard, startStage, applyStageBlock, startWebRecognition, sttEngine, voiceInputMode]);
+    }, [voiceModeOpen, initMic, cleanupAudio, resetCurrentStage, resetMoonshineFallback, saveCurrentBoard, startStage, applyStageBlock, startWebRecognition, sttEngine, voiceInputMode]);
 
     useEffect(() => {
         if (!voiceModeOpen || ttsEngine !== 'piper') return;
@@ -412,9 +421,12 @@ export function VoiceModeOverlay({
 
     if (!voiceModeOpen) return null;
 
-    const whisperBackend = sttEngine === 'web'
+    const activeSttEngine = sttEngine === 'moonshine' && moonshineFallback ? 'web' : sttEngine;
+    const activeSttModelLabel = moonshineFallback ? 'Web Speech fallback' : sttModelLabel;
+
+    const whisperBackend = activeSttEngine === 'web'
         ? 'browser-os'
-        : sttEngine === 'system'
+        : activeSttEngine === 'system'
             ? 'os-native'
             : sttEngine === 'moonshine'
                 ? 'local-cpu'
@@ -425,9 +437,9 @@ export function VoiceModeOverlay({
             : whisperRuntime.recommended_backend !== 'cpu'
                 ? `Using CPU. ${whisperRuntime.recommended_backend.toUpperCase()} is recommended for ${whisperRuntime.detected_gpu_vendors.join('/')}, but its runtime is not installed.`
                 : 'Using CPU whisper-server. No supported GPU runtime was detected.'
-        : sttEngine === 'whisper'
+        : activeSttEngine === 'whisper'
             ? 'Checking Whisper runtime backend...'
-            : sttEngine === 'web'
+            : activeSttEngine === 'web'
                 ? 'Speech recognition is provided by the current WebView browser or its operating-system service.'
                 : sttEngine === 'system'
                     ? 'Speech recognition is provided by the operating system.'
@@ -453,8 +465,8 @@ export function VoiceModeOverlay({
             onRequestClose={requestVoiceExit}
             onToggleDiagnostics={() => setShowDiagnostics((value) => !value)}
             showDiagnostics={showDiagnostics}
-            sttEngine={sttEngine}
-            sttModel={sttModelLabel}
+            sttEngine={activeSttEngine}
+            sttModel={activeSttModelLabel}
             sttStatus={sttStatus}
             ttsStatus={ttsStatus}
             subtitleSpeaker={subtitleSpeaker}
@@ -462,7 +474,7 @@ export function VoiceModeOverlay({
             tokensPerSec={tokensPerSec}
             toolAction={toolAction}
             ttsModel={ttsModelLabel}
-            captionsAvailable={sttEngine === 'web'}
+            captionsAvailable={activeSttEngine === 'web'}
             pttHeld={pttHeld}
             userSpeechText={userSpeechText}
             aiSpeechText={aiSpeechText}

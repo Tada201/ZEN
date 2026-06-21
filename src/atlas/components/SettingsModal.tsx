@@ -36,6 +36,7 @@ const AudioSettings = React.lazy(() => import("@/components/settings/Tabs/AudioS
 const ChatSettings = React.lazy(() => import("@/components/settings/Tabs/ChatSettings").then(m => ({ default: m.ChatSettings })));
 const GUISettings = React.lazy(() => import("@/components/settings/Tabs/GUISettings").then(m => ({ default: m.GUISettings })));
 const IntelligenceSettings = React.lazy(() => import("@/components/settings/Tabs/IntelligenceSettings").then(m => ({ default: m.IntelligenceSettings })));
+const DeepResearchSettings = React.lazy(() => import("@/components/settings/Tabs/DeepResearchSettings").then(m => ({ default: m.DeepResearchSettings })));
 const SystemSettings = React.lazy(() => import("@/components/settings/Tabs/SystemSettings").then(m => ({ default: m.SystemSettings })));
 const TerminalSettings = React.lazy(() => import("@/components/settings/Tabs/TerminalSettings").then(m => ({ default: m.TerminalSettings })));
 const WorkspaceSettings = React.lazy(() => import("@/components/settings/Tabs/WorkspaceSettings").then(m => ({ default: m.WorkspaceSettings })));
@@ -330,6 +331,10 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
 
                 {activeTab === "intelligence" && (
                   <IntelligenceSettings settings={settings} onUpdate={handleUpdate} />
+                )}
+
+                {activeTab === "deep-research" && (
+                  <DeepResearchSettings />
                 )}
 
                 {activeTab === "agents" && (

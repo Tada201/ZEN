@@ -141,6 +141,7 @@ pub struct UpdateMessage<'a> {
     pub tokens_out: Option<i64>,
     pub tool_calls: Option<&'a str>,
     pub reasoning_details: Option<&'a str>,
+    pub metadata: Option<&'a str>,
 }
 
 impl<'a> Default for UpdateMessage<'a> {
@@ -154,6 +155,7 @@ impl<'a> Default for UpdateMessage<'a> {
             tokens_out: None,
             tool_calls: None,
             reasoning_details: None,
+            metadata: None,
         }
     }
 }
@@ -207,7 +209,7 @@ pub async fn update_message(pool: &SqlitePool, msg: &UpdateMessage<'_>) -> ZenRe
 
     // 2. Update message
     sqlx::query(
-        "UPDATE messages SET content = ?, is_complete = ?, tokens_in = ?, tokens_out = ?, tool_calls = ?, reasoning_details = COALESCE(?, reasoning_details) WHERE id = ?"
+        "UPDATE messages SET content = ?, is_complete = ?, tokens_in = ?, tokens_out = ?, tool_calls = ?, reasoning_details = COALESCE(?, reasoning_details), metadata = COALESCE(?, metadata) WHERE id = ?"
     )
     .bind(msg.content)
     .bind(msg.is_complete as i32)
@@ -215,6 +217,7 @@ pub async fn update_message(pool: &SqlitePool, msg: &UpdateMessage<'_>) -> ZenRe
     .bind(msg.tokens_out)
     .bind(merged_tool_calls)
     .bind(msg.reasoning_details)
+    .bind(msg.metadata)
     .bind(msg.id)
     .execute(&mut *tx)
     .await?;

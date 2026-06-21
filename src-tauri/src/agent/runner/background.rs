@@ -257,7 +257,16 @@ struct CompactionParams {
 }
 
 async fn perform_background_compaction(params: CompactionParams) -> Result<()> {
-    let CompactionParams { app, db, chat_id, active_model, summarization_model, compaction_threshold, compaction_token_threshold, summarization_token_budget } = params;
+    let CompactionParams {
+        app,
+        db,
+        chat_id,
+        active_model,
+        summarization_model,
+        compaction_threshold,
+        compaction_token_threshold,
+        summarization_token_budget,
+    } = params;
     let active_msgs = queries::get_active_messages(&db, &chat_id).await?;
 
     let active_chat_msgs: Vec<ChatMessage> = active_msgs

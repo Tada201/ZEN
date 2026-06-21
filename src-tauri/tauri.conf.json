@@ -27,7 +27,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["msi"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -37,18 +37,7 @@
     ],
     "resources": [
       "resources/VISUALIZATION_GUIDE.md",
-      "resources/agents/*.json",
-      "resources/models/*.bin",
-      "resources/models/*.onnx",
-      "resources/models/*.json",
-      "resources/binaries/piper/*.exe",
-      "resources/binaries/piper/*.dll",
-      "resources/binaries/piper/*.ort",
-      "resources/binaries/whisper/*.exe",
-      "resources/binaries/whisper/**/*.exe",
-      "resources/binaries/piper/espeak-ng-data/**/*",
-      "resources/binaries/whisper/*.dll",
-      "resources/binaries/whisper/**/*.dll"
+      "resources/agents/*.json"
     ]
   },
   "plugins": {}

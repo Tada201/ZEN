@@ -59,7 +59,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
       delete buffers[chatId];
 
       setSessionMessages(chatId, (prev: Message[]) => {
-        const assistantIdx = findWritableAssistantIndex(prev);
+        const assistantIdx = findWritableAssistantIndex(prev, chatId);
         if (assistantIdx === -1) return prev;
 
         const next = [...prev];
@@ -182,7 +182,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         } else {
           // No pending text, but still clear the thinking flag
           useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-            const assistantIdx = findWritableAssistantIndex(prev);
+            const assistantIdx = findWritableAssistantIndex(prev, chatId);
             if (assistantIdx === -1) return prev;
 
             const next = [...prev];
@@ -192,12 +192,13 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         }
 
         useChatStore.getState().setStreamingForChat(chatId, false);
+        useChatStore.getState().setActiveAssistantForChat(chatId, null);
 
         const reason: string = event.payload.reason || "complete";
         const isCancelled = reason === "cancelled";
 
         useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-          const assistantIdx = findWritableAssistantIndex(prev);
+          const assistantIdx = findWritableAssistantIndex(prev, chatId);
           if (assistantIdx === -1) return prev;
           const assistant = prev[assistantIdx];
 
@@ -242,24 +243,32 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         const chatId = event.payload.chat_id;
         if (!chatId) return;
 
+        const activeAssistantId = useChatStore.getState().getActiveAssistantForChat(chatId);
+        if (!activeAssistantId) return;
+
+        const recoverable = event.payload.recoverable === true;
+        const errorMessage = event.payload.error || "The model stream stopped before returning output.";
+
         clearHeartbeatTimeout(chatId);
         clearChunkTrackingForChat(chatId, chunkBuffersRef.current, firstChunkDeltas.current);
-        console.error("[chat:error]", event.payload.error);
+        console.error("[chat:error]", errorMessage);
         ttftReport(chatId, "error");
         let appliedToSendingAssistant = false;
         useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-          const assistantIdx = findWritableAssistantIndex(prev);
+          const assistantIdx = findWritableAssistantIndex(prev, chatId);
           if (assistantIdx === -1) return prev;
+          if (prev[assistantIdx].id !== activeAssistantId) return prev;
           if (prev[assistantIdx].status !== "sending") return prev;
 
           const next = [...prev];
-          next[assistantIdx] = markMessageAsFailed(next[assistantIdx], event.payload.error || "The model stream stopped before returning output.");
+          next[assistantIdx] = markMessageAsFailed(next[assistantIdx], errorMessage, recoverable);
           appliedToSendingAssistant = true;
           return next;
         });
         useChatStore.getState().setStreamingForChat(chatId, false);
-        if (appliedToSendingAssistant) {
-          toast.error(event.payload.error || "The model stream stopped before returning output.");
+        useChatStore.getState().setActiveAssistantForChat(chatId, null);
+        if (appliedToSendingAssistant && !recoverable) {
+          toast.error(errorMessage);
         }
       });
 

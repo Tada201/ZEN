@@ -9,7 +9,6 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 #[derive(Debug, Clone)]
 pub struct RuntimeResources {
     app_data_dir: PathBuf,
-    resource_dir: PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -20,16 +19,14 @@ pub struct ResolvedBinary {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeBinarySource {
-    Bundled,
     AppData,
     PathLookup,
 }
 
 impl RuntimeResources {
-    pub fn new(app_data_dir: &Path, resource_dir: &Path) -> Self {
+    pub fn new(app_data_dir: &Path, _resource_dir: &Path) -> Self {
         Self {
             app_data_dir: app_data_dir.to_path_buf(),
-            resource_dir: resource_dir.to_path_buf(),
         }
     }
 
@@ -37,28 +34,22 @@ impl RuntimeResources {
         &self.app_data_dir
     }
 
-    pub fn bundled_model_path(&self, model_name: &str) -> PathBuf {
-        self.resource_dir
-            .join("resources")
-            .join("models")
-            .join(model_name)
-    }
-
     pub fn downloaded_model_path(&self, model_name: &str) -> PathBuf {
         self.app_data_dir.join("models").join(model_name)
     }
 
     pub fn whisper_model_path(&self, model_name: &str) -> PathBuf {
-        let bundled = self.bundled_model_path(model_name);
-        if bundled.exists() {
-            bundled
-        } else {
-            self.downloaded_model_path(model_name)
-        }
+        self.downloaded_model_path(model_name)
     }
 
     pub fn ensure_models_dir(&self) -> Result<PathBuf, std::io::Error> {
         let dir = self.app_data_dir.join("models");
+        std::fs::create_dir_all(&dir)?;
+        Ok(dir)
+    }
+
+    pub fn ensure_voices_dir(&self) -> Result<PathBuf, std::io::Error> {
+        let dir = self.app_data_dir.join("voices");
         std::fs::create_dir_all(&dir)?;
         Ok(dir)
     }
@@ -68,37 +59,27 @@ impl RuntimeResources {
     }
 
     pub fn whisper_cuda_server_path(&self) -> PathBuf {
-        self.resource_dir
-            .join("resources")
-            .join("binaries")
+        self.app_data_dir
+            .join("runtimes")
             .join("whisper")
             .join("whisper-cublas")
             .join("whisper-server.exe")
     }
 
     pub fn whisper_app_data_cuda_server_path(&self) -> PathBuf {
-        self.app_data_dir
-            .join("binaries")
-            .join("whisper")
-            .join("whisper-cublas")
-            .join("whisper-server.exe")
+        self.whisper_cuda_server_path()
     }
 
     pub fn whisper_vulkan_server_path(&self) -> PathBuf {
-        self.resource_dir
-            .join("resources")
-            .join("binaries")
+        self.app_data_dir
+            .join("runtimes")
             .join("whisper")
             .join("whisper-vulkan")
             .join("whisper-server.exe")
     }
 
     pub fn whisper_app_data_vulkan_server_path(&self) -> PathBuf {
-        self.app_data_dir
-            .join("binaries")
-            .join("whisper")
-            .join("whisper-vulkan")
-            .join("whisper-server.exe")
+        self.whisper_vulkan_server_path()
     }
 
     pub fn remove_downloaded_model(&self, model_name: &str) -> Result<(), String> {
@@ -142,25 +123,13 @@ impl RuntimeResources {
     }
 
     pub fn whisper_server_binary(&self, has_cuda: bool, prefer_vulkan: bool) -> ResolvedBinary {
-        let base_dir = self
-            .resource_dir
-            .join("resources")
-            .join("binaries")
-            .join("whisper");
+        let base_dir = self.app_data_dir.join("runtimes").join("whisper");
 
         if has_cuda {
             let cublas = self.whisper_cuda_server_path();
             if cublas.exists() {
                 return ResolvedBinary {
                     path: cublas,
-                    source: RuntimeBinarySource::Bundled,
-                };
-            }
-
-            let app_data_cublas = self.whisper_app_data_cuda_server_path();
-            if app_data_cublas.exists() {
-                return ResolvedBinary {
-                    path: app_data_cublas,
                     source: RuntimeBinarySource::AppData,
                 };
             }
@@ -171,14 +140,6 @@ impl RuntimeResources {
             if vulkan.exists() {
                 return ResolvedBinary {
                     path: vulkan,
-                    source: RuntimeBinarySource::Bundled,
-                };
-            }
-
-            let app_data_vulkan = self.whisper_app_data_vulkan_server_path();
-            if app_data_vulkan.exists() {
-                return ResolvedBinary {
-                    path: app_data_vulkan,
                     source: RuntimeBinarySource::AppData,
                 };
             }
@@ -188,14 +149,6 @@ impl RuntimeResources {
         if bundled.exists() {
             return ResolvedBinary {
                 path: bundled,
-                source: RuntimeBinarySource::Bundled,
-            };
-        }
-
-        let app_data = self.app_data_dir.join("whisper-server.exe");
-        if app_data.exists() {
-            return ResolvedBinary {
-                path: app_data,
                 source: RuntimeBinarySource::AppData,
             };
         }
@@ -207,28 +160,38 @@ impl RuntimeResources {
     }
 
     pub fn piper_binary(&self) -> ResolvedBinary {
-        let bundled = self
-            .resource_dir
-            .join("resources")
-            .join("binaries")
-            .join("piper")
-            .join("piper.exe");
-
-        if bundled.exists() {
-            return ResolvedBinary {
-                path: bundled,
-                source: RuntimeBinarySource::Bundled,
-            };
-        }
-
+        // Keep this stable before installation: TtsService captures the path at
+        // startup, while the managed runtime may be installed later in the same
+        // app session.
         ResolvedBinary {
-            path: bundled,
-            source: RuntimeBinarySource::Bundled,
+            path: self
+                .app_data_dir
+                .join("runtimes")
+                .join("piper")
+                .join("piper.exe"),
+            source: RuntimeBinarySource::AppData,
         }
     }
 
+    /// Path for a downloaded Piper voice model under app_data/voices/
+    pub fn downloaded_piper_model_path(&self, voice_name: &str) -> PathBuf {
+        self.app_data_dir.join("voices").join(voice_name)
+    }
+
+    /// Resolve the default Piper model path from the downloaded voices directory.
     pub fn default_piper_model_path(&self) -> PathBuf {
-        self.bundled_model_path("glados_piper_medium.onnx")
+        let voices_dir = self.app_data_dir.join("voices");
+        if voices_dir.exists() {
+            if let Ok(entries) = std::fs::read_dir(&voices_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().and_then(|e| e.to_str()) == Some("onnx") {
+                        return path;
+                    }
+                }
+            }
+        }
+        voices_dir.join("glados_piper_medium.onnx")
     }
 }
 
@@ -342,13 +305,6 @@ mod tests {
 
         assert_eq!(resources.app_data_dir(), dirs.app_data.as_path());
         assert_eq!(
-            resources.bundled_model_path("ggml-base.bin"),
-            dirs.resources
-                .join("resources")
-                .join("models")
-                .join("ggml-base.bin")
-        );
-        assert_eq!(
             resources.downloaded_model_path("ggml-base.bin"),
             dirs.app_data.join("models").join("ggml-base.bin")
         );
@@ -356,19 +312,6 @@ mod tests {
             resources.temp_file_path("capture.wav"),
             dirs.app_data.join("capture.wav")
         );
-    }
-
-    #[test]
-    fn whisper_model_path_prefers_bundled_model_when_present() {
-        let dirs = TestDirs::new("whisper-bundled");
-        let resources = dirs.runtime_resources();
-        let bundled = resources.bundled_model_path("tiny.en.bin");
-
-        fs::create_dir_all(bundled.parent().expect("bundled model has parent"))
-            .expect("create bundled model parent");
-        fs::write(&bundled, b"bundled").expect("write bundled model");
-
-        assert_eq!(resources.whisper_model_path("tiny.en.bin"), bundled);
     }
 
     #[test]

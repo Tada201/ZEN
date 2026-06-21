@@ -1,16 +1,70 @@
 import type { Message } from "../../components/chat/types";
+import { useChatStore } from "@/lib/stores/useChatStore";
 
-export function findWritableAssistantIndex(messages: Message[]): number {
+function assistantHasVisibleContent(message: Message): boolean {
+  return Boolean(
+    message.content?.trim() ||
+    message.reasoning?.trim() ||
+    message.steps?.some((step) =>
+      step.type === "text"
+        ? Boolean((step.content || "").trim())
+        : step.type === "reasoning" || step.type === "tool-call" || step.type === "action"
+    ) ||
+    (message.toolCalls?.length ?? 0) > 0
+  );
+}
+
+/**
+ * Close any in-flight assistant placeholders before starting a new turn so
+ * late stream events cannot attach to the wrong bubble.
+ */
+export function supersedeStaleSendingAssistants(messages: Message[]): Message[] {
+  return messages.map((message) => {
+    if (message.role !== "assistant" || message.status !== "sending") return message;
+
+    if (assistantHasVisibleContent(message)) {
+      return markMessageAsFinished(message, true, "superseded");
+    }
+
+    return {
+      ...message,
+      status: "cancelled" as const,
+      isThinking: false,
+      error: undefined,
+    };
+  });
+}
+
+export function findWritableAssistantIndex(messages: Message[], chatId?: string | null): number {
+  const activeAssistantId = chatId
+    ? useChatStore.getState().getActiveAssistantForChat(chatId)
+    : null;
+
+  if (activeAssistantId) {
+    const activeIdx = messages.findIndex((message) => message.id === activeAssistantId);
+    if (
+      activeIdx !== -1 &&
+      messages[activeIdx].role === "assistant" &&
+      messages[activeIdx].status === "sending"
+    ) {
+      return activeIdx;
+    }
+  }
+
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === "assistant" && messages[i].status === "sending") return i;
   }
+
+  // A database refresh can reconcile the optimistic placeholder before its
+  // terminal stream event arrives. Keep routing that stream to its local row.
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === "assistant" && messages[i].id.startsWith("temp-assistant-")) return i;
   }
+
   return -1;
 }
 
-export function markMessageAsFailed(message: Message, error: string): Message {
+export function markMessageAsFailed(message: Message, error: string, recoverable = false): Message {
   const toolCalls = message.toolCalls?.map((tc) => {
     if (tc.status === "running" || tc.status === "awaiting_approval") {
       return { ...tc, status: "error" as const };
@@ -37,6 +91,12 @@ export function markMessageAsFailed(message: Message, error: string): Message {
     status: "failed",
     error,
     isThinking: false,
+    metadata: {
+      ...message.metadata,
+      error,
+      status: "error",
+      recoverable,
+    },
     ...(toolCalls ? { toolCalls } : {}),
     ...(steps ? { steps } : {}),
   };
@@ -70,6 +130,7 @@ export function markMessageAsFinished(message: Message, isCancelled: boolean, st
   return {
     ...message,
     status: isCancelled ? "cancelled" : "sent",
+    error: undefined,
     isThinking: false,
     metadata: {
       ...message.metadata,

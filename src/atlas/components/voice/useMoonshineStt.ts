@@ -13,6 +13,7 @@ export function useMoonshineStt({
     setSubtitleSpeaker,
     setUserSpeechText,
     setVoiceState,
+    onFallbackStateChange,
 }: {
     appendLog: AppendVoiceLog;
     onTranscript: (text: string) => void;
@@ -20,11 +21,13 @@ export function useMoonshineStt({
     setSubtitleSpeaker: Dispatch<SetStateAction<SubtitleSpeaker>>;
     setUserSpeechText: Dispatch<SetStateAction<string>>;
     setVoiceState: Dispatch<SetStateAction<VoiceState>>;
+    onFallbackStateChange: (active: boolean) => boolean;
 }) {
     const sessionRef = useRef<MoonshineRecognitionSession | null>(null);
     const startRef = useRef<Promise<void> | null>(null);
     const stopTimerRef = useRef<number | null>(null);
     const moonshineReadyRef = useRef(false);
+    const moonshineFallbackRef = useRef(false);
 
     const startMoonshineRecognition = useCallback(async (stream: MediaStream | null | undefined) => {
         if (!stream) {
@@ -76,10 +79,21 @@ export function useMoonshineStt({
                         onTranscript(transcript);
                     },
                     onError: (error) => {
+                        const detail = error instanceof Error ? error.message : String(error);
+                        appendLog(`Moonshine ERR: ${detail}`, 'ERR');
+                        moonshineReadyRef.current = false;
+                        const fallbackAvailable = onFallbackStateChange(true);
+                        if (fallbackAvailable) {
+                            moonshineFallbackRef.current = true;
+                            setSttStatus('ready');
+                            setSubtitleSpeaker('system');
+                            setUserSpeechText('Moonshine is unavailable. Web Speech is ready for the next command.');
+                            appendLog('Moonshine fallback: Web Speech is available for this voice session.');
+                            return;
+                        }
                         setSttStatus('failed');
-                        appendLog(`Moonshine ERR: ${error instanceof Error ? error.message : String(error)}`, 'ERR');
                         setSubtitleSpeaker('system');
-                        setUserSpeechText('Moonshine recognition failed.');
+                        setUserSpeechText('Moonshine recognition failed and Web Speech is unavailable.');
                     },
                 });
             }
@@ -91,15 +105,31 @@ export function useMoonshineStt({
             await startPromise;
             return true;
         } catch (error) {
-            setSttStatus('failed');
-            appendLog(`Moonshine start failed: ${error instanceof Error ? error.message : String(error)}`, 'ERR');
-            setSubtitleSpeaker('system');
-            setUserSpeechText('Moonshine could not start. Check the network for first-use model download.');
+            const detail = error instanceof Error ? error.message : String(error);
+            moonshineReadyRef.current = false;
+            appendLog(`Moonshine start failed: ${detail}`, 'ERR');
+            const fallbackAvailable = onFallbackStateChange(true);
+            if (fallbackAvailable) {
+                moonshineFallbackRef.current = true;
+                setSttStatus('ready');
+                setSubtitleSpeaker('system');
+                setUserSpeechText('Moonshine could not load. Web Speech is ready for the next command.');
+                appendLog('Moonshine fallback: Web Speech is available for this voice session.');
+            } else {
+                setSttStatus('failed');
+                setSubtitleSpeaker('system');
+                setUserSpeechText('Moonshine could not start. Check the network for first-use model download.');
+            }
             return false;
         } finally {
             startRef.current = null;
         }
-    }, [appendLog, onTranscript, setSttStatus, setSubtitleSpeaker, setUserSpeechText, setVoiceState]);
+    }, [appendLog, onFallbackStateChange, onTranscript, setSttStatus, setSubtitleSpeaker, setUserSpeechText, setVoiceState]);
+
+    const resetMoonshineFallback = useCallback(() => {
+        moonshineFallbackRef.current = false;
+        onFallbackStateChange(false);
+    }, [onFallbackStateChange]);
 
     const stopMoonshineRecognition = useCallback((delayMs = 0) => {
         if (stopTimerRef.current !== null) {
@@ -125,5 +155,5 @@ export function useMoonshineStt({
         };
     }, []);
 
-    return { moonshineReadyRef, startMoonshineRecognition, stopMoonshineRecognition };
+    return { moonshineFallbackRef, moonshineReadyRef, resetMoonshineFallback, startMoonshineRecognition, stopMoonshineRecognition };
 }

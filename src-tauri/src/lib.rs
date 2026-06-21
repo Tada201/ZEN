@@ -1,4 +1,3 @@
-
 extern crate pdf_inspector;
 
 pub mod agent;
@@ -31,9 +30,16 @@ pub fn run() {
         .manage(AppState::new())
         .setup(|app| {
             let app_handle = app.handle().clone();
+            let _start_total = std::time::Instant::now();
 
-            // Initialize database in a blocking task to avoid blocking the main thread
+            // ═══════════════════════════════════════════════════════════════
+            // CRITICAL INIT — must complete before frontend loads
+            // ═══════════════════════════════════════════════════════════════
             tauri::async_runtime::block_on(async move {
+                let state = app_handle.state::<AppState>();
+
+                let _start_phase = std::time::Instant::now();
+
                 let app_dir = match app_handle.path().app_data_dir() {
                     Ok(dir) => dir,
                     Err(e) => {
@@ -48,15 +54,18 @@ pub fn run() {
                     }
                 }
 
-                match crate::services::init_backend_logging(&app_dir) {
-                    Ok(log_dir) => {
-                        tracing::info!(log_dir = %log_dir.display(), "Backend logging initialized");
-                    }
-                    Err(e) => {
-                        eprintln!("Warning: Backend logging initialization failed: {}", e);
-                    }
+                // Backend logging (instant)
+                if let Err(e) =                        crate::services::init_backend_logging(&app_dir) {
+                    eprintln!("Warning: Backend logging initialization failed: {}", e);
                 }
+                state.init_progress.set_status("critical.fs", "done", Some(_start_phase.elapsed().as_millis() as u64)).await;
+                tracing::info!(
+                    elapsed_ms = _start_phase.elapsed().as_millis(),
+                    "init.critical.fs: app dir + logging"
+                );
+                let _start_phase = std::time::Instant::now();
 
+                // SQLite database + migrations (near-instant, ~10ms)
                 let db_path = app_dir.join("novus.db");
                 let pool = match crate::db::init_pool(&db_path).await {
                     Ok(p) => p,
@@ -66,20 +75,26 @@ pub fn run() {
                         return;
                     }
                 };
-
-                let state = app_handle.state::<AppState>();
+                state.init_progress.set_status("critical.db", "done", Some(_start_phase.elapsed().as_millis() as u64)).await;
+                tracing::info!(
+                    elapsed_ms = _start_phase.elapsed().as_millis(),
+                    "init.critical.db: SQLite pool + migrations"
+                );
+                let _start_phase = std::time::Instant::now();
                 state.db.set(pool.clone()).await;
                 state.security.set_db_pool(pool.clone()).await;
 
-                // Start bridging EventBus events to the Tauri frontend
+                // Event bus bridge
                 state.agent.event_bus.bridge_to_tauri(app_handle.clone());
 
-                // Initialize settings service with the database pool
+                // Settings service (near-instant)
                 state.settings_manager.set_db_pool(pool.clone()).await;
                 if let Err(e) = state.settings_manager.load_all().await {
                     tracing::warn!(error = %e, "Failed to load settings from database");
                     eprintln!("Warning: Failed to load settings from database: {}", e);
                 }
+
+                // Persisted workspace root
                 let persisted_workspace_root = match state.settings_manager.get("workspace.root").await {
                     Ok(Some(value)) if !value.trim().is_empty() => Some(value),
                     Ok(_) => match state.settings_manager.get("workspace_path").await {
@@ -96,17 +111,19 @@ pub fn run() {
                     }
                 };
                 if let Some(workspace_root) = persisted_workspace_root {
-                        if let Err(e) = state.set_workspace_folder(workspace_root).await {
-                            tracing::warn!(
-                                error = %e,
-                                "Failed to apply persisted workspace root; using default workspace"
-                            );
-                            eprintln!(
-                                "Warning: Failed to apply persisted workspace root: {}",
-                                e
-                            );
-                        }
+                    if let Err(e) = state.set_workspace_folder(workspace_root).await {
+                        tracing::warn!(
+                            error = %e,
+                            "Failed to apply persisted workspace root; using default workspace"
+                        );
+                        eprintln!(
+                            "Warning: Failed to apply persisted workspace root: {}",
+                            e
+                        );
+                    }
                 }
+
+                // Secret migration
                 match state.secret_manager.migrate_plaintext_settings_to_keyring().await {
                     Ok(count) if count > 0 => {
                         tracing::info!(count, "Migrated plaintext secrets to OS keyring");
@@ -114,18 +131,23 @@ pub fn run() {
                     Ok(_) => {}
                     Err(e) => {
                         tracing::warn!(error = %e, "Secret migration failed");
-                        eprintln!("Warning: Secret migration failed: {}", e);
                     }
                 }
 
-                // Auto-sync tool permissions from loaded settings into ToolManager
+                state.init_progress.set_status("critical.settings", "done", Some(_start_phase.elapsed().as_millis() as u64)).await;
+                tracing::info!(
+                    elapsed_ms = _start_phase.elapsed().as_millis(),
+                    "init.critical.settings: settings + workspace + secrets"
+                );
+                let _start_phase = std::time::Instant::now();
+
+                // Tool permissions sync
                 {
                     use crate::tools::manager::ToolManager;
                     let all_settings = match state.settings_manager.get_all().await {
                         Ok(s) => s,
                         Err(e) => {
                             tracing::warn!(error = %e, "Failed to read settings for tool permission sync");
-                            eprintln!("Warning: Failed to read settings for tool permission sync: {}", e);
                             std::collections::HashMap::new()
                         }
                     };
@@ -133,8 +155,50 @@ pub fn run() {
                     state.tool_manager.update_permissions(permissions);
                 }
 
-                // Initialize Speech service
-                let resource_dir = app_handle.path().resource_dir().unwrap_or_default();
+                // Document service DB pool (instant)
+                state.documents.set_db_pool(pool.clone()).await;
+
+                // MCP server initial wiring (instant)
+                {
+                    let mut mcp_guard = state.mcp_server.write().await;
+                    mcp_guard.set_app_handle(app_handle.clone());
+                    mcp_guard.set_tool_service(state.tool_service.clone());
+                }
+
+                state.init_progress.set_status("critical.finalize", "done", Some(_start_phase.elapsed().as_millis() as u64)).await;
+                tracing::info!(
+                    elapsed_ms = _start_phase.elapsed().as_millis(),
+                    "init.critical.finalize: tools + docs + MCP"
+                );
+            });
+
+            tracing::info!(
+                elapsed_ms = _start_total.elapsed().as_millis(),
+                "init.critical.total: setup complete, window will now load"
+            );
+
+            // ═══════════════════════════════════════════════════════════════
+            // BACKGROUND INIT — runs after setup() returns, window loads
+            // immediately. Speech, TTS, RAG, and Orchestrator initialize
+            // here — the app works without them being fully ready.
+            // ═══════════════════════════════════════════════════════════════
+            let bg_app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let _start_bg = std::time::Instant::now();
+                let state = bg_app_handle.state::<AppState>();
+
+                let app_dir = match bg_app_handle.path().app_data_dir() {
+                    Ok(d) => d,
+                    Err(e) => {
+                        tracing::warn!(error = %e, "Background init skipped: no app data dir");
+                        return;
+                    }
+                };
+                let resource_dir = bg_app_handle.path().resource_dir().unwrap_or_default();
+
+                // ── Speech service ──
+                state.init_progress.set_status("bg.speech", "running", None).await;
+                let _p = std::time::Instant::now();
                 let hardware_info = state.hardware.lock().await.get_info().clone();
                 let speech_service = crate::services::SpeechService::with_process_manager(
                     &app_dir,
@@ -142,53 +206,62 @@ pub fn run() {
                     hardware_info,
                     state.process_manager.clone(),
                 );
-                let mut speech_write = state.speech.write().await;
-                *speech_write = Some(speech_service);
-                drop(speech_write);
+                *state.speech.write().await = Some(speech_service);
+                state.init_progress.set_status("bg.speech", "done", Some(_p.elapsed().as_millis() as u64)).await;
+                tracing::info!(
+                    elapsed_ms = _p.elapsed().as_millis(),
+                    "init.bg.speech"
+                );
 
-                // Initialize TTS service
+                // ── TTS service ──
+                state.init_progress.set_status("bg.tts", "running", None).await;
+                let _p = std::time::Instant::now();
                 let tts_service = crate::services::TtsService::with_process_manager(
                     &app_dir,
                     &resource_dir,
                     state.process_manager.clone(),
                 )
                 .unwrap_or_else(|e| {
-                    tracing::warn!(error = %e, "Failed to initialize TTS service");
-                    eprintln!("Warning: Failed to initialize TTS service: {}", e);
+                    tracing::warn!(error = %e, "Failed to initialize TTS service (background)");
                     crate::services::TtsService::new_dummy()
                 });
-                let mut tts_write = state.tts.write().await;
-                *tts_write = Some(tts_service);
-                drop(tts_write);
+                *state.tts.write().await = Some(tts_service);
+                state.init_progress.set_status("bg.tts", "done", Some(_p.elapsed().as_millis() as u64)).await;
+                tracing::info!(
+                    elapsed_ms = _p.elapsed().as_millis(),
+                    "init.bg.tts"
+                );
 
-                // Initialize document service with the database pool
-                state.documents.set_db_pool(pool.clone()).await;
-
-                // Initialize RAG (LanceDB vector store + Ollama embeddings) for document indexing
+                // ── RAG: LanceDB vector store ──
+                state.init_progress.set_status("bg.lancedb", "running", None).await;
+                let _p = std::time::Instant::now();
                 let rag_dir = app_dir.join("lancedb");
                 let rag_uri = rag_dir.to_string_lossy().to_string();
-                let collection_name = "documents".to_string();
-                let dimension: usize = 768; // nomic-embed-text dimension
+                let dimension: usize = 768;
 
                 let lance_store = Arc::new(
                     crate::rag::lancedb_store::LanceDbStore::new(
                         rag_uri.clone(),
-                        collection_name,
+                        "documents".to_string(),
                         dimension,
                     )
                 );
 
-                // Initialize the LanceDB table
                 if let Err(e) = lance_store.init().await {
-                    tracing::warn!(error = %e, "Failed to initialize LanceDB vector store");
-                    eprintln!("Warning: Failed to initialize LanceDB vector store: {}", e);
+                    state.init_progress.set_status("bg.lancedb", "error", Some(_p.elapsed().as_millis() as u64)).await;
+                    tracing::warn!(error = %e, "Failed to initialize LanceDB vector store (background)");
                 } else {
-                    // Store the vector store in app state
                     state.rag.set(lance_store.clone() as Arc<dyn crate::rag::VectorStore>).await;
-                    tracing::info!(path = %rag_dir.display(), "LanceDB vector store initialized");
-                    eprintln!("LanceDB vector store initialized at: {}", rag_dir.display());
+                    state.init_progress.set_status("bg.lancedb", "done", Some(_p.elapsed().as_millis() as u64)).await;
+                    tracing::info!(
+                        elapsed_ms = _p.elapsed().as_millis(),
+                        path = %rag_dir.display(),
+                        "init.bg.lancedb"
+                    );
 
-                    // Initialize and store Conversation Store
+                    // ── Conversation store ──
+                    state.init_progress.set_status("bg.conversation_store", "running", None).await;
+                    let _p = std::time::Instant::now();
                     let conversation_store = Arc::new(
                         crate::rag::conversation_store::ConversationStore::new(
                             rag_uri.clone(),
@@ -197,49 +270,71 @@ pub fn run() {
                         )
                     );
                     if let Err(e) = conversation_store.init().await {
-                        tracing::warn!(error = %e, "Failed to initialize LanceDB conversation vector store");
-                        eprintln!("Warning: Failed to initialize LanceDB conversation vector store: {}", e);
+                        tracing::warn!(error = %e, "Failed to initialize conversation store (background)");
                     } else {
                         state.conversation_store.set(conversation_store).await;
-                        tracing::info!("LanceDB conversation vector store initialized");
-                        eprintln!("LanceDB conversation vector store initialized.");
+                        state.init_progress.set_status("bg.conversation_store", "done", Some(_p.elapsed().as_millis() as u64)).await;
+                        tracing::info!(
+                            elapsed_ms = _p.elapsed().as_millis(),
+                            "init.bg.conversation_store"
+                        );
                     }
 
-                    // Try to initialize Ollama embeddings
+                    // ── Ollama embeddings ──
+                    state.init_progress.set_status("bg.rag", "running", None).await;
+                    let _p = std::time::Instant::now();
                     match crate::rag::embedding::create_default_ollama_embedding().await {
                         Ok(embed_model) => {
                             state.documents.set_rag_store(
                                 lance_store as Arc<dyn crate::rag::VectorStore>,
                                 embed_model,
                             ).await;
-                            tracing::info!("Document service RAG pipeline initialized");
-                            eprintln!("Document service: Full RAG pipeline initialized (LanceDB + Ollama embeddings)");
+                            state.init_progress.set_status("bg.rag", "done", Some(_p.elapsed().as_millis() as u64)).await;
+                            tracing::info!(
+                                elapsed_ms = _p.elapsed().as_millis(),
+                                "init.bg.rag: full RAG pipeline (LanceDB + Ollama)"
+                            );
                         }
                         Err(e) => {
-                            tracing::warn!(error = %e, "Document service RAG store initialized without Ollama embeddings");
-                            eprintln!("Document service: RAG store initialized, but Ollama not available ({}). Documents will be stored in SQLite only.", e);
+                            state.init_progress.set_status("bg.rag", "skipped", Some(_p.elapsed().as_millis() as u64)).await;
+                            tracing::warn!(
+                                elapsed_ms = _p.elapsed().as_millis(),
+                                error = %e,
+                                "init.bg.rag: Ollama not available, documents in SQLite only"
+                            );
                         }
                     }
                 }
 
-                // Initialize Orchestrator with AppHandle
+                // ── Orchestrator ──
+                state.init_progress.set_status("bg.orchestrator", "running", None).await;
+                let _p = std::time::Instant::now();
+                let pool = match state.db().await {
+                    Ok(p) => p,
+                    Err(e) => {
+                        tracing::error!(error = %e, "Orchestrator init skipped: DB not available");
+                        return;
+                    }
+                };
                 let orchestrator = crate::agent::orchestrator::Orchestrator::new(
-                    app_handle.clone(),
+                    bg_app_handle.clone(),
                     state.agent_registry.clone(),
                     state.tool_registry_v1.clone(),
                     state.hook_registry.clone(),
                     state.tools.clone(),
                     state.tool_manager.clone(),
                 ).with_db_pool(pool);
-
-                // Pass live AppHandle into the McpServer
-                {
-                    let mut mcp_guard = state.mcp_server.write().await;
-                    mcp_guard.set_app_handle(app_handle.clone());
-                    mcp_guard.set_tool_service(state.tool_service.clone());
-                }
-
                 state.orchestrator.set(Arc::new(orchestrator)).await;
+                state.init_progress.set_status("bg.orchestrator", "done", Some(_p.elapsed().as_millis() as u64)).await;
+                tracing::info!(
+                    elapsed_ms = _p.elapsed().as_millis(),
+                    "init.bg.orchestrator"
+                );
+
+                tracing::info!(
+                    elapsed_ms = _start_bg.elapsed().as_millis(),
+                    "init.bg.total: all background services initialized"
+                );
             });
 
             Ok(())
@@ -247,6 +342,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::system::get_system_metrics,
             commands::system::get_system_status,
+            commands::system::get_init_status,
             commands::system::get_system_stats,
             commands::system::get_hardware_info,
             commands::system::browse_folder,
@@ -255,6 +351,7 @@ pub fn run() {
             commands::terminal::terminal_kill,
             commands::terminal::terminal_resize,
             commands::dependency::list_dependency_status,
+            commands::dependency::install_managed_dependency,
             commands::document::ingest_document,
             commands::document::list_documents,
             commands::document::list_documents_page,
@@ -322,6 +419,7 @@ pub fn run() {
             commands::voice::list_voice_models,
             commands::voice::add_voice_model,
             commands::voice::set_active_voice_model,
+            commands::voice::download_piper_model,
             commands::audio::list_input_devices,
             commands::audio::list_output_devices,
             commands::audio::set_active_output_device,

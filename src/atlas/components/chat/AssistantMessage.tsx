@@ -126,7 +126,7 @@ export function AssistantMessage({
   const hasVisibleAnswer = Boolean(
     message.content?.trim() ||
     message.reasoning?.trim() ||
-    message.error ||
+    (message.status === "failed" && message.error?.trim()) ||
     message.artifact ||
     groupedSteps.some((step) =>
       step.type === "text"
@@ -147,6 +147,7 @@ export function AssistantMessage({
   const showMessageActions = hasVisibleAnswer && !hasOnlyLiveProgress;
   const hasResearchProgress = Boolean(message.metadata?.researchSteps?.length);
   const wasCancelled = message.status === "cancelled";
+  const inlineError = message.status === "failed" ? message.error?.trim() : "";
   return (
     <div
       className={cn(
@@ -288,7 +289,7 @@ export function AssistantMessage({
               </>
             )}
             
-             {message.error && (
+             {inlineError && (
               <div className="flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-4 animate-in fade-in zoom-in-95 duration-200">
                 <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
                 <div className="flex flex-1 flex-col gap-2 min-w-0">
@@ -307,11 +308,11 @@ export function AssistantMessage({
                       )}
                     </div>
                     <p className="text-[12px] text-destructive/80 leading-relaxed font-mono mt-0.5 max-h-48 overflow-y-auto whitespace-pre-wrap break-words">
-                      {message.error}
+                      {inlineError}
                     </p>
                   </div>
                   
-                  {(message.error.toLowerCase().includes("key") || message.error.toLowerCase().includes("auth")) && (
+                  {(inlineError.toLowerCase().includes("key") || inlineError.toLowerCase().includes("auth")) && (
                     <Button 
                       size="sm" 
                       variant="outline" 
@@ -374,7 +375,7 @@ export function AssistantMessage({
                 {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
                 Copy
               </Button>
-              {onRetry && (
+              {onRetry && message.status === "failed" && (
                 <Button
                   size="sm"
                   variant="ghost"

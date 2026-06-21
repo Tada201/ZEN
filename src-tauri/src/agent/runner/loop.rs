@@ -1,4 +1,6 @@
-use super::actions::{emit_action_only, persist_and_emit_action, ActionEmitParams, ActionPersistParams};
+use super::actions::{
+    emit_action_only, persist_and_emit_action, ActionEmitParams, ActionPersistParams,
+};
 use super::escalation::{EarlyToolExecutionContext, EarlyToolExecutionState, EscalationParams};
 use super::helpers::{
     generate_handoff_summary, parse_file_changes, parse_text_tool_calls,
@@ -9,7 +11,7 @@ use super::memory_bootstrap::{
     cached_recall_context, compact_context_if_needed, load_initial_conversation,
     load_memory_run_settings, truncate_conversation_by_message_count,
 };
-use super::turn_persistence::{save_assistant_message, AssistantMessageSave};
+use super::turn_persistence::{persist_chat_failure, save_assistant_message, AssistantMessageSave};
 use crate::agent::chat_status::ChatStatusPhase;
 use crate::agent::event_bus::{
     AgentEvent, ChatChunkPayload, ChatDonePayload, ChatErrorPayload, ChatStatusPayload,
@@ -127,6 +129,7 @@ impl Runner {
                         tokens_out: Some(total_tokens_out),
                         tool_calls: None,
                         reasoning_details: None,
+                        metadata: None,
                         error_context: "Failed to save partial assistant message to SQLite",
                     })
                     .await;
@@ -191,6 +194,7 @@ impl Runner {
                         tokens_out: Some(total_tokens_out),
                         tool_calls: None,
                         reasoning_details: None,
+                        metadata: None,
                         error_context: "Failed to save max iterations assistant message to SQLite",
                     })
                     .await;
@@ -399,10 +403,24 @@ impl Runner {
                     // If we did, the error message will reflect that.
                     tracing::error!("LLM chat_stream failed: {}", e);
 
+                    let error_text = e.to_string();
+                    if let Some(ref db) = self.db_pool {
+                        persist_chat_failure(
+                            db,
+                            &chat_id,
+                            &model,
+                            &mut assistant_message_id,
+                            &accumulated_commentary,
+                            &error_text,
+                            false,
+                        )
+                        .await;
+                    }
+
                     // Emit error event to unlock the chat UI
                     self.emit(AgentEvent::ChatError(ChatErrorPayload {
                         chat_id: chat_id.clone(),
-                        error: e.to_string(),
+                        error: error_text,
                         recoverable: false,
                     }));
 
@@ -537,6 +555,7 @@ impl Runner {
                         tokens_out: Some(total_tokens_out),
                         tool_calls: None,
                         reasoning_details: serialized_reasoning.as_deref(),
+                        metadata: None,
                         error_context: "Failed to save final assistant message to SQLite",
                     })
                     .await;
@@ -636,6 +655,7 @@ impl Runner {
                     tokens_out: None,
                     tool_calls: serialized_tool_calls.as_deref(),
                     reasoning_details: serialized_reasoning.as_deref(),
+                    metadata: None,
                     error_context: "Failed to save intermediate assistant message to SQLite",
                 })
                 .await;
@@ -719,10 +739,7 @@ impl Runner {
                 .await
             };
 
-            for (index, result) in remaining_indexes
-                .into_iter()
-                .zip(remaining_results)
-            {
+            for (index, result) in remaining_indexes.into_iter().zip(remaining_results) {
                 ordered_results[index] = Some(result);
             }
 

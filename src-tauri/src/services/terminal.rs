@@ -116,10 +116,7 @@ impl TerminalService {
         }
     }
 
-    pub async fn spawn_interactive(
-        &self,
-        params: TerminalSpawnParams<'_>,
-    ) -> ZenResult<String> {
+    pub async fn spawn_interactive(&self, params: TerminalSpawnParams<'_>) -> ZenResult<String> {
         let TerminalSpawnParams {
             manager,
             security,

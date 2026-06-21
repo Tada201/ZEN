@@ -4,8 +4,9 @@ import { findWritableAssistantIndex } from "./messageTarget";
 export function applyArtifactStartToMessages(
   prev: Message[],
   artifact: NonNullable<Message["artifact"]>,
+  chatId?: string | null,
 ): Message[] {
-  const assistantIdx = findWritableAssistantIndex(prev);
+  const assistantIdx = findWritableAssistantIndex(prev, chatId);
   if (assistantIdx === -1) return prev;
 
   const next = [...prev];
@@ -16,9 +17,9 @@ export function applyArtifactStartToMessages(
   return next;
 }
 
-export function applyArtifactDeltaToMessages(prev: Message[], delta: string): Message[] {
+export function applyArtifactDeltaToMessages(prev: Message[], delta: string, chatId?: string | null): Message[] {
   if (!delta) return prev;
-  const assistantIdx = findWritableAssistantIndex(prev);
+  const assistantIdx = findWritableAssistantIndex(prev, chatId);
   if (assistantIdx === -1) return prev;
   const assistant = prev[assistantIdx];
   if (!assistant.artifact) return prev;

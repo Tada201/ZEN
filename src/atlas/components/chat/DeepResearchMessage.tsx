@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/collapsible";
 
 interface ResearchStep {
+  id?: string;
   text: string;
   status: "pending" | "running" | "completed" | "error";
   agentIndex?: number;
@@ -27,6 +28,7 @@ interface ResearchStep {
   phase?: string;
   durationSecs?: number;
   subQuestion?: string;
+  progressPercent?: number;
 }
 
 interface AgentInfo {
@@ -56,7 +58,16 @@ export function DeepResearchMessage({
     return [];
   }, [message.metadata]);
 
-  const isComplete = message.status === "sent" || message.metadata?.status === "completed";
+  // Detect stale/dead deep research messages left over from a crash or
+  // incomplete session. These have is_complete=0 in the DB (mapped to
+  // status="failed" by useChatQueries) and no streaming will arrive.
+  const isFailed = message.status === "failed";
+  // The research is terminal if normally complete, marked completed in
+  // metadata, or is a stale failed message that will never resume.
+  const isComplete = message.status === "sent" || message.metadata?.status === "completed" || isFailed;
+  // True if the message has zero content and no steps — a crash happened
+  // before the first periodic checkpoint.
+  const isStaleEmpty = isFailed && !message.content && steps.length === 0;
 
   const [elapsed, setElapsed] = useState<number>(0);
 
@@ -183,6 +194,21 @@ export function DeepResearchMessage({
   );
 
   const hasAgents = agents.length > 0;
+  const progressPercent = useMemo(() => {
+    if (isComplete) return 100;
+    const backendProgress = message.metadata?.researchProgress?.percent;
+    if (typeof backendProgress === "number") {
+      return Math.min(99, Math.max(0, backendProgress));
+    }
+    const settled = processSteps.filter((step) => step.status === "completed" || step.status === "error").length;
+    return processSteps.length > 0 ? Math.min(95, Math.round((settled / processSteps.length) * 100)) : 0;
+  }, [isComplete, message.metadata?.researchProgress?.percent, processSteps]);
+  const visibleProcessSteps = useMemo(() => processSteps.slice(-12), [processSteps]);
+  const hiddenProcessStepCount = processSteps.length - visibleProcessSteps.length;
+  const plannedTaskCount = useMemo(() => {
+    const planStep = processSteps.find((step) => /Research plan created with \d+ investigation tasks/.test(step.text));
+    return Number(planStep?.text.match(/with (\d+) investigation tasks/)?.[1] || 0);
+  }, [processSteps]);
 
   return (
     <div
@@ -199,7 +225,7 @@ export function DeepResearchMessage({
         )}
       >
         {/* Deep Research Specialized Card */}
-        <div className="w-full rounded-xl border border-indigo-500/20 bg-gradient-to-b from-indigo-500/10 to-transparent p-4 shadow-sm backdrop-blur-sm">
+        <div className="flex h-[280px] w-full flex-col overflow-hidden rounded-xl border border-indigo-500/20 bg-gradient-to-b from-indigo-500/10 to-transparent p-4 shadow-sm backdrop-blur-sm">
           {/* Header */}
           <div className="flex items-center gap-3 mb-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/20">
@@ -217,10 +243,17 @@ export function DeepResearchMessage({
                     : "text-indigo-300 animate-text-shimmer font-medium"
                 )}
               >
-                {isComplete
-                  ? "Research complete"
-                  : "Agent is actively researching..."}
+                {isStaleEmpty
+                  ? "Research interrupted"
+                  : isFailed && message.content
+                    ? "Research interrupted (partial results)"
+                    : isComplete
+                      ? "Research complete"
+                      : "Agent is actively researching..."}
               </span>
+              {plannedTaskCount > 0 && (
+                <span className="text-[10px] text-zinc-500">{plannedTaskCount} planned investigation tasks</span>
+              )}
             </div>
             {!isComplete && (
               <div className="ml-auto flex items-center gap-1.5 rounded-full bg-indigo-500/10 px-2.5 py-0.5 border border-indigo-500/20 text-[10px] font-mono text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.1)]">
@@ -233,12 +266,12 @@ export function DeepResearchMessage({
             )}
           </div>
 
-          <Collapsible defaultOpen={!isComplete} className="w-full">
+          <Collapsible defaultOpen={!isComplete || isStaleEmpty} className="flex min-h-0 w-full flex-1 flex-col">
             <CollapsibleTrigger className="flex w-full flex-col gap-2 rounded-lg p-2 hover:bg-white/5 text-xs text-muted-foreground transition-all">
               <div className="flex w-full items-center justify-between">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-medium text-zinc-300">
-                    View process ({steps.length} steps)
+                    Research activity ({steps.length} events)
                   </span>
                   {steps.length > 0 && (
                     <div className="flex items-center gap-1.5">
@@ -262,6 +295,7 @@ export function DeepResearchMessage({
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-mono text-indigo-300/80">{progressPercent}%</span>
                   {!isComplete && activeProcessText && (
                     <span className="hidden md:inline text-[11px] text-indigo-300/70 max-w-[200px] truncate animate-pulse">
                       {activeProcessText}
@@ -277,7 +311,7 @@ export function DeepResearchMessage({
                   <div
                     className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-500 ease-out relative"
                     style={{
-                      width: `${((processCompleted + completedAgentSteps) / Math.max(steps.length, 1)) * 100}%`,
+                      width: `${progressPercent}%`,
                     }}
                   >
                     {!isComplete && (
@@ -291,11 +325,17 @@ export function DeepResearchMessage({
               )}
             </CollapsibleTrigger>
 
-            <CollapsibleContent className="mt-2">
+            <CollapsibleContent className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1">
               {steps.length === 0 && !isComplete && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground py-2 px-2">
                   <Loader2 className="h-3 w-3 animate-spin" />
                   <span>Initializing research plan...</span>
+                </div>
+              )}
+              {isStaleEmpty && (
+                <div className="flex items-center gap-2 text-xs text-rose-300/80 py-2 px-2">
+                  <XCircle className="h-3 w-3 shrink-0" />
+                  <span>The research process ended before collecting any data. Try running the research again.</span>
                 </div>
               )}
 
@@ -320,7 +360,12 @@ export function DeepResearchMessage({
                     </span>
                   </div>
                   <div className="flex flex-col gap-1">
-                    {processSteps.map((step, idx) => (
+                    {hiddenProcessStepCount > 0 && (
+                      <div className="px-2 py-1 text-[10px] text-zinc-500">
+                        {hiddenProcessStepCount} earlier events collapsed
+                      </div>
+                    )}
+                    {visibleProcessSteps.map((step, idx) => (
                       <ProcessStepItem key={idx} step={step} />
                     ))}
                     {processSteps.length === 0 && (
@@ -381,7 +426,7 @@ export function DeepResearchMessage({
 
 function ProcessStepItem({ step }: { step: ResearchStep }) {
   return (
-    <div className="flex items-start gap-2 text-[11px] py-1.5 px-2 rounded-md bg-black/20 hover:bg-black/30 transition-colors">
+    <div className="flex min-w-0 items-start gap-2 text-[11px] py-1.5 px-2 rounded-md bg-black/20 hover:bg-black/30 transition-colors">
       {step.status === "completed" && (
         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 mt-0.5 shrink-0" />
       )}
@@ -396,7 +441,7 @@ function ProcessStepItem({ step }: { step: ResearchStep }) {
       )}
       <span
         className={cn(
-          "text-zinc-400 leading-relaxed",
+          "min-w-0 line-clamp-2 text-zinc-400 leading-relaxed",
           step.status === "running" && "text-indigo-200 font-medium",
           step.status === "completed" && "text-zinc-300",
           step.status === "error" && "text-rose-300"

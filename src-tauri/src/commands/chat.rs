@@ -10,6 +10,33 @@ use tauri::{AppHandle, Emitter, State};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
+async fn persist_sync_send_failure(
+    db: &sqlx::SqlitePool,
+    chat_id: &str,
+    model: Option<&str>,
+    error: &str,
+) {
+    let metadata = serde_json::json!({
+        "error": error,
+        "status": "failed",
+        "recoverable": false,
+    })
+    .to_string();
+    let _ = queries::add_message(
+        db,
+        &queries::NewMessage {
+            chat_id,
+            role: "assistant",
+            content: error,
+            model,
+            is_complete: false,
+            metadata: Some(&metadata),
+            ..Default::default()
+        },
+    )
+    .await;
+}
+
 #[tauri::command]
 pub async fn create_chat(
     state: State<'_, AppState>,
@@ -194,11 +221,15 @@ pub async fn send_message(
         resolved_provider_name = %resolved_provider_name,
         "Resolving active LLM provider instance"
     );
-    let active_model = model.ok_or_else(|| {
-        crate::error::ZenError::Custom(
-            "No model selected. Open Settings → Models to choose a model.".to_string(),
-        )
-    })?;
+    let active_model = match model {
+        Some(m) if !m.is_empty() => m,
+        _ => {
+            let message =
+                "No model selected. Open Settings → Models to choose a model.".to_string();
+            persist_sync_send_failure(&db, &chat_id, None, &message).await;
+            return Err(crate::error::ZenError::Custom(message));
+        }
+    };
 
     info!(
         chat_id = %chat_id,
@@ -206,6 +237,17 @@ pub async fn send_message(
         active_model = %active_model,
         "Fetching provider, history, and settings in parallel"
     );
+    let join_result = tokio::try_join!(
+        state.provider_registry.create(&resolved_provider_name),
+        queries::get_messages(&db, &chat_id),
+        state.settings_manager.get("tools_enabled"),
+        state.settings_manager.get("tool_yolo_mode"),
+        state.settings_manager.get("tools.yolo-mode"),
+        async { queries::get_setting(&db, "system_prompt").await },
+    );
+    if let Err(ref e) = join_result {
+        persist_sync_send_failure(&db, &chat_id, Some(&active_model), &e.to_string()).await;
+    }
     let (
         llm_provider,
         history,
@@ -213,14 +255,7 @@ pub async fn send_message(
         tool_yolo_mode_str,
         tools_yolo_mode_str,
         custom_prompt_setting,
-    ) = tokio::try_join!(
-        state.provider_registry.create(&resolved_provider_name),
-        queries::get_messages(&db, &chat_id),
-        state.settings_manager.get("tools_enabled"),
-        state.settings_manager.get("tool_yolo_mode"),
-        state.settings_manager.get("tools.yolo-mode"),
-        async { queries::get_setting(&db, "system_prompt").await },
-    )?;
+    ) = join_result?;
     info!(
         chat_id = %chat_id,
         history_count = %history.len(),
@@ -262,10 +297,14 @@ pub async fn send_message(
 
     let token = CancellationToken::new();
 
-    // Register cancellation token
+    // Register cancellation token — cancel any in-flight stream for this chat first.
     let cancel_tokens = state.chat_cancellation_tokens.clone();
     {
         let mut tokens = cancel_tokens.lock().await;
+        if let Some(old_token) = tokens.remove(&chat_id) {
+            old_token.cancel();
+            info!(chat_id = %chat_id, "Cancelled previous in-flight chat stream");
+        }
         tokens.insert(chat_id.clone(), token.clone());
     }
 
@@ -443,13 +482,61 @@ Always use these specialized code blocks for visual scenarios:
     // Deep Research branch
     if deep_research.unwrap_or(false) {
         let chat_id_inner = chat_id.clone();
-        let active_model_inner = active_model.clone();
+        let configured_research_model = state
+            .settings_manager
+            .get("deep_research_model")
+            .await
+            .ok()
+            .flatten()
+            .filter(|model| !model.trim().is_empty());
+        let active_model_inner = configured_research_model.unwrap_or_else(|| active_model.clone());
         let content_inner = content.clone();
         let provider_clone = llm_provider.clone();
         let cancel_tokens_clone = cancel_tokens.clone();
         let db_clone = db.clone();
+        let parse_limit = |value: Option<String>, default: usize, min: usize, max: usize| {
+            value
+                .and_then(|value| value.parse::<usize>().ok())
+                .unwrap_or(default)
+                .clamp(min, max)
+        };
+        let max_rounds = parse_limit(
+            state.settings_manager.get("deep_research_max_rounds").await.ok().flatten(),
+            6,
+            2,
+            8,
+        );
+        let max_urls_per_round = parse_limit(
+            state
+                .settings_manager
+                .get("deep_research_max_sources_per_round")
+                .await
+                .ok()
+                .flatten(),
+            3,
+            2,
+            10,
+        );
+        let sub_agent_count = parse_limit(
+            state
+                .settings_manager
+                .get("deep_research_parallel_agents")
+                .await
+                .ok()
+                .flatten(),
+            3,
+            1,
+            4,
+        );
 
-        info!(chat_id = %chat_id, "Routing request to Deep Research Orchestrator");
+        info!(
+            chat_id = %chat_id,
+            model = %active_model_inner,
+            max_rounds,
+            max_urls_per_round,
+            sub_agent_count,
+            "Routing request to Deep Research Orchestrator"
+        );
         let _ = app.emit(
             "chat:status",
             json!({
@@ -460,16 +547,21 @@ Always use these specialized code blocks for visual scenarios:
             }),
         );
         tokio::spawn(async move {
-            crate::agent::deep_research::run_deep_research(crate::agent::deep_research::DeepResearchParams {
-                app: app.clone(),
-                db: db_clone,
-                llm_provider: &*provider_clone,
-                chat_id: chat_id_inner.clone(),
-                model: active_model_inner,
-                query: content_inner,
-                config,
-                token,
-            })
+            crate::agent::deep_research::run_deep_research(
+                crate::agent::deep_research::DeepResearchParams {
+                    app: app.clone(),
+                    db: db_clone,
+                    llm_provider: &*provider_clone,
+                    chat_id: chat_id_inner.clone(),
+                    model: active_model_inner,
+                    query: content_inner,
+                    config,
+                    token,
+                    max_rounds,
+                    max_urls_per_round,
+                    sub_agent_count,
+                },
+            )
             .await;
 
             let mut tokens = cancel_tokens_clone.lock().await;
@@ -508,16 +600,18 @@ Always use these specialized code blocks for visual scenarios:
                 let token_for_error = token_clone.clone();
                 tokio::spawn(async move {
                     let result = orchestrator
-                        .run_orchestrator_loop(crate::agent::orchestrator::execution::OrchestratorRunParams {
-                            provider: provider_clone,
-                            model: &model_inner,
-                            messages: chat_messages,
-                            chat_id: &chat_id_inner,
-                            goal: &content_inner,
-                            config: config_clone,
-                            token: token_clone,
-                            approval_rx: None,
-                        })
+                        .run_orchestrator_loop(
+                            crate::agent::orchestrator::execution::OrchestratorRunParams {
+                                provider: provider_clone,
+                                model: &model_inner,
+                                messages: chat_messages,
+                                chat_id: &chat_id_inner,
+                                goal: &content_inner,
+                                config: config_clone,
+                                token: token_clone,
+                                approval_rx: None,
+                            },
+                        )
                         .await;
                     // Clean up cancellation token on completion
                     let mut tokens = cancel_tokens_clone.lock().await;
@@ -536,16 +630,8 @@ Always use these specialized code blocks for visual scenarios:
                                     "done": true
                                 }),
                             );
-                        } else {
-                            let _ = app_error.emit(
-                                "chat:error",
-                                json!({
-                                    "chat_id": chat_id_inner,
-                                    "error": format!("Orchestrator failed: {}", e),
-                                    "recoverable": false
-                                }),
-                            );
                         }
+                        // Orchestrator emits chat:error for non-cancel failures.
                     }
                 });
                 return Ok(());
@@ -631,16 +717,8 @@ Always use these specialized code blocks for visual scenarios:
                         "done": true
                     }),
                 );
-            } else {
-                let _ = app_error.emit(
-                    "chat:error",
-                    json!({
-                        "chat_id": chat_id_clone,
-                        "error": format!("Chat runner failed: {}", e),
-                        "recoverable": false
-                    }),
-                );
             }
+            // Runner already emitted chat:error for non-cancel failures.
         }
     });
 

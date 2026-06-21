@@ -27,13 +27,16 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
         query,
         config,
         token,
+        max_rounds,
+        max_urls_per_round,
+        sub_agent_count,
     } = params;
     info!(chat_id = %chat_id, query = %query, "Starting Iterative Deep Research");
 
     // Helper to emit research step events with phase info.
     // Uses &str ref to avoid capturing String by value (keeps closure Fn, not FnOnce).
     let chat_id_ref: &str = &chat_id;
-    let emit_step = |text: &str, status: &str, msg_id: &str, phase: &str| {
+    let emit_step = |text: &str, status: &str, msg_id: &str, phase: &str, progress_percent: u8| {
         let _ = app.emit(
             "chat:research-step",
             json!({
@@ -42,6 +45,7 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
                 "text": text,
                 "status": status,
                 "phase": phase,
+                "progress_percent": progress_percent,
             }),
         );
     };
@@ -62,7 +66,10 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
     {
         Ok(msg) => msg,
         Err(e) => {
-            error!("Failed to create assistant message for deep research: {}", e);
+            error!(
+                "Failed to create assistant message for deep research: {}",
+                e
+            );
             return;
         }
     };
@@ -74,33 +81,36 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
         &app,
         llm_provider,
         &state,
+        &db,
         &model,
         &config,
         &token,
         &chat_id,
         &message_id,
         &emit_step,
+        max_rounds,
+        max_urls_per_round,
+        sub_agent_count,
     );
 
     let result = engine.run(&query).await;
 
-    // 3. Persist research steps to message metadata so the state survives
-    //    page refresh during long research sessions.
-    //    Uses a raw SQL UPDATE since UpdateMessage doesn't have metadata.
-    {
-        let steps_json = engine.research_steps_events.lock()
-            .map(|steps| {
-                let wrapper = serde_json::json!({"researchSteps": steps.as_slice()});
-                serde_json::to_string(&wrapper)
-                    .unwrap_or_else(|_| "{}".to_string())
-            })
-            .unwrap_or_else(|_| "{}".to_string());
-        let _ = sqlx::query("UPDATE messages SET metadata = ? WHERE id = ?")
-            .bind(&steps_json)
-            .bind(&message_id)
-            .execute(&db)
-            .await;
-    }
+    // 3. Persist research steps to message metadata using the canonical update path.
+    //    Periodic checkpointing during the run already saved partial progress;
+    //    this final update ensures the complete metadata is saved.
+    let steps_json = engine
+        .research_steps_events
+        .lock()
+        .map(|steps| {
+            let wrapper = serde_json::json!({
+                "researchSteps": steps.as_slice(),
+                "researchProgress": {
+                    "percent": engine.progress_percent.load(std::sync::atomic::Ordering::Relaxed),
+                },
+            });
+            serde_json::to_string(&wrapper).unwrap_or_else(|_| "{}".to_string())
+        })
+        .unwrap_or_else(|_| "{}".to_string());
 
     // 4. Write final report to DB and emit
     match result {
@@ -113,6 +123,7 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
                     chat_id: &chat_id,
                     content: &final_report,
                     is_complete: true,
+                    metadata: Some(&steps_json),
                     ..Default::default()
                 },
             )
@@ -124,7 +135,7 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
                     error = %e,
                     "Failed to finalize deep research message"
                 );
-                emit_step("Failed to save final report", "error", &message_id, "error");
+                emit_step("Failed to save final report", "error", &message_id, "error", 100);
                 return;
             }
 
@@ -142,38 +153,63 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
             );
 
             // Save raw markdown report as a markdown artifact for the frontend viewer
-            info!("Saving markdown research report as artifact...");
-            let title = format!("Deep Research: {}", query);
-            let _ = queries::upsert_artifact(
-                &db,
-                &crate::db::models::Artifact {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    chat_id: chat_id.clone(),
-                    message_id: message_id.clone(),
-                    artifact_type: "markdown".to_string(),
-                    title,
-                    content: final_report,
-                    language: Some("markdown".to_string()),
-                    metadata: None,
-                    created_at: chrono::Utc::now().to_rfc3339(),
-                    updated_at: chrono::Utc::now().to_rfc3339(),
-                },
-            )
-            .await;
+            save_artifact(&db, &chat_id, &message_id, &query, &final_report).await;
 
             info!("Iterative Deep Research completed");
             emit_chat_done(&app, &chat_id, "complete");
         }
         Err(err_msg) => {
-            error!("Iterative Deep Research failed: {}", err_msg);
-            let partial = if engine.evolving_report.is_empty() {
-                format!("**Research failed:** {}", err_msg)
+            let is_cancelled = token.is_cancelled();
+            if is_cancelled {
+                info!(chat_id = %chat_id, "Deep Research cancelled by user");
             } else {
-                format!(
-                    "{}\n\n---\n\n*Research completed with partial results. {}*",
-                    engine.evolving_report, err_msg
-                )
+                error!("Iterative Deep Research failed: {}", err_msg);
+            }
+
+            // Determine the content to save: use evolving report if available,
+            // otherwise show a clear status message.
+            let (partial, done_reason) = if is_cancelled {
+                if engine.evolving_report.is_empty() {
+                    (
+                        "**Research cancelled.** The research was stopped by user request."
+                            .to_string(),
+                        "cancelled",
+                    )
+                } else {
+                    (
+                        format!(
+                            "{}\n\n---\n\n*Research stopped by user request with partial results.*",
+                            engine.evolving_report
+                        ),
+                        "cancelled",
+                    )
+                }
+            } else {
+                if engine.evolving_report.is_empty() {
+                    (format!("**Research failed:** {}", err_msg), "error")
+                } else {
+                    (
+                        format!(
+                            "{}\n\n---\n\n*Research completed with partial results. {}*",
+                            engine.evolving_report, err_msg
+                        ),
+                        "error",
+                    )
+                }
             };
+
+            let failure_metadata = if done_reason == "cancelled" {
+                steps_json.clone()
+            } else {
+                let mut metadata_value: serde_json::Value =
+                    serde_json::from_str(&steps_json).unwrap_or_else(|_| json!({}));
+                if let Some(obj) = metadata_value.as_object_mut() {
+                    obj.insert("error".to_string(), json!(err_msg));
+                    obj.insert("status".to_string(), json!("failed"));
+                }
+                metadata_value.to_string()
+            };
+
             let _ = queries::update_message(
                 &db,
                 &queries::UpdateMessage {
@@ -181,10 +217,17 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
                     chat_id: &chat_id,
                     content: &partial,
                     is_complete: true,
+                    metadata: Some(&failure_metadata),
                     ..Default::default()
                 },
             )
             .await;
+
+            // Save partial report as artifact so partial results are viewable
+            if !engine.evolving_report.is_empty() {
+                save_artifact(&db, &chat_id, &message_id, &query, &partial).await;
+            }
+
             let _ = app.emit(
                 "chat:message",
                 json!({
@@ -194,11 +237,41 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
                     "role": "assistant",
                     "kind": "deep_research",
                     "content": partial,
+                    "status": if done_reason == "cancelled" { "cancelled" } else { "failed" },
+                    "error": if done_reason == "cancelled" { serde_json::Value::Null } else { json!(err_msg) },
                 }),
             );
-            emit_chat_done(&app, &chat_id, "error");
+            emit_chat_done(&app, &chat_id, done_reason);
         }
     }
+}
+
+/// Save a markdown artifact for the frontend viewer.
+async fn save_artifact(
+    db: &sqlx::SqlitePool,
+    chat_id: &str,
+    message_id: &str,
+    query: &str,
+    content: &str,
+) {
+    info!("Saving markdown research report as artifact...");
+    let title = format!("Deep Research: {}", query);
+    let _ = queries::upsert_artifact(
+        db,
+        &crate::db::models::Artifact {
+            id: uuid::Uuid::new_v4().to_string(),
+            chat_id: chat_id.to_string(),
+            message_id: message_id.to_string(),
+            artifact_type: "markdown".to_string(),
+            title,
+            content: content.to_string(),
+            language: Some("markdown".to_string()),
+            metadata: None,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            updated_at: chrono::Utc::now().to_rfc3339(),
+        },
+    )
+    .await;
 }
 
 fn emit_chat_done(app: &AppHandle, chat_id: &str, reason: &str) {

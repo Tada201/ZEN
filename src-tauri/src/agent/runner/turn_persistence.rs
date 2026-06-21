@@ -12,7 +12,45 @@ pub(super) struct AssistantMessageSave<'a> {
     pub tokens_out: Option<i64>,
     pub tool_calls: Option<&'a str>,
     pub reasoning_details: Option<&'a str>,
+    pub metadata: Option<&'a str>,
     pub error_context: &'static str,
+}
+
+pub fn build_failure_metadata(error: &str, recoverable: bool) -> String {
+    serde_json::json!({
+        "error": error,
+        "status": "failed",
+        "recoverable": recoverable,
+    })
+    .to_string()
+}
+
+pub(super) async fn persist_chat_failure(
+    db: &SqlitePool,
+    chat_id: &str,
+    model: &str,
+    message_id: &mut Option<String>,
+    content: &str,
+    error: &str,
+    recoverable: bool,
+) {
+    let metadata = build_failure_metadata(error, recoverable);
+    let persisted_content = if content.trim().is_empty() { error } else { content };
+    let _ = save_assistant_message(AssistantMessageSave {
+        db,
+        chat_id,
+        model,
+        message_id,
+        content: persisted_content,
+        is_complete: false,
+        tokens_in: None,
+        tokens_out: None,
+        tool_calls: None,
+        reasoning_details: None,
+        metadata: Some(&metadata),
+        error_context: "Failed to persist assistant failure message to SQLite",
+    })
+    .await;
 }
 
 pub(super) async fn save_assistant_message(params: AssistantMessageSave<'_>) -> bool {
@@ -28,6 +66,7 @@ pub(super) async fn save_assistant_message(params: AssistantMessageSave<'_>) -> 
                 tokens_out: params.tokens_out,
                 tool_calls: params.tool_calls,
                 reasoning_details: params.reasoning_details,
+                metadata: params.metadata,
             },
         )
         .await
@@ -44,6 +83,7 @@ pub(super) async fn save_assistant_message(params: AssistantMessageSave<'_>) -> 
                 tokens_in: params.tokens_in,
                 tokens_out: params.tokens_out,
                 reasoning_details: params.reasoning_details,
+                metadata: params.metadata,
                 ..Default::default()
             },
         )

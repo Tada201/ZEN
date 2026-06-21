@@ -72,38 +72,41 @@ impl OpenAiCompatProvider {
                 ("mimo-v2-omni", "MiMo V2 Omni"),
                 ("mimo-v2-flash", "MiMo V2 Flash"),
             ];
-            
-            return Ok(hardcoded_models.into_iter().map(|(id, name)| {
-                // Populate capability cache for runtime request gating
-                if let Ok(mut cache) = self.model_capabilities.write() {
-                    cache.insert(
-                        id.to_string(),
-                        ModelCapabilities {
-                            supports_tools: true,
-                            supports_reasoning: true,
-                        },
-                    );
-                }
 
-                ModelInfo {
-                    id: id.to_string(),
-                    name: id.to_string(),
-                    display_name: Some(name.to_string()),
-                    description: None,
-                    size: None,
-                    modified_at: None,
-                    provider: Some(self.provider_name.clone()),
-                    model_type: None,
-                    arch: None,
-                    quantization: None,
-                    max_context_length: Some(32768),
-                    state: None,
-                    supports_vision: Some(false),
-                    supports_tools: Some(true),
-                    supports_reasoning: Some(true),
-                    reasoning_config_type: Some("none".to_string()),
-                }
-            }).collect());
+            return Ok(hardcoded_models
+                .into_iter()
+                .map(|(id, name)| {
+                    // Populate capability cache for runtime request gating
+                    if let Ok(mut cache) = self.model_capabilities.write() {
+                        cache.insert(
+                            id.to_string(),
+                            ModelCapabilities {
+                                supports_tools: true,
+                                supports_reasoning: true,
+                            },
+                        );
+                    }
+
+                    ModelInfo {
+                        id: id.to_string(),
+                        name: id.to_string(),
+                        display_name: Some(name.to_string()),
+                        description: None,
+                        size: None,
+                        modified_at: None,
+                        provider: Some(self.provider_name.clone()),
+                        model_type: None,
+                        arch: None,
+                        quantization: None,
+                        max_context_length: Some(32768),
+                        state: None,
+                        supports_vision: Some(false),
+                        supports_tools: Some(true),
+                        supports_reasoning: Some(true),
+                        reasoning_config_type: Some("none".to_string()),
+                    }
+                })
+                .collect());
         }
 
         let url = self.url("/models");

@@ -168,14 +168,13 @@ pub fn get_default_workspace() -> PathBuf {
         return project_workspace;
     }
 
-    // Try to get user's home directory
+    // A packaged app must not silently grant its tools access to the entire
+    // home directory. Create a dedicated, user-visible workspace instead.
     if let Some(home) = dirs::home_dir() {
-        // Prefer a 'zen-projects' subdirectory if it exists, or use home
         let projects = home.join("zen-projects");
-        if projects.exists() {
+        if std::fs::create_dir_all(&projects).is_ok() {
             return projects;
         }
-        return home;
     }
 
     // Fallback to current directory

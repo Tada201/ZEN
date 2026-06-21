@@ -19,62 +19,74 @@ impl<'a> IterativeDeepResearcher<'a> {
         max_tokens: usize,
         timeout_secs: u64,
     ) -> Result<String, String> {
-        let messages = vec![ChatMessage {
-            role: "user".to_string(),
-            content: prompt.to_string(),
-            reasoning_details: None,
-            images: None,
-            tool_calls: None,
-            tool_call_id: None,
-        }];
-
         let mut config = self.config.clone();
         config.temperature = Some(temperature);
         config.max_tokens = Some(max_tokens as i64);
 
-        let full_response: Arc<StdMutex<String>> = Arc::new(StdMutex::new(String::new()));
-        let response_clone = full_response.clone();
+        const MAX_ATTEMPTS: u8 = 3;
+        let mut last_error = "LLM call did not start".to_string();
 
-        let on_chunk = Box::new(move |chunk: LlmChunk| {
-            if let LlmChunk::Text(text) = chunk {
-                if let Ok(mut resp) = response_clone.lock() {
-                    resp.push_str(&text);
-                }
+        for attempt in 1..=MAX_ATTEMPTS {
+            if self.token.is_cancelled() {
+                return Err("Research cancelled by user.".to_string());
             }
-        });
 
-        let result = tokio::time::timeout(
-            std::time::Duration::from_secs(timeout_secs),
-            self.llm_provider.chat_stream(
-                self.model,
-                messages,
-                None, // no tools for internal research calls
-                config,
-                on_chunk,
-                self.token.clone(),
-            ),
-        )
-        .await;
-
-        match result {
-            Ok(Ok(_chat_response)) => {
-                let text =
-                    full_response.lock().map_err(|e| format!("Mutex poisoned: {}", e))?;
-                if text.is_empty() {
-                    Err("LLM returned empty response".to_string())
-                } else {
-                    // Strip thinking/reasoning blocks before returning
-                    let cleaned = Self::strip_thinking(&text);
-                    if cleaned.is_empty() {
-                        Err("LLM returned empty response".to_string())
-                    } else {
-                        Ok(cleaned)
+            let messages = vec![ChatMessage {
+                role: "user".to_string(),
+                content: prompt.to_string(),
+                reasoning_details: None,
+                images: None,
+                tool_calls: None,
+                tool_call_id: None,
+            }];
+            let full_response: Arc<StdMutex<String>> = Arc::new(StdMutex::new(String::new()));
+            let response_clone = full_response.clone();
+            let on_chunk = Box::new(move |chunk: LlmChunk| {
+                if let LlmChunk::Text(text) = chunk {
+                    if let Ok(mut response) = response_clone.lock() {
+                        response.push_str(&text);
                     }
                 }
+            });
+            let result = tokio::time::timeout(
+                std::time::Duration::from_secs(timeout_secs),
+                self.llm_provider.chat_stream(
+                    self.model,
+                    messages,
+                    None,
+                    config.clone(),
+                    on_chunk,
+                    self.token.clone(),
+                ),
+            )
+            .await;
+
+            match result {
+                Ok(Ok(_)) => {
+                    let text = full_response
+                        .lock()
+                        .map_err(|error| format!("Research response mutex poisoned: {error}"))?;
+                    let cleaned = Self::strip_thinking(&text);
+                    if !cleaned.is_empty() {
+                        return Ok(cleaned);
+                    }
+                    last_error = "LLM returned an empty response".to_string();
+                }
+                Ok(Err(error)) => last_error = format!("LLM call failed: {error}"),
+                Err(_) => last_error = format!("LLM call timed out after {timeout_secs}s"),
             }
-            Ok(Err(e)) => Err(format!("LLM call failed: {}", e)),
-            Err(_) => Err(format!("LLM call timed out after {}s", timeout_secs)),
+
+            if attempt < MAX_ATTEMPTS {
+                let delay = std::time::Duration::from_millis(300 * u64::from(attempt));
+                info!(attempt, max_attempts = MAX_ATTEMPTS, error = %last_error, "Retrying deep research LLM call");
+                tokio::select! {
+                    _ = tokio::time::sleep(delay) => {}
+                    _ = self.token.cancelled() => return Err("Research cancelled by user.".to_string()),
+                }
+            }
         }
+
+        Err(format!("{last_error} after {MAX_ATTEMPTS} attempts"))
     }
 }
 
@@ -125,7 +137,11 @@ impl<'a> IterativeDeepResearcher<'a> {
                 .strip_prefix("```json")
                 .or_else(|| text.strip_prefix("```"))
                 .unwrap_or(text);
-            inner.strip_suffix("```").unwrap_or(inner).trim().to_string()
+            inner
+                .strip_suffix("```")
+                .unwrap_or(inner)
+                .trim()
+                .to_string()
         } else {
             text.to_string()
         }

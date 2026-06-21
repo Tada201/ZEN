@@ -81,7 +81,19 @@ impl SpawnAgentTool {
     /// Core child-agent execution logic. The deprecated delegate alias also
     /// calls this implementation for compatibility with persisted references.
     pub(crate) async fn do_spawn(&self, params: SpawnParams<'_>) -> Result<Value> {
-        let SpawnParams { app, chat_id, agent_id, task, context, explicit_model, explicit_max_steps, depth, allowed_tools, token, label } = params;
+        let SpawnParams {
+            app,
+            chat_id,
+            agent_id,
+            task,
+            context,
+            explicit_model,
+            explicit_max_steps,
+            depth,
+            allowed_tools,
+            token,
+            label,
+        } = params;
         child_runner::check_depth(depth)?;
 
         if agent_id == "voice_display" {
@@ -102,16 +114,17 @@ impl SpawnAgentTool {
         let child_messages =
             child_runner::build_child_messages(&app, &chat_id, &delegation_prompt).await;
 
-        let mut child_runner_instance = child_runner::build_child_runner(child_runner::ChildRunnerParams {
-            app: &app,
-            tool_registry: self.tool_registry.clone(),
-            agent_registry: self.agent_registry.clone(),
-            hook_registry: self.hook_registry.clone(),
-            permissions: self.permissions.clone(),
-            parent_depth: depth,
-            resolved: &resolved,
-            allowed_tools,
-        })?;
+        let mut child_runner_instance =
+            child_runner::build_child_runner(child_runner::ChildRunnerParams {
+                app: &app,
+                tool_registry: self.tool_registry.clone(),
+                agent_registry: self.agent_registry.clone(),
+                hook_registry: self.hook_registry.clone(),
+                permissions: self.permissions.clone(),
+                parent_depth: depth,
+                resolved: &resolved,
+                allowed_tools,
+            })?;
         child_runner_instance = child_runner_instance.with_memory_scope(memory_scope);
 
         let state = app.state::<AppState>();
@@ -441,7 +454,19 @@ impl AgentTool for SpawnAgentTool {
 
 /// Shared helper to emit completion events for spawn/delegate tools.
 fn emit_completion_events(params: CompletionParams<'_>) -> Result<()> {
-    let CompletionParams { app, chat_id, agent_id, agent_name, task, spawn_id, label, status, error, result_summary, duration_ms } = params;
+    let CompletionParams {
+        app,
+        chat_id,
+        agent_id,
+        agent_name,
+        task,
+        spawn_id,
+        label,
+        status,
+        error,
+        result_summary,
+        duration_ms,
+    } = params;
     let state = app.state::<AppState>();
 
     // Emit chat:message completion

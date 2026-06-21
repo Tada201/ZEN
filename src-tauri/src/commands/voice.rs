@@ -303,9 +303,7 @@ pub async fn speak_text(
 ) -> Result<(), ZenError> {
     let tts_lock = state.tts.read().await;
     if let Some(tts) = tts_lock.as_ref() {
-        tts.speak(&text, app)
-            .await
-            .map_err(ZenError::Internal)?;
+        tts.speak(&text, app).await.map_err(ZenError::Internal)?;
     } else {
         return Err(ZenError::Internal(
             "TTS service is not initialized. Check Settings → Audio to configure TTS.".into(),
@@ -335,24 +333,6 @@ pub struct VoiceModel {
 pub async fn list_voice_models(app: AppHandle) -> Result<Vec<VoiceModel>, ZenError> {
     let mut voices = Vec::new();
 
-    let resource_dir = app
-        .path()
-        .resource_dir()
-        .map_err(|e| ZenError::Internal(e.to_string()))?;
-    let default_path = resource_dir
-        .join("resources")
-        .join("models")
-        .join("glados_piper_medium.onnx");
-
-    if default_path.exists() {
-        voices.push(VoiceModel {
-            id: "default".to_string(),
-            name: "GLaDOS (Default)".to_string(),
-            path: default_path.to_string_lossy().to_string(),
-            is_default: true,
-        });
-    }
-
     let app_data_dir = app
         .path()
         .app_data_dir()
@@ -371,11 +351,20 @@ pub async fn list_voice_models(app: AppHandle) -> Result<Vec<VoiceModel>, ZenErr
                     .map(|s| s.to_string_lossy().to_string())
                     .unwrap_or_else(|| "Unknown".to_string());
 
+                let is_default = name == "glados_piper_medium";
                 voices.push(VoiceModel {
-                    id: name.clone(),
-                    name,
+                    id: if is_default {
+                        "default".to_string()
+                    } else {
+                        name.clone()
+                    },
+                    name: if is_default {
+                        "GLaDOS (Default)".to_string()
+                    } else {
+                        name
+                    },
                     path: path.to_string_lossy().to_string(),
-                    is_default: false,
+                    is_default,
                 });
             }
         }
@@ -487,6 +476,179 @@ pub async fn add_voice_model(
         name,
         path: onnx_dest.to_string_lossy().to_string(),
         is_default: false,
+    })
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PiperDownloadStatus {
+    pub model_name: String,
+    pub model_path: String,
+    pub config_path: String,
+    pub size_bytes: u64,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+/// Download a Piper voice model from Hugging Face.
+///
+/// `voice_name` follows the Piper naming convention: `{lang}-{voice}-{quality}`
+/// e.g. `en_US-ryan-high`, `en_US-lessac-medium`, `en_US-glados-medium`
+///
+/// The model `.onnx` and config `.onnx.json` files are saved to `{app_data_dir}/voices/`.
+/// After download, the TTS service is automatically set to use the new model.
+#[tauri::command]
+pub async fn download_piper_model(
+    state: State<'_, AppState>,
+    app: AppHandle,
+    voice_name: String,
+) -> Result<PiperDownloadStatus, ZenError> {
+    let model_file = format!("{}.onnx", voice_name);
+    let config_file = format!("{}.onnx.json", voice_name);
+
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| ZenError::Internal(format!("Failed to get app data dir: {e}")))?;
+    let voices_dir = app_data_dir.join("voices");
+    std::fs::create_dir_all(&voices_dir)
+        .map_err(|e| ZenError::Internal(format!("Failed to create voices dir: {e}")))?;
+
+    let model_path = voices_dir.join(&model_file);
+    let config_path = voices_dir.join(&config_file);
+
+    // Check if already downloaded and valid
+    if model_path.exists() && config_path.exists() {
+        let model_meta = std::fs::metadata(&model_path)
+            .map_err(|e| ZenError::Internal(format!("Failed to read model file: {e}")))?;
+        if model_meta.len() > 1_000_000 {
+            info!(path = %model_path.display(), "Piper model already downloaded");
+            let tts_lock = state.tts.read().await;
+            if let Some(tts) = tts_lock.as_ref() {
+                tts.set_model(model_path.clone()).await;
+            }
+            return Ok(PiperDownloadStatus {
+                success: true,
+                model_name: voice_name.clone(),
+                model_path: model_path.to_string_lossy().to_string(),
+                config_path: config_path.to_string_lossy().to_string(),
+                size_bytes: model_meta.len(),
+                error: None,
+            });
+        }
+    }
+
+    // Construct Hugging Face URL from voice_name.
+    // Voice name format: {locale}-{voice}-{quality}
+    // e.g. "en_US-glados-medium"
+    //
+    // HF repo path:   {lang}/{locale}/{voice}/{quality}/{file}
+    // e.g.            en/en_US/glados/medium/en_US-glados-medium.onnx
+    //
+    // The lang ("en") is the first two chars of the locale ("en_US").
+    let parts: Vec<&str> = voice_name.splitn(3, '-').collect();
+    let (lang_prefix, hf_path) = if parts.len() >= 3 {
+        let locale = parts[0]; // "en_US"
+        let voice = parts[1]; // "glados"
+        let quality = parts[2]; // "medium"
+                                // lang is first 2 chars of locale (e.g. "en" from "en_US")
+        let lang = &locale[..locale.find('_').unwrap_or(2).min(locale.len())];
+        (
+            lang.to_string(),
+            format!("{}/{}/{}", locale, voice, quality),
+        )
+    } else {
+        // Fallback: use repo root
+        (String::new(), voice_name.replace('-', "/"))
+    };
+    let base_url = if lang_prefix.is_empty() {
+        // fallback: no lang prefix
+        format!(
+            "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/{}",
+            hf_path
+        )
+    } else {
+        format!(
+            "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/{}/{}",
+            lang_prefix, hf_path
+        )
+    };
+    let model_url = format!("{}/{}", base_url, model_file);
+    let config_url = format!("{}/{}", base_url, config_file);
+
+    info!(
+        model_url = %model_url,
+        config_url = %config_url,
+        "Downloading Piper model"
+    );
+
+    let client = crate::utils::model_download_http_client();
+
+    // Download model
+    let model_response = client
+        .get(&model_url)
+        .send()
+        .await
+        .map_err(|e| ZenError::Internal(format!("Failed to download model: {e}")))?;
+    if !model_response.status().is_success() {
+        return Err(ZenError::Internal(format!(
+            "Model download returned HTTP {}",
+            model_response.status()
+        )));
+    }
+    let model_bytes = model_response
+        .bytes()
+        .await
+        .map_err(|e| ZenError::Internal(format!("Failed to read model response: {e}")))?;
+
+    // Download config
+    let config_response = client
+        .get(&config_url)
+        .send()
+        .await
+        .map_err(|e| ZenError::Internal(format!("Failed to download config: {e}")))?;
+    if !config_response.status().is_success() {
+        return Err(ZenError::Internal(format!(
+            "Config download returned HTTP {}",
+            config_response.status()
+        )));
+    }
+    let config_bytes = config_response
+        .bytes()
+        .await
+        .map_err(|e| ZenError::Internal(format!("Failed to read config response: {e}")))?;
+
+    // Atomic writes
+    let runtime = crate::services::runtime_resource::RuntimeResources::new(
+        &app_data_dir,
+        &app.path().resource_dir().unwrap_or_default(),
+    );
+    runtime
+        .atomic_write(&model_path, &model_bytes)
+        .map_err(|e| ZenError::Internal(format!("Failed to write model file: {e}")))?;
+    runtime
+        .atomic_write(&config_path, &config_bytes)
+        .map_err(|e| ZenError::Internal(format!("Failed to write config file: {e}")))?;
+
+    info!(
+        size_mb = model_bytes.len() / (1024 * 1024),
+        path = %model_path.display(),
+        "Piper model downloaded successfully"
+    );
+
+    // Automatically set the downloaded model as active
+    let tts_lock = state.tts.read().await;
+    if let Some(tts) = tts_lock.as_ref() {
+        tts.set_model(model_path.clone()).await;
+    }
+
+    Ok(PiperDownloadStatus {
+        success: true,
+        model_name: voice_name,
+        model_path: model_path.to_string_lossy().to_string(),
+        config_path: config_path.to_string_lossy().to_string(),
+        size_bytes: model_bytes.len() as u64,
+        error: None,
     })
 }
 

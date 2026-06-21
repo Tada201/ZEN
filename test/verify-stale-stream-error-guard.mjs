@@ -18,6 +18,6 @@ assert(
 assert(source.includes('let appliedToSendingAssistant = false;'), 'chat:error should track whether it affected a live assistant');
 assert(source.includes('if (prev[assistantIdx].status !== "sending") return prev;'), 'chat:error must not mark completed assistant messages as failed');
 assert(source.includes('appliedToSendingAssistant = true;'), 'chat:error should only toast when a live assistant was actually failed');
-assert(source.includes('if (appliedToSendingAssistant)') && source.includes('toast.error'), 'stale chat:error events should not show user-facing error toast');
+assert(source.includes('if (appliedToSendingAssistant && !recoverable)') && source.includes('toast.error'), 'stale or recoverable chat:error events should not show user-facing error toast');
 
 console.log('stale stream error guard verifier passed');

@@ -3,7 +3,7 @@
    Sessions · Markdown · Code blocks · Tool calls · Artifact panel
    Image attachments · API key management · SQLite persistence
  ═══════════════════════════════════════════════════════════════ */
-import { useState, useCallback, useEffect, useTransition, useMemo } from "react";
+import { lazy, Suspense, useState, useCallback, useEffect, useTransition, useMemo } from "react";
 import { PanelLeftOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useChat } from "@/atlas/hooks/useChat";
@@ -18,10 +18,13 @@ import { AgentActionStep } from "../components/chat/AssistantMessageTrace";
 import { MessageList } from "../components/chat/MessageList";
 import { PremiumChatInput } from "../components/PremiumChatInput";
 import { SettingsModal, type TabId } from "../components/SettingsModal";
-import { VoiceModeOverlay } from "../components/voice";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { VOICE_MODE_SYSTEM_PROMPT } from "../components/voice/voiceModePrompt";
+
+const VoiceModeOverlay = lazy(() =>
+  import("../components/voice/VoiceModeOverlay").then((module) => ({ default: module.VoiceModeOverlay })),
+);
 
 export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
   const [, startTransition] = useTransition();
@@ -212,22 +215,24 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
 
       <AnimatePresence>
         {voiceModeOpen && (
-          <VoiceModeOverlay
-            isOpen={voiceModeOpen}
-            onClose={() => toggleVoiceMode()}
-            chatId={currentSessionId ?? undefined}
-            messages={messages}
-            activeModel={selectedModelId}
-            onTranscript={(text) => {
-              handleSendMessageInternal({
-                message: text,
-                model: selectedModelId,
-                provider: selectedProvider,
-                systemPrompt: VOICE_MODE_SYSTEM_PROMPT,
-                systemPromptMode: "replace",
-              });
-            }}
-          />
+          <Suspense fallback={null}>
+            <VoiceModeOverlay
+              isOpen={voiceModeOpen}
+              onClose={() => toggleVoiceMode()}
+              chatId={currentSessionId ?? undefined}
+              messages={messages}
+              activeModel={selectedModelId}
+              onTranscript={(text) => {
+                handleSendMessageInternal({
+                  message: text,
+                  model: selectedModelId,
+                  provider: selectedProvider,
+                  systemPrompt: VOICE_MODE_SYSTEM_PROMPT,
+                  systemPromptMode: "replace",
+                });
+              }}
+            />
+          </Suspense>
         )}
       </AnimatePresence>
 

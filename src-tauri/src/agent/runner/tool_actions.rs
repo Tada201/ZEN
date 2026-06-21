@@ -1,4 +1,6 @@
-use super::actions::{emit_action_only, persist_and_emit_action, ActionEmitParams, ActionPersistParams};
+use super::actions::{
+    emit_action_only, persist_and_emit_action, ActionEmitParams, ActionPersistParams,
+};
 use super::helpers::parse_file_changes;
 use crate::agent::types::{ActionMeta, MessageKind, ToolCall, ToolCallMeta, ToolResultMeta};
 use serde_json::Value;
@@ -18,7 +20,17 @@ pub(super) struct ToolActionParams<'a> {
 }
 
 pub(super) async fn emit_tool_call_action(params: ToolActionParams<'_>) {
-    let ToolActionParams { app, db_pool, channel, chat_id, tool_call, agent_id, agent_name, iteration, depth } = params;
+    let ToolActionParams {
+        app,
+        db_pool,
+        channel,
+        chat_id,
+        tool_call,
+        agent_id,
+        agent_name,
+        iteration,
+        depth,
+    } = params;
     let action_meta = ActionMeta {
         agent_id: agent_id.to_string(),
         agent_name: agent_name.to_string(),
@@ -80,7 +92,18 @@ pub(super) struct CachedResultParams<'a> {
 }
 
 pub(super) async fn emit_cached_tool_result_action(params: CachedResultParams<'_>) {
-    let CachedResultParams { app, db_pool, channel, chat_id, tool_call, cached_result, agent_id, agent_name, iteration, depth } = params;
+    let CachedResultParams {
+        app,
+        db_pool,
+        channel,
+        chat_id,
+        tool_call,
+        cached_result,
+        agent_id,
+        agent_name,
+        iteration,
+        depth,
+    } = params;
     let tool_result_meta = ToolResultMeta {
         tool_name: tool_call.name.clone(),
         status: "ok".to_string(),

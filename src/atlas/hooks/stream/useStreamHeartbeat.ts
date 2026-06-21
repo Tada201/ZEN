@@ -23,9 +23,10 @@ export function useStreamHeartbeat() {
       console.warn(`[useStreamHeartbeat] Heartbeat timed out for chat: ${chatId}`);
       
       useChatStore.getState().setStreamingForChat(chatId, false);
+      useChatStore.getState().setActiveAssistantForChat(chatId, null);
       
       useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-        const assistantIdx = findWritableAssistantIndex(prev);
+        const assistantIdx = findWritableAssistantIndex(prev, chatId);
         if (assistantIdx === -1) return prev;
         const assistant = prev[assistantIdx];
         if (assistant.status === "sent" || assistant.status === "failed") return prev;

@@ -136,6 +136,7 @@ export interface ChatDoneEventPayload {
 export interface ChatErrorEventPayload {
   chat_id?: string | null;
   error?: string;
+  recoverable?: boolean;
 }
 
 export interface ChatStreamResetEventPayload {
@@ -150,6 +151,9 @@ export interface ChatResearchStepEventPayload {
   phase?: string;
   agent_index?: number;
   agent_name?: string;
+  step_id?: string;
+  duration_secs?: number;
+  progress_percent?: number;
 }
 
 export interface AgentChunkEventPayload {
@@ -276,6 +280,8 @@ export interface ChatMessageEventPayload extends AgentActionEventPayload {
   timestamp: string;
   role: Message["role"];
   content: string;
+  status?: Message["status"];
+  error?: string;
 }
 
 export interface ChatContextDriftEventPayload {

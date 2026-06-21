@@ -5,7 +5,7 @@ import { useChatStore } from "@/lib/stores/useChatStore";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import { ttftBegin, ttftReport } from "@/lib/ttft";
 import type { Message, Attachment } from "../../components/chat/types";
-import { findWritableAssistantIndex, markMessageAsFailed } from "../stream/messageTarget";
+import { findWritableAssistantIndex, markMessageAsFailed, supersedeStaleSendingAssistants } from "../stream/messageTarget";
 import { createOptimisticChatMessages } from "./optimisticChatMessages";
 import { preloadOpenUISystemPrompt } from "../../components/genui/promptLoader";
 import { useVoiceStageStore } from "../../components/voice/voiceStageStore";
@@ -65,8 +65,19 @@ export function useSendMessage(
       attachments: data.attachments,
     });
 
-    setSessionMessages(targetSessionId, (prev: Message[]) => [...prev, userMessage, assistantMessage]);
+    try {
+      await chatApi.abortChat(targetSessionId);
+    } catch {
+      // No active stream to abort — safe to continue.
+    }
 
+    setSessionMessages(targetSessionId, (prev: Message[]) => [
+      ...supersedeStaleSendingAssistants(prev),
+      userMessage,
+      assistantMessage,
+    ]);
+
+    useChatStore.getState().setActiveAssistantForChat(targetSessionId, assistantMessage.id);
     useChatStore.getState().setStreamingForChat(targetSessionId, true);
 
     try {
@@ -121,12 +132,13 @@ export function useSendMessage(
       ttftReport(targetSessionId, "send-error");
       setSessionMessages(targetSessionId, (prev: Message[]) => {
         const next = [...prev];
-        const assistantIdx = findWritableAssistantIndex(next);
+        const assistantIdx = findWritableAssistantIndex(next, targetSessionId);
         if (assistantIdx !== -1) {
           next[assistantIdx] = markMessageAsFailed(next[assistantIdx], errorMessage);
         }
         return next;
       });
+      useChatStore.getState().setActiveAssistantForChat(targetSessionId, null);
       useChatStore.getState().setStreamingForChat(targetSessionId, false);
       toast.error(errorMessage);
     }

@@ -212,7 +212,7 @@ const checks = [
   ],
   [
     "voice captions require Web Speech STT",
-    src.overlay.includes("captionsAvailable={sttEngine === 'web'}") &&
+    src.overlay.includes("captionsAvailable={activeSttEngine === 'web'}") &&
       src.panel.includes("disabled={!captionsAvailable}") &&
       src.panel.includes("Captions require Web Speech STT") &&
       src.panel.includes("captionsAvailable && captionsVisible"),
@@ -232,13 +232,13 @@ const checks = [
   [
     "Whisper CUDA server can be selected when available",
     src.runtimeResource.includes("whisper-cublas") &&
-      src.runtimeResource.includes("app_data_cublas") &&
+      src.runtimeResource.includes("whisper_app_data_cuda_server_path") &&
       src.runtimeResource.includes("whisper-vulkan") &&
       src.speechService.includes("cuda_backend") &&
       src.speechService.includes("cuda_driver") &&
       src.speechService.includes("recommended_backend") &&
       src.speechService.includes("detected_gpu_vendors") &&
-      src.speechService.includes('gpu.vendor == "AMD" || gpu.vendor == "Intel"'),
+      src.speechService.includes('vendor == "AMD" || vendor == "Intel"'),
   ],
   [
     "voice overlay cancels stale mic init",

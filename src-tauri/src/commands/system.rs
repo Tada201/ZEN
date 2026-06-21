@@ -1,4 +1,4 @@
-use crate::commands::AppState;
+use crate::commands::{AppState, InitStatus};
 use crate::error::AppResult;
 use crate::models::SystemMetrics;
 use tauri::State;
@@ -12,6 +12,11 @@ pub async fn get_system_metrics(state: State<'_, AppState>) -> AppResult<SystemM
 #[tauri::command]
 pub async fn get_system_status() -> AppResult<String> {
     Ok("OPERATIONAL".to_string())
+}
+
+#[tauri::command]
+pub async fn get_init_status(state: State<'_, AppState>) -> AppResult<InitStatus> {
+    Ok(state.init_progress.snapshot().await)
 }
 
 #[tauri::command]

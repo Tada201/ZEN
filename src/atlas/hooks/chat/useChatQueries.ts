@@ -126,6 +126,9 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
     status: msg.isComplete === 1 ? "sent" : "failed",
     kind: msg.kind as any,
     metadata: parsedMetadata,
+    error: typeof parsedMetadata?.error === "string" && parsedMetadata.error.trim()
+      ? parsedMetadata.error
+      : undefined,
   };
 };
 

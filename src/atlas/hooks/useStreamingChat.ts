@@ -36,6 +36,7 @@ export function useStreamingChat(
     // Clear streaming flag immediately for responsive UI
     if (chatId) {
       useChatStore.getState().setStreamingForChat(chatId, false);
+      useChatStore.getState().setActiveAssistantForChat(chatId, null);
       useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
         for (let i = prev.length - 1; i >= 0; i--) {
           const message = prev[i];

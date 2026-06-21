@@ -113,9 +113,7 @@ impl Parser {
     fn parse(&mut self) -> Result<f64, String> {
         let val = self.parse_expr()?;
         if self.peek().is_some() {
-            return Err(format!(
-                "Unexpected trailing tokens after expression"
-            ));
+            return Err(format!("Unexpected trailing tokens after expression"));
         }
         Ok(val)
     }
@@ -174,7 +172,7 @@ impl Parser {
                         // We'll leave left as a raw percentage marker and handle
                         // in a special way by interpreting percent as "left / 100"
                         left = left / 100.0;
-                        // If next token is an operand (number, ident, paren), 
+                        // If next token is an operand (number, ident, paren),
                         // it's "N% of expr" — multiply
                         if let Some(next) = self.peek() {
                             match next {
@@ -230,12 +228,24 @@ impl Parser {
             }
             Token::Ident(name) => {
                 // Could be a constant or a function call
-                if self.peek().map(|t| matches!(t, Token::LParen)).unwrap_or(false) {
+                if self
+                    .peek()
+                    .map(|t| matches!(t, Token::LParen))
+                    .unwrap_or(false)
+                {
                     self.advance(); // consume '('
                     let mut args = Vec::new();
-                    if !self.peek().map(|t| matches!(t, Token::RParen)).unwrap_or(false) {
+                    if !self
+                        .peek()
+                        .map(|t| matches!(t, Token::RParen))
+                        .unwrap_or(false)
+                    {
                         args.push(self.parse_expr()?);
-                        while self.peek().map(|t| matches!(t, Token::Comma)).unwrap_or(false) {
+                        while self
+                            .peek()
+                            .map(|t| matches!(t, Token::Comma))
+                            .unwrap_or(false)
+                        {
                             self.advance(); // consume ','
                             args.push(self.parse_expr()?);
                         }
@@ -395,10 +405,15 @@ fn eval_expression(expr: &str) -> Result<f64, String> {
     let mut parser = Parser::new(tokens);
     let result = parser.parse()?;
     if result.is_nan() {
-        return Err("Expression produced NaN (not a number). Check for invalid operations like 0/0.".to_string());
+        return Err(
+            "Expression produced NaN (not a number). Check for invalid operations like 0/0."
+                .to_string(),
+        );
     }
     if result.is_infinite() {
-        return Err("Expression overflowed to infinity. Try smaller or different values.".to_string());
+        return Err(
+            "Expression overflowed to infinity. Try smaller or different values.".to_string(),
+        );
     }
     Ok(result)
 }
@@ -491,18 +506,11 @@ impl Tool for CalculatorTool {
             .get("expression")
             .and_then(|v| v.as_str())
             .unwrap_or("");
-        let mode = args
-            .get("mode")
-            .and_then(|v| v.as_str())
-            .unwrap_or("auto");
+        let mode = args.get("mode").and_then(|v| v.as_str()).unwrap_or("auto");
         let data: Vec<f64> = args
             .get("data")
             .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_f64())
-                    .collect()
-            })
+            .map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect())
             .unwrap_or_default();
 
         let trimmed = expression.trim();

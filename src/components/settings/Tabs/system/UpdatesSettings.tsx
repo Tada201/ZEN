@@ -1,6 +1,7 @@
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
+import { useUpdateStore } from '@/lib/stores/updateStore';
 import { SettingsCard } from '@/components/settings/ui/SettingsCard';
 import { WorkbenchSwitch } from '@/components/settings/ui/WorkbenchSwitch';
 import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
@@ -12,13 +13,17 @@ export const UpdatesSettings = memo(() => {
   const autoCheckEnabled = useSettingsStore(s => s.autoCheckEnabled ?? true);
   const checkBeta = useSettingsStore(s => s.checkBeta ?? false);
   const updateSetting = useSettingsStore(s => s.updateSetting);
+  const currentVersion = useUpdateStore(s => s.currentVersion);
+  const initializeVersion = useUpdateStore(s => s.init);
 
   const formatDate = (ts: number | null) => ts ? new Date(ts).toLocaleString() : 'Never';
 
-  // Fallback state for when used without full store integration
-  const currentVersion = '1.0.0';
+  useEffect(() => {
+    void initializeVersion();
+  }, [initializeVersion]);
+
+  // Updater delivery remains disabled until native updater signing is configured.
   const updateAvailable = false;
-  const latestVersion = '1.0.0';
   const isChecking = false;
   const lastCheck: number | null = null;
   const isDownloading = false;
@@ -81,7 +86,7 @@ export const UpdatesSettings = memo(() => {
                 <WorkbenchIcon name="codicon:archive" size={14} className="text-zinc-400" />
                 <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest">Version</span>
               </div>
-              <span className="text-2xl font-bold text-brand-purple font-mono">v{currentVersion}</span>
+              <span className="text-2xl font-bold text-brand-purple font-mono">v{currentVersion || '...'}</span>
             </div>
 
             <div className="flex-1 p-4 bg-zinc-900 border border-white/5 rounded-xl flex flex-col gap-2">
@@ -123,7 +128,7 @@ export const UpdatesSettings = memo(() => {
                   </div>
                   <div className="flex flex-col">
                     <span className="text-sm font-extrabold text-brand-purple-bright">Update Available</span>
-                    <span className="text-xs text-brand-purple/80 font-mono">v{latestVersion}</span>
+                    <span className="text-xs text-brand-purple/80 font-mono">A newer version is available</span>
                   </div>
                 </div>
 

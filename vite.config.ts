@@ -24,6 +24,28 @@ const copyCesiumAssets = (): Plugin => ({
   },
 });
 
+// Moonshine configures ONNX Runtime with its pinned CDN path before it starts
+// inference. Its bundled fallback uses Vite's static `new URL(..., import.meta.url)`
+// pattern, which produces a false production-build warning for an unreachable
+// package-relative asset. Keep the fallback browser-relative instead.
+const normalizeMoonshineWasmFallback = (): Plugin => ({
+  name: "normalize-moonshine-wasm-fallback",
+  enforce: "pre",
+  transform(code, id) {
+    if (!id.includes("@moonshine-ai/moonshine-js/dist/moonshine.min.js")) {
+      return null;
+    }
+
+    return {
+      code: code.replaceAll(
+        'new URL("ort-wasm-simd-threaded.jsep.wasm",import.meta.url).href',
+        'new URL("ort-wasm-simd-threaded.jsep.wasm", globalThis.location.href).href',
+      ),
+      map: null,
+    };
+  },
+});
+
 const manualChunks = (id: string) => {
   if (id.includes("vite/preload-helper")) return "vendor-runtime";
   if (!id.includes("node_modules")) return undefined;
@@ -70,7 +92,7 @@ const manualChunks = (id: string) => {
 
 // https://vite.dev/config/
 export default defineConfig(async ({ command }) => ({
-  plugins: [react(), tailwindcss(), copyCesiumAssets()],
+  plugins: [react(), tailwindcss(), normalizeMoonshineWasmFallback(), copyCesiumAssets()],
   define: {
     CESIUM_BASE_URL: JSON.stringify(
       command === "serve" ? `/@fs/${normalizePath(cesiumBuildDir)}/` : cesiumBaseUrl,

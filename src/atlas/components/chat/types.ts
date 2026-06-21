@@ -137,6 +137,8 @@ export interface ActionMeta {
     durationMs?: number;
   };
   resultSummary?: string;
+  error?: string;
+  recoverable?: boolean;
   agentStream?: {
     content: string;
     type?: "text" | "thought" | string;
@@ -160,7 +162,21 @@ export interface ActionMeta {
   spawn?: SpawnMeta;
   approvalRequest?: ApprovalRequestMeta;
   clarificationRequest?: ClarificationRequestMeta;
-  researchSteps?: Array<{ text: string; status: 'pending' | 'running' | 'completed' | 'error' }>;
+  researchSteps?: Array<{
+    id?: string;
+    text: string;
+    status: 'pending' | 'running' | 'completed' | 'error';
+    phase?: string;
+    agentIndex?: number;
+    agentName?: string;
+    durationSecs?: number;
+    progressPercent?: number;
+  }>;
+  researchProgress?: {
+    phase?: string;
+    percent: number;
+    status: 'pending' | 'running' | 'completed' | 'error';
+  };
   status?: 'running' | 'completed' | 'error' | 'cancelled';
 }
 

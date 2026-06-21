@@ -186,6 +186,10 @@ export interface AiSlice {
   exaApiKey: string;
   tavilySearchDepth: "ultra-fast" | "fast" | "basic" | "advanced";
   webSearchMaxResults: number;
+  deepResearchModel: string;
+  deepResearchMaxRounds: number;
+  deepResearchParallelAgents: number;
+  deepResearchMaxSourcesPerRound: number;
   embeddingProvider: string;
   streamingSpeed: "instant" | "typewriter";
   structuredResponseEnabled: boolean;

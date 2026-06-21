@@ -102,11 +102,39 @@ export function WorkspaceApp() {
     useChatStore.getState().setSessionMessages(currentSessionId, (prev) =>
       prev.map((m) =>
         m.id === messageId
-          ? { ...m, error: undefined, status: m.status === "sending" ? "cancelled" as const : m.status }
+          ? {
+              ...m,
+              error: undefined,
+              status: m.status === "failed" ? "cancelled" as const : m.status === "sending" ? "cancelled" as const : m.status,
+            }
           : m
       )
     );
   }, [currentSessionId]);
+
+  const handleRetry = useCallback((messageId: string) => {
+    const failedMsgIndex = messages.findIndex((m) => m.id === messageId);
+    if (failedMsgIndex === -1) return;
+
+    let lastUserMsg = null;
+    for (let i = failedMsgIndex - 1; i >= 0; i--) {
+      if (messages[i].role === "user") {
+        lastUserMsg = messages[i];
+        break;
+      }
+    }
+    if (!lastUserMsg?.content) return;
+
+    const failedMsg = messages[failedMsgIndex];
+    setMessages(messages.slice(0, failedMsgIndex));
+    handleSendMessageInternal({
+      message: lastUserMsg.content,
+      model: failedMsg.model || selectedModelId,
+      provider: failedMsg.provider || selectedProvider,
+      generativeUI: failedMsg.generativeUI != null ? !!failedMsg.generativeUI : generativeUI,
+      thinking: failedMsg.thinking || { enabled: false },
+    });
+  }, [messages, setMessages, handleSendMessageInternal, selectedModelId, selectedProvider, generativeUI]);
 
   const handleRegenerate = useCallback((messageId: string) => {
     const msgIndex = messages.findIndex(m => m.id === messageId);
@@ -272,6 +300,7 @@ export function WorkspaceApp() {
                         onOpenArtifact={openArtifactInRightPanel}
                         onOpenSettings={() => setSettingsOpen(true)}
                         onDismissError={handleDismissError}
+                        onRetry={handleRetry}
                         onRegenerate={handleRegenerate}
                       />
                       <div className="max-w-3xl mx-auto w-full px-6 py-4 shrink-0">
@@ -310,6 +339,7 @@ export function WorkspaceApp() {
                             onOpenArtifact={openArtifactInRightPanel}
                             onOpenSettings={() => setSettingsOpen(true)}
                             onDismissError={handleDismissError}
+                            onRetry={handleRetry}
                             onRegenerate={handleRegenerate}
                           />
                           <div className="max-w-3xl mx-auto w-full px-6 py-4 shrink-0">

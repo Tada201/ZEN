@@ -3,14 +3,15 @@ use crate::error::{ZenError, ZenResult};
 use crate::llm::openai_compat::types::*;
 use crate::llm::openai_compat::OpenAiCompatProvider;
 use futures::StreamExt;
+use lazy_static::lazy_static;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::RwLock;
 use tracing::{debug, error, info};
-use lazy_static::lazy_static;
 
 lazy_static! {
-    static ref MIMO_CACHED_JWT: std::sync::RwLock<Option<(String, u64)>> = std::sync::RwLock::new(None);
+    static ref MIMO_CACHED_JWT: std::sync::RwLock<Option<(String, u64)>> =
+        std::sync::RwLock::new(None);
 }
 
 impl OpenAiCompatProvider {
@@ -258,7 +259,10 @@ impl OpenAiCompatProvider {
     async fn get_mimo_jwt(&self) -> ZenResult<String> {
         if let Ok(cache) = MIMO_CACHED_JWT.read() {
             if let Some((jwt, exp)) = &*cache {
-                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
                 if now < *exp - 300 {
                     return Ok(jwt.clone());
                 }
@@ -266,22 +270,35 @@ impl OpenAiCompatProvider {
         }
 
         let body = serde_json::json!({ "client": "mimocode-zen-client-hash" });
-        let resp = self.client.post("https://api.xiaomimimo.com/api/free-ai/bootstrap")
+        let resp = self
+            .client
+            .post("https://api.xiaomimimo.com/api/free-ai/bootstrap")
             .header("Content-Type", "application/json")
             .json(&body)
-            .send().await?;
-        
+            .send()
+            .await?;
+
         if !resp.status().is_success() {
-            return Err(ZenError::Custom(format!("MiMo bootstrap failed: {}", resp.status())));
+            return Err(ZenError::Custom(format!(
+                "MiMo bootstrap failed: {}",
+                resp.status()
+            )));
         }
 
         let data: serde_json::Value = resp.json().await?;
-        let jwt = data["jwt"].as_str().ok_or_else(|| ZenError::Custom("No JWT in response".into()))?.to_string();
+        let jwt = data["jwt"]
+            .as_str()
+            .ok_or_else(|| ZenError::Custom("No JWT in response".into()))?
+            .to_string();
 
-        let mut exp_time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() + 3000;
+        let mut exp_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + 3000;
         let parts: Vec<&str> = jwt.split('.').collect();
         if parts.len() == 3 {
-            use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+            use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
             if let Ok(decoded) = URL_SAFE_NO_PAD.decode(parts[1]) {
                 if let Ok(payload) = serde_json::from_slice::<serde_json::Value>(&decoded) {
                     if let Some(exp) = payload["exp"].as_u64() {
@@ -310,16 +327,21 @@ impl OpenAiCompatProvider {
         // Inject MiMoCode signature for MiMo free API
         if self.provider_key() == "mimo" {
             let signature = "You are MiMoCode, an interactive CLI tool that helps users with software engineering tasks.";
-            let has_signature = messages.iter().any(|m| m.role == "system" && m.content.contains("You are MiMoCode"));
+            let has_signature = messages
+                .iter()
+                .any(|m| m.role == "system" && m.content.contains("You are MiMoCode"));
             if !has_signature {
-                messages.insert(0, ChatMessage {
-                    role: "system".to_string(),
-                    content: signature.to_string(),
-                    reasoning_details: None,
-                    images: None,
-                    tool_calls: None,
-                    tool_call_id: None,
-                });
+                messages.insert(
+                    0,
+                    ChatMessage {
+                        role: "system".to_string(),
+                        content: signature.to_string(),
+                        reasoning_details: None,
+                        images: None,
+                        tool_calls: None,
+                        tool_call_id: None,
+                    },
+                );
             }
         }
 
@@ -474,8 +496,11 @@ impl OpenAiCompatProvider {
             "Starting chat stream"
         );
 
-        let mut req_builder = self.auth_post(&url).json(&request_body).timeout(std::time::Duration::from_secs(600));
-        
+        let mut req_builder = self
+            .auth_post(&url)
+            .json(&request_body)
+            .timeout(std::time::Duration::from_secs(600));
+
         if self.provider_key() == "mimo" || self.provider_key() == "mimo-free" {
             let jwt = self.get_mimo_jwt().await?;
             req_builder = req_builder
@@ -484,9 +509,7 @@ impl OpenAiCompatProvider {
                 .header("x-session-affinity", "ses_zen_session_001");
         }
 
-        let resp = self
-            .send_with_retry(req_builder)
-            .await?;
+        let resp = self.send_with_retry(req_builder).await?;
 
         if !resp.status().is_success() {
             let status = resp.status();

@@ -80,7 +80,9 @@ Respond with ONLY the category name, nothing else."#,
             Ok(cat) => {
                 let cat = cat.trim().to_lowercase();
                 // Handle "product" or " product " or "\"product\"" etc.
-                let first = cat.trim_matches(|c: char| c == '"' || c == '\'' || c == '`' || c == '*' || c == '_');
+                let first = cat.trim_matches(|c: char| {
+                    c == '"' || c == '\'' || c == '`' || c == '*' || c == '_'
+                });
                 match first {
                     "product" => Some(ResearchCategory::Product),
                     "comparison" => Some(ResearchCategory::Comparison),
@@ -90,7 +92,10 @@ Respond with ONLY the category name, nothing else."#,
                 }
             }
             Err(e) => {
-                info!("Category classification failed (proceeding with landscape): {}", e);
+                info!(
+                    "Category classification failed (proceeding with landscape): {}",
+                    e
+                );
                 None
             }
         }
@@ -150,11 +155,7 @@ impl<'a> IterativeDeepResearcher<'a> {
     /// assumptions were wrong or new directions have emerged, update the plan.
     /// Returns the (possibly updated) plan text, or the original if no changes.
     /// Uses the compressed report if available to keep context manageable.
-    pub(super) async fn revise_plan(
-        &mut self,
-        question: &str,
-        round_num: usize,
-    ) -> String {
+    pub(super) async fn revise_plan(&mut self, question: &str, round_num: usize) -> String {
         let plan_str = if self.research_plan.is_empty() {
             "(No plan — search broadly.)"
         } else {
@@ -236,14 +237,15 @@ Respond with ONLY the JSON object, nothing else."#,
                     info!("Plan revision: plan updated after round {}", round_num);
                     self.emit_phase(
                         "planning",
-                        &format!("Round {}: Research plan revised based on new findings", round_num),
+                        &format!(
+                            "Round {}: Research plan revised based on new findings",
+                            round_num
+                        ),
                         "completed",
                     );
                     cleaned
                 } else {
-                    info!(
-                        "Plan revision: response missing required fields, keeping existing plan"
-                    );
+                    info!("Plan revision: response missing required fields, keeping existing plan");
                     self.research_plan.clone()
                 }
             }
@@ -322,8 +324,10 @@ Example: ["query one", "query two", "query three"]"#,
         };
 
         let mut parsed = Self::parse_json_array(&response);
-        let new_queries: Vec<String> =
-            parsed.drain(..).filter(|q| !self.queries_used.contains(q)).collect();
+        let new_queries: Vec<String> = parsed
+            .drain(..)
+            .filter(|q| !self.queries_used.contains(q))
+            .collect();
         for q in &new_queries {
             self.queries_used.insert(q.clone());
         }
@@ -463,8 +467,9 @@ Return ONLY the query string, nothing else."#,
         let agent_names: Vec<String> = (0..count)
             .map(|i| {
                 sub_questions
-                    .get(i).map(|_sq| format!("Agent {}", i + 1))
-                            .unwrap_or_else(|| format!("Agent {}", i + 1))
+                    .get(i)
+                    .map(|_sq| format!("Agent {}", i + 1))
+                    .unwrap_or_else(|| format!("Agent {}", i + 1))
             })
             .collect();
 
@@ -537,10 +542,7 @@ Return ONLY the query string, nothing else."#,
                 let mut urls: Vec<(String, String)> = Vec::new();
                 for item in &results {
                     let url = item.get("url").and_then(|u| u.as_str()).unwrap_or("");
-                    let title = item
-                        .get("title")
-                        .and_then(|t| t.as_str())
-                        .unwrap_or("");
+                    let title = item.get("title").and_then(|t| t.as_str()).unwrap_or("");
                     if !url.is_empty() && urls.len() < 2 {
                         urls.push((url.to_string(), title.to_string()));
                     }
@@ -608,13 +610,12 @@ Return ONLY the query string, nothing else."#,
                             };
 
                             // Use LLM to extract structured info
-                            let extraction = self_ref
-                                .extract_from_page(&truncated, &question)
-                                .await;
+                            let extraction =
+                                self_ref.extract_from_page(&truncated, &question).await;
 
                             let finding = match extraction {
-                            Some((_, evidence, summary)) => {
-                                // ── QUALITY FILTER ────────────────
+                                Some((_, evidence, summary)) => {
+                                    // ── QUALITY FILTER ────────────────
                                     if is_low_quality(&summary) {
                                         None
                                     } else {
@@ -625,15 +626,9 @@ Return ONLY the query string, nothing else."#,
                                             } else {
                                                 title.clone()
                                             },
-                                            summary: summary
-                                                .chars()
-                                                .take(500)
-                                                .collect(),
+                                            summary: summary.chars().take(500).collect(),
                                             evidence: if evidence.is_empty() {
-                                                truncated
-                                                    .chars()
-                                                    .take(max_content_half)
-                                                    .collect()
+                                                truncated.chars().take(max_content_half).collect()
                                             } else {
                                                 evidence
                                             },
@@ -649,17 +644,18 @@ Return ONLY the query string, nothing else."#,
                                         } else {
                                             title.clone()
                                         },
-                                        summary: truncated
-                                            .chars()
-                                            .take(500)
-                                            .collect(),
+                                        summary: truncated.chars().take(500).collect(),
                                         evidence: truncated,
                                     })
                                 }
                             };
 
                             // Emit agent-indexed completion/error status
-                            let status_str = if finding.is_some() { "completed" } else { "error" };
+                            let status_str = if finding.is_some() {
+                                "completed"
+                            } else {
+                                "error"
+                            };
                             let display = if title.is_empty() { &url } else { &title };
                             let _ = self_ref.app.emit(
                                 "chat:research-step",
@@ -733,7 +729,8 @@ Return ONLY the query string, nothing else."#,
         let all_results: Vec<Vec<Finding>> = join_all(futures).await;
 
         // Check which agents produced findings BEFORE consuming all_results
-        let agent_had_findings: Vec<bool> = all_results.iter().map(|batch| !batch.is_empty()).collect();
+        let agent_had_findings: Vec<bool> =
+            all_results.iter().map(|batch| !batch.is_empty()).collect();
 
         let mut all_findings: Vec<Finding> = Vec::new();
         let mut seen_urls: HashSet<String> = HashSet::new();
@@ -751,10 +748,7 @@ Return ONLY the query string, nothing else."#,
         // conflict with self_ref (used by app.emit).
         for (i, _) in agent_names.iter().enumerate() {
             let elapsed = agent_start_times[i].elapsed().as_secs();
-            let had_findings = agent_had_findings
-                .get(i)
-                .copied()
-                .unwrap_or(false);
+            let had_findings = agent_had_findings.get(i).copied().unwrap_or(false);
 
             let (phase, status, format_text) = if had_findings {
                 ("agent_complete", "completed", "Completed")
@@ -794,7 +788,12 @@ Return ONLY the query string, nothing else."#,
                     "durationSecs": elapsed,
                 }));
             });
-            info!("Sub-agent {} {} in {}s", i, if had_findings { "completed" } else { "failed" }, elapsed);
+            info!(
+                "Sub-agent {} {} in {}s",
+                i,
+                if had_findings { "completed" } else { "failed" },
+                elapsed
+            );
         }
 
         // Track fetched URLs for cross-round dedup (after self_ref is no
@@ -822,16 +821,20 @@ impl<'a> IterativeDeepResearcher<'a> {
             arguments: json!({"query": query, "max_results": 10}),
         };
 
-        let result = self
-            .state
-            .tool_service
-            .execute_interactive(
+        // Race the tool call against the cancellation token so the user's
+        // stop action immediately interrupts in-progress searches.
+        let result = tokio::select! {
+            result = self.state.tool_service.execute_interactive(
                 self.app.clone(),
                 "deep_research",
                 self.chat_id.to_string(),
                 tool_call,
-            )
-            .await;
+            ) => result,
+            _ = self.token.cancelled() => {
+                info!("Deep research cancelled, aborting search for '{}'", query);
+                return Vec::new();
+            }
+        };
 
         match result {
             Ok(content) => content
@@ -853,16 +856,20 @@ impl<'a> IterativeDeepResearcher<'a> {
             arguments: json!({"url": url}),
         };
 
-        let result = self
-            .state
-            .tool_service
-            .execute_interactive(
+        // Race the tool call against the cancellation token so the user's
+        // stop action immediately interrupts in-progress fetches.
+        let result = tokio::select! {
+            result = self.state.tool_service.execute_interactive(
                 self.app.clone(),
                 "deep_research",
                 self.chat_id.to_string(),
                 tool_call,
-            )
-            .await;
+            ) => result,
+            _ = self.token.cancelled() => {
+                info!("Deep research cancelled, aborting URL fetch for {}", url);
+                return None;
+            }
+        };
 
         match result {
             Ok(content) => content
@@ -953,9 +960,7 @@ impl<'a> IterativeDeepResearcher<'a> {
         // Build each future in a for loop that moves owned url/title/display_text
         // into the async block while keeping self_ref and semaphore as &-borrows
         // (cloned outside the async move to avoid moving the shared Arc/Self).
-        for ((url, title), display_text) in
-            urls_to_fetch.into_iter().zip(url_display.into_iter())
-        {
+        for ((url, title), display_text) in urls_to_fetch.into_iter().zip(url_display.into_iter()) {
             let sem = semaphore.clone();
             futures.push(async move {
                 let _permit = sem.acquire().await.expect("Semaphore closed");
@@ -967,8 +972,7 @@ impl<'a> IterativeDeepResearcher<'a> {
                         // Truncate before extraction to limit LLM cost
                         let truncated = if text.len() > max_content_chars {
                             let mut t = text[..max_content_chars].to_string();
-                            if let Some(last_para) =
-                                t[..(max_content_chars * 8 / 10)].rfind("\n\n")
+                            if let Some(last_para) = t[..(max_content_chars * 8 / 10)].rfind("\n\n")
                             {
                                 t.truncate(last_para);
                             }
@@ -978,8 +982,7 @@ impl<'a> IterativeDeepResearcher<'a> {
                         };
 
                         // Use LLM to extract structured info from the page
-                        let extraction =
-                            self_ref.extract_from_page(&truncated, question).await;
+                        let extraction = self_ref.extract_from_page(&truncated, question).await;
 
                         let finding = match extraction {
                             Some((_, evidence, summary)) => {
@@ -997,10 +1000,7 @@ impl<'a> IterativeDeepResearcher<'a> {
                                         },
                                         summary: summary.chars().take(500).collect(),
                                         evidence: if evidence.is_empty() {
-                                            truncated
-                                                .chars()
-                                                .take(max_content_half)
-                                                .collect()
+                                            truncated.chars().take(max_content_half).collect()
                                         } else {
                                             evidence
                                         },
@@ -1036,11 +1036,7 @@ impl<'a> IterativeDeepResearcher<'a> {
             });
         }
 
-        let findings: Vec<Finding> = join_all(futures)
-            .await
-            .into_iter()
-            .flatten()
-            .collect();
+        let findings: Vec<Finding> = join_all(futures).await.into_iter().flatten().collect();
 
         findings
     }
@@ -1059,8 +1055,16 @@ impl<'a> IterativeDeepResearcher<'a> {
             Ok(response) => {
                 match Self::parse_json_object(&response) {
                     Some(obj) => {
-                        let evidence = obj.get("evidence").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                        let summary = obj.get("summary").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        let evidence = obj
+                            .get("evidence")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let summary = obj
+                            .get("summary")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
                         Some((String::new(), evidence, summary))
                     }
                     None => {
@@ -1089,16 +1093,19 @@ impl<'a> IterativeDeepResearcher<'a> {
             arguments: json!({"expression": expression}),
         };
 
-        let result = self
-            .state
-            .tool_service
-            .execute_interactive(
+        // Race the tool call against the cancellation token.
+        let result = tokio::select! {
+            result = self.state.tool_service.execute_interactive(
                 self.app.clone(),
                 "deep_research",
                 self.chat_id.to_string(),
                 tool_call,
-            )
-            .await;
+            ) => result,
+            _ = self.token.cancelled() => {
+                info!("Deep research cancelled, aborting calculator call");
+                return None;
+            }
+        };
 
         match result {
             Ok(content) => Some(content),
@@ -1124,7 +1131,11 @@ impl<'a> IterativeDeepResearcher<'a> {
                 while pos < chars.len() {
                     if chars[pos].is_ascii_digit() || chars[pos] == '.' {
                         let start = pos;
-                        while pos < chars.len() && (chars[pos].is_ascii_digit() || chars[pos] == '.' || chars[pos] == ',') {
+                        while pos < chars.len()
+                            && (chars[pos].is_ascii_digit()
+                                || chars[pos] == '.'
+                                || chars[pos] == ',')
+                        {
                             if chars[pos] == ',' {
                                 pos += 1;
                                 continue;
@@ -1134,7 +1145,10 @@ impl<'a> IterativeDeepResearcher<'a> {
                         let num_str: String = chars[start..pos].iter().collect();
                         if let Ok(n) = num_str.parse::<f64>() {
                             // Filter: reasonable data values (not years, small counts, or huge numbers)
-                            if n > 0.01 && n < 1_000_000_000.0 && n != num_str.parse::<f64>().unwrap_or(0.0).round() {
+                            if n > 0.01
+                                && n < 1_000_000_000.0
+                                && n != num_str.parse::<f64>().unwrap_or(0.0).round()
+                            {
                                 numbers.push(n);
                             } else if n > 0.0 && n < 1_000_000.0 && num_str.len() >= 3 {
                                 numbers.push(n);
@@ -1160,13 +1174,23 @@ impl<'a> IterativeDeepResearcher<'a> {
         let expr = format!("mean({})", num_strs.join(","));
 
         let mean_result = self.calculate(&expr).await;
-        let median_result = self.calculate(&format!("median({})", num_strs.join(","))).await;
-        let stddev_result = self.calculate(&format!("stddev({})", num_strs.join(","))).await;
-        let sum_result = self.calculate(&format!("sum({})", num_strs.join(","))).await;
+        let median_result = self
+            .calculate(&format!("median({})", num_strs.join(",")))
+            .await;
+        let stddev_result = self
+            .calculate(&format!("stddev({})", num_strs.join(",")))
+            .await;
+        let sum_result = self
+            .calculate(&format!("sum({})", num_strs.join(",")))
+            .await;
 
         let mut output = String::from("\n\n**Calculator Analysis — Extracted Data Points:**\n");
         output.push_str(&format!("Data points found: {}\n", numbers.len()));
-        output.push_str(&format!("Values: {} ... {}\n", numbers.first().unwrap_or(&0.0), numbers.last().unwrap_or(&0.0)));
+        output.push_str(&format!(
+            "Values: {} ... {}\n",
+            numbers.first().unwrap_or(&0.0),
+            numbers.last().unwrap_or(&0.0)
+        ));
 
         if let Some(val) = mean_result.and_then(|v| v.get("result").and_then(|r| r.as_f64())) {
             output.push_str(&format!("Mean: {:.2}\n", val));
@@ -1260,7 +1284,10 @@ Write only the updated report — no preamble or meta-commentary."#,
             calculator_analysis = calculator_analysis,
         );
 
-        match self.call_llm(&prompt, 0.3, self.max_report_tokens as usize, 60).await {
+        match self
+            .call_llm(&prompt, 0.3, self.max_report_tokens as usize, 60)
+            .await
+        {
             Ok(text) => text,
             Err(e) => {
                 error!("Synthesis failed: {}", e);
@@ -1270,17 +1297,10 @@ Write only the updated report — no preamble or meta-commentary."#,
     }
 }
 
-
-
 // ── DECIDE ─────────────────────────────────────────────────────────────────
 
 impl<'a> IterativeDeepResearcher<'a> {
-    pub(super) async fn should_stop(
-        &self,
-        question: &str,
-        report: &str,
-        round_num: usize,
-    ) -> bool {
+    pub(super) async fn should_stop(&self, question: &str, report: &str, round_num: usize) -> bool {
         let prompt = format!(
             r#"You are deciding whether a research report is comprehensive enough.
 
@@ -1308,9 +1328,9 @@ Example: "NO — We still lack information about the economic impact.""#,
             Ok(text) => {
                 let clean = text
                     .trim()
-                    .trim_start_matches(
-                        |c: char| matches!(c, '*' | '_' | '`' | '"' | '>' | '#' | '-'),
-                    )
+                    .trim_start_matches(|c: char| {
+                        matches!(c, '*' | '_' | '`' | '"' | '>' | '#' | '-')
+                    })
                     .to_uppercase();
                 let should_stop = clean.starts_with("YES");
                 info!(
@@ -1338,10 +1358,7 @@ impl<'a> IterativeDeepResearcher<'a> {
         let mut sources: Vec<(String, String)> = Vec::new();
         for finding in &self.findings {
             if seen.insert(finding.url.clone()) {
-                sources.push((
-                    finding.url.clone(),
-                    finding.title.clone(),
-                ));
+                sources.push((finding.url.clone(), finding.title.clone()));
             }
         }
         sources
@@ -1427,22 +1444,20 @@ Include concrete numbers and data-driven analysis in the report to support concl
         base_prompt
     }
 
-    pub(super) async fn final_report(
-        &self,
-        question: &str,
-        report: &str,
-    ) -> String {
+    pub(super) async fn final_report(&self, question: &str, report: &str) -> String {
         let sources = self.collect_cited_sources();
         let prompt = Self::final_report_prompt(question, report, self.category.as_ref(), &sources);
 
-        let mut result =
-            match self.call_llm(&prompt, 0.3, self.max_report_tokens as usize, 180).await {
-                Ok(text) => text,
-                Err(e) => {
-                    error!("Final report generation failed: {}", e);
-                    return format!("{}\n{}", report, Self::format_references(&sources));
-                }
-            };
+        let mut result = match self
+            .call_llm(&prompt, 0.3, self.max_report_tokens as usize, 180)
+            .await
+        {
+            Ok(text) => text,
+            Err(e) => {
+                error!("Final report generation failed: {}", e);
+                return format!("{}\n{}", report, Self::format_references(&sources));
+            }
+        };
 
         // Expand if too short
         let word_count = result.split_whitespace().count();
@@ -1467,8 +1482,9 @@ Original report:
 Write the full expanded report now."#,
                 result = result
             );
-            if let Ok(expanded) =
-                self.call_llm(&expand_prompt, 0.4, self.max_report_tokens as usize, 180).await
+            if let Ok(expanded) = self
+                .call_llm(&expand_prompt, 0.4, self.max_report_tokens as usize, 180)
+                .await
             {
                 if expanded.split_whitespace().count() > word_count {
                     result = expanded;

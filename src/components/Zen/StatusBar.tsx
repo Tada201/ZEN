@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Clock, Calendar } from 'lucide-react';
+import { useUpdateStore } from '@/lib/stores/updateStore';
 
 export function StatusBar() {
   const [time, setTime] = useState(new Date());
+  const currentVersion = useUpdateStore((state) => state.currentVersion);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -17,9 +19,12 @@ export function StatusBar() {
   return (
     <div className="flex items-center justify-between w-full h-full px-4 text-xs font-sans text-zinc-400 capitalize tracking-normal">
       {/* Left Section: Static Warning Banner */}
-      <div className="flex items-center h-full border-l border-white/5 pl-2 select-none">
+      <div className="flex items-center h-full gap-3 border-l border-white/5 pl-2 select-none">
         <span className="text-[9px] uppercase font-bold tracking-widest text-amber-500/70 whitespace-nowrap">
           ⚠️ UNDER ACTIVE DEVELOPMENT — DEV BUILD
+        </span>
+        <span className="text-[9px] font-mono text-zinc-500 whitespace-nowrap">
+          ZEN v{currentVersion || '...'}
         </span>
       </div>
 

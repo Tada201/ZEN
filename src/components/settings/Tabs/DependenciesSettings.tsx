@@ -53,19 +53,35 @@ export function DependenciesSettings() {
     void refresh();
   }, [refresh]);
 
-  const handleDownload = useCallback((item: DependencyStatus) => {
+  const handleDownload = useCallback(async (item: DependencyStatus) => {
     appendLog("info", `Preparing ${item.name}.`);
+    if (item.managed) {
+      try {
+        const result = await dependenciesApi.installManaged(item.id);
+        appendLog("ok", `${item.name}: ${result.message}`);
+        await refresh();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        appendLog("error", `${item.name} installation failed: ${message}`);
+      }
+      return;
+    }
     if (item.installCommand) {
       appendLog("warn", `Run manually: ${item.installCommand}`);
     }
     if (item.downloadUrl) {
       appendLog("info", `Opening ${item.downloadUrl}`);
-      window.open(item.downloadUrl, "_blank", "noopener,noreferrer");
+      try {
+        await dependenciesApi.openSource(item.downloadUrl);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        appendLog("error", `Could not open source: ${message}`);
+      }
     }
     if (!item.installCommand && !item.downloadUrl) {
       appendLog("warn", `${item.name} has no automatic download source configured.`);
     }
-  }, [appendLog]);
+  }, [appendLog, refresh]);
 
   const handleDownloadAll = useCallback(() => {
     if (missing.length === 0) {
@@ -73,7 +89,7 @@ export function DependenciesSettings() {
       return;
     }
     appendLog("info", `Preparing ${missing.length} missing dependencies.`);
-    missing.forEach(handleDownload);
+    void Promise.all(missing.map(handleDownload));
   }, [appendLog, handleDownload, missing]);
 
   return (
@@ -105,7 +121,7 @@ export function DependenciesSettings() {
 
       <div className="space-y-3">
         {items.map((item) => (
-          <DependencyRow key={item.id} item={item} onDownload={() => handleDownload(item)} />
+          <DependencyRow key={item.id} item={item} onDownload={() => void handleDownload(item)} />
         ))}
       </div>
 
@@ -173,7 +189,7 @@ function DependencyRow({ item, onDownload }: { item: DependencyStatus; onDownloa
         </div>
         <Button variant="outline" size="sm" onClick={onDownload} disabled={item.installed && !item.downloadUrl && !item.installCommand}>
           <WorkbenchIcon name={item.installed ? "lucide:external-link" : "lucide:download"} size={13} className="mr-1.5" />
-          {item.installed ? "Source" : "Get"}
+          {item.managed ? (item.installed ? "Repair" : "Install") : (item.installed ? "Source" : "Get")}
         </Button>
       </div>
     </div>

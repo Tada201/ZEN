@@ -26,7 +26,7 @@ export function useArtifactEvents({ resetHeartbeatTimeout }: UseArtifactEventsPr
       const delta = buffers[chatId];
       delete buffers[chatId];
       if (!delta) continue;
-      setSessionMessages(chatId, (prev: Message[]) => applyArtifactDeltaToMessages(prev, delta));
+      setSessionMessages(chatId, (prev: Message[]) => applyArtifactDeltaToMessages(prev, delta, chatId));
     }
   };
 
@@ -46,7 +46,7 @@ export function useArtifactEvents({ resetHeartbeatTimeout }: UseArtifactEventsPr
             title: event.payload.title,
             language: event.payload.language,
             content: ""
-          })
+          }, chatId)
         );
       });
 
@@ -71,10 +71,10 @@ export function useArtifactEvents({ resetHeartbeatTimeout }: UseArtifactEventsPr
         const pending = deltaBuffersRef.current[chatId];
         if (pending) {
           delete deltaBuffersRef.current[chatId];
-          useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => applyArtifactDeltaToMessages(prev, pending));
+          useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => applyArtifactDeltaToMessages(prev, pending, chatId));
         }
         useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-          const assistantIdx = findWritableAssistantIndex(prev);
+          const assistantIdx = findWritableAssistantIndex(prev, chatId);
           if (assistantIdx === -1 || !prev[assistantIdx].artifact) return prev;
 
           const next = [...prev];

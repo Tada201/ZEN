@@ -13,6 +13,14 @@ const chatCommandSource = readFileSync(
   new URL("../src-tauri/src/commands/chat.rs", import.meta.url),
   "utf8",
 );
+const runnerSource = readFileSync(
+  new URL("../src-tauri/src/agent/runner/loop.rs", import.meta.url),
+  "utf8",
+);
+const orchestratorSource = readFileSync(
+  new URL("../src-tauri/src/agent/orchestrator/loop.rs", import.meta.url),
+  "utf8",
+);
 const messageTargetSource = readFileSync(
   new URL("../src/atlas/hooks/stream/messageTarget.ts", import.meta.url),
   "utf8",
@@ -49,10 +57,9 @@ assert(
   chatCommandSource.includes("token_for_error.is_cancelled()") &&
     chatCommandSource.includes('"chat:done"') &&
     chatCommandSource.includes('"reason": "cancelled"') &&
-    chatCommandSource.includes('"chat:error"') &&
-    chatCommandSource.includes("Chat runner failed") &&
-    chatCommandSource.includes("Orchestrator failed"),
-  "backend spawned runner/orchestrator failures must emit terminal chat events instead of only logging",
+    runnerSource.includes("AgentEvent::ChatError(ChatErrorPayload") &&
+    orchestratorSource.includes("AgentEvent::ChatError(ChatErrorPayload"),
+  "backend runner and orchestrator failures must emit terminal chat events instead of only logging",
 );
 
 console.log("stream completion and abort verifier passed");

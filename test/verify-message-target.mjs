@@ -4,7 +4,11 @@ import ts from "typescript";
 
 const sourcePath = new URL("../src/atlas/hooks/stream/messageTarget.ts", import.meta.url);
 const source = readFileSync(sourcePath, "utf8");
-const transpiled = ts.transpileModule(source, {
+const testableSource = source.replace(
+  'import { useChatStore } from "@/lib/stores/useChatStore";',
+  'const useChatStore = { getState: () => ({ getActiveAssistantForChat: () => null }) };',
+);
+const transpiled = ts.transpileModule(testableSource, {
   compilerOptions: {
     module: ts.ModuleKind.ES2022,
     target: ts.ScriptTarget.ES2022,

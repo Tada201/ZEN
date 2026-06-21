@@ -21,6 +21,15 @@ export interface WhisperModelStatus {
   error: string | null;
 }
 
+export interface PiperDownloadStatus {
+  modelName: string;
+  modelPath: string;
+  configPath: string;
+  sizeBytes: number;
+  success: boolean;
+  error: string | null;
+}
+
 export interface WhisperRuntimeStatus {
   backend: "cuda" | "vulkan" | "cpu" | string;
   recommended_backend: "cuda" | "vulkan" | "cpu" | string;
@@ -56,5 +65,9 @@ export const voiceApi = {
   downloadWhisperModel: (modelName: string) =>
     callCommand<WhisperModelStatus>("download_whisper_model", {
       modelName,
+    }),
+  downloadPiperModel: (voiceName: string) =>
+    callCommand<PiperDownloadStatus>("download_piper_model", {
+      voiceName,
     }),
 };

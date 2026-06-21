@@ -24,7 +24,6 @@ pub enum TaskPriority {
     Low = 3,
 }
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[derive(Default)]
@@ -36,7 +35,6 @@ pub enum TaskStatus {
     Failed,
     Cancelled,
 }
-
 
 impl TaskStatus {
     pub fn is_terminal(&self) -> bool {
@@ -58,7 +56,6 @@ pub enum TaskType {
     Workflow,
     Custom(String),
 }
-
 
 // ─── Task ───
 

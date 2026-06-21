@@ -231,26 +231,28 @@ fn validate_block(block: &BoardBlock) -> Result<()> {
         anyhow::bail!("Board palettes support at most 20 colors");
     }
     match block.kind {
-        BoardBlockKind::Map
-            if (block.latitude.is_none() || block.longitude.is_none()) => {
-                anyhow::bail!("Map blocks require latitude and longitude");
-            }
+        BoardBlockKind::Map if (block.latitude.is_none() || block.longitude.is_none()) => {
+            anyhow::bail!("Map blocks require latitude and longitude");
+        }
         BoardBlockKind::Video | BoardBlockKind::Image | BoardBlockKind::LinkPreview
-            if block.url.as_deref().is_none_or(str::is_empty) => {
-                anyhow::bail!("Media and link blocks require url");
-            }
+            if block.url.as_deref().is_none_or(str::is_empty) =>
+        {
+            anyhow::bail!("Media and link blocks require url");
+        }
         BoardBlockKind::GenUi | BoardBlockKind::Html
-            if block.content.as_deref().is_none_or(str::is_empty) => {
-                anyhow::bail!("Gen UI and HTML blocks require content");
-            }
+            if block.content.as_deref().is_none_or(str::is_empty) =>
+        {
+            anyhow::bail!("Gen UI and HTML blocks require content");
+        }
         BoardBlockKind::PremiumCard
-            if (block.card_type.as_deref().is_none_or(str::is_empty) || block.card_data.is_none()) => {
-                anyhow::bail!("Premium card blocks require card_type and card_data");
-            }
-        BoardBlockKind::Svg
-            if block.markup.as_deref().is_none_or(str::is_empty) => {
-                anyhow::bail!("SVG blocks require markup");
-            }
+            if (block.card_type.as_deref().is_none_or(str::is_empty)
+                || block.card_data.is_none()) =>
+        {
+            anyhow::bail!("Premium card blocks require card_type and card_data");
+        }
+        BoardBlockKind::Svg if block.markup.as_deref().is_none_or(str::is_empty) => {
+            anyhow::bail!("SVG blocks require markup");
+        }
         _ => {}
     }
     Ok(())

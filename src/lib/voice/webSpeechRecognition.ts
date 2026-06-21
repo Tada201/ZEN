@@ -37,6 +37,12 @@ interface SpeechRecognitionWindow extends Window {
     webkitSpeechRecognition?: WebSpeechRecognitionConstructor;
 }
 
+export function isWebSpeechRecognitionSupported(): boolean {
+    if (typeof window === 'undefined') return false;
+    const speechWindow = window as SpeechRecognitionWindow;
+    return Boolean(speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition);
+}
+
 export function createWebSpeechRecognition(): WebSpeechRecognitionLike | null {
     if (typeof window === 'undefined') return null;
     const speechWindow = window as SpeechRecognitionWindow;

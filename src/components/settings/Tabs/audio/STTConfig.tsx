@@ -5,6 +5,7 @@ import { SettingsSection } from '../../SettingsSection';
 import { SettingsRow } from '../../SettingsRow';
 import { WorkbenchSelect } from '@/components/settings/ui/WorkbenchSelect';
 import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
+import { dependenciesApi } from '@/api/dependenciesApi';
 import { voiceApi, type WhisperModelStatus, type WhisperRuntimeStatus } from '@/api/voiceApi';
 import { systemApi, type HardwareInfo } from '@/api/systemApi';
 import { detectWebSpeechCapability } from '@/lib/voice/webSpeechCapability';
@@ -65,8 +66,10 @@ export const STTConfig = memo(() => {
         setDownloading(true);
         setError(null);
         try {
+            await dependenciesApi.installManaged('whisper');
             const result = await voiceApi.downloadWhisperModel(sttWhisperModel);
             setStatus(result);
+            setRuntimeStatus(await voiceApi.getWhisperRuntimeStatus());
             if (!result.valid) {
                 setError(result.error ?? 'Model file is not valid after download');
             }

@@ -111,6 +111,8 @@ impl SpeechService {
         process_manager: Option<Arc<crate::services::process_manager::ProcessManager>>,
     ) -> Self {
         let runtime = RuntimeResources::new(app_data_dir, resource_dir);
+        // Keep the fresh-install default aligned with the managed dependency
+        // package. Additional Whisper models remain optional downloads.
         let model_name = "ggml-tiny.en.bin".to_string();
         let model_path = runtime.whisper_model_path(&model_name);
 
@@ -156,12 +158,8 @@ impl SpeechService {
 
     /// Check if a specific model file exists and is valid (not truncated).
     pub fn check_model_file(&self, model_name: &str) -> ModelFileStatus {
-        let bundled = self.runtime.bundled_model_path(model_name);
         let downloaded = self.runtime.downloaded_model_path(model_name);
-
-        let (path, source) = if bundled.exists() {
-            (bundled, "bundled")
-        } else if downloaded.exists() {
+        let (path, source) = if downloaded.exists() {
             (downloaded, "downloaded")
         } else {
             return ModelFileStatus {

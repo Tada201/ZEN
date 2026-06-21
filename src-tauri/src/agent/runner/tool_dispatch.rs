@@ -1,6 +1,5 @@
 use super::tool_actions::{
-    emit_cached_tool_result_action, emit_tool_call_action, CachedResultParams,
-    ToolActionParams,
+    emit_cached_tool_result_action, emit_tool_call_action, CachedResultParams, ToolActionParams,
 };
 use super::tool_pipeline::{
     cache_key_for, normalize_tool_result, preprocess_tool_calls, should_read_cache,
@@ -550,19 +549,21 @@ impl Runner {
 
                                     let start = std::time::Instant::now();
                                     let mut result = tool_service
-                                        .execute_agent_tool(crate::services::tool::AgentToolParams {
-                                            tool,
-                                            app,
-                                            chat_id: chat_id_inner,
-                                            tool_call: ToolCall {
-                                                id: tc_id.clone(),
-                                                name: tc_name.clone(),
-                                                args: tc_args_inner.clone(),
+                                        .execute_agent_tool(
+                                            crate::services::tool::AgentToolParams {
+                                                tool,
+                                                app,
+                                                chat_id: chat_id_inner,
+                                                tool_call: ToolCall {
+                                                    id: tc_id.clone(),
+                                                    name: tc_name.clone(),
+                                                    args: tc_args_inner.clone(),
+                                                },
+                                                token: token_inner,
+                                                depth,
+                                                allowed_tools: Some(allowed_tools),
                                             },
-                                            token: token_inner,
-                                            depth,
-                                            allowed_tools: Some(allowed_tools),
-                                        })
+                                        )
                                         .await;
                                     result.duration_ms = start.elapsed().as_millis() as u64;
 

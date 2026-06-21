@@ -15,6 +15,7 @@ pub mod system;
 pub mod terminal;
 pub mod voice;
 
+use serde::Serialize;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -93,6 +94,81 @@ impl AgentState {
     }
 }
 
+/// Represents the status of a single initialization phase.
+#[derive(Debug, Clone, Serialize)]
+pub struct InitPhase {
+    pub id: &'static str,
+    pub label: &'static str,
+    /// "pending", "running", "done", "error", "skipped"
+    pub status: &'static str,
+    pub elapsed_ms: Option<u64>,
+}
+
+impl InitPhase {
+    pub const fn new(id: &'static str, label: &'static str) -> Self {
+        Self {
+            id,
+            label,
+            status: "pending",
+            elapsed_ms: None,
+        }
+    }
+}
+
+/// Snapshot of all init phases for the frontend.
+#[derive(Debug, Clone, Serialize)]
+pub struct InitStatus {
+    pub phases: Vec<InitPhase>,
+    pub critical_complete: bool,
+    pub background_complete: bool,
+}
+
+/// Shared mutable tracker for init progress.
+pub struct InitProgress {
+    pub phases: tokio::sync::RwLock<Vec<std::sync::Mutex<InitPhase>>>,
+}
+
+impl InitProgress {
+    pub fn new(phases: Vec<InitPhase>) -> Self {
+        Self {
+            phases: tokio::sync::RwLock::new(
+                phases.into_iter().map(std::sync::Mutex::new).collect(),
+            ),
+        }
+    }
+
+    pub async fn snapshot(&self) -> InitStatus {
+        let guard = self.phases.read().await;
+        let mut critical_complete = true;
+        let mut background_complete = true;
+        let phases: Vec<InitPhase> = guard.iter().map(|m| m.lock().unwrap().clone()).collect();
+        for p in &phases {
+            if p.id.starts_with("critical.") && p.status != "done" && p.status != "skipped" {
+                critical_complete = false;
+            }
+            if p.id.starts_with("bg.") && p.status != "done" && p.status != "skipped" {
+                background_complete = false;
+            }
+        }
+        InitStatus {
+            phases,
+            critical_complete,
+            background_complete,
+        }
+    }
+
+    pub async fn set_status(&self, id: &str, status: &'static str, elapsed_ms: Option<u64>) {
+        let guard = self.phases.read().await;
+        if let Some(mutex) = guard.iter().find(|m| m.lock().unwrap().id == id) {
+            let mut phase = mutex.lock().unwrap();
+            phase.status = status;
+            if let Some(ms) = elapsed_ms {
+                phase.elapsed_ms = Some(ms);
+            }
+        }
+    }
+}
+
 pub struct SysInfoState {
     pub system: RwLock<sysinfo::System>,
     pub networks: RwLock<sysinfo::Networks>,
@@ -165,6 +241,7 @@ pub struct AppState {
     pub provider_cache:
         Arc<tokio::sync::Mutex<HashMap<String, (Arc<dyn LlmProvider>, std::time::Instant)>>>,
     pub provider_registry: Arc<ProviderRegistry>,
+    pub init_progress: Arc<InitProgress>,
 }
 
 impl Default for AppState {
@@ -203,10 +280,9 @@ impl AppState {
             }
         }
         for path in paths_to_try {
-            if path.exists() && path.is_dir()
-                && agent_registry_inner.load_from_dir(&path) > 0 {
-                    break;
-                }
+            if path.exists() && path.is_dir() && agent_registry_inner.load_from_dir(&path) > 0 {
+                break;
+            }
         }
         let agent_registry = Arc::new(agent_registry_inner);
         let hook_registry = Arc::new(HookRegistry::new());
@@ -308,6 +384,18 @@ impl AppState {
             recall_cache: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             provider_cache: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             provider_registry: Arc::new(ProviderRegistry::new(settings_manager, secret_manager)),
+            init_progress: Arc::new(InitProgress::new(vec![
+                InitPhase::new("critical.fs", "File system"),
+                InitPhase::new("critical.db", "Database"),
+                InitPhase::new("critical.settings", "Settings"),
+                InitPhase::new("critical.finalize", "Services"),
+                InitPhase::new("bg.speech", "Speech recognition"),
+                InitPhase::new("bg.tts", "Text-to-speech"),
+                InitPhase::new("bg.lancedb", "Vector store"),
+                InitPhase::new("bg.conversation_store", "Conversation store"),
+                InitPhase::new("bg.rag", "Embeddings"),
+                InitPhase::new("bg.orchestrator", "Orchestrator"),
+            ])),
         }
     }
 

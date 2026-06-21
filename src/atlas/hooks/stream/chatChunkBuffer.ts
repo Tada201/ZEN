@@ -244,7 +244,7 @@ export function replaceTextStepsWithContent(message: Message, content: string): 
 
 export function applyBufferedDeltaToChat(chatId: string, delta: string, chunkType: string, options?: { isThinking?: boolean }) {
   useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-    const assistantIdx = findWritableAssistantIndex(prev);
+    const assistantIdx = findWritableAssistantIndex(prev, chatId);
     if (assistantIdx === -1) return prev;
 
     const next = [...prev];

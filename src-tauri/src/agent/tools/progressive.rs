@@ -25,7 +25,6 @@ pub enum DetailLevel {
     Full,
 }
 
-
 #[derive(Debug, Clone, Serialize)]
 pub struct ToolMetadata {
     pub id: String,

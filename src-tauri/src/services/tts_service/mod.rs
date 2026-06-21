@@ -117,6 +117,9 @@ impl TtsService {
         info!("TTS model updated to: {}", model_path.display());
     }
 
+    /// Download a Piper voice model + config from Hugging Face to `{app_data}/voices/`.
+    /// Returns the download status including model and config paths.
+
     /// Rebuild the audio output sink on a specific cpal device by name.
     /// `None` resets to the system default. Errors are returned to the caller.
     pub async fn set_output_device(&self, device_name: Option<String>) -> Result<(), String> {

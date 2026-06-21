@@ -63,9 +63,7 @@ fn apply_permission_key(
         let tool_id = remainder[..dot_pos].to_string();
         let field = &remainder[dot_pos + 1..];
 
-        let rules = tool_overrides
-            .entry(tool_id)
-            .or_default();
+        let rules = tool_overrides.entry(tool_id).or_default();
 
         match field {
             "default" => {

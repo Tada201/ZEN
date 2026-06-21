@@ -110,7 +110,9 @@ pub struct ActionEmitParams<'a> {
 
 /// Emit action event to frontend without persisting to DB (fallback when no db_pool)
 pub fn emit_action_only(params: ActionEmitParams<'_>) -> Result<String> {
-    let msg_id = params.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let msg_id = params
+        .id
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let msg_ts = chrono::Utc::now().to_rfc3339();
 
     AgentEvent::ChatMessage(ChatMessagePayload {
@@ -171,7 +173,10 @@ fn bridge_lifecycle_events(ctx: BridgeContext<'_>) {
         MessageKind::AgentComplete => {
             if let Some(ref spawn) = ctx.meta.spawn {
                 let status = spawn.status.clone();
-                let target_spawn_id = spawn.spawn_id.clone().unwrap_or_else(|| ctx.msg_id.to_string());
+                let target_spawn_id = spawn
+                    .spawn_id
+                    .clone()
+                    .unwrap_or_else(|| ctx.msg_id.to_string());
                 AgentEvent::AgentComplete(AgentCompletePayload {
                     spawn_id: Some(target_spawn_id),
                     agent_id: ctx.meta.agent_id.clone(),

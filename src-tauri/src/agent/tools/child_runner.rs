@@ -185,7 +185,16 @@ pub(crate) struct ChildRunnerParams<'a> {
 }
 
 pub(crate) fn build_child_runner(params: ChildRunnerParams<'_>) -> Result<Runner> {
-    let ChildRunnerParams { app, tool_registry, agent_registry, hook_registry, permissions, parent_depth, resolved, allowed_tools } = params;
+    let ChildRunnerParams {
+        app,
+        tool_registry,
+        agent_registry,
+        hook_registry,
+        permissions,
+        parent_depth,
+        resolved,
+        allowed_tools,
+    } = params;
     let state = app.state::<AppState>();
     let tool_manager = state.tool_manager.clone();
 

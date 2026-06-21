@@ -40,7 +40,6 @@ pub enum ModelTier {
     Cloud,
 }
 
-
 impl ModelTier {
     pub fn description(&self) -> &'static str {
         match self {

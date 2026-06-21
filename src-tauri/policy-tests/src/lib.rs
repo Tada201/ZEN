@@ -12,9 +12,7 @@ pub mod runtime_resource;
 
 #[cfg(test)]
 mod tests {
-    use super::permission::{
-        PermissionDecision, PermissionDefault, RiskLevel, ToolPermissions,
-    };
+    use super::permission::{PermissionDecision, PermissionDefault, RiskLevel, ToolPermissions};
     use super::runtime_resource::RuntimeResources;
     use super::secret_policy::{
         is_secret_key, is_secret_placeholder_write, redact_if_secret, SECRET_PRESENT_SENTINEL,
@@ -27,7 +25,6 @@ mod tests {
     struct TestDirs {
         root: PathBuf,
         app_data: PathBuf,
-        resources: PathBuf,
     }
 
     impl TestDirs {
@@ -41,20 +38,14 @@ mod tests {
                 std::process::id()
             ));
             let app_data = root.join("app-data");
-            let resources = root.join("resources-root");
 
             fs::create_dir_all(&app_data).expect("create test app data dir");
-            fs::create_dir_all(&resources).expect("create test resource dir");
 
-            Self {
-                root,
-                app_data,
-                resources,
-            }
+            Self { root, app_data }
         }
 
         fn runtime_resources(&self) -> RuntimeResources {
-            RuntimeResources::new(&self.app_data, &self.resources)
+            RuntimeResources::new(&self.app_data, &self.root)
         }
     }
 
@@ -85,7 +76,10 @@ mod tests {
             SECRET_PRESENT_SENTINEL
         ));
         assert!(!is_secret_placeholder_write("openai_api_key", "sk-new"));
-        assert!(!is_secret_placeholder_write("theme", SECRET_PRESENT_SENTINEL));
+        assert!(!is_secret_placeholder_write(
+            "theme",
+            SECRET_PRESENT_SENTINEL
+        ));
     }
 
     #[test]
@@ -156,13 +150,6 @@ mod tests {
 
         assert_eq!(resources.app_data_dir(), dirs.app_data.as_path());
         assert_eq!(
-            resources.bundled_model_path("ggml-base.bin"),
-            dirs.resources
-                .join("resources")
-                .join("models")
-                .join("ggml-base.bin")
-        );
-        assert_eq!(
             resources.downloaded_model_path("ggml-base.bin"),
             dirs.app_data.join("models").join("ggml-base.bin")
         );
@@ -170,19 +157,6 @@ mod tests {
             resources.temp_file_path("capture.wav"),
             dirs.app_data.join("capture.wav")
         );
-    }
-
-    #[test]
-    fn runtime_resources_prefer_bundled_whisper_model_when_present() {
-        let dirs = TestDirs::new("whisper-bundled");
-        let resources = dirs.runtime_resources();
-        let bundled = resources.bundled_model_path("tiny.en.bin");
-
-        fs::create_dir_all(bundled.parent().expect("bundled model has parent"))
-            .expect("create bundled model parent");
-        fs::write(&bundled, b"bundled").expect("write bundled model");
-
-        assert_eq!(resources.whisper_model_path("tiny.en.bin"), bundled);
     }
 
     #[test]

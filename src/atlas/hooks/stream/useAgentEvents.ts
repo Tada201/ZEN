@@ -179,7 +179,10 @@ export function useAgentEvents() {
                 ...next[researchIdx],
                 id: payload.id,  // Replace temp ID with real DB ID
                 content: payload.content,
-                status: "sent",
+                status: payload.status || "sent",
+                ...(payload.status === "failed"
+                  ? { error: payload.error?.trim() || "Research failed." }
+                  : {}),
                 createdAt: payload.timestamp
                   ? new Date(payload.timestamp).getTime()
                   : next[researchIdx].createdAt,
@@ -395,35 +398,39 @@ export function useAgentEvents() {
             const prevSteps = meta.researchSteps || [];
 
             // Preserve agent_index and agent_name when present
+            const stepId = payload.step_id || `${payload.phase || "research"}:${payload.text}:${payload.agent_index ?? "main"}`;
             const step = payload.agent_index !== undefined
               ? {
+                  id: stepId,
                   text: payload.text,
                   status: payload.status,
                   agentIndex: payload.agent_index,
                   agentName: payload.agent_name,
                   phase: payload.phase,
+                  durationSecs: payload.duration_secs,
+                  progressPercent: payload.progress_percent,
                 }
               : {
+                  id: stepId,
                   text: payload.text,
                   status: payload.status,
                   phase: payload.phase,
+                  durationSecs: payload.duration_secs,
+                  progressPercent: payload.progress_percent,
                 };
             
             // When agent_index is present, also match by agentIndex to prevent
             // step-dedup collisions between parallel sub-agents fetching the
             // same URL title.
-            const existingIdx = payload.agent_index !== undefined
-              ? prevSteps.findIndex(
-                  (s) =>
-                    s.text === payload.text &&
-                    (s as { agentIndex?: number }).agentIndex === payload.agent_index
-                )
-              : prevSteps.findIndex((s) => s.text === payload.text);
+            const existingIdx = prevSteps.findIndex((s) => s.id === stepId);
             const steps = existingIdx !== -1
               ? prevSteps.map((s, i) => i === existingIdx ? { ...s, status: payload.status } : s)
               : [...prevSteps, step];
             
-            next[lastIdx] = { ...msg, metadata: { ...meta, researchSteps: steps } };
+            const researchProgress = typeof payload.progress_percent === "number"
+              ? { phase: payload.phase, percent: payload.progress_percent, status: payload.status }
+              : meta.researchProgress;
+            next[lastIdx] = { ...msg, metadata: { ...meta, researchSteps: steps, researchProgress } };
           }
           return next;
         });

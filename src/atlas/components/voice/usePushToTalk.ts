@@ -16,7 +16,7 @@ function consumeVoiceSpaceEvent(e: KeyboardEvent) {
 
 export function usePushToTalk({
     appendLog, audioCtxRef, flushVadUtterance, gainNodeRef, heardSpeechRef, isOpenRef,
-    moonshineGateRef, moonshineReadyRef, moonshineStreamRef, pttActiveRef, recordingChunksRef,
+    moonshineFallbackRef, moonshineGateRef, moonshineReadyRef, moonshineStreamRef, pttActiveRef, recordingChunksRef,
     requestVoiceExit, setAiSpeechText, setPttHeld, setRecordingState, setSttStatus,
     setSubtitleSpeaker, setUserSpeechText, setVoiceState, startMoonshineRecognition,
     startWebRecognition, stopWebRecognition, streamRef, sttEngine, sttModelLabel,
@@ -24,7 +24,7 @@ export function usePushToTalk({
 }: {
     appendLog: AppendVoiceLog; flushVadUtterance: () => Promise<void>; requestVoiceExit: () => void;
     audioCtxRef: MutableRefObject<AudioContext | null>; gainNodeRef: MutableRefObject<GainNode | null>; heardSpeechRef: MutableRefObject<boolean>; isOpenRef: MutableRefObject<boolean>;
-    moonshineGateRef: MutableRefObject<GainNode | null>; moonshineReadyRef: MutableRefObject<boolean>; moonshineStreamRef: MutableRefObject<MediaStream | null>;
+    moonshineFallbackRef: MutableRefObject<boolean>; moonshineGateRef: MutableRefObject<GainNode | null>; moonshineReadyRef: MutableRefObject<boolean>; moonshineStreamRef: MutableRefObject<MediaStream | null>;
     pttActiveRef: MutableRefObject<boolean>; recordingChunksRef: MutableRefObject<Float32Array[]>; streamRef: MutableRefObject<MediaStream | null>;
     setAiSpeechText: Dispatch<SetStateAction<string>>; setPttHeld: Dispatch<SetStateAction<boolean>>; setRecordingState: (recording: boolean) => void;
     setSttStatus: Dispatch<SetStateAction<SttServiceStatus>>;
@@ -39,6 +39,10 @@ export function usePushToTalk({
             limitTimer = null;
         };
 
+        const activeSttEngine = () => (
+            sttEngine === 'moonshine' && moonshineFallbackRef.current ? 'web' : sttEngine
+        );
+
         const finishPttTurn = (reason: FinishReason) => {
             if (!pttActiveRef.current) return;
             clearLimitTimer();
@@ -50,12 +54,13 @@ export function usePushToTalk({
             if (gainNodeRef.current && audioCtxRef.current) gainNodeRef.current.gain.setValueAtTime(1, audioCtxRef.current.currentTime);
             setVoiceState('idle');
             setSttStatus('transcribing');
-            appendLog(sttEngine === 'whisper'
+            const engine = activeSttEngine();
+            appendLog(engine === 'whisper'
                 ? `PTT: Released by ${reason}. Processing ${recordingChunksRef.current.length} audio chunks.`
                 : `PTT: Released by ${reason}. Finalizing ${sttModelLabel}.`);
-            if (sttEngine === 'whisper') void flushVadUtterance();
-            else if (sttEngine === 'web') stopWebRecognition();
-            else if (sttEngine === 'moonshine') {
+            if (engine === 'whisper') void flushVadUtterance();
+            else if (engine === 'web') stopWebRecognition();
+            else if (engine === 'moonshine') {
                 setUserSpeechText('Finalizing Moonshine transcript...');
                 if (moonshineGateRef.current && audioCtxRef.current) {
                     moonshineGateRef.current.gain.cancelScheduledValues(audioCtxRef.current.currentTime);
@@ -73,7 +78,8 @@ export function usePushToTalk({
                 setSubtitleSpeaker('system');
                 return;
             }
-            if (sttEngine === 'moonshine' && !moonshineReadyRef.current) {
+            const engine = activeSttEngine();
+            if (engine === 'moonshine' && !moonshineReadyRef.current) {
                 setSttStatus('starting');
                 setSubtitleSpeaker('system');
                 setUserSpeechText('Moonshine is still loading. Try again when ready.');
@@ -85,7 +91,7 @@ export function usePushToTalk({
             recordingChunksRef.current = [];
             heardSpeechRef.current = true;
             pttActiveRef.current = true;
-            if (sttEngine === 'whisper') setRecordingState(true);
+            if (engine === 'whisper') setRecordingState(true);
             setSttStatus('recording');
             setPttHeld(true);
             setUserSpeechText('Recording...');
@@ -95,8 +101,8 @@ export function usePushToTalk({
             gainNodeRef.current?.gain.setValueAtTime(1, audioCtxRef.current.currentTime);
             setVoiceState('listening');
             appendLog('PTT: Recording started');
-            if (sttEngine === 'web') startWebRecognition();
-            if (sttEngine === 'moonshine') {
+            if (engine === 'web') startWebRecognition();
+            if (engine === 'moonshine') {
                 moonshineGateRef.current?.gain.cancelScheduledValues(audioCtxRef.current.currentTime);
                 moonshineGateRef.current?.gain.setValueAtTime(1, audioCtxRef.current.currentTime);
                 void startMoonshineRecognition(moonshineStreamRef.current ?? streamRef.current);
@@ -143,5 +149,5 @@ export function usePushToTalk({
             window.removeEventListener(VOICE_PTT_TOGGLE_EVENT, handleClickToggle);
             document.removeEventListener('visibilitychange', handleVisibilityChange, { capture: true });
         };
-    }, [appendLog, audioCtxRef, flushVadUtterance, gainNodeRef, heardSpeechRef, isOpenRef, moonshineGateRef, moonshineReadyRef, moonshineStreamRef, pttActiveRef, recordingChunksRef, requestVoiceExit, setAiSpeechText, setPttHeld, setRecordingState, setSttStatus, setSubtitleSpeaker, setUserSpeechText, setVoiceState, startMoonshineRecognition, startWebRecognition, stopWebRecognition, streamRef, sttEngine, sttModelLabel, voiceInputModeRef, workletNodeRef]);
+    }, [appendLog, audioCtxRef, flushVadUtterance, gainNodeRef, heardSpeechRef, isOpenRef, moonshineFallbackRef, moonshineGateRef, moonshineReadyRef, moonshineStreamRef, pttActiveRef, recordingChunksRef, requestVoiceExit, setAiSpeechText, setPttHeld, setRecordingState, setSttStatus, setSubtitleSpeaker, setUserSpeechText, setVoiceState, startMoonshineRecognition, startWebRecognition, stopWebRecognition, streamRef, sttEngine, sttModelLabel, voiceInputModeRef, workletNodeRef]);
 }

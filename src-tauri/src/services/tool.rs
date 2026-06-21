@@ -396,8 +396,19 @@ impl ToolService {
         }
     }
 
-    pub async fn execute_agent_tool(&self, params: AgentToolParams) -> crate::agent::types::ToolResult {
-        let AgentToolParams { tool, app, chat_id, tool_call, token, depth, allowed_tools } = params;
+    pub async fn execute_agent_tool(
+        &self,
+        params: AgentToolParams,
+    ) -> crate::agent::types::ToolResult {
+        let AgentToolParams {
+            tool,
+            app,
+            chat_id,
+            tool_call,
+            token,
+            depth,
+            allowed_tools,
+        } = params;
         let tool = if tool.is_some() {
             tool
         } else {

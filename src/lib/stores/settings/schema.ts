@@ -73,6 +73,10 @@ export const SettingsSchema = z.object({
   streamSpeed: z.number().min(0).max(1).default(0.5),
   thinkingMode: z.boolean().default(false),
   promptCaching: z.boolean().default(true),
+  deepResearchModel: z.string().default(""),
+  deepResearchMaxRounds: z.number().int().min(2).max(8).default(6),
+  deepResearchParallelAgents: z.number().int().min(1).max(4).default(3),
+  deepResearchMaxSourcesPerRound: z.number().int().min(2).max(10).default(3),
 
   // ─── Memory ──────────────────────────────────────────────────────────────
   maxMessagesInMemory: z.number().min(1).max(500).default(100),

@@ -28,6 +28,9 @@ pub struct DeepResearchParams<'a> {
     pub query: String,
     pub config: ChatRequestConfig,
     pub token: CancellationToken,
+    pub max_rounds: usize,
+    pub max_urls_per_round: usize,
+    pub sub_agent_count: usize,
 }
 
 // ── Research category ──────────────────────────────────────────────────────
@@ -152,10 +155,10 @@ pub(super) fn is_low_quality(summary: &str) -> bool {
         return true;
     }
     let low = summary.to_lowercase();
-    LOW_QUALITY_MARKERS.iter().any(|marker| low.contains(marker))
+    LOW_QUALITY_MARKERS
+        .iter()
+        .any(|marker| low.contains(marker))
 }
-
-
 
 // ── Internal data types ────────────────────────────────────────────────────
 
@@ -180,7 +183,9 @@ mod tests {
 
     #[test]
     fn boilerplate_cookie_notice_is_filtered() {
-        assert!(is_low_quality("This site uses cookie consent to improve your experience"));
+        assert!(is_low_quality(
+            "This site uses cookie consent to improve your experience"
+        ));
     }
 
     #[test]
@@ -193,8 +198,12 @@ mod tests {
         assert!(is_low_quality(
             "The content is insufficient to answer the research question."
         ));
-        assert!(is_low_quality("This page does not contain relevant information."));
-        assert!(is_low_quality("No substantive data was found on this topic."));
+        assert!(is_low_quality(
+            "This page does not contain relevant information."
+        ));
+        assert!(is_low_quality(
+            "No substantive data was found on this topic."
+        ));
     }
 
     #[test]

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde_json::json;
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
@@ -9,7 +9,7 @@ use super::Orchestrator;
 use super::OrchestratorPhase;
 use crate::agent::event_bus::{AgentEvent, ChatChunkFirstPayload, ChatChunkPayload};
 use crate::agent::runner;
-use crate::agent::runner::actions::{ActionPersistParams, ActionEmitParams};
+use crate::agent::runner::actions::{ActionEmitParams, ActionPersistParams};
 use crate::agent::task::Task;
 use crate::agent::types::{ActionMeta, AgentResponse, MessageKind, SpawnMeta};
 use crate::db::models::ChatMessage;
@@ -87,16 +87,18 @@ impl Orchestrator {
         )?;
 
         // Create runner for this agent using the unified child runner builder
-        let mut runner = crate::agent::tools::child_runner::build_child_runner(crate::agent::tools::child_runner::ChildRunnerParams {
-            app: &self.app,
-            tool_registry: self.tool_registry.clone(),
-            agent_registry: self.agent_registry.clone(),
-            hook_registry: self.hook_registry.clone(),
-            permissions: self.permissions.clone(),
-            parent_depth: 0, // Orchestrator tasks are spawned at parent depth 0
-            resolved: &resolved,
-            allowed_tools: None,
-        })?;
+        let mut runner = crate::agent::tools::child_runner::build_child_runner(
+            crate::agent::tools::child_runner::ChildRunnerParams {
+                app: &self.app,
+                tool_registry: self.tool_registry.clone(),
+                agent_registry: self.agent_registry.clone(),
+                hook_registry: self.hook_registry.clone(),
+                permissions: self.permissions.clone(),
+                parent_depth: 0, // Orchestrator tasks are spawned at parent depth 0
+                resolved: &resolved,
+                allowed_tools: None,
+            },
+        )?;
 
         // Pass direct channel for high-performance streaming if available
         if let Some(ref channel) = self.on_event {
@@ -390,7 +392,11 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
         let first_chunk_sent_clone = first_chunk_sent.clone();
 
         // Text buffer: accumulates delta text and emits on batch timer to prevent Tauri IPC drops.
-        let buffer = std::sync::Arc::new(std::sync::Mutex::new((String::new(), "text", std::time::Instant::now())));
+        let buffer = std::sync::Arc::new(std::sync::Mutex::new((
+            String::new(),
+            "text",
+            std::time::Instant::now(),
+        )));
         let buffer_clone = buffer.clone();
 
         let maybe_channel_clone = maybe_channel.clone();
@@ -449,7 +455,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                 };
 
                 let now = std::time::Instant::now();
-                
+
                 // If type changed, flush the old type immediately
                 if data.1 != chunk_type && !data.0.is_empty() {
                     let old_text = std::mem::take(&mut data.0);
@@ -463,14 +469,14 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                         message_id: None,
                     })
                     .emit_via(&app_clone_2, &maybe_channel_clone);
-                    
+
                     data.0.push_str(&chunk_text);
                     data.1 = chunk_type;
                     data.2 = now;
                 } else {
                     data.0.push_str(&chunk_text);
                     data.1 = chunk_type;
-                    
+
                     // Batch emits to prevent Tauri IPC drops
                     if now.duration_since(data.2).as_millis() > 30 {
                         let text = std::mem::take(&mut data.0);

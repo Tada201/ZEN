@@ -22,6 +22,10 @@ export interface AiSlice {
   exaApiKey: string;
   tavilySearchDepth: "ultra-fast" | "fast" | "basic" | "advanced";
   webSearchMaxResults: number;
+  deepResearchModel: string;
+  deepResearchMaxRounds: number;
+  deepResearchParallelAgents: number;
+  deepResearchMaxSourcesPerRound: number;
   embeddingProvider: string;
   citationsEnabled: boolean;
   strictGrounding: boolean;
@@ -77,6 +81,10 @@ export const createAISlice: StateCreator<SettingsState, [], [], AiSlice> = (set,
   exaApiKey: "",
   tavilySearchDepth: "fast",
   webSearchMaxResults: 10,
+  deepResearchModel: "",
+  deepResearchMaxRounds: 6,
+  deepResearchParallelAgents: 3,
+  deepResearchMaxSourcesPerRound: 3,
   embeddingProvider: "ollama",
   citationsEnabled: false,
   strictGrounding: false,

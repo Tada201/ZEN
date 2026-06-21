@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAppInit } from "@/hooks/useAppInit";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import { Progress } from "@/components/ui/progress";
+import { systemApi, type InitPhase } from "@/api/systemApi";
+import { IS_TAURI } from "@/api/tauriClient";
 
 interface BootScreenProps {
   onComplete: () => void;
@@ -17,6 +19,8 @@ export function BootScreen({ onComplete }: BootScreenProps) {
   const [showLoadingBar, setShowLoadingBar] = useState(false);
   const [progress, setProgress] = useState(0);
   const [isFadingOut, setIsFadingOut] = useState(false);
+  const [backendPhases, setBackendPhases] = useState<InitPhase[]>([]);
+  const [backendCriticalDone, setBackendCriticalDone] = useState(IS_TAURI ? false : true);
 
   // If boot screen is disabled, immediately complete
   useEffect(() => {
@@ -44,6 +48,31 @@ export function BootScreen({ onComplete }: BootScreenProps) {
     };
   }, [bootEnabled, durationMs]);
 
+  // Poll backend init status (only in Tauri)
+  useEffect(() => {
+    if (!bootEnabled || !IS_TAURI) return;
+    let mounted = true;
+    const poll = async () => {
+      try {
+        const status = await systemApi.getInitStatus();
+        if (!mounted) return;
+        setBackendPhases(status.phases);
+        if (status.critical_complete) {
+          setBackendCriticalDone(true);
+        }
+        if (status.background_complete) {
+          // All backend init done — stop polling
+          return;
+        }
+      } catch {
+        // Backend not ready yet, keep polling
+      }
+      if (mounted) setTimeout(poll, 200);
+    };
+    poll();
+    return () => { mounted = false; };
+  }, [bootEnabled]);
+
   // Never let an optional startup task strand the user behind the boot overlay.
   useEffect(() => {
     if (!bootEnabled) return;
@@ -55,14 +84,29 @@ export function BootScreen({ onComplete }: BootScreenProps) {
     return () => clearTimeout(timeout);
   }, [bootEnabled, durationMs, onComplete]);
 
-  // Loading bar progress simulation while waiting for initialization
+  // Compute real progress from backend phases (or fall back to simulated)
+  const realProgress = useCallback(() => {
+    if (backendPhases.length === 0) return null;
+    const total = backendPhases.length;
+    const done = backendPhases.filter(
+      (p) => p.status === "done" || p.status === "skipped"
+    ).length;
+    return Math.round((done / total) * 100);
+  }, [backendPhases]);
+
+  // Loading bar progress: real backend progress + frontend init state
   useEffect(() => {
     if (!showLoadingBar || isFadingOut) return;
 
     const interval = setInterval(() => {
       setProgress((prev) => {
-        if (isInitialized) {
+        if (isInitialized && backendCriticalDone) {
           return 100;
+        }
+        // Use real progress if available
+        const rp = realProgress();
+        if (rp !== null && rp > prev) {
+          return Math.min(rp, 95);
         }
         // Slowly approach 95% if not yet initialized
         if (prev < 95) {
@@ -73,19 +117,19 @@ export function BootScreen({ onComplete }: BootScreenProps) {
     }, 150);
 
     return () => clearInterval(interval);
-  }, [showLoadingBar, isInitialized, isFadingOut]);
+  }, [showLoadingBar, isInitialized, isFadingOut, realProgress, backendCriticalDone]);
 
-  // Handle transition out when both minimum time has elapsed and app is initialized
+  // Handle transition out when all conditions met
   useEffect(() => {
-    if (bootEnabled && minTimeElapsed && isInitialized) {
+    if (bootEnabled && minTimeElapsed && isInitialized && backendCriticalDone) {
       setProgress(100);
       setIsFadingOut(true);
       const fadeTimer = setTimeout(() => {
         onComplete();
-      }, 600); // match transition duration
+      }, 600);
       return () => clearTimeout(fadeTimer);
     }
-  }, [bootEnabled, minTimeElapsed, isInitialized, onComplete]);
+  }, [bootEnabled, minTimeElapsed, isInitialized, onComplete, backendCriticalDone]);
 
   if (!bootEnabled) return null;
 
@@ -187,8 +231,29 @@ export function BootScreen({ onComplete }: BootScreenProps) {
           {showLoadingBar ? (
             <div className="w-full space-y-3">
               <Progress value={progress} className="h-1 bg-white/10 glowing-bar" />
-              <p className="text-[9px] text-white/50 font-bold tracking-[0.3em] uppercase text-center animate-pulse drop-shadow-[0_0_4px_rgba(255,255,255,0.2)]">
-                {isInitialized ? "Ready" : "Initializing System"}
+              {/* Show current backend phase if available */}
+              <div className="flex flex-wrap justify-center gap-1.5 mt-2">
+                {backendPhases.map((phase) => (
+                  <span
+                    key={phase.id}
+                    className={`text-[8px] font-mono tracking-wider uppercase px-2 py-0.5 rounded-sm transition-colors duration-200 ${
+                      phase.status === "done"
+                        ? "text-green-400/70 bg-green-500/8"
+                        : phase.status === "running"
+                          ? "text-white/80 bg-white/8"
+                          : phase.status === "error"
+                            ? "text-red-400/70 bg-red-500/8"
+                            : phase.status === "skipped"
+                              ? "text-yellow-400/50 bg-yellow-400/8"
+                              : "text-white/20"
+                    }`}
+                  >
+                    {phase.label}
+                  </span>
+                ))}
+              </div>
+              <p className="text-[9px] text-white/50 font-bold tracking-[0.3em] uppercase text-center animate-pulse drop-shadow-[0_0_4px_rgba(255,255,255,0.2)] mt-2">
+                {isInitialized && backendCriticalDone ? "Ready" : "Initializing System"}
               </p>
             </div>
           ) : (

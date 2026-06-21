@@ -1,7 +1,6 @@
 import { SettingsSection } from "../SettingsSection";
 import { SettingsRow } from "../SettingsRow";
 import { WorkbenchSelect } from "../ui/WorkbenchSelect";
-import { WorkbenchInput } from "../ui/WorkbenchInput";
 import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 import { FolderBrowser } from "@/atlas/components/FolderBrowser";
 
@@ -31,18 +30,6 @@ export function WorkspaceSettings({ settings, onUpdate }: WorkspaceSettingsProps
             </p>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-foreground/80">Data Directory</label>
-            <WorkbenchInput
-              value={settings["workspace.data-dir"] || ""}
-              onChange={e => onUpdate("workspace.data-dir", e.target.value)}
-              placeholder="~/.zen"
-              className="h-8 text-xs bg-background/50"
-            />
-            <p className="text-xs text-muted-foreground">
-              Application data, vector stores, and cached models.
-            </p>
-          </div>
         </div>
       </SettingsSection>
 

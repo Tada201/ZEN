@@ -30,6 +30,7 @@ export type SettingsTabId =
   | "providers"
   | "capabilities"
   | "intelligence"
+  | "deep-research"
   | "agents"
   | "skills"
   | "voice"
@@ -86,6 +87,7 @@ export const FRONTEND_FEATURES = [
   { id: "settings.providers", label: "Providers", maturity: "production", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "secrets", settingsTabId: "providers", icon: Bot },
   { id: "settings.capabilities", label: "Capabilities", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "privileged", settingsTabId: "capabilities", icon: Sparkles },
   { id: "settings.intelligence", label: "Intelligence", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "heavy-runtime", settingsTabId: "intelligence", icon: Search },
+  { id: "settings.deep-research", label: "Deep Research", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "heavy-runtime", settingsTabId: "deep-research", icon: Search },
   { id: "settings.agents", label: "Agents", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "privileged", settingsTabId: "agents", icon: Bot },
   { id: "settings.voice", label: "Voice", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "none", settingsTabId: "voice", icon: Headphones },
   { id: "settings.audio", label: "Audio", maturity: "production", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "none", settingsTabId: "audio", icon: Headphones },

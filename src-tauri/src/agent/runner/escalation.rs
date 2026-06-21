@@ -1,6 +1,7 @@
 //! Auto-escalation from local to cloud models, and the LLM streaming callback wrapper.
 
 use super::helpers::is_tool_capability_error;
+use super::turn_persistence::persist_chat_failure;
 use super::Runner;
 use crate::agent::chat_status::ChatStatusPhase;
 use crate::agent::event_bus::{
@@ -404,9 +405,22 @@ impl Runner {
                                 }
                                 Err(cloud_err) => {
                                     tracing::error!("Cloud provider also failed: {}", cloud_err);
+                                    let error_text = format!("Cloud provider failed: {}", cloud_err);
+                                    if let Some(ref db) = self.db_pool {
+                                        persist_chat_failure(
+                                            db,
+                                            chat_id,
+                                            model,
+                                            assistant_message_id,
+                                            "",
+                                            &error_text,
+                                            true,
+                                        )
+                                        .await;
+                                    }
                                     self.emit(AgentEvent::ChatError(ChatErrorPayload {
                                         chat_id: chat_id.to_string(),
-                                        error: format!("Cloud provider failed: {}", cloud_err),
+                                        error: error_text,
                                         recoverable: true,
                                     }));
                                     Err(e)
@@ -422,23 +436,46 @@ impl Runner {
                                 phase: Some(ChatStatusPhase::PROVIDER_MISSING.to_string()),
                                 metadata: None,
                             }));
+                            let error_text = "No cloud provider configured for escalation".to_string();
+                            if let Some(ref db) = self.db_pool {
+                                persist_chat_failure(
+                                    db,
+                                    chat_id,
+                                    model,
+                                    assistant_message_id,
+                                    "",
+                                    &error_text,
+                                    false,
+                                )
+                                .await;
+                            }
                             self.emit(AgentEvent::ChatError(ChatErrorPayload {
                                 chat_id: chat_id.to_string(),
-                                error: "No cloud provider configured for escalation".to_string(),
+                                error: error_text,
                                 recoverable: false,
                             }));
                             Err(e)
                         }
                     }
                 } else {
-                    let _ = app.emit(
-                        "chat:error",
-                        json!({
-                            "chat_id": chat_id,
-                            "error": e.to_string(),
-                            "recoverable": false
-                        }),
-                    );
+                    let error_text = e.to_string();
+                    if let Some(ref db) = self.db_pool {
+                        persist_chat_failure(
+                            db,
+                            chat_id,
+                            model,
+                            assistant_message_id,
+                            "",
+                            &error_text,
+                            false,
+                        )
+                        .await;
+                    }
+                    self.emit(AgentEvent::ChatError(ChatErrorPayload {
+                        chat_id: chat_id.to_string(),
+                        error: error_text,
+                        recoverable: false,
+                    }));
                     Err(e)
                 }
             }
@@ -521,7 +558,11 @@ impl Runner {
         let first_chunk_sent = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let first_chunk_sent_clone = first_chunk_sent.clone();
         // Text buffer: accumulates delta text and emits on batch timer to prevent Tauri IPC drops.
-        let buffer = std::sync::Arc::new(std::sync::Mutex::new((String::new(), "text", std::time::Instant::now())));
+        let buffer = std::sync::Arc::new(std::sync::Mutex::new((
+            String::new(),
+            "text",
+            std::time::Instant::now(),
+        )));
         let buffer_clone = buffer.clone();
 
         // Shared accumulated text for periodic checkpoint saves
@@ -748,7 +789,7 @@ impl Runner {
                     };
 
                     let now = std::time::Instant::now();
-                    
+
                     // If type changed, flush the old type immediately
                     if data.1 != chunk_type && !data.0.is_empty() {
                         let old_text = std::mem::take(&mut data.0);
@@ -761,14 +802,14 @@ impl Runner {
                             message_id: Some(msg_id_for_chunks.clone()),
                         })
                         .emit_via(&app_clone, &on_event_clone);
-                        
+
                         data.0.push_str(&chunk_text);
                         data.1 = chunk_type;
                         data.2 = now;
                     } else {
                         data.0.push_str(&chunk_text);
                         data.1 = chunk_type;
-                        
+
                         // Batch emits to prevent Tauri IPC drops
                         if now.duration_since(data.2).as_millis() > 30 {
                             let text = std::mem::take(&mut data.0);

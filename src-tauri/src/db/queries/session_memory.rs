@@ -52,10 +52,7 @@ pub struct NewSessionMemory<'a> {
     pub embedding: &'a [u8],
 }
 
-pub async fn add_session_memory(
-    pool: &SqlitePool,
-    mem: &NewSessionMemory<'_>,
-) -> ZenResult<()> {
+pub async fn add_session_memory(pool: &SqlitePool, mem: &NewSessionMemory<'_>) -> ZenResult<()> {
     sqlx::query(
         r#"
         INSERT INTO session_memories (id, session_id, content, metadata, written_by, timestamp, embedding)

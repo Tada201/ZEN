@@ -113,24 +113,25 @@ impl Runner {
             let allowed_tools = Arc::new(tokio::sync::Mutex::new(HashSet::from([
                 "manage_board".to_string()
             ])));
-            let mut runner = match child_runner::build_child_runner(child_runner::ChildRunnerParams {
-                app: &app,
-                tool_registry,
-                agent_registry,
-                hook_registry,
-                permissions,
-                parent_depth: depth,
-                resolved: &resolved,
-                allowed_tools: Some(allowed_tools),
-            }) {
-                Ok(runner) => runner
-                    .with_max_context_tokens(context_tokens)
-                    .with_max_messages_in_memory(max_turns),
-                Err(error) => {
-                    tracing::warn!(error = %error, "Failed to construct voice display runner");
-                    return;
-                }
-            };
+            let mut runner =
+                match child_runner::build_child_runner(child_runner::ChildRunnerParams {
+                    app: &app,
+                    tool_registry,
+                    agent_registry,
+                    hook_registry,
+                    permissions,
+                    parent_depth: depth,
+                    resolved: &resolved,
+                    allowed_tools: Some(allowed_tools),
+                }) {
+                    Ok(runner) => runner
+                        .with_max_context_tokens(context_tokens)
+                        .with_max_messages_in_memory(max_turns),
+                    Err(error) => {
+                        tracing::warn!(error = %error, "Failed to construct voice display runner");
+                        return;
+                    }
+                };
             runner.config.compaction_token_threshold = if auto_compact {
                 context_tokens.saturating_mul(compact_threshold) / 100
             } else {
@@ -427,11 +428,7 @@ fn first_youtube_url(text: &str) -> Option<String> {
             token.starts_with("https://www.youtube.com/watch?")
                 || token.starts_with("https://youtu.be/")
         })
-        .map(|token| {
-            token
-                .trim_end_matches(['.', ';', '}'])
-                .to_string()
-        })
+        .map(|token| token.trim_end_matches(['.', ';', '}']).to_string())
 }
 
 fn extract_board_operation(content: &str) -> Option<serde_json::Value> {
@@ -511,18 +508,17 @@ pub(super) fn normalize_board_operation(mut value: serde_json::Value) -> Option<
     // LLMs often place the id inside the block rather than at the root.
     // Serde's BoardOperation::Update/Remove/Focus expects id at the root level.
     match action.as_str() {
-        "update" | "remove" | "focus"
-            if !object.contains_key("id") => {
-                if let Some(block_id) = object
-                    .get("block")
-                    .and_then(|b| b.get("id"))
-                    .and_then(|v| v.as_str())
-                    .filter(|id| !id.is_empty())
-                    .map(str::to_string)
-                {
-                    object.insert("id".to_string(), serde_json::json!(block_id));
-                }
+        "update" | "remove" | "focus" if !object.contains_key("id") => {
+            if let Some(block_id) = object
+                .get("block")
+                .and_then(|b| b.get("id"))
+                .and_then(|v| v.as_str())
+                .filter(|id| !id.is_empty())
+                .map(str::to_string)
+            {
+                object.insert("id".to_string(), serde_json::json!(block_id));
             }
+        }
         _ => {}
     }
 

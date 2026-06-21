@@ -20,12 +20,16 @@ interface ChatState {
   // Per-session streaming state and live message buffers.
   streamingChats: Record<string, boolean>;
   sessionMessages: Record<string, Message[]>;
+  /** Optimistic assistant id currently receiving stream events for each chat. */
+  activeAssistantByChat: Record<string, string>;
 
   // Derived getters kept for active-chat compatibility.
   isStreaming: boolean;
   messages: Message[];
 
   setStreamingForChat: (chatId: string, streaming: boolean) => void;
+  setActiveAssistantForChat: (chatId: string, assistantId: string | null) => void;
+  getActiveAssistantForChat: (chatId: string) => string | null;
   getSessionMessages: (chatId: string) => Message[];
   setSessionMessages: (chatId: string, messages: Message[] | ((prev: Message[]) => Message[])) => void;
   clearSessionMessages: (chatId: string) => void;
@@ -63,6 +67,7 @@ export const useChatStore = create<ChatState>()(
 
       streamingChats: {},
       sessionMessages: {},
+      activeAssistantByChat: {},
 
       get isStreaming() {
         const state = get();
@@ -79,10 +84,28 @@ export const useChatStore = create<ChatState>()(
         if (streaming) {
           useUIStore.getState().setAgentsPanelDismissed(false);
         }
+        const nextStreamingChats = { ...state.streamingChats, [chatId]: streaming };
+        const nextActiveAssistantByChat = { ...state.activeAssistantByChat };
+        if (!streaming) {
+          delete nextActiveAssistantByChat[chatId];
+        }
         return {
-          streamingChats: { ...state.streamingChats, [chatId]: streaming },
+          streamingChats: nextStreamingChats,
+          activeAssistantByChat: nextActiveAssistantByChat,
         };
       }),
+
+      setActiveAssistantForChat: (chatId, assistantId) => set((state) => {
+        const nextActiveAssistantByChat = { ...state.activeAssistantByChat };
+        if (assistantId) {
+          nextActiveAssistantByChat[chatId] = assistantId;
+        } else {
+          delete nextActiveAssistantByChat[chatId];
+        }
+        return { activeAssistantByChat: nextActiveAssistantByChat };
+      }),
+
+      getActiveAssistantForChat: (chatId) => get().activeAssistantByChat[chatId] ?? null,
 
       getSessionMessages: (chatId) => get().sessionMessages[chatId] ?? EMPTY_ARRAY,
 
@@ -104,11 +127,14 @@ export const useChatStore = create<ChatState>()(
       clearSessionRuntime: (chatId) => set((state) => {
         const sessionMessages = { ...state.sessionMessages };
         const streamingChats = { ...state.streamingChats };
+        const activeAssistantByChat = { ...state.activeAssistantByChat };
         delete sessionMessages[chatId];
         delete streamingChats[chatId];
+        delete activeAssistantByChat[chatId];
         return {
           sessionMessages,
           streamingChats,
+          activeAssistantByChat,
           activeSessionId: state.activeSessionId === chatId ? null : state.activeSessionId,
         };
       }),
@@ -181,6 +207,7 @@ export const useChatStore = create<ChatState>()(
 
         delete durableState.streamingChats;
         delete durableState.sessionMessages;
+        delete durableState.activeAssistantByChat;
         delete durableState.sessions;
         delete durableState.archivedSessions;
         delete durableState.folders;
@@ -193,6 +220,7 @@ export const useChatStore = create<ChatState>()(
           ...durableState,
           streamingChats: {},
           sessionMessages: {},
+          activeAssistantByChat: {},
         } as ChatState;
       },
       partialize: (state) => ({

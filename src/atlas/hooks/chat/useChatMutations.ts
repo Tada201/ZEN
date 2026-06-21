@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { chatApi } from "@/api";
+import { chatApi, getIpcErrorMessage } from "@/api";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { toast } from "sonner";
 import { Session, ChatFolder } from "../../components/chat/types";
@@ -32,7 +32,7 @@ export function useChatMutations({
     },
     onError: (err) => {
       console.error("[useChat] Failed to create session:", err);
-      toast.error("Failed to create session");
+      toast.error(getIpcErrorMessage(err, "Failed to create session"));
     },
   });
 
@@ -45,7 +45,7 @@ export function useChatMutations({
       if (currentSessionId === id) setCurrentSessionId(null);
       toast.success("Session deleted");
     },
-    onError: () => toast.error("Failed to delete session"),
+    onError: (err) => toast.error(getIpcErrorMessage(err, "Failed to delete session")),
   });
 
   const renameSessionMutation = useMutation({
@@ -55,7 +55,8 @@ export function useChatMutations({
         prev?.map(s => s.id === id ? { ...s, title } : s)
       );
       toast.success("Session renamed");
-    }
+    },
+    onError: (err) => toast.error(getIpcErrorMessage(err, "Failed to rename session")),
   });
 
   const pinSessionMutation = useMutation({
@@ -77,7 +78,8 @@ export function useChatMutations({
       }
       if (currentSessionId === id) setCurrentSessionId(null);
       toast.success("Session archived");
-    }
+    },
+    onError: (err) => toast.error(getIpcErrorMessage(err, "Failed to archive session")),
   });
 
   const unarchiveSessionMutation = useMutation({
@@ -89,7 +91,8 @@ export function useChatMutations({
         queryClient.setQueryData<Session[]>(["sessions"], (prev) => [{ ...session, archived: false }, ...(prev || [])]);
       }
       toast.success("Session unarchived");
-    }
+    },
+    onError: (err) => toast.error(getIpcErrorMessage(err, "Failed to unarchive session")),
   });
 
   const bulkDeleteMutation = useMutation({
@@ -99,14 +102,16 @@ export function useChatMutations({
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
       queryClient.invalidateQueries({ queryKey: ["archived-sessions"] });
       toast.success("History cleared");
-    }
+    },
+    onError: (err) => toast.error(getIpcErrorMessage(err, "Failed to clear history")),
   });
 
   const createFolderMutation = useMutation({
     mutationFn: (name: string) => chatApi.createFolder(name),
     onSuccess: (folder) => {
       queryClient.setQueryData<ChatFolder[]>(["folders"], (prev) => [mapChatFolderToFolder(folder), ...(prev || [])]);
-    }
+    },
+    onError: (err) => toast.error(getIpcErrorMessage(err, "Failed to create folder")),
   });
 
   const moveChatToFolderMutation = useMutation({
@@ -118,7 +123,8 @@ export function useChatMutations({
       queryClient.setQueryData<Session[]>(["sessions"], (prev) => 
         prev?.map(s => s.id === chatId ? { ...s, folderId } : s)
       );
-    }
+    },
+    onError: (err) => toast.error(getIpcErrorMessage(err, "Failed to move chat")),
   });
 
   return {

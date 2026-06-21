@@ -35,7 +35,21 @@ export interface BackendSystemMetrics {
   net_down: number;
 }
 
+export interface InitPhase {
+  id: string;
+  label: string;
+  status: "pending" | "running" | "done" | "error" | "skipped";
+  elapsed_ms?: number;
+}
+
+export interface InitStatus {
+  phases: InitPhase[];
+  critical_complete: boolean;
+  background_complete: boolean;
+}
+
 export const systemApi = {
   getHardwareInfo: () => callCommand<HardwareInfo>("get_hardware_info", {}),
   getSystemMetrics: () => callCommand<BackendSystemMetrics>("get_system_metrics", {}),
+  getInitStatus: () => callCommand<InitStatus>("get_init_status", {}),
 };

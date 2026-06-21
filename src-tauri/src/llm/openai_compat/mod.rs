@@ -87,7 +87,9 @@ impl OpenAiCompatProvider {
     fn url(&self, path: &str) -> String {
         let base_locked = self.base_url.read().unwrap();
         let base = base_locked.trim_end_matches('/');
-        if self.provider_name.to_lowercase() == "mimo" || self.provider_name.to_lowercase() == "mimo-free" {
+        if self.provider_name.to_lowercase() == "mimo"
+            || self.provider_name.to_lowercase() == "mimo-free"
+        {
             if path == "/chat/completions" {
                 return base.to_string(); // The base URL itself IS the chat endpoint
             }

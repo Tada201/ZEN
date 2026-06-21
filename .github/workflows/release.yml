@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Dry run (build but do not publish release)"
+        description: "Create a free unsigned development MSI artifact. It is not published as a GitHub release."
         required: false
-        default: "false"
+        default: "true"
         type: boolean
 
 concurrency:
@@ -63,6 +63,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
@@ -81,16 +83,33 @@ jobs:
         shell: pwsh
         run: npm run secret:artifacts
 
-      - name: Fetch runtime binaries
-        shell: pwsh
-        run: npm run runtime:fetch -- -Clean
-
-      - name: Check runtime binaries
-        shell: pwsh
-        run: npm run runtime:check
-
       - name: Build frontend
         run: npm run build
+
+      - name: Frontend feature tests
+        run: npm test
+
+      - name: Dependency audit
+        run: npm audit --audit-level=high
+
+      - name: Cargo check
+        working-directory: src-tauri
+        run: cargo check --all-targets
+
+      - name: Cargo clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Cargo tests
+        working-directory: src-tauri
+        run: cargo test --bin zen
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Rust dependency audit
+        working-directory: src-tauri
+        run: cargo audit
 
       - name: Bundle size budget
         shell: pwsh
@@ -98,6 +117,45 @@ jobs:
 
       - name: Build Tauri bundle
         run: npx tauri build
+
+      - name: Development build notice
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          Write-Host "Development build: producing an unsigned MSI artifact for local testing."
+          Write-Host "No code-signing certificate or GitHub release is used for manual workflow runs."
+
+      - name: Require signing credentials for published releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_BASE64) -or [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) {
+            throw "Published releases require WINDOWS_CERTIFICATE_BASE64 and WINDOWS_CERTIFICATE_PASSWORD. Use workflow_dispatch dry_run until code signing is configured."
+          }
+
+      - name: Sign Windows installers
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $certificatePath = Join-Path $env:RUNNER_TEMP "zen-release-signing.pfx"
+          [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
+          $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse | Sort-Object FullName -Descending | Select-Object -First 1
+          if ($null -eq $signTool) { throw "signtool.exe is unavailable on this runner" }
+          $installers = Get-ChildItem "src-tauri/target/release/bundle" -Recurse -Include "*.msi", "*.exe" -File
+          if ($installers.Count -eq 0) { throw "No Windows installers were produced" }
+          foreach ($installer in $installers) {
+            & $signTool.FullName sign /fd SHA256 /f $certificatePath /p $env:WINDOWS_CERTIFICATE_PASSWORD /tr http://timestamp.digicert.com /td SHA256 $installer.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Signing failed for $($installer.Name)" }
+            $signature = Get-AuthenticodeSignature $installer.FullName
+            if ($signature.Status -ne "Valid") { throw "Signature validation failed for $($installer.Name): $($signature.Status)" }
+          }
+          Remove-Item -LiteralPath $certificatePath -Force
 
       - name: Post-build secret artifact guard
         shell: pwsh
@@ -117,7 +175,16 @@ jobs:
             Write-Host "Bundle output is clean — no database or secret files found."
           }
 
-      - name: Upload Windows bundles
+      - name: Upload unsigned development MSI
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: zen-windows-dev-unsigned
+          path: src-tauri/target/release/bundle/**
+          if-no-files-found: error
+
+      - name: Upload signed release bundles
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@v4
         with:
           name: zen-windows-bundles
@@ -125,8 +192,8 @@ jobs:
           if-no-files-found: error
 
       # Generate Tauri updater JSON for tauri-plugin-updater
-      - name: Generate updater manifest
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Generate updater manifest (disabled until native updater is configured)
+        if: ${{ false }}
         shell: pwsh
         run: |
           $version = "${{ steps.meta.outputs.version }}"
@@ -166,8 +233,8 @@ jobs:
           $updater | Out-File -FilePath "latest.json" -Encoding utf8
           Write-Host "Generated latest.json for updater."
 
-      - name: Upload updater manifest
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Upload updater manifest (disabled until native updater is configured)
+        if: ${{ false }}
         uses: actions/upload-artifact@v4
         with:
           name: updater-manifest
@@ -190,6 +257,7 @@ jobs:
           path: bundles
 
       - name: Download updater manifest
+        if: ${{ false }}
         uses: actions/download-artifact@v4
         with:
           name: updater-manifest
@@ -201,14 +269,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p release-assets
-          # Collect NSIS installers
-          find bundles/nsis -name "*.exe" -exec cp {} release-assets/ \; 2>/dev/null || true
-          find bundles/nsis -name "*.exe.sig" -exec cp {} release-assets/ \; 2>/dev/null || true
           # Collect MSI installers
           find bundles/msi -name "*.msi" -exec cp {} release-assets/ \; 2>/dev/null || true
           find bundles/msi -name "*.msi.sig" -exec cp {} release-assets/ \; 2>/dev/null || true
-          # Updater manifest
-          if [ -f latest.json ]; then cp latest.json release-assets/; fi
           echo "Collected assets:"
           ls -la release-assets/
 

@@ -33,6 +33,7 @@ const TAB_GROUPS: SettingsTabGroup[] = [
       { id: "providers", label: "Providers", icon: "lucide:server-cog", description: "Connections and models" },
       { id: "capabilities", label: "Capabilities", icon: "lucide:sparkles", description: "Agent skills" },
       { id: "intelligence", label: "Intelligence", icon: "lucide:search", description: "RAG & memory" },
+      { id: "deep-research", label: "Deep Research", icon: "lucide:book-open-check", description: "Research agents & sources" },
       { id: "agents", label: "Agents", icon: "lucide:bot", description: "Sub-agent config" },
     ],
   },
