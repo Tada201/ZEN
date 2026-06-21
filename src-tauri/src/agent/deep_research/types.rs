@@ -5,17 +5,14 @@ use crate::llm::{ChatRequestConfig, LlmProvider};
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-pub(super) const DEFAULT_MAX_ROUNDS: usize = 6;
 pub(super) const DEFAULT_MIN_ROUNDS: usize = 2;
 pub(super) const DEFAULT_MAX_TIME_SECS: u64 = 300;
-pub(super) const DEFAULT_MAX_URLS_PER_ROUND: usize = 3;
 pub(super) const DEFAULT_MAX_CONTENT_CHARS: usize = 15_000;
 pub(super) const DEFAULT_MAX_REPORT_TOKENS: i64 = 8_192;
 pub(super) const DEFAULT_MAX_EMPTY_ROUNDS: usize = 2;
 pub(super) const DEFAULT_SYNTHESIS_WINDOW: usize = 10;
 pub(super) const DEFAULT_EXTRACTION_CONCURRENCY: usize = 3;
 pub(super) const DEFAULT_COMPRESSION_INTERVAL: usize = 4;
-pub(super) const DEFAULT_SUB_AGENT_COUNT: usize = 3;
 
 // ── Public API ─────────────────────────────────────────────────────────────
 
