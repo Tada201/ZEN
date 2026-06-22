@@ -14,7 +14,9 @@ pub mod types;
 pub mod vessels;
 pub mod weather;
 pub mod websocket;
+pub mod geojson;
 
 #[allow(unused_imports)]
 pub use cache::GtsmCache;
 pub use types::*;
+pub use geojson::GeojsonService;

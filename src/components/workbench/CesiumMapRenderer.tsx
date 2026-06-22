@@ -7,6 +7,8 @@ import { useCesiumEntityLayers } from './cesium/useCesiumEntityLayers';
 import { useCesiumMapControls } from './cesium/useCesiumMapControls';
 import { useCesiumViewerSetup } from './cesium/useCesiumViewerSetup';
 import { useCesiumVisualLayers } from './cesium/useCesiumVisualLayers';
+import { useCesiumGeojsonLayers } from './cesium/useCesiumGeojsonLayers';
+import { useGlobalMapData } from './cesium/useGlobalMapData';
 import type { CesiumDataSources, CesiumEntityIds } from './cesium/cesiumMapTypes';
 
 import "cesium/Build/Cesium/Widgets/widgets.css";
@@ -25,6 +27,7 @@ export const CesiumMapRenderer: React.FC = () => {
     const earthquakes = useGTSMStore(state => state.earthquakes);
     const military = useGTSMStore(state => state.military);
     const vessels = useGTSMStore(state => state.vessels);
+    const naturalEvents = useGTSMStore(state => state.naturalEvents);
     const selectedLayers = useGTSMStore(state => state.selectedLayers);
     const targetLocked = useGTSMStore(state => state.targetLocked);
     const setTargetLocked = useGTSMStore(state => state.setTargetLocked);
@@ -33,7 +36,6 @@ export const CesiumMapRenderer: React.FC = () => {
     const selectedTarget = useGTSMStore(state => state.selectedTarget);
     const imageryProvider = useGTSMStore(state => state.imageryProvider);
     const googleMapsApiKey = useGTSMStore(state => state.googleMapsApiKey);
-    const viewMode = useGTSMStore(state => state.viewMode);
     const viewportCenter = useGTSMStore(state => state.viewportCenter);
     const resolutionScale = useGTSMStore(state => state.resolutionScale);
     const antiAliasing = useGTSMStore(state => state.antiAliasing);
@@ -43,6 +45,8 @@ export const CesiumMapRenderer: React.FC = () => {
     const showFps = useGTSMStore(state => state.showFps);
     const flyToRequest = useGTSMStore(state => state.flyToRequest);
     const setFlyToRequest = useGTSMStore(state => state.setFlyToRequest);
+
+    useGlobalMapData(true);
 
     const activeFlights = selectedLayers.includes('flights') ? flights : [];
     const activeVessels = selectedLayers.includes('vessels') ? vessels : [];
@@ -76,7 +80,7 @@ export const CesiumMapRenderer: React.FC = () => {
         handlerRef,
         dataSourcesRef,
         entityServiceRef,
-        viewMode,
+        viewMode: 'globe',
         setViewportCenter,
         setSelectedTarget,
         setTargetLocked,
@@ -86,7 +90,7 @@ export const CesiumMapRenderer: React.FC = () => {
     useCesiumMapControls({
         viewerRef,
         googleTilesetRef,
-        viewMode,
+        viewMode: 'globe',
         imageryProvider,
         googleMapsApiKey,
         satellites,
@@ -119,6 +123,7 @@ export const CesiumMapRenderer: React.FC = () => {
         earthquakes,
         military,
         vessels,
+        naturalEvents,
         selectedLayers,
         selectedTarget,
         viewportCenter,
@@ -132,6 +137,10 @@ export const CesiumMapRenderer: React.FC = () => {
         selectedTarget,
         satellites,
         selectedLayers,
+    });
+
+    useCesiumGeojsonLayers({
+        viewerRef,
     });
 
     return <div ref={containerRef} className="flex-1 h-full z-0 relative" />;

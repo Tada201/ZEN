@@ -1,15 +1,17 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, useState } from 'react';
 import { useGTSMStore } from '@/lib/stores/useGTSMStore';
+import { useGeojsonLayerStore } from '@/lib/stores/useGeojsonLayerStore';
 
 // GTSM HUD Panel Components
-import { ViewportHUD, Minimap, NavigationPanel, LayerManager, TargetInspector } from '../GTSM';
+import { ViewportHUD, Minimap, LayerManager, TargetInspector } from '../GTSM';
+import { GeoJsonDropZone } from '../GTSM/geojson/GeoJsonDropZone';
+import { GeoJsonImportModal } from '../GTSM/geojson/GeoJsonImportModal';
+import { GeoJsonLayerPanel } from '../GTSM/geojson/GeoJsonLayerPanel';
+
+import '../GTSM/geojson/geojson-layers.css';
 
 const CesiumMapRenderer = React.lazy(() =>
     import('./CesiumMapRenderer').then((module) => ({ default: module.CesiumMapRenderer }))
-);
-
-const MapLibreMapRenderer = React.lazy(() =>
-    import('./MapLibreMapRenderer').then((module) => ({ default: module.MapLibreMapRenderer }))
 );
 
 const MapRendererFallback = () => (
@@ -20,54 +22,57 @@ const MapRendererFallback = () => (
 
 export const CesiumCanvas: React.FC = () => {
     // Read state from Zustand store
-    const viewMode = useGTSMStore(state => state.viewMode);
     const selectedTarget = useGTSMStore(state => state.selectedTarget);
+    const { addLayer } = useGeojsonLayerStore();
+
+    // Import modal state
+    const [pendingFile, setPendingFile] = useState<{ name: string; content: string } | null>(null);
+
+    const handleFileDropped = (name: string, content: string) => {
+        setPendingFile({ name, content });
+    };
+
+    const handleImportConfirm = async (name: string, description: string, color: string) => {
+        if (!pendingFile) return;
+        try {
+            await addLayer(name, description, color, pendingFile.content);
+            setPendingFile(null);
+        } catch (e) {
+            console.error('[GeoJSON Import] Failed to save layer:', e);
+            alert('Failed to import layer: ' + e);
+        }
+    };
 
     return (
         <div className="w-full h-full relative overflow-hidden bg-black flex">
-            {/* 
-              Conditional Map Mounting:
-              - When viewMode is 'globe' (3D), we mount Cesium and unmount MapLibre.
-              - When viewMode is 'navigation' (2D), we mount MapLibre and completely unmount Cesium.
-              - Unmounting cleanly triggers standard cleanup hooks (viewer.destroy() / map.remove())
-                which completely unloads the GPU context and releases RAM/VRAM!
-            */}
-            <Suspense fallback={<MapRendererFallback />}>
-                {viewMode !== 'navigation' ? (
+            {/* 2D navigation remains intentionally deferred; this surface owns the 3D globe only. */}
+            <GeoJsonDropZone onFileDropped={handleFileDropped}>
+                <Suspense fallback={<MapRendererFallback />}>
                     <CesiumMapRenderer />
-                ) : (
-                    <MapLibreMapRenderer />
-                )}
-            </Suspense>
+                </Suspense>
+            </GeoJsonDropZone>
 
             {/* Tactical eDEX Dashboards overlay grids */}
             <div className="absolute inset-0 z-10 pointer-events-none p-4 flex flex-col justify-between font-mono">
                 {/* Top Row HUD */}
                 <div className="flex justify-between items-start pointer-events-none w-full">
                     <div className="w-[240px] pointer-events-auto shadow-lg shadow-black/45">
-                        {viewMode !== 'navigation' && <ViewportHUD />}
+                        <ViewportHUD />
                     </div>
                     
-                    <div className="w-[280px]" />
-
-                    {/* Compact Navigation Panel renders on the right in 2D mode */}
-                    <div className="w-[240px] pointer-events-auto">
-                        {viewMode === 'navigation' && (
-                            <div className="shadow-lg shadow-black/45">
-                                <NavigationPanel />
-                            </div>
-                        )}
+                    <div className="w-[240px] pointer-events-auto flex flex-col gap-2 shadow-lg shadow-black/45">
+                        <GeoJsonLayerPanel />
                     </div>
                 </div>
 
                 {/* Bottom Row HUD */}
                 <div className="flex justify-between items-end pointer-events-none w-full">
                     <div className="w-[240px] pointer-events-auto shadow-lg shadow-black/45">
-                        {viewMode !== 'navigation' && <LayerManager />}
+                        <LayerManager />
                     </div>
 
                     <div className="w-[240px] pointer-events-auto shadow-lg shadow-black/45">
-                        {viewMode !== 'navigation' && <Minimap />}
+                        <Minimap />
                     </div>
                 </div>
             </div>
@@ -77,6 +82,16 @@ export const CesiumCanvas: React.FC = () => {
                 <div className="z-20 relative pointer-events-auto border-l border-zinc-800 bg-black/60 backdrop-blur-md shrink-0">
                     <TargetInspector />
                 </div>
+            )}
+
+            {/* Import Dialog */}
+            {pendingFile && (
+                <GeoJsonImportModal
+                    fileName={pendingFile.name}
+                    fileContent={pendingFile.content}
+                    onConfirm={handleImportConfirm}
+                    onCancel={() => setPendingFile(null)}
+                />
             )}
         </div>
     );

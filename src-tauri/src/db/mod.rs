@@ -820,6 +820,24 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         .execute(pool)
         .await;
 
+    // GTSM GeoJSON Saved Layers table
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS gtsm_geojson_layers (
+            id          TEXT PRIMARY KEY,
+            name        TEXT NOT NULL,
+            description TEXT,
+            data        TEXT NOT NULL,
+            is_visible  INTEGER NOT NULL DEFAULT 1,
+            style       TEXT NOT NULL,
+            created_at  INTEGER NOT NULL,
+            updated_at  INTEGER NOT NULL
+        );
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
     info!("Database migrations complete");
     Ok(())
 }

@@ -247,6 +247,40 @@ pub struct GtsmMarker {
     pub created_at: String,
 }
 
+// ─── GTSM GeoJSON Layer ───
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct GtsmGeojsonLayer {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub color: String,
+    pub visible: i32,
+    pub geojson: String,
+    pub feature_count: i32,
+    pub geometry_types: String,
+    pub bbox_json: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Lightweight metadata view (without the full GeoJSON blob).
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct GtsmGeojsonLayerMeta {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub color: String,
+    pub visible: i32,
+    pub feature_count: i32,
+    pub geometry_types: String,
+    pub bbox_json: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SystemStatus {

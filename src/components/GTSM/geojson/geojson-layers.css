@@ -1,0 +1,25 @@
+/* GeoJSON eDEX interface styling sheet */
+
+.geojson-drop-zone-active {
+  animation: pulse-cyan 2s infinite ease-in-out;
+}
+
+@keyframes pulse-cyan {
+  0%, 100% {
+    border-color: rgba(6, 182, 212, 0.4);
+    box-shadow: inset 0 0 10px rgba(6, 182, 212, 0.1);
+  }
+  50% {
+    border-color: rgba(6, 182, 212, 0.95);
+    box-shadow: inset 0 0 20px rgba(6, 182, 212, 0.25);
+  }
+}
+
+/* Custom styles for native HTML color picker overrides */
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input[type="color"]::-webkit-color-swatch {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+}

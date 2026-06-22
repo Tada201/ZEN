@@ -105,6 +105,25 @@ pub async fn get_military_aircraft(
 }
 
 #[tauri::command]
+pub async fn get_vessels(state: State<'_, AppState>) -> Result<Vec<crate::services::gtsm::Vessel>, ZenError> {
+    Ok(state.gtsm_cache.get_vessels().await.unwrap_or_default())
+}
+
+#[tauri::command]
+pub async fn get_natural_events(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::services::gtsm::NaturalEvent>, ZenError> {
+    if let Some(cached) = state.gtsm_cache.get_natural_events().await {
+        return Ok(cached);
+    }
+    let events = crate::services::gtsm::nasa_events::fetch_natural_events()
+        .await
+        .map_err(|error| ZenError::Internal(error.to_string()))?;
+    state.gtsm_cache.set_natural_events(events.clone(), 900).await;
+    Ok(events)
+}
+
+#[tauri::command]
 pub async fn calculate_route(
     state: State<'_, AppState>,
     start_lat: f64,
@@ -491,6 +510,81 @@ pub async fn save_marker_db(
 #[tauri::command]
 pub async fn delete_marker_db(state: State<'_, AppState>, id: String) -> Result<(), ZenError> {
     crate::db::queries::delete_marker(&state.db().await?, &id)
+        .await
+        .map_err(|e| ZenError::Custom(e.to_string()))
+}
+
+use crate::db::models::GtsmGeojsonLayer;
+use crate::services::gtsm::GeojsonService;
+
+#[tauri::command]
+pub async fn list_geojson_layers_db(state: State<'_, AppState>) -> Result<Vec<GtsmGeojsonLayer>, ZenError> {
+    crate::db::queries::list_geojson_layers(&state.db().await?)
+        .await
+        .map_err(|e| ZenError::Custom(e.to_string()))
+}
+
+#[tauri::command]
+pub async fn list_geojson_layers_db_page(
+    state: State<'_, AppState>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+) -> Result<Page<GtsmGeojsonLayer>, ZenError> {
+    let (limit, offset) = normalize_page(limit, offset);
+    let items = crate::db::queries::list_geojson_layers_page(&state.db().await?, limit + 1, offset)
+        .await
+        .map_err(|e| ZenError::Custom(e.to_string()))?;
+    Ok(page_from_fetch(items, limit, offset))
+}
+
+#[tauri::command]
+pub async fn save_geojson_layer_db(
+    state: State<'_, AppState>,
+    id: String,
+    name: String,
+    description: String,
+    color: String,
+    visible: bool,
+    geojson: String,
+) -> Result<GtsmGeojsonLayer, ZenError> {
+    // Validate geojson content and compute feature/bbox/geom metadata
+    let metadata = GeojsonService::parse_and_validate(&geojson)
+        .map_err(|e| ZenError::Custom(e.to_string()))?;
+
+    let geometry_types = serde_json::to_string(&metadata.geometry_types)
+        .map_err(|e| ZenError::Custom(format!("Serialization error: {}", e)))?;
+    let bbox_json = if let Some(ref bbox) = metadata.bbox {
+        Some(serde_json::to_string(bbox).map_err(|e| ZenError::Custom(format!("Serialization error: {}", e)))?)
+    } else {
+        None
+    };
+
+    let now_str = chrono::Utc::now().to_rfc3339();
+
+    let layer = GtsmGeojsonLayer {
+        id,
+        name,
+        description,
+        color,
+        visible: if visible { 1 } else { 0 },
+        geojson,
+        feature_count: metadata.feature_count,
+        geometry_types,
+        bbox_json,
+        created_at: now_str.clone(),
+        updated_at: now_str,
+    };
+
+    crate::db::queries::save_geojson_layer(&state.db().await?, &layer)
+        .await
+        .map_err(|e| ZenError::Custom(e.to_string()))?;
+
+    Ok(layer)
+}
+
+#[tauri::command]
+pub async fn delete_geojson_layer_db(state: State<'_, AppState>, id: String) -> Result<(), ZenError> {
+    crate::db::queries::delete_geojson_layer(&state.db().await?, &id)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))
 }
