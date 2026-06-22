@@ -134,7 +134,7 @@ export const TargetInspector: React.FC = () => {
     }
 
     function renderTimeSinceUpdate(target: SpatialEntity) {
-        const timeVal = target.metadata.time;
+        const timeVal = target.metadata?.time;
         if (!timeVal) {
             return (
                 <div className="flex items-center gap-1.5 mt-2 bg-cyan-500/10 px-4 py-1.5 border border-cyan-500/20 rounded-sm">
@@ -314,7 +314,7 @@ export const TargetInspector: React.FC = () => {
                         <div className="flex flex-col gap-0.5">
                             <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider">Designation</span>
                             <div className="text-[9px] text-zinc-300 font-bold truncate">
-                                {selectedTarget.metadata.name || selectedTarget.metadata.callsign || selectedTarget.metadata.flight || selectedTarget.metadata.title || "UNKNOWN"}
+                                {selectedTarget.metadata?.name || selectedTarget.metadata?.callsign || selectedTarget.metadata?.flight || selectedTarget.metadata?.title || "UNKNOWN"}
                             </div>
                         </div>
 
@@ -344,7 +344,7 @@ export const TargetInspector: React.FC = () => {
                             <span>Datalink Grid</span>
                         </div>
                         <div className="grid grid-cols-1 gap-px bg-zinc-900 border border-zinc-850 rounded-sm overflow-hidden text-[9px]">
-                            {Object.entries(selectedTarget.metadata).map(([key, value]) => {
+                            {Object.entries(selectedTarget.metadata || {}).map(([key, value]) => {
                                 if (value === undefined || value === null || value === "") return null;
                                 let displayValue = String(value);
                                 if (typeof value === 'object') displayValue = "{...}";
