@@ -22,7 +22,7 @@ export const CesiumMapRenderer: React.FC = () => {
     const flightPositionsRef = useRef<Map<string, Cesium.SampledPositionProperty>>(new Map());
     const [expandedHubId, setExpandedHubId] = useState<string | null>(null);
 
-    const satellites = useGTSMStore(state => state.satellites);
+        const satellites = useGTSMStore(state => state.satellites);
     const flights = useGTSMStore(state => state.flights);
     const earthquakes = useGTSMStore(state => state.earthquakes);
     const military = useGTSMStore(state => state.military);
@@ -45,6 +45,7 @@ export const CesiumMapRenderer: React.FC = () => {
     const showFps = useGTSMStore(state => state.showFps);
     const flyToRequest = useGTSMStore(state => state.flyToRequest);
     const setFlyToRequest = useGTSMStore(state => state.setFlyToRequest);
+    const mapMode = useGTSMStore(state => state.mapMode);
 
     useGlobalMapData(true);
 
@@ -80,7 +81,7 @@ export const CesiumMapRenderer: React.FC = () => {
         handlerRef,
         dataSourcesRef,
         entityServiceRef,
-        viewMode: 'globe',
+        viewMode: mapMode === '2D' ? 'navigation' : 'globe',
         setViewportCenter,
         setSelectedTarget,
         setTargetLocked,
@@ -90,7 +91,7 @@ export const CesiumMapRenderer: React.FC = () => {
     useCesiumMapControls({
         viewerRef,
         googleTilesetRef,
-        viewMode: 'globe',
+        viewMode: mapMode === '2D' ? 'navigation' : 'globe',
         imageryProvider,
         googleMapsApiKey,
         satellites,

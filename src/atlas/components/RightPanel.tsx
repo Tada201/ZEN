@@ -1,5 +1,6 @@
 import React, { Suspense } from "react";
 import { useUIStore } from "@/lib/stores/useUIStore";
+import { useGTSMStore } from "@/lib/stores/useGTSMStore";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -46,6 +47,7 @@ const MathGraphPlaceholder = () => (
  */
 export function RightPanel() {
   const { activeRightTab, setActiveRightTab, setRightPanelOpen, operationalParams, rightPanelCanvasMode, setRightPanelCanvasMode } = useUIStore();
+  const { mapMode, setMapMode } = useGTSMStore();
   const [mapActivated, setMapActivated] = React.useState(false);
   const [mapClosing, setMapClosing] = React.useState(false);
 
@@ -176,7 +178,24 @@ export function RightPanel() {
           )}
           {visibleActiveRightTab === 'map' && mapActivated && (
             <div className="flex items-center gap-2 ml-4">
-              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-primary">3D globe</span>
+              <div className="flex rounded-lg border border-border bg-black/40 p-0.5">
+                <button
+                  type="button"
+                  className={`inline-flex h-7 items-center rounded-md px-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${mapMode === '2D' ? 'bg-primary/15 text-primary' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
+                  onClick={() => setMapMode('2D')}
+                  title="Switch to 2D Map"
+                >
+                  2D Map
+                </button>
+                <button
+                  type="button"
+                  className={`inline-flex h-7 items-center rounded-md px-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${mapMode === '3D' ? 'bg-primary/15 text-primary' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
+                  onClick={() => setMapMode('3D')}
+                  title="Switch to 3D Globe"
+                >
+                  3D Globe
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={() => setMapClosing(true)}
