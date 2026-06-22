@@ -4,13 +4,25 @@ use crate::services::terminal::TerminalSpawnParams;
 use tauri::{AppHandle, State};
 
 #[tauri::command]
+pub async fn terminal_request_approval(
+    state: State<'_, AppState>,
+    cwd: Option<String>,
+) -> ZenResult<crate::services::terminal::TerminalApprovalGrant> {
+    let workspace = state.workspace_folder.read().await.clone();
+    state
+        .terminal
+        .request_interactive_approval(&state.security, workspace, cwd)
+        .await
+}
+
+#[tauri::command]
 pub async fn terminal_spawn(
     state: State<'_, AppState>,
     app: AppHandle,
     cols: u16,
     rows: u16,
     cwd: Option<String>,
-    user_approved: bool,
+    approval_id: String,
 ) -> ZenResult<String> {
     let workspace = state.workspace_folder.read().await.clone();
     state
@@ -23,7 +35,7 @@ pub async fn terminal_spawn(
             cols,
             rows,
             cwd,
-            user_approved,
+            approval_id,
         })
         .await
 }
@@ -54,5 +66,16 @@ pub async fn terminal_resize(
     state
         .terminal
         .resize_interactive(&state.terminal_sessions, id, cols, rows)
+        .await
+}
+
+#[tauri::command]
+pub async fn terminal_read_output(
+    state: State<'_, AppState>,
+    id: String,
+) -> ZenResult<String> {
+    state
+        .terminal
+        .read_interactive_output(&state.terminal_sessions, id)
         .await
 }

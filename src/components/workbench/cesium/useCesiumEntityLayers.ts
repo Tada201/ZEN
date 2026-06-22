@@ -20,6 +20,7 @@ interface UseCesiumEntityLayersOptions {
     earthquakes: any[];
     military: any[];
     vessels: any[];
+    naturalEvents: any[];
     selectedLayers: string[];
     selectedTarget: any;
     viewportCenter: { alt: number };
@@ -38,6 +39,7 @@ export const useCesiumEntityLayers = ({
     earthquakes,
     military,
     vessels,
+    naturalEvents,
     selectedLayers,
     selectedTarget,
     viewportCenter,
@@ -45,10 +47,9 @@ export const useCesiumEntityLayers = ({
     allClusteredUnits,
 }: UseCesiumEntityLayersOptions) => {
     useEffect(() => {
-        if (!viewerRef.current || !entityServiceRef.current) return;
-
         const viewer = viewerRef.current;
         const service = entityServiceRef.current;
+        if (!viewer || viewer.isDestroyed() || !service) return;
 
         if (!selectedLayers.includes('satellites')) {
             service.clearEntities('satellite');
@@ -124,7 +125,7 @@ export const useCesiumEntityLayers = ({
     useEffect(() => {
         const ds = dataSourcesRef.current.flights;
         const viewer = viewerRef.current;
-        if (!ds || !viewer) return;
+        if (!ds || !viewer || viewer.isDestroyed()) return;
 
         ds.entities.suspendEvents();
         const prev = entityIdsRef.current.flights;
@@ -335,6 +336,42 @@ export const useCesiumEntityLayers = ({
         ds.entities.resumeEvents();
         viewerRef.current?.scene.requestRender();
     }, [dataSourcesRef, entityIdsRef, viewerRef, earthquakes, selectedLayers]);
+
+    useEffect(() => {
+        const viewer = viewerRef.current;
+        const ds = dataSourcesRef.current.naturalEvents;
+        if (!viewer || viewer.isDestroyed() || !ds) return;
+
+        ds.entities.suspendEvents();
+        ds.entities.removeAll();
+        if (selectedLayers.includes('naturalEvents')) {
+            naturalEvents.forEach((event) => {
+                const magnitude = Number(event.metadata?.magnitude);
+                ds.entities.add({
+                    id: event.id,
+                    position: Cesium.Cartesian3.fromDegrees(event.position.lon, event.position.lat, 0),
+                    properties: { metadata: event.metadata, type: event.type },
+                    point: {
+                        pixelSize: Number.isFinite(magnitude) ? Math.min(16, 7 + magnitude) : 8,
+                        color: Cesium.Color.ORANGERED,
+                        outlineColor: Cesium.Color.BLACK,
+                        outlineWidth: 1,
+                    },
+                    label: {
+                        text: String(event.metadata?.title || event.id).toUpperCase(),
+                        font: '8px Cascadia Mono, monospace',
+                        fillColor: Cesium.Color.ORANGERED,
+                        pixelOffset: new Cesium.Cartesian2(0, -12),
+                        showBackground: true,
+                        backgroundColor: new Cesium.Color(0, 0, 0, 0.7),
+                        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1_500_000),
+                    },
+                });
+            });
+        }
+        ds.entities.resumeEvents();
+        viewer.scene.requestRender();
+    }, [dataSourcesRef, naturalEvents, selectedLayers, viewerRef]);
 
     useEffect(() => {
         const ds = dataSourcesRef.current.vessels;

@@ -49,6 +49,10 @@ impl ProcessManager {
     pub async fn kill_process(&self, id: &str) -> bool {
         let mut processes = self.processes.write().await;
         if let Some(proc) = processes.remove(id) {
+            if proc.pid == 0 {
+                warn!(id = %id, name = %proc.name, "Tracked process has no PID; caller must use its local fallback");
+                return false;
+            }
             Self::kill_by_pid(proc.pid, &proc.name).await;
             return true;
         }
@@ -61,7 +65,9 @@ impl ProcessManager {
         {
             let mut cmd = std::process::Command::new("taskkill");
             cmd.creation_flags(CREATE_NO_WINDOW);
-            cmd.args(["/F", "/PID", &pid.to_string()]);
+            // `/T` is required for terminal and compiler children. Killing
+            // only the shell leaves descendant processes running after Zen exits.
+            cmd.args(["/F", "/T", "/PID", &pid.to_string()]);
 
             match cmd.status() {
                 Ok(status) if status.success() => {

@@ -14,6 +14,7 @@ import { CustomProviderConfig } from './providers/CustomProviderConfig';
 import { ConnectionStatus } from './providers/ConnectionStatus';
 import { ProviderParamsConfig } from './providers/ProviderParamsConfig';
 import { ProviderGallery } from './providers/ProviderGallery';
+import { ProviderUsagePanel } from './providers/ProviderUsagePanel';
 import { providersApi } from '@/api';
 
 const CATEGORIES = [
@@ -475,6 +476,8 @@ export const ProvidersSettings = memo(() => {
                             isLocal={(providerData as any).isLocal || false}
                             apiKeyPresent={true} // Simplified for now
                         />
+
+                        <ProviderUsagePanel models={availableModelsByProvider[selectedProviderId] || []} />
 
                         <ConnectionStatus providerKey={selectedProviderId} providerName={displayData.name} />
                     </div>

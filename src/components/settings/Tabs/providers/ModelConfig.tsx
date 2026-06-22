@@ -1,6 +1,5 @@
 import React, { useCallback } from 'react';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
-import { ModelInPageSelector } from '@/components/settings/ui/ModelInPageSelector';
 import type { ModelInfo } from '@/lib/types/provider';
 
 const EMPTY_ARRAY: ModelInfo[] = [];
@@ -42,17 +41,30 @@ export const ModelConfig = React.memo(({ providerKey, displayName, requiresKey, 
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">Active Identifier</label>
                 <span className="text-[11px] text-muted-foreground/60">Select the model architecture for this node.</span>
             </div>
-            <div className="w-full max-w-lg">
-                <ModelInPageSelector
-                    models={providerModels}
-                    selectedModelId={activeModel}
-                    onModelSelect={handleModelChange}
-                    fetching={fetchingModels}
-                    status={fetchingModels ? 'warning' : (providerModels.length === 0 ? 'missing' : 'ready')}
-                    emptyHint={getEmptyHint()}
-                    disabled={requiresKey && !apiKeyPresent}
-                />
-            </div>
+            {fetchingModels ? <p className="text-xs text-muted-foreground">Discovering models...</p> : null}
+            {providerModels.length > 0 ? (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    {providerModels.map((model) => {
+                        const selected = model.id === activeModel;
+                        return (
+                            <button
+                                key={model.id}
+                                type="button"
+                                onClick={() => handleModelChange(model.id)}
+                                className={`min-h-24 border p-3 text-left transition-colors ${selected ? 'border-primary bg-primary/10' : 'border-white/[0.08] bg-white/[0.02] hover:border-white/[0.18] hover:bg-white/[0.04]'}`}
+                                aria-pressed={selected}
+                                disabled={requiresKey && !apiKeyPresent}
+                            >
+                                <div className="line-clamp-2 font-mono text-xs font-semibold text-foreground">{model.name || model.id}</div>
+                                <div className="mt-2 truncate font-mono text-[10px] text-muted-foreground" title={model.id}>{model.id}</div>
+                                {model.capabilities?.length ? <div className="mt-2 truncate text-[10px] text-muted-foreground">{model.capabilities.join(' · ')}</div> : null}
+                            </button>
+                        );
+                    })}
+                </div>
+            ) : (
+                <p className="rounded border border-dashed border-white/[0.10] px-3 py-4 text-xs text-muted-foreground">{getEmptyHint()}</p>
+            )}
         </div>
     );
 });

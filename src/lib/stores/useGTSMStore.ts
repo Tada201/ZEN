@@ -204,7 +204,7 @@ export const useGTSMStore = create<GTSMState>()(
             flyToRequest: null,
 
             // Initial view state
-            selectedLayers: ['satellites', 'flights', 'earthquakes', 'military', 'vessels', 'heatmap', 'weather'],
+            selectedLayers: ['satellites', 'flights', 'earthquakes', 'military', 'vessels', 'naturalEvents'],
             imageryProvider: 'dark',
             googleMapsApiKey: '',
             mapMode: '3D',

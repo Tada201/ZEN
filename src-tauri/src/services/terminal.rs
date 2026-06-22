@@ -1,9 +1,12 @@
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use std::io::{Read, Write};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::{Mutex, RwLock};
+use serde::Serialize;
 
 use crate::error::{ZenError, ZenResult};
 use crate::services::{
@@ -26,18 +29,98 @@ pub struct TerminalSpawnParams<'a> {
     pub cols: u16,
     pub rows: u16,
     pub cwd: Option<String>,
-    pub user_approved: bool,
+    pub approval_id: String,
+}
+
+const INTERACTIVE_APPROVAL_TTL: Duration = Duration::from_secs(60);
+
+struct InteractiveTerminalApproval {
+    cwd: PathBuf,
+    expires_at: Instant,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalApprovalGrant {
+    pub approval_id: String,
+    pub expires_at: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalOutputEvent {
+    pub session_id: String,
+    pub data: String,
 }
 
 pub struct TerminalService {
     pub sessions: Arc<Mutex<Vec<TerminalSession>>>,
+    approvals: Arc<Mutex<HashMap<String, InteractiveTerminalApproval>>>,
 }
 
 impl TerminalService {
     pub fn new() -> Self {
         Self {
             sessions: Arc::new(Mutex::new(Vec::new())),
+            approvals: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    pub async fn request_interactive_approval(
+        &self,
+        security: &SecurityService,
+        workspace: PathBuf,
+        cwd: Option<String>,
+    ) -> ZenResult<TerminalApprovalGrant> {
+        let cwd = resolve_terminal_cwd(&workspace, cwd)?;
+        let decision = security.evaluate(&PermissionRequest {
+            operation: PrivilegedOperation::ShellCommand,
+            risk: RiskLevel::Critical,
+            caller: "terminal_request_approval".to_string(),
+            target: Some("interactive_shell".to_string()),
+            workspace: Some(workspace),
+            reason: Some("user approved opening an interactive terminal shell".to_string()),
+        });
+
+        if decision == PermissionDecision::Deny {
+            security
+                .record_audit(AuditEvent {
+                    operation: PrivilegedOperation::ShellCommand,
+                    decision,
+                    caller: "terminal_request_approval".to_string(),
+                    target: Some("interactive_shell".to_string()),
+                    reason: Some("interactive terminal approval denied by security policy".to_string()),
+                })
+                .await;
+            return Err(ZenError::Custom(
+                "Terminal access is denied by security policy".to_string(),
+            ));
+        }
+
+        let approval_id = uuid::Uuid::new_v4().to_string();
+        let expires_at = Instant::now() + INTERACTIVE_APPROVAL_TTL;
+        let mut approvals = self.approvals.lock().await;
+        approvals.retain(|_, approval| approval.expires_at > Instant::now());
+        approvals.insert(
+            approval_id.clone(),
+            InteractiveTerminalApproval { cwd, expires_at },
+        );
+        drop(approvals);
+
+        security
+            .record_audit(AuditEvent {
+                operation: PrivilegedOperation::ShellCommand,
+                decision: PermissionDecision::Allow,
+                caller: "terminal_request_approval".to_string(),
+                target: Some("interactive_shell".to_string()),
+                reason: Some("issued one-time interactive terminal approval".to_string()),
+            })
+            .await;
+
+        Ok(TerminalApprovalGrant {
+            approval_id,
+            expires_at: (chrono::Utc::now() + chrono::Duration::seconds(INTERACTIVE_APPROVAL_TTL.as_secs() as i64)).to_rfc3339(),
+        })
     }
 
     pub fn spawn(&self, id: String, app_handle: AppHandle) -> Result<(), String> {
@@ -125,70 +208,55 @@ impl TerminalService {
             cols,
             rows,
             cwd,
-            user_approved,
+            approval_id,
         } = params;
-        let resolved_cwd = match cwd {
-            Some(path) => Some(
-                crate::workspace::resolve_workspace_path(&workspace, &path)
-                    .map_err(|e| ZenError::Custom(format!("Workspace violation: {}", e)))?,
-            ),
-            None => Some(workspace.clone()),
-        };
-
-        if let Some(ref dir) = resolved_cwd {
-            if !dir.exists() || !dir.is_dir() {
-                return Err(ZenError::Custom(format!(
-                    "Terminal cwd is not a directory: {}",
-                    dir.display()
-                )));
-            }
-        }
-
-        let decision = security.evaluate(&PermissionRequest {
-            operation: PrivilegedOperation::ShellCommand,
-            risk: RiskLevel::Critical,
-            caller: "terminal_spawn".to_string(),
-            target: Some("interactive_shell".to_string()),
-            workspace: Some(workspace),
-            reason: Some("frontend requested interactive terminal shell".to_string()),
-        });
-
-        let explicitly_allowed = decision == PermissionDecision::Ask && user_approved;
-        if decision != PermissionDecision::Allow && !explicitly_allowed {
+        let resolved_cwd = resolve_terminal_cwd(&workspace, cwd)?;
+        let approval = self.approvals.lock().await.remove(&approval_id);
+        let Some(approval) = approval else {
             security
                 .record_audit(AuditEvent {
                     operation: PrivilegedOperation::ShellCommand,
-                    decision,
+                    decision: PermissionDecision::Deny,
                     caller: "terminal_spawn".to_string(),
                     target: Some("interactive_shell".to_string()),
-                    reason: Some("terminal spawn requires an explicit allow decision".to_string()),
+                    reason: Some("terminal spawn attempted without a valid approval".to_string()),
                 })
                 .await;
             return Err(ZenError::Custom(
-                "Terminal spawn requires explicit approval by security policy".to_string(),
+                "Terminal approval is missing, expired, or already used".to_string(),
             ));
-        }
-
-        if explicitly_allowed {
+        };
+        if approval.expires_at <= Instant::now() || approval.cwd != resolved_cwd {
             security
                 .record_audit(AuditEvent {
                     operation: PrivilegedOperation::ShellCommand,
-                    decision: PermissionDecision::Allow,
+                    decision: PermissionDecision::Deny,
                     caller: "terminal_spawn".to_string(),
                     target: Some("interactive_shell".to_string()),
-                    reason: Some("user explicitly approved interactive terminal spawn".to_string()),
+                    reason: Some("terminal approval did not match the requested session".to_string()),
                 })
                 .await;
+            return Err(ZenError::Custom(
+                "Terminal approval expired or does not match the requested directory".to_string(),
+            ));
         }
 
         let mut manager = manager.write().await;
         let app_handle = app.clone();
         let on_output = move |session_id: &str, data: &str| {
-            let _ = app_handle.emit(&format!("terminal:output:{}", session_id), data);
+            if let Err(error) = app_handle.emit(
+                "terminal:output",
+                TerminalOutputEvent {
+                    session_id: session_id.to_string(),
+                    data: data.to_string(),
+                },
+            ) {
+                tracing::warn!(%error, session_id, "Failed to emit terminal output event");
+            }
         };
 
         let session_id = manager.spawn(
-            resolved_cwd.map(|p| p.to_string_lossy().to_string()),
+            Some(shell_cwd(&resolved_cwd)),
             cols,
             rows,
             Some(Box::new(on_output)),
@@ -209,22 +277,15 @@ impl TerminalService {
     pub async fn write_interactive(
         &self,
         manager: &RwLock<TerminalManager>,
-        security: &SecurityService,
+        _security: &SecurityService,
         id: String,
         data: String,
     ) -> ZenResult<()> {
         let manager = manager.read().await;
         if let Some(session) = manager.get(&id) {
             session.write_data(&data).await?;
-            security
-                .record_audit(AuditEvent {
-                    operation: PrivilegedOperation::ShellCommand,
-                    decision: PermissionDecision::Allow,
-                    caller: "terminal_write".to_string(),
-                    target: Some(id),
-                    reason: Some(format!("wrote {} bytes to terminal session", data.len())),
-                })
-                .await;
+            // Interactive keystrokes are intentionally not audited individually.
+            // Session creation and destruction retain the privileged audit trail.
             Ok(())
         } else {
             Err(ZenError::Custom("Terminal session not found".to_string()))
@@ -272,6 +333,43 @@ impl TerminalService {
             Err(ZenError::Custom("Terminal session not found".to_string()))
         }
     }
+
+    pub async fn read_interactive_output(
+        &self,
+        manager: &RwLock<TerminalManager>,
+        id: String,
+    ) -> ZenResult<String> {
+        let manager = manager.read().await;
+        if let Some(session) = manager.get(&id) {
+            Ok(session.read_output().await)
+        } else {
+            Err(ZenError::Custom("Terminal session not found".to_string()))
+        }
+    }
+}
+
+fn resolve_terminal_cwd(workspace: &std::path::Path, cwd: Option<String>) -> ZenResult<PathBuf> {
+    let resolved = match cwd {
+        Some(path) => crate::workspace::resolve_workspace_path(workspace, &path)
+            .map_err(|e| ZenError::Custom(format!("Workspace violation: {}", e)))?,
+        None => workspace.to_path_buf(),
+    };
+
+    if !resolved.exists() || !resolved.is_dir() {
+        return Err(ZenError::Custom(format!(
+            "Terminal cwd is not a directory: {}",
+            resolved.display()
+        )));
+    }
+
+    Ok(resolved)
+}
+
+fn shell_cwd(path: &std::path::Path) -> String {
+    // `canonicalize` on Windows can yield a `\\?\` extended-length path. It is
+    // valid for file APIs but makes the PowerShell prompt noisy and unfamiliar.
+    let path = path.to_string_lossy();
+    path.strip_prefix("\\\\?\\").unwrap_or(&path).to_string()
 }
 
 impl Default for TerminalService {

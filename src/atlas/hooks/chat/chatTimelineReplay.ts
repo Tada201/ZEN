@@ -10,7 +10,6 @@ const ACTION_MESSAGE_KINDS = new Set([
   "agent_chunk",
   "approval_request",
   "clarification_request",
-  "deep_research",
   "error",
   "system",
   "chat_status",

@@ -33,6 +33,7 @@ use crate::llm::{LlmProvider, ProviderRegistry};
 use crate::services::{
     process_manager::ProcessManager, DocumentService, HardwareService, SecretService,
     SecurityService, SettingsService, SpeechService, TerminalService, ToolService, TtsService,
+    UsageService,
 };
 use crate::tools::manager::ToolManager;
 
@@ -242,6 +243,7 @@ pub struct AppState {
         Arc<tokio::sync::Mutex<HashMap<String, (Arc<dyn LlmProvider>, std::time::Instant)>>>,
     pub provider_registry: Arc<ProviderRegistry>,
     pub init_progress: Arc<InitProgress>,
+    pub usage: Arc<UsageService>,
 }
 
 impl Default for AppState {
@@ -396,6 +398,7 @@ impl AppState {
                 InitPhase::new("bg.rag", "Embeddings"),
                 InitPhase::new("bg.orchestrator", "Orchestrator"),
             ])),
+            usage: Arc::new(UsageService),
         }
     }
 

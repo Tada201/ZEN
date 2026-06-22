@@ -13,6 +13,7 @@ pub mod speech_service;
 pub mod terminal;
 pub mod tool;
 pub mod tts_service;
+pub mod usage;
 
 pub use document::DocumentService;
 pub use hardware::{HardwareInfo, HardwareService};
@@ -30,3 +31,4 @@ pub use speech_service::SpeechService;
 pub use terminal::TerminalService;
 pub use tool::ToolService;
 pub use tts_service::TtsService;
+pub use usage::UsageService;

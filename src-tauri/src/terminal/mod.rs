@@ -324,10 +324,15 @@ impl TerminalManager {
             let pm_clone = self.process_manager.clone();
 
             tokio::spawn(async move {
-                let _ = session.kill().await;
-                // Unregister from process manager
+                // The process manager uses a Windows process-tree kill. Run it
+                // before the PTY child fallback so compiler/server descendants
+                // cannot survive a terminal tab closing.
                 if let Some(pm) = pm_clone {
-                    pm.unregister(&session_id_owned).await;
+                    if !pm.kill_process(&session_id_owned).await {
+                        let _ = session.kill().await;
+                    }
+                } else {
+                    let _ = session.kill().await;
                 }
             });
             tracing::info!(session_id = %session_id, "PTY session killed");

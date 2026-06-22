@@ -207,6 +207,18 @@ pub async fn get_all_available_models(
     }
 }
 
+/// Returns local, completed-message usage for the supplied provider model ids.
+/// Provider credit/quota APIs are intentionally separate from this reliable
+/// local token history and can be added per provider without altering the UI contract.
+#[tauri::command]
+pub async fn get_provider_usage(
+    state: State<'_, AppState>,
+    model_ids: Vec<String>,
+) -> ZenResult<crate::db::queries::ProviderUsageSnapshot> {
+    let db = state.db().await?;
+    state.usage.provider_snapshot(&db, &model_ids).await
+}
+
 /// Synchronize tool permissions from flat key-value settings into the ToolManager
 /// and the v2 ToolRegistry. Should be called after any `tools.*` setting is changed.
 #[tauri::command]

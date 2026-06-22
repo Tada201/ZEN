@@ -4,7 +4,7 @@ use crate::services::{AuditEvent, PermissionDecision, PrivilegedOperation};
 use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 
 /// Agent tool that executes a shell command and returns the output.
 /// Similar to Zed's terminal_tool — spawns a temporary PTY, runs the command,
@@ -120,15 +120,6 @@ impl AgentTool for RunCommandTool {
             })
             .await;
 
-        // Emit event so the TERM panel can show the command being executed
-        let _ = app.emit(
-            "terminal:ai-command",
-            json!({
-                "command": command,
-                "cwd": resolved_cwd,
-            }),
-        );
-
         // Execute the command through the terminal manager
         let state = app.state::<AppState>();
         let result: Result<crate::terminal::CommandResult, anyhow::Error> = {
@@ -145,17 +136,6 @@ impl AgentTool for RunCommandTool {
         match result {
             Ok(cmd_result) => {
                 let formatted = cmd_result.format_for_llm(&command);
-
-                // Emit the output to the TERM panel
-                let _ = app.emit(
-                    "terminal:ai-output",
-                    json!({
-                        "command": command,
-                        "output": cmd_result.output,
-                        "exit_code": cmd_result.exit_code,
-                        "timed_out": cmd_result.timed_out,
-                    }),
-                );
 
                 tracing::info!(
                     exit_code = ?cmd_result.exit_code,

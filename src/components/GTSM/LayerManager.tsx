@@ -28,9 +28,6 @@ export const LayerManager: React.FC = () => {
         { id: 'military', label: 'Military', count: `${military.length || '—'}`, color: '#FFCC00' },
         { id: 'vessels', label: 'Vessels (AIS)', count: `${vessels.length || '—'}`, color: '#00CCFF' },
         { id: 'naturalEvents', label: 'Natural Events', count: `${naturalEvents.length || '—'}`, color: '#FF4500' },
-        { id: 'weather', label: 'Thermal Map', count: 'API', color: '#f97316' },
-        { id: 'radar', label: 'Precip Radar', count: 'LIVE', color: '#4488FF' },
-        { id: 'heatmap', label: 'Threat Heatmap', count: 'DATA', color: '#EF4444' },
     ];
 
     const filteredLayers = layers.filter(l => l.label.toLowerCase().includes(search.toLowerCase()));

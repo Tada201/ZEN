@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::json;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 
 use super::{permission::RiskLevel, Tool, ToolError, ToolOutput};
 use crate::commands::AppState;
@@ -107,14 +107,6 @@ impl Tool for RunCommandTool {
             "RunCommandTool executing through v2 registry"
         );
 
-        let _ = app.emit(
-            "terminal:ai-command",
-            json!({
-                "command": args.command.clone(),
-                "cwd": resolved_cwd.to_string_lossy(),
-            }),
-        );
-
         let result = {
             let mut sessions = state.terminal_sessions.write().await;
             sessions
@@ -130,16 +122,6 @@ impl Tool for RunCommandTool {
         })?;
 
         let formatted = result.format_for_llm(&args.command);
-
-        let _ = app.emit(
-            "terminal:ai-output",
-            json!({
-                "command": args.command.clone(),
-                "output": result.output.clone(),
-                "exit_code": result.exit_code,
-                "timed_out": result.timed_out,
-            }),
-        );
 
         Ok(ToolOutput {
             content: json!({

@@ -54,11 +54,11 @@ export const useCesiumViewerSetup = ({
 
         return () => {
             destroyed = true;
-            instance.dispose();
             if (entityServiceRef.current) {
                 entityServiceRef.current.dispose();
                 entityServiceRef.current = null;
             }
+            instance.dispose();
             viewerRef.current = null;
             handlerRef.current = null;
         };

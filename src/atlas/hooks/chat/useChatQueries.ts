@@ -365,17 +365,44 @@ export function useChatQueries() {
 
       // Guard: deep_research messages are updated in-place by the chat:message
       // and chat:done event handlers. Don't let stale fetched data overwrite
-      // the live message state that still contains deep research content.
-      if (currentMessages.some((m) => m.kind === "deep_research")) return;
+      // the live message state while deep research is actively streaming.
+      // Only block when a deep_research message is still in "sending" status.
+      if (currentMessages.some((m) => m.kind === "deep_research" && m.status === "sending")) return;
 
       const latestFetchedAssistantIndex = fetchedMessages.reduce((latestIndex, message, index) =>
         message.role === "assistant" ? index : latestIndex,
       -1);
       const merged = fetchedMessages.map((msg, index) => {
+        let updatedMsg = msg;
         const existing = findLiveAssistantForFetched(msg, currentMessages, {
           allowLatestFallback: index === latestFetchedAssistantIndex,
         });
-        const withToolState = mergeLiveToolState(msg, existing);
+        
+        // If the fetched message is a deep research message, and the existing live message
+        // has content/is complete while the fetched one is stale/incomplete (e.g. status "failed"
+        // because it was fetched before completion database write finished or because of stale query),
+        // we must preserve the live message's content, status, and metadata.
+        if (updatedMsg.kind === "deep_research" && existing?.kind === "deep_research") {
+          const fetchedIsComplete = updatedMsg.status === "sent";
+          const existingIsComplete = existing.status === "sent";
+          if (existingIsComplete && !fetchedIsComplete) {
+            updatedMsg = {
+              ...updatedMsg,
+              status: existing.status,
+              content: existing.content,
+              metadata: existing.metadata,
+              error: existing.error,
+            };
+          } else if (existing.content && !updatedMsg.content) {
+            updatedMsg = {
+              ...updatedMsg,
+              content: existing.content,
+              metadata: existing.metadata || updatedMsg.metadata,
+            };
+          }
+        }
+
+        const withToolState = mergeLiveToolState(updatedMsg, existing);
         return existing?.artifact ? { ...withToolState, artifact: existing.artifact } : withToolState;
       });
 

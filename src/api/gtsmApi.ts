@@ -17,6 +17,31 @@ export interface TrackPoint {
   alt: number;
 }
 
+export interface GlobalMapRecord {
+  id?: string;
+  icao24?: string;
+  hex?: string;
+  mmsi?: string;
+  name?: string;
+  title?: string;
+  lat: number;
+  lon: number;
+  alt?: number;
+  alt_baro?: number;
+  depth?: number;
+  velocity?: number;
+  heading?: number;
+  track?: number;
+  magnitude?: number;
+  place?: string;
+  event_type?: string;
+  ship_type?: string;
+  ground_speed?: number;
+  callsign?: string | null;
+  flight?: string | null;
+  [key: string]: unknown;
+}
+
 export interface GtsmGeofence {
   id: string;
   name: string;
@@ -48,6 +73,12 @@ export interface GtsmMarker {
 }
 
 export const gtsmApi = {
+  getSatellites: () => callCommand<GlobalMapRecord[]>("get_satellites"),
+  getFlights: () => callCommand<GlobalMapRecord[]>("get_flights"),
+  getEarthquakes: () => callCommand<GlobalMapRecord[]>("get_earthquakes", { minMagnitude: 2.5, hours: 24 }),
+  getMilitaryAircraft: () => callCommand<GlobalMapRecord[]>("get_military_aircraft"),
+  getVessels: () => callCommand<GlobalMapRecord[]>("get_vessels"),
+  getNaturalEvents: () => callCommand<GlobalMapRecord[]>("get_natural_events"),
   getTelemetryHistory: (entityType: string, timestamp: number) =>
     callCommand<TelemetrySnapshot[]>("get_telemetry_history", { entityType, timestamp }),
   getTelemetryHistoryPage: (entityType: string, timestamp: number, limit?: number, offset?: number) =>

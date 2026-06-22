@@ -4,7 +4,6 @@ import {
   MessageSquarePlus,
   Search,
   Mic,
-  Settings,
   PanelLeft,
   PanelRight,
   Info,
@@ -148,15 +147,6 @@ export function CommandPalette() {
     });
 
     // 🧭 General settings (default)
-    out.push({
-      id: "s-general",
-      label: "Open settings",
-      hint: "All settings",
-      group: "Settings",
-      icon: Settings,
-      run: () => toggleSettings(),
-    });
-
     return out;
   }, [theme, toggleVoiceMode, toggleSettings, setActiveSettingsTab, toggleSidebar, toggleRightPanel, toggleAboutModal, setTheme, toggleSearch]);
 

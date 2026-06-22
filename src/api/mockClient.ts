@@ -147,6 +147,15 @@ let settings = loadData(KEY_SETTINGS, defaultSettings);
 
 // Registry of commands
 const mockCommands: Record<string, (args: any) => any> = {
+  // Browser-only mode deliberately has no fabricated OSINT data. Live map data
+  // is supplied by the Tauri GTSM commands in the desktop application.
+  get_satellites: () => [],
+  get_flights: () => [],
+  get_earthquakes: () => [],
+  get_military_aircraft: () => [],
+  get_vessels: () => [],
+  get_natural_events: () => [],
+
   // Settings API
   get_all_settings: () => settings,
   set_setting: ({ key, value }: { key: string; value: string }) => {
@@ -271,8 +280,10 @@ const mockCommands: Record<string, (args: any) => any> = {
 
   // Terminal
   terminal_spawn: () => "terminal-mock-session",
+  terminal_request_approval: () => ({ approvalId: "terminal-mock-approval", expiresAt: new Date(Date.now() + 60_000).toISOString() }),
   terminal_kill: () => {},
   terminal_resize: () => {},
+  terminal_read_output: () => "",
   terminal_write: () => {},
 
   // System Metrics — return shape matching BackendSystemMetrics / HardwareInfo

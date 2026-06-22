@@ -79,6 +79,7 @@ Codex CLI uses the global `~/.codex/config.toml`; do not assume a project-local 
 ## Agent Rules
 0. **Read RULES.md First**: Before planning or editing, read [RULES.md](RULES.md). It is the current architecture contract and phase rebuild guide for this codebase.
 1. **Frontend Contract**: Before planning or editing frontend code under `src/`, read and follow [docs/architecture/frontend-rules.md](docs/architecture/frontend-rules.md). It defines product-surface, security, performance, UI-quality, and code-quality restrictions for the frontend.
-2. **Function over Form**: Prioritize utility and performance. Every unique animation or UI feature must serve a clear purpose and be useful. Avoid performance waste on purely decorative elements.
-3. **Utilize .codegraph Rules**: Always consult `.agents/rules/codegraph.md` when querying the SQLite codegraph database to inspect schemas and find optimal SQL query templates.
-4. **Concise Claude-style Responses**: Always consult and follow the guidelines in `.agents/rules/agents_response.md` to keep communication concise, direct, tool-first, and minimally verbose during task execution.
+2. **Design Grounding**: Before designing a new frontend surface or materially reshaping an existing one, read and apply [frontende-design.md](frontende-design.md). Use it to ground visual decisions in Zen's product context and existing system, prevent generic design drift, and keep each UI choice purposeful. For narrow maintenance changes, apply the existing local design patterns without inventing a new visual direction.
+3. **Function over Form**: Prioritize utility and performance. Every unique animation or UI feature must serve a clear purpose and be useful. Avoid performance waste on purely decorative elements.
+4. **Utilize .codegraph Rules**: Always consult `.agents/rules/codegraph.md` when querying the SQLite codegraph database to inspect schemas and find optimal SQL query templates.
+5. **Concise Claude-style Responses**: Always consult and follow the guidelines in `.agents/rules/agents_response.md` to keep communication concise, direct, tool-first, and minimally verbose during task execution.

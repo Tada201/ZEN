@@ -9,9 +9,35 @@ export interface ProviderConfigRequest {
   headers?: Record<string, string>;
 }
 
+export interface ModelUsageSummary {
+  model: string;
+  requests: number;
+  tokensIn: number;
+  tokensOut: number;
+  lastUsedAt: string;
+}
+
+export interface ModelUsageHistoryItem {
+  id: string;
+  model: string;
+  tokensIn: number;
+  tokensOut: number;
+  createdAt: string;
+}
+
+export interface ProviderUsageSnapshot {
+  totalRequests: number;
+  totalTokensIn: number;
+  totalTokensOut: number;
+  models: ModelUsageSummary[];
+  history: ModelUsageHistoryItem[];
+}
+
 export const providersApi = {
   getAllAvailableModels: (provider?: string | null) =>
     callCommand<ModelInfo[]>("get_all_available_models", { provider: provider ?? null }),
   testProviderConnection: (config: ProviderConfigRequest) =>
     callCommand<ModelInfo[]>("test_provider_connection", { config }),
+  getUsage: (modelIds: string[]) =>
+    callCommand<ProviderUsageSnapshot>("get_provider_usage", { modelIds }),
 };

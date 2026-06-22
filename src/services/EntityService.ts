@@ -130,6 +130,7 @@ export class EntityService {
     }
 
     public clearEntities(layerId: string): void {
+        if (this.viewer.isDestroyed()) return;
         const { points, billboards, labels, polylines } = this.collections;
         const layerSet = this.layerItems.get(layerId);
         if (!layerSet) return;
@@ -162,6 +163,11 @@ export class EntityService {
     }
 
     public dispose(): void {
+        if (this.viewer.isDestroyed()) {
+            this.items.clear();
+            this.layerItems.clear();
+            return;
+        }
         const scene = this.viewer.scene;
         try { scene.primitives.remove(this.collections.points); } catch (_) {}
         try { scene.primitives.remove(this.collections.billboards); } catch (_) {}

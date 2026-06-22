@@ -1,6 +1,5 @@
 import React, { Suspense } from "react";
 import { useUIStore } from "@/lib/stores/useUIStore";
-import { useGTSMStore } from "@/lib/stores/useGTSMStore";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -50,8 +49,6 @@ export function RightPanel() {
   const [mapActivated, setMapActivated] = React.useState(false);
   const [mapClosing, setMapClosing] = React.useState(false);
 
-  const viewMode = useGTSMStore(state => state.viewMode);
-  const setViewMode = useGTSMStore(state => state.setViewMode);
   const visibleActiveRightTab = isRightPanelFeatureVisible(activeRightTab)
     ? activeRightTab
     : getDefaultRightPanelTab();
@@ -179,22 +176,7 @@ export function RightPanel() {
           )}
           {visibleActiveRightTab === 'map' && mapActivated && (
             <div className="flex items-center gap-2 ml-4">
-              <div className="flex bg-black/60 border border-white/5 p-0.5 rounded font-mono select-none">
-                <button
-                  type="button"
-                  className={`px-2 py-0.5 text-[11px] font-bold font-mono tracking-widest cursor-pointer border-0 rounded transition-all ${viewMode === 'globe' ? 'bg-primary/20 text-primary' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
-                  onClick={() => setViewMode('globe')}
-                >
-                  3D_GLOBE
-                </button>
-                <button
-                  type="button"
-                  className={`px-2 py-0.5 text-[11px] font-bold font-mono tracking-widest cursor-pointer border-0 rounded transition-all ${viewMode === 'navigation' ? 'bg-primary/20 text-primary' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
-                  onClick={() => setViewMode('navigation')}
-                >
-                  2D_NAV
-                </button>
-              </div>
+              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-primary">3D globe</span>
               <button
                 type="button"
                 onClick={() => setMapClosing(true)}
