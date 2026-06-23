@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { gtsmApi } from '@/api/gtsmApi';
+import type { MapCameraCatalogEntry } from '@/api/gtsmApi';
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -14,6 +16,7 @@ export interface TelemetrySnapshot {
     velocity: number | null;
     heading: number | null;
     raw_data: string | null;
+    metadata?: string | null;
 }
 
 export interface SpatialEntity {
@@ -35,6 +38,17 @@ export interface FlyToRequest {
     lat: number;
     lon: number;
     alt: number;
+}
+
+export interface FavoriteItem {
+    id: string;
+    label: string;
+    layerId: string;
+    layerLabel: string;
+    lat: number;
+    lon: number;
+    alt: number;
+    timestamp: number;
 }
 
 // Entity limits per layer to prevent unbounded growth
@@ -114,6 +128,8 @@ export interface GTSMState {
     vessels: SpatialEntity[];
     naturalEvents: SpatialEntity[];
     weatherGrid: SpatialEntity[];
+    cameras: MapCameraCatalogEntry[];
+    cameraCatalogLoaded: boolean;
     
     riskScore: number;
     aiInsights: string[];
@@ -122,18 +138,26 @@ export interface GTSMState {
     isOrbiting: boolean;
     loadingLayers: string[];
     errorLayers: Record<string, string>;
+    layerUpdatedAt: Record<string, number>;
     recentSnapshots: TelemetrySnapshot[];
     
-    // History mode
+    // History / Timeline mode
     historyMode: boolean;
     historyTimestamp: number | null;
     historyRange: [number, number] | null;
     playbackSpeed: number;
+    isPlaying: boolean;
+    currentTime: number;
+    timeWindow: '1h' | '6h' | '24h' | '48h' | '7d';
+    timelineAvailability: Record<string, { start: number; end: number }[]>;
 
     // Navigation State
     navigationRoute: any | null;
     navigationActive: boolean;
     navigationProfile: 'car' | 'bicycle' | 'pedestrian' | 'truck';
+
+    // Favorites
+    favorites: FavoriteItem[];
 
     // Actions - Entities
     setEntities: (entities: Record<string, SpatialEntity>) => void;
@@ -165,6 +189,7 @@ export interface GTSMState {
     appendAiSynthesis: (chunk: string) => void;
     setIsAnalyzing: (analyzing: boolean) => void;
     setWeatherGrid: (grid: SpatialEntity[]) => void;
+    setCameras: (cameras: MapCameraCatalogEntry[]) => void;
     updateEntities: (layer: string, entities: SpatialEntity[]) => void;
     addEntities: (layer: string, newEntities: SpatialEntity[]) => void;
     clearEntities: (layer: string) => void;
@@ -172,8 +197,13 @@ export interface GTSMState {
     setHistoryTimestamp: (ts: number | null) => void;
     setHistoryRange: (range: [number, number] | null) => void;
     setPlaybackSpeed: (speed: number) => void;
+    setIsPlaying: (playing: boolean) => void;
+    setCurrentTime: (time: number) => void;
+    setTimeWindow: (window: '1h' | '6h' | '24h' | '48h' | '7d') => void;
+    setTimelineAvailability: (pluginId: string, availability: { start: number; end: number }[]) => void;
     setLoadingLayer: (layerId: string, loading: boolean) => void;
     setLayerError: (layerId: string, error: string | null) => void;
+    setLayerUpdatedAt: (layerId: string, timestamp: number) => void;
     setRecentSnapshots: (snapshots: TelemetrySnapshot[]) => void;
 
     // Premium WebGL Graphics actions
@@ -189,6 +219,10 @@ export interface GTSMState {
     setNavigationRoute: (route: any | null) => void;
     setNavigationActive: (active: boolean) => void;
     setNavigationProfile: (profile: 'car' | 'bicycle' | 'pedestrian' | 'truck') => void;
+
+    // Favorites Actions
+    addFavorite: (entity: SpatialEntity, layerLabel: string) => void;
+    removeFavorite: (id: string) => void;
 }
 
 // ─── Store ──────────────────────────────────────────────────────
@@ -211,9 +245,9 @@ export const useGTSMStore = create<GTSMState>()(
             viewMode: 'globe',
 
             // Initial premium WebGL Graphics settings
-            resolutionScale: 0.85,
+            resolutionScale: 1.0,
             antiAliasing: 'fxaa',
-            tileDetail: 3.0,
+            tileDetail: 5.0,
             shadows: false,
             globeLighting: true,
             showFps: false,
@@ -231,6 +265,8 @@ export const useGTSMStore = create<GTSMState>()(
             vessels: [],
             naturalEvents: [],
             weatherGrid: [],
+            cameras: [],
+            cameraCatalogLoaded: false,
 
             riskScore: 0,
             aiInsights: [],
@@ -239,16 +275,23 @@ export const useGTSMStore = create<GTSMState>()(
             isOrbiting: true,
             loadingLayers: [],
             errorLayers: {},
+            layerUpdatedAt: {},
             recentSnapshots: [],
             
             historyMode: false,
             historyTimestamp: null,
             historyRange: null,
             playbackSpeed: 1,
+            isPlaying: false,
+            currentTime: Date.now(),
+            timeWindow: '24h',
+            timelineAvailability: {},
 
             navigationRoute: null,
             navigationActive: false,
             navigationProfile: 'car',
+
+            favorites: [],
 
             // Entity actions
             setEntities: (entities) => set({ entities }),
@@ -301,6 +344,7 @@ export const useGTSMStore = create<GTSMState>()(
             appendAiSynthesis: (chunk) => set((state) => ({ aiSynthesis: (state.aiSynthesis || "") + chunk })),
             setIsAnalyzing: (analyzing) => set({ isAnalyzing: analyzing }),
             setWeatherGrid: (grid) => set({ weatherGrid: grid }),
+            setCameras: (cameras) => set({ cameras, cameraCatalogLoaded: true }),
 
             updateEntities: (layer, entities) => set((state) => {
                 const timestampedEntities = entities.map(e => ({
@@ -357,11 +401,29 @@ export const useGTSMStore = create<GTSMState>()(
                 return { errorLayers: updated };
             }),
 
+            setLayerUpdatedAt: (layerId, timestamp) => set((state) => ({
+                layerUpdatedAt: { ...state.layerUpdatedAt, [layerId]: timestamp },
+            })),
+
             setRecentSnapshots: (snapshots) => set({ recentSnapshots: snapshots }),
             setHistoryMode: (on) => set({ historyMode: on }),
             setHistoryTimestamp: (ts) => set({ historyTimestamp: ts }),
             setHistoryRange: (range) => set({ historyRange: range }),
             setPlaybackSpeed: (speed) => set({ playbackSpeed: speed }),
+            setIsPlaying: (playing) => set({ isPlaying: playing }),
+            setCurrentTime: (time) => set({ currentTime: time }),
+            setTimeWindow: (window) => {
+                const now = Date.now();
+                const msMap: Record<string, number> = { '1h': 3600000, '6h': 21600000, '24h': 86400000, '48h': 172800000, '7d': 604800000 };
+                set({
+                    timeWindow: window,
+                    historyRange: [now - msMap[window], now],
+                    currentTime: now,
+                });
+            },
+            setTimelineAvailability: (pluginId, availability) => set((state) => ({
+                timelineAvailability: { ...state.timelineAvailability, [pluginId]: availability },
+            })),
 
             setResolutionScale: (val) => set({ resolutionScale: val }),
             setAntiAliasing: (val) => set({ antiAliasing: val }),
@@ -370,9 +432,9 @@ export const useGTSMStore = create<GTSMState>()(
             setGlobeLighting: (val) => set({ globeLighting: val }),
             setShowFps: (val) => set({ showFps: val }),
             resetGraphicsToDefault: () => set({
-                resolutionScale: 0.85,
+                resolutionScale: 1.0,
                 antiAliasing: 'fxaa',
-                tileDetail: 3.0,
+                tileDetail: 5.0,
                 shadows: false,
                 globeLighting: true,
                 showFps: false
@@ -381,6 +443,37 @@ export const useGTSMStore = create<GTSMState>()(
             setNavigationRoute: (route) => set({ navigationRoute: route }),
             setNavigationActive: (active) => set({ navigationActive: active }),
             setNavigationProfile: (profile) => set({ navigationProfile: profile }),
+
+            addFavorite: (entity, layerLabel) => set((state) => {
+                if (state.favorites.some(f => f.id === entity.id)) return state;
+                const fav = {
+                    id: entity.id,
+                    label: entity.metadata?.name || entity.metadata?.callsign || entity.metadata?.flight || entity.metadata?.title || entity.id,
+                    layerId: entity.type,
+                    layerLabel,
+                    lat: entity.position.lat,
+                    lon: entity.position.lon,
+                    alt: entity.position.alt,
+                    timestamp: Date.now(),
+                };
+                // Persist to SQLite backend (fire-and-forget)
+                gtsmApi.saveFavorite({
+                    id: fav.id,
+                    entityId: entity.id,
+                    label: fav.label,
+                    layerId: fav.layerId,
+                    layerLabel: fav.layerLabel,
+                    lat: fav.lat,
+                    lon: fav.lon,
+                    alt: fav.alt,
+                }).catch(console.error);
+                return { favorites: [...state.favorites, fav] };
+            }),
+            removeFavorite: (id) => set((state) => {
+                // Delete from SQLite backend (fire-and-forget)
+                gtsmApi.deleteFavorite(id).catch(console.error);
+                return { favorites: state.favorites.filter(f => f.id !== id) };
+            }),
         }),
         {
             name: 'zen-gtsm-store-hybrid',
@@ -399,7 +492,32 @@ export const useGTSMStore = create<GTSMState>()(
                 shadows: state.shadows,
                 globeLighting: state.globeLighting,
                 showFps: state.showFps,
+                favorites: state.favorites,
             }),
+            onRehydrateStorage: () => (_state, _error) => {
+                // After localStorage rehydration completes, merge SQLite favorites
+                gtsmApi.listFavorites().then((dbFavorites) => {
+                    if (dbFavorites && dbFavorites.length > 0) {
+                        useGTSMStore.setState((state) => {
+                            const existingIds = new Set(state.favorites.map(f => f.id));
+                            const newFromDb = dbFavorites
+                                .filter(f => !existingIds.has(f.id))
+                                .map(f => ({
+                                    id: f.id,
+                                    label: f.label,
+                                    layerId: f.layerId,
+                                    layerLabel: f.layerLabel,
+                                    lat: f.lat,
+                                    lon: f.lon,
+                                    alt: f.alt,
+                                    timestamp: 0,
+                                }));
+                            if (newFromDb.length === 0) return state;
+                            return { favorites: [...state.favorites, ...newFromDb] };
+                        });
+                    }
+                }).catch(() => {});
+            },
         }
     )
 );

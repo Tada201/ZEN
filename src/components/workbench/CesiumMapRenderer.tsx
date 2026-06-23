@@ -9,6 +9,9 @@ import { useCesiumViewerSetup } from './cesium/useCesiumViewerSetup';
 import { useCesiumVisualLayers } from './cesium/useCesiumVisualLayers';
 import { useCesiumGeojsonLayers } from './cesium/useCesiumGeojsonLayers';
 import { useGlobalMapData } from './cesium/useGlobalMapData';
+import { useHistoricalTelemetry } from './cesium/useHistoricalTelemetry';
+import { useWeatherGrid } from './cesium/useWeatherGrid';
+import { useCameraCatalogLayer } from './cesium/useCameraCatalogLayer';
 import type { CesiumDataSources, CesiumEntityIds } from './cesium/cesiumMapTypes';
 
 import "cesium/Build/Cesium/Widgets/widgets.css";
@@ -28,6 +31,7 @@ export const CesiumMapRenderer: React.FC = () => {
     const military = useGTSMStore(state => state.military);
     const vessels = useGTSMStore(state => state.vessels);
     const naturalEvents = useGTSMStore(state => state.naturalEvents);
+    const weatherGrid = useGTSMStore(state => state.weatherGrid);
     const selectedLayers = useGTSMStore(state => state.selectedLayers);
     const targetLocked = useGTSMStore(state => state.targetLocked);
     const setTargetLocked = useGTSMStore(state => state.setTargetLocked);
@@ -46,8 +50,11 @@ export const CesiumMapRenderer: React.FC = () => {
     const flyToRequest = useGTSMStore(state => state.flyToRequest);
     const setFlyToRequest = useGTSMStore(state => state.setFlyToRequest);
     const mapMode = useGTSMStore(state => state.mapMode);
+    const cameras = useGTSMStore(state => state.cameras);
 
     useGlobalMapData(true);
+    useHistoricalTelemetry();
+    useWeatherGrid(selectedLayers.includes('weather'));
 
     const activeFlights = selectedLayers.includes('flights') ? flights : [];
     const activeVessels = selectedLayers.includes('vessels') ? vessels : [];
@@ -70,6 +77,7 @@ export const CesiumMapRenderer: React.FC = () => {
         naturalEvents: null,
         connectors: null,
         cables: null,
+        cameras: null,
         nuclear: null
     });
 
@@ -125,6 +133,7 @@ export const CesiumMapRenderer: React.FC = () => {
         military,
         vessels,
         naturalEvents,
+        weatherGrid,
         selectedLayers,
         selectedTarget,
         viewportCenter,
@@ -143,6 +152,8 @@ export const CesiumMapRenderer: React.FC = () => {
     useCesiumGeojsonLayers({
         viewerRef,
     });
+
+    useCameraCatalogLayer({ viewerRef, dataSourcesRef, cameras, selectedLayers });
 
     return <div ref={containerRef} className="flex-1 h-full z-0 relative" />;
 };

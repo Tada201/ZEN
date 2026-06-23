@@ -223,7 +223,7 @@ export const useCesiumMapControls = ({
             viewer.scene.msaaSamples = 1;
         } else if (antiAliasing === 'msaa') {
             viewer.scene.postProcessStages.fxaa.enabled = false;
-            viewer.scene.msaaSamples = 4;
+            viewer.scene.msaaSamples = 2;
         } else {
             viewer.scene.postProcessStages.fxaa.enabled = false;
             viewer.scene.msaaSamples = 1;
@@ -232,7 +232,9 @@ export const useCesiumMapControls = ({
         viewer.scene.globe.maximumScreenSpaceError = tileDetail;
         viewer.shadows = shadows;
         viewer.scene.globe.enableLighting = globeLighting;
-        viewer.scene.debugShowFramesPerSecond = showFps;
+        // Cesium's native FPS widget is unpositioned relative to Zen's overlay
+        // layout. Zen renders its own compact profiler badge instead.
+        viewer.scene.debugShowFramesPerSecond = false;
         viewer.scene.requestRender();
     }, [viewerRef, resolutionScale, antiAliasing, tileDetail, shadows, globeLighting, showFps]);
 };

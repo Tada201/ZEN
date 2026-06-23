@@ -3,10 +3,16 @@ import { useGTSMStore } from '@/lib/stores/useGTSMStore';
 import { useGeojsonLayerStore } from '@/lib/stores/useGeojsonLayerStore';
 
 // GTSM HUD Panel Components
-import { ViewportHUD, Minimap, LayerManager, TargetInspector } from '../GTSM';
+import { ViewportHUD, Minimap, TargetInspector } from '../GTSM';
+import { SearchBar } from '../GTSM/search';
+import { Timeline } from '../GTSM/timeline';
+import { FavoritesPanel } from '../GTSM/favorites';
 import { GeoJsonDropZone } from '../GTSM/geojson/GeoJsonDropZone';
 import { GeoJsonImportModal } from '../GTSM/geojson/GeoJsonImportModal';
-import { GeoJsonLayerPanel } from '../GTSM/geojson/GeoJsonLayerPanel';
+import { prepareMapImport } from '../GTSM/geojson/mapImport';
+import { MapSettingsPanel } from '../GTSM/MapSettingsPanel';
+import { MapPerformanceBadge } from '../GTSM/MapPerformanceBadge';
+import { CameraCatalogPanel } from '../GTSM/CameraCatalogPanel';
 
 import '../GTSM/geojson/geojson-layers.css';
 
@@ -28,8 +34,13 @@ export const CesiumCanvas: React.FC = () => {
     // Import modal state
     const [pendingFile, setPendingFile] = useState<{ name: string; content: string } | null>(null);
 
-    const handleFileDropped = (name: string, content: string) => {
-        setPendingFile({ name, content });
+    const handleImportFile = async (file: File) => {
+        try {
+            const prepared = await prepareMapImport(file);
+            setPendingFile({ name: prepared.name, content: prepared.geojson });
+        } catch (error) {
+            window.alert(error instanceof Error ? error.message : 'Unable to prepare the selected map file.');
+        }
     };
 
     const handleImportConfirm = async (name: string, description: string, color: string) => {
@@ -44,34 +55,45 @@ export const CesiumCanvas: React.FC = () => {
     };
 
     return (
-        <div className="w-full h-full relative overflow-hidden bg-black flex">
+        <div className="w-full h-full relative overflow-hidden bg-background flex">
             {/* 2D navigation remains intentionally deferred; this surface owns the 3D globe only. */}
-            <GeoJsonDropZone onFileDropped={handleFileDropped}>
+            <GeoJsonDropZone onFileDropped={(file) => { void handleImportFile(file); }}>
                 <Suspense fallback={<MapRendererFallback />}>
                     <CesiumMapRenderer />
                 </Suspense>
             </GeoJsonDropZone>
 
-            {/* Tactical eDEX Dashboards overlay grids */}
-            <div className="absolute inset-0 z-10 pointer-events-none p-4 flex flex-col justify-between font-mono">
+            <div className="absolute inset-0 z-10 pointer-events-none p-2 flex flex-col justify-between">
                 {/* Top Row HUD */}
-                <div className="flex justify-between items-start pointer-events-none w-full">
-                    <div className="w-[240px] pointer-events-auto shadow-lg shadow-black/45">
+                <div className="flex justify-between items-start gap-3 pointer-events-none w-full">
+                    <div className="w-[190px] pointer-events-auto">
                         <ViewportHUD />
                     </div>
+
+                    {/* Top-center search bar */}
+                    <div className="pointer-events-auto w-full max-w-[320px]">
+                        <SearchBar />
+                    </div>
                     
-                    <div className="w-[240px] pointer-events-auto flex flex-col gap-2 shadow-lg shadow-black/45">
-                        <GeoJsonLayerPanel />
+                    <div className="w-[190px] pointer-events-auto flex flex-col items-end gap-1.5">
+                        <MapSettingsPanel onImportFile={handleImportFile} />
+                        <CameraCatalogPanel />
+                        <FavoritesPanel />
                     </div>
                 </div>
 
                 {/* Bottom Row HUD */}
-                <div className="flex justify-between items-end pointer-events-none w-full">
-                    <div className="w-[240px] pointer-events-auto shadow-lg shadow-black/45">
-                        <LayerManager />
+                <div className="flex justify-between items-end gap-3 pointer-events-none w-full">
+                    <div className="w-[190px] flex items-end">
+                        <MapPerformanceBadge />
                     </div>
 
-                    <div className="w-[240px] pointer-events-auto shadow-lg shadow-black/45">
+                    {/* Bottom-center timeline */}
+                    <div className="flex-1 max-w-[520px] pointer-events-auto">
+                        <Timeline />
+                    </div>
+
+                    <div className="w-[180px] pointer-events-auto">
                         <Minimap />
                     </div>
                 </div>
@@ -79,7 +101,7 @@ export const CesiumCanvas: React.FC = () => {
 
             {/* Target Inspector on the far right */}
             {selectedTarget && (
-                <div className="z-20 relative pointer-events-auto border-l border-zinc-800 bg-black/60 backdrop-blur-md shrink-0">
+                <div className="z-20 relative pointer-events-auto border-l border-white/10 bg-background/90 backdrop-blur-md shrink-0">
                     <TargetInspector />
                 </div>
             )}

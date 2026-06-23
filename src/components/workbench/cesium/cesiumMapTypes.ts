@@ -10,6 +10,7 @@ export interface CesiumDataSources {
     naturalEvents: Cesium.CustomDataSource | null;
     connectors: Cesium.CustomDataSource | null;
     cables: Cesium.CustomDataSource | null;
+    cameras: Cesium.CustomDataSource | null;
     nuclear: Cesium.CustomDataSource | null;
 }
 

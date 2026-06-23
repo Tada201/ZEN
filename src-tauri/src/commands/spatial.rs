@@ -124,6 +124,64 @@ pub async fn get_natural_events(
 }
 
 #[tauri::command]
+pub async fn get_undersea_cables() -> Result<serde_json::Value, ZenError> {
+    crate::services::gtsm::cables::fetch_undersea_cables()
+        .await
+        .map_err(|error| ZenError::Internal(error.to_string()))
+}
+
+#[tauri::command]
+pub fn list_map_connectors() -> Vec<crate::services::gtsm::connectors::MapConnectorMetadata> {
+    crate::services::gtsm::connectors::built_in_connectors()
+}
+
+#[tauri::command]
+pub async fn list_map_cameras(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::services::gtsm::cameras::CameraCatalogEntry>, ZenError> {
+    crate::services::gtsm::cameras::list_camera_catalog(
+        &state.settings_manager,
+        &state.secret_manager,
+        &state.security,
+    ).await
+}
+
+#[tauri::command]
+pub async fn get_map_camera_catalog(
+    state: State<'_, AppState>,
+) -> Result<crate::services::gtsm::cameras::CameraCatalogSnapshot, ZenError> {
+    crate::services::gtsm::cameras::get_camera_catalog_snapshot(
+        &state.settings_manager,
+        &state.secret_manager,
+        &state.security,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn resolve_map_camera_playback(
+    state: State<'_, AppState>,
+    camera_id: String,
+) -> Result<crate::services::gtsm::cameras::CameraPlaybackDescriptor, ZenError> {
+    crate::services::gtsm::cameras::resolve_camera_playback(
+        &camera_id,
+        &state.settings_manager,
+        &state.secret_manager,
+        &state.security,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn test_map_camera_catalog(state: State<'_, AppState>) -> Result<usize, ZenError> {
+    crate::services::gtsm::cameras::test_camera_catalog(
+        &state.settings_manager,
+        &state.secret_manager,
+        &state.security,
+    ).await
+}
+
+#[tauri::command]
 pub async fn calculate_route(
     state: State<'_, AppState>,
     start_lat: f64,
@@ -515,6 +573,7 @@ pub async fn delete_marker_db(state: State<'_, AppState>, id: String) -> Result<
 }
 
 use crate::db::models::GtsmGeojsonLayer;
+use crate::db::queries::GtsmFavorite;
 use crate::services::gtsm::GeojsonService;
 
 #[tauri::command]
@@ -585,6 +644,51 @@ pub async fn save_geojson_layer_db(
 #[tauri::command]
 pub async fn delete_geojson_layer_db(state: State<'_, AppState>, id: String) -> Result<(), ZenError> {
     crate::db::queries::delete_geojson_layer(&state.db().await?, &id)
+        .await
+        .map_err(|e| ZenError::Custom(e.to_string()))
+}
+
+// ─── GTSM Favorites (bookmarks) Persistence Commands ───
+
+#[tauri::command]
+pub async fn list_favorites_db(state: State<'_, AppState>) -> Result<Vec<GtsmFavorite>, ZenError> {
+    crate::db::queries::list_favorites(&state.db().await?)
+        .await
+        .map_err(|e| ZenError::Custom(e.to_string()))
+}
+
+#[tauri::command]
+pub async fn save_favorite_db(
+    state: State<'_, AppState>,
+    id: String,
+    entity_id: String,
+    label: String,
+    layer_id: String,
+    layer_label: String,
+    lat: f64,
+    lon: f64,
+    alt: f64,
+) -> Result<(), ZenError> {
+    let favorite = GtsmFavorite {
+        id,
+        entity_id,
+        label,
+        layer_id,
+        layer_label,
+        lat,
+        lon,
+        alt,
+        created_at: String::new(),
+    };
+
+    crate::db::queries::save_favorite(&state.db().await?, &favorite)
+        .await
+        .map_err(|e| ZenError::Custom(e.to_string()))
+}
+
+#[tauri::command]
+pub async fn delete_favorite_db(state: State<'_, AppState>, id: String) -> Result<(), ZenError> {
+    crate::db::queries::delete_favorite(&state.db().await?, &id)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))
 }

@@ -13,6 +13,7 @@ export interface CesiumDataSources {
     military: Cesium.CustomDataSource;
     connectors: Cesium.CustomDataSource;
     cables: Cesium.CustomDataSource;
+    cameras: Cesium.CustomDataSource;
     nuclear: Cesium.CustomDataSource;
 }
 
@@ -53,7 +54,7 @@ export function createCesiumViewer(
         navigationInstructionsInitiallyVisible: false,
         scene3DOnly: false,
         shouldAnimate: true,
-        msaaSamples: 4,
+        msaaSamples: 2,
         skyAtmosphere: new Cesium.SkyAtmosphere(),
         skyBox: new Cesium.SkyBox({ show: false }),
         contextOptions: {
@@ -74,9 +75,10 @@ export function createCesiumViewer(
     scene.highDynamicRange = true;
     scene.requestRenderMode = true;
     scene.maximumRenderTimeChange = Infinity;
+    scene.debugShowFramesPerSecond = false;
     scene.fog.enabled = false;
-    viewer.resolutionScale = 0.85;
-    scene.globe.maximumScreenSpaceError = 3;
+    viewer.resolutionScale = 1.0;
+    scene.globe.maximumScreenSpaceError = 5;
 
     if (viewMode === "navigation") {
         scene.morphTo2D(0);
@@ -100,15 +102,16 @@ export function createCesiumViewer(
     const military = new Cesium.CustomDataSource("military");
     const connectors = new Cesium.CustomDataSource("connectors");
     const cables = new Cesium.CustomDataSource("cables");
+    const cameras = new Cesium.CustomDataSource("cameras");
     const nuclear = new Cesium.CustomDataSource("nuclear");
 
-    for (const ds of [flights, earthquakes, vessels, naturalEvents, military, connectors, cables, nuclear]) {
+    for (const ds of [flights, earthquakes, vessels, naturalEvents, military, connectors, cables, cameras, nuclear]) {
         viewer.dataSources.add(ds);
     }
 
     const dataSources: CesiumDataSources = {
         flights, earthquakes, vessels, naturalEvents,
-        military, connectors, cables, nuclear,
+        military, connectors, cables, cameras, nuclear,
     };
 
     // ── Camera tracking ──

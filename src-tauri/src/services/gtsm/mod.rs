@@ -1,4 +1,7 @@
 pub mod cache;
+pub mod cables;
+pub mod cameras;
+pub mod connectors;
 pub mod earthquakes;
 pub mod flights;
 pub mod fusion;
