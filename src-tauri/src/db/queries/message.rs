@@ -106,3 +106,19 @@ pub async fn add_message(pool: &SqlitePool, msg: &NewMessage<'_>) -> ZenResult<M
         .await?;
     Ok(msg)
 }
+
+/// Updates only the content and metadata of a message.
+pub async fn update_message_content_and_metadata(
+    pool: &SqlitePool,
+    id: &str,
+    content: &str,
+    metadata: &str,
+) -> ZenResult<()> {
+    sqlx::query("UPDATE messages SET content = ?, metadata = ? WHERE id = ?")
+        .bind(content)
+        .bind(metadata)
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}

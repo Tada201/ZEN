@@ -214,9 +214,13 @@ pub async fn get_all_available_models(
 pub async fn get_provider_usage(
     state: State<'_, AppState>,
     model_ids: Vec<String>,
+    period_days: Option<u16>,
 ) -> ZenResult<crate::db::queries::ProviderUsageSnapshot> {
     let db = state.db().await?;
-    state.usage.provider_snapshot(&db, &model_ids).await
+    state
+        .usage
+        .provider_snapshot(&db, &model_ids, period_days)
+        .await
 }
 
 /// Synchronize tool permissions from flat key-value settings into the ToolManager

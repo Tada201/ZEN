@@ -212,7 +212,13 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
           // the chat:message handler will update the message in-place.
           if (assistant.kind === "deep_research") {
             const next = [...prev];
-            next[assistantIdx] = markMessageAsFinished(assistant, isCancelled, reason);
+            // Deep research publishes its final report through chat:message.
+            // Tauri event names are not ordered, so chat:done may arrive
+            // first. Keep the placeholder live until the report event fills
+            // it instead of marking an empty research card complete.
+            next[assistantIdx] = assistant.content.trim()
+              ? markMessageAsFinished(assistant, isCancelled, reason)
+              : { ...assistant, isThinking: false };
             return next;
           }
 

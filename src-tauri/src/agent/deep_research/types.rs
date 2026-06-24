@@ -1,5 +1,6 @@
 use tauri::AppHandle;
 use tokio_util::sync::CancellationToken;
+use serde_json::Value;
 
 use crate::llm::{ChatRequestConfig, LlmProvider};
 
@@ -28,6 +29,15 @@ pub struct DeepResearchParams<'a> {
     pub max_rounds: usize,
     pub max_urls_per_round: usize,
     pub sub_agent_count: usize,
+}
+
+/// Scope resolved before the research worker is allowed to search. The brief
+/// is carried through every research prompt so similarly named entities and
+/// stale dates do not silently broaden the investigation.
+#[derive(Debug, Clone)]
+pub(super) struct ResearchScopeAssessment {
+    pub brief: Value,
+    pub clarification_questions: Vec<String>,
 }
 
 // ── Research category ──────────────────────────────────────────────────────

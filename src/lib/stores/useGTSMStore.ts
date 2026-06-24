@@ -130,6 +130,7 @@ export interface GTSMState {
     weatherGrid: SpatialEntity[];
     cameras: MapCameraCatalogEntry[];
     cameraCatalogLoaded: boolean;
+    localCamera: { label: string; latitude: number; longitude: number } | null;
     
     riskScore: number;
     aiInsights: string[];
@@ -190,6 +191,7 @@ export interface GTSMState {
     setIsAnalyzing: (analyzing: boolean) => void;
     setWeatherGrid: (grid: SpatialEntity[]) => void;
     setCameras: (cameras: MapCameraCatalogEntry[]) => void;
+    setLocalCamera: (camera: { label: string; latitude: number; longitude: number } | null) => void;
     updateEntities: (layer: string, entities: SpatialEntity[]) => void;
     addEntities: (layer: string, newEntities: SpatialEntity[]) => void;
     clearEntities: (layer: string) => void;
@@ -267,6 +269,7 @@ export const useGTSMStore = create<GTSMState>()(
             weatherGrid: [],
             cameras: [],
             cameraCatalogLoaded: false,
+            localCamera: null,
 
             riskScore: 0,
             aiInsights: [],
@@ -345,6 +348,7 @@ export const useGTSMStore = create<GTSMState>()(
             setIsAnalyzing: (analyzing) => set({ isAnalyzing: analyzing }),
             setWeatherGrid: (grid) => set({ weatherGrid: grid }),
             setCameras: (cameras) => set({ cameras, cameraCatalogLoaded: true }),
+            setLocalCamera: (localCamera) => set({ localCamera }),
 
             updateEntities: (layer, entities) => set((state) => {
                 const timestampedEntities = entities.map(e => ({

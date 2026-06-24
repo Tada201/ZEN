@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 import * as Cesium from 'cesium';
+import { gtsmApi } from '@/api/gtsmApi';
+import { useGTSMStore } from '@/lib/stores/useGTSMStore';
 import type { CesiumDataSourcesRef, CesiumViewerRef } from './cesiumMapTypes';
 
 interface UseCesiumVisualLayersOptions {
@@ -101,11 +103,7 @@ export const useCesiumVisualLayers = ({
             return;
         }
 
-        fetch("https://www.submarinecablemap.com/api/v3/cable/cable-geo.json")
-            .then(res => {
-                if (!res.ok) throw new Error("CORS or network error");
-                return res.json();
-            })
+        gtsmApi.getUnderseaCables()
             .then(geoJson => {
                 if (destroyed || !selectedLayers.includes('cables')) return;
 
@@ -126,37 +124,15 @@ export const useCesiumVisualLayers = ({
                         }
                         ds.entities.add(entity);
                     });
+                    useGTSMStore.getState().setLayerError('cables', null);
+                    useGTSMStore.getState().setLayerUpdatedAt('cables', Date.now());
                     viewer.scene.requestRender();
                 });
             })
             .catch(err => {
                 if (!destroyed) {
-                    console.warn("[CesiumMapRenderer] Undersea cables fetch failed, using fallback high-traffic lanes:", err);
+                    useGTSMStore.getState().setLayerError('cables', err instanceof Error ? err.message : 'Unable to load cable data');
                 }
-
-                const fallbacks = [
-                    { name: "Atlantic Crossing 1 (AC-1)", coords: [[-74.0060, 40.7128], [-4.2181, 50.7978], [8.6821, 50.1109]] },
-                    { name: "Unity / EGRT", coords: [[-124.0444, 45.3675], [140.8550, 35.7000]] },
-                    { name: "Southeast Asia-Japan Cable (SJC)", coords: [[106.6602, 10.7626], [103.8519, 1.2902], [114.1694, 22.3193], [139.6917, 35.6895]] },
-                    { name: "SeaMeWe-3 Segment", coords: [[103.8519, 1.2902], [80.2707, 13.0827], [31.2357, 30.0444], [5.4083, 43.2965]] }
-                ];
-
-                fallbacks.forEach(cable => {
-                    const positions = cable.coords.map(c => Cesium.Cartesian3.fromDegrees(c[0], c[1], 0));
-                    ds.entities.add({
-                        name: cable.name,
-                        polyline: {
-                            positions: positions,
-                            width: 1.5,
-                            material: new Cesium.PolylineGlowMaterialProperty({
-                                glowPower: 0.15,
-                                color: Cesium.Color.fromCssColorString('rgba(0, 240, 180, 0.85)')
-                            }),
-                            clampToGround: true
-                        }
-                    });
-                });
-                viewer.scene.requestRender();
             })
             .finally(() => {
                 if (!destroyed) ds.entities.resumeEvents();

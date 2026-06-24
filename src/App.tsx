@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { BootScreen } from "./components/BootScreen";
 import { useFullscreen } from "./lib/hooks/useFullscreen";
 import { useUpdateStore } from "./lib/stores/updateStore";
+import { useGTSMStore } from "./lib/stores/useGTSMStore";
 
 /**
  * Root Application Component.
@@ -23,6 +24,20 @@ function App() {
   useEffect(() => {
     void initializeVersion();
   }, [initializeVersion]);
+
+  // Ctrl+B / Cmd+B → toggle FavoritesPanel visibility
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
+        e.preventDefault();
+        useGTSMStore.getState().togglePanel("favorites");
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   return (
     <ZenProvider>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
+import { AppDialog } from '@/components/ui/AppDialog';
 
 interface GeoJsonImportModalProps {
   fileName: string;
@@ -46,16 +46,21 @@ export const GeoJsonImportModal: React.FC<GeoJsonImportModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 font-mono select-none">
-      <div className="w-full max-w-md border border-zinc-800 bg-black/90 p-5 rounded-lg shadow-2xl flex flex-col gap-4 text-xs">
-        {/* Header */}
-        <div className="flex items-center gap-2 text-cyan-400 border-b border-zinc-800 pb-2">
-          <WorkbenchIcon name="solar:import-bold-duotone" size={16} />
-          <span className="font-bold tracking-widest text-[10px]">IMPORT_GEOJSON_MANIFEST</span>
-        </div>
-
-        {/* Preview Stats */}
-        <div className="bg-zinc-950/60 border border-zinc-900 p-2.5 rounded flex flex-col gap-1 text-[10px] text-zinc-400">
+    <AppDialog
+      open
+      onOpenChange={(open) => { if (!open) onCancel(); }}
+      title="Import map layer"
+      description="Review the local data before adding it to the map workspace."
+      footer={(
+        <>
+          <button type="button" onClick={onCancel} className="border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-zinc-300 hover:bg-white/[0.08]">Cancel</button>
+          <button type="button" onClick={handleConfirm} className="border border-primary/40 bg-primary/15 px-3 py-2 text-[11px] font-medium text-primary hover:bg-primary/25">Import layer</button>
+        </>
+      )}
+      className="font-mono"
+    >
+      <div className="flex flex-col gap-4 text-xs">
+        <div className="bg-white/[0.025] border border-white/10 p-2.5 flex flex-col gap-1 text-[10px] text-zinc-400">
           <div className="flex justify-between">
             <span>FILE:</span>
             <span className="text-zinc-200 truncate max-w-[240px]">{fileName}</span>
@@ -70,7 +75,6 @@ export const GeoJsonImportModal: React.FC<GeoJsonImportModalProps> = ({
           </div>
         </div>
 
-        {/* Inputs */}
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider">Layer Name</label>
@@ -78,7 +82,7 @@ export const GeoJsonImportModal: React.FC<GeoJsonImportModalProps> = ({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full h-8 px-2.5 bg-black/40 border border-zinc-800 rounded text-white focus:outline-none focus:border-cyan-400/50 transition-colors"
+              className="w-full h-8 px-2.5 bg-white/[0.025] border border-white/10 text-white focus:outline-none focus:border-primary/60 transition-colors"
             />
           </div>
 
@@ -87,7 +91,7 @@ export const GeoJsonImportModal: React.FC<GeoJsonImportModalProps> = ({
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full h-16 p-2 bg-black/40 border border-zinc-800 rounded text-white focus:outline-none focus:border-cyan-400/50 resize-none transition-colors"
+              className="w-full h-16 p-2 bg-white/[0.025] border border-white/10 text-white focus:outline-none focus:border-primary/60 resize-none transition-colors"
             />
           </div>
 
@@ -105,22 +109,7 @@ export const GeoJsonImportModal: React.FC<GeoJsonImportModalProps> = ({
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex justify-end gap-2 border-t border-zinc-800 pt-3">
-          <button
-            onClick={onCancel}
-            className="px-4 py-1.5 bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-white transition-all rounded font-bold tracking-wider text-[9px] uppercase cursor-pointer"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleConfirm}
-            className="px-4 py-1.5 bg-cyan-950/40 border border-cyan-800 text-cyan-400 hover:bg-cyan-950/60 hover:text-cyan-300 transition-all rounded font-bold tracking-wider text-[9px] uppercase cursor-pointer"
-          >
-            Import Layer
-          </button>
-        </div>
       </div>
-    </div>
+    </AppDialog>
   );
 };

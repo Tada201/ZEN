@@ -371,7 +371,7 @@ impl AgentTool for WebFetchTool {
         _allowed_tools: Option<Arc<Mutex<std::collections::HashSet<String>>>>,
         _token: CancellationToken,
     ) -> Result<Value> {
-        self.execute(app, chat_id, input)
+        Tool::execute(self, app, chat_id, input)
             .await
             .map(|output| output.content)
             .map_err(|e| anyhow::anyhow!("{}", e))

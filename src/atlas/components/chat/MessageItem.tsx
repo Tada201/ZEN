@@ -12,6 +12,7 @@ export function MessageItem({
   onOpenSettings,
   onDismissError,
   onRegenerate,
+  onContinueResearch,
   compact,
 }: {
   message: Message;
@@ -20,6 +21,7 @@ export function MessageItem({
   onOpenSettings?: (tab: SettingsTabId, provider?: string) => void;
   onDismissError?: (id: string) => void;
   onRegenerate?: (id: string) => void;
+  onContinueResearch?: (request: string) => void;
   compact?: boolean;
 }) {
   const message = useMemo(() => normalizeVercelMessage(rawMessage), [rawMessage]);
@@ -32,6 +34,7 @@ export function MessageItem({
         <DeepResearchMessage 
           message={message} 
           compact={compact} 
+          onContinueResearch={onContinueResearch}
         />
       );
     }

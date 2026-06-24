@@ -9,6 +9,7 @@ import { VoiceStage } from "./VoiceStage";
 import { VoiceSubtitleBox } from "./VoiceSubtitleBox";
 import type { SttServiceStatus, TtsServiceStatus } from "./voiceStatus";
 import type { VoiceAgentActivity } from "./useVoiceAgentActivity";
+import { AppDialog } from '@/components/ui/AppDialog';
 
 export type VoiceState = "initializing" | "listening" | "processing" | "speaking" | "idle";
 
@@ -246,55 +247,17 @@ export function VoiceModePanelInner({
           )}
         </AnimatePresence>
 
-        <AnimatePresence>
-          {exitConfirmationOpen && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              className="absolute inset-0 z-40 flex items-center justify-center rounded-lg border border-white/10 bg-black/70 p-4 backdrop-blur-md"
-            >
-              <div className="w-full max-w-lg rounded-lg border border-amber-300/20 bg-zinc-950/95 p-5 shadow-2xl">
-                <div className="mb-4 flex items-start gap-3">
-                  <div className="rounded-md border border-amber-300/20 bg-amber-300/10 p-2 text-amber-200">
-                    <AlertTriangle size={18} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold text-zinc-100">Exit voice mode?</div>
-                    <p className="mt-1 text-sm leading-relaxed text-zinc-400">
-                      {hasActiveWork
-                        ? "Voice mode is still active. You can leave the visual voice room while the main agent keeps working, or stop the full run."
-                        : "Voice mode is idle. Leaving will close the voice room and keep the blackboard snapshot for this session."}
-                    </p>
-                  </div>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <button
-                    type="button"
-                    onClick={onConfirmLeaveVoice}
-                    className="rounded-md border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-sm font-semibold text-cyan-100 transition-colors hover:bg-cyan-300/15"
-                  >
-                    Leave Voice Mode
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onConfirmStopEverything}
-                    className="rounded-md border border-red-400/25 bg-red-400/10 px-3 py-2 text-sm font-semibold text-red-100 transition-colors hover:bg-red-400/15"
-                  >
-                    Stop Everything
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onCancelExit}
-                    className="rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-semibold text-zinc-200 transition-colors hover:bg-white/[0.08]"
-                  >
-                    Stay
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <AppDialog
+          open={exitConfirmationOpen}
+          onOpenChange={(open) => { if (!open) onCancelExit(); }}
+          title="Exit voice mode?"
+          description={hasActiveWork
+            ? 'Voice mode is still active. You can leave the visual voice room while the main agent keeps working, or stop the full run.'
+            : 'Voice mode is idle. Leaving closes the voice room and keeps the blackboard snapshot for this session.'}
+          footer={<><button type="button" onClick={onConfirmLeaveVoice} className="border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-xs font-medium text-cyan-100 hover:bg-cyan-300/15">Leave voice mode</button>{hasActiveWork ? <button type="button" onClick={onConfirmStopEverything} className="border border-red-400/25 bg-red-400/10 px-3 py-2 text-xs font-medium text-red-100 hover:bg-red-400/15">Stop everything</button> : null}<button type="button" onClick={onCancelExit} className="border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-medium text-zinc-200 hover:bg-white/[0.08]">Stay</button></>}
+        >
+          <div className="flex items-center gap-2 text-xs text-zinc-400"><AlertTriangle size={15} className="text-amber-200" /> Voice activity and board state are preserved unless you stop the full run.</div>
+        </AppDialog>
 
         <VoiceStage voiceState={voiceState} />
 

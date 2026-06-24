@@ -200,3 +200,9 @@
 .tactical-sidebar-hud::-webkit-scrollbar-thumb:hover {
     background: var(--gtsm-cyan);
 }
+/* Zen owns the FPS badge; Cesium's native performance display has no reliable
+   place in the overlay layout and can overlap map controls after hot reloads. */
+.operational-map-container .cesium-performanceDisplay,
+.cesium-viewer .cesium-performanceDisplay {
+  display: none !important;
+}

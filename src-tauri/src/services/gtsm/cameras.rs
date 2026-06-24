@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -10,7 +11,9 @@ use crate::services::{
 const CAMERA_CATALOG_URL_KEY: &str = "maps.camera_catalog_url";
 const CAMERA_CATALOG_TOKEN_KEY: &str = "maps_camera_catalog_token";
 const MAX_CATALOG_BYTES: usize = 512 * 1024;
+const MAX_LOCAL_CATALOG_BYTES: usize = 5 * 1024 * 1024;
 const MAX_CAMERA_ENTRIES: usize = 250;
+const LOCAL_CATALOG_FILE: &str = "map-camera-catalog.json";
 
 fn validate_https_public_url(value: &str) -> AppResult<String> {
     let validated = crate::tools::url_safety::validate_public_http_url(value)
@@ -75,6 +78,14 @@ pub struct CameraPlaybackDescriptor {
     pub direct_preview_supported: bool,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalCameraCatalogImportReport {
+    pub accepted: usize,
+    pub rejected: usize,
+    pub source_name: String,
+}
+
 impl CameraCatalogEntry {
     fn validate(self) -> AppResult<Self> {
         if self.id.trim().is_empty() || self.label.trim().is_empty() || self.operator.trim().is_empty() {
@@ -122,6 +133,110 @@ pub fn built_in_camera_catalog() -> Vec<CameraCatalogEntry> {
         attribution: Some("Mux test streams".to_string()),
         terms_url: None,
     }]
+}
+
+fn local_catalog_path(app_data_dir: &Path) -> std::path::PathBuf {
+    app_data_dir.join(LOCAL_CATALOG_FILE)
+}
+
+fn validate_entries(entries: Vec<CameraCatalogEntry>) -> AppResult<Vec<CameraCatalogEntry>> {
+    let entries = entries
+        .into_iter()
+        .take(MAX_CAMERA_ENTRIES)
+        .map(CameraCatalogEntry::validate)
+        .collect::<AppResult<Vec<_>>>()?;
+    let mut ids = std::collections::HashSet::with_capacity(entries.len());
+    for entry in &entries {
+        if !ids.insert(entry.id.as_str()) {
+            return Err(ZenError::Custom(format!("Camera catalog contains duplicate id '{}'", entry.id)));
+        }
+    }
+    Ok(entries)
+}
+
+fn value_as_string(value: &serde_json::Value, key: &str) -> Option<String> {
+    value.get(key).and_then(serde_json::Value::as_str).map(str::to_owned)
+}
+
+fn legacy_feature_entry(feature: &serde_json::Value, index: usize) -> Result<CameraCatalogEntry, String> {
+    let coordinates = feature
+        .get("geometry")
+        .and_then(|geometry| geometry.get("coordinates"))
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| "missing Point coordinates".to_string())?;
+    let longitude = coordinates.first().and_then(serde_json::Value::as_f64).ok_or_else(|| "invalid longitude".to_string())?;
+    let latitude = coordinates.get(1).and_then(serde_json::Value::as_f64).ok_or_else(|| "invalid latitude".to_string())?;
+    let empty_properties = serde_json::Value::Null;
+    let properties = feature.get("properties").unwrap_or(&empty_properties);
+    let stream_url = value_as_string(properties, "stream")
+        .or_else(|| value_as_string(properties, "stream_url"))
+        .ok_or_else(|| "missing stream URL".to_string())?;
+    let label = value_as_string(properties, "label")
+        .or_else(|| value_as_string(properties, "name"))
+        .or_else(|| value_as_string(properties, "city"))
+        .unwrap_or_else(|| format!("Imported camera {}", index + 1));
+    let operator = value_as_string(properties, "operator")
+        .or_else(|| value_as_string(properties, "source"))
+        .unwrap_or_else(|| "Imported local catalog".to_string());
+    let stream_format = if stream_url.to_ascii_lowercase().contains(".m3u8") { "hls" } else { "external" };
+    Ok(CameraCatalogEntry {
+        id: format!("local-camera-{}", index + 1), label, operator, latitude, longitude,
+        source_url: stream_url.clone(), stream_url: Some(stream_url), stream_format: stream_format.to_string(),
+        status: "available".to_string(), is_demo: false, attribution: value_as_string(properties, "attribution"),
+        terms_url: value_as_string(properties, "terms_url"),
+    })
+}
+
+fn parse_local_catalog(bytes: &[u8]) -> AppResult<(Vec<CameraCatalogEntry>, usize)> {
+    if bytes.len() > MAX_LOCAL_CATALOG_BYTES {
+        return Err(ZenError::Custom("Local camera catalogs are limited to 5 MB".to_string()));
+    }
+    let root: serde_json::Value = serde_json::from_slice(bytes)
+        .map_err(|error| ZenError::Custom(format!("Camera catalog JSON is invalid: {error}")))?;
+    if let Some(entries) = root.as_array() {
+        let parsed = serde_json::from_value(serde_json::Value::Array(entries.clone()))
+            .map_err(|error| ZenError::Custom(format!("Camera catalog entries are invalid: {error}")))?;
+        return Ok((validate_entries(parsed)?, 0));
+    }
+    let features = root.get("features").and_then(serde_json::Value::as_array)
+        .ok_or_else(|| ZenError::Custom("Camera catalog must be a Zen entry array or a GeoJSON FeatureCollection".to_string()))?;
+    let mut accepted = Vec::new();
+    let mut rejected = 0;
+    for (index, feature) in features.iter().enumerate() {
+        match legacy_feature_entry(feature, index).and_then(|entry| entry.validate().map_err(|error| error.to_string())) {
+            Ok(entry) if accepted.len() < MAX_CAMERA_ENTRIES => accepted.push(entry),
+            _ => rejected += 1,
+        }
+    }
+    if accepted.is_empty() {
+        return Err(ZenError::Custom(format!("No compatible HTTPS camera sources were found; {rejected} entries were rejected. Legacy HTTP/IP camera feeds cannot be imported.")));
+    }
+    Ok((validate_entries(accepted)?, rejected))
+}
+
+pub async fn import_local_camera_catalog(app_data_dir: &Path, source_name: String, bytes: Vec<u8>, security: &crate::services::SecurityService) -> AppResult<LocalCameraCatalogImportReport> {
+    let result = (|| {
+        let (entries, rejected) = parse_local_catalog(&bytes)?;
+        std::fs::create_dir_all(app_data_dir).map_err(|error| ZenError::Internal(format!("Could not prepare local catalog storage: {error}")))?;
+        let destination = local_catalog_path(app_data_dir);
+        let temporary = destination.with_extension("part");
+        std::fs::write(&temporary, serde_json::to_vec(&entries).map_err(|error| ZenError::Internal(format!("Could not encode local camera catalog: {error}")))?)
+            .map_err(|error| ZenError::Internal(format!("Could not save local camera catalog: {error}")))?;
+        if destination.exists() { std::fs::remove_file(&destination).map_err(|error| ZenError::Internal(format!("Could not replace local camera catalog: {error}")))?; }
+        std::fs::rename(&temporary, destination).map_err(|error| ZenError::Internal(format!("Could not finalize local camera catalog: {error}")))?;
+        Ok(LocalCameraCatalogImportReport { accepted: entries.len(), rejected, source_name })
+    })();
+    security.record_audit(AuditEvent { operation: PrivilegedOperation::FileWrite, decision: if result.is_ok() { PermissionDecision::Allow } else { PermissionDecision::Deny }, caller: "map_camera_catalog".to_string(), target: Some(LOCAL_CATALOG_FILE.to_string()), reason: Some("user imported a local camera catalog".to_string()) }).await;
+    result
+}
+
+fn load_local_catalog(app_data_dir: &Path) -> AppResult<Option<Vec<CameraCatalogEntry>>> {
+    let path = local_catalog_path(app_data_dir);
+    if !path.exists() { return Ok(None); }
+    let bytes = std::fs::read(&path).map_err(|error| ZenError::Internal(format!("Could not read local camera catalog: {error}")))?;
+    if bytes.len() > MAX_LOCAL_CATALOG_BYTES { return Err(ZenError::Custom("Saved local camera catalog exceeds the 5 MB limit".to_string())); }
+    let entries = serde_json::from_slice(&bytes).map_err(|error| ZenError::Custom(format!("Saved local camera catalog is invalid: {error}")))?;
+    Ok(Some(validate_entries(entries)?))
 }
 
 async fn fetch_configured_catalog(
@@ -177,18 +292,7 @@ async fn fetch_configured_catalog(
 
         let configured: Vec<CameraCatalogEntry> = serde_json::from_slice(&body)
             .map_err(|error| ZenError::Custom(format!("Camera catalog JSON is invalid: {error}")))?;
-        let entries = configured
-            .into_iter()
-            .take(MAX_CAMERA_ENTRIES)
-            .map(CameraCatalogEntry::validate)
-            .collect::<AppResult<Vec<_>>>()?;
-        let mut ids = std::collections::HashSet::with_capacity(entries.len());
-        for entry in &entries {
-            if !ids.insert(entry.id.as_str()) {
-                return Err(ZenError::Custom(format!("Camera catalog contains duplicate id '{}'", entry.id)));
-            }
-        }
-        Ok(entries)
+        validate_entries(configured)
     }
     .await;
 
@@ -208,6 +312,7 @@ async fn fetch_configured_catalog(
 /// Returns the built-in diagnostic and the configured source independently so a
 /// configuration failure remains visible without taking the map layer down.
 pub async fn get_camera_catalog_snapshot(
+    app_data_dir: &Path,
     settings: &SettingsService,
     secrets: &SecretService,
     security: &crate::services::SecurityService,
@@ -223,6 +328,16 @@ pub async fn get_camera_catalog_snapshot(
         checked_at,
         detail: Some("Development diagnostic only. It is not a public camera feed.".to_string()),
     }];
+
+    match load_local_catalog(app_data_dir) {
+        Ok(Some(local)) => {
+            let count = local.len();
+            entries.extend(local);
+            sources.push(CameraCatalogSourceStatus { id: "local-catalog".to_string(), label: "Local camera catalog".to_string(), configured: true, status: "available".to_string(), entry_count: count, checked_at, detail: Some("Imported and validated locally. Only HTTPS sources are retained.".to_string()) });
+        }
+        Ok(None) => sources.push(CameraCatalogSourceStatus { id: "local-catalog".to_string(), label: "Local camera catalog".to_string(), configured: false, status: "not_configured".to_string(), entry_count: 0, checked_at, detail: Some("Import a camera JSON or GeoJSON file from Map settings to enable this source.".to_string()) }),
+        Err(error) => sources.push(CameraCatalogSourceStatus { id: "local-catalog".to_string(), label: "Local camera catalog".to_string(), configured: true, status: "unavailable".to_string(), entry_count: 0, checked_at, detail: Some(error.to_string()) }),
+    }
 
     match fetch_configured_catalog(settings, secrets, security).await {
         Ok(Some(configured)) => {
@@ -262,22 +377,24 @@ pub async fn get_camera_catalog_snapshot(
 }
 
 pub async fn list_camera_catalog(
+    app_data_dir: &Path,
     settings: &SettingsService,
     secrets: &SecretService,
     security: &crate::services::SecurityService,
 ) -> AppResult<Vec<CameraCatalogEntry>> {
-    Ok(get_camera_catalog_snapshot(settings, secrets, security).await?.entries)
+    Ok(get_camera_catalog_snapshot(app_data_dir, settings, secrets, security).await?.entries)
 }
 
 /// Resolves a preview only after a user selects a catalog entry. It prevents the
 /// renderer from inventing or modifying a stream endpoint.
 pub async fn resolve_camera_playback(
     camera_id: &str,
+    app_data_dir: &Path,
     settings: &SettingsService,
     secrets: &SecretService,
     security: &crate::services::SecurityService,
 ) -> AppResult<CameraPlaybackDescriptor> {
-    let snapshot = get_camera_catalog_snapshot(settings, secrets, security).await?;
+    let snapshot = get_camera_catalog_snapshot(app_data_dir, settings, secrets, security).await?;
     let camera = snapshot
         .entries
         .into_iter()
@@ -305,11 +422,12 @@ pub async fn resolve_camera_playback(
 }
 
 pub async fn test_camera_catalog(
+    app_data_dir: &Path,
     settings: &SettingsService,
     secrets: &SecretService,
     security: &crate::services::SecurityService,
 ) -> AppResult<usize> {
-    let snapshot = get_camera_catalog_snapshot(settings, secrets, security).await?;
+    let snapshot = get_camera_catalog_snapshot(app_data_dir, settings, secrets, security).await?;
     let configured = snapshot
         .sources
         .iter()

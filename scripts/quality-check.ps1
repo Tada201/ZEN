@@ -24,9 +24,9 @@ function Run($Command, $WorkingDirectory = ".") {
     }
 }
 
-function Assert-NoMatches($Description, $Command) {
+function Assert-NoMatches($Description, [scriptblock]$Check) {
     Write-Host "==> $Description"
-    $matches = Invoke-Expression $Command
+    $matches = Invoke-Command -ScriptBlock $Check
     if ($matches) {
         $matches | ForEach-Object { Write-Host $_ }
         Fail $Description
@@ -43,27 +43,32 @@ if (-not $SkipBuild) {
 
 Assert-NoMatches `
     "Raw frontend invoke calls found outside src/api/tauriClient.ts" `
-    "rg 'invoke<|invoke\(' src -n -g '!src/api/tauriClient.ts'"
+    { Get-ChildItem src -Recurse -File | Where-Object { $_.FullName -notmatch 'src[/\\]api[/\\]tauriClient\.ts' } | Select-String -Pattern 'invoke<|invoke\(' }
 
 Assert-NoMatches `
     "Inline SQL found outside src-tauri/src/db/queries" `
-    "rg 'sqlx::query|query_as::<|query_scalar' src-tauri/src -n -g '!src-tauri/src/db/queries/**' -g '!src-tauri/src/db/mod.rs'"
+    { Get-ChildItem src-tauri/src -Recurse -File | Where-Object { $_.FullName -notmatch 'src-tauri[/\\]src[/\\]db[/\\]queries' -and $_.Name -ne "mod.rs" } | Select-String -Pattern 'sqlx::query|query_as::<|query_scalar' }
 
 Assert-NoMatches `
     "Direct registry execution found outside ToolService" `
-    "rg 'execute_authorized|execute_with_permission' src-tauri/src -n -g '!src-tauri/src/services/tool.rs' -g '!src-tauri/src/tools/mod.rs'"
+    { Get-ChildItem src-tauri/src -Recurse -File | Where-Object { $_.FullName -notmatch 'src-tauri[/\\]src[/\\]services[/\\]tool\.rs' -and $_.Name -ne "mod.rs" } | Select-String -Pattern 'execute_authorized|execute_with_permission' }
 
 Assert-NoMatches `
     "Direct Tool.execute(app, ...) calls found outside ToolService" `
-    "rg '\.execute\(\s*app' src-tauri/src -n -g '!src-tauri/src/services/tool.rs' -g '!src-tauri/src/tools/mod.rs'"
+    { Get-ChildItem src-tauri/src -Recurse -File | Where-Object { $_.FullName -notmatch 'src-tauri[/\\]src[/\\]services[/\\]tool\.rs' -and $_.Name -ne "mod.rs" } | Select-String -Pattern '\.execute\(\s*app' }
 
 Assert-NoMatches `
     "Direct AgentTool.run(...) calls found outside ToolService" `
-    "rg 'tool\.run\(' src-tauri/src -n -g '!src-tauri/src/services/tool.rs'"
+    { Get-ChildItem src-tauri/src -Recurse -File | Where-Object { $_.FullName -notmatch 'src-tauri[/\\]src[/\\]services[/\\]tool\.rs' } | Select-String -Pattern 'tool\.run\(' }
 
 Assert-NoMatches `
     "Backend command reads secret-like keys through SettingsService" `
-    "rg 'settings_manager\.get\([^`n]*(api_key|token|secret|credential|password)' src-tauri/src/commands src-tauri/src/agent src-tauri/src/tools src-tauri/src/search -n"
+    {
+        $dirs = @("src-tauri/src/commands", "src-tauri/src/agent", "src-tauri/src/tools", "src-tauri/src/search") | Where-Object { Test-Path $_ }
+        if ($dirs) {
+            Get-ChildItem $dirs -Recurse -File -ErrorAction SilentlyContinue | Select-String -Pattern 'settings_manager\.get\([^)]*(api_key|token|secret|credential|password)'
+        }
+    }
 
 $coveragePath = "src-tauri/tool-coverage.json"
 if (-not (Test-Path $coveragePath)) {

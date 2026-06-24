@@ -59,6 +59,7 @@ export function useGlobalMapData(enabled: boolean) {
               records.map((record, index) => toSpatialEntity(typedLayer, record, index)).filter((entity): entity is SpatialEntity => entity !== null),
             );
             store.getState().setLayerError(typedLayer, null);
+            store.getState().setLayerUpdatedAt(typedLayer, Date.now());
           }
         } catch (error) {
           if (!cancelled) store.getState().setLayerError(typedLayer, error instanceof Error ? error.message : 'Unable to load layer');

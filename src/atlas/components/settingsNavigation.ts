@@ -56,7 +56,7 @@ const TAB_GROUPS: SettingsTabGroup[] = [
       { id: "mcp", label: "MCP", icon: "lucide:cpu", description: "MCP servers" },
       { id: "embedding-models", label: "Embedding Models", icon: "lucide:download", description: "Download embedding models" },
       { id: "skills", label: "Skills", icon: "lucide:book-open", description: "Skill modules" },
-      { id: "map-config", label: "Map Configuration", icon: "lucide:map", description: "Operational map layers" },
+      { id: "maps", label: "Maps", icon: "lucide:map", description: "Map data and camera sources" },
       { id: "system", label: "System", icon: "lucide:monitor", description: "Performance & maintenance" },
       { id: "updates", label: "Updates", icon: "lucide:refresh-cw", description: "Update & version info" },
     ],

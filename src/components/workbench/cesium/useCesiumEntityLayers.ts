@@ -21,6 +21,7 @@ interface UseCesiumEntityLayersOptions {
     military: any[];
     vessels: any[];
     naturalEvents: any[];
+    weatherGrid: any[];
     selectedLayers: string[];
     selectedTarget: any;
     viewportCenter: { alt: number };
@@ -40,6 +41,7 @@ export const useCesiumEntityLayers = ({
     military,
     vessels,
     naturalEvents,
+    weatherGrid,
     selectedLayers,
     selectedTarget,
     viewportCenter,
@@ -525,4 +527,38 @@ export const useCesiumEntityLayers = ({
         ds.entities.resumeEvents();
         viewerRef.current?.scene.requestRender();
     }, [dataSourcesRef, entityIdsRef, viewerRef, military, selectedLayers, allClusteredUnits]);
+
+    useEffect(() => {
+        const viewer = viewerRef.current;
+        if (!viewer || viewer.isDestroyed()) return;
+        const prefix = 'weather:';
+        viewer.entities.values
+            .filter((entity) => String(entity.id).startsWith(prefix))
+            .forEach((entity) => viewer.entities.remove(entity));
+
+        if (!selectedLayers.includes('weather')) return;
+        weatherGrid.forEach((point) => {
+            const temperature = Number(point.metadata?.temperature ?? 0);
+            const color = temperature >= 30
+                ? Cesium.Color.fromCssColorString('#ef4444')
+                : temperature >= 20
+                    ? Cesium.Color.fromCssColorString('#f59e0b')
+                    : temperature >= 10
+                        ? Cesium.Color.fromCssColorString('#22d3ee')
+                        : Cesium.Color.fromCssColorString('#60a5fa');
+            viewer.entities.add({
+                id: `${prefix}${point.id}`,
+                position: Cesium.Cartesian3.fromDegrees(point.position.lon, point.position.lat, point.position.alt),
+                point: { pixelSize: 7, color: color.withAlpha(0.72), outlineColor: Cesium.Color.BLACK, outlineWidth: 1 },
+                label: {
+                    text: `${temperature.toFixed(0)} C`,
+                    font: '8px JetBrains Mono, monospace',
+                    fillColor: color,
+                    pixelOffset: new Cesium.Cartesian2(0, -10),
+                    distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1_000_000),
+                },
+            });
+        });
+        viewer.scene.requestRender();
+    }, [selectedLayers, viewerRef, weatherGrid]);
 };

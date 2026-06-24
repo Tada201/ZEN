@@ -1,7 +1,12 @@
 use super::AppState;
 use crate::commands::pagination::{normalize_page, page_from_fetch, Page};
 use crate::error::ZenError;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
+
+fn map_catalog_directory(app: &AppHandle) -> Result<std::path::PathBuf, ZenError> {
+    app.path().app_data_dir()
+        .map_err(|error| ZenError::Internal(format!("Could not resolve Zen application data directory: {error}")))
+}
 
 // GTSM Types
 use crate::db::models::{GtsmGeofence, GtsmMarker};
@@ -137,9 +142,11 @@ pub fn list_map_connectors() -> Vec<crate::services::gtsm::connectors::MapConnec
 
 #[tauri::command]
 pub async fn list_map_cameras(
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<crate::services::gtsm::cameras::CameraCatalogEntry>, ZenError> {
     crate::services::gtsm::cameras::list_camera_catalog(
+        &map_catalog_directory(&app)?,
         &state.settings_manager,
         &state.secret_manager,
         &state.security,
@@ -148,9 +155,11 @@ pub async fn list_map_cameras(
 
 #[tauri::command]
 pub async fn get_map_camera_catalog(
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<crate::services::gtsm::cameras::CameraCatalogSnapshot, ZenError> {
     crate::services::gtsm::cameras::get_camera_catalog_snapshot(
+        &map_catalog_directory(&app)?,
         &state.settings_manager,
         &state.secret_manager,
         &state.security,
@@ -160,11 +169,13 @@ pub async fn get_map_camera_catalog(
 
 #[tauri::command]
 pub async fn resolve_map_camera_playback(
+    app: AppHandle,
     state: State<'_, AppState>,
     camera_id: String,
 ) -> Result<crate::services::gtsm::cameras::CameraPlaybackDescriptor, ZenError> {
     crate::services::gtsm::cameras::resolve_camera_playback(
         &camera_id,
+        &map_catalog_directory(&app)?,
         &state.settings_manager,
         &state.secret_manager,
         &state.security,
@@ -173,11 +184,24 @@ pub async fn resolve_map_camera_playback(
 }
 
 #[tauri::command]
-pub async fn test_map_camera_catalog(state: State<'_, AppState>) -> Result<usize, ZenError> {
+pub async fn test_map_camera_catalog(app: AppHandle, state: State<'_, AppState>) -> Result<usize, ZenError> {
     crate::services::gtsm::cameras::test_camera_catalog(
+        &map_catalog_directory(&app)?,
         &state.settings_manager,
         &state.secret_manager,
         &state.security,
+    ).await
+}
+
+#[tauri::command]
+pub async fn import_local_map_camera_catalog(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    source_name: String,
+    bytes: Vec<u8>,
+) -> Result<crate::services::gtsm::cameras::LocalCameraCatalogImportReport, ZenError> {
+    crate::services::gtsm::cameras::import_local_camera_catalog(
+        &map_catalog_directory(&app)?, source_name, bytes, &state.security,
     ).await
 }
 
@@ -575,6 +599,11 @@ pub async fn delete_marker_db(state: State<'_, AppState>, id: String) -> Result<
 use crate::db::models::GtsmGeojsonLayer;
 use crate::db::queries::GtsmFavorite;
 use crate::services::gtsm::GeojsonService;
+
+#[tauri::command]
+pub fn extract_kmz_kml(bytes: Vec<u8>) -> Result<String, ZenError> {
+    GeojsonService::extract_kmz_kml(&bytes)
+}
 
 #[tauri::command]
 pub async fn list_geojson_layers_db(state: State<'_, AppState>) -> Result<Vec<GtsmGeojsonLayer>, ZenError> {

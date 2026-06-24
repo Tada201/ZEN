@@ -27,10 +27,14 @@ assert(service.includes('remove(&approval_id)'), 'Terminal approvals must be sin
 assert(session.includes("@xterm/xterm"), 'Terminal renderer must use xterm.');
 assert(session.includes('requestAnimationFrame(flushOutput)'), 'Terminal output must be buffered before rendering.');
 assert(session.includes('terminalApi.readOutput(sessionId)'), 'Initial PTY output must be recovered after listener setup.');
+assert(session.includes('replaySequence = initialOutput.sequence'), 'Initial terminal output must establish a replay boundary.');
 assert(session.includes("listen<TerminalOutputEvent>('terminal:output'"), 'Terminal output must use the shared typed event.');
 assert(service.includes('"terminal:output"'), 'Backend must emit the shared terminal output event.');
+assert(service.includes('pub sequence: u64'), 'Terminal output events must be sequenced.');
 assert(!panel.includes('simulatedMetrics'), 'Terminal UI must not retain simulated telemetry.');
 assert(panel.includes('terminalApi.kill(tab.id)'), 'Unmounted terminal panels must clean up live sessions.');
+assert(panel.includes("from '@/components/ui/AppDialog'"), 'Opening a terminal must use the shared in-app confirmation dialog.');
+assert(panel.includes('terminalApi.requestApproval()'), 'The shared confirmation dialog must still request a backend approval token.');
 assert(processManager.includes('"/T"'), 'Windows cleanup must terminate process trees.');
 assert(service.includes('shell_cwd(&resolved_cwd)'), 'Terminal sessions must normalize workspace paths for the shell prompt.');
 assert(service.includes('strip_prefix("\\\\\\\\?\\\\")'), 'Terminal sessions must remove Windows extended path prefixes.');

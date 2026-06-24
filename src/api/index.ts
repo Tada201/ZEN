@@ -51,7 +51,7 @@ export type { AgentConfig, AgentConfigFileData, AgentConfigFileInfo, AgentInfo, 
 export { memoryApi } from "./memoryApi";
 export type { MemoryEntry, MemorySearchResult, MemoryStats, SessionMemoryItem } from "./memoryApi";
 export { gtsmApi } from "./gtsmApi";
-export type { ComputeNavigationRouteRequest, GtsmGeofence, GtsmMarker, TrackPoint } from "./gtsmApi";
+export type { ComputeNavigationRouteRequest, GtsmFavorite, GtsmGeofence, GtsmMarker, TrackPoint } from "./gtsmApi";
 export { voiceApi } from "./voiceApi";
 export type { TranscriptionResult } from "./voiceApi";
 export { sessionApi } from "./sessionApi";

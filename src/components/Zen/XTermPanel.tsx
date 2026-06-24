@@ -3,6 +3,7 @@ import { Plus, SquareTerminal, X } from 'lucide-react';
 import { terminalApi } from '@/api/terminalApi';
 import { cn } from '@/lib/utils/style';
 import { XTermSessionView } from './XTermSessionView';
+import { AppDialog } from '@/components/ui/AppDialog';
 
 const DEFAULT_COLS = 100;
 const DEFAULT_ROWS = 32;
@@ -58,6 +59,7 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
       await terminalApi.kill(id);
     } catch (cause) {
       setError(getErrorMessage(cause));
+      return;
     }
     const next = tabs.filter((tab) => tab.id !== id);
     setTabs(next);
@@ -100,18 +102,15 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
         ) : null}
       </div>
 
-      {confirmOpen ? (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70 p-5" role="dialog" aria-modal="true" aria-label="Open terminal confirmation">
-          <div className="w-full max-w-md border border-white/[0.16] bg-[#121214] p-5 shadow-2xl">
-            <h2 className="text-sm font-semibold">Open workspace terminal?</h2>
-            <p className="mt-2 text-xs leading-5 text-zinc-400">This starts an interactive shell in the configured workspace. It has your normal user permissions and remains isolated from agent command execution.</p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" className="border border-white/[0.12] px-3 py-2 text-xs text-zinc-300 hover:bg-white/[0.06]" onClick={() => setConfirmOpen(false)} disabled={opening}>Cancel</button>
-              <button type="button" className="border border-emerald-300/50 bg-emerald-300/10 px-3 py-2 text-xs font-medium text-emerald-100 hover:bg-emerald-300/20 disabled:opacity-50" onClick={() => void openTerminal()} disabled={opening}>{opening ? 'Opening...' : 'Open terminal'}</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <AppDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Open workspace terminal?"
+        description="This starts an interactive shell in the configured workspace with your user permissions. Agent command execution remains isolated."
+        footer={<><button type="button" className="border border-white/[0.12] px-3 py-2 text-xs text-zinc-300 hover:bg-white/[0.06]" onClick={() => setConfirmOpen(false)} disabled={opening}>Cancel</button><button type="button" className="border border-emerald-300/50 bg-emerald-300/10 px-3 py-2 text-xs font-medium text-emerald-100 hover:bg-emerald-300/20 disabled:opacity-50" onClick={() => void openTerminal()} disabled={opening}>{opening ? 'Opening...' : 'Open terminal'}</button></>}
+      >
+        <p className="text-xs leading-5 text-zinc-400">The shell opens only after you confirm this action. It has your normal account permissions.</p>
+      </AppDialog>
     </section>
   );
 }

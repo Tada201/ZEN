@@ -390,7 +390,7 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
                 {activeTab === "updates" && (
                   <UpdatesSettings />
                 )}
-                {activeTab === "map-config" && (
+                {activeTab === "maps" && (
                   <MapConfiguration />
                 )}
                 {activeTab === "skills" && (

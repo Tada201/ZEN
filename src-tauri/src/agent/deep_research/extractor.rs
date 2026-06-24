@@ -13,6 +13,8 @@ pub(super) const EXTRACTOR_PROMPT: &str = r#"Extract information relevant to the
 
 **Goal:** {goal}
 
+**Locked research scope:** {scope}
+
 **Web page content:**
 {webpage_content}
 
@@ -27,7 +29,7 @@ Return a JSON object with these keys:
 - "evidence": The key evidence, quotes, and data from the page (2-5 paragraphs)
 - "summary": A concise 1-3 sentence summary of what this source says about the goal
 
-If the page content is not relevant to the goal at all, return:
+If the page content does not satisfy the locked scope, including a similarly named entity, wrong event edition, or wrong time period, return:
 {{"rational": "This page is not relevant to the research goal.", "evidence": "", "summary": "This page does not contain relevant information."}}
 "#;
 

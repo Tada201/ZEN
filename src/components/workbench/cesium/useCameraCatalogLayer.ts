@@ -7,10 +7,11 @@ interface UseCameraCatalogLayerOptions {
   viewerRef: CesiumViewerRef;
   dataSourcesRef: CesiumDataSourcesRef;
   cameras: MapCameraCatalogEntry[];
+  localCamera: { label: string; latitude: number; longitude: number } | null;
   selectedLayers: string[];
 }
 
-export function useCameraCatalogLayer({ viewerRef, dataSourcesRef, cameras, selectedLayers }: UseCameraCatalogLayerOptions) {
+export function useCameraCatalogLayer({ viewerRef, dataSourcesRef, cameras, localCamera, selectedLayers }: UseCameraCatalogLayerOptions) {
   useEffect(() => {
     const viewer = viewerRef.current;
     const dataSource = dataSourcesRef.current.cameras;
@@ -46,8 +47,17 @@ export function useCameraCatalogLayer({ viewerRef, dataSourcesRef, cameras, sele
           },
         });
       }
+      if (localCamera) {
+        dataSource.entities.add({
+          id: 'camera:local-device',
+          position: Cesium.Cartesian3.fromDegrees(localCamera.longitude, localCamera.latitude, 0),
+          properties: { label: localCamera.label, type: 'local-camera' },
+          billboard: { image: Cesium.PinBuilder ? new Cesium.PinBuilder().fromColor(Cesium.Color.fromCssColorString('#22d3ee'), 36) : undefined, verticalOrigin: Cesium.VerticalOrigin.BOTTOM, scale: 0.72 },
+          label: { text: localCamera.label, font: '10px Inter, sans-serif', fillColor: Cesium.Color.WHITE, outlineColor: Cesium.Color.BLACK, outlineWidth: 2, style: Cesium.LabelStyle.FILL_AND_OUTLINE, pixelOffset: new Cesium.Cartesian2(0, -32) },
+        });
+      }
     }
     dataSource.entities.resumeEvents();
     viewer.scene.requestRender();
-  }, [viewerRef, dataSourcesRef, cameras, selectedLayers]);
+  }, [viewerRef, dataSourcesRef, cameras, localCamera, selectedLayers]);
 }

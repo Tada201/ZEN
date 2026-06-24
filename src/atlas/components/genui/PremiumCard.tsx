@@ -15,6 +15,25 @@ import { MetricCard } from './premium/MetricCard';
 import { DataRecordCard } from './premium/DataRecordCard';
 import { ComparisonCard } from './premium/ComparisonCard';
 import { StatusCard } from './premium/StatusCard';
+import { RecipeCard } from './premium/RecipeCard';
+import { LinkPreviewCard } from './premium/LinkPreviewCard';
+import { TimelineCard } from './premium/TimelineCard';
+import { CurrencyCard } from './premium/CurrencyCard';
+import { PollCard } from './premium/PollCard';
+import { InvoiceCard } from './premium/InvoiceCard';
+import { MapPinCard } from './premium/MapPinCard';
+import { CodeSnippetCard } from './premium/CodeSnippetCard';
+import { WordDefinitionCard } from './premium/WordDefinitionCard';
+import { AgentStepCard } from './premium/AgentStepCard';
+import { TranslationCard } from './premium/TranslationCard';
+import { DocumentSummaryCard } from './premium/DocumentSummaryCard';
+import { DiffCard } from './premium/DiffCard';
+import { ChartCard } from './premium/ChartCard';
+import { MemoryRecallCard } from './premium/MemoryRecallCard';
+import { MathCard } from './premium/MathCard';
+import { CitationCard } from './premium/CitationCard';
+import { TerminalCard } from './premium/TerminalCard';
+import { FlashcardComponent } from './premium/FlashcardComponent';
 import { MapComponent } from './Map';
 import { MessageComposer } from './MessageComposer';
 
@@ -99,6 +118,85 @@ export function PremiumCard({ type, data }: CardProps) {
 
   if (t === 'sports' || t === 'match' || t === 'game') {
     return <SportsCard data={data} />;
+  }
+
+  // New visualizer cards (Pass 1)
+  if (t === 'recipe' || t === 'food_recipe' || t === 'cooking') {
+    return <RecipeCard data={data} />;
+  }
+
+  if (t === 'link_preview' || t === 'url_preview' || t === 'unfurl') {
+    return <LinkPreviewCard data={data} />;
+  }
+
+  if (t === 'timeline' || t === 'history' || t === 'events_sequence') {
+    return <TimelineCard data={data} />;
+  }
+
+  if (t === 'currency' || t === 'exchange' || t === 'forex') {
+    return <CurrencyCard data={data} />;
+  }
+
+  if (t === 'poll' || t === 'vote' || t === 'choice') {
+    return <PollCard data={data} />;
+  }
+
+  if (t === 'invoice' || t === 'receipt' || t === 'bill') {
+    return <InvoiceCard data={data} />;
+  }
+
+  if (t === 'map_pin' || t === 'location' || t === 'place') {
+    return <MapPinCard data={data} />;
+  }
+
+  // New visualizer cards (Pass 2)
+  if (t === 'code_snippet' || t === 'code_block' || t === 'snippet') {
+    return <CodeSnippetCard data={data} />;
+  }
+
+  if (t === 'word_definition' || t === 'dictionary' || t === 'define') {
+    return <WordDefinitionCard data={data} />;
+  }
+
+  if (t === 'agent_step' || t === 'trace_step' || t === 'agent_execution') {
+    return <AgentStepCard data={data} />;
+  }
+
+  if (t === 'translation' || t === 'translate' || t === 'bilingual') {
+    return <TranslationCard data={data} />;
+  }
+
+  if (t === 'document_summary' || t === 'file_summary' || t === 'doc_overview') {
+    return <DocumentSummaryCard data={data} />;
+  }
+
+  if (t === 'diff' || t === 'code_diff' || t === 'patch') {
+    return <DiffCard data={data} />;
+  }
+
+  // New visualizer cards (Pass 3)
+  if (t === 'chart' || t === 'graph' || t === 'data_visualization') {
+    return <ChartCard data={data} />;
+  }
+
+  if (t === 'memory_recall' || t === 'semantic_search' || t === 'past_chunks') {
+    return <MemoryRecallCard data={data} />;
+  }
+
+  if (t === 'math' || t === 'equation' || t === 'formula') {
+    return <MathCard data={data} />;
+  }
+
+  if (t === 'citation' || t === 'reference' || t === 'paper') {
+    return <CitationCard data={data} />;
+  }
+
+  if (t === 'terminal' || t === 'shell_command' || t === 'cmd_exec') {
+    return <TerminalCard data={data} />;
+  }
+
+  if (t === 'flashcard' || t === 'quiz_card' || t === 'card_flip') {
+    return <FlashcardComponent data={data} />;
   }
 
   // Claude-style structural cards

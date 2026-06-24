@@ -25,12 +25,20 @@ export interface ModelUsageHistoryItem {
   createdAt: string;
 }
 
+export interface UsageDay {
+  day: string;
+  requests: number;
+  tokensIn: number;
+  tokensOut: number;
+}
+
 export interface ProviderUsageSnapshot {
   totalRequests: number;
   totalTokensIn: number;
   totalTokensOut: number;
   models: ModelUsageSummary[];
   history: ModelUsageHistoryItem[];
+  daily: UsageDay[];
 }
 
 export const providersApi = {
@@ -38,6 +46,6 @@ export const providersApi = {
     callCommand<ModelInfo[]>("get_all_available_models", { provider: provider ?? null }),
   testProviderConnection: (config: ProviderConfigRequest) =>
     callCommand<ModelInfo[]>("test_provider_connection", { config }),
-  getUsage: (modelIds: string[]) =>
-    callCommand<ProviderUsageSnapshot>("get_provider_usage", { modelIds }),
+  getUsage: (modelIds: string[], periodDays?: number) =>
+    callCommand<ProviderUsageSnapshot>("get_provider_usage", { modelIds, periodDays }),
 };

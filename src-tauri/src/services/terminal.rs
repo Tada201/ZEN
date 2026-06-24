@@ -50,6 +50,7 @@ pub struct TerminalApprovalGrant {
 #[serde(rename_all = "camelCase")]
 pub struct TerminalOutputEvent {
     pub session_id: String,
+    pub sequence: u64,
     pub data: String,
 }
 
@@ -243,11 +244,12 @@ impl TerminalService {
 
         let mut manager = manager.write().await;
         let app_handle = app.clone();
-        let on_output = move |session_id: &str, data: &str| {
+        let on_output = move |session_id: &str, sequence: u64, data: &str| {
             if let Err(error) = app_handle.emit(
                 "terminal:output",
                 TerminalOutputEvent {
                     session_id: session_id.to_string(),
+                    sequence,
                     data: data.to_string(),
                 },
             ) {
@@ -338,7 +340,7 @@ impl TerminalService {
         &self,
         manager: &RwLock<TerminalManager>,
         id: String,
-    ) -> ZenResult<String> {
+    ) -> ZenResult<crate::terminal::TerminalOutputSnapshot> {
         let manager = manager.read().await;
         if let Some(session) = manager.get(&id) {
             Ok(session.read_output().await)

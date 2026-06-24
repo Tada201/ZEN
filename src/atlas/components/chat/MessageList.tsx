@@ -16,6 +16,7 @@ export const MessageList = memo(function MessageList({
   onOpenSettings,
   onDismissError,
   onRegenerate,
+  onContinueResearch,
   compact,
 }: {
   messages: Message[];
@@ -25,6 +26,7 @@ export const MessageList = memo(function MessageList({
   onOpenSettings?: (tab: SettingsTabId, provider?: string) => void;
   onDismissError?: (id: string) => void;
   onRegenerate?: (id: string) => void;
+  onContinueResearch?: (request: string) => void;
   compact?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -107,6 +109,7 @@ export const MessageList = memo(function MessageList({
               onOpenSettings={onOpenSettings}
               onDismissError={onDismissError}
               onRegenerate={onRegenerate}
+              onContinueResearch={onContinueResearch}
               compact={compact}
             />
           ))}

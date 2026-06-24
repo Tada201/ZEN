@@ -197,6 +197,32 @@ export function useAgentEvents() {
             return prev;
           }
 
+          // Assistant messages: replace the optimistic temp-assistant entry in-place
+          // when the backend emits the persisted message with a real DB ID.
+          if (payload.role === "assistant") {
+            let tempAssistantIdx = -1;
+            for (let i = prev.length - 1; i >= 0; i--) {
+              if (prev[i].role === "assistant" && prev[i].id.startsWith("temp-assistant-")) {
+                tempAssistantIdx = i;
+                break;
+              }
+            }
+            if (tempAssistantIdx !== -1) {
+              const next = [...prev];
+              next[tempAssistantIdx] = {
+                ...next[tempAssistantIdx],
+                id: payload.id,
+                content: payload.content || next[tempAssistantIdx].content,
+                createdAt: payload.timestamp
+                  ? new Date(payload.timestamp).getTime()
+                  : next[tempAssistantIdx].createdAt,
+                status: payload.status || "sent",
+                metadata: (payload.metadata as ActionMeta | undefined) || next[tempAssistantIdx].metadata,
+              };
+              return next;
+            }
+          }
+
           // User messages: replace the optimistic temp-user entry in-place
           // when the backend emits the persisted message with a real DB ID.
           // The optimistic placeholder has "temp-user-{timestamp}" while the

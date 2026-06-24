@@ -45,7 +45,7 @@ export type SettingsTabId =
   | "commands"
   | "hooks"
   | "updates"
-  | "map-config";
+  | "maps";
 
 export type RightPanelTabId =
   | "metrics"
@@ -98,7 +98,7 @@ export const FRONTEND_FEATURES = [
   { id: "settings.updates", label: "Updates", maturity: "prototype", surfaces: ["settings", "commandPalette"], defaultVisible: false, labsOnly: true, risk: "none", settingsTabId: "updates", icon: Info },
   { id: "settings.skills", label: "Skills", maturity: "prototype", surfaces: ["settings", "commandPalette"], defaultVisible: false, labsOnly: true, risk: "privileged", settingsTabId: "skills", icon: Layers },
   { id: "settings.embedding-models", label: "Embedding Models", maturity: "prototype", surfaces: ["settings", "commandPalette"], defaultVisible: false, labsOnly: true, risk: "heavy-runtime", settingsTabId: "embedding-models", icon: Search },
-  { id: "settings.map-config", label: "Map Config", maturity: "prototype", surfaces: ["settings", "commandPalette"], defaultVisible: false, labsOnly: true, risk: "heavy-runtime", settingsTabId: "map-config", icon: MapIcon },
+  { id: "settings.maps", label: "Maps", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "secrets", settingsTabId: "maps", icon: MapIcon },
   { id: "right.metrics", label: "System Metrics", maturity: "production", surfaces: ["rightRail"], defaultVisible: true, risk: "none", rightPanelTabId: "metrics", icon: Activity },
   { id: "right.artifacts", label: "Artifacts", maturity: "production", surfaces: ["rightRail"], defaultVisible: true, risk: "untrusted-content", rightPanelTabId: "artifacts", icon: Box },
   { id: "right.agents", label: "Active Agents", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "privileged", rightPanelTabId: "agents", icon: Cpu },

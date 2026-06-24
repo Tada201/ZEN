@@ -13,6 +13,7 @@ interface XTermSessionViewProps {
 
 interface TerminalOutputEvent {
   sessionId: string;
+  sequence: number;
   data: string;
 }
 
@@ -76,6 +77,7 @@ export function XTermSessionView({ sessionId, active, onError }: XTermSessionVie
     };
 
     const outputBuffer: string[] = [];
+    let replaySequence = Number.POSITIVE_INFINITY;
     let frame = 0;
     const flushOutput = () => {
       frame = 0;
@@ -100,13 +102,16 @@ export function XTermSessionView({ sessionId, active, onError }: XTermSessionVie
 
     let unlisten: (() => void) | undefined;
     void listen<TerminalOutputEvent>('terminal:output', (event) => {
-      if (event.payload.sessionId === sessionId) enqueueOutput(event.payload.data);
+      if (event.payload.sessionId === sessionId && event.payload.sequence > replaySequence) {
+        enqueueOutput(event.payload.data);
+      }
     }).then(async (dispose) => {
       unlisten = dispose;
       // The shell can print its banner before this listener attaches. Drain the
       // backend-owned PTY buffer after subscribing so the first prompt is not lost.
       const initialOutput = await terminalApi.readOutput(sessionId);
-      if (initialOutput) enqueueOutput(initialOutput);
+      replaySequence = initialOutput.sequence;
+      if (initialOutput.data) enqueueOutput(initialOutput.data);
       resize();
     }).catch((error) => onError(getErrorMessage(error)));
 

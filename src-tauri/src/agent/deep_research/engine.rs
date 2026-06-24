@@ -12,7 +12,7 @@ use crate::commands::AppState;
 use crate::llm::{ChatRequestConfig, LlmProvider};
 
 use super::types::{
-    Finding, ResearchCategory, DEFAULT_COMPRESSION_INTERVAL, DEFAULT_EXTRACTION_CONCURRENCY,
+    Finding, ResearchCategory, ResearchScopeAssessment, DEFAULT_COMPRESSION_INTERVAL, DEFAULT_EXTRACTION_CONCURRENCY,
     DEFAULT_MAX_CONTENT_CHARS, DEFAULT_MAX_EMPTY_ROUNDS, DEFAULT_MAX_REPORT_TOKENS,
     DEFAULT_MAX_TIME_SECS, DEFAULT_MIN_ROUNDS, DEFAULT_SYNTHESIS_WINDOW,
 };
@@ -68,6 +68,8 @@ pub(super) struct IterativeDeepResearcher<'a> {
     pub(super) start_time: std::time::Instant,
     /// Auto-detected research category for format-specific final reports
     pub(super) category: Option<ResearchCategory>,
+    /// Validated objective, entity, time window, and exclusions for this run.
+    pub(super) research_scope: serde_json::Value,
 }
 
 impl<'a> IterativeDeepResearcher<'a> {
@@ -120,7 +122,20 @@ impl<'a> IterativeDeepResearcher<'a> {
             round_count: 0,
             start_time: std::time::Instant::now(),
             category: None,
+            research_scope: serde_json::json!({}),
         }
+    }
+
+    pub(super) fn apply_scope(&mut self, assessment: ResearchScopeAssessment) {
+        self.research_scope = assessment.brief;
+    }
+
+    pub(super) fn scope_context(&self) -> String {
+        if self.research_scope.is_null() || self.research_scope.as_object().is_some_and(|scope| scope.is_empty()) {
+            return "No structured scope was available. Preserve the user's original wording exactly.".to_string();
+        }
+        serde_json::to_string(&self.research_scope)
+            .unwrap_or_else(|_| "Preserve the user's original wording exactly.".to_string())
     }
 
     fn milestone_progress(phase: &str, status: &str) -> u8 {
@@ -165,6 +180,7 @@ impl<'a> IterativeDeepResearcher<'a> {
             .map(|steps| {
                 let wrapper = serde_json::json!({
                     "researchSteps": steps.as_slice(),
+                    "researchScope": self.research_scope.clone(),
                     "researchProgress": {
                         "percent": self.progress_percent.load(Ordering::Relaxed),
                     },
@@ -173,12 +189,13 @@ impl<'a> IterativeDeepResearcher<'a> {
             })
             .unwrap_or_else(|_| "{}".to_string());
 
-        let _ = sqlx::query("UPDATE messages SET content = ?, metadata = ? WHERE id = ?")
-            .bind(&self.evolving_report)
-            .bind(&steps_json)
-            .bind(self.message_id)
-            .execute(self.db)
-            .await;
+        let _ = crate::db::queries::message::update_message_content_and_metadata(
+            self.db,
+            self.message_id,
+            &self.evolving_report,
+            &steps_json,
+        )
+        .await;
     }
 
     pub(super) fn time_exceeded(&self) -> bool {

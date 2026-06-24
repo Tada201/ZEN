@@ -13,15 +13,15 @@ export const ViewportHUD: React.FC = () => {
     const altKM = (center.alt / 1000).toFixed(2);
 
     return (
-        <div className={`border border-zinc-800 bg-black/60 backdrop-blur-md transition-all duration-300 font-mono ${isCollapsed ? 'h-8 overflow-hidden' : ''}`}>
+        <div className={`border border-white/15 bg-black/45 backdrop-blur-md transition-all duration-200 ${isCollapsed ? 'h-8 overflow-hidden' : ''}`}>
             {/* Header */}
             <div 
-                className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-800/50 cursor-pointer select-none bg-zinc-950/40"
+                className="flex h-8 min-h-8 items-center justify-between px-2 border-b border-white/10 cursor-pointer select-none"
                 onClick={() => togglePanel('viewport')}
             >
-                <div className="flex items-center gap-2 text-cyan-400">
-                    <WorkbenchIcon name="solar:radar-bold-duotone" size={13} className="animate-pulse" />
-                    <span className="text-[9px] font-bold tracking-[0.2em]">ORBITAL_TELEMETRY</span>
+                <div className="flex items-center gap-2 text-zinc-100">
+                    <WorkbenchIcon name="solar:radar-bold-duotone" size={13} className="text-primary" />
+                    <span className="text-[10px] font-medium">Viewport</span>
                 </div>
                 <div className="flex items-center gap-1.5 pointer-events-auto">
                     <WorkbenchButton
@@ -34,7 +34,7 @@ export const ViewportHUD: React.FC = () => {
                     >
                         {targetLocked ? <WorkbenchIcon name="solar:lock-bold" size={11} /> : <WorkbenchIcon name="solar:lock-open-bold" size={11} />}
                     </WorkbenchButton>
-                    <div className="text-cyan-400">
+                    <div className="text-zinc-400">
                         {isCollapsed ? <WorkbenchIcon name="solar:alt-arrow-down-bold" size={11} /> : <WorkbenchIcon name="solar:alt-arrow-up-bold" size={11} />}
                     </div>
                 </div>
@@ -42,22 +42,22 @@ export const ViewportHUD: React.FC = () => {
 
             {/* Content */}
             {!isCollapsed && (
-                <div className="p-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[10px]">
+                <div className="p-2 grid grid-cols-2 gap-x-2.5 gap-y-1.5 text-[10px]">
                     <div className="flex flex-col gap-0.5">
-                        <span className="text-[8px] text-zinc-500 uppercase tracking-wider">Latitude</span>
-                        <span className="font-bold text-white tracking-widest">{latStr}</span>
+                        <span className="text-[8px] text-zinc-400">Latitude</span>
+                        <span className="text-[10px] font-medium text-zinc-100">{latStr}</span>
                     </div>
                     <div className="flex flex-col gap-0.5">
-                        <span className="text-[8px] text-zinc-500 uppercase tracking-wider">Longitude</span>
-                        <span className="font-bold text-white tracking-widest">{lonStr}</span>
+                        <span className="text-[8px] text-zinc-400">Longitude</span>
+                        <span className="text-[10px] font-medium text-zinc-100">{lonStr}</span>
                     </div>
                     <div className="flex flex-col gap-0.5 border-t border-zinc-900/60 pt-1.5 mt-0.5">
-                        <span className="text-[8px] text-zinc-500 uppercase tracking-wider">Altitude</span>
-                        <span className="font-bold text-cyan-400 tracking-widest">{altKM} KM</span>
+                        <span className="text-[8px] text-zinc-400">Altitude</span>
+                        <span className="text-[10px] font-medium text-zinc-100">{altKM} km</span>
                     </div>
                     <div className="flex flex-col gap-0.5 border-t border-zinc-900/60 pt-1.5 mt-0.5">
-                        <span className="text-[8px] text-zinc-500 uppercase tracking-wider">Sense_Res</span>
-                        <span className="font-bold text-zinc-400 tracking-widest">30M/PX</span>
+                        <span className="text-[8px] text-zinc-400">Resolution</span>
+                        <span className="text-[10px] font-medium text-zinc-200">30 m/px</span>
                     </div>
                 </div>
             )}

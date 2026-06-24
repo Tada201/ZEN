@@ -112,6 +112,8 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
     }
   }
 
+  const isPendingDeepResearch = msg.kind === "deep_research" && msg.isComplete !== 1;
+
   return {
     id: msg.id,
     sessionId: msg.chatId,
@@ -123,7 +125,11 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
     steps,
     createdAt: new Date(msg.createdAt).getTime(),
     model: msg.model,
-    status: msg.isComplete === 1 ? "sent" : "failed",
+    // A deep-research run persists an assistant placeholder before its report
+    // exists. Treat that row as live while the runner owns it; mapping it as a
+    // failure lets a refetch overwrite the optimistic research card and makes
+    // the chat appear to reset.
+    status: isPendingDeepResearch ? "sending" : msg.isComplete === 1 ? "sent" : "failed",
     kind: msg.kind as any,
     metadata: parsedMetadata,
     error: typeof parsedMetadata?.error === "string" && parsedMetadata.error.trim()
@@ -362,6 +368,12 @@ export function useChatQueries() {
     if (fetchedMessages && currentSessionId && !isSessionStreaming) {
       if (isMessagesFetching) return;
       const currentMessages = useChatStore.getState().sessionMessages[currentSessionId] ?? [];
+
+      // Query invalidation can race the user-message insert at the beginning
+      // of a deep-research run. An empty page is never authoritative over a
+      // populated in-memory session; otherwise the visible chat briefly
+      // collapses to the empty-state while the research worker is still live.
+      if (fetchedMessages.length === 0 && currentMessages.length > 0) return;
 
       // Guard: deep_research messages are updated in-place by the chat:message
       // and chat:done event handlers. Don't let stale fetched data overwrite

@@ -93,6 +93,45 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
         sub_agent_count,
     );
 
+    engine.emit_phase("planning", "Validating research scope", "running");
+    let scope = engine.assess_scope(&query).await;
+    if !scope.clarification_questions.is_empty() {
+        let metadata = json!({
+            "status": "clarification_required",
+            "researchClarification": {
+                "originalQuestion": query,
+                "questions": scope.clarification_questions,
+                "brief": scope.brief,
+            },
+        });
+        let content = "I need a few details before I start the research.";
+        let metadata_json = metadata.to_string();
+        let _ = queries::update_message(
+            &db,
+            &queries::UpdateMessage {
+                id: &message_id,
+                chat_id: &chat_id,
+                content,
+                is_complete: true,
+                metadata: Some(&metadata_json),
+                ..Default::default()
+            },
+        ).await;
+        let _ = app.emit("chat:message", json!({
+            "chat_id": chat_id,
+            "id": message_id,
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "role": "assistant",
+            "kind": "deep_research",
+            "content": content,
+            "metadata": metadata,
+        }));
+        emit_chat_done(&app, &chat_id, "clarification_required");
+        return;
+    }
+    engine.apply_scope(scope);
+    engine.emit_phase("planning", "Research scope confirmed", "completed");
+
     let result = engine.run(&query).await;
 
     // 3. Persist research steps to message metadata using the canonical update path.
@@ -104,6 +143,7 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
         .map(|steps| {
             let wrapper = serde_json::json!({
                 "researchSteps": steps.as_slice(),
+                "researchScope": engine.research_scope.clone(),
                 "researchProgress": {
                     "percent": engine.progress_percent.load(std::sync::atomic::Ordering::Relaxed),
                 },

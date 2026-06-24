@@ -5,6 +5,11 @@ import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
 import { gtsmApi } from '@/api';
 
+const LAYER_LABELS: Record<string, string> = {
+    satellite: 'Satellites', flight: 'Flights', earthquake: 'Earthquakes',
+    military: 'Military', vessel: 'Vessels', natural_event: 'Natural Events', weather: 'Weather',
+};
+
 // Helper component for the SVG sparkline graph
 function SignalSparkline({ target, snapshots }: { target: SpatialEntity, snapshots: TelemetrySnapshot[] }) {
     const entitySnaps = snapshots.filter(s => s.entity_id === target.id).sort((a, b) => a.timestamp - b.timestamp);
@@ -78,7 +83,9 @@ function SignalSparkline({ target, snapshots }: { target: SpatialEntity, snapsho
 }
 
 export const TargetInspector: React.FC = () => {
-    const { collapsedPanels, togglePanel, selectedTarget, setIsAnalyzing, isAnalyzing, setAiSynthesis, recentSnapshots } = useGTSMStore();
+    const { collapsedPanels, togglePanel, selectedTarget, setIsAnalyzing, isAnalyzing, setAiSynthesis, recentSnapshots, favorites, addFavorite, removeFavorite } = useGTSMStore();
+    const isFavorited = selectedTarget ? favorites.some(f => f.id === selectedTarget.id) : false;
+
     const activeModel = useSettingsStore(s => s.activeModel);
     const isCollapsed = collapsedPanels.includes('target');
     const [now, setNow] = React.useState(0);
@@ -275,30 +282,30 @@ export const TargetInspector: React.FC = () => {
     }
 
     return (
-        <aside className={`flex flex-col border border-zinc-800 bg-black/60 backdrop-blur-md transition-all duration-300 w-[240px] font-mono ${isCollapsed ? 'h-8 shrink-0' : 'h-full overflow-hidden'}`}>
+        <aside className={`flex flex-col border-l border-white/15 bg-black/55 backdrop-blur-md transition-all duration-200 w-[260px] ${isCollapsed ? 'h-8 shrink-0 overflow-hidden' : 'h-full overflow-hidden'}`}>
             {/* Header */}
             <div 
-                className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-800/50 cursor-pointer select-none bg-zinc-950/40" 
+                className="flex h-8 min-h-8 items-center justify-between px-2.5 border-b border-white/10 cursor-pointer select-none"
                 onClick={() => togglePanel('target')}
             >
-                <div className="flex items-center gap-2 text-cyan-400">
+                <div className="flex items-center gap-2 text-zinc-100">
                     {selectedTarget ? renderTypeIcon(selectedTarget.type) : <WorkbenchIcon name="solar:target-bold-duotone" size={13} />}
-                    <span className="text-[9px] font-bold tracking-[0.2em]">TARGET_INSPECTOR</span>
+                    <span className="text-[10px] font-medium">Selected target</span>
                 </div>
-                <div className="text-cyan-400">
+                <div className="text-zinc-400">
                     {isCollapsed ? <WorkbenchIcon name="solar:alt-arrow-down-bold" size={11} /> : <WorkbenchIcon name="solar:alt-arrow-up-bold" size={11} />}
                 </div>
             </div>
 
             {!isCollapsed && !selectedTarget && (
                 <div className="flex-1 p-6 flex flex-col items-center justify-center gap-2 opacity-35">
-                    <WorkbenchIcon name="solar:radar-bold" size={24} className="text-cyan-400 animate-pulse" />
-                    <span className="text-[9px] font-bold tracking-widest text-zinc-500 text-center uppercase">Awaiting Target Signal</span>
+                    <WorkbenchIcon name="solar:radar-bold" size={24} className="text-primary" />
+                    <span className="text-[10px] text-zinc-500 text-center">Select an item on the map</span>
                 </div>
             )}
 
             {!isCollapsed && selectedTarget && (
-                <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-4">
+                <div className="flex-1 overflow-y-auto p-2.5 flex flex-col gap-3">
                     {/* Identification Block */}
                     <div className="flex flex-col gap-3">
                         <div className="flex justify-between items-start">
@@ -306,8 +313,26 @@ export const TargetInspector: React.FC = () => {
                                 <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider">Tracking ID</span>
                                 <div className="text-[10px] font-mono font-bold text-white truncate">{selectedTarget.id}</div>
                             </div>
-                            <div className="px-1.5 py-0.5 border border-cyan-400/20 bg-cyan-400/5 rounded-sm">
-                                <span className="text-[8px] text-cyan-400 font-bold tracking-wider uppercase">{selectedTarget.type}</span>
+                            <div className="flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (isFavorited) {
+                                            removeFavorite(selectedTarget.id);
+                                        } else {
+                                            const layerLabel = LAYER_LABELS[selectedTarget.type] || selectedTarget.type.charAt(0).toUpperCase() + selectedTarget.type.slice(1);
+                                            addFavorite(selectedTarget, layerLabel);
+                                        }
+                                    }}
+                                    className={`p-1 transition-colors cursor-pointer ${isFavorited ? 'text-yellow-400 hover:text-yellow-300' : 'text-zinc-600 hover:text-yellow-400'}`}
+                                    title={isFavorited ? 'Remove bookmark' : 'Bookmark target'}
+                                >
+                                    <WorkbenchIcon name={isFavorited ? 'solar:star-bold' : 'solar:star-outline'} size={14} />
+                                </button>
+                                <div className="px-1.5 py-0.5 border border-white/10 bg-white/[0.03]">
+                                    <span className="text-[9px] text-zinc-300 font-medium">{selectedTarget.type}</span>
+                                </div>
                             </div>
                         </div>
 
@@ -329,12 +354,12 @@ export const TargetInspector: React.FC = () => {
 
                     {/* AI Analysis Action */}
                     <WorkbenchButton
-                        className={`w-full flex items-center justify-center gap-2 py-2 rounded-sm border transition-all duration-300 transform active:scale-98 ${isAnalyzing ? 'border-cyan-500/20 bg-cyan-500/5 text-cyan-500/40 cursor-not-allowed' : 'border-zinc-800 bg-zinc-950 text-zinc-300 hover:border-cyan-500/30 hover:bg-cyan-500/5 hover:text-cyan-400'}`}
+                        className={`w-full flex items-center justify-center gap-2 py-2 border transition-colors ${isAnalyzing ? 'border-primary/20 bg-primary/5 text-primary/40 cursor-not-allowed' : 'border-white/10 bg-white/[0.03] text-zinc-300 hover:border-primary/35 hover:bg-primary/10 hover:text-primary'}`}
                         onClick={handleAnalyze}
                         disabled={isAnalyzing}
                     >
                         {isAnalyzing ? <span className="animate-spin"><WorkbenchIcon name="solar:radar-bold" size={12} /></span> : <WorkbenchIcon name="solar:cpu-bold" size={12} />}
-                        <span className="text-[9px] font-bold tracking-widest uppercase">{isAnalyzing ? 'Processing' : 'Tactical Analysis'}</span>
+                        <span className="text-[10px] font-medium">{isAnalyzing ? 'Analyzing' : 'Analyze target'}</span>
                     </WorkbenchButton>
 
                     {/* Metadata Grid */}

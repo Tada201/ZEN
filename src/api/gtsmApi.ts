@@ -156,6 +156,12 @@ export interface MapCameraPlaybackDescriptor {
   directPreviewSupported: boolean;
 }
 
+export interface LocalMapCameraCatalogImportReport {
+  accepted: number;
+  rejected: number;
+  sourceName: string;
+}
+
 export const gtsmApi = {
   getSatellites: () => callCommand<GlobalMapRecord[]>("get_satellites"),
   getFlights: () => callCommand<GlobalMapRecord[]>("get_flights"),
@@ -164,11 +170,13 @@ export const gtsmApi = {
   getVessels: () => callCommand<GlobalMapRecord[]>("get_vessels"),
   getNaturalEvents: () => callCommand<GlobalMapRecord[]>("get_natural_events"),
   getUnderseaCables: () => callCommand<unknown>("get_undersea_cables"),
+  extractKmzKml: (bytes: number[]) => callCommand<string>("extract_kmz_kml", { bytes }),
   listMapConnectors: () => callCommand<MapConnectorMetadata[]>("list_map_connectors"),
   listMapCameras: () => callCommand<MapCameraCatalogEntry[]>("list_map_cameras"),
   getMapCameraCatalog: () => callCommand<MapCameraCatalogSnapshot>("get_map_camera_catalog"),
   resolveMapCameraPlayback: (cameraId: string) => callCommand<MapCameraPlaybackDescriptor>("resolve_map_camera_playback", { cameraId }),
   testMapCameraCatalog: () => callCommand<number>("test_map_camera_catalog"),
+  importLocalMapCameraCatalog: (sourceName: string, bytes: number[]) => callCommand<LocalMapCameraCatalogImportReport>("import_local_map_camera_catalog", { sourceName, bytes }),
   getWeatherGrid: (latMin: number, latMax: number, lonMin: number, lonMax: number, step: number) =>
     callCommand<WeatherGridPoint[]>("get_weather_grid", { latMin, latMax, lonMin, lonMax, step }),
   getTelemetryStats: () => callCommand<TelemetryStats>("get_telemetry_stats"),

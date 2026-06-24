@@ -282,7 +282,7 @@ export const Minimap: React.FC = () => {
     }, [animationFps]);
 
     return (
-        <div className="w-full border border-zinc-800 bg-black/60 p-1">
+        <div className="w-full border border-white/15 bg-black/40 p-0.5 backdrop-blur-md">
             <canvas
                 ref={canvasRef}
                 width={CANVAS_W}

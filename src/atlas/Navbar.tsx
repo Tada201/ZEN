@@ -1,14 +1,15 @@
 
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Bot, Check, LayoutList, Moon, PanelRightClose, PanelRightOpen,
   Search, Settings2, Sparkles, Sun, Zap, ZapOff, FileStack,
-  RotateCcw, Rows3, Square, ExternalLink
+  RotateCcw, Rows3, Square, ExternalLink, Star
 } from "lucide-react";
 import { useZenTheme } from "./providers/ZenThemeProvider";
 import { useUIState } from "./providers/UIStateProvider";
 import { ACCENT_SWATCHES } from "./theme";
+import { useGTSMStore } from "@/lib/stores/useGTSMStore";
 
 function SettingsToggle({
   label, hint, value, onChange,
@@ -32,6 +33,10 @@ function SettingsToggle({
 }
 
 export function Navbar({ onToggleInspector, inspectorOpen }: { onToggleInspector: () => void; inspectorOpen: boolean }) {
+  const navigate = useNavigate();
+  const favoritesCount = useGTSMStore((s) => s.favorites.length);
+  const togglePanel = useGTSMStore((s) => s.togglePanel);
+  const collapsedPanels = useGTSMStore((s) => s.collapsedPanels);
   const {
     mode, setMode, accent, setAccent,
     motionEnabled, setMotionEnabled,
@@ -42,6 +47,14 @@ export function Navbar({ onToggleInspector, inspectorOpen }: { onToggleInspector
   const { setPaletteOpen, viewMode, setViewMode } = useUIState();
   const [accentMenu, setAccentMenu] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const handleFavoritesClick = () => {
+    navigate("/gtsm");
+    // If favorites panel is collapsed, expand it
+    if (collapsedPanels.includes("favorites")) {
+      togglePanel("favorites");
+    }
+  };
 
   return (
     <header className="fixed inset-x-0 top-0 z-30 h-14 border-b border-border bg-background/80 backdrop-blur">
@@ -217,6 +230,21 @@ export function Navbar({ onToggleInspector, inspectorOpen }: { onToggleInspector
               </>
             )}
           </div>
+
+          {/* Favorites badge */}
+          <button
+            onClick={handleFavoritesClick}
+            className="press relative inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label={`Favorites (${favoritesCount} bookmarked)`}
+            title="Favorites"
+          >
+            <Star className="h-4 w-4" />
+            {favoritesCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-bold text-primary-foreground">
+                {favoritesCount > 99 ? "99+" : favoritesCount}
+              </span>
+            )}
+          </button>
 
           <button
             onClick={onToggleInspector}

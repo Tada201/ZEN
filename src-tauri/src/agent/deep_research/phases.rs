@@ -9,16 +9,90 @@ use tracing::{error, info};
 
 use super::engine::IterativeDeepResearcher;
 use super::extractor::EXTRACTOR_PROMPT;
-use super::types::{is_low_quality, Finding, ResearchCategory};
+use super::types::{is_low_quality, Finding, ResearchCategory, ResearchScopeAssessment};
 
 // ── PLAN: Research strategy ────────────────────────────────────────────────
 
 impl<'a> IterativeDeepResearcher<'a> {
+    /// Resolve ambiguity before any search call. The model may ask at most
+    /// three questions; malformed responses default to a safe, scoped brief
+    /// rather than blocking the user behind a parser failure.
+    pub(super) async fn assess_scope(&self, question: &str) -> ResearchScopeAssessment {
+        let current_date = chrono::Utc::now().format("%Y-%m-%d UTC").to_string();
+        let fallback = json!({
+            "original_question": question,
+            "current_date": current_date,
+            "objective": question,
+            "time_scope": "Use the time period explicitly stated by the user; otherwise do not claim recency.",
+            "required_entities": [],
+            "excluded_entities": [],
+        });
+        let prompt = format!(
+            r#"You are the scope gate for a deep-research system.
+
+Current date: {current_date}
+User request: {question}
+
+Extract a precise research brief before any web searches. Preserve named entities, event editions, locations, dates, and user exclusions exactly. Do not substitute similarly named events, people, organizations, or historical editions.
+
+Ask clarification ONLY when a missing detail would materially change the research target, such as an ambiguous named entity, an unspecified event edition, an unclear time period for a "latest" request, or multiple reasonable interpretations. Do not ask for clarification for a broad but valid request.
+
+Return ONLY JSON:
+{{
+  "needs_clarification": false,
+  "clarification_questions": [],
+  "brief": {{
+    "original_question": "verbatim user request",
+    "objective": "one concise research objective",
+    "current_date": "{current_date}",
+    "time_scope": "explicit date/freshness requirement or unknown",
+    "required_entities": ["exact entities, event edition, geography"],
+    "excluded_entities": ["near matches that must not be used"],
+    "success_criteria": "what a correct answer must establish"
+  }}
+}}
+
+When clarification is required, include 1-3 concise questions and set needs_clarification to true."#,
+            current_date = current_date,
+            question = question,
+        );
+        let Ok(response) = self.call_llm(&prompt, 0.0, 700, 30).await else {
+            return ResearchScopeAssessment { brief: fallback, clarification_questions: Vec::new() };
+        };
+        let Some(parsed) = Self::parse_json_object(&response) else {
+            return ResearchScopeAssessment { brief: fallback, clarification_questions: Vec::new() };
+        };
+        let questions = parsed
+            .get("clarification_questions")
+            .and_then(|value| value.as_array())
+            .map(|items| items.iter()
+                .filter_map(|item| item.as_str())
+                .map(str::trim)
+                .filter(|item| item.len() >= 4)
+                .take(3)
+                .map(ToOwned::to_owned)
+                .collect::<Vec<_>>())
+            .unwrap_or_default();
+        let needs_clarification = parsed
+            .get("needs_clarification")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        ResearchScopeAssessment {
+            brief: parsed.get("brief").cloned().unwrap_or(fallback),
+            clarification_questions: if needs_clarification { questions } else { Vec::new() },
+        }
+    }
+
     pub(super) async fn create_plan(&self, question: &str) -> String {
+        let scope_context = self.scope_context();
         let prompt = format!(
             r#"You are a research strategist. Before searching, analyze this question and create a research plan.
 
 **Question:** {question}
+
+**Locked research scope:** {scope_context}
+
+Every sub-question must preserve this scope. Do not broaden it to similarly named entities or dates.
 
 Break this question down:
 1. What are the key sub-topics that need to be covered for a comprehensive answer?
@@ -36,7 +110,8 @@ Example:
   "key_topics": ["economy", "healthcare", "safety", "culture"],
   "success_criteria": "A balanced comparison covering cost, quality of life, and practical considerations."
 }}"#,
-            question = question
+            question = question,
+            scope_context = scope_context,
         );
 
         let response = self.call_llm(&prompt, 0.3, 1024, 30).await;
@@ -156,6 +231,7 @@ impl<'a> IterativeDeepResearcher<'a> {
     /// Returns the (possibly updated) plan text, or the original if no changes.
     /// Uses the compressed report if available to keep context manageable.
     pub(super) async fn revise_plan(&mut self, question: &str, round_num: usize) -> String {
+        let scope_context = self.scope_context();
         let plan_str = if self.research_plan.is_empty() {
             "(No plan — search broadly.)"
         } else {
@@ -174,6 +250,8 @@ impl<'a> IterativeDeepResearcher<'a> {
             r#"You are a research strategist reviewing progress on an ongoing investigation.
 
 **Original question:** {question}
+
+**Locked research scope:** {scope_context}
 
 **Current research plan:**
 {plan_str}
@@ -198,6 +276,7 @@ Do NOT make gratuitous changes — only revise the plan if there's a clear reaso
 
 Respond with ONLY the JSON object, nothing else."#,
             question = question,
+            scope_context = scope_context,
             plan_str = plan_str,
             round_num = round_num,
             report_str = report_str,
@@ -289,10 +368,13 @@ impl<'a> IterativeDeepResearcher<'a> {
             "(No findings yet.)"
         };
 
+        let scope_context = self.scope_context();
         let prompt = format!(
             r#"You are a research assistant planning web searches.
 
 **Original question:** {question}
+
+**Locked research scope:** {scope_context}
 
 **Research plan:**
 {plan_str}
@@ -308,6 +390,7 @@ Generate {num_queries} focused search queries that will help answer the question
 Return ONLY a JSON array of query strings, nothing else.
 Example: ["query one", "query two", "query three"]"#,
             question = question,
+            scope_context = scope_context,
             plan_str = plan_str,
             report_str = report_str,
             round_num = round_num,
@@ -389,10 +472,13 @@ impl<'a> IterativeDeepResearcher<'a> {
             sub_question.to_string()
         };
 
+        let scope_context = self.scope_context();
         let prompt = format!(
             r#"You are one of several parallel research agents investigating a question.
 
 **Original question:** {question}
+
+**Locked research scope:** {scope_context}
 
 **Your assigned sub-question:** {sub_question_hint}
 
@@ -403,6 +489,7 @@ Generate exactly ONE focused search query that will help answer your assigned su
 
 Return ONLY the query string, nothing else."#,
             question = question,
+            scope_context = scope_context,
             sub_question_hint = sub_question_hint,
             report_str = report_str,
         );
@@ -1049,6 +1136,7 @@ impl<'a> IterativeDeepResearcher<'a> {
     ) -> Option<(String, String, String)> {
         let prompt = EXTRACTOR_PROMPT
             .replace("{goal}", goal)
+            .replace("{scope}", &self.scope_context())
             .replace("{webpage_content}", content);
 
         match self.call_llm(&prompt, 0.2, 2048, 90).await {
@@ -1261,10 +1349,15 @@ impl<'a> IterativeDeepResearcher<'a> {
             current_report
         };
 
+        let scope_context = self.scope_context();
         let prompt = format!(
             r#"You are updating an evolving research report.
 
 **Original question:** {question}
+
+**Locked research scope:** {scope_context}
+
+Discard findings that do not satisfy the locked scope. Never blend similarly named entities, old events, or unrelated dates into the report.
 
 **Current report:**
 {report_hint}
@@ -1279,6 +1372,7 @@ Include specific data-driven analysis with relevant statistics (means, medians, 
 
 Write only the updated report — no preamble or meta-commentary."#,
             question = question,
+            scope_context = scope_context,
             report_hint = report_hint,
             findings_text = findings_text,
             calculator_analysis = calculator_analysis,
@@ -1384,6 +1478,7 @@ impl<'a> IterativeDeepResearcher<'a> {
     fn final_report_prompt(
         question: &str,
         report: &str,
+        scope_context: &str,
         category: Option<&ResearchCategory>,
         sources: &[(String, String)],
     ) -> String {
@@ -1408,6 +1503,10 @@ impl<'a> IterativeDeepResearcher<'a> {
 
 **Question:** {question}
 
+**Locked research scope:** {scope_context}
+
+Do not introduce claims about entities, event editions, or dates outside this scope.
+
 **All collected evidence and analysis:**
 {report}
 
@@ -1429,6 +1528,7 @@ Requirements:
 
 Include concrete numbers and data-driven analysis in the report to support conclusions. Where numerical data was found in the sources, pre-computed statistics are included above — reference these figures in your analysis."#,
             question = question,
+            scope_context = scope_context,
             report = report,
             source_index = source_index,
         );
@@ -1446,7 +1546,8 @@ Include concrete numbers and data-driven analysis in the report to support concl
 
     pub(super) async fn final_report(&self, question: &str, report: &str) -> String {
         let sources = self.collect_cited_sources();
-        let prompt = Self::final_report_prompt(question, report, self.category.as_ref(), &sources);
+        let scope_context = self.scope_context();
+        let prompt = Self::final_report_prompt(question, report, &scope_context, self.category.as_ref(), &sources);
 
         let mut result = match self
             .call_llm(&prompt, 0.3, self.max_report_tokens as usize, 180)

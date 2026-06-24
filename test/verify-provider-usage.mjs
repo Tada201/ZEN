@@ -9,9 +9,12 @@ const models = readFileSync('src/components/settings/Tabs/providers/ModelConfig.
 const required = [
   [query, 'WHERE role = \'assistant\' AND is_complete = 1', 'completed assistant usage filter'],
   [query, 'MAX_HISTORY_ITEMS', 'bounded usage history'],
+  [query, 'UsageDay', 'daily usage aggregation type'],
+  [query, "GROUP BY day ORDER BY day ASC", 'daily usage aggregation query'],
   [command, 'pub async fn get_provider_usage', 'typed usage command'],
   [api, 'getUsage:', 'typed provider usage API'],
   [panel, 'Recent completed responses', 'usage history UI'],
+  [panel, 'Usage trend', 'usage trend UI'],
   [models, 'xl:grid-cols-4', 'four-column model grid'],
 ];
 

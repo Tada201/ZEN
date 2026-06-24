@@ -86,14 +86,58 @@ pub fn compact_conversation(conversation: &mut Vec<ChatMessage>, keep_recent: us
     let split_point = conversation.len().saturating_sub(keep_recent);
     for msg in conversation[..split_point].iter_mut() {
         if msg.role == "tool" && msg.content.len() > 500 {
-            let truncated = format!(
-                "{}... [truncated, {} bytes total]",
-                &msg.content[..500],
-                msg.content.len()
-            );
-            msg.content = truncated;
+            msg.content = compact_tool_result_for_context(&msg.content);
         }
     }
+}
+
+/// Reduces stale tool output before it is sent back to the model. The original
+/// tool output remains persisted and visible in the tool trace; only the older
+/// conversation context is compacted. Repeated adjacent lines are collapsed
+/// first, then the beginning and end are retained so errors and summaries are
+/// not silently discarded.
+pub fn compact_tool_result_for_context(content: &str) -> String {
+    const MAX_CONTEXT_CHARS: usize = 1_200;
+
+    let mut compacted_lines = Vec::new();
+    let mut previous = None;
+    let mut duplicate_count = 0usize;
+    for line in content.lines() {
+        if previous == Some(line) {
+            duplicate_count += 1;
+            continue;
+        }
+        if duplicate_count > 0 {
+            compacted_lines.push(format!("[{} repeated lines removed]", duplicate_count));
+            duplicate_count = 0;
+        }
+        compacted_lines.push(line.to_string());
+        previous = Some(line);
+    }
+    if duplicate_count > 0 {
+        compacted_lines.push(format!("[{} repeated lines removed]", duplicate_count));
+    }
+
+    let compacted = compacted_lines.join("\n");
+    let total_chars = compacted.chars().count();
+    if total_chars <= MAX_CONTEXT_CHARS {
+        return compacted;
+    }
+
+    let head_len = MAX_CONTEXT_CHARS * 2 / 3;
+    let tail_len = MAX_CONTEXT_CHARS - head_len;
+    let head: String = compacted.chars().take(head_len).collect();
+    let tail: String = compacted
+        .chars()
+        .rev()
+        .take(tail_len)
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect();
+    format!(
+        "{head}\n\n[tool output compacted for context: {total_chars} chars; original remains in the tool trace]\n\n{tail}"
+    )
 }
 
 /// Token-aware conversation compaction (fixes #23)
@@ -280,7 +324,9 @@ pub fn try_parse_tool_json(json_str: &str) -> Option<crate::db::models::ToolCall
 
 #[cfg(test)]
 mod text_tool_call_tests {
-    use super::{parse_text_tool_calls, strip_text_tool_call_blocks};
+    use super::{
+        compact_tool_result_for_context, parse_text_tool_calls, strip_text_tool_call_blocks,
+    };
 
     #[test]
     fn strips_tool_protocol_but_keeps_commentary() {
@@ -296,5 +342,13 @@ mod text_tool_call_tests {
     fn preserves_normal_json_code_blocks() {
         let input = "```json\n{\"name\":\"Zen\"}\n```";
         assert_eq!(strip_text_tool_call_blocks(input), input);
+    }
+
+    #[test]
+    fn compacts_duplicate_lines_without_losing_the_summary() {
+        let input = format!("{}\nsummary: completed", "progress: waiting\n".repeat(80));
+        let compacted = compact_tool_result_for_context(&input);
+        assert!(compacted.contains("repeated lines removed"));
+        assert!(compacted.contains("summary: completed"));
     }
 }

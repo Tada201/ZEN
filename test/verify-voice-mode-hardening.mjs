@@ -14,6 +14,7 @@ const files = {
   runtimeResource: "src-tauri/src/services/runtime_resource.rs",
   chatCommand: "src-tauri/src/commands/chat.rs",
   ttsService: "src-tauri/src/services/tts_service/mod.rs",
+  dependencyCommand: "src-tauri/src/commands/dependency.rs",
   speechService: "src-tauri/src/services/speech_service/mod.rs",
   settingsSchema: "src/lib/stores/settings/schema.ts",
   audioSlice: "src/lib/stores/settings/createAudioSlice.ts",
@@ -297,6 +298,13 @@ const checks = [
     "Piper voice sync reruns when the selected voice changes",
     src.ttsConfig.includes("syncedVoiceRef") &&
       src.ttsConfig.includes("syncedVoiceRef.current === ttsPiperVoiceId"),
+  ],
+  [
+    "Piper resolves eSpeak data for both legacy and canonical runtime layouts",
+    src.ttsService.includes("resolve_espeak_data_dir") &&
+      src.ttsService.includes("--espeak_data") &&
+      src.ttsService.includes("espeak-ng-data") &&
+      src.dependencyCommand.includes("Piper resolves this directory at runtime"),
   ],
   [
     "tts:start event payload is typed as an object",

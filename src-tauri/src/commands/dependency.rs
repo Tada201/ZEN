@@ -333,16 +333,18 @@ fn destination_for(
         _ => return Err(format!("Unsupported managed runtime '{archive_id}'")),
     };
     let relative = if nested.is_empty() {
-        source.rsplit('/').next().unwrap_or(source)
+        PathBuf::from(source.rsplit('/').next().unwrap_or(source))
     } else {
-        nested
+        // Directory specs such as `piper/espeak-ng-data` must retain their
+        // top-level directory. Piper resolves this directory at runtime.
+        PathBuf::from(source.rsplit('/').next().unwrap_or(source)).join(nested)
     };
-    let safe_relative = Path::new(relative);
+    let safe_relative = relative.as_path();
     if safe_relative
         .components()
         .any(|part| !matches!(part, Component::Normal(_)))
     {
-        return Err(format!("Unsafe runtime archive path '{relative}'"));
+        return Err(format!("Unsafe runtime archive path '{}'", relative.display()));
     }
     Ok(base.join(safe_relative))
 }

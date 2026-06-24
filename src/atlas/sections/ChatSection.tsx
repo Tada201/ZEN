@@ -119,6 +119,15 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
     });
   }, [messages, setMessages, handleSendMessage, selectedModelId, selectedProvider, webSearch, generativeUI]);
 
+  const handleContinueResearch = useCallback((request: string) => {
+    handleSendMessageInternal({
+      message: request,
+      model: selectedModelId,
+      provider: selectedProvider,
+      deepResearch: true,
+    });
+  }, [handleSendMessageInternal, selectedModelId, selectedProvider]);
+
   const onOpenSettings = useCallback((tab: TabId) => {
     setSettingsTab(tab);
     setShowSettingsModal(true);
@@ -262,6 +271,7 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
             isStreaming={isStreaming}
             onRetry={handleRetry}
             onOpenSettings={onOpenSettings}
+            onContinueResearch={handleContinueResearch}
           />
 
           <div className="absolute bottom-0 left-0 right-0 z-30 p-4 pb-8 bg-gradient-to-t from-background via-background/80 to-transparent pointer-events-none">

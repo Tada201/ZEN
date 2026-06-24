@@ -9,7 +9,8 @@ impl UsageService {
         &self,
         db: &sqlx::SqlitePool,
         model_ids: &[String],
+        period_days: Option<u16>,
     ) -> ZenResult<ProviderUsageSnapshot> {
-        queries::get_provider_usage(db, model_ids).await
+        queries::get_provider_usage(db, model_ids, period_days).await
     }
 }

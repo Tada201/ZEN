@@ -16,8 +16,11 @@ const reducer = await read("src/atlas/hooks/stream/useAgentEvents.ts");
 const card = await read("src/atlas/components/chat/DeepResearchMessage.tsx");
 const settingsTab = await read("src/components/settings/Tabs/DeepResearchSettings.tsx");
 const settingsSchema = await read("src/lib/stores/settings/schema.ts");
+const chatQueries = await read("src/atlas/hooks/chat/useChatQueries.ts");
+const chunkHandler = await read("src/atlas/hooks/stream/useChatChunkEvent.ts");
 const settingsFeatures = await read("src/lib/features/frontendFeatures.ts");
 const chatCommand = await read("src-tauri/src/commands/chat.rs");
+const phases = await read("src-tauri/src/agent/deep_research/phases.rs");
 
 expect(engine.includes("fn milestone_progress") && engine.includes("AtomicU8"),
   "Deep research must maintain monotonic backend milestone progress.");
@@ -43,6 +46,17 @@ expect(settingsFeatures.includes('"deep-research"') && chatCommand.includes("dee
   "The Deep Research settings tab and runtime model override must be wired end to end.");
 expect(chatCommand.includes("deep_research_parallel_agents") && engine.includes("sub_agent_count.clamp(1, 4)"),
   "Deep Research worker parallelism must be configured and bounded by the backend.");
+expect(chatQueries.includes('const isPendingDeepResearch = msg.kind === "deep_research" && msg.isComplete !== 1') &&
+  chatQueries.includes('status: isPendingDeepResearch ? "sending"'),
+  "An unfinished deep-research placeholder must remain live during query reconciliation.");
+expect(chatQueries.includes("fetchedMessages.length === 0 && currentMessages.length > 0"),
+  "A stale empty message page must not erase a populated live session.");
+expect(chunkHandler.includes("chat:done may arrive") && chunkHandler.includes("assistant.content.trim()"),
+  "chat:done must not complete an empty deep-research placeholder before chat:message arrives.");
+expect(phases.includes("scope gate for a deep-research system") && phases.includes("Locked research scope"),
+  "Deep research must resolve and carry a scoped objective before planning or search.");
+expect(moduleSource.includes("researchClarification") && card.includes("Research scope needed"),
+  "Ambiguous research requests must stop before search and render a clarification form.");
 
 if (failures.length > 0) {
   console.error("Deep research progress contract failed:");

@@ -51,6 +51,7 @@ export const CesiumMapRenderer: React.FC = () => {
     const setFlyToRequest = useGTSMStore(state => state.setFlyToRequest);
     const mapMode = useGTSMStore(state => state.mapMode);
     const cameras = useGTSMStore(state => state.cameras);
+    const localCamera = useGTSMStore(state => state.localCamera);
 
     useGlobalMapData(true);
     useHistoricalTelemetry();
@@ -153,7 +154,7 @@ export const CesiumMapRenderer: React.FC = () => {
         viewerRef,
     });
 
-    useCameraCatalogLayer({ viewerRef, dataSourcesRef, cameras, selectedLayers });
+    useCameraCatalogLayer({ viewerRef, dataSourcesRef, cameras, localCamera, selectedLayers });
 
     return <div ref={containerRef} className="flex-1 h-full z-0 relative" />;
 };

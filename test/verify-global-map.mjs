@@ -18,7 +18,10 @@ const visualLayers = read('src/components/workbench/cesium/useCesiumVisualLayers
 const connectors = read('src-tauri/src/services/gtsm/connectors.rs');
 const cameras = read('src-tauri/src/services/gtsm/cameras.rs');
 const cameraPanel = read('src/components/GTSM/CameraCatalogPanel.tsx');
+const hlsCameraPlayer = read('src/components/GTSM/HlsCameraPlayer.tsx');
+const localCameraPreview = read('src/components/GTSM/LocalCameraPreviewDialog.tsx');
 const mapConfiguration = read('src/components/GTSM/MapConfiguration.tsx');
+const mapSettingsPanel = read('src/components/GTSM/MapSettingsPanel.tsx');
 
 assert(spatial.includes('pub async fn get_vessels'), 'Vessel cache command is missing.');
 assert(spatial.includes('pub async fn get_natural_events'), 'Natural-event command is missing.');
@@ -41,6 +44,8 @@ assert(lib.includes('commands::spatial::list_map_cameras'), 'Camera catalog comm
 assert(spatial.includes('pub async fn get_map_camera_catalog'), 'Camera source-health command is missing.');
 assert(lib.includes('commands::spatial::get_map_camera_catalog'), 'Camera source-health command is not registered.');
 assert(spatial.includes('pub async fn resolve_map_camera_playback'), 'Camera playback-resolution command is missing.');
+assert(spatial.includes('pub async fn import_local_map_camera_catalog'), 'Local camera catalog import command is missing.');
+assert(lib.includes('commands::spatial::import_local_map_camera_catalog'), 'Local camera catalog import command is not registered.');
 assert(lib.includes('commands::spatial::resolve_map_camera_playback'), 'Camera playback-resolution command is not registered.');
 assert(cameras.includes('built_in_camera_catalog'), 'Camera registry is missing.');
 assert(cameras.includes('validate_public_http_url'), 'Configured camera catalogs must validate public URLs.');
@@ -48,21 +53,34 @@ assert(cameras.includes('validate_https_public_url'), 'Camera sources must requi
 assert(cameras.includes('Camera status must be available'), 'Camera entries must validate their status.');
 assert(cameras.includes('duplicate id'), 'Camera catalogs must reject duplicate source IDs.');
 assert(cameras.includes('MAX_CATALOG_BYTES'), 'Configured camera catalogs must cap response size.');
+assert(cameras.includes('MAX_LOCAL_CATALOG_BYTES'), 'Local camera catalogs must cap input size.');
+assert(cameras.includes('parse_local_catalog'), 'Local camera catalogs must be parsed and validated in Rust.');
+assert(cameras.includes('Legacy HTTP/IP camera feeds cannot be imported'), 'Legacy insecure camera feeds must be rejected.');
 assert(cameras.includes('CameraCatalogSnapshot'), 'Camera catalog must expose source health and freshness.');
 assert(cameras.includes('CameraPlaybackDescriptor'), 'Camera playback must use an explicit backend descriptor.');
 assert(cameras.includes('skip_serializing'), 'Raw stream URLs must not be exposed in catalog listing responses.');
 assert(cameraPanel.includes('Playback starts only after you choose it'), 'Camera playback must require an explicit user action.');
 assert(cameraPanel.includes('resolveMapCameraPlayback'), 'Camera preview must resolve a source through typed IPC.');
 assert(cameraPanel.includes('Vetted sources only'), 'Camera catalog must show source ownership and freshness context.');
+assert(hlsCameraPlayer.includes("import('hls.js')"), 'HLS playback must be lazy-loaded after explicit user intent.');
+assert(hlsCameraPlayer.includes('hls.destroy()'), 'HLS playback must release resources when the preview closes.');
+assert(localCameraPreview.includes('getUserMedia'), 'The local camera preview must request camera permission explicitly.');
+assert(localCameraPreview.includes('track.stop()'), 'The local camera preview must stop tracks when it closes.');
 assert(mapConfiguration.includes('maps.camera_catalog_url'), 'Maps settings must own the camera catalog endpoint.');
 assert(mapConfiguration.includes('maps_camera_catalog_token'), 'Maps settings must save camera credentials through the secret boundary.');
 assert(mapConfiguration.includes('here_api_key') && mapConfiguration.includes('google_maps_api_key'), 'Maps settings must own supported routing and map credentials.');
 const mapImport = read('src/components/GTSM/geojson/mapImport.ts');
 assert(mapImport.includes('csvToGeoJson'), 'CSV map import support is missing.');
 assert(mapImport.includes('kmlToGeoJson'), 'KML map import support is missing.');
-assert(mapImport.includes('KMZ import is not enabled'), 'KMZ imports must fail explicitly.');
+assert(mapImport.includes('extractKmzKml'), 'KMZ imports must use the bounded backend extractor.');
+assert(spatial.includes('pub fn extract_kmz_kml'), 'KMZ extraction command is missing.');
+assert(lib.includes('commands::spatial::extract_kmz_kml'), 'KMZ extraction command is not registered.');
+assert(read('src-tauri/src/services/gtsm/geojson.rs').includes('MAX_KMZ_ENTRIES'), 'KMZ extraction must cap archive entries.');
 assert(visualLayers.includes("setLayerUpdatedAt('cables'"), 'Cable source freshness must update after a successful fetch.');
 assert(visualLayers.includes("setLayerError('cables'"), 'Cable source failures must reach the source-health UI.');
 assert(map.includes('MapSettingsPanel'), 'The globe must expose map settings through the toolbar.');
+assert(mapSettingsPanel.includes('getMapCameraCatalog'), 'The source panel must include camera catalog health.');
+assert(mapSettingsPanel.includes('importLocalMapCameraCatalog'), 'Map settings must support validated local camera catalog imports.');
+assert(mapSettingsPanel.includes("source.status === 'unavailable'"), 'Map settings must surface unavailable camera sources as issues.');
 
 console.log('Global map wiring verified.');

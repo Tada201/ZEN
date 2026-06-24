@@ -177,6 +177,12 @@ export interface ActionMeta {
     percent: number;
     status: 'pending' | 'running' | 'completed' | 'error';
   };
+  researchScope?: Record<string, unknown>;
+  researchClarification?: {
+    originalQuestion: string;
+    questions: string[];
+    brief?: Record<string, unknown>;
+  };
   status?: 'running' | 'completed' | 'error' | 'cancelled';
 }
 

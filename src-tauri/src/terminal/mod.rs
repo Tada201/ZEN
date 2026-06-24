@@ -1,12 +1,25 @@
 use anyhow::{Context, Result};
 use portable_pty::{native_pty_system, Child, CommandBuilder, PtySize};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 const OUTPUT_BUFFER_LIMIT: usize = 64 * 1024; // 64KB max buffer per session
-type OutputCallback = Box<dyn Fn(&str, &str) + Send + 'static>;
+type OutputCallback = Box<dyn Fn(&str, u64, &str) + Send + 'static>;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalOutputSnapshot {
+    pub sequence: u64,
+    pub data: String,
+}
+
+struct TerminalOutputBuffer {
+    sequence: u64,
+    data: String,
+}
 
 /// A single PTY session — holds only Send+Sync-safe handles.
 /// The MasterPty is consumed during construction; we only keep the writer + reader task.
@@ -14,7 +27,7 @@ pub struct PtySession {
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
     child: Mutex<Box<dyn Child + Send + Sync>>,
     /// Accumulated output buffer from the background reader
-    output_buffer: Arc<std::sync::RwLock<String>>,
+    output_buffer: Arc<std::sync::RwLock<TerminalOutputBuffer>>,
     /// Background reader task handle
     _reader_handle: tokio::task::JoinHandle<()>,
     /// Master PTY handle MUST be kept alive. Dropping it closes the connection.
@@ -46,14 +59,21 @@ impl PtySession {
     }
 
     /// Read and drain the accumulated output buffer.
-    pub async fn read_output(&self) -> String {
+    pub async fn read_output(&self) -> TerminalOutputSnapshot {
         let mut buf = self.output_buffer.write().unwrap();
-        std::mem::take(&mut *buf)
+        TerminalOutputSnapshot {
+            sequence: buf.sequence,
+            data: std::mem::take(&mut buf.data),
+        }
     }
 
     /// Get the current output without draining.
-    pub async fn peek_output(&self) -> String {
-        self.output_buffer.read().unwrap().clone()
+    pub async fn peek_output(&self) -> TerminalOutputSnapshot {
+        let buf = self.output_buffer.read().unwrap();
+        TerminalOutputSnapshot {
+            sequence: buf.sequence,
+            data: buf.data.clone(),
+        }
     }
 }
 
@@ -148,7 +168,10 @@ impl TerminalManager {
             .map_err(|e| anyhow::anyhow!("Failed to clone PTY writer: {}", e))?;
 
         // Set up background reader that accumulates output
-        let output_buffer = Arc::new(std::sync::RwLock::new(String::new()));
+        let output_buffer = Arc::new(std::sync::RwLock::new(TerminalOutputBuffer {
+            sequence: 0,
+            data: String::new(),
+        }));
         let buffer_clone = output_buffer.clone();
         let reader_done = Arc::new(tokio::sync::Notify::new());
         let reader_done_clone = reader_done.clone();
@@ -166,16 +189,18 @@ impl TerminalManager {
                     Ok(n) => {
                         let text = String::from_utf8_lossy(&chunk[..n]).to_string();
                         // tracing::debug!("PTY Read {} bytes: {:?}", n, text);
-                        {
+                        let sequence = {
                             let mut b = buffer_clone.write().unwrap();
-                            b.push_str(&text);
-                            if b.len() > OUTPUT_BUFFER_LIMIT {
-                                let start = b.len() - OUTPUT_BUFFER_LIMIT;
-                                *b = b[start..].to_string();
+                            b.sequence = b.sequence.saturating_add(1);
+                            b.data.push_str(&text);
+                            if b.data.len() > OUTPUT_BUFFER_LIMIT {
+                                let start = b.data.len() - OUTPUT_BUFFER_LIMIT;
+                                b.data = b.data[start..].to_string();
                             }
-                        }
+                            b.sequence
+                        };
                         if let Some(ref cb) = on_output {
-                            cb(&sid, &text);
+                            cb(&sid, sequence, &text);
                         }
                     }
                     Err(e) => {

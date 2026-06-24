@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
 import { AppDialog } from '@/components/ui/AppDialog';
+import { HlsCameraPlayer } from '@/components/GTSM/HlsCameraPlayer';
+import { LocalCameraPreviewDialog } from '@/components/GTSM/LocalCameraPreviewDialog';
 import {
   gtsmApi,
   type MapCameraCatalogEntry,
@@ -57,15 +59,7 @@ function CameraPreviewDialog({ camera, onClose }: { camera: MapCameraCatalogEntr
               <span className="text-[10px] text-zinc-500">Playback starts only after you choose it.</span>
             </button>
           ) : playback.streamUrl && playback.directPreviewSupported ? (
-            <video
-              controls
-              autoPlay
-              playsInline
-              className="h-full w-full bg-black object-contain"
-              onError={() => setPlaybackError('This WebView cannot play this stream directly. Use the source link or configure a supported native playback path.')}
-            >
-              <source src={playback.streamUrl} type={playback.streamFormat === 'hls' ? 'application/vnd.apple.mpegurl' : 'video/mp4'} />
-            </video>
+            <HlsCameraPlayer playback={playback} onPlaybackError={setPlaybackError} />
           ) : <div className="flex h-full items-center justify-center px-6 text-center text-xs text-zinc-500">This catalog source does not allow direct in-app playback.</div>}
         </div>
         {playbackError ? <p role="alert" className="border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-[11px] leading-5 text-rose-100">{playbackError}</p> : null}
@@ -82,11 +76,14 @@ function CameraPreviewDialog({ camera, onClose }: { camera: MapCameraCatalogEntr
 export function CameraCatalogPanel() {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<MapCameraCatalogEntry | null>(null);
+  const [localPreviewOpen, setLocalPreviewOpen] = useState(false);
   const [sources, setSources] = useState<MapCameraCatalogSourceStatus[]>([]);
   const [checkedAt, setCheckedAt] = useState<number | null>(null);
   const cameras = useGTSMStore((state) => state.cameras);
   const loaded = useGTSMStore((state) => state.cameraCatalogLoaded);
   const setCameras = useGTSMStore((state) => state.setCameras);
+  const setLocalCamera = useGTSMStore((state) => state.setLocalCamera);
+  const viewportCenter = useGTSMStore((state) => state.viewportCenter);
   const setFlyToRequest = useGTSMStore((state) => state.setFlyToRequest);
   const setLayerError = useGTSMStore((state) => state.setLayerError);
   const setLoadingLayer = useGTSMStore((state) => state.setLoadingLayer);
@@ -141,11 +138,17 @@ export function CameraCatalogPanel() {
                   <div className="flex items-start gap-2"><WorkbenchIcon name="solar:videocamera-record-bold" size={14} className="mt-0.5 text-primary" /><div className="min-w-0 flex-1"><p className="truncate text-[11px] font-medium text-zinc-200">{camera.label}</p><p className="mt-0.5 truncate text-[9px] text-zinc-500">{camera.operator} · {camera.isDemo ? 'diagnostic' : camera.status}</p></div><WorkbenchIcon name="solar:arrow-right-linear" size={13} className="text-zinc-500" /></div>
                 </button>
               ))}
+              <button type="button" onClick={() => setLocalPreviewOpen(true)} className="mt-2 flex w-full items-center gap-2 border border-dashed border-white/15 px-2 py-2.5 text-left text-[10px] text-zinc-300 hover:bg-white/[0.045]">
+                <WorkbenchIcon name="solar:camera-add-bold" size={14} className="text-primary" />
+                <span className="flex-1">Use this device camera</span>
+                <span className="text-[9px] text-zinc-500">local only</span>
+              </button>
             </div>
           </section>
         ) : null}
       </div>
       {selected ? <CameraPreviewDialog camera={selected} onClose={() => setSelected(null)} /> : null}
+      {localPreviewOpen ? <LocalCameraPreviewDialog latitude={viewportCenter.lat} longitude={viewportCenter.lon} onActive={() => setLocalCamera({ label: 'This device camera', latitude: viewportCenter.lat, longitude: viewportCenter.lon })} onClose={() => { setLocalCamera(null); setLocalPreviewOpen(false); }} /> : null}
     </>
   );
 }

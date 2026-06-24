@@ -12,6 +12,18 @@ use crate::services::runtime_resource::{configure_std_command_for_binary, Runtim
 
 struct AudioHandle(OutputStream, OutputStreamHandle, Sink);
 
+/// Piper releases package eSpeak data as `espeak-ng-data/`. Older Zen-managed
+/// installs flattened that directory, so accept both layouts while the runtime
+/// installer migrates to the canonical path.
+fn resolve_espeak_data_dir(piper_path: &std::path::Path) -> Option<PathBuf> {
+    let runtime_dir = piper_path.parent()?;
+    let canonical = runtime_dir.join("espeak-ng-data");
+    if canonical.join("phontab").is_file() {
+        return Some(canonical);
+    }
+    runtime_dir.join("phontab").is_file().then(|| runtime_dir.to_path_buf())
+}
+
 /// One sentence-sized caption cue.
 ///
 /// Piper cannot emit word-level timestamps, so we pre-split the text on
@@ -171,6 +183,13 @@ impl TtsService {
             return Err(msg);
         }
 
+        let espeak_data_dir = resolve_espeak_data_dir(&piper_path_clone).ok_or_else(|| {
+            format!(
+                "Piper eSpeak data is missing beside '{}'. Reinstall Piper from Settings > Dependencies.",
+                piper_path_clone.display()
+            )
+        })?;
+
         tokio::task::spawn_blocking(move || {
             let piper_exe = piper_path_clone.to_string_lossy().into_owned();
             let model_path = model_path_clone.to_string_lossy().into_owned();
@@ -199,6 +218,7 @@ impl TtsService {
             }
 
             command.arg("--model").arg(&model_path).arg("--output_raw");
+            command.arg("--espeak_data").arg(espeak_data_dir);
 
             if let Some(cp) = config_path {
                 command.arg("--config").arg(cp);

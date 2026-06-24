@@ -73,7 +73,7 @@ pub async fn terminal_resize(
 pub async fn terminal_read_output(
     state: State<'_, AppState>,
     id: String,
-) -> ZenResult<String> {
+) -> ZenResult<crate::terminal::TerminalOutputSnapshot> {
     state
         .terminal
         .read_interactive_output(&state.terminal_sessions, id)

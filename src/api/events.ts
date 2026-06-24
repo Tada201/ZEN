@@ -282,6 +282,7 @@ export interface ChatMessageEventPayload extends AgentActionEventPayload {
   content: string;
   status?: Message["status"];
   error?: string;
+  metadata?: AgentActionMetadata;
 }
 
 export interface ChatContextDriftEventPayload {

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 interface GeoJsonDropZoneProps {
-  onFileDropped: (name: string, content: string) => void;
+  onFileDropped: (file: File) => void;
   children: React.ReactNode;
 }
 
@@ -25,15 +25,7 @@ export const GeoJsonDropZone: React.FC<GeoJsonDropZoneProps> = ({ onFileDropped,
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
-      if (file.name.endsWith('.geojson') || file.name.endsWith('.json')) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          if (event.target?.result) {
-            onFileDropped(file.name, event.target.result as string);
-          }
-        };
-        reader.readAsText(file);
-      }
+      onFileDropped(file);
     }
   };
 
@@ -46,10 +38,10 @@ export const GeoJsonDropZone: React.FC<GeoJsonDropZoneProps> = ({ onFileDropped,
       className="relative w-full h-full flex-1"
     >
       {isDragActive && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-cyan-950/40 backdrop-blur-sm border-2 border-dashed border-cyan-400 m-2 rounded-lg pointer-events-none transition-all duration-200">
-          <div className="text-center font-mono p-6 bg-black/80 border border-zinc-800 rounded shadow-2xl">
-            <span className="text-cyan-400 text-xs font-bold tracking-[0.2em] block mb-2">📥 DROP_GEOJSON_FILE</span>
-            <span className="text-zinc-400 text-[10px]">ACCEPTING .GEOJSON OR .JSON UP TO 10MB</span>
+        <div className="absolute inset-0 z-50 m-3 flex items-center justify-center border border-dashed border-primary/70 bg-background/75 backdrop-blur-sm pointer-events-none transition-all duration-200">
+          <div className="border border-white/10 bg-background/95 px-5 py-4 text-center shadow-2xl">
+            <span className="text-cyan-400 text-xs font-bold tracking-[0.2em] block mb-2">DROP_MAP_FILE</span>
+            <span className="text-zinc-400 text-[10px]">GeoJSON, CSV, or KML, up to 10 MB</span>
           </div>
         </div>
       )}

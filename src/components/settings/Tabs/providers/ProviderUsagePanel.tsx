@@ -10,7 +10,14 @@ const EMPTY_USAGE: ProviderUsageSnapshot = {
   totalTokensOut: 0,
   models: [],
   history: [],
+  daily: [],
 };
+
+const PERIODS = [
+  { label: '24H', days: 1 },
+  { label: '7D', days: 7 },
+  { label: '30D', days: 30 },
+];
 
 function formatCount(value: number): string {
   return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
@@ -27,6 +34,7 @@ interface ProviderUsagePanelProps {
 
 export function ProviderUsagePanel({ models }: ProviderUsagePanelProps) {
   const [snapshot, setSnapshot] = useState<ProviderUsageSnapshot>(EMPTY_USAGE);
+  const [periodDays, setPeriodDays] = useState(7);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const modelIds = useMemo(() => models.map((model) => model.id).filter(Boolean), [models]);
@@ -40,13 +48,13 @@ export function ProviderUsagePanel({ models }: ProviderUsagePanelProps) {
     setLoading(true);
     setError(null);
     try {
-      setSnapshot(await providersApi.getUsage(modelIds));
+      setSnapshot(await providersApi.getUsage(modelIds, periodDays));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Usage history could not be loaded.');
     } finally {
       setLoading(false);
     }
-  }, [modelIds]);
+  }, [modelIds, periodDays]);
 
   useEffect(() => {
     void refresh();
@@ -76,6 +84,25 @@ export function ProviderUsagePanel({ models }: ProviderUsagePanelProps) {
         <Metric label="Input Tokens" value={formatCount(snapshot.totalTokensIn)} />
         <Metric label="Output Tokens" value={formatCount(snapshot.totalTokensOut)} />
       </div>
+
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Usage trend</div>
+        <div className="flex rounded-md border border-white/[0.08] p-0.5" aria-label="Usage time range">
+          {PERIODS.map((period) => (
+            <button
+              key={period.days}
+              type="button"
+              onClick={() => setPeriodDays(period.days)}
+              className={`rounded px-2 py-1 text-[10px] font-medium transition-colors ${period.days === periodDays ? 'bg-white/[0.1] text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              aria-pressed={period.days === periodDays}
+            >
+              {period.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <UsageTrend daily={snapshot.daily} />
 
       {error ? <p className="mt-3 text-xs text-rose-300">{error}</p> : null}
 
@@ -123,6 +150,28 @@ export function ProviderUsagePanel({ models }: ProviderUsagePanelProps) {
         </div>
       ) : null}
     </section>
+  );
+}
+
+function UsageTrend({ daily }: { daily: ProviderUsageSnapshot['daily'] }) {
+  const peak = Math.max(1, ...daily.map((item) => item.tokensIn + item.tokensOut));
+
+  if (daily.length === 0) {
+    return <p className="mt-3 text-xs text-muted-foreground">No completed responses in this period.</p>;
+  }
+
+  return (
+    <div className="mt-3 flex h-24 items-end gap-1 border-b border-white/[0.06] pb-1" aria-label="Daily token usage chart">
+      {daily.map((item) => {
+        const tokens = item.tokensIn + item.tokensOut;
+        const height = Math.max(6, Math.round((tokens / peak) * 88));
+        return (
+          <div key={item.day} className="group relative flex min-w-0 flex-1 items-end" title={`${item.day}: ${formatCount(tokens)} tokens across ${item.requests} responses`}>
+            <div className="w-full rounded-t-sm bg-blue-400/55 transition-colors group-hover:bg-blue-300" style={{ height: `${height}px` }} />
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
