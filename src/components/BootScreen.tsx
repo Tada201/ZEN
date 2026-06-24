@@ -4,9 +4,39 @@ import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import { Progress } from "@/components/ui/progress";
 import { systemApi, type InitPhase } from "@/api/systemApi";
 import { IS_TAURI } from "@/api/tauriClient";
+import { callCommand } from "@/api/tauriClient";
+import { Cpu, Database, Activity, CheckCircle, Disc, Terminal, Settings } from "lucide-react";
 
 interface BootScreenProps {
   onComplete: () => void;
+}
+
+function ScrambleText({ text, speed = 40 }: { text: string; speed?: number }) {
+  const [displayText, setDisplayText] = useState("");
+  
+  useEffect(() => {
+    let iteration = 0;
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#@$%&+";
+    const interval = setInterval(() => {
+      setDisplayText(
+        text
+          .split("")
+          .map((char, index) => {
+            if (char === " ") return " ";
+            if (index < iteration) return text[index];
+            return chars[Math.floor(Math.random() * chars.length)];
+          })
+          .join("")
+      );
+      
+      if (iteration >= text.length) clearInterval(interval);
+      iteration += 1 / 3;
+    }, speed);
+    
+    return () => clearInterval(interval);
+  }, [text, speed]);
+
+  return <span>{displayText}</span>;
 }
 
 export function BootScreen({ onComplete }: BootScreenProps) {
@@ -16,37 +46,60 @@ export function BootScreen({ onComplete }: BootScreenProps) {
 
   const { isInitialized } = useAppInit();
   const [minTimeElapsed, setMinTimeElapsed] = useState(false);
-  const [showLoadingBar, setShowLoadingBar] = useState(false);
   const [progress, setProgress] = useState(0);
   const [isFadingOut, setIsFadingOut] = useState(false);
   const [backendPhases, setBackendPhases] = useState<InitPhase[]>([]);
   const [backendCriticalDone, setBackendCriticalDone] = useState(IS_TAURI ? false : true);
+  
+  // Real telemetry state
+  const [hardware, setHardware] = useState<any>(null);
+  const [metrics, setMetrics] = useState<any>(null);
 
-  // If boot screen is disabled, immediately complete
+  // Skip boot screen if disabled
   useEffect(() => {
     if (!bootEnabled) {
       onComplete();
     }
   }, [bootEnabled, onComplete]);
 
-  // Respect the configured intro duration without imposing an extra startup delay.
+  // Handle minimum display time
   useEffect(() => {
     if (!bootEnabled) return;
-
     const timer = setTimeout(() => {
       setMinTimeElapsed(true);
     }, durationMs);
-
-    // Show loading bar after 2 seconds if still loading
-    const loadingBarTimer = setTimeout(() => {
-      setShowLoadingBar(true);
-    }, 2000);
-
-    return () => {
-      clearTimeout(timer);
-      clearTimeout(loadingBarTimer);
-    };
+    return () => clearTimeout(timer);
   }, [bootEnabled, durationMs]);
+
+  // Fetch telemetry
+  useEffect(() => {
+    if (!bootEnabled) return;
+    if (!IS_TAURI) {
+      setHardware({
+        cpu: "Intel Core i9-14900K (Mock)",
+        cores: 24,
+        threads: 32,
+        memory_gb: 32.0,
+        os: "Windows 11 (Mock)",
+        hostname: "zen-desktop-mock",
+        has_cuda: true,
+      });
+      setMetrics({
+        cpu_load: 18.4,
+        mem_used: 12.8 * 1024 * 1024 * 1024,
+        mem_total: 32 * 1024 * 1024 * 1024,
+      });
+      return;
+    }
+
+    callCommand("get_hardware_info")
+      .then((info) => setHardware(info))
+      .catch(() => {});
+
+    callCommand("get_system_metrics")
+      .then((met) => setMetrics(met))
+      .catch(() => {});
+  }, [bootEnabled]);
 
   // Poll backend init status (only in Tauri)
   useEffect(() => {
@@ -60,20 +113,17 @@ export function BootScreen({ onComplete }: BootScreenProps) {
         if (status.critical_complete) {
           setBackendCriticalDone(true);
         }
-        if (status.background_complete) {
-          // All backend init done — stop polling
-          return;
-        }
+        if (status.background_complete) return;
       } catch {
-        // Backend not ready yet, keep polling
+        // Backend not ready yet
       }
-      if (mounted) setTimeout(poll, 200);
+      if (mounted) setTimeout(poll, 150);
     };
     poll();
     return () => { mounted = false; };
   }, [bootEnabled]);
 
-  // Never let an optional startup task strand the user behind the boot overlay.
+  // Absolute safety timeout (8s max)
   useEffect(() => {
     if (!bootEnabled) return;
     const timeout = setTimeout(() => {
@@ -84,7 +134,7 @@ export function BootScreen({ onComplete }: BootScreenProps) {
     return () => clearTimeout(timeout);
   }, [bootEnabled, durationMs, onComplete]);
 
-  // Compute real progress from backend phases (or fall back to simulated)
+  // Compute progress
   const realProgress = useCallback(() => {
     if (backendPhases.length === 0) return null;
     const total = backendPhases.length;
@@ -94,174 +144,157 @@ export function BootScreen({ onComplete }: BootScreenProps) {
     return Math.round((done / total) * 100);
   }, [backendPhases]);
 
-  // Loading bar progress: real backend progress + frontend init state
   useEffect(() => {
-    if (!showLoadingBar || isFadingOut) return;
-
+    if (isFadingOut) return;
     const interval = setInterval(() => {
       setProgress((prev) => {
-        if (isInitialized && backendCriticalDone) {
-          return 100;
-        }
-        // Use real progress if available
+        if (isInitialized && backendCriticalDone) return 100;
         const rp = realProgress();
-        if (rp !== null && rp > prev) {
-          return Math.min(rp, 95);
-        }
-        // Slowly approach 95% if not yet initialized
-        if (prev < 95) {
-          return Math.min(95, prev + 4);
-        }
+        if (rp !== null && rp > prev) return Math.min(rp, 95);
+        if (prev < 95) return Math.min(95, prev + 5);
         return prev;
       });
-    }, 150);
-
+    }, 120);
     return () => clearInterval(interval);
-  }, [showLoadingBar, isInitialized, isFadingOut, realProgress, backendCriticalDone]);
+  }, [isInitialized, isFadingOut, realProgress, backendCriticalDone]);
 
-  // Handle transition out when all conditions met
+  // Transition out
   useEffect(() => {
     if (bootEnabled && minTimeElapsed && isInitialized && backendCriticalDone) {
       setProgress(100);
       setIsFadingOut(true);
-      const fadeTimer = setTimeout(() => {
-        onComplete();
-      }, 600);
+      const fadeTimer = setTimeout(onComplete, 600);
       return () => clearTimeout(fadeTimer);
     }
   }, [bootEnabled, minTimeElapsed, isInitialized, onComplete, backendCriticalDone]);
 
   if (!bootEnabled) return null;
 
+  const memUsagePercent = metrics 
+    ? Math.round((metrics.mem_used / metrics.mem_total) * 100) 
+    : 0;
+
   return (
     <div
-      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black transition-opacity duration-500 ease-in-out ${
+      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-zinc-950 text-zinc-100 select-none overflow-hidden transition-opacity duration-500 ease-in-out ${
         isFadingOut ? "opacity-0 pointer-events-none" : "opacity-100"
       }`}
     >
-      {/* Localized Custom Sci-Fi VFX Styles */}
-      <style>{`
-        .scifi-text {
-          background: linear-gradient(90deg, #ffffff 0%, #e2e8f0 25%, #ffffff 50%, #e2e8f0 75%, #ffffff 100%);
-          background-size: 200% auto;
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          animation: textShimmer 4s linear infinite, glowPulse 3s ease-in-out infinite;
-        }
-        @keyframes textShimmer {
-          to { background-position: 200% center; }
-        }
-        @keyframes glowPulse {
-          0%, 100% {
-            filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.25)) drop-shadow(0 0 8px rgba(255, 255, 255, 0.1));
-          }
-          50% {
-            filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 16px rgba(255, 255, 255, 0.3));
-          }
-        }
-        .glass-panel {
-          position: relative;
-          overflow: hidden;
-        }
-        .glass-panel::before {
-          content: "";
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(to bottom, transparent 50%, rgba(255, 255, 255, 0.02) 50%);
-          background-size: 100% 4px;
-          pointer-events: none;
-        }
-        .glass-panel::after {
-          content: "";
-          position: absolute;
-          top: -100%;
-          left: 0;
-          width: 100%;
-          height: 100%;
-          background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.08), transparent);
-          animation: scanline 4s linear infinite;
-          pointer-events: none;
-        }
-        @keyframes scanline {
-          0% { top: -100%; }
-          100% { top: 100%; }
-        }
-        .glowing-bar [class*="ProgressPrimitive-Indicator"] {
-          box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
-          background: #ffffff;
-          position: relative;
-        }
-        .glowing-bar [class*="ProgressPrimitive-Indicator"]::after {
-          content: "";
-          position: absolute;
-          right: 0;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 4px;
-          height: 4px;
-          background: #ffffff;
-          border-radius: 50%;
-          box-shadow: 0 0 8px #ffffff;
-        }
-      `}</style>
+      {/* Vercel-style Animated CSS Grid Background */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] animate-[gridPulse_8s_ease-in-out_infinite]" />
+      
+      {/* Ambient Gradient Glows */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-purple-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse" />
+      <div className="absolute bottom-1/4 left-1/3 w-[300px] h-[300px] bg-blue-500/5 rounded-full blur-[100px] pointer-events-none" />
 
-      {/* Background Video (Full Viewport) */}
-      <div className="absolute inset-0 w-full h-full overflow-hidden">
-        <video
-          src="/video/boot.mp4"
-          autoPlay
-          muted
-          loop
-          playsInline
-          className="w-full h-full object-cover opacity-90"
-        />
-        {/* Subtle overlay gradient to ensure text readability */}
-        <div className="absolute inset-0 bg-black/55" />
-      </div>
-
-      {/* Sci-Fi Content Overlay with Glassmorphic Container for high legibility */}
-      <div className="relative z-10 flex flex-col items-center max-w-sm w-full mx-4 p-8 rounded-2xl bg-black/85 backdrop-blur-xl border border-white/10 shadow-[0_0_60px_rgba(0,0,0,0.95)] text-center select-none glass-panel">
-        {/* Brand Text */}
-        <h1 className="text-4xl font-extrabold tracking-[0.55em] font-sans ml-[0.55em] mb-6 scifi-text">
-          ZENOS
-        </h1>
-
-        {/* Loading Indicator */}
-        <div className="w-full h-12 flex flex-col items-center justify-center transition-all duration-500">
-          {showLoadingBar ? (
-            <div className="w-full space-y-3">
-              <Progress value={progress} className="h-1 bg-white/10 glowing-bar" />
-              {/* Show current backend phase if available */}
-              <div className="flex flex-wrap justify-center gap-1.5 mt-2">
-                {backendPhases.map((phase) => (
-                  <span
-                    key={phase.id}
-                    className={`text-[8px] font-mono tracking-wider uppercase px-2 py-0.5 rounded-sm transition-colors duration-200 ${
-                      phase.status === "done"
-                        ? "text-green-400/70 bg-green-500/8"
-                        : phase.status === "running"
-                          ? "text-white/80 bg-white/8"
-                          : phase.status === "error"
-                            ? "text-red-400/70 bg-red-500/8"
-                            : phase.status === "skipped"
-                              ? "text-yellow-400/50 bg-yellow-400/8"
-                              : "text-white/20"
-                    }`}
-                  >
-                    {phase.label}
-                  </span>
-                ))}
-              </div>
-              <p className="text-[9px] text-white/50 font-bold tracking-[0.3em] uppercase text-center animate-pulse drop-shadow-[0_0_4px_rgba(255,255,255,0.2)] mt-2">
-                {isInitialized && backendCriticalDone ? "Ready" : "Initializing System"}
-              </p>
+      {/* Main Glass Container */}
+      <div className="relative z-10 w-full max-w-lg mx-4 flex flex-col gap-5 p-6 rounded-xl bg-zinc-950/60 backdrop-blur-xl border border-zinc-800/60 shadow-[0_24px_80px_rgba(0,0,0,0.8)]">
+        
+        {/* Header (Scrambled Brand Logo & Minimal Version Tag) */}
+        <div className="flex items-center justify-between border-b border-zinc-800/50 pb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-5 h-5 rounded-md bg-gradient-to-tr from-purple-600 to-blue-500 flex items-center justify-center shadow-[0_0_12px_rgba(147,51,234,0.4)]">
+              <span className="text-[10px] font-black text-white">Z</span>
             </div>
-          ) : (
-            <div className="h-1" />
-          )}
+            <h1 className="text-sm font-bold tracking-[0.3em] uppercase text-zinc-100">
+              <ScrambleText text="ZENOS" />
+            </h1>
+          </div>
+          <span className="font-mono text-[9px] text-zinc-500 tracking-wider bg-zinc-900 px-2 py-0.5 rounded-md border border-zinc-800/40">
+            SYSTEM INIT // v0.1.0
+          </span>
+        </div>
+
+        {/* Space-Efficient Telemetry Board (VSCode Style Dense Grid) */}
+        <div className="grid grid-cols-2 gap-2.5">
+          <div className="flex flex-col gap-1 p-3 rounded-lg bg-zinc-900/30 border border-zinc-800/40 font-mono">
+            <div className="flex items-center gap-2 text-[9px] text-zinc-500 tracking-wider uppercase font-bold">
+              <Cpu className="w-3 h-3 text-purple-400" />
+              <span>Processor</span>
+            </div>
+            <span className="text-[10px] text-zinc-300 truncate font-semibold">
+              {hardware ? hardware.cpu.replace(/\(R\)|\(TM\)/g, "") : "Probing core..."}
+            </span>
+            <span className="text-[8px] text-zinc-500">
+              {hardware ? `${hardware.cores} Cores / ${hardware.threads} Threads` : "--"}
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-1 p-3 rounded-lg bg-zinc-900/30 border border-zinc-800/40 font-mono">
+            <div className="flex items-center gap-2 text-[9px] text-zinc-500 tracking-wider uppercase font-bold">
+              <Activity className="w-3 h-3 text-blue-400" />
+              <span>Memory</span>
+            </div>
+            <span className="text-[10px] text-zinc-300 font-semibold">
+              {hardware ? `${hardware.memory_gb.toFixed(1)} GB RAM` : "Allocating..."}
+            </span>
+            <span className="text-[8px] text-zinc-500">
+              {metrics ? `Utilized: ${memUsagePercent}% (${(metrics.mem_used / 1e9).toFixed(1)} GB)` : "--"}
+            </span>
+          </div>
+        </div>
+
+        {/* System Micro logs (VSCode Panel Resemblance) */}
+        <div className="flex flex-col gap-2 p-3.5 rounded-lg bg-zinc-950/80 border border-zinc-800/80 font-mono">
+          <div className="flex items-center justify-between text-[9px] text-zinc-500 tracking-wider uppercase font-bold border-b border-zinc-900 pb-1.5 mb-1">
+            <div className="flex items-center gap-2">
+              <Terminal className="w-3 h-3 text-emerald-400" />
+              <span>Initialization Pipeline</span>
+            </div>
+            <span className="text-zinc-600">Active</span>
+          </div>
+          
+          <div className="flex flex-col gap-1.5 max-h-[72px] overflow-y-auto pr-1">
+            {backendPhases.length === 0 ? (
+              <div className="flex items-center gap-2 text-[10px] text-zinc-500">
+                <div className="w-1.5 h-1.5 rounded-full bg-zinc-700 animate-pulse" />
+                <span>Synchronizing backend kernel logs...</span>
+              </div>
+            ) : (
+              backendPhases.map((phase) => (
+                <div key={phase.id} className="flex items-center justify-between text-[10px]">
+                  <div className="flex items-center gap-2 text-zinc-400">
+                    <span className={`w-1 h-1 rounded-full ${
+                      phase.status === "done" ? "bg-emerald-400" :
+                      phase.status === "running" ? "bg-purple-400 animate-ping" : "bg-zinc-700"
+                    }`} />
+                    <span>{phase.label}</span>
+                  </div>
+                  <span className={`text-[8px] tracking-wider uppercase px-1.5 py-0.2 rounded-sm ${
+                    phase.status === "done" ? "text-emerald-400/90 bg-emerald-500/5 border border-emerald-500/10" :
+                    phase.status === "running" ? "text-purple-400/90 bg-purple-500/5 border border-purple-500/10" :
+                    "text-zinc-600 bg-zinc-900/40"
+                  }`}>
+                    {phase.status === "done" ? "Ready" : phase.status === "running" ? "Init" : "Wait"}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Progress & Transition Section */}
+        <div className="space-y-2 mt-1">
+          <div className="flex items-center justify-between text-[10px] font-mono text-zinc-500">
+            <span>{isInitialized && backendCriticalDone ? "Pipeline Nominal" : "Executing Kernel Handshake..."}</span>
+            <span>{progress}%</span>
+          </div>
+          
+          <Progress 
+            value={progress} 
+            className="h-1 bg-zinc-900 overflow-hidden" 
+            indicatorClassName="bg-gradient-to-r from-purple-500 via-purple-600 to-blue-500 shadow-[0_0_12px_rgba(168,85,247,0.5)] transition-all duration-300" 
+          />
         </div>
       </div>
+
+      {/* Global CSS Inject */}
+      <style>{`
+        @keyframes gridPulse {
+          0%, 100% { opacity: 0.7; }
+          50% { opacity: 1; }
+        }
+      `}</style>
     </div>
   );
 }
-
