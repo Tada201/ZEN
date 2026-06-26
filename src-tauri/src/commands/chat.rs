@@ -90,6 +90,15 @@ pub async fn get_messages_page(
 #[tauri::command]
 pub async fn delete_chat(state: State<'_, AppState>, chat_id: String) -> ZenResult<()> {
     let db = state.db().await?;
+    // 0. Cancel any in-flight stream for this chat so the runner stops
+    //    writing to a session that is about to be destroyed.
+    {
+        let mut tokens = state.chat_cancellation_tokens.lock().await;
+        if let Some(token) = tokens.remove(&chat_id) {
+            token.cancel();
+            info!(chat_id = %chat_id, "delete_chat: cancelled active stream");
+        }
+    }
     // 1. Remove SQLite rows first (primary source of truth)
     queries::delete_chat(&db, &chat_id).await?;
     // 2. Best-effort: remove conversation vectors from LanceDB so deleted
@@ -109,6 +118,17 @@ pub async fn delete_chat(state: State<'_, AppState>, chat_id: String) -> ZenResu
 #[tauri::command]
 pub async fn bulk_delete_chats(state: State<'_, AppState>, chat_ids: Vec<String>) -> ZenResult<()> {
     let db = state.db().await?;
+    // 0. Cancel any in-flight streams for these chats so runners stop
+    //    writing to sessions that are about to be destroyed.
+    {
+        let mut tokens = state.chat_cancellation_tokens.lock().await;
+        for chat_id in &chat_ids {
+            if let Some(token) = tokens.remove(chat_id) {
+                token.cancel();
+                info!(chat_id = %chat_id, "bulk_delete_chats: cancelled active stream");
+            }
+        }
+    }
     // 1. Remove SQLite rows first
     queries::bulk_delete_chats(&db, &chat_ids).await?;
     // 2. Best-effort vector cleanup — same lifecycle as single delete
@@ -180,6 +200,15 @@ pub async fn send_message(
         }),
     );
     let db = state.db().await?;
+
+    // 0. Guard: verify the chat exists before doing any work.
+    //    Rapid session switching can race with the frontend, causing
+    //    send_message to target a chat that was just deleted.
+    if queries::get_chat(&db, &chat_id).await.is_err() {
+        return Err(crate::error::ZenError::Custom(
+            format!("Chat session {} no longer exists.", chat_id)
+        ));
+    }
 
     // 1. Add user message to DB
     info!(chat_id = %chat_id, "Inserting user message into database");

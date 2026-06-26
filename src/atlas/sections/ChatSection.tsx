@@ -44,7 +44,7 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
   
   const handleOpenArtifact = useCallback((art: ArtifactData) => {
     const artId = art.id || `art_${Date.now()}`;
-    const fullArt = { ...art, id: artId };
+    const fullArt = { ...art, id: artId, chatId: art.chatId || currentSessionId || undefined };
     
     // Add to chat store
     useChatStore.getState().addArtifact(fullArt);
@@ -53,7 +53,7 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
     // Open right panel and set active tab
     useUIStore.getState().setRightPanelOpen(true);
     useUIStore.getState().setActiveRightTab('artifacts');
-  }, []);
+  }, [currentSessionId]);
   
   // Settings UI State
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -115,7 +115,9 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
       webSearch: failedMsg.webSearch ?? webSearch,
       generativeUI: failedMsg.generativeUI != null ? !!failedMsg.generativeUI : generativeUI,
       // Pass thinking config if available in failed message or from current state
-      thinking: failedMsg.thinking || { enabled: false } 
+      thinking: failedMsg.thinking || { enabled: false },
+      // Route retry to the original session, not the potentially-stale currentSessionId
+      targetSessionId: lastUserMsg.sessionId || undefined,
     });
   }, [messages, setMessages, handleSendMessage, selectedModelId, selectedProvider, webSearch, generativeUI]);
 
@@ -272,6 +274,7 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
             onRetry={handleRetry}
             onOpenSettings={onOpenSettings}
             onContinueResearch={handleContinueResearch}
+            onAbort={abortStream}
           />
 
           <div className="absolute bottom-0 left-0 right-0 z-30 p-4 pb-8 bg-gradient-to-t from-background via-background/80 to-transparent pointer-events-none">

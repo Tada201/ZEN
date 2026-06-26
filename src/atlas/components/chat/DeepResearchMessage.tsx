@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState, useEffect } from "react";
+import { FormEvent, useCallback, useMemo, useState, useEffect } from "react";
 import {
   Search,
   ChevronDown,
@@ -9,6 +9,7 @@ import {
   Bot,
   Globe,
   Sparkles,
+  Square,
 } from "lucide-react";
 import { Message } from "./types";
 import { MarkdownContent } from "./MarkdownContent";
@@ -51,16 +52,22 @@ export function DeepResearchMessage({
   message,
   compact,
   onContinueResearch,
+  onAbort,
+  isChatStreaming,
+  messages,
 }: {
   message: Message;
   compact?: boolean;
   onContinueResearch?: (request: string) => void;
+  onAbort?: () => void;
+  isChatStreaming?: boolean;
+  messages?: Message[];
 }) {
   if (message.metadata?.researchClarification) {
     return <ResearchClarificationCard message={message} compact={compact} onContinueResearch={onContinueResearch} />;
   }
 
-  return <DeepResearchRunMessage message={message} compact={compact} />;
+  return <DeepResearchRunMessage message={message} compact={compact} isChatStreaming={isChatStreaming} messages={messages} onContinueResearch={onContinueResearch} onAbort={onAbort} />;
 }
 
 function ResearchClarificationCard({
@@ -129,7 +136,7 @@ function ResearchClarificationCard({
   );
 }
 
-function DeepResearchRunMessage({ message, compact }: { message: Message; compact?: boolean }) {
+function DeepResearchRunMessage({ message, compact, isChatStreaming, messages, onContinueResearch, onAbort }: { message: Message; compact?: boolean; isChatStreaming?: boolean; messages?: Message[]; onContinueResearch?: (request: string) => void; onAbort?: () => void }) {
   const steps: ResearchStep[] = useMemo(() => {
     if (message.metadata?.researchSteps && Array.isArray(message.metadata.researchSteps)) {
       return message.metadata.researchSteps as ResearchStep[];
@@ -141,12 +148,22 @@ function DeepResearchRunMessage({ message, compact }: { message: Message; compac
   // incomplete session. These have is_complete=0 in the DB (mapped to
   // status="failed" by useChatQueries) and no streaming will arrive.
   const isFailed = message.status === "failed";
+
+  // Detect phantom streaming: the message is status="sending" (from a
+  // reload where is_complete=0 was mapped to "sending") but the chat is
+  // not actually streaming — no events will arrive.
+  // Note: during the deep-research handoff window (after chat:done but
+  // before chat:message delivers the final report), streaming is kept
+  // alive by useChatChunkEvent so isChatStreaming remains true and this
+  // guard does not fire prematurely.
+  const isStaleSending = message.status === "sending" && isChatStreaming === false;
+
   // The research is terminal if normally complete, marked completed in
-  // metadata, or is a stale failed message that will never resume.
-  const isComplete = message.status === "sent" || message.metadata?.status === "completed" || isFailed;
+  // metadata, failed, or is a stale sending message from a reload.
+  const isComplete = message.status === "sent" || message.metadata?.status === "completed" || isFailed || isStaleSending;
   // True if the message has zero content and no steps — a crash happened
   // before the first periodic checkpoint.
-  const isStaleEmpty = isFailed && !message.content && steps.length === 0;
+  const isStaleEmpty = (isFailed || isStaleSending) && !message.content && steps.length === 0;
 
   const [elapsed, setElapsed] = useState<number>(0);
 
@@ -328,23 +345,42 @@ function DeepResearchRunMessage({ message, compact }: { message: Message; compac
               >
                 {isStaleEmpty
                   ? "Research interrupted"
-                  : isFailed && message.content
-                    ? "Research interrupted (partial results)"
-                    : isComplete
-                      ? "Research complete"
-                      : "Agent is actively researching..."}
+                  : isStaleSending
+                    ? message.content
+                      ? "Research interrupted (partial results)"
+                      : "Research interrupted"
+                    : isFailed
+                      ? message.content
+                        ? "Research interrupted (partial results)"
+                        : "Research interrupted"
+                      : isComplete
+                        ? "Research complete"
+                        : "Agent is actively researching..."}
               </span>
               {plannedTaskCount > 0 && (
                 <span className="text-[11px] text-zinc-400">{plannedTaskCount} planned investigation tasks</span>
               )}
             </div>
             {!isComplete && (
-              <div className="ml-auto flex items-center gap-1.5 rounded-full bg-indigo-500/10 px-2.5 py-0.5 border border-indigo-500/20 text-[10px] font-mono text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.1)]">
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500" />
-                </span>
-                {formatTime(elapsed)}
+              <div className="ml-auto flex items-center gap-2">
+                {onAbort && (
+                  <button
+                    type="button"
+                    onClick={onAbort}
+                    className="inline-flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-0.5 text-[10px] font-medium text-red-300 hover:bg-red-500/20 transition-colors cursor-pointer"
+                    title="Stop research"
+                  >
+                    <Square className="h-2.5 w-2.5" />
+                    Stop
+                  </button>
+                )}
+                <div className="flex items-center gap-1.5 rounded-full bg-indigo-500/10 px-2.5 py-0.5 border border-indigo-500/20 text-[10px] font-mono text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.1)]">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500" />
+                  </span>
+                  {formatTime(elapsed)}
+                </div>
               </div>
             )}
           </div>
@@ -416,9 +452,20 @@ function DeepResearchRunMessage({ message, compact }: { message: Message; compac
                 </div>
               )}
               {isStaleEmpty && (
-                <div className="flex items-center gap-2 text-xs text-rose-300/80 py-2 px-2">
+                <div className="flex flex-col gap-2 py-2 px-2">
+                  <div className="flex items-center gap-2 text-xs text-rose-300/80">
+                    <XCircle className="h-3 w-3 shrink-0" />
+                    <span>The research process ended before collecting any data.</span>
+                  </div>
+                  {onContinueResearch && (
+                    <StaleRetryButton message={message} messages={messages} onContinueResearch={onContinueResearch} />
+                  )}
+                </div>
+              )}
+              {isStaleSending && !isStaleEmpty && message.content && (
+                <div className="flex items-center gap-2 text-xs text-amber-300/80 py-2 px-2">
                   <XCircle className="h-3 w-3 shrink-0" />
-                  <span>The research process ended before collecting any data. Try running the research again.</span>
+                  <span>Connection was lost. Partial results are shown above. Re-run the research to get the complete report.</span>
                 </div>
               )}
 
@@ -502,6 +549,42 @@ function DeepResearchRunMessage({ message, compact }: { message: Message; compac
         )}
       </div>
     </div>
+  );
+}
+
+// ── Stale Retry Button ─────────────────────────────────────────────────────
+
+function StaleRetryButton({
+  message,
+  messages,
+  onContinueResearch,
+}: {
+  message: Message;
+  messages?: Message[];
+  onContinueResearch: (request: string) => void;
+}) {
+  const handleRetry = useCallback(() => {
+    if (!messages) return;
+    // Find the user message preceding this deep research message
+    const msgIdx = messages.findIndex((m) => m.id === message.id);
+    if (msgIdx === -1) return;
+    for (let i = msgIdx - 1; i >= 0; i--) {
+      if (messages[i].role === "user") {
+        onContinueResearch(messages[i].content);
+        return;
+      }
+    }
+  }, [messages, message.id, onContinueResearch]);
+
+  return (
+    <button
+      type="button"
+      onClick={handleRetry}
+      className="inline-flex items-center gap-1.5 rounded-md border border-rose-500/25 bg-rose-500/10 px-3 py-1.5 text-[11px] font-medium text-rose-300 hover:bg-rose-500/20 transition-colors"
+    >
+      <XCircle className="h-3 w-3" />
+      Retry research
+    </button>
   );
 }
 

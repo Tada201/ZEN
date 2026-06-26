@@ -3,6 +3,8 @@ import { chatApi } from "@/api";
 import { Message } from "../components/chat/types";
 
 import { useChatStore } from "@/lib/stores/useChatStore";
+import { clearHeartbeatTimeout } from "./stream/useStreamHeartbeat";
+import { clearChunkTrackingForChat } from "./stream/chatChunkBuffer";
 
 import { useShallow } from "zustand/react/shallow";
 
@@ -35,6 +37,10 @@ export function useStreamingChat(
     }
     // Clear streaming flag immediately for responsive UI
     if (chatId) {
+      // Cancel any pending heartbeat timer so it doesn't overwrite
+      // the "cancelled" status with a failure message.
+      clearHeartbeatTimeout(chatId);
+      clearChunkTrackingForChat(chatId, {}, {});
       useChatStore.getState().setStreamingForChat(chatId, false);
       useChatStore.getState().setActiveAssistantForChat(chatId, null);
       useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {

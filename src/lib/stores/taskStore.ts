@@ -107,7 +107,9 @@ export const useTaskStore = create<TaskState>((set, get) => {
             updatedAt: Date.now(),
           });
         }
-        return { tasks: newTasks, activeChatId: chat_id, isVisible: true };
+        // Don't overwrite activeChatId here — useChatQueries owns the sync
+        // via setActiveChatId on session switch.
+        return { tasks: newTasks, isVisible: true };
       });
     });
 
@@ -204,10 +206,11 @@ export const useTaskStore = create<TaskState>((set, get) => {
       set({ isVisible: visible });
     },
 
-    // Selectors
+    // Selectors — scoped to activeChatId when set, otherwise return all tasks.
     getTasksByStatus: (status: Task['status']) => {
-      return Array.from(get().tasks.values()).filter(
-        (task) => task.status === status
+      const { activeChatId, tasks } = get();
+      return Array.from(tasks.values()).filter(
+        (task) => task.status === status && (!activeChatId || task.chatId === activeChatId)
       );
     },
 
@@ -234,11 +237,14 @@ export const useTaskStore = create<TaskState>((set, get) => {
     },
 
     getTotalProgress: () => {
-      const tasks = Array.from(get().tasks.values());
-      if (tasks.length === 0) return 0;
+      const { activeChatId, tasks } = get();
+      const scoped = activeChatId
+        ? Array.from(tasks.values()).filter((t) => t.chatId === activeChatId)
+        : Array.from(tasks.values());
+      if (scoped.length === 0) return 0;
 
-      const total = tasks.reduce((sum, task) => sum + task.progress, 0);
-      return Math.round(total / tasks.length);
+      const total = scoped.reduce((sum, task) => sum + task.progress, 0);
+      return Math.round(total / scoped.length);
     },
   };
 });

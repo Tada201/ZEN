@@ -5,6 +5,30 @@ import { useUIStore } from './useUIStore';
 
 const EMPTY_ARRAY: Message[] = [];
 
+// LRU eviction for sessionMessages to prevent unbounded memory growth.
+// Tracks access order; evicts the oldest entry when the cap is exceeded.
+const LRU_SESSION_CAP = 10;
+const sessionAccessOrder: string[] = [];
+
+function touchSessionLru(chatId: string) {
+  const idx = sessionAccessOrder.indexOf(chatId);
+  if (idx !== -1) sessionAccessOrder.splice(idx, 1);
+  sessionAccessOrder.push(chatId);
+}
+
+function evictStaleSessions(sessionMessages: Record<string, Message[]>): Record<string, Message[]> {
+  if (sessionAccessOrder.length <= LRU_SESSION_CAP) return sessionMessages;
+  let next = sessionMessages;
+  while (sessionAccessOrder.length > LRU_SESSION_CAP) {
+    const evictId = sessionAccessOrder.shift()!;
+    if (next[evictId]) {
+      next = { ...next };
+      delete next[evictId];
+    }
+  }
+  return next;
+}
+
 interface ChatState {
   activeSessionId: string | null;
 
@@ -109,22 +133,28 @@ export const useChatStore = create<ChatState>()(
 
       getSessionMessages: (chatId) => get().sessionMessages[chatId] ?? EMPTY_ARRAY,
 
-      setSessionMessages: (chatId, messages) => set((state) => ({
-        sessionMessages: {
+      setSessionMessages: (chatId, messages) => set((state) => {
+        touchSessionLru(chatId);
+        const next = {
           ...state.sessionMessages,
           [chatId]: typeof messages === 'function'
             ? messages(state.sessionMessages[chatId] ?? EMPTY_ARRAY)
             : messages,
-        },
-      })),
+        };
+        return { sessionMessages: evictStaleSessions(next) };
+      }),
 
       clearSessionMessages: (chatId) => set((state) => {
+        const lruIdx = sessionAccessOrder.indexOf(chatId);
+        if (lruIdx !== -1) sessionAccessOrder.splice(lruIdx, 1);
         const sessionMessages = { ...state.sessionMessages };
         delete sessionMessages[chatId];
         return { sessionMessages };
       }),
 
       clearSessionRuntime: (chatId) => set((state) => {
+        const lruIdx = sessionAccessOrder.indexOf(chatId);
+        if (lruIdx !== -1) sessionAccessOrder.splice(lruIdx, 1);
         const sessionMessages = { ...state.sessionMessages };
         const streamingChats = { ...state.streamingChats };
         const activeAssistantByChat = { ...state.activeAssistantByChat };
@@ -142,13 +172,14 @@ export const useChatStore = create<ChatState>()(
       setMessages: (messages) => {
         const { activeSessionId } = get();
         if (!activeSessionId) return;
+        touchSessionLru(activeSessionId);
         set((state) => ({
-          sessionMessages: {
+          sessionMessages: evictStaleSessions({
             ...state.sessionMessages,
             [activeSessionId]: typeof messages === 'function'
               ? messages(state.sessionMessages[activeSessionId] ?? EMPTY_ARRAY)
               : messages,
-          },
+          }),
         }));
       },
 

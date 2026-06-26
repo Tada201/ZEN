@@ -83,18 +83,18 @@ impl TerminalService {
             reason: Some("user approved opening an interactive terminal shell".to_string()),
         });
 
-        if decision == PermissionDecision::Deny {
+        if decision != PermissionDecision::Allow {
             security
                 .record_audit(AuditEvent {
                     operation: PrivilegedOperation::ShellCommand,
                     decision,
                     caller: "terminal_request_approval".to_string(),
                     target: Some("interactive_shell".to_string()),
-                    reason: Some("interactive terminal approval denied by security policy".to_string()),
+                    reason: Some("interactive terminal requires explicit approval".to_string()),
                 })
                 .await;
             return Err(ZenError::Custom(
-                "Terminal access is denied by security policy".to_string(),
+                "Terminal access requires explicit approval".to_string(),
             ));
         }
 

@@ -56,6 +56,10 @@ export interface AgentActivityState {
     clearTasks: () => void;
     removeTask: (id: string) => void;
 
+    clearActivitiesForChat: (chatId: string) => void;
+
+    clearTasksForChat: (chatId: string) => void;
+
     pendingPlan: OrchestratorPlan | null;
     setPendingPlan: (plan: OrchestratorPlan | null) => void;
 }
@@ -82,6 +86,10 @@ export const useAgentActivityStore = create<AgentActivityState>()(
         },
 
         clearActivities: () => set({ activities: [] }),
+
+        clearActivitiesForChat: (chatId: string) => set((state) => ({
+            activities: state.activities.filter(a => a.chatId !== chatId),
+        })),
 
         getActivitiesByTask: (chatId, agentId) => {
             return get().activities.filter(a => a.chatId === chatId && (a.agentId === agentId || a.agentName === agentId));
@@ -137,7 +145,14 @@ export const useAgentActivityStore = create<AgentActivityState>()(
         setSelectedTaskId: (id) => set({ selectedTaskId: id }),
 
         clearTasks: () => set({ activeTasks: [], selectedTaskId: null }),
-        
+
+        clearTasksForChat: (chatId: string) => set((state) => ({
+            activeTasks: state.activeTasks.filter(t => t.chatId !== chatId),
+            selectedTaskId: state.selectedTaskId && state.activeTasks.find(t => t.id === state.selectedTaskId)?.chatId === chatId
+                ? null
+                : state.selectedTaskId,
+        })),
+
         removeTask: (id) => set((state) => ({
             activeTasks: state.activeTasks.filter(t => t.id !== id),
             selectedTaskId: state.selectedTaskId === id ? null : state.selectedTaskId

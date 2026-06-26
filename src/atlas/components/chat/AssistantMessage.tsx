@@ -31,12 +31,6 @@ const CardFallback = () => (
 // via the streamingPreview prop — no need for separate AgentActionStep display.
 const VISIBLE_CHAT_STATUS_PHASES: ReadonlySet<ChatStatusPhase> = new Set([]);
 
-function completedStepDisplayRank(step: ReturnType<typeof groupAssistantSteps>[number]) {
-  if (step.type === "reasoning") return 0;
-  if (step.type === "tool-group") return 1;
-  if (step.type === "action") return 2;
-  return 3;
-}
 
 function isVisibleChatStatusStep(step: Step) {
   const phase = step.metadata?.phase;
@@ -103,16 +97,8 @@ export function AssistantMessage({
   }, [groupedSteps]);
 
   const visibleGroupedSteps = useMemo(() => {
-    const visible = groupedSteps.filter((step) => step.type !== "action" || isVisibleChatActionStep(step as Step));
-    if (message.status === "sending") return visible;
-    if (!visible.some((step) => step.type === "tool-group") || !visible.some((step) => step.type === "text")) {
-      return visible;
-    }
-    return visible
-      .map((step, index) => ({ step, index }))
-      .sort((a, b) => completedStepDisplayRank(a.step) - completedStepDisplayRank(b.step) || a.index - b.index)
-      .map(({ step }) => step);
-  }, [groupedSteps, message.status]);
+    return groupedSteps.filter((step) => step.type !== "action" || isVisibleChatActionStep(step as Step));
+  }, [groupedSteps]);
 
   const showPostToolWorking = useMemo(() => {
     if (visibleGroupedSteps.length > 0) {

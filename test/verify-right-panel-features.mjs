@@ -8,16 +8,33 @@ const uiStoreSource = readFileSync(new URL("../src/lib/stores/useUIStore.ts", im
 const graphEventsSource = readFileSync(new URL("../src/atlas/hooks/stream/useGraphSessionEvents.ts", import.meta.url), "utf8");
 const globalListenerSource = readFileSync(new URL("../src/atlas/hooks/useGlobalStreamListener.ts", import.meta.url), "utf8");
 
-for (const tab of ["metrics", "analytics", "artifacts", "agents", "workflows", "drawing", "memory", "terminal", "map", "space"]) {
+// Only tabs with real panel implementations in RightPanel should be
+// visible in the right-rail feature registry.  analytics, workflows,
+// memory, and space were removed because they had no render branches.
+const IMPLEMENTED_TABS = ["metrics", "artifacts", "agents", "drawing", "terminal", "map"];
+
+for (const tab of IMPLEMENTED_TABS) {
   assert(
     featuresSource.includes(`rightPanelTabId: "${tab}"`) &&
-      featuresSource.includes(`rightPanelTabId: "${tab}"`) &&
       featuresSource.slice(
         featuresSource.indexOf(`rightPanelTabId: "${tab}"`) - 180,
         featuresSource.indexOf(`rightPanelTabId: "${tab}"`) + 80,
       ).includes("defaultVisible: true"),
     `${tab} should be visible in the right rail feature registry`,
   );
+}
+
+// Unimplemented tabs must NOT appear as visible right-rail features.
+const HIDDEN_TABS = ["analytics", "workflows", "memory", "space"];
+for (const tab of HIDDEN_TABS) {
+  const idx = featuresSource.indexOf(`rightPanelTabId: "${tab}"`);
+  if (idx !== -1) {
+    // If the entry still exists, it must not be visible (defaultVisible: false or prototype/labsOnly)
+    const snippet = featuresSource.slice(idx - 200, idx + 80);
+    const isPrototype = snippet.includes('maturity: "prototype"');
+    const isHidden = snippet.includes("defaultVisible: false") || snippet.includes("labsOnly: true") || isPrototype;
+    assert(isHidden, `${tab} should be hidden (prototype/labsOnly/defaultVisible:false) in the right rail feature registry`);
+  }
 }
 
 assert(

@@ -75,7 +75,7 @@ function markTtftStatusPhase(chatId: string, phase?: unknown) {
   if (marker) ttftMark(chatId, marker);
 }
 
-export function useAgentEvents() {
+export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeout?: (chatId: string) => void } = {}) {
   const unlistenRefs = useRef<UnlistenFn[]>([]);
   const taskChatIdsRef = useRef<Map<string, string>>(new Map());
   const agentChatIdsRef = useRef<Map<string, string>>(new Map());
@@ -183,9 +183,10 @@ export function useAgentEvents() {
                 ...(payload.status === "failed"
                   ? { error: payload.error?.trim() || "Research failed." }
                   : {}),
-                createdAt: payload.timestamp
-                  ? new Date(payload.timestamp).getTime()
-                  : next[researchIdx].createdAt,
+                // Preserve the original createdAt from the optimistic
+                // placeholder so the elapsed timer doesn't jump when
+                // the real DB ID replaces the temp ID.
+                createdAt: next[researchIdx].createdAt,
               };
               return next;
             }
@@ -209,6 +210,14 @@ export function useAgentEvents() {
             }
             if (tempAssistantIdx !== -1) {
               const next = [...prev];
+              const tempId = prev[tempAssistantIdx].id;
+              
+              // Update the active assistant reference in the store to point to the new UUID
+              const currentActive = useChatStore.getState().getActiveAssistantForChat(chatId);
+              if (currentActive === tempId) {
+                useChatStore.getState().setActiveAssistantForChat(chatId, payload.id);
+              }
+
               next[tempAssistantIdx] = {
                 ...next[tempAssistantIdx],
                 id: payload.id,
@@ -216,7 +225,7 @@ export function useAgentEvents() {
                 createdAt: payload.timestamp
                   ? new Date(payload.timestamp).getTime()
                   : next[tempAssistantIdx].createdAt,
-                status: payload.status || "sent",
+                status: payload.status || next[tempAssistantIdx].status || "sent",
                 metadata: (payload.metadata as ActionMeta | undefined) || next[tempAssistantIdx].metadata,
               };
               return next;
@@ -414,6 +423,11 @@ export function useAgentEvents() {
         const payload = event.payload;
         const chatId = getDirectOrActiveStreamingChatId(useChatStore.getState(), payload);
         if (!chatId) return;
+
+        // Deep research sends chat:research-step events instead of chat:chunk
+        // events during its multi-round investigation phase. Reset the stream
+        // heartbeat so the 5-minute timeout doesn't kill long-running research.
+        resetHeartbeatTimeout?.(chatId);
 
         useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
           const next = [...prev];

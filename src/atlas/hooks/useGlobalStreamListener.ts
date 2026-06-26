@@ -22,6 +22,6 @@ export function useGlobalStreamListener() {
   useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout });
   useToolEvents({ resetHeartbeatTimeout });
   useArtifactEvents({ resetHeartbeatTimeout });
-  useAgentEvents();
+  useAgentEvents({ resetHeartbeatTimeout });
   useGraphSessionEvents();
 }

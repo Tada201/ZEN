@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { chatApi, providersApi } from '@/api';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
-import { useChatStore } from '@/lib/stores/useChatStore';
 
 export interface InitStep {
     id: string;
@@ -90,13 +89,10 @@ export function useAppInit(onStepsUpdate?: (steps: InitStep[]) => void) {
 
                 setStep('chathistory', 'loading');
                 try {
-                    const chatStore = useChatStore.getState();
-                    let targetSessionId = chatStore.activeSessionId;
-                    const sessionsPage = await chatApi.listChatsPage(1, 0);
-                    if (!targetSessionId && sessionsPage.items.length > 0) {
-                        targetSessionId = sessionsPage.items[0].id;
-                        chatStore.setActiveSession(targetSessionId);
-                    }
+                    // Session auto-selection is handled exclusively by useChatQueries
+                    // to avoid a race condition between this async init and the React
+                    // Query effect. We only need to verify chat history is accessible.
+                    await chatApi.listChatsPage(1, 0);
                     setStep('chathistory', 'done');
                 } catch {
                     setStep('chathistory', 'error');

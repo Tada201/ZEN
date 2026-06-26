@@ -42,7 +42,11 @@ export function useChatMutations({
       queryClient.setQueryData<Session[]>(["sessions"], (prev) => prev?.filter((s) => s.id !== id));
       queryClient.setQueryData<Session[]>(["archived-sessions"], (prev) => prev?.filter((s) => s.id !== id));
       useChatStore.getState().clearSessionRuntime(id);
-      if (currentSessionId === id) setCurrentSessionId(null);
+      if (currentSessionId === id) {
+        // Auto-select the next available session instead of leaving a blank chat.
+        const remaining = sessions.filter((s) => s.id !== id);
+        setCurrentSessionId(remaining.length > 0 ? remaining[0].id : null);
+      }
       toast.success("Session deleted");
     },
     onError: (err) => toast.error(getIpcErrorMessage(err, "Failed to delete session")),
@@ -76,7 +80,11 @@ export function useChatMutations({
         queryClient.setQueryData<Session[]>(["sessions"], (prev) => prev?.filter(s => s.id !== id));
         queryClient.setQueryData<Session[]>(["archived-sessions"], (prev) => [{ ...session, archived: true }, ...(prev || [])]);
       }
-      if (currentSessionId === id) setCurrentSessionId(null);
+      if (currentSessionId === id) {
+        // Auto-select the next available session instead of leaving a blank chat.
+        const remaining = sessions.filter((s) => s.id !== id);
+        setCurrentSessionId(remaining.length > 0 ? remaining[0].id : null);
+      }
       toast.success("Session archived");
     },
     onError: (err) => toast.error(getIpcErrorMessage(err, "Failed to archive session")),

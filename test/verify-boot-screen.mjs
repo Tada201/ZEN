@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
 const appSource = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
-const bootSource = readFileSync(new URL("../src/components/BootScreen.tsx", import.meta.url), "utf8");
+const bootSource = readFileSync(new URL("../src/components/bootscreen/index.tsx", import.meta.url), "utf8");
 const initSource = readFileSync(new URL("../src/hooks/useAppInit.ts", import.meta.url), "utf8");
 
 assert(appSource.includes("<BootScreen") && appSource.includes("bootFinished"), "app must mount and dismiss the boot overlay");

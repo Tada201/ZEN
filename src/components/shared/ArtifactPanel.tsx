@@ -8,11 +8,12 @@ const MermaidDiagram = React.lazy(() => import("@/atlas/components/chat/MermaidD
 const MarkdownContent = React.lazy(() => import("@/atlas/components/chat/MarkdownContent").then((module) => ({ default: module.MarkdownContent })));
 
 export function ArtifactPanel({ isEmbedded = false }: { isEmbedded?: boolean }) {
-  const artifacts = useChatStore((state) => state.artifacts);
+  const allArtifacts = useChatStore((state) => state.artifacts);
   const globalArtifacts = useChatStore((state) => state.globalArtifacts);
   const activeArtifactId = useChatStore((state) => state.activeArtifactId);
   const setActiveArtifact = useChatStore((state) => state.setActiveArtifact);
   const loadAllArtifacts = useChatStore((state) => state.loadAllArtifacts);
+  const activeSessionId = useChatStore((state) => state.activeSessionId);
   const [scope, setScope] = useState<"session" | "all">("session");
   const [mode, setMode] = useState<"preview" | "code">("preview");
   const [query, setQuery] = useState("");
@@ -22,7 +23,14 @@ export function ArtifactPanel({ isEmbedded = false }: { isEmbedded?: boolean }) 
     if (scope === "all") loadAllArtifacts();
   }, [loadAllArtifacts, scope]);
 
-  const source = scope === "session" ? artifacts : globalArtifacts;
+  // When scoped to "session", only show artifacts tagged with the current session.
+  // Fall back to showing all artifacts for backward-compatible artifacts that
+  // predate the chatId tagging (no chatId field).
+  const sessionArtifacts = useMemo(() => {
+    if (!activeSessionId) return allArtifacts;
+    return allArtifacts.filter((a) => !a.chatId || a.chatId === activeSessionId);
+  }, [allArtifacts, activeSessionId]);
+  const source = scope === "session" ? sessionArtifacts : globalArtifacts;
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return source;

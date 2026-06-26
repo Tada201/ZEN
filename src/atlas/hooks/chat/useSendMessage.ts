@@ -33,8 +33,10 @@ export function useSendMessage(
     tools?: string[];
     systemPrompt?: string | null;
     systemPromptMode?: "append" | "replace" | null;
+    /** Override target session — used by retry to route to the original session. */
+    targetSessionId?: string;
   }) => {
-    let targetSessionId = currentSessionId;
+    let targetSessionId = data.targetSessionId || currentSessionId;
     if (!targetSessionId && ensureSession) {
       targetSessionId = await ensureSession();
     }

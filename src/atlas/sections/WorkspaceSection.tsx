@@ -83,12 +83,12 @@ export function WorkspaceApp() {
 
   const openArtifactInRightPanel = useCallback((artifact: ArtifactData) => {
     const artifactId = artifact.id || `art_${Date.now()}`;
-    useChatStore.getState().addArtifact({ ...artifact, id: artifactId });
+    useChatStore.getState().addArtifact({ ...artifact, id: artifactId, chatId: artifact.chatId || currentSessionId || undefined });
     useChatStore.getState().setActiveArtifact(artifactId);
     setActiveArtifact(null);
     useUIStore.getState().setRightPanelOpen(true);
     useUIStore.getState().setActiveRightTab("artifacts");
-  }, []);
+  }, [currentSessionId]);
 
   const handleSendMessageInternal = useCallback(async (data: any) => {
     handleSendMessage({
@@ -154,6 +154,15 @@ export function WorkspaceApp() {
       provider: selectedProvider,
     });
   }, [messages, setMessages, selectedModelId, selectedProvider, handleSendMessageInternal]);
+
+  const handleContinueResearch = useCallback((request: string) => {
+    handleSendMessageInternal({
+      message: request,
+      model: selectedModelId,
+      provider: selectedProvider,
+      deepResearch: true,
+    });
+  }, [handleSendMessageInternal, selectedModelId, selectedProvider]);
 
   // Stable ref for voice transcript callback to prevent cascading re-initialization
   // of audio graph / rAF loop when parent re-renders during streaming.
@@ -302,6 +311,9 @@ export function WorkspaceApp() {
                         onDismissError={handleDismissError}
                         onRetry={handleRetry}
                         onRegenerate={handleRegenerate}
+                        onContinueResearch={handleContinueResearch}
+                        onAbort={abortStream}
+                        isStreaming={isStreaming}
                       />
                       <div className="max-w-3xl mx-auto w-full px-6 py-4 shrink-0">
                           <PremiumChatInput
@@ -341,6 +353,9 @@ export function WorkspaceApp() {
                             onDismissError={handleDismissError}
                             onRetry={handleRetry}
                             onRegenerate={handleRegenerate}
+                            onContinueResearch={handleContinueResearch}
+                            onAbort={abortStream}
+                            isStreaming={isStreaming}
                           />
                           <div className="max-w-3xl mx-auto w-full px-6 py-4 shrink-0">
                               <PremiumChatInput

@@ -17,6 +17,7 @@ export const MessageList = memo(function MessageList({
   onDismissError,
   onRegenerate,
   onContinueResearch,
+  onAbort,
   compact,
 }: {
   messages: Message[];
@@ -27,6 +28,7 @@ export const MessageList = memo(function MessageList({
   onDismissError?: (id: string) => void;
   onRegenerate?: (id: string) => void;
   onContinueResearch?: (request: string) => void;
+  onAbort?: () => void;
   compact?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -100,8 +102,7 @@ export const MessageList = memo(function MessageList({
         </div>
       ) : (
         <div className="w-full pb-8">
-          {filteredMessages.map((message) => (
-            <MemoizedMessageItem
+          {filteredMessages.map((message) => (              <MemoizedMessageItem
               key={message.id}
               message={message}
               onOpenArtifact={onOpenArtifact}
@@ -110,6 +111,9 @@ export const MessageList = memo(function MessageList({
               onDismissError={onDismissError}
               onRegenerate={onRegenerate}
               onContinueResearch={onContinueResearch}
+              onAbort={onAbort}
+              isChatStreaming={_isStreaming}
+              messages={filteredMessages}
               compact={compact}
             />
           ))}

@@ -2,6 +2,11 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { RightPanelTabId, SettingsTabId, WorkspaceModeId } from '@/lib/features/frontendFeatures';
 
+// Module-level session tracker — avoids circular import with useChatStore.
+// Updated by useChatQueries on session switch via setActiveSessionId.
+let _lastSessionId: string | null = null;
+export function setActiveSessionId(id: string | null) { _lastSessionId = id; }
+
 interface UIState {
   sidebarOpen: boolean;
   sidebarWidth: number;
@@ -28,6 +33,7 @@ interface UIState {
   rightPanelOpen: boolean;
   activeRightTab: RightPanelTabId;
   rightPanelCanvasMode: 'draw' | 'mathplot';
+  rightTabBySession: Record<string, RightPanelTabId>;
   agentsPanelDismissed: boolean;
   
   // Actions
@@ -58,6 +64,7 @@ interface UIState {
   setActiveRightTab: (tab: RightPanelTabId) => void;
   setRightPanelCanvasMode: (mode: 'draw' | 'mathplot') => void;
   setAgentsPanelDismissed: (dismissed: boolean) => void;
+  restoreRightTabForSession: (sessionId: string | null) => void;
   toggleSidebar: () => void;
   toggleRightPanel: () => void;
 }
@@ -89,6 +96,7 @@ export const useUIStore = create<UIState>()(
       rightPanelOpen: false,
       activeRightTab: 'metrics',
       rightPanelCanvasMode: 'draw',
+      rightTabBySession: {},
       agentsPanelDismissed: false,
 
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
@@ -129,7 +137,25 @@ export const useUIStore = create<UIState>()(
         } else if (state.activeRightTab === 'agents' && state.rightPanelOpen) {
           nextState.agentsPanelDismissed = true;
         }
+        // Remember the selected tab for the current session
+        if (_lastSessionId) {
+          nextState.rightTabBySession = { ...state.rightTabBySession, [_lastSessionId]: activeRightTab };
+        }
         return nextState as any;
+      }),
+      restoreRightTabForSession: (sessionId) => set((state) => {
+        if (!sessionId) return state;
+        const remembered = state.rightTabBySession[sessionId];
+        if (remembered && remembered !== state.activeRightTab) {
+          const nextState: Partial<UIState> = { activeRightTab: remembered };
+          if (remembered === 'agents') {
+            nextState.agentsPanelDismissed = false;
+          } else if (state.activeRightTab === 'agents' && state.rightPanelOpen) {
+            nextState.agentsPanelDismissed = true;
+          }
+          return nextState as any;
+        }
+        return state;
       }),
       setRightPanelCanvasMode: (rightPanelCanvasMode) => set({ rightPanelCanvasMode }),
       setAgentsPanelDismissed: (agentsPanelDismissed) => set({ agentsPanelDismissed }),
@@ -147,6 +173,7 @@ export const useUIStore = create<UIState>()(
           voiceModeOpen,
           aiSpeaking,
           agentsPanelDismissed,
+          rightTabBySession,
           ...rest
         } = state;
         return rest;

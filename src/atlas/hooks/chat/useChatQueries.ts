@@ -1,7 +1,11 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { chatApi, providersApi, type BackendChat, type BackendFolder, type BackendMessage } from "@/api";
 import { useChatStore } from "@/lib/stores/useChatStore";
+import { useTaskStore } from "@/lib/stores/taskStore";
+import { useAgentActivityStore } from "@/lib/stores/agentActivityStore";
+import { useVoiceStageStore } from "@/atlas/components/voice/voiceStageStore";
+import { useUIStore, setActiveSessionId as setUISessionId } from "@/lib/stores/useUIStore";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import { useShallow } from "zustand/react/shallow";
 import type { ModelInfo } from "@/lib/types/provider";
@@ -269,6 +273,7 @@ export function useChatQueries() {
   })));
 
   const [search, setSearch] = useState("");
+  const prevSessionRef = useRef<string | null>(currentSessionId);
 
   const { data: sessions = [] } = useQuery({
     queryKey: ["sessions"],
@@ -398,6 +403,7 @@ export function useChatQueries() {
           const fetchedIsComplete = updatedMsg.status === "sent";
           const existingIsComplete = existing.status === "sent";
           if (existingIsComplete && !fetchedIsComplete) {
+            // Live message is complete but fetched DB row is stale — preserve live state.
             updatedMsg = {
               ...updatedMsg,
               status: existing.status,
@@ -405,6 +411,18 @@ export function useChatQueries() {
               metadata: existing.metadata,
               error: existing.error,
             };
+          } else if (existingIsComplete && fetchedIsComplete) {
+            // Both are complete. The live message may have richer researchSteps
+            // accumulated from streaming events that the DB hasn't persisted yet.
+            // Prefer the live metadata when it has more research steps.
+            const liveStepCount = existing.metadata?.researchSteps?.length ?? 0;
+            const fetchedStepCount = updatedMsg.metadata?.researchSteps?.length ?? 0;
+            if (liveStepCount > fetchedStepCount) {
+              updatedMsg = {
+                ...updatedMsg,
+                metadata: existing.metadata,
+              };
+            }
           } else if (existing.content && !updatedMsg.content) {
             updatedMsg = {
               ...updatedMsg,
@@ -472,6 +490,54 @@ export function useChatQueries() {
       setCurrentSessionId(sessions[0].id);
     }
   }, [sessions, currentSessionId]);
+  // On session switch, clear the previous session's non-streaming runtime
+  // state (active artifact, task store, agent activity, voice board) so
+  // stale data doesn't flash before the new fetch completes. Preserve
+  // sessionMessages, streamingChats, and activeAssistantByChat for chats
+  // that are still actively streaming in the background.
+  useEffect(() => {
+    const prev = prevSessionRef.current;
+    prevSessionRef.current = currentSessionId;
+    if (prev !== null && prev !== currentSessionId) {
+      const chatStore = useChatStore.getState();
+      if (chatStore.activeArtifactId) {
+        chatStore.setActiveArtifact(null);
+      }
+
+      const prevStillStreaming = chatStore.streamingChats[prev] === true;
+      if (prevStillStreaming) {
+        // Background-streaming chat — preserve live buffers so stream
+        // events keep routing correctly. Only clear the local UI artifact.
+      } else {
+        // Inactive chat — safe to purge its full runtime footprint.
+        chatStore.clearSessionRuntime(prev);
+      }
+
+      useTaskStore.getState().setActiveChatId(currentSessionId);
+      useTaskStore.getState().clearTasksForChat(prev);
+
+      const agentStore = useAgentActivityStore.getState();
+      agentStore.clearTasksForChat(prev);
+      agentStore.clearActivitiesForChat(prev);
+      if (agentStore.pendingPlan?.chatId === prev) {
+        agentStore.setPendingPlan(null);
+      }
+
+      // Voice board is session-bound — clear widgets, retained boards,
+      // and close lifecycle so stale visualizations don't leak.
+      const voiceStore = useVoiceStageStore.getState();
+      voiceStore.clear();
+      voiceStore.close();
+
+      // Track the active session for the UI store's per-session tab memory
+      setUISessionId(currentSessionId);
+      // Restore the right-panel tab remembered for the new session
+      useUIStore.getState().restoreRightTabForSession(currentSessionId);
+    } else {
+      useTaskStore.getState().setActiveChatId(currentSessionId);
+      setUISessionId(currentSessionId);
+    }
+  }, [currentSessionId]);
 
   const { data: searchResults = [] } = useQuery({
     queryKey: ["search-sessions", search],

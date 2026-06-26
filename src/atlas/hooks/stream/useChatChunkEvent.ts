@@ -28,6 +28,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
   const chunkBuffersRef = useRef<Record<string, ChunkBuffer>>({});
   const chunkRafRef = useRef<number | null>(null);
   const firstChunkDeltas = useRef<Record<string, ChunkBuffer>>({});
+  const researchCompletionTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   const flushAllChunkBuffers = useCallback(() => {
     const buffers = chunkBuffersRef.current;
@@ -191,11 +192,14 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
           });
         }
 
-        useChatStore.getState().setStreamingForChat(chatId, false);
-        useChatStore.getState().setActiveAssistantForChat(chatId, null);
-
         const reason: string = event.payload.reason || "complete";
         const isCancelled = reason === "cancelled";
+
+        // Track whether streaming should stop after message finalization.
+        // For deep_research handoff (no content yet), keep streaming alive
+        // so the UI does not render "interrupted" during the 20-second
+        // window that awaits chat:message with the final report.
+        let shouldStopStreaming = true;
 
         useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
           const assistantIdx = findWritableAssistantIndex(prev, chatId);
@@ -216,9 +220,38 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
             // Tauri event names are not ordered, so chat:done may arrive
             // first. Keep the placeholder live until the report event fills
             // it instead of marking an empty research card complete.
-            next[assistantIdx] = assistant.content.trim()
-              ? markMessageAsFinished(assistant, isCancelled, reason)
-              : { ...assistant, isThinking: false };
+            if (assistant.content.trim()) {
+              // Content already present — finalize immediately.
+              next[assistantIdx] = markMessageAsFinished(assistant, isCancelled, reason);
+            } else {
+              // No content yet — chat:message should arrive soon to fill it.
+              // Keep streaming=true so DeepResearchMessage does not render
+              // "interrupted" during the handoff window. The fallback
+              // timer or chat:message handler will stop streaming later.
+              shouldStopStreaming = false;
+              next[assistantIdx] = { ...assistant, isThinking: false };
+              researchCompletionTimersRef.current[chatId] = setTimeout(() => {
+                const store = useChatStore.getState();
+                const msgs = store.sessionMessages[chatId];
+                const idx = msgs?.findIndex((m) => m.id === assistant.id) ?? -1;
+                if (idx === -1) return;
+                const msg = msgs[idx];
+                // If chat:message already filled content or finalized, bail.
+                if (msg.status !== "sending" || msg.content.trim()) return;
+                console.warn(`[chat:done] Deep research fallback timeout for chat ${chatId} — finalizing without content.`);
+                store.setSessionMessages(chatId, (prev2: Message[]) => {
+                  const i = prev2.findIndex((m) => m.id === assistant.id);
+                  if (i === -1) return prev2;
+                  const next2 = [...prev2];
+                  next2[i] = markMessageAsFinished(next2[i], false, "fallback-timeout");
+                  return next2;
+                });
+                store.setStreamingForChat(chatId, false);
+                store.setActiveAssistantForChat(chatId, null);
+                queryClient.invalidateQueries({ queryKey: ["messages", chatId] });
+                toast.error("Research completed but the final report was not received. Partial results may be available.");
+              }, 20_000);
+            }
             return next;
           }
 
@@ -234,6 +267,13 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
           return next;
         });
 
+        // Stop streaming after setSessionMessages unless we're in a
+        // deep_research handoff (shouldStopStreaming === false).
+        if (shouldStopStreaming) {
+          useChatStore.getState().setStreamingForChat(chatId, false);
+          useChatStore.getState().setActiveAssistantForChat(chatId, null);
+        }
+
         // Skip query invalidation for deep_research — the chat:message
         // handler (in useAgentEvents.ts) updates the message in-place,
         // and we don't want the refetch to replace the live state.
@@ -241,13 +281,44 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         const hasDeepResearch = currentMessages?.some((m) => m.kind === "deep_research");
         if (!hasDeepResearch) {
           queryClient.invalidateQueries({ queryKey: ["messages", chatId] });
+        } else {
+          // Cancel any fallback timeout since chat:message arrived or
+          // the research had content (finalized above).
+          if (researchCompletionTimersRef.current[chatId]) {
+            clearTimeout(researchCompletionTimersRef.current[chatId]);
+            delete researchCompletionTimersRef.current[chatId];
+          }
         }
         ttftReport(chatId, reason);
+      });
+
+      const unlistenChatMessage = await listenAppEvent("chat:message", (event) => {
+        // When chat:message arrives for a deep_research message, cancel
+        // the fallback timer — the message will be finalized properly.
+        // Also stop streaming for this chat since the handoff is complete.
+        const chatId = event.payload.chat_id;
+        const kind = event.payload.kind;
+        if (chatId && kind === "deep_research") {
+          if (researchCompletionTimersRef.current[chatId]) {
+            clearTimeout(researchCompletionTimersRef.current[chatId]);
+            delete researchCompletionTimersRef.current[chatId];
+          }
+          // End the handoff — streaming was kept alive in chat:done
+          // so the UI would not render "interrupted" prematurely.
+          useChatStore.getState().setStreamingForChat(chatId, false);
+          useChatStore.getState().setActiveAssistantForChat(chatId, null);
+          queryClient.invalidateQueries({ queryKey: ["messages", chatId] });
+        }
       });
 
       const unlistenError = await listenAppEvent("chat:error", (event) => {
         const chatId = event.payload.chat_id;
         if (!chatId) return;
+        // Cancel any fallback timer on error
+        if (researchCompletionTimersRef.current[chatId]) {
+          clearTimeout(researchCompletionTimersRef.current[chatId]);
+          delete researchCompletionTimersRef.current[chatId];
+        }
 
         const activeAssistantId = useChatStore.getState().getActiveAssistantForChat(chatId);
         if (!activeAssistantId) return;
@@ -291,6 +362,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         unlistenChunkFirst,
         unlistenChunk,
         unlistenDone,
+        unlistenChatMessage,
         unlistenError,
         unlistenStreamReset,
       ];
@@ -313,6 +385,9 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         cancelAnimationFrame(chunkRafRef.current);
         chunkRafRef.current = null;
       }
+      // Clear all fallback timers on unmount
+      Object.values(researchCompletionTimersRef.current).forEach(clearTimeout);
+      researchCompletionTimersRef.current = {};
       flushAllChunkBuffers();
     };
   }, [queryClient, flushAllChunkBuffers, resetHeartbeatTimeout, clearHeartbeatTimeout]);

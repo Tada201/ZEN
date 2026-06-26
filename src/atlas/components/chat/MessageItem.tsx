@@ -13,6 +13,9 @@ export function MessageItem({
   onDismissError,
   onRegenerate,
   onContinueResearch,
+  onAbort,
+  isChatStreaming,
+  messages,
   compact,
 }: {
   message: Message;
@@ -22,6 +25,9 @@ export function MessageItem({
   onDismissError?: (id: string) => void;
   onRegenerate?: (id: string) => void;
   onContinueResearch?: (request: string) => void;
+  onAbort?: () => void;
+  isChatStreaming?: boolean;
+  messages?: Message[];
   compact?: boolean;
 }) {
   const message = useMemo(() => normalizeVercelMessage(rawMessage), [rawMessage]);
@@ -35,6 +41,9 @@ export function MessageItem({
           message={message} 
           compact={compact} 
           onContinueResearch={onContinueResearch}
+          onAbort={onAbort}
+          isChatStreaming={isChatStreaming}
+          messages={messages}
         />
       );
     }

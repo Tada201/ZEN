@@ -4,7 +4,7 @@ import { WorkspaceApp } from "./atlas/sections/WorkspaceSection";
 import { Toaster } from "sonner";
 import { useGlobalStreamListener } from "./atlas/hooks/useGlobalStreamListener";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { BootScreen } from "./components/BootScreen";
+import { BootScreen } from "./components/bootscreen";
 import { useFullscreen } from "./lib/hooks/useFullscreen";
 import { useUpdateStore } from "./lib/stores/updateStore";
 import { useGTSMStore } from "./lib/stores/useGTSMStore";
