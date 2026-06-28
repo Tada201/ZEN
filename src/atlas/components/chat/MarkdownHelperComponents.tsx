@@ -1,5 +1,9 @@
 import React, { Component, type ReactNode, useState, useCallback } from "react";
-import { Play, X, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
+import { Play, X, ChevronLeft, ChevronRight, ExternalLink, Download } from "lucide-react";
+import { AppDialog } from "@/components/ui/AppDialog";
+import { invoke } from "@tauri-apps/api/core";
+import { toast } from "sonner";
+import { toAssetUrl } from "@/lib/utils/assetUrl";
 
 /**
  * MarkdownErrorBoundary - Catches rendering errors in markdown blocks
@@ -92,9 +96,29 @@ export function YoutubePreview({ videoId }: { videoId: string }) {
 // ── Image gallery / lightbox ─────────────────────────────────
 export function ImageGallery({ images }: { images: Array<{ src: string; alt: string }> }) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const open = (idx: number) => setLightboxIndex(idx);
   const close = () => setLightboxIndex(null);
+
+  const handleExport = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (lightboxIndex === null) return;
+    const currentSrc = images[lightboxIndex].src;
+    setExporting(true);
+    const toastId = toast.loading("Saving image to workspace...");
+    try {
+      const savedPath = await invoke<string>("export_image_to_workspace", {
+        imageUri: currentSrc,
+      });
+      toast.success(`Image saved to workspace: ${savedPath}`, { id: toastId });
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`Failed to export image: ${err?.message || err}`, { id: toastId });
+    } finally {
+      setExporting(false);
+    }
+  }, [lightboxIndex, images]);
 
   const prev = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -118,7 +142,7 @@ export function ImageGallery({ images }: { images: Array<{ src: string; alt: str
             style={{ scrollSnapAlign: "start" }}
           >
             <img
-              src={img.src}
+              src={toAssetUrl(img.src)}
               alt={img.alt || ""}
               className="h-32 w-auto max-w-[200px] object-cover group-hover:scale-105 transition-transform duration-200"
               loading="lazy"
@@ -126,62 +150,89 @@ export function ImageGallery({ images }: { images: Array<{ src: string; alt: str
           </button>
         ))}
       </div>
-      {lightboxIndex !== null && (
-        <div
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
-          onClick={close}
-        >
-          <button
-            type="button"
-            onClick={close}
-            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors z-10"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5 text-white" />
-          </button>
-          {lightboxIndex > 0 && (
-            <button
-              type="button"
-              onClick={prev}
-              className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-              aria-label="Previous"
-            >
-              <ChevronLeft className="w-6 h-6 text-white" />
-            </button>
-          )}
-          <img
-            src={images[lightboxIndex].src}
-            alt={images[lightboxIndex].alt || ""}
-            className="max-h-[85vh] max-w-[90vw] object-contain rounded-lg"
-          />
-          {lightboxIndex < images.length - 1 && (
-            <button
-              type="button"
-              onClick={next}
-              className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-              aria-label="Next"
-            >
-              <ChevronRight className="w-6 h-6 text-white" />
-            </button>
-          )}
-          <div className="absolute bottom-4 text-white/60 text-xs">
-            {lightboxIndex + 1} / {images.length}
+
+      <AppDialog
+        open={lightboxIndex !== null}
+        onOpenChange={(isOpen) => { if (!isOpen) close(); }}
+        title={lightboxIndex !== null ? (images[lightboxIndex].alt || "Image Preview") : "Image Preview"}
+        footer={
+          <div className="flex w-full items-center justify-between">
+            <span className="text-[10px] text-zinc-400 font-mono">
+              {lightboxIndex !== null ? `${lightboxIndex + 1} / ${images.length}` : ""}
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={exporting}
+                className="flex items-center gap-1.5 border border-white/10 px-3 py-1.5 text-[11px] rounded text-zinc-200 hover:bg-white/[0.06] transition-colors disabled:opacity-50"
+              >
+                <Download size={12} />
+                <span>{exporting ? "Saving..." : "Export to Workspace"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={close}
+                className="border border-white/10 px-3 py-1.5 text-[11px] rounded text-zinc-400 hover:text-white transition-colors"
+              >
+                Close
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        }
+      >
+        {lightboxIndex !== null && (
+          <div className="relative flex items-center justify-center min-h-[300px]">
+            {lightboxIndex > 0 && (
+              <button
+                type="button"
+                onClick={prev}
+                className="absolute left-0 p-2 rounded-full bg-black/40 hover:bg-black/60 transition-colors z-10"
+                aria-label="Previous"
+              >
+                <ChevronLeft className="w-5 h-5 text-white" />
+              </button>
+            )}
+            <img
+              src={toAssetUrl(images[lightboxIndex].src)}
+              alt={images[lightboxIndex].alt || ""}
+              className="max-h-[60vh] max-w-full object-contain rounded-md"
+            />
+            {lightboxIndex < images.length - 1 && (
+              <button
+                type="button"
+                onClick={next}
+                className="absolute right-0 p-2 rounded-full bg-black/40 hover:bg-black/60 transition-colors z-10"
+                aria-label="Next"
+              >
+                <ChevronRight className="w-5 h-5 text-white" />
+              </button>
+            )}
+          </div>
+        )}
+      </AppDialog>
     </>
   );
 }
 
-// Helper to detect if children contain primarily images (for gallery grouping)
+// Helper to detect if children contain primarily images (for gallery grouping).
+// Recognizes both native <img> elements and custom image wrapper components
+// (e.g. InteractiveImage) by duck-typing on src/alt props.
 export function extractImagesFromChildren(children: React.ReactNode): Array<{ src: string; alt: string }> | null {
   const images: Array<{ src: string; alt: string }> = [];
   let hasNonImage = false;
   React.Children.forEach(children, (child) => {
-    if (React.isValidElement(child) && child.type === "img") {
-      const props = child.props as { src?: string; alt?: string };
-      images.push({ src: props.src || "", alt: props.alt || "" });
-    } else if (child && typeof child !== "string") {
+    if (React.isValidElement(child)) {
+      const props = child.props as Record<string, any>;
+      // Native <img> or any custom component that receives src (e.g. InteractiveImage)
+      if (child.type === "img" || (typeof props.src === "string" && props.src.length > 0)) {
+        images.push({ src: props.src || "", alt: props.alt || "" });
+        return;
+      }
+    }
+    // Skip pure whitespace text nodes between images
+    if (child && typeof child === "string" && child.trim() === "") return;
+    if (child && typeof child !== "string") {
       hasNonImage = true;
     }
   });

@@ -29,6 +29,35 @@ use tokio_util::sync::CancellationToken;
 /// Maximum recursion depth for sub-agent spawning (prevents infinite loops)
 pub const MAX_SPAWN_DEPTH: u32 = 3;
 
+/// Extracts image URIs from `generate_image` tool results in the conversation,
+/// but **only** for tool-call IDs that belong to the current run.
+/// This prevents old images from prior conversation history leaking into later replies.
+fn extract_generated_image_uris(
+    conversation: &[ChatMessage],
+    current_run_ids: &std::collections::HashSet<String>,
+) -> Vec<String> {
+    if current_run_ids.is_empty() {
+        return Vec::new();
+    }
+
+    // Find matching tool results and extract image_uri
+    conversation
+        .iter()
+        .filter(|m| m.role == "tool" && m.tool_call_id.as_deref().is_some_and(|id| current_run_ids.contains(id)))
+        .filter_map(|m| {
+            serde_json::from_str::<serde_json::Value>(&m.content)
+                .ok()
+                .and_then(|v| {
+                    v.get("image_uri")
+                        .or_else(|| v.get("imageUri"))
+                        .or_else(|| v.get("image_url"))
+                        .and_then(|u| u.as_str())
+                        .map(|s| s.to_string())
+                })
+        })
+        .collect()
+}
+
 fn voice_display_tool_evidence(conversation: &[ChatMessage]) -> String {
     conversation
         .iter()
@@ -94,6 +123,8 @@ impl Runner {
         let mut message_persisted = false;
         let mut assistant_message_id: Option<String> = None;
         let mut accumulated_commentary = String::new();
+        let mut current_run_gen_image_ids: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
         let early_tool_state = Arc::new(EarlyToolExecutionState::new());
 
         // ── P1: Check if provider supports structured tool calling ──
@@ -180,6 +211,14 @@ impl Runner {
                     accumulated_commentary.push('\n');
                 }
                 accumulated_commentary.push_str(&final_msg);
+
+                // Auto-inject image markdown for generate_image tool results (current run only)
+                let generated_uris = extract_generated_image_uris(&conversation, &current_run_gen_image_ids);
+                for uri in &generated_uris {
+                    if !accumulated_commentary.contains(uri) {
+                        accumulated_commentary.push_str(&format!("\n\n![Generated Image]({})\n\n", uri));
+                    }
+                }
 
                 // Save max iterations reached assistant response to SQLite database
                 if let Some(ref db) = self.db_pool {
@@ -465,6 +504,11 @@ impl Runner {
                     continue;
                 }
 
+                // Track generate_image tool-call IDs for the current run
+                if tc.name == "generate_image" {
+                    current_run_gen_image_ids.insert(tc.id.clone());
+                }
+
                 tool_calls.push(ToolCall {
                     id: tc.id.clone(),
                     name: tc.name.clone(),
@@ -536,6 +580,15 @@ impl Runner {
                         accumulated_commentary.push('\n');
                     }
                     accumulated_commentary.push_str(&visible_response_content);
+                }
+
+                // Auto-inject image markdown for generate_image tool results (current run only)
+                // so images render in the chat and are persisted in the DB.
+                let generated_uris = extract_generated_image_uris(&conversation, &current_run_gen_image_ids);
+                for uri in &generated_uris {
+                    if !accumulated_commentary.contains(uri) {
+                        accumulated_commentary.push_str(&format!("\n\n![Generated Image]({})\n\n", uri));
+                    }
                 }
 
                 // Save final completed assistant response to SQLite database
