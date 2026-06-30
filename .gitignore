@@ -76,6 +76,16 @@ src-tauri/**/user-data/
 *.lance
 **/.lancedb/
 
+# Dev/prod isolation leftovers — explicit entries for the pre-identifier-split
+# era. Already covered by `*.db` and `**/.lancedb/` above, but listed here so
+# future agents understand the intent: dev DB names are suffixed `-dev` and
+# live under `lancedb-dev/`. Stale files from old installs should never enter
+# the repo. Identifier-based isolation (com.zen.app vs com.zen.app.dev) means
+# these names are no longer produced at runtime; they only exist as historical
+# artifacts on developer machines.
+*.dev.db
+**/lancedb-dev/
+
 # Editor directories and files
 .vscode/
 !.vscode/extensions.json

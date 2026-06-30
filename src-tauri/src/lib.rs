@@ -87,6 +87,9 @@ pub fn run() {
                 let _start_phase = std::time::Instant::now();
 
                 // SQLite database + migrations (near-instant, ~10ms)
+                // Path isolation is handled by the per-channel `identifier` in
+                // tauri.conf.json (prod) vs tauri.dev.conf.json (dev), so the
+                // same `novus.db` filename lives in separate `app_data_dir`s.
                 let db_path = app_dir.join("novus.db");
                 let pool = match crate::db::init_pool(&db_path).await {
                     Ok(p) => p,
@@ -173,7 +176,9 @@ pub fn run() {
                         }
                     };
                     let permissions = ToolManager::build_permissions(&all_settings);
-                    state.tool_manager.update_permissions(permissions);
+                    if let Err(e) = state.tool_manager.update_permissions(permissions).await {
+                        tracing::warn!(error = %e, "Initial tool permission install failed");
+                    }
                 }
 
                 // Document service DB pool (instant)
@@ -271,6 +276,7 @@ pub fn run() {
                 // ── RAG: LanceDB vector store ──
                 state.init_progress.set_status(&bg_app_handle, "bg.lancedb", "running", None).await;
                 let _p = std::time::Instant::now();
+                // Same identifier-based isolation as the SQLite DB above.
                 let rag_dir = app_dir.join("lancedb");
                 let rag_uri = rag_dir.to_string_lossy().to_string();
                 let dimension: usize = 768;

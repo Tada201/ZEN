@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:tauri": "tauri dev --config src-tauri/tauri.dev.conf.json",
     "build": "tsc && vite build",
+    "build:tauri": "tauri build",
     "quality": "powershell -ExecutionPolicy Bypass -File scripts/quality-check.ps1",
     "quality:fast": "powershell -ExecutionPolicy Bypass -File scripts/quality-check.ps1 -SkipBuild",
     "codegraph:health": "powershell -ExecutionPolicy Bypass -File scripts/codegraph-health.ps1",

@@ -5,12 +5,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ### Development
-- **Start Dev Environment**: `npm run tauri dev` (runs the interactive desktop app with hot-reloading).
-- **Build**: `npm run build` (runs `tsc` and `vite build`).
+- **Start Dev Environment**: `npm run dev:tauri` (runs the interactive desktop app with hot-reloading under the `com.zen.app.dev` identifier — fully isolated app data folder, separate from production installs).
+- **Frontend-only Dev** (browser, no Tauri): `npm run dev` (Vite dev server only).
+- **Build Frontend**: `npm run build` (runs `tsc` and `vite build`).
+- **Build Desktop Installer** (MSI): `npm run build:tauri` (uses `tauri.conf.json` with `com.zen.app` identifier).
 
 ### Backend (Rust/Tauri)
 - **Run Tests**: `cargo test` in the `src-tauri` directory.
-- **Run Backend**: Automatically started and managed by `npm run tauri dev`.
+- **Run Backend**: Automatically started and managed by `npm run dev:tauri`.
+
+### Dev vs Prod Isolation
+The dev build uses `src-tauri/tauri.dev.conf.json` which overrides `identifier` to `com.zen.app.dev`. This means dev and prod never share:
+- SQLite DB (`novus.db`)
+- LanceDB vector store (`lancedb/`)
+- OS keyring entries
+- Tauri plugin data (notifications, dialog state, etc.)
+
+Do NOT run `tauri build` directly without `--config` — use `npm run build:tauri`. Do NOT add `cfg!(debug_assertions)` branches for path isolation; identifier-based isolation already covers it.
 
 ## Architecture
 
