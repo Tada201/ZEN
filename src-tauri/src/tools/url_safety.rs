@@ -72,3 +72,26 @@ pub fn resolve_redirect_url(current: &Url, location: &str) -> Result<Url, String
         .map_err(|e| format!("Invalid redirect URL: {}", e))
         .and_then(|url| validate_public_http_url(url.as_str()))
 }
+
+pub async fn validate_url_dns_safety(parsed_url: &Url) -> Result<(), String> {
+    let host = parsed_url.host_str().ok_or_else(|| "URL must include a host".to_string())?;
+
+    if host.eq_ignore_ascii_case("localhost") {
+        return Err("localhost URLs are not allowed".to_string());
+    }
+
+    let ip_host = host.trim_start_matches('[').trim_end_matches(']');
+    if let Ok(ip) = ip_host.parse::<std::net::IpAddr>() {
+        validate_public_ip(ip)?;
+    } else {
+        let lookup_target = format!("{}:80", host);
+        let addrs = tokio::net::lookup_host(lookup_target).await
+            .map_err(|e| format!("DNS resolution failed for {}: {}", host, e))?;
+
+        for addr in addrs {
+            validate_public_ip(addr.ip())?;
+        }
+    }
+
+    Ok(())
+}

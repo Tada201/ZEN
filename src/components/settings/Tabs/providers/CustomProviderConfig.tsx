@@ -1,4 +1,5 @@
 import { useState, memo } from 'react';
+import { toast } from 'sonner';
 import { ask } from '@tauri-apps/plugin-dialog';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { WorkbenchInput } from '@/components/settings/ui/WorkbenchInput';
@@ -28,6 +29,27 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
     const [keyDirty, setKeyDirty] = useState(false);
     const [headersText, setHeadersText] = useState(Object.entries(headers).map(([key, value]) => `${key}: ${value}`).join('\n'));
     const [saveError, setSaveError] = useState<string | null>(null);
+    const [isPinging, setIsPinging] = useState(false);
+    const runConnectionTest = useSettingsStore(s => s.testProviderConnection);
+    const handlePing = async () => {
+        if (isPinging) return;
+        setIsPinging(true);
+        try {
+            await runConnectionTest(providerId);
+            const nextStatus = useSettingsStore.getState().connectionStatuses[providerId];
+            if (nextStatus === 'success') {
+                toast.success(`Connection to ${displayName} is healthy.`);
+            } else {
+                toast.warning(`Handshake with ${displayName} completed but no models were returned.`);
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setSaveError(message);
+            toast.error(`Connection to ${displayName} failed: ${message}`);
+        } finally {
+            setIsPinging(false);
+        }
+    };
     const keyPlaceholder = isSecretPresentValue(apiKey) ? 'Saved key present. Enter a new key to replace it.' : 'Optional secure key...';
 
     const isEnabled = useSettingsStore(s => s.customProviders.find(cp => cp.id === providerId)?.enabled ?? true);
@@ -36,13 +58,27 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
 
     return (
         <div className="flex flex-col gap-4 p-4 bg-muted/20 border border-border/40 rounded-xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-3">
+            <div className="absolute top-0 right-0 p-3 flex items-center gap-2">
+                 <button
+                    type="button"
+                    onClick={handlePing}
+                    disabled={isPinging}
+                    className={cn(
+                        "flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all",
+                        isPinging
+                            ? "bg-muted border-border/40 text-muted-foreground/40 cursor-wait"
+                            : "bg-blue-500/10 border-blue-500/20 text-blue-400 hover:bg-blue-500/20"
+                    )}
+                >
+                    <WorkbenchIcon name={isPinging ? "lucide:loader-2" : "lucide:radio"} size={10} className={isPinging ? "animate-spin" : undefined} />
+                    <span className="text-[9px] font-bold uppercase tracking-widest">{isPinging ? 'Pinging' : 'Test'}</span>
+                </button>
                  <button
                     onClick={() => toggleCustomProvider(providerId)}
                     className={cn(
                         "flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all",
-                        isEnabled 
-                            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
+                        isEnabled
+                            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
                             : "bg-muted border-border/40 text-muted-foreground/40"
                     )}
                 >
@@ -94,7 +130,11 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">Secure Key</label>
                     <span className="text-[11px] text-muted-foreground/60">Auth token if required.</span>
                 </div>
-                <div className="relative max-w-lg group">
+                <form
+                    className="relative max-w-lg group"
+                    onSubmit={(event) => event.preventDefault()}
+                    autoComplete="off"
+                >
                     <WorkbenchInput
                         type={showKey ? "text" : "password"}
                         value={localKey}
@@ -118,7 +158,7 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                     >
                         <WorkbenchIcon name={showKey ? "lucide:eye-off" : "lucide:eye"} size={13} />
                     </WorkbenchButton>
-                </div>
+                </form>
             </div>
 
             <details className="rounded-md border border-border/40 p-3">
@@ -150,12 +190,19 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                     variant="ghost"
                     className="h-8 px-3 text-[10px] font-bold text-rose-400/60 hover:text-rose-400 hover:bg-rose-500/10"
                     onClick={async () => {
-                        const confirmed = await ask('Permanently delete this custom node?', { 
+                        const confirmed = await ask('Permanently delete this custom node?', {
                             title: 'ZEN_NODE_PURGE',
-                            kind: 'warning' 
+                            kind: 'warning'
                         });
                         if (confirmed) {
-                            await removeCustomProvider(providerId);
+                            try {
+                                await removeCustomProvider(providerId);
+                                toast.success(`Custom node "${displayName}" was purged.`);
+                            } catch (error) {
+                                const message = error instanceof Error ? error.message : String(error);
+                                setSaveError(message);
+                                toast.error(`Could not purge node: ${message}`);
+                            }
                         }
                     }}
                 >

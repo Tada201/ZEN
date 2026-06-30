@@ -1,182 +1,205 @@
 import { LogEntry, StatusItem } from "./types";
 
-export function generateBootLog(): LogEntry[] {
-  const t = (s: number) => {
-    const ms = s * 1000;
-    const m = Math.floor(ms / 60000);
-    const sec = Math.floor((ms % 60000) / 1000);
-    const frac = ms % 1000;
-    return `[${String(m).padStart(2, '0')}.${String(sec).padStart(2, '0')}.${String(frac).padStart(3, '0')}]`;
-  };
+/** Minimal subset of HardwareInfo needed for dynamic log generation. */
+export interface BootHardwareInfo {
+  cpu: string;
+  cores: number;
+  threads: number;
+  memory_gb: number;
+  os: string;
+  hostname: string;
+  has_cuda: boolean;
+  gpus: Array<{
+    name: string;
+    vendor: string;
+    vram_mb?: number | null;
+    driver_version?: string | null;
+  }>;
+  disks: Array<{
+    name: string;
+    mount_point: string;
+    total_space: number;
+  }>;
+}
+
+/** A single init phase returned by the backend's get_init_status. */
+export interface InitPhase {
+  id: string;
+  label: string;
+  status: "pending" | "running" | "done" | "error" | "skipped";
+  elapsed_ms?: number;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function t(seconds: number): string {
+  const ms = seconds * 1000;
+  const m = Math.floor(ms / 60000);
+  const sec = Math.floor((ms % 60000) / 1000);
+  const frac = ms % 1000;
+  return `[${String(m).padStart(2, "0")}.${String(sec).padStart(2, "0")}.${String(frac).padStart(3, "0")}]`;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024 * 1024)).toFixed(1)} TB`;
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(0)} GB`;
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
+  return `${bytes} B`;
+}
+
+// ── Dynamic Log Generation ─────────────────────────────────────────────────
+
+export function generateBootLog(hw: BootHardwareInfo): LogEntry[] {
+  const cpuName = hw.cpu || "Unknown CPU";
+  const memGb = hw.memory_gb || 32;
+  const hostname = hw.hostname || "zenos-workstation";
+  const primaryGpu = hw.gpus?.[0];
+  const gpuName = primaryGpu?.name || "Integrated Graphics";
+  const gpuVram = primaryGpu?.vram_mb ? `${primaryGpu.vram_mb} MiB` : "Shared Memory";
+  const primaryDisk = hw.disks?.[0];
+  const diskName = primaryDisk?.name || "Local Disk";
+  const diskSize = primaryDisk ? formatBytes(primaryDisk.total_space) : "512 GB";
 
   return [
-    { timestamp: t(0.000), message: 'BIOS: American Megatrends International, LLC. v2.14.1242', color: 'text-zinc-400' },
-    { timestamp: t(0.012), message: 'BIOS: UEFI Firmware v2.8 (UEFI 2.9, PI 1.8)', color: 'text-zinc-400' },
-    { timestamp: t(0.018), message: 'BIOS: CPU: 13th Gen Intel(R) Core(TM) i9-13900K @ 5.80GHz', color: 'text-zinc-400' },
-    { timestamp: t(0.024), message: 'BIOS: Memory: 32768 MB DDR5-5600 (4x8192MB Dual-Channel)', color: 'text-zinc-400' },
-    { timestamp: t(0.030), message: 'BIOS: NVMe: Samsung SSD 990 PRO 2TB [PCIe 4.0 x4]', color: 'text-zinc-400' },
-    { timestamp: t(0.038), message: 'BIOS: GPU: NVIDIA GeForce RTX 4090 24GB [PCIe 4.0 x16]', color: 'text-zinc-400' },
-    { timestamp: t(0.042), message: 'BIOS: Network: Intel(R) Ethernet Controller I225-V 2.5GbE', color: 'text-zinc-400' },
-    { timestamp: t(0.048), message: 'BIOS: Audio: Realtek ALC4082 HD Audio Codec', color: 'text-zinc-400' },
-    { timestamp: t(0.060), message: 'Boot loader: GRUB2 v2.06-29.fc38 loading...', color: 'text-cyan-400' },
-    { timestamp: t(0.075), message: 'Boot loader: Loading vmlinuz-6.8.12-300.fc40.x86_64 ...', color: 'text-zinc-300' },
-    { timestamp: t(0.088), message: 'Boot loader: Loading initramfs-6.8.12-300.fc40.x86_64.img ...', color: 'text-zinc-300' },
-    { timestamp: t(0.110), message: 'Boot loader: Booting kernel at 0x1000000 ...', color: 'text-green-400' },
-    { timestamp: t(0.180), message: 'Linux version 6.8.12-300.fc40.x86_64 (gcc 13.3.1) #1 SMP PREEMPT_DYNAMIC', color: 'text-green-500' },
-    { timestamp: t(0.195), message: 'Command line: BOOT_IMAGE=/vmlinuz-6.8.12-300.fc40.x86_64 root=UUID=a3f2... ro quiet', color: 'text-zinc-500' },
-    { timestamp: t(0.210), message: 'x86/fpu: x87 FPU on chip, AVX-512 supported', color: 'text-zinc-400' },
-    { timestamp: t(0.218), message: 'x86/fpu: Supporting XSAVE feature: AVX-512 Foundation (0x000000e7)', color: 'text-zinc-400' },
-    { timestamp: t(0.225), message: 'BIOS-provided physical RAM map:', color: 'text-zinc-400' },
-    { timestamp: t(0.230), message: '  BIOS-e820: [mem 0x0000000000000000-0x000000000009fbff] usable', color: 'text-zinc-500' },
-    { timestamp: t(0.236), message: '  BIOS-e820: [mem 0x0000000000100000-0x00000007ffffffff] usable', color: 'text-zinc-500' },
-    { timestamp: t(0.245), message: 'NX (Execute Disable) protection: active', color: 'text-green-400' },
-    { timestamp: t(0.260), message: 'DMI: ASUS ROG STRIX Z790-E GAMING WIFI, BIOS 2804 03/15/2024', color: 'text-zinc-400' },
-    { timestamp: t(0.275), message: 'tsc: Detected 5800.000 MHz processor', color: 'text-cyan-400' },
-    { timestamp: t(0.282), message: 'tsc: Marking TSC unstable due to TSCs unsynchronized', color: 'text-yellow-500' },
-    { timestamp: t(0.290), message: 'e820: update [mem 0x00000000-0x00000fff] usable ==> reserved', color: 'text-zinc-500' },
-    { timestamp: t(0.310), message: 'CPU: Intel(R) Core(TM) i9-13900K (24 cores, 32 threads)', color: 'text-green-400' },
-    { timestamp: t(0.318), message: 'CPU: Microcode revision: 0x8e', color: 'text-zinc-400' },
-    { timestamp: t(0.325), message: 'CPU: Spectre v2: Mitigation: Enhanced IBRS, IBPB conditional, RSB filling', color: 'text-zinc-400' },
-    { timestamp: t(0.332), message: 'CPU: Spectre BHB: Mitigation: Enhanced IBRS', color: 'text-zinc-400' },
-    { timestamp: t(0.340), message: 'CPU: MDS: Mitigation: Clear buffer keys', color: 'text-zinc-400' },
-    { timestamp: t(0.360), message: 'Memory: 32768MB RAM available (8192MB kernel, 24576MB user)', color: 'text-cyan-400' },
-    { timestamp: t(0.368), message: 'Memory: 49152 pages reserved, 4194304 pages in zone DMA32', color: 'text-zinc-400' },
-    { timestamp: t(0.375), message: 'Memory: 786432 pages in zone Normal, 0 pages in zone HighMem', color: 'text-zinc-400' },
-    { timestamp: t(0.382), message: 'Swap: 8192MB configured on /dev/nvme0n1p3', color: 'text-zinc-400' },
-    { timestamp: t(0.400), message: 'ACPI: RSDP 0x00000000000E0000 000024 (v02 ASUS)', color: 'text-zinc-400' },
-    { timestamp: t(0.408), message: 'ACPI: XSDT 0x00000000BFFD0030 00005C (v01 ASUS 01072000 INTL 20231214)', color: 'text-zinc-400' },
-    { timestamp: t(0.415), message: 'ACPI: SSDT 0x00000000BFFC8000 0025C7 (v02 ASUS  SSDT 00001000 INTL 20231214)', color: 'text-zinc-400' },
-    { timestamp: t(0.422), message: 'ACPI: DSDT 0x00000000BFFD0200 013DE1 (v02 ASUS  DSDT 00001000 INTL 20231214)', color: 'text-zinc-400' },
-    { timestamp: t(0.430), message: 'ACPI: 18 ACPI tables found', color: 'text-green-400' },
-    { timestamp: t(0.450), message: 'PCI: Using configuration type 1 for base access', color: 'text-zinc-400' },
-    { timestamp: t(0.458), message: 'PCI: Probing PCI hardware', color: 'text-zinc-400' },
-    { timestamp: t(0.465), message: 'PCI: 00:00.0 Host bridge: Intel Corp. 13th Gen Core Processor Host Bridge', color: 'text-zinc-500' },
-    { timestamp: t(0.472), message: 'PCI: 00:01.0 PCI bridge: Intel Corp. Xeon E7 v4/Xeon E5 v4/Core i7 DMI3', color: 'text-zinc-500' },
-    { timestamp: t(0.480), message: 'PCI: 00:02.0 VGA: NVIDIA RTX 4090 [AD102] 24GB GDDR6X', color: 'text-cyan-400' },
-    { timestamp: t(0.488), message: 'PCI: 00:1f.0 ISA bridge: Intel Corp. Z790 Chipset LPC/eSPI Controller', color: 'text-zinc-500' },
-    { timestamp: t(0.495), message: 'PCI: 00:1f.2 SATA: Samsung SSD 990 PRO 2TB [NVMe]', color: 'text-zinc-500' },
-    { timestamp: t(0.502), message: 'PCI: 01:00.0 Network: Intel Ethernet I225-V 2.5GbE Controller', color: 'text-zinc-500' },
-    { timestamp: t(0.510), message: 'PCI: 07:00.0 USB: ASMedia ASM3242 USB 3.2 x2 Host Controller', color: 'text-zinc-500' },
-    { timestamp: t(0.530), message: 'usbcore: registered new device driver usb', color: 'text-zinc-400' },
-    { timestamp: t(0.538), message: 'usbcore: registered new device driver hub', color: 'text-zinc-400' },
-    { timestamp: t(0.545), message: 'usb: xHCI Host Controller [0000:07:00.0] (rev 0x01)', color: 'text-zinc-400' },
-    { timestamp: t(0.552), message: 'usb: xHCI 1.10 device found at 0x3030, irq 31, base 0x40800000', color: 'text-zinc-400' },
-    { timestamp: t(0.560), message: 'usb: Port 1: USB 3.2 Gen 2x1 [5 Gbps] - Logitech G PRO X Keyboard', color: 'text-cyan-400' },
-    { timestamp: t(0.568), message: 'usb: Port 2: USB 3.2 Gen 2x1 [10 Gbps] - Logitech G PRO Wireless Mouse', color: 'text-cyan-400' },
-    { timestamp: t(0.575), message: 'usb: Port 3: USB 2.0 [480 Mbps] - Elgato HD60 S+ Capture', color: 'text-cyan-400' },
-    { timestamp: t(0.582), message: 'usb: Port 5: USB 3.2 Gen 2 [10 Gbps] - SanDisk Extreme Pro 2TB', color: 'text-cyan-400' },
-    { timestamp: t(0.590), message: 'usb: 4 USB devices detected (3 active, 1 powered off)', color: 'text-green-400' },
-    { timestamp: t(0.610), message: 'igc: Intel(R) Ethernet Controller I225-V driver v1.0.12', color: 'text-zinc-400' },
-    { timestamp: t(0.618), message: 'igc 0000:01:00.0: MAC: 4C:ED:FB:A1:2B:3C, PHY: I225-V', color: 'text-zinc-400' },
-    { timestamp: t(0.625), message: 'igc 0000:01:00.0: Link is Up - 2.5Gbps Full Duplex', color: 'text-green-400' },
-    { timestamp: t(0.635), message: 'iwlwifi: Intel(R) Wi-Fi 7 BE200 160MHz driver loaded', color: 'text-zinc-400' },
-    { timestamp: t(0.642), message: 'iwlwifi: Detected Intel(R) Wi-Fi 7 BE200, REV=0x380', color: 'text-zinc-400' },
-    { timestamp: t(0.650), message: 'iwlwifi: Supported bands: 2.4GHz, 5GHz, 6GHz', color: 'text-cyan-400' },
-    { timestamp: t(0.658), message: 'iwlwifi: Detected regulatory domain: US (FCC)', color: 'text-zinc-400' },
-    { timestamp: t(0.680), message: 'wlp2s0: Scanning for wireless networks...', color: 'text-yellow-400' },
-    { timestamp: t(0.695), message: 'wlp2s0: BSS 00:1A:2B:3C:4D:5E onchan 1 (2.4 GHz) - "HomeNet-5G" signal -42dBm WPA3', color: 'text-zinc-300' },
-    { timestamp: t(0.702), message: 'wlp2s0: BSS AA:BB:CC:DD:EE:FF onchan 6 (2.4 GHz) - "TP-Link_8F2A" signal -58dBm WPA2', color: 'text-zinc-300' },
-    { timestamp: t(0.708), message: 'wlp2s0: BSS 11:22:33:44:55:66 onchan 36 (5 GHz) - "HomeNet-5G" signal -38dBm WPA3', color: 'text-zinc-300' },
-    { timestamp: t(0.715), message: 'wlp2s0: BSS 77:88:99:AA:BB:CC onchan 149 (5 GHz) - "Neighbor_5G" signal -65dBm WPA2', color: 'text-zinc-300' },
-    { timestamp: t(0.722), message: 'wlp2s0: BSS DD:EE:11:22:33:44 onchan 1 (2.4 GHz) - "Guest_Network" signal -72dBm OPEN', color: 'text-zinc-300' },
-    { timestamp: t(0.730), message: 'wlp2s0: BSS 55:66:77:88:99:00 onchan 60 (5 GHz) - "Office-Secure" signal -55dBm WPA3-ENT', color: 'text-zinc-300' },
-    { timestamp: t(0.738), message: 'wlp2s0: BSS 44:55:66:77:88:99 onchan 161 (5 GHz) - "StarLink-5G" signal -78dBm WPA2', color: 'text-zinc-300' },
-    { timestamp: t(0.745), message: 'wlp2s0: Scan complete. 7 BSS found, connected to "HomeNet-5G" (5GHz, WPA3)', color: 'text-green-400' },
-    { timestamp: t(0.752), message: 'wlp2s0: associated, DHCP: ip 192.168.1.142/24, gw 192.168.1.1, dns 1.1.1.1', color: 'text-green-400' },
-    { timestamp: t(0.775), message: 'snd_hda_intel: Realtek ALC4082 codec driver loaded', color: 'text-zinc-400' },
-    { timestamp: t(0.783), message: 'snd_hda_intel: codec #0: Realtek ALC4082 (HDMI/DP, 8ch)', color: 'text-cyan-400' },
-    { timestamp: t(0.790), message: 'snd_hda_intel: codec #1: NVIDIA GPU HDMI/DP (8ch, HBR capable)', color: 'text-cyan-400' },
-    { timestamp: t(0.798), message: 'snd_hda_codec_realtek: ALC4082: Front Panel Jack detected', color: 'text-zinc-400' },
-    { timestamp: t(0.805), message: 'snd_hda_codec_realtek: Auto-config: Line-Out, Headphone, Mic-In', color: 'text-zinc-400' },
-    { timestamp: t(0.812), message: 'ALSA: device list:', color: 'text-zinc-400' },
-    { timestamp: t(0.818), message: '  #0: HDA Intel PCH (ALC4082 Analog) [2ch 24bit/192kHz]', color: 'text-zinc-500' },
-    { timestamp: t(0.825), message: '  #1: HDA Intel HDMI (NVIDIA DP-1) [8ch 32bit/384kHz]', color: 'text-zinc-500' },
-    { timestamp: t(0.832), message: '  #2: HDA Intel HDMI (NVIDIA DP-2) [8ch 32bit/384kHz]', color: 'text-zinc-500' },
-    { timestamp: t(0.840), message: '  #3: HDA Intel HDMI (NVIDIA HDMI) [8ch 32bit/384kHz]', color: 'text-zinc-500' },
-    { timestamp: t(0.848), message: 'PipeWire: [0m:00.012] core.c: PipeWire version 1.0.3 initialized', color: 'text-green-400' },
-    { timestamp: t(0.855), message: 'PipeWire: [0m:00.018] protocol-native.c: Client connected (pid:1842)', color: 'text-zinc-400' },
-    { timestamp: t(0.862), message: 'WirePlumber: [0m:00.005] config.c: Loading configuration from /etc/wireplumber', color: 'text-zinc-400' },
-    { timestamp: t(0.870), message: 'WirePlumber: [0m:00.045] default-nodes: 4 audio devices configured', color: 'text-green-400' },
-    { timestamp: t(0.890), message: 'nvidia: loading driver v550.90.07, 449152MiB VRAM', color: 'text-cyan-400' },
-    { timestamp: t(0.900), message: 'nvidia: GPU 0: NVIDIA GeForce RTX 4090 (AD102-A) @ 2520MHz', color: 'text-green-400' },
-    { timestamp: t(0.908), message: 'nvidia: BAR1: 32768MiB, BAR2: 262144MiB', color: 'text-zinc-400' },
-    { timestamp: t(0.915), message: 'nvidia: BAR1: 32768MiB, BAR2: 262144MiB', color: 'text-zinc-400' },
-    { timestamp: t(0.922), message: 'NVRM: Loading NVIDIA UNIX Open Kernel Module', color: 'text-zinc-400' },
-    { timestamp: t(0.930), message: 'fb0: EFI VGA frame buffer device [1920x1080x32]', color: 'text-cyan-400' },
-    { timestamp: t(0.938), message: 'Console: switching to colour frame buffer device 128x48', color: 'text-zinc-400' },
-    { timestamp: t(0.960), message: 'bluetooth: Intel Bluetooth firmware loaded (ibt-20-1.4.sfi)', color: 'text-zinc-400' },
-    { timestamp: t(0.968), message: 'bluetooth: hci0: Intel BT adapter [80:C7:52:A3:44:91] (USB)', color: 'text-cyan-400' },
-    { timestamp: t(0.975), message: 'bluetooth: hci0: supported features: LE, BR/EDR, BLE 5.3', color: 'text-zinc-400' },
-    { timestamp: t(0.982), message: 'bluetooth: hci0: scanning for devices...', color: 'text-yellow-400' },
-    { timestamp: t(0.990), message: 'bluetooth: hci0: found "Sony WH-1000XM5" [AA:BB:CC:11:22:33] RSSI -45', color: 'text-zinc-300' },
-    { timestamp: t(0.998), message: 'bluetooth: hci0: found "Logitech MX Master 3S" [DD:EE:FF:44:55:66] RSSI -52', color: 'text-zinc-300' },
-    { timestamp: t(1.020), message: 'EXT4-fs (nvme0n1p2): mounted filesystem with ordered data mode', color: 'text-green-400' },
-    { timestamp: t(1.028), message: 'EXT4-fs (nvme0n1p2): quota type: usrquota, grpquota', color: 'text-zinc-400' },
-    { timestamp: t(1.035), message: 'VFS: Mounted root (ext4 filesystem) readonly on device 259:2', color: 'text-zinc-400' },
-    { timestamp: t(1.042), message: 'devtmpfs: mounted', color: 'text-zinc-400' },
-    { timestamp: t(1.048), message: 'tmpfs: mounted on /tmp (size=16G, mode=1777)', color: 'text-zinc-400' },
-    { timestamp: t(1.055), message: 'efivarfs: mounted on /sys/firmware/efi/efivars', color: 'text-zinc-400' },
-    { timestamp: t(1.062), message: 'pstore: registered pstored with 1 backend', color: 'text-zinc-400' },
-    { timestamp: t(1.080), message: 'systemd[1]: Detected architecture x86-64', color: 'text-zinc-300' },
-    { timestamp: t(1.088), message: 'systemd[1]: Set hostname to <zenos-workstation>', color: 'text-green-400' },
-    { timestamp: t(1.095), message: 'systemd[1]: Running in system mode (+PAM +AUDIT +SELINUX +IMA +APPARMOR)', color: 'text-zinc-400' },
-    { timestamp: t(1.102), message: 'systemd[1]: Detected virtualization: none', color: 'text-zinc-400' },
-    { timestamp: t(1.110), message: 'systemd[1]: Installed in system mode', color: 'text-zinc-400' },
-    { timestamp: t(1.130), message: '[  OK  ] Started Journal Service (systemd-journald)', color: 'text-green-400' },
-    { timestamp: t(1.145), message: '[  OK  ] Started D-Bus System Message Bus (dbus-broker)', color: 'text-green-400' },
-    { timestamp: t(1.160), message: '[  OK  ] Reached target Network (network.target)', color: 'text-green-400' },
-    { timestamp: t(1.175), message: '[  OK  ] Started Network Manager (NetworkManager)', color: 'text-green-400' },
-    { timestamp: t(1.190), message: '[  OK  ] Started Bluetooth service (bluetoothd)', color: 'text-green-400' },
-    { timestamp: t(1.205), message: '[  OK  ] Started PipeWire Multimedia Service (pipewire)', color: 'text-green-400' },
-    { timestamp: t(1.220), message: '[  OK  ] Started WirePlumber Policy Agent (wireplumber)', color: 'text-green-400' },
-    { timestamp: t(1.235), message: '[  OK  ] Started Login Service (systemd-logind)', color: 'text-green-400' },
-    { timestamp: t(1.250), message: '[  OK  ] Started User Database Manager (systemd-userdbd)', color: 'text-green-400' },
-    { timestamp: t(1.265), message: '[  OK  ] Started Polkit Authentication Agent (polkitd)', color: 'text-green-400' },
-    { timestamp: t(1.280), message: '[  OK  ] Started Firewalld (firewalld) - default: public', color: 'text-green-400' },
-    { timestamp: t(1.295), message: '[  OK  ] Started CUPS Printing Service (cups-browsed)', color: 'text-green-400' },
-    { timestamp: t(1.310), message: '[  OK  ] Started SSD TRIM timer (fstrim.timer)', color: 'text-green-400' },
-    { timestamp: t(1.340), message: 'docker: Docker Engine v25.0.3 started', color: 'text-cyan-400' },
-    { timestamp: t(1.355), message: 'docker: 3 containers running: postgres, redis, nginx-proxy', color: 'text-zinc-300' },
-    { timestamp: t(1.370), message: 'postgres: PostgreSQL 16.2 on x86_64-pc-linux-gnu, 64-bit', color: 'text-cyan-400' },
-    { timestamp: t(1.385), message: 'postgres: database "zenos_prod" is ready to accept connections (port 5432)', color: 'text-green-400' },
-    { timestamp: t(1.400), message: 'redis: Redis 7.2.4 server started (port 6379, mode: standalone)', color: 'text-cyan-400' },
-    { timestamp: t(1.415), message: 'nginx: nginx/1.25.4 configured - 3 virtual hosts, TLS 1.3 enabled', color: 'text-cyan-400' },
-    { timestamp: t(1.440), message: 'zenos[1]: initializing ZENOS kernel v3.2.0 ...', color: 'text-emerald-400' },
-    { timestamp: t(1.455), message: 'zenos[1]: loading configuration from /etc/zenos/zenos.conf', color: 'text-zinc-400' },
-    { timestamp: t(1.470), message: 'zenos[1]: AI runtime initialized (CUDA 12.4, cuDNN 9.1)', color: 'text-green-400' },
-    { timestamp: t(1.485), message: 'zenos[1]: vector store connected (chromadb, 2048-dim embeddings)', color: 'text-green-400' },
-    { timestamp: t(1.500), message: 'zenos[1]: LLM gateway online (model: glm-4, latency: 42ms)', color: 'text-green-400' },
-    { timestamp: t(1.520), message: 'zenos[1]: file system watcher active (16 directories monitored)', color: 'text-green-400' },
-    { timestamp: t(1.540), message: 'zenos[1]: all subsystems nominal', color: 'text-green-400' },
-    { timestamp: t(1.555), message: 'zenos[1]: ─────────────────────────────────────────', color: 'text-emerald-500' },
-    { timestamp: t(1.560), message: 'zenos[1]: SYSTEM READY', color: 'text-emerald-400' },
+    // BIOS
+    { timestamp: t(0.000), message: `BIOS: UEFI Firmware v2.8 (UEFI 2.9, PI 1.8)`, color: "text-zinc-400" },
+    { timestamp: t(0.012), message: `BIOS: CPU: ${cpuName} @ ${(4.0 + hw.cores * 0.05).toFixed(1)}GHz`, color: "text-zinc-400" },
+    { timestamp: t(0.018), message: `BIOS: Memory: ${Math.round(memGb * 1024)} MB DDR5-5600 (${hw.threads} threads)`, color: "text-zinc-400" },
+    { timestamp: t(0.024), message: `BIOS: Storage: ${diskName} [${diskSize}]`, color: "text-zinc-400" },
+    { timestamp: t(0.030), message: `BIOS: GPU: ${gpuName} [${gpuVram}]`, color: "text-zinc-400" },
+    { timestamp: t(0.038), message: `BIOS: CUDA: ${hw.has_cuda ? "Available" : "Not detected"}`, color: hw.has_cuda ? "text-cyan-400" : "text-zinc-500" },
+
+    // Boot loader
+    { timestamp: t(0.060), message: "Boot loader: GRUB2 v2.06 loading...", color: "text-cyan-400" },
+    { timestamp: t(0.075), message: "Boot loader: Loading kernel...", color: "text-zinc-300" },
+    { timestamp: t(0.088), message: "Boot loader: Loading initramfs...", color: "text-zinc-300" },
+    { timestamp: t(0.110), message: "Boot loader: Booting kernel at 0x1000000 ...", color: "text-green-400" },
+
+    // Kernel
+    { timestamp: t(0.180), message: `Linux version 6.8.12 (gcc 13.3.1) #1 SMP PREEMPT_DYNAMIC`, color: "text-green-500" },
+    { timestamp: t(0.210), message: "x86/fpu: x87 FPU on chip, AVX-512 supported", color: "text-zinc-400" },
+    { timestamp: t(0.245), message: "NX (Execute Disable) protection: active", color: "text-green-400" },
+    { timestamp: t(0.260), message: `DMI: ${hostname}`, color: "text-zinc-400" },
+    { timestamp: t(0.275), message: `tsc: Detected ${(4.0 + hw.cores * 0.05).toFixed(3)} MHz processor`, color: "text-cyan-400" },
+
+    // CPU
+    { timestamp: t(0.310), message: `CPU: ${cpuName} (${hw.cores} cores, ${hw.threads} threads)`, color: "text-green-400" },
+    { timestamp: t(0.325), message: "CPU: Spectre v2: Mitigation: Enhanced IBRS, IBPB conditional", color: "text-zinc-400" },
+
+    // Memory
+    { timestamp: t(0.360), message: `Memory: ${Math.round(memGb * 1024)}MB RAM available (${Math.round(memGb * 1024 * 0.25)}MB kernel, ${Math.round(memGb * 1024 * 0.75)}MB user)`, color: "text-cyan-400" },
+    { timestamp: t(0.382), message: `Swap: ${Math.round(memGb / 4)}GB configured`, color: "text-zinc-400" },
+
+    // ACPI / PCI
+    { timestamp: t(0.400), message: "ACPI: RSDP 0x00000000000E0000 000024", color: "text-zinc-400" },
+    { timestamp: t(0.430), message: "ACPI: 18 ACPI tables found", color: "text-green-400" },
+    { timestamp: t(0.458), message: "PCI: Probing PCI hardware", color: "text-zinc-400" },
+    { timestamp: t(0.480), message: `PCI: VGA: ${gpuName}`, color: "text-cyan-400" },
+
+    // GPU driver
+    ...(primaryGpu?.vendor === "NVIDIA"
+      ? [
+          { timestamp: t(0.530), message: `nvidia: loading driver ${primaryGpu.driver_version || "latest"}`, color: "text-cyan-400" } as LogEntry,
+          { timestamp: t(0.540), message: `nvidia: GPU 0: ${gpuName} [${gpuVram}]`, color: "text-green-400" } as LogEntry,
+        ]
+      : [
+          { timestamp: t(0.530), message: `gpu: ${gpuName} driver loaded`, color: "text-cyan-400" } as LogEntry,
+        ]),
+
+    // Filesystem
+    { timestamp: t(0.620), message: `EXT4-fs: mounted filesystem with ordered data mode`, color: "text-green-400" },
+    { timestamp: t(0.635), message: "VFS: Mounted root filesystem readonly", color: "text-zinc-400" },
+    { timestamp: t(0.642), message: "devtmpfs: mounted", color: "text-zinc-400" },
+
+    // systemd
+    { timestamp: t(0.700), message: `systemd[1]: Detected architecture x86-64`, color: "text-zinc-300" },
+    { timestamp: t(0.710), message: `systemd[1]: Set hostname to <${hostname}>`, color: "text-green-400" },
+    { timestamp: t(0.720), message: "systemd[1]: Running in system mode", color: "text-zinc-400" },
+    { timestamp: t(0.740), message: "[  OK  ] Started Journal Service (systemd-journald)", color: "text-green-400" },
+    { timestamp: t(0.755), message: "[  OK  ] Started D-Bus System Message Bus", color: "text-green-400" },
+    { timestamp: t(0.770), message: "[  OK  ] Reached target Network", color: "text-green-400" },
+    { timestamp: t(0.785), message: "[  OK  ] Started Network Manager", color: "text-green-400" },
+    { timestamp: t(0.800), message: "[  OK  ] Started Bluetooth service", color: "text-green-400" },
+    { timestamp: t(0.815), message: "[  OK  ] Started PipeWire Multimedia Service", color: "text-green-400" },
+    { timestamp: t(0.830), message: "[  OK  ] Started Login Service", color: "text-green-400" },
+    { timestamp: t(0.845), message: "[  OK  ] Started Polkit Authentication Agent", color: "text-green-400" },
+    { timestamp: t(0.860), message: "[  OK  ] Started Firewalld", color: "text-green-400" },
+
+    // ZENOS init
+    { timestamp: t(0.900), message: "zenos[1]: initializing ZENOS kernel...", color: "text-emerald-400" },
+    { timestamp: t(0.920), message: "zenos[1]: loading configuration", color: "text-zinc-400" },
+    { timestamp: t(0.940), message: `zenos[1]: ${hw.has_cuda ? "CUDA runtime detected" : "CPU-only mode"}`, color: hw.has_cuda ? "text-green-400" : "text-yellow-400" },
+    { timestamp: t(0.960), message: "zenos[1]: vector store connecting...", color: "text-zinc-400" },
+    { timestamp: t(0.975), message: "zenos[1]: LLM gateway connecting...", color: "text-zinc-400" },
+    { timestamp: t(0.990), message: "zenos[1]: all subsystems nominal", color: "text-green-400" },
+    { timestamp: t(1.000), message: "zenos[1]: ─────────────────────────────────────", color: "text-emerald-500" },
+    { timestamp: t(1.005), message: "zenos[1]: SYSTEM READY", color: "text-emerald-400" },
   ];
 }
 
-export function generateStatusItems(): StatusItem[] {
-  return [
-    { label: 'KERNEL', detail: '6.8.12-300.fc40', status: 'pending' },
-    { label: 'MEMORY', detail: '32768 MB DDR5', status: 'pending' },
-    { label: 'GPU', detail: 'RTX 4090 24GB', status: 'pending' },
-    { label: 'STORAGE', detail: 'Samsung 990 PRO 2TB', status: 'pending' },
-    { label: 'NETWORK', detail: 'Intel I225-V 2.5GbE', status: 'pending' },
-    { label: 'WIFI', detail: 'Intel BE200 Wi-Fi 7', status: 'pending' },
-    { label: 'BLUETOOTH', detail: 'Intel BT 5.3', status: 'pending' },
-    { label: 'AUDIO', detail: 'ALC4082 + HDMI 8ch', status: 'pending' },
-    { label: 'USB', detail: '4 devices', status: 'pending' },
-    { label: 'DATABASE', detail: 'PostgreSQL 16.2', status: 'pending' },
-    { label: 'CACHE', detail: 'Redis 7.2.4', status: 'pending' },
-    { label: 'BACKEND', detail: 'Next.js 16 + Bun', status: 'pending' },
-    { label: 'FRONTEND', detail: 'React 19 + Tailwind', status: 'pending' },
-    { label: 'AI RUNTIME', detail: 'CUDA 12.4 / cuDNN', status: 'pending' },
-    { label: 'VECTOR STORE', detail: 'ChromaDB 2048d', status: 'pending' },
-    { label: 'LLM GATEWAY', detail: 'GLM-4 (42ms)', status: 'pending' },
-    { label: 'DOCKER', detail: '3 containers', status: 'pending' },
-    { label: 'TLS/SSL', detail: 'TLS 1.3 active', status: 'pending' },
-  ];
-}
+// ── Dynamic Status Items from Init Phases ──────────────────────────────────
 
-export const statusMap: Record<number, number> = {
-  0: 0, 2: 1, 3: 2, 4: 3, 6: 4, 9: 5, 10: 6, 12: 7, 14: 8,
-  30: 9, 31: 10, 32: 11, 33: 12, 34: 13, 35: 14, 36: 15, 37: 16, 38: 17,
+const PHASE_ICON_MAP: Record<string, string> = {
+  "critical.fs": "lucide:hard-drive",
+  "critical.db": "lucide:database",
+  "critical.settings": "lucide:settings",
+  "critical.finalize": "lucide:cpu",
+  "bg.speech": "lucide:mic",
+  "bg.tts": "lucide:speaker",
+  "bg.lancedb": "lucide:brain",
+  "bg.conversation_store": "lucide:message-square",
+  "bg.rag": "lucide:sparkles",
+  "bg.orchestrator": "lucide:network",
 };
+
+export function generateStatusItems(phases: InitPhase[]): StatusItem[] {
+  return phases.map((phase) => ({
+    label: phase.label,
+    status: phase.status === "done" ? ("ok" as const)
+      : phase.status === "running" ? ("running" as const)
+      : phase.status === "error" ? ("fail" as const)
+      : phase.status === "skipped" ? ("skipped" as const)
+      : ("pending" as const),
+    detail: phase.elapsed_ms != null ? `${phase.elapsed_ms}ms` : undefined,
+    icon: PHASE_ICON_MAP[phase.id] || "lucide:circle",
+  }));
+}
+
+/**
+ * Compute real boot progress (0-100) and phase label from backend init phases.
+ * Counts phases that have reached a terminal state (done/skipped/error) as complete,
+ * with `running` counted as half-progress. This reflects actual backend init, not the
+ * scripted log playback.
+ */
+export function deriveBootProgress(phases: InitPhase[]): { progress: number; phase: "bios" | "kernel" | "hardware" | "services" | "apps" | "ready" } {
+  if (!phases || phases.length === 0) {
+    return { progress: 0, phase: "bios" };
+  }
+  let completed = 0;
+  let criticalDone = true;
+  for (const p of phases) {
+    if (p.status === "done" || p.status === "skipped" || p.status === "error") {
+      completed += 1;
+    } else if (p.status === "running") {
+      completed += 0.5;
+    }
+    if (p.id.startsWith("critical.") && p.status !== "done" && p.status !== "skipped" && p.status !== "error") {
+      criticalDone = false;
+    }
+  }
+  const progress = Math.min(100, (completed / phases.length) * 100);
+  let phase: "bios" | "kernel" | "hardware" | "services" | "apps" | "ready";
+  if (progress >= 100) phase = "ready";
+  else if (criticalDone) {
+    // critical phases complete — map remaining bg.* work to services/apps by ratio
+    const bgPhases = phases.filter(p => p.id.startsWith("bg."));
+    const bgCompleted = bgPhases.filter(p => p.status === "done" || p.status === "skipped" || p.status === "error").length;
+    const bgRatio = bgPhases.length > 0 ? bgCompleted / bgPhases.length : 1;
+    phase = bgRatio < 0.5 ? "services" : "apps";
+  } else if (progress < 25) phase = "bios";
+  else if (progress < 50) phase = "kernel";
+  else phase = "hardware";
+  return { progress, phase };
+}
+
+

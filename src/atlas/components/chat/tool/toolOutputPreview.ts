@@ -14,6 +14,7 @@ export type ToolOutputPreview = {
   results: ToolPreviewResultItem[];
   files: FileChange[];
   artifact?: ArtifactData;
+  imageUri?: string;
   content?: string;
   raw: string;
 };
@@ -197,11 +198,14 @@ export function buildToolOutputPreview(output: string): ToolOutputPreview {
     600,
   );
   const exitCode = findFromCandidates(candidates, ["exit_code", "exitCode", "code"]);
+  const imageUri = compactText(findFromCandidates(candidates, ["image_uri", "imageUri", "image_url"]), 500);
   const raw = typeof parsed === "string" ? parsed : JSON.stringify(parsed, null, 2);
   const commandSummary = inferCommandSummary(stdout, stderr, exitCode);
 
   let summary = "";
-  if (results.length > 0) {
+  if (imageUri) {
+    summary = "Image generated";
+  } else if (results.length > 0) {
     const resultCount = Array.isArray(resultSource) ? resultSource.length : results.length;
     summary = `${resultCount} results: ${results[0].title}`;
   } else if (artifact) {
@@ -228,6 +232,7 @@ export function buildToolOutputPreview(output: string): ToolOutputPreview {
     results,
     files,
     artifact,
+    imageUri: imageUri || undefined,
     content,
     raw,
   };

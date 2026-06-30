@@ -1,11 +1,125 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight, Clock, Copy, ExternalLink, Loader2, CheckCircle2, XCircle, Search, Terminal, FileText, Wrench } from 'lucide-react';
+import { ChevronRight, Clock, Copy, ExternalLink, Loader2, CheckCircle2, XCircle, Search, Terminal, FileText, Wrench, Brush, Sparkles, ShieldOff, ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ToolCall, ArtifactData } from './types';
 import { ToolTimer } from './tool/ToolTimer';
 import { buildToolOutputPreview } from './tool/toolOutputPreview';
 import { buildToolChecklistPreview } from './tool/toolInputPreview';
+import { isSafeGeneratedHref } from '@/lib/security/generatedLinks';
+import { toAssetUrl } from '@/lib/utils/assetUrl';
+
+function ImageGenPreview({ status, output, input }: { status: ToolCall['status']; output?: string; input: Record<string, unknown> }) {
+  const [statusIndex, setStatusIndex] = useState(0);
+  
+  useEffect(() => {
+    if (status !== 'running') return;
+    const interval = setInterval(() => {
+      setStatusIndex((prev) => (prev + 1) % 4);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [status]);
+
+  const statuses = [
+    "Formulating composition...",
+    "Sketching layout and contours...",
+    "Applying lighting and textures...",
+    "Polishing creative details..."
+  ];
+
+  // Try to parse the image URI from the output if completed
+  const imageUri = useMemo(() => {
+    if (status !== 'completed' || !output) return null;
+    try {
+      const parsed = JSON.parse(output);
+      return parsed.image_uri || null;
+    } catch {
+      return null;
+    }
+  }, [status, output]);
+
+  if (status === 'running') {
+    return (
+      <div className="relative w-full max-w-[380px] aspect-square rounded-xl border border-white/[0.08] bg-zinc-950/80 overflow-hidden flex flex-col items-center justify-center gap-4 p-6 shadow-2xl backdrop-blur-md animate-pulse">
+        {/* Shimmering/rotating background effect */}
+        <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/10 via-purple-500/5 to-pink-500/10" />
+        <div className="absolute w-[150%] h-[150%] -top-[25%] -left-[25%] bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.08)_0%,transparent_60%)] animate-spin [animation-duration:15s]" />
+        
+        {/* Animated pulsating icon */}
+        <div className="relative flex items-center justify-center w-16 h-16 rounded-full bg-white/[0.03] border border-white/[0.08]">
+          <Brush className="w-6 h-6 text-blue-400 animate-bounce" />
+          <Sparkles className="absolute -top-1 -right-1 w-4 h-4 text-purple-400 animate-pulse" />
+        </div>
+
+        <div className="flex flex-col items-center gap-1.5 text-center z-10">
+          <div className="text-[13px] font-semibold text-zinc-200 font-sans tracking-tight">
+            {statuses[statusIndex]}
+          </div>
+          <div className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest flex items-center gap-1.5">
+            <span className="w-1 h-1 rounded-full bg-blue-500 animate-ping" />
+            Generating Artwork
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'completed' && imageUri) {
+    const isSafe = isSafeGeneratedHref(imageUri);
+    if (!isSafe) {
+      return (
+        <div className="relative w-full max-w-[380px] aspect-square rounded-xl border border-rose-500/20 bg-rose-950/10 overflow-hidden flex flex-col items-center justify-center gap-3 p-6 text-center">
+          <ShieldOff className="w-10 h-10 text-rose-500/80" />
+          <div className="text-[12px] font-semibold text-rose-300">Preview Blocked</div>
+          <p className="text-[11px] text-zinc-500 max-w-[280px]">
+            The generated image link was blocked by security policies.
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="relative w-full max-w-[380px] aspect-square rounded-xl border border-white/[0.08] bg-zinc-950 overflow-hidden group shadow-2xl">
+        <img
+          src={toAssetUrl(imageUri)}
+          alt={String(input.prompt || "Generated Artwork")}
+          className="w-full h-full object-cover animate-in fade-in zoom-in-95 duration-700 ease-out"
+        />
+        {/* Hover overlay with prompt and action */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
+          <p className="text-[11px] text-zinc-300 line-clamp-2 mb-2 font-sans italic">
+            "{String(input.prompt || '')}"
+          </p>
+          <div className="flex items-center gap-2">
+            <a
+              href={imageUri}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 text-[11px] font-bold text-white bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg transition-colors shadow-lg"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Open Fullscreen
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <div className="relative w-full max-w-[380px] aspect-square rounded-xl border border-rose-500/20 bg-rose-950/10 overflow-hidden flex flex-col items-center justify-center gap-3 p-6 text-center">
+        <XCircle className="w-10 h-10 text-rose-500/80" />
+        <div className="text-[12px] font-semibold text-rose-300">Generation Failed</div>
+        <p className="text-[11px] text-zinc-500 max-w-[280px]">
+          Unable to complete image generation. Check settings or API quota.
+        </p>
+      </div>
+    );
+  }
+
+  return null;
+}
 
 export interface ToolCallCardProps {
   toolCall: ToolCall;
@@ -229,6 +343,9 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
     setIsExpanded(!isExpanded);
   };
 
+  const isImageGen = name === 'generate_image';
+  const imageGenUri = isImageGen ? outputPreview.imageUri : undefined;
+
   return (
     <div className={cn('min-w-0', className)}>
       <button
@@ -256,6 +373,16 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
         )}>
           {actionText}
         </span>
+        {imageGenUri && status === 'completed' && (
+          <img
+            src={toAssetUrl(imageGenUri)}
+            alt=""
+            className="h-5 w-5 shrink-0 rounded-sm object-cover border border-white/[0.08]"
+          />
+        )}
+        {isImageGen && status === 'running' && !imageGenUri && (
+          <ImageIcon className="h-3.5 w-3.5 shrink-0 text-blue-400 animate-pulse" />
+        )}
         {status === 'running' && <ToolTimer startTime={startTime} />}
         {status !== 'running' && durationLabel && <span className="shrink-0 text-[11px] text-zinc-500 tabular-nums">{durationLabel}</span>}
 
@@ -284,6 +411,8 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
         )} />
       </button>
 
+
+
       <div className={cn("ml-2 tool-expand-grid", isExpanded && "open")}>
         <div className="tool-expand-inner">
           <div className="border-l border-zinc-800/80 py-1 pl-3">
@@ -304,6 +433,10 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
               )}
             </div>
           </div>
+
+          {isImageGen && (
+            <ImageGenPreview status={status} output={output} input={safeInput} />
+          )}
 
           {status === 'awaiting_approval' && approvalContext && (
             <div className="mb-1.5 rounded-md border border-amber-400/10 bg-amber-400/[0.035] px-2 py-1.5">

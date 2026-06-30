@@ -1,7 +1,7 @@
 import React, { Component, type ReactNode, useState, useCallback } from "react";
-import { Play, X, ChevronLeft, ChevronRight, ExternalLink, Download } from "lucide-react";
+import { Play, ChevronLeft, ChevronRight, ExternalLink, Download } from "lucide-react";
 import { AppDialog } from "@/components/ui/AppDialog";
-import { invoke } from "@tauri-apps/api/core";
+import { chatApi } from "@/api/chatApi";
 import { toast } from "sonner";
 import { toAssetUrl } from "@/lib/utils/assetUrl";
 
@@ -103,14 +103,12 @@ export function ImageGallery({ images }: { images: Array<{ src: string; alt: str
 
   const handleExport = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (lightboxIndex === null) return;
+    if (lightboxIndex === null || lightboxIndex < 0 || lightboxIndex >= images.length) return;
     const currentSrc = images[lightboxIndex].src;
     setExporting(true);
     const toastId = toast.loading("Saving image to workspace...");
     try {
-      const savedPath = await invoke<string>("export_image_to_workspace", {
-        imageUri: currentSrc,
-      });
+      const savedPath = await chatApi.exportImageToWorkspace(currentSrc);
       toast.success(`Image saved to workspace: ${savedPath}`, { id: toastId });
     } catch (err: any) {
       console.error(err);
@@ -152,13 +150,13 @@ export function ImageGallery({ images }: { images: Array<{ src: string; alt: str
       </div>
 
       <AppDialog
-        open={lightboxIndex !== null}
+        open={lightboxIndex !== null && lightboxIndex >= 0 && lightboxIndex < images.length}
         onOpenChange={(isOpen) => { if (!isOpen) close(); }}
-        title={lightboxIndex !== null ? (images[lightboxIndex].alt || "Image Preview") : "Image Preview"}
+        title={lightboxIndex !== null && lightboxIndex >= 0 && lightboxIndex < images.length ? (images[lightboxIndex].alt || "Image Preview") : "Image Preview"}
         footer={
           <div className="flex w-full items-center justify-between">
             <span className="text-[10px] text-zinc-400 font-mono">
-              {lightboxIndex !== null ? `${lightboxIndex + 1} / ${images.length}` : ""}
+              {lightboxIndex !== null && lightboxIndex >= 0 && lightboxIndex < images.length ? `${lightboxIndex + 1} / ${images.length}` : ""}
             </span>
             <div className="flex gap-2">
               <button
@@ -181,7 +179,7 @@ export function ImageGallery({ images }: { images: Array<{ src: string; alt: str
           </div>
         }
       >
-        {lightboxIndex !== null && (
+        {lightboxIndex !== null && lightboxIndex >= 0 && lightboxIndex < images.length && (
           <div className="relative flex items-center justify-center min-h-[300px]">
             {lightboxIndex > 0 && (
               <button
@@ -232,9 +230,8 @@ export function extractImagesFromChildren(children: React.ReactNode): Array<{ sr
     }
     // Skip pure whitespace text nodes between images
     if (child && typeof child === "string" && child.trim() === "") return;
-    if (child && typeof child !== "string") {
-      hasNonImage = true;
-    }
+    // Non-image elements and non-whitespace text both prevent gallery mode
+    hasNonImage = true;
   });
   if (images.length >= 2 && !hasNonImage) return images;
   return null;

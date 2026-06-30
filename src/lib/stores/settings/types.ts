@@ -248,6 +248,13 @@ export interface ProviderSlice {
   // Per-tool auto-approve IDs (transient runtime list, not persisted)
   toolAutoApprove: string[];
   
+  // 9Router Image Models (cached from /v1/models/image)
+  nineRouterImageModels: ModelInfo[];
+  nineRouterImageModelsLoading: boolean;
+  nineRouterImageModelsError: string | null;
+  nineRouterImageModelsLastFetchedAt: number | null;
+  fetchNineRouterImageModels: (force?: boolean) => Promise<void>;
+
   // Dynamic Catalog
   availableModels: ModelInfo[];
   availableModelsByProvider: Record<string, ModelInfo[]>;

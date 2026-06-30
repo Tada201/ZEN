@@ -100,11 +100,17 @@ pub async fn discover_models(
     api_key: Option<String>,
 ) -> ZenResult<Vec<ModelInfo>> {
     let p_type = provider.to_lowercase();
+    let target_base_url = base_url.unwrap_or_else(|| crate::llm::default_base_url(&p_type));
+    let target_api_key = api_key.unwrap_or_default();
+
+    // Prevent transmitting bearer credentials over plain HTTP
+    crate::utils::validate_remote_auth_safety(&target_base_url, !target_api_key.is_empty())
+        .map_err(|e| crate::error::ZenError::Custom(e.to_string()))?;
 
     let config = ProviderConfig {
         provider_type: p_type.clone(),
-        base_url: base_url.unwrap_or_else(|| crate::llm::default_base_url(&p_type)),
-        api_key: api_key.unwrap_or_default(),
+        base_url: target_base_url,
+        api_key: target_api_key,
         display_name: provider.clone(),
         headers: None,
     };
@@ -221,6 +227,90 @@ pub async fn get_provider_usage(
         .usage
         .provider_snapshot(&db, &model_ids, period_days)
         .await
+}
+
+/// Fetch available image generation models from a running 9Router instance.
+/// Calls GET {base_url}/v1/models/image and returns a list of { id, name } pairs.
+#[tauri::command]
+pub async fn fetch_9router_image_models(
+    state: State<'_, AppState>,
+) -> ZenResult<Vec<ModelInfo>> {
+    let base_url = state
+        .settings_manager
+        .get("nine_router_base_url")
+        .await
+        .unwrap_or_default()
+        .unwrap_or_else(|| "http://localhost:20128/v1".to_string());
+
+    let api_key = state
+        .secret_manager
+        .get_secret("nine_router_api_key")
+        .await
+        .unwrap_or_default()
+        .unwrap_or_default();
+
+    let base = base_url.trim_end_matches('/');
+    let endpoint = if base.ends_with("/v1") {
+        format!("{}/models/image", base)
+    } else {
+        format!("{}/v1/models/image", base)
+    };
+
+    // Validate security boundary: prevent leaking API key over remote plain HTTP
+    crate::utils::validate_remote_auth_safety(&endpoint, !api_key.is_empty())
+        .map_err(|e| crate::error::ZenError::Custom(e.to_string()))?;
+
+    let client = crate::utils::default_http_client();
+    let mut request = client.get(&endpoint);
+    if !api_key.is_empty() {
+        request = request.bearer_auth(&api_key);
+    }
+
+    let response = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        request.send(),
+    )
+    .await
+    .map_err(|_| {
+        crate::error::ZenError::Custom("9Router image models request timed out".to_string())
+    })?
+    .map_err(|e| {
+        crate::error::ZenError::Custom(format!("Failed to connect to 9Router: {}", e))
+    })?;
+
+    if !response.status().is_success() {
+        return Err(crate::error::ZenError::Custom(format!(
+            "9Router returned status {} for image models",
+            response.status()
+        )));
+    }
+
+    let body: serde_json::Value = response.json().await.map_err(|e| {
+        crate::error::ZenError::Custom(format!("Failed to parse 9Router response: {}", e))
+    })?;
+
+    let data_arr = body.get("data").and_then(|d| d.as_array()).ok_or_else(|| {
+        crate::error::ZenError::Custom("No data field in 9Router models response".to_string())
+    })?;
+
+    let models: Vec<ModelInfo> = data_arr
+        .iter()
+        .filter_map(|item| {
+            let id = item.get("id")?.as_str()?.to_string();
+            let name = item
+                .get("name")
+                .and_then(|n| n.as_str())
+                .unwrap_or(&id)
+                .to_string();
+            Some(ModelInfo {
+                id,
+                name,
+                ..Default::default()
+            })
+        })
+        .collect();
+
+    Ok(models)
 }
 
 /// Synchronize tool permissions from flat key-value settings into the ToolManager

@@ -6,11 +6,13 @@ interface StatusPanelProps {
   logoSubVisible: boolean;
   bootPhase: string;
   statusItems: StatusItem[];
+  visibleCount: number;
   logsCount: number;
   totalLogsCount: number;
   bootComplete: boolean;
   getStatusIcon: (status: StatusItem['status']) => React.ReactNode;
   panelStyle: React.CSSProperties;
+  reducedMotion?: boolean;
 }
 
 export const StatusPanel: React.FC<StatusPanelProps> = ({
@@ -18,11 +20,13 @@ export const StatusPanel: React.FC<StatusPanelProps> = ({
   logoSubVisible,
   bootPhase,
   statusItems,
+  visibleCount,
   logsCount,
   totalLogsCount,
   bootComplete,
   getStatusIcon,
   panelStyle,
+  reducedMotion = false,
 }) => {
   return (
     <div
@@ -32,19 +36,19 @@ export const StatusPanel: React.FC<StatusPanelProps> = ({
       {/* Header */}
       <div className="px-3 sm:px-4 pt-3 sm:pt-4 pb-2 sm:pb-3 border-b border-white/[0.06]">
         <div
-          className="uppercase font-light transition-all duration-700"
+          className={`uppercase font-light ${reducedMotion ? '' : 'transition-all duration-700'}`}
           style={{
             fontSize: 'clamp(8px, 0.85vw, 11px)',
             letterSpacing: '0.4em',
             color: 'rgba(52,211,153,0.9)',
             opacity: logoVisible ? 1 : 0,
-            transform: logoVisible ? 'translateY(0)' : 'translateY(-8px)',
+            transform: reducedMotion ? 'translateY(0)' : (logoVisible ? 'translateY(0)' : 'translateY(-8px)'),
           }}
         >
           {'>'} ZENOS
         </div>
         <div
-          className="mt-0.5 uppercase transition-all duration-700"
+          className={`mt-0.5 uppercase ${reducedMotion ? '' : 'transition-all duration-700'}`}
           style={{
             fontSize: 'clamp(7px, 0.7vw, 9px)',
             letterSpacing: '0.25em',
@@ -66,13 +70,17 @@ export const StatusPanel: React.FC<StatusPanelProps> = ({
 
       {/* Status list */}
       <div className="flex-1 overflow-y-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {statusItems.map((item) => (
+        {statusItems.slice(0, visibleCount > 0 ? visibleCount : (bootComplete ? statusItems.length : 0)).map((item, i) => (
           <div
             key={item.label}
-            className={`flex items-start gap-1.5 px-3 sm:px-4 py-[3px] transition-colors duration-75 ${
-              item.status === 'running' ? 'bg-white/[0.03]' : ''
-            }`}
-            style={{ fontSize: 'clamp(9px, 0.85vw, 11px)', lineHeight: '1.4' }}
+            className={`flex items-start gap-1.5 px-3 sm:px-4 py-[3px] ${reducedMotion ? '' : 'boot-log-entry'}`}
+            style={{
+              fontSize: 'clamp(9px, 0.85vw, 11px)',
+              lineHeight: '1.4',
+              animationDelay: reducedMotion ? undefined : `${i * 40}ms`,
+              backgroundColor: item.status === 'running' ? 'rgba(255,255,255,0.03)' : 'transparent',
+              transition: reducedMotion ? undefined : 'background-color 75ms ease',
+            }}
           >
             <span className="shrink-0 text-right" style={{ width: 'clamp(22px, 2.2vw, 30px)' }}>{getStatusIcon(item.status)}</span>
             <div className="min-w-0">

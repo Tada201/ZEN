@@ -5,6 +5,8 @@ function isPrivateOrLoopbackHost(hostname: string): boolean {
   if (host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "0.0.0.0" || host === "asset.localhost") {
     return true;
   }
+
+  // ── IPv4 private / link-local ranges ──
   if (host.startsWith("10.")) return true;
   if (host.startsWith("192.168.")) return true;
   if (host.startsWith("172.")) {
@@ -17,16 +19,38 @@ function isPrivateOrLoopbackHost(hostname: string): boolean {
     }
   }
   if (host.startsWith("169.254.")) return true;
+
+  // ── IPv6 private ranges ──
+  // ULA: fc00::/7 (fc00:: – fdff::)
+  if (host.startsWith("fc") || host.startsWith("fd")) {
+    const v6 = host.replace(/^\[|\]$/g, "");
+    if (/^[0-9a-f]{2}/.test(v6) && v6.length >= 2) {
+      const first = parseInt(v6.substring(0, 2), 16);
+      if (first >= 0xfc && first <= 0xfd) return true;
+    }
+  }
+  // Link-local: fe80::/10
+  if (host.startsWith("fe")) {
+    const v6 = host.replace(/^\[|\]$/g, "");
+    if (/^fe[0-9a-f]/.test(v6) && v6.length >= 3) {
+      const first = parseInt(v6.substring(0, 2), 16);
+      if (first === 0xfe) {
+        const second = parseInt(v6[2], 16);
+        if (second >= 0x8 && second <= 0xb) return true;
+      }
+    }
+  }
+
   return false;
 }
 
 /**
  * Shared check: does the URL path target the trusted `generated_images` directory?
- * Used for every local-file-like protocol to prevent directory traversal.
+ * Uses segment-level matching to prevent bypass via substring tricks.
  */
 function isInsideGeneratedImagesDir(url: URL): boolean {
-  const path = url.pathname.toLowerCase();
-  return path.includes("generated_images/") || path.includes("generated_images\\");
+  const segments = url.pathname.split(/[/\\]/).filter(Boolean);
+  return segments.includes("generated_images");
 }
 
 export function isSafeGeneratedHref(href?: string | null): href is string {

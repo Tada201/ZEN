@@ -2,6 +2,7 @@ use crate::error::{AppResult, ZenError};
 use std::path::{Component, Path};
 use std::sync::OnceLock;
 use std::time::Duration;
+use tauri::Manager;
 
 static PUBLIC_NO_REDIRECT_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 static DUCKDUCKGO_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
@@ -105,4 +106,66 @@ pub fn is_path_in_root(path: &Path, root: &Path) -> bool {
     };
 
     path_abs.starts_with(root_abs)
+}
+
+/// Security check: Validates that the filename belongs to a valid generated image
+/// inside the app's generated_images directory and canonicalizes it.
+pub fn validate_generated_image_path(app: &tauri::AppHandle, filename: &str) -> AppResult<std::path::PathBuf> {
+    let app_data_dir = app.path().app_data_dir().map_err(|e| {
+        ZenError::Internal(format!("Failed to resolve AppData directory: {}", e))
+    })?;
+    let generated_images_dir = app_data_dir.join("generated_images");
+
+    let clean_filename = Path::new(filename)
+        .file_name()
+        .ok_or_else(|| ZenError::Internal("Invalid filename".to_string()))?
+        .to_string_lossy()
+        .into_owned();
+
+    if !clean_filename.starts_with("image_") || !clean_filename.ends_with(".png") {
+        return Err(ZenError::Internal("Security check failed: Input is not an app-generated image asset".to_string()));
+    }
+
+    let source_path = generated_images_dir.join(&clean_filename);
+    let resolved_source = source_path.canonicalize().map_err(|e| {
+        ZenError::Internal(format!("Image file does not exist or invalid path: {}", e))
+    })?;
+
+    if !is_path_in_root(&resolved_source, &generated_images_dir) {
+        return Err(ZenError::Internal("Security check failed: Target path lies outside generated_images directory".to_string()));
+    }
+
+    if !resolved_source.is_file() {
+        return Err(ZenError::Internal("Security check failed: Path is not a file".to_string()));
+    }
+
+    Ok(resolved_source)
+}
+
+/// Security check: Ensures bearer tokens/API keys cannot be transmitted over remote plaintext HTTP connections.
+/// Allows only local loopback HTTP or remote HTTPS.
+pub fn validate_remote_auth_safety(url_str: &str, has_token: bool) -> AppResult<()> {
+    if !has_token {
+        return Ok(());
+    }
+
+    let parsed = url::Url::parse(url_str).map_err(|e| {
+        ZenError::Internal(format!("Invalid URL format: {}", e))
+    })?;
+
+    let is_loopback = if let Some(host) = parsed.host_str() {
+        host == "localhost" || host == "127.0.0.1" || host == "[::1]"
+    } else {
+        false
+    };
+
+    let is_https = parsed.scheme() == "https";
+
+    if !is_https && !is_loopback {
+        return Err(ZenError::Internal(
+            "Security violation: Bearer tokens / API keys cannot be transmitted over plaintext remote connections. Use HTTPS or localhost.".to_string()
+        ));
+    }
+
+    Ok(())
 }

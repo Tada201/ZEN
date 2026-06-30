@@ -116,6 +116,15 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
     }
   }
 
+  let parsedAttachments = [];
+  if (msg.attachments) {
+    try {
+      parsedAttachments = JSON.parse(msg.attachments);
+    } catch (e) {
+      console.error("Failed to parse attachments JSON:", e);
+    }
+  }
+
   const isPendingDeepResearch = msg.kind === "deep_research" && msg.isComplete !== 1;
 
   return {
@@ -124,7 +133,7 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
     role: msg.role as Message["role"],
     content: finalContent,
     reasoning: reasoning || undefined,
-    attachments: [],
+    attachments: parsedAttachments,
     toolCalls: parsedToolCalls,
     steps,
     createdAt: new Date(msg.createdAt).getTime(),

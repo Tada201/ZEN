@@ -22,6 +22,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
+use tauri::Emitter;
 
 use crate::agent::event_bus::EventBus;
 use crate::agent::hooks::HookRegistry;
@@ -158,15 +159,20 @@ impl InitProgress {
         }
     }
 
-    pub async fn set_status(&self, id: &str, status: &'static str, elapsed_ms: Option<u64>) {
-        let guard = self.phases.read().await;
-        if let Some(mutex) = guard.iter().find(|m| m.lock().unwrap().id == id) {
-            let mut phase = mutex.lock().unwrap();
-            phase.status = status;
-            if let Some(ms) = elapsed_ms {
-                phase.elapsed_ms = Some(ms);
+    pub async fn set_status(&self, app: &tauri::AppHandle, id: &str, status: &'static str, elapsed_ms: Option<u64>) {
+        {
+            let guard = self.phases.read().await;
+            if let Some(mutex) = guard.iter().find(|m| m.lock().unwrap().id == id) {
+                let mut phase = mutex.lock().unwrap();
+                phase.status = status;
+                if let Some(ms) = elapsed_ms {
+                    phase.elapsed_ms = Some(ms);
+                }
             }
         }
+        // Emit snapshot update event to all webview listeners
+        let snap = self.snapshot().await;
+        let _ = app.emit("init-status-update", snap);
     }
 }
 

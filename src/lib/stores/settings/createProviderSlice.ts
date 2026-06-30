@@ -7,6 +7,8 @@ import { ModelInfo, CustomProviderConfig, PROVIDER_KEY_MAP, PROVIDER_BASE_URL_MA
 const isLocalUrl = (url: string) => url.includes('localhost') || url.includes('127.0.0.1');
 const MODEL_CACHE_KEY = 'zen:model-catalog:v1';
 const MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
+const IMAGE_MODEL_CACHE_KEY = 'zen:nine-router-image-models:v1';
+const IMAGE_MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
 let modelFetchGeneration = 0;
 
 function readCachedModels(): ModelInfo[] {
@@ -32,6 +34,31 @@ function isModelCacheFresh(): boolean {
 function writeCachedModels(models: ModelInfo[]) {
     if (typeof window === 'undefined' || models.length === 0) return;
     localStorage.setItem(MODEL_CACHE_KEY, JSON.stringify({ timestamp: Date.now(), models }));
+}
+
+function readCachedImageModels(): ModelInfo[] {
+    if (typeof window === 'undefined') return [];
+    try {
+        const cached = JSON.parse(localStorage.getItem(IMAGE_MODEL_CACHE_KEY) || 'null') as { models?: ModelInfo[] } | null;
+        return Array.isArray(cached?.models) ? cached.models : [];
+    } catch {
+        return [];
+    }
+}
+
+function isImageModelCacheFresh(): boolean {
+    if (typeof window === 'undefined') return false;
+    try {
+        const cached = JSON.parse(localStorage.getItem(IMAGE_MODEL_CACHE_KEY) || 'null') as { timestamp?: number } | null;
+        return typeof cached?.timestamp === 'number' && Date.now() - cached.timestamp < IMAGE_MODEL_CACHE_TTL_MS;
+    } catch {
+        return false;
+    }
+}
+
+function writeCachedImageModels(models: ModelInfo[]) {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(IMAGE_MODEL_CACHE_KEY, JSON.stringify({ timestamp: Date.now(), models }));
 }
 
 const customProviderApiKeySetting = (id: string) => `${id}_api_key`;
@@ -85,6 +112,19 @@ function normalizeModelInfo(model: BackendModelInfo): ModelInfo {
     };
 }
 
+function dedupeModelsById(models: ModelInfo[], preferredOrder: "first" | "last" = "last"): ModelInfo[] {
+    const seen = new Map<string, ModelInfo>();
+    for (const model of models) {
+        if (!model || typeof model.id !== "string" || model.id.length === 0) continue;
+        if (preferredOrder === "last") {
+            seen.set(model.id, model);
+        } else if (!seen.has(model.id)) {
+            seen.set(model.id, model);
+        }
+    }
+    return Array.from(seen.values());
+}
+
 function groupModelsByProvider(models: ModelInfo[]): Record<string, ModelInfo[]> {
     return models.reduce<Record<string, ModelInfo[]>>((grouped, model) => {
         const provider = model.provider || "custom";
@@ -118,8 +158,38 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
   agentConfigs: [],
   toolAutoApprove: [],
   
-  availableModels: readCachedModels(),
-  availableModelsByProvider: groupModelsByProvider(readCachedModels()),
+  nineRouterImageModels: readCachedImageModels(),
+  nineRouterImageModelsLoading: false,
+  nineRouterImageModelsError: null,
+  nineRouterImageModelsLastFetchedAt: null,
+
+  fetchNineRouterImageModels: async (force?: boolean) => {
+    const state = get();
+    // Skip if already loading, or if cache is fresh and not forced
+    if (state.nineRouterImageModelsLoading) return;
+    if (!force && isImageModelCacheFresh() && state.nineRouterImageModels.length > 0) return;
+
+    set({ nineRouterImageModelsLoading: true, nineRouterImageModelsError: null });
+    try {
+      const models = await providersApi.fetchNineRouterImageModels();
+      const result = models || [];
+      writeCachedImageModels(result);
+      set({
+        nineRouterImageModels: result,
+        nineRouterImageModelsLoading: false,
+        nineRouterImageModelsLastFetchedAt: Date.now(),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      set({
+        nineRouterImageModelsError: msg,
+        nineRouterImageModelsLoading: false,
+      });
+    }
+  },
+
+  availableModels: dedupeModelsById(readCachedModels()),
+  availableModelsByProvider: groupModelsByProvider(dedupeModelsById(readCachedModels())),
   fetchingModels: false,
   connectionStatuses: {},
   testingConnections: {},
@@ -166,11 +236,11 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
 
         const fetchedModels = [...backendModels, ...customModels];
         const allModels = providerOverride
-            ? [
+            ? dedupeModelsById([
                 ...get().availableModels.filter(model => model.provider !== providerOverride),
                 ...fetchedModels,
-              ]
-            : fetchedModels;
+              ], "first")
+            : dedupeModelsById(fetchedModels);
         const groupedModels = groupModelsByProvider(allModels);
 
         // Provider-specific filtered view (for per-provider settings tabs)
@@ -190,10 +260,16 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
     } catch (err) {
         // Only log if it's not a common/expected error like 401 during setup
         const errMsg = String(err);
-        if (!errMsg.includes('401') && !errMsg.includes('Unauthorized')) {
+        const suppressed = errMsg.includes('401') || errMsg.includes('Unauthorized');
+        if (!suppressed) {
             console.error('Failed to fetch models:', err);
         }
-        if (requestGeneration === modelFetchGeneration) set({ fetchingModels: false });
+        if (requestGeneration === modelFetchGeneration) {
+            set(s => ({
+                fetchingModels: false,
+                connectionStatuses: { ...s.connectionStatuses, [provider]: suppressed ? s.connectionStatuses[provider] || 'idle' : 'error' },
+            }));
+        }
         return [];
     }
   },
@@ -317,9 +393,15 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
 
   removeCustomProvider: async (id) => {
     const state = get();
-    const current = state.customProviders;
-    await syncCustomProviderBackendSettings(id, "", "", {});
-    
+    const providerToRemove = (state.customProviders || []).find(cp => cp.id === id);
+    if (!providerToRemove) return;
+
+    try {
+        await syncCustomProviderBackendSettings(providerToRemove.id, "", "", {});
+    } catch (error) {
+        console.warn('[removeCustomProvider] Backend settings cleanup failed; proceeding with frontend removal.', error);
+    }
+
     if (state.activeProvider === id) {
         const fallback = providerOrder.find(p => {
             const configKey = PROVIDER_KEY_MAP[p.key];
@@ -328,10 +410,31 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
             return true;
         })?.key || 'ollama';
 
-        state.updateSetting({ activeProvider: fallback, activeModel: '' } as any);
+        const fallbackHasSavedModel = (state.availableModelsByProvider[fallback] || []).some(
+            model => model.id === state.activeModel,
+        );
+        state.batchUpdate({
+            activeProvider: fallback,
+            ...(fallbackHasSavedModel ? {} : { activeModel: '' }),
+        } as any);
     }
-    
-    state.updateSetting({ customProviders: current.filter(cp => cp.id !== id) } as any);
+
+    state.batchUpdate({
+        customProviders: state.customProviders.filter(cp => cp.id !== id),
+        availableModels: state.availableModels.filter(model => model.provider !== id),
+        availableModelsByProvider: Object.fromEntries(
+            Object.entries(state.availableModelsByProvider).filter(([key]) => key !== id),
+        ),
+        connectionStatuses: Object.fromEntries(
+            Object.entries(state.connectionStatuses).filter(([key]) => key !== id),
+        ),
+        testingConnections: Object.fromEntries(
+            Object.entries(state.testingConnections).filter(([key]) => key !== id),
+        ),
+        providerParams: Object.fromEntries(
+            Object.entries(state.providerParams).filter(([key]) => key !== id),
+        ),
+    } as any);
   },
 
   toggleCustomProvider: (id) => {
@@ -392,7 +495,7 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
     connectionStatuses: { ...s.connectionStatuses, [provider]: status.status as any }
   })),
   setAvailableModels: (models: ModelInfo[]) => {
-    const normalizedModels = models.map(normalizeModelInfo);
+    const normalizedModels = dedupeModelsById(models.map(normalizeModelInfo));
     set({
         availableModels: normalizedModels,
         availableModelsByProvider: groupModelsByProvider(normalizedModels),

@@ -13,6 +13,7 @@ export interface PremiumChatInputProps {
     };
     deepResearch: boolean;
     generativeUI: boolean;
+    imageGen?: boolean;
     files: File[];
     attachments?: Attachment[];
     tools?: string[];

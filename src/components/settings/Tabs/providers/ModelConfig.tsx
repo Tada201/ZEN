@@ -1,8 +1,17 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import type { ModelInfo } from '@/lib/types/provider';
 
 const EMPTY_ARRAY: ModelInfo[] = [];
+
+function dedupeModelsById(models: ModelInfo[]): ModelInfo[] {
+    const seen = new Map<string, ModelInfo>();
+    for (const model of models) {
+        if (!model || typeof model.id !== 'string' || model.id.length === 0) continue;
+        if (!seen.has(model.id)) seen.set(model.id, model);
+    }
+    return Array.from(seen.values());
+}
 
 interface ModelConfigProps {
     providerKey: string;
@@ -17,6 +26,8 @@ export const ModelConfig = React.memo(({ providerKey, displayName, requiresKey, 
     const providerModels = useSettingsStore(s => s.availableModelsByProvider[providerKey] || EMPTY_ARRAY);
     const fetchingModels = useSettingsStore(s => s.fetchingModels);
     const switchModel = useSettingsStore(s => s.switchModel);
+
+    const dedupedModels = useMemo(() => dedupeModelsById(providerModels), [providerModels]);
 
     const handleModelChange = useCallback((newModel: string) => {
         switchModel(providerKey, newModel);
@@ -42,9 +53,9 @@ export const ModelConfig = React.memo(({ providerKey, displayName, requiresKey, 
                 <span className="text-[11px] text-muted-foreground/60">Select the model architecture for this node.</span>
             </div>
             {fetchingModels ? <p className="text-xs text-muted-foreground">Discovering models...</p> : null}
-            {providerModels.length > 0 ? (
+            {dedupedModels.length > 0 ? (
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                    {providerModels.map((model) => {
+                    {dedupedModels.map((model) => {
                         const selected = model.id === activeModel;
                         return (
                             <button

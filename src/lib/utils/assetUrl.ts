@@ -11,11 +11,18 @@ import { convertFileSrc, isTauri } from "@tauri-apps/api/core";
 export function toAssetUrl(rawUrl: string): string {
   if (!rawUrl) return rawUrl;
 
-  // Already a web-safe URL — pass through
-  if (/^(https?|data|blob|asset):/.test(rawUrl)) return rawUrl;
+  let localPath = rawUrl;
+  
+  // If it's already an asset://localhost/ URI, unpack the absolute path out of it
+  if (localPath.startsWith("asset://localhost/")) {
+    localPath = localPath.replace(/^asset:\/\/localhost\/\/\/\?\//, "");
+    localPath = localPath.replace(/^asset:\/\/localhost\//, "");
+  } else if (/^(https?|data|blob):/.test(rawUrl)) {
+    // Other web-safe URLs pass through
+    return rawUrl;
+  }
 
   // Strip accidental file:// prefix the user may have pasted
-  let localPath = rawUrl;
   if (localPath.startsWith("file:///")) {
     localPath = localPath.slice(8); // file:///C:/... → C:/...
   } else if (localPath.startsWith("file://")) {
@@ -23,7 +30,18 @@ export function toAssetUrl(rawUrl: string): string {
   }
 
   // Normalise forward-slashes for Windows (CSS url() sometimes eats backslashes)
-  localPath = localPath.replace(/\//g, "\\");
+  localPath = localPath.replace(/\\/g, "/");
+
+  // Strip trailing hash/query fragments from local paths (e.g. #⚡️ Cyberpunk Night City)
+  // which prevent filesystem resolution.
+  const hashIdx = localPath.indexOf('#');
+  if (hashIdx !== -1) {
+    localPath = localPath.slice(0, hashIdx);
+  }
+  const queryIdx = localPath.indexOf('?');
+  if (queryIdx !== -1) {
+    localPath = localPath.slice(0, queryIdx);
+  }
 
   // Guard: only convert when running inside Tauri
   if (!isTauri()) return rawUrl;

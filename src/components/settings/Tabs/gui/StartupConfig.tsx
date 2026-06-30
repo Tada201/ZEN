@@ -39,11 +39,11 @@ export const StartupConfig = memo(() => {
                                 placeholder="2500"
                                 type="number"
                                 min={500}
-                                max={10000}
+                                max={5000}
                                 step={100}
                                 value={bootDurationMs.toString()}
                                 onChangeText={(text) => updateSetting({
-                                    bootDurationMs: Math.min(10000, Math.max(500, Number.parseInt(text, 10) || 500)),
+                                    bootDurationMs: Math.min(5000, Math.max(500, Number.parseInt(text, 10) || 500)),
                                 })}
                                 className="w-[120px] text-center bg-zinc-950/50 rounded-lg border border-white/5 font-mono text-emerald-400 focus:border-emerald-500/30"
                             />

@@ -11,6 +11,7 @@ import { FileTree } from "./FileTree";
 import { splitMarkdownIntoBlocks, type MarkdownBlock } from "./markdown-utils";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import { isSafeGeneratedHref } from "@/lib/security/generatedLinks";
+import { toAssetUrl } from "@/lib/utils/assetUrl";
 import {
   MarkdownErrorBoundary,
   flattenChildren,
@@ -22,7 +23,83 @@ import {
   stripCodeFence,
   removeAlertTag
 } from "./MarkdownHelperComponents";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Download } from "lucide-react";
+import { AppDialog } from "@/components/ui/AppDialog";
+import { chatApi } from "@/api/chatApi";
+import { toast } from "sonner";
+import { useState, useCallback } from "react";
+
+function InteractiveImage({ src, alt }: { src: string; alt: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const resolvedSrc = toAssetUrl(src);
+
+  const handleExport = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExporting(true);
+    const toastId = toast.loading("Saving image to workspace...");
+    try {
+      const savedPath = await chatApi.exportImageToWorkspace(src);
+      toast.success(`Image saved to workspace: ${savedPath}`, { id: toastId });
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`Failed to export image: ${err?.message || err}`, { id: toastId });
+    } finally {
+      setExporting(false);
+    }
+  }, [src]);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setIsOpen(true)}
+        className="block my-4 shrink-0 relative overflow-hidden rounded-lg border border-border/30 hover:border-primary/40 transition-all duration-200 group"
+      >
+        <img
+          src={resolvedSrc}
+          alt={alt}
+          className="max-w-full rounded-lg hover:scale-[1.01] transition-transform duration-200"
+          loading="lazy"
+        />
+      </button>
+
+      <AppDialog
+        open={isOpen}
+        onOpenChange={setIsOpen}
+        title={alt || "Image Preview"}
+        footer={
+          <div className="flex w-full items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex items-center gap-1.5 border border-white/10 px-3 py-1.5 text-[11px] rounded text-zinc-200 hover:bg-white/[0.06] transition-colors disabled:opacity-50"
+            >
+              <Download size={12} />
+              <span>{exporting ? "Saving..." : "Export to Workspace"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="border border-white/10 px-3 py-1.5 text-[11px] rounded text-zinc-400 hover:text-white transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        }
+      >
+        <div className="relative flex items-center justify-center min-h-[300px] p-2">
+          <img
+            src={resolvedSrc}
+            alt={alt}
+            className="max-h-[60vh] max-w-full object-contain rounded-md"
+          />
+        </div>
+      </AppDialog>
+    </>
+  );
+}
 
 // ── References grid component ──────────────────────────────────────────────
 
@@ -215,9 +292,7 @@ export function MarkdownContent({
     mainContent = extracted.content;
   }
 
-  const isPlainShortText = mainContent.length > 0
-    && mainContent.length < 48
-    && !/[\\`*_{}\[\]<>#|$~]/.test(mainContent);
+  const isPlainShortText = false;
 
   // 2a. Parse & extract ## References section for compact grid rendering
   const { clean: refStrippedContent, items: refItems } = useMemo(
@@ -317,10 +392,11 @@ export function MarkdownContent({
     img: ({ src, alt }) => {
       if (!src) return null;
       if (!isSafeGeneratedHref(src)) {
+        console.warn("isSafeGeneratedHref rejected URL: ", src);
         return <span className="text-muted-foreground italic text-xs">[Image: {alt || src}]</span>;
       }
       return (
-        <img src={src} alt={alt || ""} className="my-4 max-w-full rounded-lg border border-border/30" />
+        <InteractiveImage src={src} alt={alt || ""} />
       );
     },
     blockquote: ({ children }) => {
@@ -382,9 +458,9 @@ export function MarkdownContent({
       )}
       {isPlainShortText ? (
         <div className="whitespace-pre-wrap break-words text-foreground">{mainContent}</div>
-      ) : blocks.length > 0 && (
+      ) : (
         <div className="space-y-6">
-          {blocks.map((block) => (
+          {(blocks.length > 0 ? blocks : [{ id: "fallback-single-block", type: "text", content: refStrippedContent, isComplete: !isStreaming, index: 0 } as any]).map((block) => (
             <MemoizedMarkdownBlock
               key={block.id}
               block={block}

@@ -122,6 +122,31 @@ export function useChatMutations({
     onError: (err) => toast.error(getIpcErrorMessage(err, "Failed to create folder")),
   });
 
+  const renameFolderMutation = useMutation({
+    mutationFn: ({ folderId, name }: { folderId: string; name: string }) =>
+      chatApi.updateFolder(folderId, name),
+    onSuccess: (_, { folderId, name }) => {
+      queryClient.setQueryData<ChatFolder[]>(["folders"], (prev) =>
+        prev?.map((f) => (f.id === folderId ? { ...f, name } : f))
+      );
+      toast.success("Folder renamed");
+    },
+    onError: (err) => toast.error(getIpcErrorMessage(err, "Failed to rename folder")),
+  });
+
+  const deleteFolderMutation = useMutation({
+    mutationFn: (folderId: string) => chatApi.deleteFolder(folderId),
+    onSuccess: (_, folderId) => {
+      queryClient.setQueryData<ChatFolder[]>(["folders"], (prev) => prev?.filter((f) => f.id !== folderId));
+      // Clear folderId on any sessions that were in this folder.
+      queryClient.setQueryData<Session[]>(["sessions"], (prev) =>
+        prev?.map((s) => (s.folderId === folderId ? { ...s, folderId: null } : s))
+      );
+      toast.success("Folder deleted");
+    },
+    onError: (err) => toast.error(getIpcErrorMessage(err, "Failed to delete folder")),
+  });
+
   const moveChatToFolderMutation = useMutation({
     mutationFn: ({ chatId, folderId }: { chatId: string; folderId: string | null }) => 
       folderId 
@@ -148,6 +173,9 @@ export function useChatMutations({
     handleUnarchiveSession: (id: string) => unarchiveSessionMutation.mutate(id),
     handleDeleteAll: () => bulkDeleteMutation.mutate(sessions.map(s => s.id)),
     handleCreateFolder: (name: string) => createFolderMutation.mutate(name),
+    handleRenameFolder: (folderId: string, name: string) =>
+      renameFolderMutation.mutate({ folderId, name }),
+    handleDeleteFolder: (folderId: string) => deleteFolderMutation.mutate(folderId),
     handleMoveToFolder: (chatId: string, folderId: string | null) => moveChatToFolderMutation.mutate({ chatId, folderId }),
   };
 }

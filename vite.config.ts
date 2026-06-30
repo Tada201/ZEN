@@ -14,13 +14,13 @@ const copyCesiumAssets = (): Plugin => ({
   name: "copy-cesium-assets",
   apply: "build",
   async closeBundle() {
-    await Promise.all(
-      cesiumAssetDirs.map((dir) =>
+    await Promise.all([
+      ...cesiumAssetDirs.map((dir) =>
         fs.cp(path.join(cesiumBuildDir, dir), path.resolve(__dirname, "dist", cesiumBaseUrl, dir), {
           recursive: true,
         }),
       ),
-    );
+    ]);
   },
 });
 
@@ -28,6 +28,20 @@ const copyCesiumAssets = (): Plugin => ({
 // inference. Its bundled fallback uses Vite's static `new URL(..., import.meta.url)`
 // pattern, which produces a false production-build warning for an unreachable
 // package-relative asset. Keep the fallback browser-relative instead.
+// Tauri v2's custom asset protocol (https://tauri.localhost/) does not add
+// CORS headers. Vite/Rolldown adds `crossorigin` to all <script type="module">
+// and <link rel="modulepreload"> tags by default. The browser then requires
+// Access-Control-Allow-Origin on every JS chunk — without it module scripts
+// are silently rejected and React never mounts ("stuck on loader").
+const stripCrossorigin = (): Plugin => ({
+  name: "strip-crossorigin",
+  enforce: "post",
+  apply: "build",
+  transformIndexHtml(html: string) {
+    return html.replaceAll(' crossorigin', '');
+  },
+});
+
 const normalizeMoonshineWasmFallback = (): Plugin => ({
   name: "normalize-moonshine-wasm-fallback",
   enforce: "pre",
@@ -92,7 +106,7 @@ const manualChunks = (id: string) => {
 
 // https://vite.dev/config/
 export default defineConfig(async ({ command }) => ({
-  plugins: [react(), tailwindcss(), normalizeMoonshineWasmFallback(), copyCesiumAssets()],
+  plugins: [react(), tailwindcss(), stripCrossorigin(), normalizeMoonshineWasmFallback(), copyCesiumAssets()],
   define: {
     CESIUM_BASE_URL: JSON.stringify(
       command === "serve" ? `/@fs/${normalizePath(cesiumBuildDir)}/` : cesiumBaseUrl,

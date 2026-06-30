@@ -13,6 +13,7 @@ import { preloadOpenUISystemPrompt } from './genui/promptLoader';
 
 // Decomposed Components
 import { ActionPills } from './chat/input/ActionPills';
+import { ImagePresetStrip } from './chat/input/ImagePresetStrip';
 import { PlusActionMenu } from './chat/input/PlusActionMenu';
 import { ModelSearchDropdown } from './chat/input/ModelSearchDropdown';
 import { PinnedActionBar } from './chat/input/PinnedActionBar';
@@ -77,6 +78,10 @@ export const PremiumChatInput = memo(({
     return false;
   });
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isImageGenEnabled, setIsImageGenEnabled] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('zen_image_gen') === 'true';
+    return false;
+  });
   const [selectedPrompt, setSelectedPrompt] = useState<PromptDefinition | null>(null);
 
   const [isModelOpen, setIsModelOpen] = useState(false);
@@ -122,6 +127,7 @@ export const PremiumChatInput = memo(({
   useEffect(() => { localStorage.setItem('zen_thinking_budget', String(thinkingBudget)); }, [thinkingBudget]);
   useEffect(() => { localStorage.setItem('zen_deep_research', String(isDeepResearch)); }, [isDeepResearch]);
   useEffect(() => { localStorage.setItem('zen_tools_disabled', String(isToolsDisabled)); }, [isToolsDisabled]);
+  useEffect(() => { localStorage.setItem('zen_image_gen', String(isImageGenEnabled)); }, [isImageGenEnabled]);
 
   const [pinnedActions, setPinnedActions] = useState<string[]>(() => {
     if (typeof window !== 'undefined') {
@@ -190,10 +196,7 @@ export const PremiumChatInput = memo(({
     return selectedModelInfo.supportsReasoning === true || selectedModelInfo.capabilities?.includes('reasoning') === true;
   }, [selectedModelInfo]);
 
-  const supportsImageGen = useMemo(() => {
-    if (!selectedModelInfo) return false;
-    return selectedModelInfo.capabilities?.includes('image-gen') || selectedModelInfo.id?.toLowerCase().includes('imagen');
-  }, [selectedModelInfo]);
+
 
   const reasoningConfigType = useMemo(() => {
     if (!supportsReasoning || !selectedModelInfo) return 'none';
@@ -228,6 +231,8 @@ export const PremiumChatInput = memo(({
     }
   }, [supportsReasoning, isThinking]);
 
+
+
   const handleSend = async () => {
     if (isLoading) {
       onAbort?.();
@@ -251,6 +256,7 @@ export const PremiumChatInput = memo(({
       webSearch: isWebSearch,
       deepResearch: isDeepResearch,
       generativeUI: internalGenerativeUI,
+      imageGen: isImageGenEnabled,
       files: selectedFiles,
       attachments: attachments as Attachment[],
       thinking: buildThinkingPayload(),
@@ -320,6 +326,7 @@ export const PremiumChatInput = memo(({
       webSearch: isWebSearch,
       deepResearch: isDeepResearch,
       generativeUI: promptText.includes("genui") || internalGenerativeUI,
+      imageGen: isImageGenEnabled,
       files: [],
       attachments: [],
       thinking: buildThinkingPayload(),
@@ -346,8 +353,8 @@ export const PremiumChatInput = memo(({
       <div
         ref={containerRef}
         className={cn(
-          "w-full relative bg-white/80 dark:bg-white/[0.12] backdrop-blur-xl dark:backdrop-blur-xl backdrop-saturate-150 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.05)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.05)] ring-1 ring-black/5 dark:ring-white/20 overflow-visible transition-all duration-200",
-          isLoading && "ring-primary/40 dark:ring-primary/50 shadow-[0_0_15px_-3px_rgba(var(--primary-rgb),0.1)]"
+          "w-full relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.05)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.05)] overflow-visible transition-all duration-200",
+          isLoading && "ring-1 ring-primary/40 dark:ring-primary/50 shadow-[0_0_15px_-3px_rgba(var(--primary-rgb),0.1)]"
         )}
       >
         {isLoading && (
@@ -390,6 +397,18 @@ export const PremiumChatInput = memo(({
             removeFile={removeFile}
           />
 
+          {/* Style Presets Strip for Image Generation */}
+          <div className="px-3 pt-2">
+            <ImagePresetStrip
+              isImageGenEnabled={isImageGenEnabled}
+              onSelectPreset={(presetPrompt: string) => {
+                const trimmed = message.trim();
+                const newValue = trimmed ? `${trimmed}, ${presetPrompt}` : presetPrompt;
+                setMessage(newValue);
+              }}
+            />
+          </div>
+
           <div className="flex items-start p-3 gap-2">
             <PlusActionMenu
               isOpen={isPlusMenuOpen}
@@ -411,7 +430,8 @@ export const PremiumChatInput = memo(({
               isToolsDisabled={isToolsDisabled}
               setIsToolsDisabled={setIsToolsDisabled}
               onOpenSkills={onOpenSkills}
-              supportsImageGen={supportsImageGen}
+              isImageGenEnabled={isImageGenEnabled}
+              setIsImageGenEnabled={setIsImageGenEnabled}
             />
 
             <div className="flex-1 min-h-[38px] flex items-center">

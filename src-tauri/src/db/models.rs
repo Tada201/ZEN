@@ -327,14 +327,28 @@ pub struct ReasoningBlock {
     pub raw: Option<serde_json::Value>,
 }
 
+fn default_mime_type() -> String {
+    "application/octet-stream".to_string()
+}
+
+fn default_type() -> String {
+    "file".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Attachment {
-    pub id: String,
-    pub filename: String,
+    #[serde(default = "default_type")]
+    pub r#type: String,
+    #[serde(alias = "filename")]
+    pub name: String,
+    pub data: String,
+    #[serde(default = "default_mime_type")]
     pub mime_type: String,
-    pub size: u64,
-    pub data: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extracted_text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page_count: Option<i32>,
 }
 
 // ─── LLM Response ───

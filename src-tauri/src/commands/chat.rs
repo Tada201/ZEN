@@ -8,7 +8,7 @@ use crate::llm::ChatRequestConfig;
 use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{error, info};
 
 async fn persist_sync_send_failure(
     db: &sqlx::SqlitePool,
@@ -175,8 +175,9 @@ pub async fn send_message(
     stop: Option<Vec<String>>,
     thinking: Option<ThinkingConfig>,
     generative_ui: Option<bool>,
+    image_gen: Option<bool>,
     tools: Option<Vec<String>>,
-    _attachments: Option<Vec<crate::db::models::Attachment>>,
+    attachments: Option<Vec<crate::db::models::Attachment>>,
     system_prompt: Option<String>,
     system_prompt_mode: Option<String>,
     voice_display_context: Option<String>,
@@ -211,6 +212,16 @@ pub async fn send_message(
     }
 
     // 1. Add user message to DB
+    let attachments_json = attachments.as_ref().and_then(|atts| {
+        match serde_json::to_string(atts) {
+            Ok(json_str) => Some(json_str),
+            Err(e) => {
+                error!("Failed to serialize attachments: {}", e);
+                None
+            }
+        }
+    });
+
     info!(chat_id = %chat_id, "Inserting user message into database");
     queries::add_message(
         &db,
@@ -220,6 +231,7 @@ pub async fn send_message(
             content: &content,
             model: model.as_deref(),
             is_complete: true,
+            attachments: attachments_json.as_deref(),
             ..Default::default()
         },
     )
@@ -360,14 +372,48 @@ pub async fn send_message(
                 return None;
             }
 
+            let mut final_content = m.content;
+            let mut final_images = m
+                .images
+                .as_deref()
+                .and_then(|img_str| serde_json::from_str::<Vec<String>>(img_str).ok())
+                .unwrap_or_default();
+
+            if let Some(ref att_str) = m.attachments {
+                if let Ok(atts) = serde_json::from_str::<Vec<crate::db::models::Attachment>>(att_str) {
+                    for att in atts {
+                        if att.mime_type.starts_with("image/") {
+                            // Image Attachment Contract:
+                            // The raw base64 or trusted asset/data URI must be in the `data` field.
+                            final_images.push(att.data.clone());
+                        } else if let Some(ref text) = att.extracted_text {
+                            // Non-Image Attachment Contract:
+                            // The extracted text content must be populated in `extracted_text`.
+                            // It is appended to the message's content text block.
+                            final_content.push_str(&format!("\n\n[Attachment: {}]\n{}", att.name, text));
+                        } else {
+                            // Warn if a non-image attachment lacks extracted text to prevent silent ignoring.
+                            tracing::warn!(
+                                "Non-image attachment '{}' (mime: {}) ignored because extracted_text is missing. The frontend must populate extracted_text for non-image uploads.",
+                                att.name,
+                                att.mime_type
+                            );
+                        }
+                    }
+                }
+            }
+
+            let images_opt = if final_images.is_empty() {
+                None
+            } else {
+                Some(final_images)
+            };
+
             Some(ChatMessage {
                 role,
-                content: m.content,
+                content: final_content,
                 reasoning_details,
-                images: m
-                    .images
-                    .as_deref()
-                    .and_then(|img_str| serde_json::from_str(img_str).ok()),
+                images: images_opt,
                 tool_calls,
                 tool_call_id: m.tool_call_id,
             })
@@ -378,6 +424,9 @@ pub async fn send_message(
     let mut tool_ids = vec![];
     if web_search.unwrap_or(false) {
         tool_ids.push("web_search".to_string());
+    }
+    if image_gen.unwrap_or(false) {
+        tool_ids.push("generate_image".to_string());
     }
 
     // If specific tools were requested, use them. Otherwise only attach core
@@ -445,10 +494,22 @@ Always use these specialized code blocks for visual scenarios:
     if replace_system_prompt {
         // Per-turn replacements are used by specialized surfaces such as Voice Mode.
         // Those prompts own their output contract and should not inherit chat UI warnings.
-    } else if generative_ui.unwrap_or(false) {
-        instructions.push_str("\n\n[SYSTEM STATE WARNING]\nIMPORTANT: The Generative UI feature is currently ENABLED for this message turn. You MUST generate any visual mockups, dashboards, grids, stacks, or styled templates inside ```openui ... ``` code blocks using the specified DSL catalog.");
     } else {
-        instructions.push_str("\n\n[SYSTEM STATE WARNING]\nIMPORTANT: The Generative UI feature is currently DISABLED for this message turn. Do NOT generate any 'openui' or visual sandbox layout blocks. Provide all responses in plain, standard markdown or text.");
+        if generative_ui.unwrap_or(false) {
+            instructions.push_str("\n\n[SYSTEM STATE WARNING]\nIMPORTANT: The Generative UI feature is currently ENABLED for this message turn. You MUST generate any visual mockups, dashboards, grids, stacks, or styled templates inside ```openui ... ``` code blocks using the specified DSL catalog.");
+        } else {
+            instructions.push_str("\n\n[SYSTEM STATE WARNING]\nIMPORTANT: The Generative UI feature is currently DISABLED for this message turn. Do NOT generate any 'openui' or visual sandbox layout blocks. Provide all responses in plain, standard markdown or text.");
+        }
+
+        if image_gen.unwrap_or(false) || tool_ids.contains(&"generate_image".to_string()) {
+            instructions.push_str("\n\n[IMAGE GENERATION CAPABILITY]\n\
+            IMPORTANT: The Image Generation feature is currently ENABLED for this turn. The `generate_image` tool is available through the standard tool protocol. When the user asks to generate, create, draw, paint, or illustrate an image/artwork:\n\
+            1. Call `tool_list({\"query\":\"image\"})` to discover the `generate_image` tool.\n\
+            2. Call `tool_info({\"tool_id\":\"generate_image\"})` to read its schema.\n\
+            3. Call `tool_exec({\"tool_id\":\"generate_image\",\"arguments\":{\"prompt\":\"<detailed description>\"}})` with a highly descriptive prompt.\n\
+            4. After the tool returns, it will provide an `image_uri` (e.g., `asset://localhost/...`). You MUST display the generated image directly to the user inside your chat response block using standard markdown image syntax: `![Generated Image](image_uri)`. This is required because there is no automatic preview in the tool card, and the image will only render if you place it in your response text.\n\n\
+            IMPORTANT: Do NOT call `generate_image` directly. Use `tool_list` -> `tool_info` -> `tool_exec` as with any other tool.");
+        }
     }
 
     // Detect voice mode and read display agent settings
@@ -639,6 +700,8 @@ Always use these specialized code blocks for visual scenarios:
                                 config: config_clone,
                                 token: token_clone,
                                 approval_rx: None,
+                                extra_tool_ids: agent.tool_ids.clone(),
+                                extra_instructions: None,
                             },
                         )
                         .await;
@@ -947,6 +1010,32 @@ pub async fn export_chat(state: State<'_, AppState>, chat_id: String) -> ZenResu
 }
 
 #[tauri::command]
+pub async fn export_image_to_workspace(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    filename: String,
+) -> ZenResult<String> {
+    let resolved_source = crate::utils::validate_generated_image_path(&app, &filename)?;
+
+    let workspace_path = state.workspace_folder.read().await.clone();
+    let workspace_images_dir = workspace_path.join("generated_images");
+    std::fs::create_dir_all(&workspace_images_dir).map_err(|e| {
+        crate::error::ZenError::Custom(format!("Failed to create workspace directory: {}", e))
+    })?;
+
+    let destination_path = workspace_images_dir.join(
+        resolved_source
+            .file_name()
+            .ok_or_else(|| crate::error::ZenError::Custom("Invalid filename".to_string()))?,
+    );
+    std::fs::copy(&resolved_source, &destination_path).map_err(|e| {
+        crate::error::ZenError::Custom(format!("Failed to copy image to workspace: {}", e))
+    })?;
+
+    Ok(destination_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 pub async fn import_chat(state: State<'_, AppState>, source_path: String) -> ZenResult<Chat> {
     let db = state.db().await?;
     let validated_path = crate::utils::validate_path(&source_path)?;
@@ -1016,6 +1105,15 @@ fn has_tool_intent(content: &str) -> bool {
         "modify",
         "implement",
         "fix the bug",
+        "draw",
+        "paint",
+        "create image",
+        "generate image",
+        "illustration",
+        "artwork",
+        "picture",
+        "render image",
+        "sketch",
     ];
 
     tool_keywords
@@ -1032,6 +1130,7 @@ fn default_tool_intent_ids() -> Vec<String> {
         "write_file",
         "edit_file",
         "run_command",
+        "generate_image",
     ]
     .into_iter()
     .map(str::to_string)
@@ -1054,6 +1153,7 @@ fn default_yolo_tool_ids() -> Vec<String> {
         "get_system_metrics",
         "spawn_agent",
         "handoff_to_agent",
+        "generate_image",
     ]
     .into_iter()
     .map(str::to_string)

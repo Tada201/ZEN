@@ -1,4 +1,5 @@
 import React, { useState, memo, useCallback, useMemo } from 'react';
+import { toast } from 'sonner';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { providerOrder, PROVIDER_KEY_MAP } from '@/lib/types/provider';
 import { cn } from '@/lib/utils/style';
@@ -39,6 +40,12 @@ export const ProvidersSettings = memo(() => {
     const addCustomProvider = useSettingsStore(s => s.addCustomProvider);
     const allProviderParams = useSettingsStore(s => s.providerParams);
     const updateProviderParams = useSettingsStore(s => s.updateProviderParams);
+    const nineRouterImageModels = useSettingsStore(s => s.nineRouterImageModels);
+    const nineRouterImageModelsLoading = useSettingsStore(s => s.nineRouterImageModelsLoading);
+    const nineRouterImageModelsError = useSettingsStore(s => s.nineRouterImageModelsError);
+    const fetchNineRouterImageModelsAction = useSettingsStore(s => s.fetchNineRouterImageModels);
+    const nineRouterBaseUrl = useSettingsStore(s => s.nineRouterBaseUrl);
+    const nineRouterApiKey = useSettingsStore(s => s.nineRouterApiKey);
 
     const [isAddingCustom, setIsAddingCustom] = useState(false);
     const [addForm, setAddForm] = useState({
@@ -86,7 +93,24 @@ export const ProvidersSettings = memo(() => {
     const handleProviderClick = useCallback((id: string) => {
         setSelectedProviderId(id);
         fetchModels(id);
-    }, [fetchModels]);
+        if (id === 'nine_router') {
+            let isSafe = true;
+            if (nineRouterApiKey && nineRouterApiKey.trim() !== '') {
+                try {
+                    const parsedUrl = new URL(nineRouterBaseUrl);
+                    const host = parsedUrl.hostname.toLowerCase();
+                    const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+                    const isHttps = parsedUrl.protocol === 'https:';
+                    isSafe = isHttps || isLoopback;
+                } catch {
+                    isSafe = false;
+                }
+            }
+            if (isSafe) {
+                void fetchNineRouterImageModelsAction();
+            }
+        }
+    }, [fetchModels, fetchNineRouterImageModelsAction, nineRouterBaseUrl, nineRouterApiKey]);
 
     const getProviderStatus = useCallback((id: string) => {
         const state = useSettingsStore.getState();
@@ -123,13 +147,20 @@ export const ProvidersSettings = memo(() => {
                 displayName: addForm.displayName || 'Custom Node',
                 headers,
             });
-            setAddForm(prev => ({ 
-                ...prev, 
-                testStatus: models && models.length > 0 ? 'success' : 'error',
-                discoveredModels: models || []
+            const ok = models && models.length > 0;
+            setAddForm(prev => ({
+                ...prev,
+                testStatus: ok ? 'success' : 'error',
+                discoveredModels: models || [],
+                validationError: ok ? null : 'Endpoint reachable, but no models were returned. Add model IDs manually below.',
             }));
+            if (!ok) {
+                toast.error('Connection succeeded but no models were returned.');
+            }
         } catch (err) {
-            setAddForm(prev => ({ ...prev, testStatus: 'error', discoveredModels: [], validationError: err instanceof Error ? err.message : String(err) }));
+            const message = err instanceof Error ? err.message : String(err);
+            setAddForm(prev => ({ ...prev, testStatus: 'error', discoveredModels: [], validationError: message }));
+            toast.error(`Custom provider test failed: ${message}`);
         }
     }, [addForm]);
 
@@ -145,17 +176,24 @@ export const ProvidersSettings = memo(() => {
             if (addForm.testStatus !== 'success' && manualModels.length === 0) {
                 throw new Error('Test the connection or enter at least one manual model ID.');
             }
-            await addCustomProvider({
+            const newId = await addCustomProvider({
                 displayName: addForm.displayName,
                 baseUrl: addForm.baseUrl,
                 apiKey: addForm.apiKey,
                 headers,
                 customModels: addForm.discoveredModels.length ? addForm.discoveredModels : manualModels,
             } as any);
+            useSettingsStore.setState(state => ({
+                connectionStatuses: { ...state.connectionStatuses, [newId]: 'success' },
+            }));
+            void useSettingsStore.getState().fetchModels(newId);
             setIsAddingCustom(false);
             setAddForm({ displayName: '', baseUrl: '', apiKey: '', headersText: '', manualModels: '', testStatus: 'idle', discoveredModels: [], validationError: null });
+            toast.success(`Custom provider "${addForm.displayName}" registered.`);
         } catch (err) {
-            setAddForm(prev => ({ ...prev, validationError: err instanceof Error ? err.message : String(err) }));
+            const message = err instanceof Error ? err.message : String(err);
+            setAddForm(prev => ({ ...prev, validationError: message }));
+            toast.error(`Could not register provider: ${message}`);
         }
     }, [addForm, addCustomProvider]);
 
@@ -225,13 +263,18 @@ export const ProvidersSettings = memo(() => {
 
                         <div className="flex flex-col gap-2">
                             <label className="text-xs font-medium text-foreground">API key <span className="font-normal text-muted-foreground">(optional)</span></label>
-                            <WorkbenchInput
-                                type="password"
-                                value={addForm.apiKey}
-                                placeholder="sk-..."
-                                onChangeText={(val) => setAddForm(prev => ({ ...prev, apiKey: val }))}
-                                className="h-11 font-mono text-xs bg-white/[0.03] border-white/[0.08] rounded-xl"
-                            />
+                            <form
+                                onSubmit={(event) => event.preventDefault()}
+                                autoComplete="off"
+                            >
+                                <WorkbenchInput
+                                    type="password"
+                                    value={addForm.apiKey}
+                                    placeholder="sk-..."
+                                    onChangeText={(val) => setAddForm(prev => ({ ...prev, apiKey: val }))}
+                                    className="h-11 font-mono text-xs bg-white/[0.03] border-white/[0.08] rounded-xl"
+                                />
+                            </form>
                         </div>
 
                         {addForm.testStatus !== 'idle' && (
@@ -342,6 +385,92 @@ export const ProvidersSettings = memo(() => {
                             </>
                         )}
 
+                        {selectedProviderId === 'nine_router' && (
+                            <div className="p-4 rounded-xl border border-white/[0.04] bg-white/[0.02] flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                <div className="flex items-center gap-2 border-b border-white/[0.04] pb-2">
+                                    <WorkbenchIcon name="lucide:brush" size={14} className="text-blue-400" />
+                                    <span className="text-[11px] font-bold text-white/80 uppercase tracking-wider">Image Generation Gateway (9Router)</span>
+                                </div>
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Image Gen Provider</label>
+                                        <WorkbenchSelect
+                                            value={providerParams.imageProvider || ''}
+                                            onValueChange={(val) => updateProviderParams('nine_router', { imageProvider: val })}
+                                            className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                            options={[
+                                                { value: "", label: "No provider selected (Uses 9Router default)" },
+                                                { value: "openai", label: "OpenAI" },
+                                                { value: "together", label: "Together AI" },
+                                                { value: "siliconflow", label: "SiliconFlow" },
+                                                { value: "novita", label: "Novita AI" },
+                                                { value: "sdwebui", label: "Stable Diffusion WebUI" },
+                                                { value: "comfyui", label: "ComfyUI" }
+                                            ]}
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-1.5">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Image Gen Model</label>
+                                            <button
+                                                type="button"
+                                                onClick={() => void fetchNineRouterImageModelsAction(true)}
+                                                className="flex items-center gap-1 text-[9px] text-white/30 hover:text-white/60 transition-colors"
+                                                title="Refresh available models from 9Router"
+                                            >
+                                                <WorkbenchIcon name="lucide:refresh-cw" size={10} className={nineRouterImageModelsLoading ? 'animate-spin' : ''} />
+                                                <span>{nineRouterImageModelsLoading ? 'Loading...' : 'Refresh'}</span>
+                                            </button>
+                                        </div>
+                                        {nineRouterImageModelsLoading && nineRouterImageModels.length === 0 ? (
+                                            <WorkbenchSelect
+                                                value=""
+                                                onValueChange={() => {}}
+                                                className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                                options={[{ value: "", label: 'Fetching models from 9Router...' }]}
+                                            />
+                                        ) : nineRouterImageModelsError ? (
+                                            <div className="flex flex-col gap-1.5">
+                                                <div className="h-8 text-[10px] text-amber-400/60 bg-amber-500/5 border border-amber-500/10 rounded px-2 flex items-center">
+                                                    <WorkbenchIcon name="lucide:alert-triangle" size={10} className="mr-1.5 shrink-0" />
+                                                    <span className="truncate">9Router unreachable — type model manually</span>
+                                                </div>
+                                                <WorkbenchInput
+                                                    value={providerParams.imageGenModel || ''}
+                                                    placeholder="e.g., openrouter/black-forest-labs/FLUX.1-schnell"
+                                                    onChangeText={(val) => updateProviderParams('nine_router', { imageGenModel: val })}
+                                                    className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono px-2"
+                                                />
+                                            </div>
+                                        ) : nineRouterImageModels.length > 0 ? (
+                                            <WorkbenchSelect
+                                                value={providerParams.imageGenModel || ''}
+                                                onValueChange={(val) => updateProviderParams('nine_router', { imageGenModel: val })}
+                                                className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                                options={[
+                                                    { value: "", label: 'No model selected' },
+                                                    ...nineRouterImageModels.map((m) => ({
+                                                        value: m.id,
+                                                        label: m.name || m.id,
+                                                    })),
+                                                ]}
+                                            />
+                                        ) : (
+                                            <div className="flex flex-col gap-1.5">
+                                                <WorkbenchInput
+                                                    value={providerParams.imageGenModel || ''}
+                                                    placeholder="e.g., openrouter/black-forest-labs/FLUX.1-schnell"
+                                                    onChangeText={(val) => updateProviderParams('nine_router', { imageGenModel: val })}
+                                                    className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono px-2"
+                                                />
+                                                <p className="text-[9px] text-white/20">No models discovered. Ensure 9Router is running with image providers configured.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {selectedProviderId === 'aihubmix' && (
                             <div className="p-4 rounded-xl border border-white/[0.04] bg-white/[0.02] flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                                 <div className="flex items-center gap-2 border-b border-white/[0.04] pb-2">
@@ -430,18 +559,62 @@ export const ProvidersSettings = memo(() => {
                                         />
                                     </div>
                                     <div className="flex flex-col gap-1.5">
-                                        <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Image Generator Model</label>
-                                        <WorkbenchSelect
-                                            value={providerParams.imageModel || ''}
-                                            onValueChange={(val) => updateProviderParams('nine_router', { imageModel: val })}
-                                            className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
-                                            options={[
-                                                { value: "", label: "No model selected" },
-                                                { value: "flux", label: "Flux (Local Standard)" },
-                                                { value: "dall-e-3", label: "DALL-E 3 (Cloud Fallback)" },
-                                                { value: "stable-diffusion-xl", label: "SDXL (Local)" }
-                                            ]}
-                                        />
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Image Generator Model</label>
+                                            <button
+                                                type="button"
+                                                onClick={() => void fetchNineRouterImageModelsAction(true)}
+                                                className="flex items-center gap-1 text-[9px] text-white/30 hover:text-white/60 transition-colors"
+                                                title="Refresh available models from 9Router"
+                                            >
+                                                <WorkbenchIcon name="lucide:refresh-cw" size={10} className={nineRouterImageModelsLoading ? 'animate-spin' : ''} />
+                                                <span>{nineRouterImageModelsLoading ? 'Loading...' : 'Refresh'}</span>
+                                            </button>
+                                        </div>
+                                        {nineRouterImageModelsLoading && nineRouterImageModels.length === 0 ? (
+                                            <WorkbenchSelect
+                                                value=""
+                                                onValueChange={() => {}}
+                                                className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                                options={[{ value: "", label: 'Fetching models from 9Router...' }]}
+                                            />
+                                        ) : nineRouterImageModelsError ? (
+                                            <div className="flex flex-col gap-1.5">
+                                                <div className="h-8 text-[10px] text-amber-400/60 bg-amber-500/5 border border-amber-500/10 rounded px-2 flex items-center">
+                                                    <WorkbenchIcon name="lucide:alert-triangle" size={10} className="mr-1.5 shrink-0" />
+                                                    <span className="truncate">9Router unreachable — type model manually</span>
+                                                </div>
+                                                <WorkbenchInput
+                                                    value={providerParams.imageGenModel || ''}
+                                                    placeholder="e.g., openrouter/black-forest-labs/FLUX.1-schnell"
+                                                    onChangeText={(val) => updateProviderParams('nine_router', { imageGenModel: val })}
+                                                    className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono px-2"
+                                                />
+                                            </div>
+                                        ) : nineRouterImageModels.length > 0 ? (
+                                            <WorkbenchSelect
+                                                value={providerParams.imageGenModel || ''}
+                                                onValueChange={(val) => updateProviderParams('nine_router', { imageGenModel: val })}
+                                                className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                                options={[
+                                                    { value: "", label: 'No model selected' },
+                                                    ...nineRouterImageModels.map((m) => ({
+                                                        value: m.id,
+                                                        label: m.name || m.id,
+                                                    })),
+                                                ]}
+                                            />
+                                        ) : (
+                                            <div className="flex flex-col gap-1.5">
+                                                <WorkbenchInput
+                                                    value={providerParams.imageGenModel || ''}
+                                                    placeholder="e.g., openrouter/black-forest-labs/FLUX.1-schnell"
+                                                    onChangeText={(val) => updateProviderParams('nine_router', { imageGenModel: val })}
+                                                    className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono px-2"
+                                                />
+                                                <p className="text-[9px] text-white/20">No models discovered. Ensure 9Router is running with image providers configured.</p>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="flex flex-col gap-1.5 col-span-2">

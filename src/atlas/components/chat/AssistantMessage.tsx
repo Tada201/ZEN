@@ -192,9 +192,9 @@ export function AssistantMessage({
                                   ))}
                                 </div>
                               )}
-                              {step.cleanText && (
+                              {Boolean(step.cleanText || step.content) && (
                                 <MarkdownContent
-                                  content={step.cleanText}
+                                  content={step.cleanText || step.content || ""}
                                   isThinking={false}
                                   isStreaming={message.status === "sending"}
                                   onOpenArtifact={onOpenArtifact}

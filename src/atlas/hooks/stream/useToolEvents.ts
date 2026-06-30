@@ -4,8 +4,9 @@ import { listenAppEvent } from "@/api/events";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { getToolChatId, rememberToolChat } from "./toolLifecycleRouting";
 import { makeToolCall, upsertTool } from "./toolEventReducer";
-import type { ToolCall } from "../../components/chat/types";
+import type { Message, ToolCall } from "../../components/chat/types";
 import { focusActiveAgentsPanel, shouldFocusAgentsForTool } from "./agentPanelFocus";
+import { findWritableAssistantIndex } from "./messageTarget";
 
 interface UseToolEventsProps {
   resetHeartbeatTimeout: (chatId: string) => void;
@@ -147,7 +148,39 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
           undefined,
           getToolEventMeta(event.payload),
         );
-        useChatStore.getState().setSessionMessages(chatId, (prev) => upsertTool(prev, chatId, tool));
+        useChatStore.getState().setSessionMessages(chatId, (prev) => {
+          const next = upsertTool(prev, chatId, tool);
+
+          // Auto-inject image markdown when generate_image completes successfully
+          if (event.payload.tool_name === "generate_image" && event.payload.status === "success") {
+            const imageUri = extractImageUri(event.payload.output);
+            if (imageUri) {
+              // Prefer precise ownership match, fall back to active sending assistant
+              const ownershipIdx = findAssistantWithTool(next, event.payload.tool_call_id);
+              const targetIdx = ownershipIdx !== -1 ? ownershipIdx : findWritableAssistantIndex(next, chatId);
+              if (targetIdx !== -1) {
+                const msg = next[targetIdx];
+                const imageMarkdown = `\n\n![Generated Image](${imageUri})\n\n`;
+                // Don't inject if the content already contains this image URI
+                if (!msg.content.includes(imageUri)) {
+                  const updatedMsg: Message = {
+                    ...msg,
+                    content: msg.content + imageMarkdown,
+                    steps: [
+                      ...(msg.steps || []),
+                      { type: "text", content: imageMarkdown.trim() },
+                    ],
+                  };
+                  const final = [...next];
+                  final[targetIdx] = updatedMsg;
+                  return final;
+                }
+              }
+            }
+          }
+
+          return next;
+        });
       });
 
       const unlistenAuthorizationTimeout = await listenAppEvent("tool:authorization_timeout", (event) => {
@@ -182,4 +215,31 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
       unlistenRefs.current = [];
     };
   }, [resetHeartbeatTimeout]);
+}
+
+/**
+ * Extract image_uri from a generate_image tool output string.
+ * The output is typically a JSON string like { status: "success", image_uri: "asset://localhost/..." }.
+ */
+function extractImageUri(output: string | undefined): string | undefined {
+  if (!output) return undefined;
+  try {
+    const parsed = JSON.parse(output);
+    return parsed.image_uri || parsed.imageUri || parsed.image_url || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Find the assistant message index that owns a given tool call ID.
+ */
+function findAssistantWithTool(messages: Message[], toolCallId: string): number {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role !== "assistant") continue;
+    if (msg.toolCalls?.some((tc) => tc.id === toolCallId)) return i;
+    if (msg.steps?.some((s) => s.type === "tool-call" && s.toolCall?.id === toolCallId)) return i;
+  }
+  return -1;
 }

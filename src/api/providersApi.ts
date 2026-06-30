@@ -48,4 +48,6 @@ export const providersApi = {
     callCommand<ModelInfo[]>("test_provider_connection", { config }),
   getUsage: (modelIds: string[], periodDays?: number) =>
     callCommand<ProviderUsageSnapshot>("get_provider_usage", { modelIds, periodDays }),
+  fetchNineRouterImageModels: () =>
+    callCommand<ModelInfo[]>("fetch_9router_image_models"),
 };

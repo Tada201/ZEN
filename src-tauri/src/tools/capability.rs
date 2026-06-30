@@ -65,6 +65,12 @@ pub(crate) fn tool_status(id: &str) -> ToolStatusInfo {
                 user_configurable: false,
             }
         }
+        "generate_image" => ToolStatusInfo {
+            status: "external",
+            detail: "Generates images via 9Router. Requires a configured 9Router endpoint and image model.",
+            agent_visible: true,
+            user_configurable: true,
+        },
         _ => ToolStatusInfo {
             status: "ready",
             detail: "Registered with an executable backend implementation.",
@@ -123,6 +129,19 @@ pub(crate) fn tool_aliases(id: &str) -> &'static [&'static str] {
             "median",
             "standard deviation",
             "percentage",
+        ],
+        "generate_image" => &[
+            "draw",
+            "paint",
+            "create image",
+            "image generation",
+            "illustration",
+            "artwork",
+            "picture",
+            "render image",
+            "sketch",
+            "dalle",
+            "flux",
         ],
         _ => &[],
     }

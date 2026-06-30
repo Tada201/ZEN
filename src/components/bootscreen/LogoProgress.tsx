@@ -1,4 +1,5 @@
 import React from "react";
+import type { BootHardwareInfo } from "./data";
 
 interface LogoProgressProps {
   logoVisible: boolean;
@@ -6,6 +7,9 @@ interface LogoProgressProps {
   barVisible: boolean;
   progress: number;
   bootComplete: boolean;
+  backendReady: boolean;
+  hardwareInfo?: BootHardwareInfo | null;
+  reducedMotion?: boolean;
 }
 
 export const LogoProgress: React.FC<LogoProgressProps> = ({
@@ -14,87 +18,115 @@ export const LogoProgress: React.FC<LogoProgressProps> = ({
   barVisible,
   progress,
   bootComplete,
+  backendReady,
+  hardwareInfo,
+  reducedMotion = false,
 }) => {
+  const cpuLabel = hardwareInfo?.cpu?.replace(/\s+/g, " ").trim() || "AI Operating System";
+  const memLabel = hardwareInfo ? `${Math.round(hardwareInfo.memory_gb)} GB DDR5` : undefined;
+  const gpuLabel = hardwareInfo?.gpus?.[0]?.name;
+
+  const isActuallyReady = bootComplete && backendReady;
+  const isFinalizing = bootComplete && !backendReady;
+
   return (
-    <div className="flex-1 flex flex-col items-center justify-center min-w-0" style={{ flex: '1.2 1 0%' }}>
+    <div className="flex-1 flex flex-col items-center justify-center min-w-0" style={{ flex: "1.2 1 0%" }}>
       <div className="text-center">
         <div
-          className="transition-all duration-1000 ease-out"
+          className={`${reducedMotion ? '' : 'transition-all duration-1000 ease-out'}`}
           style={{
             opacity: logoVisible ? 1 : 0,
-            transform: logoVisible ? 'scale(1)' : 'scale(0.92)',
-            filter: logoVisible ? 'blur(0px)' : 'blur(6px)',
+            transform: reducedMotion ? 'scale(1)' : (logoVisible ? 'scale(1)' : 'scale(0.92)'),
+            filter: reducedMotion ? 'blur(0px)' : (logoVisible ? 'blur(0px)' : 'blur(6px)'),
           }}
         >
           <div
             className="font-extralight tracking-[0.3em] uppercase"
-            style={{ fontSize: 'clamp(1.6rem, 5vw, 3.8rem)', color: 'rgba(255,255,255,0.9)' }}
+            style={{ fontSize: "clamp(1.6rem, 5vw, 3.8rem)", color: "rgba(255,255,255,0.9)" }}
           >
             ZENOS
           </div>
         </div>
         <div
-          className="mt-3 uppercase transition-all duration-1000"
+          className={`mt-3 uppercase ${reducedMotion ? '' : 'transition-all duration-1000'}`}
           style={{
-            fontSize: 'clamp(0.5rem, 1vw, 0.75rem)',
-            letterSpacing: '0.5em',
-            color: '#71717a',
+            fontSize: "clamp(0.5rem, 1vw, 0.75rem)",
+            letterSpacing: "0.5em",
+            color: "#71717a",
             opacity: logoSubVisible ? 1 : 0,
-            transform: logoSubVisible ? 'translateY(0)' : 'translateY(6px)',
-            transitionDelay: '300ms',
+            transform: reducedMotion ? 'translateY(0)' : (logoSubVisible ? 'translateY(0)' : 'translateY(6px)'),
+            transitionDelay: reducedMotion ? undefined : '300ms',
           }}
         >
           AI Operating System
         </div>
         <div
-          className="mt-1.5 uppercase transition-all duration-1000"
+          className={`mt-1.5 uppercase ${reducedMotion ? '' : 'transition-all duration-1000'}`}
           style={{
-            fontSize: 'clamp(0.45rem, 0.8vw, 0.6rem)',
-            letterSpacing: '0.3em',
-            color: '#3f3f46',
+            fontSize: "clamp(0.45rem, 0.8vw, 0.6rem)",
+            letterSpacing: "0.3em",
+            color: "#3f3f46",
             opacity: logoSubVisible ? 0.7 : 0,
-            transitionDelay: '500ms',
+            transitionDelay: reducedMotion ? undefined : '500ms',
           }}
         >
-          Kernel v3.2.0 · x86_64
+          {hardwareInfo
+            ? `${cpuLabel}${memLabel ? ` · ${memLabel}` : ""}`
+            : "Kernel v3.2.0 · x86_64"}
         </div>
+        {gpuLabel && logoSubVisible && (
+          <div
+            className={`mt-1 uppercase ${reducedMotion ? '' : 'transition-all duration-1000'}`}
+            style={{
+              fontSize: "clamp(0.4rem, 0.7vw, 0.55rem)",
+              letterSpacing: "0.25em",
+              color: "#3f3f46",
+              opacity: 0.5,
+              transitionDelay: reducedMotion ? undefined : '700ms',
+            }}
+          >
+            {gpuLabel}
+          </div>
+        )}
       </div>
 
       {/* Progress bar */}
       <div
-        className="w-full transition-all duration-700"
+        className={`w-full ${reducedMotion ? '' : 'transition-all duration-700'}`}
         style={{
           opacity: barVisible ? 1 : 0,
-          transform: barVisible ? 'translateY(0)' : 'translateY(8px)',
-          maxWidth: 'clamp(180px, 20vw, 280px)',
-          marginTop: 'clamp(1.5rem, 4vh, 3rem)',
+          transform: reducedMotion ? 'translateY(0)' : (barVisible ? 'translateY(0)' : 'translateY(8px)'),
+          maxWidth: "clamp(180px, 20vw, 280px)",
+          marginTop: "clamp(1.5rem, 4vh, 3rem)",
         }}
       >
         <div className="flex items-center justify-between mb-1.5">
-          <span className="uppercase" style={{ fontSize: 'clamp(0.45rem, 0.8vw, 0.65rem)', letterSpacing: '0.2em', color: '#71717a' }}>
-            Initializing System
+          <span className="uppercase" style={{ fontSize: "clamp(0.45rem, 0.8vw, 0.65rem)", letterSpacing: "0.2em", color: "#71717a" }}>
+            {isFinalizing ? "Finalizing Environment" : "Initializing System"}
           </span>
-          <span className="tabular-nums" style={{ fontSize: 'clamp(0.45rem, 0.8vw, 0.65rem)', color: '#71717a' }}>
+          <span className="tabular-nums" style={{ fontSize: "clamp(0.45rem, 0.8vw, 0.65rem)", color: "#71717a" }}>
             {Math.round(progress)}%
           </span>
         </div>
-        <div className="w-full h-[2px] bg-white/[0.06] overflow-hidden rounded-full">
-          <div
-            className="h-full transition-all duration-100 ease-linear rounded-full"
+        <div className="w-full h-[2px] bg-white/[0.06] overflow-hidden rounded-full">          <div className={`h-full ${reducedMotion ? '' : 'transition-all duration-100 ease-linear'} rounded-full`}
             style={{
               width: `${progress}%`,
-              background: bootComplete
-                ? 'linear-gradient(90deg, #10b981, #34d399)'
-                : 'linear-gradient(90deg, rgba(16,185,129,0.6), rgba(52,211,153,0.8))',
+              background: isActuallyReady
+                ? "linear-gradient(90deg, #10b981, #34d399)"
+                : "linear-gradient(90deg, rgba(16,185,129,0.6), rgba(52,211,153,0.8))",
             }}
           />
         </div>
         {bootComplete && (
-          <div
-            className="mt-3 text-center uppercase transition-all duration-1000"
-            style={{ fontSize: 'clamp(0.45rem, 0.8vw, 0.65rem)', letterSpacing: '0.3em', color: 'rgba(52,211,153,0.8)' }}
-          >
-            System Ready
+        <div
+          className={`mt-3 text-center uppercase ${reducedMotion ? '' : 'transition-all duration-1000'}`}
+          style={{
+            fontSize: "clamp(0.45rem, 0.8vw, 0.65rem)",
+            letterSpacing: "0.3em",
+            color: isActuallyReady ? "rgba(52,211,153,0.8)" : "rgba(251,191,36,0.8)"
+          }}
+        >
+            {isActuallyReady ? "System Ready" : "Finalizing..."}
           </div>
         )}
       </div>

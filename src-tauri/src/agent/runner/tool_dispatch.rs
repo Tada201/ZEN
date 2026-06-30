@@ -42,7 +42,7 @@ impl Runner {
             return (Vec::new(), Vec::new());
         }
 
-        let authorized_tool_ids: Vec<String> = self
+        let mut authorized_tool_ids: Vec<String> = self
             .tool_registry
             .read()
             .await
@@ -51,6 +51,14 @@ impl Runner {
             .filter(|t| current_agent.tool_ids.contains(&t.id().to_string()))
             .map(|t| t.id().to_string())
             .collect();
+
+        // Authorize v2 tools from the permissions registry
+        let v2_tools = self.permissions.read().await.executable_tool_names();
+        for tool_id in &current_agent.tool_ids {
+            if v2_tools.contains(tool_id) && !authorized_tool_ids.contains(tool_id) {
+                authorized_tool_ids.push(tool_id.clone());
+            }
+        }
 
         let exposed_tools = if current_agent.id == "voice_display" {
             self.tool_registry
@@ -61,7 +69,26 @@ impl Runner {
                 .filter(|tool| authorized_tool_ids.contains(&tool.name))
                 .collect()
         } else {
-            crate::tools::manager::meta_tool_definitions()
+            let mut tools = crate::tools::manager::meta_tool_definitions();
+
+            // Expose authorized v2 tools as direct function definitions
+            // so the LLM can call them without needing the tool_list
+            // discovery step. This is critical because many models don't
+            // follow the deferred-discovery protocol and only look at
+            // their available function definitions.
+            {
+                let v2 = self.permissions.read().await;
+                for tool_id in &authorized_tool_ids {
+                    if let Some(tool) = v2.get(tool_id) {
+                        let info = tool.info();
+                        if !tools.iter().any(|t| t.name == info.name) {
+                            tools.push(info);
+                        }
+                    }
+                }
+            }
+
+            tools
         };
 
         (authorized_tool_ids, exposed_tools)

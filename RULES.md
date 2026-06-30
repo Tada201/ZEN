@@ -318,3 +318,8 @@ New architecture patterns require docs. Update the relevant file under
 
 Do not skip Phase 1 and Phase 2 to add new features. That is how the current
 mess propagates.
+
+## Tauri v2 Window Permissions and Capability Rules
+- When adding or renaming any window label (e.g. `splashscreen`), you **must** register it inside the capability configuration JSON file under `src-tauri/capabilities/default.json` (inside the `"windows"` array block). 
+- If a window is omitted from capability configurations, Tauri v2's IPC router will block all frontend command invocations (`invoke`) and event listeners (`listen`) silently, causing the interface to freeze or fail without native crash messages.
+- Always provide watchdog fail-safes (e.g. `setTimeout` fallback intervals) inside independent webview scripts to guarantee window execution completes and transfers focus in development environments.

@@ -29,10 +29,12 @@ export interface BackendMessage {
   toolCalls?: string;
   createdAt: string | number;
   model?: string;
+
   isComplete?: number;
   kind?: string;
   metadata?: string;
   reasoningDetails?: string;
+  attachments?: string;
 }
 
 export interface BackendChatTag {
@@ -82,13 +84,13 @@ export interface SendMessageRequest extends Record<string, unknown> {
   } | null;
   deepResearch?: boolean;
   generativeUi?: boolean;
+  imageGen?: boolean;
   tools?: string[] | null;
   attachments?: Attachment[] | null;
   systemPrompt?: string | null;
   systemPromptMode?: "append" | "replace" | null;
   voiceDisplayContext?: string | null;
 }
-
 export const chatApi = {
   listChats: () => callCommand<BackendChat[]>("get_chats"),
   listChatsPage: (limit?: number, offset?: number) =>
@@ -119,10 +121,32 @@ export const chatApi = {
   unarchiveChat: (chatId: string) => callCommand<void>("unarchive_chat", { chatId }),
   bulkDeleteChats: (chatIds: string[]) => callCommand<void>("bulk_delete_chats", { chatIds }),
   createFolder: (name: string) => callCommand<BackendFolder>("create_chat_folder", { name }),
+  updateFolder: (folderId: string, name: string) =>
+    callCommand<void>("update_chat_folder", { folderId, name }),
+  deleteFolder: (folderId: string) =>
+    callCommand<void>("delete_chat_folder", { folderId }),
   moveChatToFolder: (chatId: string, folderId: string) =>
     callCommand<void>("move_chat_to_folder", { chatId, folderId }),
   removeChatFromFolder: (chatId: string) =>
     callCommand<void>("remove_chat_from_folder", { chatId }),
-  sendMessage: (request: SendMessageRequest) => callCommand<void>("send_message", request),
+  sendMessage: (request: SendMessageRequest) => {
+    const { imageGen, generativeUi, ...rest } = request;
+    return callCommand<void>("send_message", {
+      ...rest,
+      image_gen: imageGen,
+      generative_ui: generativeUi,
+    });
+  },
   abortChat: (chatId: string) => callCommand<void>("abort_chat", { chatId }),
+  exportImageToWorkspace: (imageUriOrFilename: string) => {
+    let filename = imageUriOrFilename;
+    if (imageUriOrFilename.includes("/")) {
+      const parts = imageUriOrFilename.split("/");
+      filename = parts[parts.length - 1];
+    } else if (imageUriOrFilename.includes("\\")) {
+      const parts = imageUriOrFilename.split("\\");
+      filename = parts[parts.length - 1];
+    }
+    return callCommand<string>("export_image_to_workspace", { filename });
+  },
 };

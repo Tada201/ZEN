@@ -719,6 +719,7 @@ fn id_to_display_name(id: &str) -> String {
         "search_session_memory" => "Search Memory".into(),
         "get_memory_stats" => "Memory Stats".into(),
         "draw" => "Drawing Canvas".into(),
+        "generate_image" => "Image Generation".into(),
         "graph_session" => "Graph Session".into(),
         "tool_list" | "tool_info" | "tool_exec" | "tools_search" | "guidance" | "list_tools" => {
             String::new()
@@ -751,6 +752,7 @@ fn id_to_icon(id: &str) -> String {
             "lucide:database"
         }
         "draw" => "lucide:pen",
+        "generate_image" => "lucide:image",
         _ => "lucide:cpu",
     }
     .into()
@@ -837,5 +839,30 @@ mod tests {
 
         assert_eq!(draw.status, "frontend_missing");
         assert!(!draw.user_configurable);
+    }
+
+    #[tokio::test]
+    async fn generate_image_discoverable_by_art_aliases() {
+        let manager = manager_for_tests();
+        // The tool_aliases for generate_image include "draw", "paint", "artwork"
+        for alias in &["draw", "paint", "artwork", "illustration", "flux"] {
+            let tools = manager
+                .list_allowed_matching(&["generate_image".to_string()], Some(alias))
+                .await;
+            assert!(
+                tools.iter().any(|t| t.id == "generate_image"),
+                "generate_image should be discoverable via alias '{}'",
+                alias,
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn generate_image_status_is_external() {
+        use crate::tools::capability::tool_status;
+        let info = tool_status("generate_image");
+        assert_eq!(info.status, "external");
+        assert!(info.agent_visible);
+        assert!(info.user_configurable);
     }
 }

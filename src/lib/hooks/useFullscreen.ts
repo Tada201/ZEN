@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { IS_TAURI } from "@/api/tauriClient";
 
 /**
  * Global F11 fullscreen toggle for the Tauri window.
@@ -7,23 +7,36 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
  */
 export function useFullscreen() {
   useEffect(() => {
-    const win = getCurrentWindow();
+    if (!IS_TAURI) return;
 
-    const handler = async (e: KeyboardEvent) => {
-      if (e.key === "F11") {
-        e.preventDefault();
-        e.stopPropagation();
-        try {
-          const isFull = await win.isFullscreen();
-          await win.setFullscreen(!isFull);
-        } catch (err) {
-          console.error("[useFullscreen] toggle failed:", err);
+    // Dynamic import so the module-level getCurrentWindow() call
+    // doesn't execute when IS_TAURI is false.
+    let cleanup: (() => void) | undefined;
+
+    import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
+      const win = getCurrentWindow();
+
+      const handler = async (e: KeyboardEvent) => {
+        if (e.key === "F11") {
+          e.preventDefault();
+          e.stopPropagation();
+          try {
+            const isFull = await win.isFullscreen();
+            await win.setFullscreen(!isFull);
+          } catch (err) {
+            console.error("[useFullscreen] toggle failed:", err);
+          }
         }
-      }
-    };
+      };
 
-    // Use capture phase to intercept before anything else
-    document.addEventListener("keydown", handler, true);
-    return () => document.removeEventListener("keydown", handler, true);
+      // Use capture phase to intercept before anything else
+      document.addEventListener("keydown", handler, true);
+      cleanup = () => document.removeEventListener("keydown", handler, true);
+    }).catch((err) => {
+      console.warn("[useFullscreen] Tauri window API unavailable:", err);
+    });
+
+    return () => cleanup?.();
   }, []);
 }
+

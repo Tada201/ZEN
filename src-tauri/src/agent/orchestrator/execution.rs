@@ -25,6 +25,10 @@ pub(crate) struct TaskAgentParams<'a> {
     pub messages: &'a [ChatMessage],
     pub config: ChatRequestConfig,
     pub token: CancellationToken,
+    /// Per-turn tool IDs inherited from the chat request (e.g. `generate_image`).
+    pub extra_tool_ids: Vec<String>,
+    /// Per-turn instruction addendum from the chat request.
+    pub extra_instructions: Option<String>,
 }
 
 /// Parameters for synthesizing task results into a final response.
@@ -49,6 +53,10 @@ pub struct OrchestratorRunParams<'a> {
     pub config: ChatRequestConfig,
     pub token: CancellationToken,
     pub approval_rx: Option<tokio::sync::oneshot::Receiver<bool>>,
+    /// Per-turn tool IDs that should be inherited by task agents (e.g. `generate_image`).
+    pub extra_tool_ids: Vec<String>,
+    /// Per-turn instruction addendum to append to task agent instructions.
+    pub extra_instructions: Option<String>,
 }
 
 impl Orchestrator {
@@ -66,9 +74,11 @@ impl Orchestrator {
             messages,
             config,
             token,
+            extra_tool_ids,
+            extra_instructions,
         } = params;
         // Get agent definition
-        let agent = self
+        let mut agent = self
             .agent_registry
             .get(agent_id)
             .cloned()
@@ -77,6 +87,19 @@ impl Orchestrator {
                 self.agent_registry.get("generalist").cloned()
             })
             .ok_or_else(|| anyhow::anyhow!("Agent '{}' not found", agent_id))?;
+
+        // Merge per-turn tool overrides into the agent's tool_ids
+        for tool_id in &extra_tool_ids {
+            if !agent.tool_ids.contains(tool_id) {
+                agent.tool_ids.push(tool_id.clone());
+            }
+        }
+
+        // Append per-turn instruction addendum if provided
+        if let Some(ref addendum) = extra_instructions {
+            agent.instructions.push_str("\n\n");
+            agent.instructions.push_str(addendum);
+        }
 
         // Resolve agent configuration
         let resolved = crate::agent::tools::child_runner::resolve_agent(

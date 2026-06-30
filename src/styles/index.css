@@ -325,6 +325,31 @@ html[data-vibe="edex"] ::selection {
   animation: border-pulse 2s infinite ease-in-out;
 }
 
+/* Boot log entry staggered reveal */
+@keyframes log-entry-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+    filter: blur(1px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0px);
+  }
+}
+
+.boot-log-entry {
+  animation: log-entry-reveal 150ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-log-entry {
+    animation: none;
+  }
+}
+
 @keyframes slow-shimmer {
   0% { background-position: 160% 0; }
   45% { background-position: -60% 0; }

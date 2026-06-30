@@ -251,7 +251,7 @@ impl Runner {
                 // Emit completion event to unlock the chat UI
                 self.emit(AgentEvent::ChatDone(ChatDonePayload {
                     chat_id: chat_id.clone(),
-                    content: Some(final_msg.clone()),
+                    content: Some(accumulated_commentary.clone()),
                     tokens_in: total_tokens_in,
                     tokens_out: total_tokens_out,
                     reason: "max_iterations".to_string(),
@@ -266,7 +266,7 @@ impl Runner {
                 }
                 self.trigger_background_embedding(&chat_id);
                 return Ok(AgentResponse {
-                    content: Some(final_msg),
+                    content: Some(accumulated_commentary),
                     tool_calls: vec![],
                     reasoning: None,
                     handoff: None,

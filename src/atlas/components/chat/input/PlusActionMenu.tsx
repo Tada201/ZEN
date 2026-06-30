@@ -25,6 +25,8 @@ interface PlusActionMenuProps {
   setIsToolsDisabled: (val: boolean) => void;
   onOpenSkills?: () => void;
   supportsImageGen?: boolean;
+  isImageGenEnabled?: boolean;
+  setIsImageGenEnabled?: (val: boolean) => void;
 }
 
 export const PlusActionMenu = memo(({
@@ -38,7 +40,8 @@ export const PlusActionMenu = memo(({
   isAuto, setIsAuto,
   isToolsDisabled, setIsToolsDisabled,
   onOpenSkills,
-  supportsImageGen
+  isImageGenEnabled,
+  setIsImageGenEnabled
 }: PlusActionMenuProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -50,7 +53,7 @@ export const PlusActionMenu = memo(({
         className="hidden" 
         ref={fileInputRef} 
         onChange={onFileSelect} 
-        accept="image/*,text/*,application/pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.rtf,.odt,.ods,.odp,.epub,.xml,.yaml,.yml,.toml"
+        accept="image/*,.txt,.md,.json,.js,.ts,.tsx,.jsx,.html,.css,.csv,.xml,.yaml,.yml,.toml,.py,.rs,.go,.c,.cpp,.h"
       />
       <button 
         onClick={() => setIsOpen(!isOpen)}
@@ -81,7 +84,17 @@ export const PlusActionMenu = memo(({
                 <div className="px-3 py-1.5 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Add Content</div>
                 <MenuItem icon={Paperclip} label="Photos & Files" onClick={() => fileInputRef.current?.click()} />
                 <MenuItem icon={Camera} label="Screenshot" />
-                <MenuItem icon={ImageIcon} label="Create Image" disabled={!supportsImageGen} />
+                <MenuItem 
+                  icon={ImageIcon} 
+                  label="Create Image" 
+                  active={isImageGenEnabled}
+                  onClick={() => {
+                    if (setIsImageGenEnabled) {
+                      setIsImageGenEnabled(!isImageGenEnabled);
+                    }
+                    setIsOpen(false);
+                  }}
+                />
 
                 <div className="h-px bg-zinc-200 dark:bg-zinc-800 my-1 mx-2" />
                 

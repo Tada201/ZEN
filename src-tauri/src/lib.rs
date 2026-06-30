@@ -33,14 +33,35 @@ pub fn run() {
             let _start_total = std::time::Instant::now();
 
             // ═══════════════════════════════════════════════════════════════
-            // CRITICAL INIT — must complete before frontend loads
+            // CRITICAL INIT — spawned so the window loads immediately.
+            // The BootScreen polls get_init_status() and waits for
+            // critical_complete before transitioning to the workspace.
             // ═══════════════════════════════════════════════════════════════
-            tauri::async_runtime::block_on(async move {
-                let state = app_handle.state::<AppState>();
+            let critical_handle = app_handle.clone();
+
+            // Prevent early transparency flash: Show the splashscreen window 
+            // only once it has fully loaded its content and is ready to paint.
+            if let Some(splash) = app_handle.get_webview_window("splashscreen") {
+                let splash_clone = splash.clone();
+                splash.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { .. } = event {
+                        // ignore
+                    }
+                });
+                // Once window setup runs, schedule showing the window after a tiny delay
+                // to let Webview2 initialize and apply background colors.
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                    splash_clone.show().ok();
+                });
+            }
+
+            tauri::async_runtime::spawn(async move {
+                let state = critical_handle.state::<AppState>();
 
                 let _start_phase = std::time::Instant::now();
 
-                let app_dir = match app_handle.path().app_data_dir() {
+                let app_dir = match critical_handle.path().app_data_dir() {
                     Ok(dir) => dir,
                     Err(e) => {
                         eprintln!("FATAL: Failed to get app data directory: {}. Application cannot start.", e);
@@ -58,7 +79,7 @@ pub fn run() {
                 if let Err(e) =                        crate::services::init_backend_logging(&app_dir) {
                     eprintln!("Warning: Backend logging initialization failed: {}", e);
                 }
-                state.init_progress.set_status("critical.fs", "done", Some(_start_phase.elapsed().as_millis() as u64)).await;
+                state.init_progress.set_status(&critical_handle, "critical.fs", "done", Some(_start_phase.elapsed().as_millis() as u64)).await;
                 tracing::info!(
                     elapsed_ms = _start_phase.elapsed().as_millis(),
                     "init.critical.fs: app dir + logging"
@@ -75,7 +96,7 @@ pub fn run() {
                         return;
                     }
                 };
-                state.init_progress.set_status("critical.db", "done", Some(_start_phase.elapsed().as_millis() as u64)).await;
+                state.init_progress.set_status(&critical_handle, "critical.db", "done", Some(_start_phase.elapsed().as_millis() as u64)).await;
                 tracing::info!(
                     elapsed_ms = _start_phase.elapsed().as_millis(),
                     "init.critical.db: SQLite pool + migrations"
@@ -85,7 +106,7 @@ pub fn run() {
                 state.security.set_db_pool(pool.clone()).await;
 
                 // Event bus bridge
-                state.agent.event_bus.bridge_to_tauri(app_handle.clone());
+                state.agent.event_bus.bridge_to_tauri(critical_handle.clone());
 
                 // Settings service (near-instant)
                 state.settings_manager.set_db_pool(pool.clone()).await;
@@ -134,7 +155,7 @@ pub fn run() {
                     }
                 }
 
-                state.init_progress.set_status("critical.settings", "done", Some(_start_phase.elapsed().as_millis() as u64)).await;
+                state.init_progress.set_status(&critical_handle, "critical.settings", "done", Some(_start_phase.elapsed().as_millis() as u64)).await;
                 tracing::info!(
                     elapsed_ms = _start_phase.elapsed().as_millis(),
                     "init.critical.settings: settings + workspace + secrets"
@@ -161,21 +182,21 @@ pub fn run() {
                 // MCP server initial wiring (instant)
                 {
                     let mut mcp_guard = state.mcp_server.write().await;
-                    mcp_guard.set_app_handle(app_handle.clone());
+                    mcp_guard.set_app_handle(critical_handle.clone());
                     mcp_guard.set_tool_service(state.tool_service.clone());
                 }
 
-                state.init_progress.set_status("critical.finalize", "done", Some(_start_phase.elapsed().as_millis() as u64)).await;
+                state.init_progress.set_status(&critical_handle, "critical.finalize", "done", Some(_start_phase.elapsed().as_millis() as u64)).await;
                 tracing::info!(
                     elapsed_ms = _start_phase.elapsed().as_millis(),
                     "init.critical.finalize: tools + docs + MCP"
                 );
-            });
 
-            tracing::info!(
-                elapsed_ms = _start_total.elapsed().as_millis(),
-                "init.critical.total: setup complete, window will now load"
-            );
+                tracing::info!(
+                    elapsed_ms = _start_total.elapsed().as_millis(),
+                    "init.critical.total: critical init complete"
+                );
+            });
 
             // ═══════════════════════════════════════════════════════════════
             // BACKGROUND INIT — runs after setup() returns, window loads
@@ -187,6 +208,21 @@ pub fn run() {
                 let _start_bg = std::time::Instant::now();
                 let state = bg_app_handle.state::<AppState>();
 
+                // Wait for critical init to finish setting up the DB pool.
+                // Previously block_on guaranteed this; now both are spawned.
+                let mut waited = 0u32;
+                while !state.db.is_initialized().await {
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                    waited += 50;
+                    if waited > 30_000 {
+                        tracing::error!("Background init timed out waiting for DB (30s). Aborting.");
+                        return;
+                    }
+                }
+                if waited > 0 {
+                    tracing::info!(waited_ms = waited, "Background init waited for critical init to set DB");
+                }
+
                 let app_dir = match bg_app_handle.path().app_data_dir() {
                     Ok(d) => d,
                     Err(e) => {
@@ -197,7 +233,7 @@ pub fn run() {
                 let resource_dir = bg_app_handle.path().resource_dir().unwrap_or_default();
 
                 // ── Speech service ──
-                state.init_progress.set_status("bg.speech", "running", None).await;
+                state.init_progress.set_status(&bg_app_handle, "bg.speech", "running", None).await;
                 let _p = std::time::Instant::now();
                 let hardware_info = state.hardware.lock().await.get_info().clone();
                 let speech_service = crate::services::SpeechService::with_process_manager(
@@ -207,14 +243,14 @@ pub fn run() {
                     state.process_manager.clone(),
                 );
                 *state.speech.write().await = Some(speech_service);
-                state.init_progress.set_status("bg.speech", "done", Some(_p.elapsed().as_millis() as u64)).await;
+                state.init_progress.set_status(&bg_app_handle, "bg.speech", "done", Some(_p.elapsed().as_millis() as u64)).await;
                 tracing::info!(
                     elapsed_ms = _p.elapsed().as_millis(),
                     "init.bg.speech"
                 );
 
                 // ── TTS service ──
-                state.init_progress.set_status("bg.tts", "running", None).await;
+                state.init_progress.set_status(&bg_app_handle, "bg.tts", "running", None).await;
                 let _p = std::time::Instant::now();
                 let tts_service = crate::services::TtsService::with_process_manager(
                     &app_dir,
@@ -226,14 +262,14 @@ pub fn run() {
                     crate::services::TtsService::new_dummy()
                 });
                 *state.tts.write().await = Some(tts_service);
-                state.init_progress.set_status("bg.tts", "done", Some(_p.elapsed().as_millis() as u64)).await;
+                state.init_progress.set_status(&bg_app_handle, "bg.tts", "done", Some(_p.elapsed().as_millis() as u64)).await;
                 tracing::info!(
                     elapsed_ms = _p.elapsed().as_millis(),
                     "init.bg.tts"
                 );
 
                 // ── RAG: LanceDB vector store ──
-                state.init_progress.set_status("bg.lancedb", "running", None).await;
+                state.init_progress.set_status(&bg_app_handle, "bg.lancedb", "running", None).await;
                 let _p = std::time::Instant::now();
                 let rag_dir = app_dir.join("lancedb");
                 let rag_uri = rag_dir.to_string_lossy().to_string();
@@ -248,11 +284,11 @@ pub fn run() {
                 );
 
                 if let Err(e) = lance_store.init().await {
-                    state.init_progress.set_status("bg.lancedb", "error", Some(_p.elapsed().as_millis() as u64)).await;
+                    state.init_progress.set_status(&bg_app_handle, "bg.lancedb", "error", Some(_p.elapsed().as_millis() as u64)).await;
                     tracing::warn!(error = %e, "Failed to initialize LanceDB vector store (background)");
                 } else {
                     state.rag.set(lance_store.clone() as Arc<dyn crate::rag::VectorStore>).await;
-                    state.init_progress.set_status("bg.lancedb", "done", Some(_p.elapsed().as_millis() as u64)).await;
+                    state.init_progress.set_status(&bg_app_handle, "bg.lancedb", "done", Some(_p.elapsed().as_millis() as u64)).await;
                     tracing::info!(
                         elapsed_ms = _p.elapsed().as_millis(),
                         path = %rag_dir.display(),
@@ -260,7 +296,7 @@ pub fn run() {
                     );
 
                     // ── Conversation store ──
-                    state.init_progress.set_status("bg.conversation_store", "running", None).await;
+                    state.init_progress.set_status(&bg_app_handle, "bg.conversation_store", "running", None).await;
                     let _p = std::time::Instant::now();
                     let conversation_store = Arc::new(
                         crate::rag::conversation_store::ConversationStore::new(
@@ -271,9 +307,10 @@ pub fn run() {
                     );
                     if let Err(e) = conversation_store.init().await {
                         tracing::warn!(error = %e, "Failed to initialize conversation store (background)");
+                        state.init_progress.set_status(&bg_app_handle, "bg.conversation_store", "skipped", Some(_p.elapsed().as_millis() as u64)).await;
                     } else {
                         state.conversation_store.set(conversation_store).await;
-                        state.init_progress.set_status("bg.conversation_store", "done", Some(_p.elapsed().as_millis() as u64)).await;
+                        state.init_progress.set_status(&bg_app_handle, "bg.conversation_store", "done", Some(_p.elapsed().as_millis() as u64)).await;
                         tracing::info!(
                             elapsed_ms = _p.elapsed().as_millis(),
                             "init.bg.conversation_store"
@@ -281,7 +318,7 @@ pub fn run() {
                     }
 
                     // ── Ollama embeddings ──
-                    state.init_progress.set_status("bg.rag", "running", None).await;
+                    state.init_progress.set_status(&bg_app_handle, "bg.rag", "running", None).await;
                     let _p = std::time::Instant::now();
                     match crate::rag::embedding::create_default_ollama_embedding().await {
                         Ok(embed_model) => {
@@ -289,14 +326,14 @@ pub fn run() {
                                 lance_store as Arc<dyn crate::rag::VectorStore>,
                                 embed_model,
                             ).await;
-                            state.init_progress.set_status("bg.rag", "done", Some(_p.elapsed().as_millis() as u64)).await;
+                            state.init_progress.set_status(&bg_app_handle, "bg.rag", "done", Some(_p.elapsed().as_millis() as u64)).await;
                             tracing::info!(
                                 elapsed_ms = _p.elapsed().as_millis(),
                                 "init.bg.rag: full RAG pipeline (LanceDB + Ollama)"
                             );
                         }
                         Err(e) => {
-                            state.init_progress.set_status("bg.rag", "skipped", Some(_p.elapsed().as_millis() as u64)).await;
+                            state.init_progress.set_status(&bg_app_handle, "bg.rag", "skipped", Some(_p.elapsed().as_millis() as u64)).await;
                             tracing::warn!(
                                 elapsed_ms = _p.elapsed().as_millis(),
                                 error = %e,
@@ -307,7 +344,7 @@ pub fn run() {
                 }
 
                 // ── Orchestrator ──
-                state.init_progress.set_status("bg.orchestrator", "running", None).await;
+                state.init_progress.set_status(&bg_app_handle, "bg.orchestrator", "running", None).await;
                 let _p = std::time::Instant::now();
                 let pool = match state.db().await {
                     Ok(p) => p,
@@ -325,7 +362,7 @@ pub fn run() {
                     state.tool_manager.clone(),
                 ).with_db_pool(pool);
                 state.orchestrator.set(Arc::new(orchestrator)).await;
-                state.init_progress.set_status("bg.orchestrator", "done", Some(_p.elapsed().as_millis() as u64)).await;
+                state.init_progress.set_status(&bg_app_handle, "bg.orchestrator", "done", Some(_p.elapsed().as_millis() as u64)).await;
                 tracing::info!(
                     elapsed_ms = _p.elapsed().as_millis(),
                     "init.bg.orchestrator"
@@ -343,6 +380,7 @@ pub fn run() {
             commands::system::get_system_metrics,
             commands::system::get_system_status,
             commands::system::get_init_status,
+            commands::system::close_splashscreen,
             commands::system::get_system_stats,
             commands::system::get_hardware_info,
             commands::system::browse_folder,
@@ -367,6 +405,7 @@ pub fn run() {
             commands::settings::get_all_available_models,
             commands::settings::get_provider_usage,
             commands::settings::test_provider_connection,
+            commands::settings::fetch_9router_image_models,
             commands::settings::sync_tool_permissions,
             commands::settings::list_tool_metadata,
             commands::artifacts::list_artifacts_page,
@@ -399,6 +438,7 @@ pub fn run() {
             commands::chat::fork_chat,
             commands::chat::abort_chat,
             commands::chat::export_chat,
+            commands::chat::export_image_to_workspace,
             commands::chat::import_chat,
             commands::agent::list_agents,
             commands::agent::spawn_agent,

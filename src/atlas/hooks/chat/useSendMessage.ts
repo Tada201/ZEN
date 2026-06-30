@@ -29,6 +29,7 @@ export function useSendMessage(
     };
     deepResearch?: boolean;
     generativeUI?: boolean;
+    imageGen?: boolean;
     attachments?: Attachment[];
     tools?: string[];
     systemPrompt?: string | null;
@@ -122,6 +123,7 @@ export function useSendMessage(
         thinking: data.thinking,
         deepResearch: data.deepResearch,
         generativeUi: data.generativeUI,
+        imageGen: data.imageGen,
         tools: data.tools,
         attachments: data.attachments,
         systemPrompt: systemPrompt,

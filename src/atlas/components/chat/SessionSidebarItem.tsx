@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { formatDistanceToNowStrict } from "date-fns";
 import {
   Archive,
   ArchiveRestore,
@@ -8,7 +9,6 @@ import {
   MoreHorizontal,
   Pin,
   PinOff,
-  Plus,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -49,8 +49,9 @@ interface SessionSidebarItemProps {
   onArchive: (id: string) => void;
   onUnarchive: (id: string) => void;
   onExport: (id: string) => void;
-  onCreateFolder: (name: string) => void;
   onMoveToFolder: (chatId: string, folderId: string | null) => void;
+  /** Open the app-level folder-name modal instead of using window.prompt. */
+  onRequestCreateFolder: () => void;
   setEditingId: (id: string | null) => void;
   setEditTitle: (title: string) => void;
 }
@@ -110,14 +111,20 @@ export function SessionSidebarItemInner({
   onArchive,
   onUnarchive,
   onExport,
-  onCreateFolder,
   onMoveToFolder,
+  onRequestCreateFolder,
   setEditingId,
   setEditTitle,
 }: SessionSidebarItemProps) {
   const id = isSearchResult ? (item as SearchResult).chatId : (item as Session).id;
   const displayTitle = isSearchResult ? (item as SearchResult).chatTitle : (item as Session).title;
   const isPinned = !isSearchResult && (item as Session).pinned;
+  const updatedAt = isSearchResult ? undefined : (item as Session).updatedAt;
+  const folderId = isSearchResult ? undefined : (item as Session).folderId;
+  const folderName = folderId ? folders.find((f) => f.id === folderId)?.name : undefined;
+  const relativeTime = updatedAt
+    ? formatDistanceToNowStrict(updatedAt, { addSuffix: false })
+    : null;
   const itemKey = isSearchResult
     ? `${(item as SearchResult).chatId}-${(item as SearchResult).messageId}`
     : (item as Session).id;
@@ -126,8 +133,11 @@ export function SessionSidebarItemInner({
     <div
       key={itemKey}
       className={cn(
-        "group relative flex flex-col gap-1 px-3 py-2 rounded-lg cursor-pointer transition-all border border-transparent",
-        id === currentId ? "bg-white/5 border-white/5" : "hover:bg-white/[0.03]",
+        "group relative flex flex-col gap-1 pl-3 pr-2 py-2 rounded-lg cursor-pointer transition-all",
+        "before:absolute before:left-0 before:top-1 before:bottom-1 before:w-[2px] before:rounded-full before:bg-primary/70 before:opacity-0 before:transition-opacity",
+        id === currentId
+          ? "bg-white/[0.07] before:opacity-100"
+          : "hover:bg-white/[0.04]",
       )}
       onClick={() => onSelect(id)}
     >
@@ -244,12 +254,11 @@ export function SessionSidebarItemInner({
                     <DropdownMenuItem
                       onClick={(e) => {
                         e.stopPropagation();
-                        const name = prompt("Folder name:");
-                        if (name) onCreateFolder(name);
+                        onRequestCreateFolder();
                       }}
                       className="text-xs"
                     >
-                      <Plus className="mr-2 h-3.5 w-3.5" /> New Folder
+                      <Folder className="mr-2 h-3.5 w-3.5" /> New folder
                     </DropdownMenuItem>
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
@@ -306,6 +315,19 @@ export function SessionSidebarItemInner({
       {isSearchResult && (item as SearchResult).messageContent && (
         <div className="text-[10px] text-zinc-500 line-clamp-2 leading-relaxed">
           {renderSearchSnippet((item as SearchResult).messageContent)}
+        </div>
+      )}
+
+      {!isSearchResult && (folderName || relativeTime) && (
+        <div className="flex items-center gap-1.5 text-[10px] text-zinc-600 leading-none">
+          {folderName ? (
+            <span className="inline-flex items-center gap-1 max-w-[60%] truncate text-zinc-500">
+              <Folder size={9} className="shrink-0" />
+              {folderName}
+            </span>
+          ) : null}
+          {folderName && relativeTime ? <span className="text-zinc-700">·</span> : null}
+          {relativeTime ? <span className="shrink-0">{relativeTime}</span> : null}
         </div>
       )}
     </div>

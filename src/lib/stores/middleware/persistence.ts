@@ -32,6 +32,10 @@ const TRANSIENT_KEYS = new Set([
   "powerStatus",
   "availableNetworkInterfaces",
   "hardwareInfo",
+  "nineRouterImageModels",
+  "nineRouterImageModelsLoading",
+  "nineRouterImageModelsError",
+  "nineRouterImageModelsLastFetchedAt",
 ]);
 
 const SECRET_KEY_PATTERN = /(apiKey|api_key|token|secret|credential|password)$/i;

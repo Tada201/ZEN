@@ -42,7 +42,7 @@ export function WorkspaceApp() {
     handleCreateSession, handleDeleteSession,
     handleRenameSession, handlePinSession, handleArchiveSession,
     handleUnarchiveSession, handleExportSession,
-    handleDeleteAll, handleCreateFolder, handleMoveToFolder,
+    handleDeleteAll, handleCreateFolder, handleRenameFolder, handleDeleteFolder, handleMoveToFolder,
     handleSendMessage, abortStream
   } = useChat();
 
@@ -235,6 +235,8 @@ export function WorkspaceApp() {
             onExport={handleExportSession}
             onDeleteAll={handleDeleteAll}
             onCreateFolder={handleCreateFolder}
+            onRenameFolder={handleRenameFolder}
+            onDeleteFolder={handleDeleteFolder}
             onMoveToFolder={handleMoveToFolder}
             search={search}
             searchResults={searchResults}

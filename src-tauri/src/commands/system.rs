@@ -1,7 +1,7 @@
 use crate::commands::{AppState, InitStatus};
 use crate::error::AppResult;
 use crate::models::SystemMetrics;
-use tauri::State;
+use tauri::{Manager, State};
 
 #[tauri::command]
 pub async fn get_system_metrics(state: State<'_, AppState>) -> AppResult<SystemMetrics> {
@@ -17,6 +17,19 @@ pub async fn get_system_status() -> AppResult<String> {
 #[tauri::command]
 pub async fn get_init_status(state: State<'_, AppState>) -> AppResult<InitStatus> {
     Ok(state.init_progress.snapshot().await)
+}
+
+#[tauri::command]
+pub async fn close_splashscreen(window: tauri::Window) -> AppResult<()> {
+    // Get both windows
+    if let Some(splashscreen) = window.get_webview_window("splashscreen") {
+        splashscreen.close().ok();
+    }
+    if let Some(main) = window.get_webview_window("main") {
+        main.show().ok();
+        main.set_focus().ok();
+    }
+    Ok(())
 }
 
 #[tauri::command]

@@ -36,7 +36,7 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
     handleCreateSession, handleDeleteSession,
     handleRenameSession, handlePinSession, handleArchiveSession,
     handleUnarchiveSession, handleExportSession,
-    handleDeleteAll, handleCreateFolder, handleMoveToFolder,
+    handleDeleteAll, handleCreateFolder, handleRenameFolder, handleDeleteFolder, handleMoveToFolder,
     handleSendMessage, abortStream
   } = useChat();
 
@@ -199,6 +199,8 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
               onExport={handleExportSession}
               onDeleteAll={handleDeleteAll}
               onCreateFolder={handleCreateFolder}
+              onRenameFolder={handleRenameFolder}
+              onDeleteFolder={handleDeleteFolder}
               onMoveToFolder={handleMoveToFolder}
               search={search}
               searchResults={searchResults}

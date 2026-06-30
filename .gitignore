@@ -92,7 +92,8 @@ src-tauri/**/user-data/
 # Codegraph / Cursor
 .codegraph/
 .cursor/
-
+.kimchi/
+.specify/
 # Issue tracker
 ISSUE.md
 

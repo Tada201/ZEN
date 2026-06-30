@@ -1,21 +1,27 @@
 import React from "react";
-import { LogEntry } from "./types";
+import { LogEntry, BootMetrics } from "./types";
 
 interface LogPanelProps {
   bootComplete: boolean;
+  backendReady: boolean;
   logs: LogEntry[];
-  metrics: any;
+  metrics?: BootMetrics | null;
   panelStyle: React.CSSProperties;
   logContainerRef: React.RefObject<HTMLDivElement | null>;
+  reducedMotion?: boolean;
 }
 
 export const LogPanel: React.FC<LogPanelProps> = ({
   bootComplete,
+  backendReady,
   logs,
   metrics,
   panelStyle,
   logContainerRef,
+  reducedMotion = false,
 }) => {
+  const isActuallyReady = bootComplete && backendReady;
+
   return (
     <div
       className="h-full flex flex-col overflow-hidden shadow-2xl"
@@ -30,16 +36,16 @@ export const LogPanel: React.FC<LogPanelProps> = ({
         </div>
         <span className="uppercase" style={{
           fontSize: 'clamp(7px, 0.7vw, 9px)', letterSpacing: '0.15em',
-          color: bootComplete ? '#34d399' : 'rgba(251,191,36,0.8)',
+          color: isActuallyReady ? '#34d399' : (bootComplete ? '#fbbf24' : 'rgba(251,191,36,0.8)'),
         }}>
-          {bootComplete ? '● system ready' : '● booting...'}
+          {isActuallyReady ? '● system ready' : (bootComplete ? '● finalizing...' : '● booting...')}
         </span>
       </div>
 
       {/* Log content */}
       <div ref={logContainerRef} className="flex-1 overflow-y-auto px-3 sm:px-4 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {logs.map((entry, i) => (
-          <div key={i} className="flex" style={{ fontSize: 'clamp(9px, 0.9vw, 12px)', lineHeight: '1.65' }}>
+          <div key={i} className={`flex ${reducedMotion ? '' : 'boot-log-entry'}`} style={{ fontSize: 'clamp(9px, 0.9vw, 12px)', lineHeight: '1.65' }}>
             <span className="shrink-0 mr-2" style={{ color: '#52525b' }}>{entry.timestamp}</span>
             <span className={entry.color || 'text-zinc-300'}>{entry.message}</span>
           </div>
@@ -59,7 +65,7 @@ export const LogPanel: React.FC<LogPanelProps> = ({
                 return `[${String(m).padStart(2, '0')}.${String(s).padStart(2, '0')}.${String(f).padStart(3, '0')}]`;
               })()}
             </span>
-            <span className="animate-pulse">▌</span>
+            <span className={reducedMotion ? '' : 'animate-pulse'}>▌</span>
           </div>
         )}
         {bootComplete && (
@@ -75,9 +81,9 @@ export const LogPanel: React.FC<LogPanelProps> = ({
         <div className="flex items-center gap-2 sm:gap-3 uppercase" style={{ fontSize: 'clamp(6px, 0.65vw, 8px)', letterSpacing: '0.12em', color: '#52525b' }}>
           <span>uptime: {(logs.length * 0.055).toFixed(1)}s</span>
           <span style={{ color: '#27272a' }}>|</span>
-          <span>mem: {metrics ? (metrics.mem_used / 1024 / 1024 / 1024).toFixed(1) : "24.2"}G / {metrics ? Math.round(metrics.mem_total / 1024 / 1024 / 1024) : "32"}G</span>
+          <span>mem: {metrics?.mem_used != null ? (metrics.mem_used / 1024 / 1024 / 1024).toFixed(1) : "--"}G / {metrics?.mem_total != null ? Math.round(metrics.mem_total / 1024 / 1024 / 1024) : "--"}G</span>
           <span style={{ color: '#27272a' }}>|</span>
-          <span>cpu: {metrics ? metrics.cpu_load.toFixed(1) : "2.1"}%</span>
+          <span>cpu: {metrics?.cpu_load != null ? metrics.cpu_load.toFixed(1) : "--"}%</span>
         </div>
         <div className="uppercase" style={{ fontSize: 'clamp(6px, 0.65vw, 8px)', letterSpacing: '0.12em', color: '#52525b' }}>
           tty1 — 80x24

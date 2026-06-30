@@ -138,14 +138,20 @@ export const createAISlice: StateCreator<SettingsState, [], [], AiSlice> = (set,
   updateProviderParams: (provider: string, params: any) => {
     const { providerParams = {} } = get();
     const currentParams = providerParams || {};
-    set({
-      providerParams: {
-        ...currentParams,
-        [provider]: {
-          ...(currentParams[provider] || {}),
-          ...params
-        }
+    const updatedParams = {
+      ...currentParams,
+      [provider]: {
+        ...(currentParams[provider] || {}),
+        ...params
       }
-    });
+    };
+    set((state) => ({
+      providerParams: updatedParams,
+      activeSettings: {
+        ...state.activeSettings,
+        providerParams: updatedParams
+      },
+      isDirty: true
+    }));
   },
 });

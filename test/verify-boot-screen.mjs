@@ -7,7 +7,7 @@ const initSource = readFileSync(new URL("../src/hooks/useAppInit.ts", import.met
 
 assert(appSource.includes("<BootScreen") && appSource.includes("bootFinished"), "app must mount and dismiss the boot overlay");
 assert(bootSource.includes("bootEnabled") && bootSource.includes("bootDurationMs"), "boot screen must respect user settings");
-assert(bootSource.includes("Math.max(8000, durationMs + 1000)"), "boot overlay must have a bounded fail-open timeout");
+assert(bootSource.includes("Math.min(5000, durationMs + 1000)"), "boot overlay must have a bounded fail-open timeout capped at 5s");
 assert(!bootSource.includes("Math.random"), "boot progress must be deterministic and avoid decorative hot-loop randomness");
 assert(initSource.includes("waitForSettingsHydration") && initSource.includes("useSettingsStore.subscribe"), "startup must wait for persisted settings without guessing a fixed delay");
 assert(initSource.includes("void providersApi.getAllAvailableModels"), "provider discovery must run outside the blocking startup path");

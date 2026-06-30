@@ -3,7 +3,7 @@ import { type TabId } from "../SettingsModal";
 import { 
   Plus, Search, Trash2, Settings2,
   PanelLeftClose, PanelLeftOpen, MessageSquare, History,
-  FolderPlus, Folder, Archive
+  FolderPlus, Folder, Archive, Edit2, MoreHorizontal
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -11,6 +11,8 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuTrigger, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { PromptDialog } from "@/components/ui/PromptDialog";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/utils";
 import { Session, ChatFolder } from "./types";
 import { SessionSidebarItem, type SearchResult } from "./SessionSidebarItem";
@@ -32,6 +34,8 @@ interface SessionSidebarProps {
   onExport: (id: string) => void;
   onDeleteAll: () => void;
   onCreateFolder: (name: string) => void;
+  onRenameFolder: (folderId: string, name: string) => void;
+  onDeleteFolder: (folderId: string) => void;
   onMoveToFolder: (chatId: string, folderId: string | null) => void;
   search: string;
   searchResults?: SearchResult[];
@@ -48,7 +52,7 @@ interface SessionSidebarProps {
 
 export const SessionSidebar = memo(({
   sessions, archivedSessions = [], folders, currentId, onSelect, onCreate, onDelete, onRename,
-  onPin, onArchive, onUnarchive, onCreateFolder, onMoveToFolder,
+  onPin, onArchive, onUnarchive, onCreateFolder, onRenameFolder, onDeleteFolder, onMoveToFolder,
   search, searchResults = [], onSearchChange, onExport, onDeleteAll,
   setSettingsTab, setShowSettingsModal, onPreloadSettings, onToggleSidebar,
   isCollapsed = false, activeTab = "chat", onTabChange, workspaceModes = [{ id: "chat", label: "Chat" }]
@@ -57,6 +61,10 @@ export const SessionSidebar = memo(({
   const [editTitle, setEditTitle] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
+  const [folderPromptOpen, setFolderPromptOpen] = useState(false);
+  const [confirmPurgeOpen, setConfirmPurgeOpen] = useState(false);
+  const [renameFolderTarget, setRenameFolderTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleteFolderTarget, setDeleteFolderTarget] = useState<ChatFolder | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const deferredSearch = useDeferredValue(search);
@@ -85,8 +93,8 @@ export const SessionSidebar = memo(({
         onArchive={onArchive}
         onUnarchive={onUnarchive}
         onExport={onExport}
-        onCreateFolder={onCreateFolder}
         onMoveToFolder={onMoveToFolder}
+        onRequestCreateFolder={() => setFolderPromptOpen(true)}
         setEditingId={setEditingId}
         setEditTitle={setEditTitle}
       />
@@ -283,6 +291,17 @@ export const SessionSidebar = memo(({
             </div>
           )}
 
+          {/* Empty State for active search with no matches */}
+          {displaySessions.length > 0 && groupedSessions.length === 0 && deferredSearch.length > 0 && (
+            <div className="flex flex-col items-center justify-center py-12 px-4 text-center select-none font-sans">
+              <Search className="w-8 h-8 text-zinc-500 mb-2 opacity-40" />
+              <span className="text-xs font-medium text-zinc-400">No matching cases</span>
+              <span className="text-[10px] text-zinc-500 mt-1 max-w-[180px] leading-relaxed">
+                Try a different keyword or clear the search.
+              </span>
+            </div>
+          )}
+
           {/* Folders Section */}
           {!showArchived && deferredSearch.length === 0 && folders.length > 0 && (
             <div className="space-y-1">
@@ -292,26 +311,61 @@ export const SessionSidebar = memo(({
               {folders.map(folder => {
                 const isExpanded = expandedFolders[folder.id];
                 const folderChats = folderGroups[folder.id] || [];
-                
+
                 return (
                   <div key={folder.id} className="space-y-0.5">
-                    <div 
+                    <div
                       onClick={() => toggleFolder(folder.id)}
                       className="group flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-white/5 transition-all"
                     >
-                      <Folder 
-                        size={14} 
+                      <Folder
+                        size={14}
                         className={cn(
-                          "transition-colors",
+                          "transition-colors shrink-0",
                           isExpanded ? "text-primary" : "text-zinc-500 group-hover:text-zinc-300"
-                        )} 
+                        )}
                       />
                       <span className="text-xs flex-1 truncate text-zinc-400 group-hover:text-zinc-200">
                         {folder.name}
                       </span>
                       <span className="text-[10px] text-zinc-600 px-1">{folderChats.length}</span>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-5 w-5 text-zinc-600 hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`Open actions for folder ${folder.name}`}
+                            title={`Folder actions`}
+                          >
+                            <MoreHorizontal size={12} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40 bg-zinc-950 border-white/10">
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRenameFolderTarget({ id: folder.id, name: folder.name });
+                            }}
+                            className="text-xs"
+                          >
+                            <Edit2 className="mr-2 h-3.5 w-3.5" /> Rename
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator className="bg-white/5" />
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteFolderTarget(folder);
+                            }}
+                            className="text-red-400 text-xs focus:bg-red-500/10 focus:text-red-400"
+                          >
+                            <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
-                    
+
                     {isExpanded && (
                       <div className="ml-4 pl-1 border-l border-white/5 space-y-0.5 mt-0.5">
                         {folderChats.length === 0 ? (
@@ -369,7 +423,7 @@ export const SessionSidebar = memo(({
                   className="h-8 px-2 gap-1.5 text-zinc-500 hover:text-white hover:bg-white/5"
                 >
                   <MessageSquare size={13} />
-                  <span className="text-xs font-semibold text-zinc-400">Chats</span>
+                  <span className="text-xs font-semibold text-zinc-400">Cases</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48 bg-zinc-950 border-white/10">
@@ -380,18 +434,16 @@ export const SessionSidebar = memo(({
                   <Search className="mr-2 h-3.5 w-3.5" /> Focus search
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => {
-                    const name = window.prompt("Folder name:");
-                    if (name?.trim()) onCreateFolder(name.trim());
-                  }}
+                  onClick={() => setFolderPromptOpen(true)}
                   className="text-xs"
                 >
                   <FolderPlus className="mr-2 h-3.5 w-3.5" /> New folder
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-white/5" />
                 <DropdownMenuItem 
-                  onClick={onDeleteAll}
-                  className="text-red-400 text-xs"
+                  onClick={() => setConfirmPurgeOpen(true)}
+                  disabled={sessions.length === 0}
+                  className="text-red-400 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Trash2 className="mr-2 h-3.5 w-3.5" /> Purge history
                 </DropdownMenuItem>
@@ -415,6 +467,59 @@ export const SessionSidebar = memo(({
           </div>
         </div>
       </div>
+
+      <PromptDialog
+        open={folderPromptOpen}
+        onOpenChange={setFolderPromptOpen}
+        title="New folder"
+        description="Organize related cases into a folder."
+        label="Folder name"
+        placeholder="e.g. Work research"
+        confirmLabel="Create folder"
+        onSubmit={(name) => onCreateFolder(name)}
+      />
+
+      <PromptDialog
+        open={renameFolderTarget !== null}
+        onOpenChange={(open) => { if (!open) setRenameFolderTarget(null); }}
+        title="Rename folder"
+        label="Folder name"
+        initialValue={renameFolderTarget?.name ?? ''}
+        confirmLabel="Save"
+        onSubmit={(name) => {
+          if (renameFolderTarget) onRenameFolder(renameFolderTarget.id, name);
+          setRenameFolderTarget(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={deleteFolderTarget !== null}
+        onOpenChange={(open) => { if (!open) setDeleteFolderTarget(null); }}
+        title={`Delete "${deleteFolderTarget?.name ?? 'folder'}"?`}
+        description="Cases inside this folder will be moved back to the main list. The cases themselves are not deleted."
+        confirmLabel="Delete folder"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={() => {
+          if (deleteFolderTarget) onDeleteFolder(deleteFolderTarget.id);
+          setDeleteFolderTarget(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={confirmPurgeOpen}
+        onOpenChange={setConfirmPurgeOpen}
+        title="Purge case history?"
+        description={
+          displaySessions.length === 0
+            ? 'There are no active cases to remove.'
+            : `This permanently deletes all ${displaySessions.length} non-archived case${displaySessions.length === 1 ? '' : 's'} and their messages. This cannot be undone.`
+        }
+        confirmLabel="Purge all"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={onDeleteAll}
+      />
     </div>
   );
 });

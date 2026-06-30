@@ -41,7 +41,11 @@ export const ApiKeyConfig = React.memo(({ providerKey, displayName }: ApiKeyConf
     }, [providerKey, applyChanges, fetchModels]);
 
     return (
-        <div className="flex flex-col gap-2.5">
+        <form
+            className="flex flex-col gap-2.5"
+            onSubmit={(event) => event.preventDefault()}
+            autoComplete="off"
+        >
             <div className="flex flex-col">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">API Key</label>
                 <span className="text-[11px] text-muted-foreground/60">Required for authentication to {displayName}.</span>
@@ -64,6 +68,6 @@ export const ApiKeyConfig = React.memo(({ providerKey, displayName }: ApiKeyConf
                     <WorkbenchIcon name={showKey ? "lucide:eye-off" : "lucide:eye"} size={13} />
                 </WorkbenchButton>
             </div>
-        </div>
+        </form>
     );
 });

@@ -1,6 +1,7 @@
 pub mod calculator;
 pub mod capability;
 pub mod fs_tools;
+pub mod image_tool;
 pub mod manager;
 pub mod operational_map;
 pub mod permission;
@@ -443,7 +444,8 @@ pub fn default_tool_risk(id: &str) -> RiskLevel {
         | "calculate_route"
         | "draw"
         | "activate_3d_globe"
-        | "handoff_to_agent" => RiskLevel::Medium,
+        | "handoff_to_agent"
+        | "generate_image" => RiskLevel::Medium,
         _ => RiskLevel::Low,
     }
 }
@@ -458,6 +460,7 @@ pub fn init_tool_registry(permissions: ToolPermissions) -> ToolRegistry {
     registry.register(Arc::new(crate::search::WebSearchTool));
     registry.register(Arc::new(ActivateOperationalMapTool));
     registry.register(Arc::new(RunCommandTool));
+    registry.register(Arc::new(self::image_tool::ImageGenerationTool));
 
     // Register File System / RAG tools
     registry.register(Arc::new(fs_tools::VectorSearchTool));
@@ -497,6 +500,7 @@ pub fn init_tool_registry(permissions: ToolPermissions) -> ToolRegistry {
         "get_memory_stats",
         "spawn_agent",
         "handoff_to_agent",
+        "generate_image",
     ] {
         registry.register_known_tool(tool_id, default_tool_risk(tool_id));
     }

@@ -32,6 +32,8 @@ impl Orchestrator {
             config,
             token,
             approval_rx,
+            extra_tool_ids,
+            extra_instructions,
         } = params;
         info!("Starting orchestrator loop for goal: {}", goal);
 
@@ -233,6 +235,8 @@ impl Orchestrator {
                 let messages_clone = all_messages.to_vec();
                 let config_clone = config.clone();
                 let token_clone = token.clone();
+                let extra_tool_ids_clone = extra_tool_ids.clone();
+                let extra_instructions_clone = extra_instructions.clone();
 
                 running_tasks.push(async move {
                     let result = timeout(
@@ -246,6 +250,8 @@ impl Orchestrator {
                             messages: &messages_clone,
                             config: config_clone,
                             token: token_clone,
+                            extra_tool_ids: extra_tool_ids_clone,
+                            extra_instructions: extra_instructions_clone,
                         }),
                     )
                     .await;
