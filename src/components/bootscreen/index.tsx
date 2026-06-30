@@ -15,11 +15,20 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
   const bootEnabled = useSettingsStore((s) => s.bootEnabled ?? true);
   const bootDurationMs = useSettingsStore((s) => s.bootDurationMs ?? 2500);
   const durationMs = Math.min(5000, Math.max(500, bootDurationMs));
-  // Bounded fail-open: capped at 5s total wall-clock, scales with user setting.
-  // Guarantees backend gates progress even if IPC stalls, while honouring the
-  // 5s product cap on total boot wait time. (Boot screen contract — see
-  // test/verify-boot-screen.mjs.)
-  const failOpenMs = Math.min(5000, durationMs + 1000);
+  // Bounded fail-open: covers assembly (≤1.7s) + reveal choreography (≤4.4s) +
+  // 400ms hold + 250ms breath + 500ms buffer = 7.25s total upper bound.
+  // Honours the 5s product cap on total boot wait time but ensures the
+  // cover-mask reveal finishes before any state collapse fires. (Boot screen
+  // contract — see test/verify-boot-screen.mjs.)
+  //
+  // The previous `min(5000, durationMs + 1000)` cap (3.5s default) was racing
+  // the 4.4s reveal choreography, causing the parent fade to start before
+  // the wireframe covers had finished wiping. Symptom: "splashscreen only
+  // checks halfway done then main UI pops".
+  const failOpenMs = Math.max(
+    durationMs + 1000,
+    1700 /* panel assembly */ + 4400 /* reveal choreography */ + 400 /* hold */,
+  );
 
   const { isInitialized } = useAppInit();
   const [minTimeElapsed, setMinTimeElapsed] = useState(false);
@@ -162,6 +171,12 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
   // + unmount happen once the longest cover animation finishes.
   useEffect(() => {
     if (!bootEnabled || !heldAtFull) return;
+
+    // Close the native splash screen. The renderer is now the single owner
+    // of the transition; the native splashscript only renders progress.
+    if (IS_TAURI) {
+      void systemApi.closeSplashscreen().catch(() => {});
+    }
 
     // Slight breath before reveal so the wireframe reads as settled.
     const start = setTimeout(() => setRevealed(true), 250);

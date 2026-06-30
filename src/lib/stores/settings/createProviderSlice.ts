@@ -155,6 +155,7 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
   ollamaBaseUrl: "http://localhost:11434",
   lmstudioBaseUrl: "http://localhost:1234",
   customProviders: [],
+  lastRemovedProviderId: null,
   agentConfigs: [],
   toolAutoApprove: [],
   
@@ -373,7 +374,11 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
 
   addCustomProvider: async (config) => {
     const current = get().customProviders;
-    if (current.some(provider => provider.displayName.trim().toLowerCase() === config.displayName.trim().toLowerCase())) {
+    const requestedName = (config.displayName ?? '').trim().toLowerCase();
+    if (current.some(provider => {
+        const existingName = (provider.displayName ?? '').trim().toLowerCase();
+        return existingName.length > 0 && existingName === requestedName;
+    })) {
         throw new Error(`A provider named "${config.displayName}" already exists.`);
     }
     const id = customProviderId(config.displayName, new Set(current.map(provider => provider.id)));
@@ -420,6 +425,7 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
     }
 
     state.batchUpdate({
+        lastRemovedProviderId: id,
         customProviders: state.customProviders.filter(cp => cp.id !== id),
         availableModels: state.availableModels.filter(model => model.provider !== id),
         availableModelsByProvider: Object.fromEntries(

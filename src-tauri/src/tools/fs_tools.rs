@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
@@ -564,6 +564,10 @@ struct EditFileArgs {
     file_path: String,
     old_text: String,
     new_text: String,
+    /// Which occurrence of `old_text` to replace (1-indexed).
+    /// If omitted, replaces the first occurrence.
+    #[serde(default)]
+    occurrence: Option<usize>,
 }
 
 pub struct EditFileTool;
@@ -575,7 +579,7 @@ impl Tool for EditFileTool {
     }
 
     fn description(&self) -> &str {
-        "Edits a workspace file by replacing exact old_text with new_text. Returns a unified diff of changes."
+        "Edits a workspace file by replacing exact old_text with new_text. Returns a unified diff of changes. Use `occurrence` to target a specific match when `old_text` appears multiple times."
     }
 
     fn parameters_schema(&self) -> serde_json::Value {
@@ -593,6 +597,11 @@ impl Tool for EditFileTool {
                 "new_text": {
                     "type": "string",
                     "description": "Replacement text"
+                },
+                "occurrence": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "1-indexed occurrence of old_text to replace. Defaults to 1 (the first match). If omitted and old_text is not unique, only the first occurrence is replaced."
                 }
             },
             "required": ["file_path", "old_text", "new_text"],
@@ -641,36 +650,164 @@ impl Tool for EditFileTool {
 
         enforce_existing_file_size(&target_path, max_file_bytes).await?;
         let original_content = read_text_file(&target_path).await?;
-        if !original_content.contains(&args.old_text) {
-            return Err(ToolError::ExecutionFailed {
-                message: "old_text not found in file; ensure exact match including whitespace"
-                    .to_string(),
-            });
+
+        match apply_targeted_edit(
+            &original_content,
+            &args.old_text,
+            &args.new_text,
+            args.occurrence,
+        ) {
+            TargetedEditResult::Mismatch(details) => {
+                Ok(ToolOutput {
+                    content: json!({
+                        "success": false,
+                        "error": "old_text occurrence mismatch",
+                        "mismatch": details,
+                    }),
+                    metadata: None,
+                })
+            }
+            TargetedEditResult::Applied(new_content) => {
+                enforce_content_size(new_content.len(), max_file_bytes, "edited file content")?;
+                tokio::fs::write(&target_path, &new_content)
+                    .await
+                    .map_err(|e| ToolError::ExecutionFailed {
+                        message: format!("Failed to write edited file: {}", e),
+                    })?;
+
+                let (diff, lines_added, lines_removed) =
+                    unified_diff(&target_path, &original_content, &new_content);
+
+                Ok(ToolOutput {
+                    content: json!({
+                        "file_path": target_path.to_string_lossy(),
+                        "change_type": "modified",
+                        "lines_added": lines_added,
+                        "lines_removed": lines_removed,
+                        "diff": diff,
+                        "success": true,
+                    }),
+                    metadata: None,
+                })
+            }
         }
-
-        let new_content = original_content.replace(&args.old_text, &args.new_text);
-        enforce_content_size(new_content.len(), max_file_bytes, "edited file content")?;
-        tokio::fs::write(&target_path, &new_content)
-            .await
-            .map_err(|e| ToolError::ExecutionFailed {
-                message: format!("Failed to write edited file: {}", e),
-            })?;
-
-        let (diff, lines_added, lines_removed) =
-            unified_diff(&target_path, &original_content, &new_content);
-
-        Ok(ToolOutput {
-            content: json!({
-                "file_path": target_path.to_string_lossy(),
-                "change_type": "modified",
-                "lines_added": lines_added,
-                "lines_removed": lines_removed,
-                "diff": diff,
-                "success": true,
-            }),
-            metadata: None,
-        })
     }
+}
+
+/// A single match of `old_text` within a file's content.
+#[derive(Debug, Clone, Copy)]
+struct EditMatch {
+    /// Inclusive byte offset where the match starts.
+    start: usize,
+    /// Exclusive byte offset where the match ends.
+    end: usize,
+    /// 1-indexed line number where the match begins.
+    line: usize,
+}
+
+#[derive(Debug, Serialize)]
+struct EditMismatchDetails {
+    old_text: String,
+    found_count: usize,
+    requested_occurrence: usize,
+    matches: Vec<serde_json::Value>,
+}
+
+enum TargetedEditResult {
+    /// The edit was applied; carries the new content.
+    Applied(String),
+    /// The requested occurrence could not be resolved; carries structured details.
+    Mismatch(EditMismatchDetails),
+}
+
+/// Find every occurrence of `old_text` inside `content`, returning byte ranges and lines.
+fn find_occurrences(content: &str, old_text: &str) -> Vec<EditMatch> {
+    let mut matches = Vec::new();
+    let bytes = content.as_bytes();
+    let mut start = 0;
+    while let Some(pos) = content[start..].find(old_text) {
+        let abs_start = start + pos;
+        let abs_end = abs_start + old_text.len();
+        // Count newlines BEFORE the match start; +1 gives the 1-indexed line
+        // number. Using `lines().count()` was off-by-one for matches on the
+        // first line because `lines()` returns at least one chunk for any
+        // non-empty prefix (so `"alpha "`.lines().count() == 1, making the
+        // reported line "2" when the match is actually on line 1).
+        let line = content[..abs_start].matches('\n').count() + 1;
+        matches.push(EditMatch {
+            start: abs_start,
+            end: abs_end,
+            line,
+        });
+        start = abs_end;
+        if start >= bytes.len() {
+            break;
+        }
+    }
+    matches
+}
+
+/// Apply a targeted edit to `content`, replacing only the requested 1-indexed occurrence.
+/// When `occurrence` is `None`, defaults to the first occurrence.
+/// Returns `Mismatch` (without writing) when the request cannot be satisfied.
+fn apply_targeted_edit(
+    content: &str,
+    old_text: &str,
+    new_text: &str,
+    occurrence: Option<usize>,
+) -> TargetedEditResult {
+    let matches = find_occurrences(content, old_text);
+    let requested = occurrence.unwrap_or(1).max(1);
+
+    if matches.is_empty() {
+        return TargetedEditResult::Mismatch(EditMismatchDetails {
+            old_text: old_text.to_string(),
+            found_count: 0,
+            requested_occurrence: requested,
+            matches: vec![],
+        });
+    }
+
+    if requested > matches.len() {
+        return TargetedEditResult::Mismatch(EditMismatchDetails {
+            old_text: old_text.to_string(),
+            found_count: matches.len(),
+            requested_occurrence: requested,
+            matches: matches
+                .into_iter()
+                .map(|m| json!({"line": m.line, "start": m.start, "end": m.end}))
+                .collect(),
+        });
+    }
+
+    let target = &matches[requested - 1];
+    let mut new_content = String::with_capacity(content.len() - old_text.len() + new_text.len());
+    new_content.push_str(&content[..target.start]);
+    new_content.push_str(new_text);
+    new_content.push_str(&content[target.end..]);
+
+    TargetedEditResult::Applied(new_content)
+}
+
+/// Public entry point used by both the `EditFileTool` and the agent-side
+/// `EditFileTool` (in `agent/tools/fs_tools.rs`) so the targeted-edit contract
+/// has exactly one owner.
+pub async fn execute_targeted_edit(
+    app: &AppHandle,
+    chat_id: String,
+    file_path: String,
+    old_text: String,
+    new_text: String,
+    occurrence: Option<usize>,
+) -> Result<ToolOutput, ToolError> {
+    let args = serde_json::json!({
+        "file_path": file_path,
+        "old_text": old_text,
+        "new_text": new_text,
+        "occurrence": occurrence,
+    });
+    let tool = EditFileTool;
+    Tool::execute(&tool, app.clone(), chat_id, args).await
 }
 
 async fn read_text_file(path: &Path) -> Result<String, ToolError> {
@@ -755,4 +892,72 @@ fn unified_diff(path: &Path, old: &str, new: &str) -> (String, usize, usize) {
     }
 
     (diff_lines.join("\n"), lines_added, lines_removed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn apply_targeted_edit_defaults_to_first_occurrence() {
+        // When `occurrence` is None, replace only the first match.
+        let content = "alpha foo middle foo tail";
+        match apply_targeted_edit(content, "foo", "BAR", None) {
+            TargetedEditResult::Applied(new_content) => {
+                assert_eq!(new_content, "alpha BAR middle foo tail");
+            }
+            TargetedEditResult::Mismatch(details) => panic!(
+                "expected Applied, got Mismatch with found_count={}",
+                details.found_count
+            ),
+        }
+    }
+
+    #[test]
+    fn apply_targeted_edit_selects_second_occurrence() {
+        let content = "alpha foo middle foo tail";
+        match apply_targeted_edit(content, "foo", "BAR", Some(2)) {
+            TargetedEditResult::Applied(new_content) => {
+                assert_eq!(new_content, "alpha foo middle BAR tail");
+            }
+            TargetedEditResult::Mismatch(details) => panic!(
+                "expected Applied, got Mismatch with found_count={}",
+                details.found_count
+            ),
+        }
+    }
+
+    #[test]
+    fn apply_targeted_edit_returns_structured_mismatch() {
+        // When `old_text` is missing entirely, found_count must be 0 and
+        // matches must be empty.
+        let content = "alpha foo middle foo tail";
+        match apply_targeted_edit(content, "missing", "BAR", None) {
+            TargetedEditResult::Mismatch(details) => {
+                assert_eq!(details.found_count, 0);
+                assert_eq!(details.requested_occurrence, 1);
+                assert_eq!(details.old_text, "missing");
+                assert!(details.matches.is_empty());
+                // Sanity: the structured detail serializes to JSON without errors.
+                let serialized = serde_json::to_value(&details).expect("serialize mismatch");
+                assert_eq!(serialized["found_count"], serde_json::json!(0));
+                assert_eq!(serialized["requested_occurrence"], serde_json::json!(1));
+            }
+            TargetedEditResult::Applied(_) => panic!("expected Mismatch, got Applied"),
+        }
+
+        // When `old_text` appears twice but `occurrence` is too large, the
+        // mismatch should report the actual matches with their line positions.
+        let mismatch_details = match apply_targeted_edit(content, "foo", "BAR", Some(5)) {
+            TargetedEditResult::Mismatch(details) => details,
+            TargetedEditResult::Applied(_) => panic!("expected Mismatch, got Applied"),
+        };
+        assert_eq!(mismatch_details.found_count, 2);
+        assert_eq!(mismatch_details.requested_occurrence, 5);
+        assert_eq!(mismatch_details.matches.len(), 2);
+        let serialized = serde_json::to_value(&mismatch_details).expect("serialize mismatch");
+        assert_eq!(serialized["found_count"], serde_json::json!(2));
+        assert_eq!(serialized["matches"][0]["line"], serde_json::json!(1));
+        assert_eq!(serialized["matches"][1]["line"], serde_json::json!(2));
+    }
 }

@@ -1,4 +1,4 @@
-import React, { useState, memo, useCallback, useMemo } from 'react';
+import React, { useState, memo, useCallback, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { providerOrder, PROVIDER_KEY_MAP } from '@/lib/types/provider';
@@ -46,6 +46,16 @@ export const ProvidersSettings = memo(() => {
     const fetchNineRouterImageModelsAction = useSettingsStore(s => s.fetchNineRouterImageModels);
     const nineRouterBaseUrl = useSettingsStore(s => s.nineRouterBaseUrl);
     const nineRouterApiKey = useSettingsStore(s => s.nineRouterApiKey);
+    const lastRemovedProviderId = useSettingsStore(s => s.lastRemovedProviderId);
+
+    useEffect(() => {
+        if (lastRemovedProviderId && selectedProviderId === lastRemovedProviderId) {
+            setSelectedProviderId(null);
+        }
+        if (lastRemovedProviderId) {
+            useSettingsStore.setState({ lastRemovedProviderId: null });
+        }
+    }, [lastRemovedProviderId, selectedProviderId]);
 
     const [isAddingCustom, setIsAddingCustom] = useState(false);
     const [addForm, setAddForm] = useState({
@@ -204,13 +214,13 @@ export const ProvidersSettings = memo(() => {
                     <WorkbenchButton 
                         variant="ghost" 
                         size="icon" 
-                        className="h-8 w-8 rounded-lg hover:bg-white/[0.05]"
+                        className="h-8 w-8 rounded-lg hover:bg-muted"
                         onClick={() => setIsAddingCustom(false)}
                     >
                         <WorkbenchIcon name="lucide:chevron-left" size={14} />
                     </WorkbenchButton>
-                    <div className="h-9 w-9 rounded-xl border border-blue-500/20 bg-blue-500/5 flex items-center justify-center">
-                        <WorkbenchIcon name="lucide:plus" size={18} className="text-blue-400" />
+                    <div className="h-9 w-9 rounded-xl border border-primary/20 bg-primary/5 flex items-center justify-center">
+                        <WorkbenchIcon name="lucide:plus" size={18} className="text-primary" />
                     </div>
                     <div>
                         <h3 className="text-base font-semibold leading-tight text-foreground">Add custom provider</h3>
@@ -226,7 +236,7 @@ export const ProvidersSettings = memo(() => {
                                 value={addForm.displayName}
                                 placeholder="e.g., Private Research Cluster"
                                 onChangeText={(val) => setAddForm(prev => ({ ...prev, displayName: val }))}
-                                className="h-11 bg-white/[0.03] border-white/[0.08] rounded-xl"
+                                className="h-11 bg-muted/40 border-border rounded-xl"
                             />
                         </div>
 
@@ -257,7 +267,7 @@ export const ProvidersSettings = memo(() => {
                                 value={addForm.baseUrl}
                                 placeholder="https://api.domain.ai/v1"
                                 onChangeText={(val) => setAddForm(prev => ({ ...prev, baseUrl: val, validationError: null }))}
-                                className="h-11 font-mono text-xs bg-white/[0.03] border-white/[0.08] rounded-xl"
+                                className="h-11 font-mono text-xs bg-muted/40 border-border rounded-xl"
                             />
                         </div>
 
@@ -272,7 +282,7 @@ export const ProvidersSettings = memo(() => {
                                     value={addForm.apiKey}
                                     placeholder="sk-..."
                                     onChangeText={(val) => setAddForm(prev => ({ ...prev, apiKey: val }))}
-                                    className="h-11 font-mono text-xs bg-white/[0.03] border-white/[0.08] rounded-xl"
+                                    className="h-11 font-mono text-xs bg-muted/40 border-border rounded-xl"
                                 />
                             </form>
                         </div>
@@ -280,9 +290,9 @@ export const ProvidersSettings = memo(() => {
                         {addForm.testStatus !== 'idle' && (
                             <div className={cn(
                                 "p-3 rounded-xl border flex items-center gap-3",
-                                addForm.testStatus === 'testing' && "bg-amber-500/5 border-amber-500/10 text-amber-400",
-                                addForm.testStatus === 'success' && "bg-emerald-500/5 border-emerald-500/10 text-emerald-400",
-                                addForm.testStatus === 'error' && "bg-red-500/5 border-red-500/10 text-red-400"
+                                addForm.testStatus === 'testing' && "bg-warning/5 border-warning/10 text-warning",
+                                addForm.testStatus === 'success' && "bg-success/5 border-emerald-500/10 text-success",
+                                addForm.testStatus === 'error' && "bg-destructive/5 border-destructive/10 text-destructive"
                             )}>
                                 <WorkbenchIcon
                                     name={addForm.testStatus === 'testing' ? "lucide:loader-2" : addForm.testStatus === 'success' ? "lucide:check-circle" : "lucide:alert-circle"}
@@ -295,7 +305,7 @@ export const ProvidersSettings = memo(() => {
                             </div>
                         )}
                         {addForm.validationError && (
-                            <div className="rounded-md border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-[12px] text-rose-300">
+                            <div className="rounded-md border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-[12px] text-destructive">
                                 {addForm.validationError}
                             </div>
                         )}
@@ -303,7 +313,7 @@ export const ProvidersSettings = memo(() => {
                         <div className="flex gap-3 mt-10">
                             <WorkbenchButton
                                 variant="secondary"
-                                className="flex-1 h-10 rounded-xl font-bold bg-white/[0.03] border-white/[0.08]"
+                                className="flex-1 h-10 rounded-xl font-bold bg-muted/40 border-border"
                                 onClick={handleAddFormTest}
                                 disabled={!addForm.baseUrl || addForm.testStatus === 'testing'}
                             >
@@ -326,16 +336,23 @@ export const ProvidersSettings = memo(() => {
 
     if (selectedProviderId) {
         const providerParams = allProviderParams[selectedProviderId] || {};
-        const providerData = providerOrder.find(p => p.key === selectedProviderId) || 
+        const providerData = providerOrder.find(p => p.key === selectedProviderId) ||
                            customProviders.find(cp => cp.id === selectedProviderId);
-        
+
+        if (!providerData) {
+            // Selected provider was deleted; return to the gallery instead of
+            // dereferencing undefined metadata.
+            setSelectedProviderId(null);
+            return null;
+        }
+
         const isCustom = !providerOrder.find(p => p.key === selectedProviderId);
         const displayData = isCustom ? {
-            name: (providerData as any).displayName,
+            name: (providerData as any).displayName ?? (providerData as any).name ?? 'Unknown provider',
             category: 'custom'
         } : {
-            name: (providerData as any).name,
-            category: (providerData as any).category
+            name: (providerData as any).name ?? (providerData as any).displayName ?? 'Unknown provider',
+            category: (providerData as any).category ?? 'cloud'
         };
 
         return (
@@ -344,16 +361,16 @@ export const ProvidersSettings = memo(() => {
                     <WorkbenchButton 
                         variant="ghost" 
                         size="icon" 
-                        className="h-8 w-8 rounded-lg hover:bg-white/[0.05]"
+                        className="h-8 w-8 rounded-lg hover:bg-muted"
                         onClick={() => setSelectedProviderId(null)}
                     >
                         <WorkbenchIcon name="lucide:chevron-left" size={14} />
                     </WorkbenchButton>
-                    <div className="h-9 w-9 rounded-xl border border-blue-500/20 bg-blue-500/5 flex items-center justify-center shrink-0">
-                        {PROVIDER_ICONS[selectedProviderId] || <WorkbenchIcon name={isCustom ? "lucide:network" : "lucide:cpu"} size={20} className="text-blue-400" />}
+                    <div className="h-9 w-9 rounded-xl border border-primary/20 bg-primary/5 flex items-center justify-center shrink-0">
+                        {PROVIDER_ICONS[selectedProviderId] || <WorkbenchIcon name={isCustom ? "lucide:network" : "lucide:cpu"} size={20} className="text-primary" />}
                     </div>
                     <div className="min-w-0">
-                        <h3 className="text-base font-bold tracking-tight text-white/90 truncate leading-tight">{displayData.name}</h3>
+                        <h3 className="text-base font-bold tracking-tight text-foreground truncate leading-tight">{displayData.name}</h3>
                         <p className="text-xs text-muted-foreground">Provider configuration</p>
                     </div>
                 </div>
@@ -363,8 +380,8 @@ export const ProvidersSettings = memo(() => {
                         {isCustom ? (
                             <CustomProviderConfig
                                 providerId={selectedProviderId}
-                                displayName={(providerData as any).displayName}
-                                baseUrl={(providerData as any).baseUrl}
+                                displayName={(providerData as any).displayName ?? (providerData as any).name ?? 'Custom Node'}
+                                baseUrl={(providerData as any).baseUrl ?? ''}
                                 apiKey={(providerData as any).apiKey}
                                 headers={(providerData as any).headers}
                             />
@@ -386,18 +403,18 @@ export const ProvidersSettings = memo(() => {
                         )}
 
                         {selectedProviderId === 'nine_router' && (
-                            <div className="p-4 rounded-xl border border-white/[0.04] bg-white/[0.02] flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                <div className="flex items-center gap-2 border-b border-white/[0.04] pb-2">
-                                    <WorkbenchIcon name="lucide:brush" size={14} className="text-blue-400" />
-                                    <span className="text-[11px] font-bold text-white/80 uppercase tracking-wider">Image Generation Gateway (9Router)</span>
+                            <div className="p-4 rounded-xl border border-border bg-muted/30 flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                <div className="flex items-center gap-2 border-b border-border pb-2">
+                                    <WorkbenchIcon name="lucide:brush" size={14} className="text-primary" />
+                                    <span className="text-[11px] font-bold text-foreground uppercase tracking-wider">Image Generation Gateway (9Router)</span>
                                 </div>
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div className="flex flex-col gap-1.5">
-                                        <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Image Gen Provider</label>
+                                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Image Gen Provider</label>
                                         <WorkbenchSelect
                                             value={providerParams.imageProvider || ''}
                                             onValueChange={(val) => updateProviderParams('nine_router', { imageProvider: val })}
-                                            className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                            className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                             options={[
                                                 { value: "", label: "No provider selected (Uses 9Router default)" },
                                                 { value: "openai", label: "OpenAI" },
@@ -411,11 +428,11 @@ export const ProvidersSettings = memo(() => {
                                     </div>
                                     <div className="flex flex-col gap-1.5">
                                         <div className="flex items-center justify-between">
-                                            <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Image Gen Model</label>
+                                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Image Gen Model</label>
                                             <button
                                                 type="button"
                                                 onClick={() => void fetchNineRouterImageModelsAction(true)}
-                                                className="flex items-center gap-1 text-[9px] text-white/30 hover:text-white/60 transition-colors"
+                                                className="flex items-center gap-1 text-[9px] text-muted-foreground/70 hover:text-muted-foreground transition-colors"
                                                 title="Refresh available models from 9Router"
                                             >
                                                 <WorkbenchIcon name="lucide:refresh-cw" size={10} className={nineRouterImageModelsLoading ? 'animate-spin' : ''} />
@@ -426,12 +443,12 @@ export const ProvidersSettings = memo(() => {
                                             <WorkbenchSelect
                                                 value=""
                                                 onValueChange={() => {}}
-                                                className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                                className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                                 options={[{ value: "", label: 'Fetching models from 9Router...' }]}
                                             />
                                         ) : nineRouterImageModelsError ? (
                                             <div className="flex flex-col gap-1.5">
-                                                <div className="h-8 text-[10px] text-amber-400/60 bg-amber-500/5 border border-amber-500/10 rounded px-2 flex items-center">
+                                                <div className="h-8 text-[10px] text-warning/60 bg-warning/5 border border-warning/10 rounded px-2 flex items-center">
                                                     <WorkbenchIcon name="lucide:alert-triangle" size={10} className="mr-1.5 shrink-0" />
                                                     <span className="truncate">9Router unreachable — type model manually</span>
                                                 </div>
@@ -439,14 +456,14 @@ export const ProvidersSettings = memo(() => {
                                                     value={providerParams.imageGenModel || ''}
                                                     placeholder="e.g., openrouter/black-forest-labs/FLUX.1-schnell"
                                                     onChangeText={(val) => updateProviderParams('nine_router', { imageGenModel: val })}
-                                                    className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono px-2"
+                                                    className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono px-2"
                                                 />
                                             </div>
                                         ) : nineRouterImageModels.length > 0 ? (
                                             <WorkbenchSelect
                                                 value={providerParams.imageGenModel || ''}
                                                 onValueChange={(val) => updateProviderParams('nine_router', { imageGenModel: val })}
-                                                className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                                className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                                 options={[
                                                     { value: "", label: 'No model selected' },
                                                     ...nineRouterImageModels.map((m) => ({
@@ -461,9 +478,9 @@ export const ProvidersSettings = memo(() => {
                                                     value={providerParams.imageGenModel || ''}
                                                     placeholder="e.g., openrouter/black-forest-labs/FLUX.1-schnell"
                                                     onChangeText={(val) => updateProviderParams('nine_router', { imageGenModel: val })}
-                                                    className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono px-2"
+                                                    className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono px-2"
                                                 />
-                                                <p className="text-[9px] text-white/20">No models discovered. Ensure 9Router is running with image providers configured.</p>
+                                                <p className="text-[9px] text-muted-foreground/50">No models discovered. Ensure 9Router is running with image providers configured.</p>
                                             </div>
                                         )}
                                     </div>
@@ -472,18 +489,18 @@ export const ProvidersSettings = memo(() => {
                         )}
 
                         {selectedProviderId === 'aihubmix' && (
-                            <div className="p-4 rounded-xl border border-white/[0.04] bg-white/[0.02] flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                <div className="flex items-center gap-2 border-b border-white/[0.04] pb-2">
+                            <div className="p-4 rounded-xl border border-border bg-muted/30 flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                <div className="flex items-center gap-2 border-b border-border pb-2">
                                     <WorkbenchIcon name="lucide:sliders" size={14} className="text-pink-400" />
-                                    <span className="text-[11px] font-bold text-white/80 uppercase tracking-wider">Gateway Model Mappings</span>
+                                    <span className="text-[11px] font-bold text-foreground uppercase tracking-wider">Gateway Model Mappings</span>
                                 </div>
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div className="flex flex-col gap-1.5">
-                                        <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Embeddings Model</label>
+                                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Embeddings Model</label>
                                         <WorkbenchSelect
                                             value={providerParams.embeddingModel || ''}
                                             onValueChange={(val) => updateProviderParams('aihubmix', { embeddingModel: val })}
-                                            className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                            className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                             options={[
                                                 { value: "", label: "No model selected" },
                                                 { value: "text-embedding-3-small", label: "text-embedding-3-small" },
@@ -493,11 +510,11 @@ export const ProvidersSettings = memo(() => {
                                         />
                                     </div>
                                     <div className="flex flex-col gap-1.5">
-                                        <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Image Generator Model</label>
+                                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Image Generator Model</label>
                                         <WorkbenchSelect
                                             value={providerParams.imageModel || ''}
                                             onValueChange={(val) => updateProviderParams('aihubmix', { imageModel: val })}
-                                            className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                            className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                             options={[
                                                 { value: "", label: "No model selected" },
                                                 { value: "dall-e-3", label: "DALL-E 3 (Premium)" },
@@ -508,11 +525,11 @@ export const ProvidersSettings = memo(() => {
                                         />
                                     </div>
                                     <div className="flex flex-col gap-1.5">
-                                        <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Speech-to-Text Model</label>
+                                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Speech-to-Text Model</label>
                                         <WorkbenchSelect
                                             value={providerParams.sttModel || ''}
                                             onValueChange={(val) => updateProviderParams('aihubmix', { sttModel: val })}
-                                            className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                            className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                             options={[
                                                 { value: "", label: "No model selected" },
                                                 { value: "whisper-1", label: "Whisper v1" },
@@ -521,11 +538,11 @@ export const ProvidersSettings = memo(() => {
                                         />
                                     </div>
                                     <div className="flex flex-col gap-1.5">
-                                        <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Text-to-Speech Model</label>
+                                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Text-to-Speech Model</label>
                                         <WorkbenchSelect
                                             value={providerParams.ttsModel || ''}
                                             onValueChange={(val) => updateProviderParams('aihubmix', { ttsModel: val })}
-                                            className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                            className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                             options={[
                                                 { value: "", label: "No model selected" },
                                                 { value: "tts-1", label: "TTS OpenAI v1" },
@@ -538,18 +555,18 @@ export const ProvidersSettings = memo(() => {
                         )}
 
                         {selectedProviderId === 'nine_router' && (
-                            <div className="p-4 rounded-xl border border-white/[0.04] bg-white/[0.02] flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                <div className="flex items-center gap-2 border-b border-white/[0.04] pb-2">
-                                    <WorkbenchIcon name="lucide:sliders" size={14} className="text-blue-400" />
-                                    <span className="text-[11px] font-bold text-white/80 uppercase tracking-wider">Proxy Capabilities Config</span>
+                            <div className="p-4 rounded-xl border border-border bg-muted/30 flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                <div className="flex items-center gap-2 border-b border-border pb-2">
+                                    <WorkbenchIcon name="lucide:sliders" size={14} className="text-primary" />
+                                    <span className="text-[11px] font-bold text-foreground uppercase tracking-wider">Proxy Capabilities Config</span>
                                 </div>
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div className="flex flex-col gap-1.5">
-                                        <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Embeddings Model</label>
+                                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Embeddings Model</label>
                                         <WorkbenchSelect
                                             value={providerParams.embeddingModel || ''}
                                             onValueChange={(val) => updateProviderParams('nine_router', { embeddingModel: val })}
-                                            className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                            className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                             options={[
                                                 { value: "", label: "No model selected" },
                                                 { value: "nomic-embed-text", label: "Nomic Embed Text (Local)" },
@@ -560,11 +577,11 @@ export const ProvidersSettings = memo(() => {
                                     </div>
                                     <div className="flex flex-col gap-1.5">
                                         <div className="flex items-center justify-between">
-                                            <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Image Generator Model</label>
+                                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Image Generator Model</label>
                                             <button
                                                 type="button"
                                                 onClick={() => void fetchNineRouterImageModelsAction(true)}
-                                                className="flex items-center gap-1 text-[9px] text-white/30 hover:text-white/60 transition-colors"
+                                                className="flex items-center gap-1 text-[9px] text-muted-foreground/70 hover:text-muted-foreground transition-colors"
                                                 title="Refresh available models from 9Router"
                                             >
                                                 <WorkbenchIcon name="lucide:refresh-cw" size={10} className={nineRouterImageModelsLoading ? 'animate-spin' : ''} />
@@ -575,12 +592,12 @@ export const ProvidersSettings = memo(() => {
                                             <WorkbenchSelect
                                                 value=""
                                                 onValueChange={() => {}}
-                                                className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                                className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                                 options={[{ value: "", label: 'Fetching models from 9Router...' }]}
                                             />
                                         ) : nineRouterImageModelsError ? (
                                             <div className="flex flex-col gap-1.5">
-                                                <div className="h-8 text-[10px] text-amber-400/60 bg-amber-500/5 border border-amber-500/10 rounded px-2 flex items-center">
+                                                <div className="h-8 text-[10px] text-warning/60 bg-warning/5 border border-warning/10 rounded px-2 flex items-center">
                                                     <WorkbenchIcon name="lucide:alert-triangle" size={10} className="mr-1.5 shrink-0" />
                                                     <span className="truncate">9Router unreachable — type model manually</span>
                                                 </div>
@@ -588,14 +605,14 @@ export const ProvidersSettings = memo(() => {
                                                     value={providerParams.imageGenModel || ''}
                                                     placeholder="e.g., openrouter/black-forest-labs/FLUX.1-schnell"
                                                     onChangeText={(val) => updateProviderParams('nine_router', { imageGenModel: val })}
-                                                    className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono px-2"
+                                                    className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono px-2"
                                                 />
                                             </div>
                                         ) : nineRouterImageModels.length > 0 ? (
                                             <WorkbenchSelect
                                                 value={providerParams.imageGenModel || ''}
                                                 onValueChange={(val) => updateProviderParams('nine_router', { imageGenModel: val })}
-                                                className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                                className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                                 options={[
                                                     { value: "", label: 'No model selected' },
                                                     ...nineRouterImageModels.map((m) => ({
@@ -610,19 +627,19 @@ export const ProvidersSettings = memo(() => {
                                                     value={providerParams.imageGenModel || ''}
                                                     placeholder="e.g., openrouter/black-forest-labs/FLUX.1-schnell"
                                                     onChangeText={(val) => updateProviderParams('nine_router', { imageGenModel: val })}
-                                                    className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono px-2"
+                                                    className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono px-2"
                                                 />
-                                                <p className="text-[9px] text-white/20">No models discovered. Ensure 9Router is running with image providers configured.</p>
+                                                <p className="text-[9px] text-muted-foreground/50">No models discovered. Ensure 9Router is running with image providers configured.</p>
                                             </div>
                                         )}
                                     </div>
 
                                     <div className="flex flex-col gap-1.5 col-span-2">
-                                        <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Web Search Strategy & Model</label>
+                                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Web Search Strategy & Model</label>
                                         <WorkbenchSelect
                                             value={providerParams.searchModel || ''}
                                             onValueChange={(val) => updateProviderParams('nine_router', { searchModel: val })}
-                                            className="h-8 text-[11px] bg-white/[0.03] border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 font-mono"
+                                            className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                             options={[
                                                 { value: "", label: "No model selected" },
                                                 { value: "kr/claude-sonnet-4.5", label: "kr/claude-sonnet-4.5 (Smart Discovery)" },
@@ -636,11 +653,11 @@ export const ProvidersSettings = memo(() => {
                             </div>
                         )}
 
-                        <div className="h-px bg-white/[0.04]" />
+                        <div className="h-px bg-muted/50" />
 
                         <ProviderParamsConfig providerKey={selectedProviderId} />
 
-                        <div className="h-px bg-white/[0.04]" />
+                        <div className="h-px bg-muted/50" />
 
                         <ModelConfig
                             providerKey={selectedProviderId}
