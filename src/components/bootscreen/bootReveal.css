@@ -1,0 +1,199 @@
+/* =====================================================================
+ * Boot Reveal — per-panel unique cover animations
+ *
+ * Each panel's black cover mask dissolves with its own keyframe, chosen
+ * to match the panel's content shape:
+ *   wipe-down   : left sidebar   — vertical list, wipes top → bottom
+ *   bloom       : middle chat    — large canvas, scales out + unfocuses
+ *   snap-up     : premium input  — wide bar, slides up with overshoot
+ *   wipe-right  : right sidebar  — mirrored to left, wipes right → left
+ *   scale-x     : bottom footer  — thin strip, fills left → right
+ *
+ * Cover stays fully opaque until data-state="active" is set. Once
+ * active, animation runs once (animation-fill-mode: forwards) and the
+ * cover ends transparent — revealing the wireframe underneath.
+ * Per-cover staggering is driven by `--boot-delay` (inline style).
+ * ===================================================================== */
+
+.boot-cover {
+  position: absolute;
+  /* transparent so the wireframe skeleton shows through during the
+   * outline phase; border + glow remain as decorative panel outlines */
+  background: transparent;
+  pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.15);
+  will-change: clip-path, transform, opacity, filter;
+}
+
+.boot-cover[data-variant="wipe-down"][data-state="active"] {
+  animation: boot-wipe-down 750ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
+  animation-delay: calc(var(--boot-delay, 0ms) + 1600ms);
+}
+@keyframes boot-wipe-down {
+  0%   { clip-path: inset(0 0 0 0);    opacity: 1; }
+  100% { clip-path: inset(100% 0 0 0); opacity: 0; }
+}
+
+.boot-cover[data-variant="bloom"][data-state="active"] {
+  animation: boot-bloom 850ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: calc(var(--boot-delay, 0ms) + 1600ms);
+  transform-origin: center center;
+}
+@keyframes boot-bloom {
+  0%   { opacity: 1; transform: scale(1);    filter: blur(0); }
+  60%  { opacity: 0.7;                       filter: blur(2px); }
+  100% { opacity: 0; transform: scale(1.02); filter: blur(0); }
+}
+
+.boot-cover[data-variant="snap-up"][data-state="active"] {
+  animation: boot-snap-up 700ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation-delay: calc(var(--boot-delay, 0ms) + 1600ms);
+}
+@keyframes boot-snap-up {
+  0%   { opacity: 1;   transform: translateY(0); }
+  65%  { opacity: 0.85; transform: translateY(-3%); }
+  100% { opacity: 0;   transform: translateY(-110%); }
+}
+
+.boot-cover[data-variant="wipe-right"][data-state="active"] {
+  animation: boot-wipe-right 750ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
+  animation-delay: calc(var(--boot-delay, 0ms) + 1600ms);
+}
+@keyframes boot-wipe-right {
+  0%   { clip-path: inset(0 0 0 0);   opacity: 1; }
+  100% { clip-path: inset(0 0 0 100%); opacity: 0; }
+}
+
+.boot-cover[data-variant="scale-x"][data-state="active"] {
+  animation: boot-scale-x 550ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
+  animation-delay: calc(var(--boot-delay, 0ms) + 1600ms);
+  transform-origin: left center;
+}
+@keyframes boot-scale-x {
+  0%   { opacity: 1; transform: scaleX(1); }
+  100% { opacity: 0; transform: scaleX(0); }
+}
+
+/* =====================================================================
+ * Inner-element reveals — distinct choreography INSIDE each panel.
+ *
+ * Triggered by adding data-state="active" to the parent panel. Each
+ * cluster fades/translates with its own timing and curve so the panel
+ * feels custom-built, not a generic fade.
+ * ===================================================================== */
+
+/* All inner clusters start hidden — apply fade only when parent reveals */
+[data-inner] {
+  opacity: 0;
+  will-change: transform, opacity;
+}
+[data-state="active"] [data-inner] {
+  animation-fill-mode: forwards;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Left sidebar: rows enter top-to-bottom with translateY */
+[data-inner="sb-header"] {
+  animation: boot-row-in 420ms 200ms forwards;
+}
+[data-inner="sb-search"] {
+  animation: boot-row-in 420ms 320ms forwards;
+}
+[data-inner="sb-newchat"] {
+  animation: boot-row-in 420ms 440ms forwards;
+}
+[data-inner="sb-today"] {
+  animation: boot-row-in 420ms 560ms forwards;
+}
+[data-inner="sb-week"] {
+  animation: boot-row-in 420ms 680ms forwards;
+}
+[data-inner="sb-toolbar"] {
+  animation: boot-row-in 420ms 820ms forwards;
+}
+@keyframes boot-row-in {
+  0%   { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Middle chat: messages bloom with stagger */
+[data-inner="chat-header"] {
+  animation: boot-message-in 500ms 350ms forwards;
+}
+[data-inner="chat-welcome"] {
+  animation: boot-message-in 500ms 480ms forwards;
+}
+[data-inner="chat-user"] {
+  animation: boot-message-in 500ms 580ms forwards;
+}
+[data-inner="chat-reasoning"] {
+  animation: boot-message-in 500ms 700ms forwards;
+}
+[data-inner="chat-response"] {
+  animation: boot-message-in 500ms 820ms forwards;
+}
+[data-inner="chat-actions"] {
+  animation: boot-message-in 500ms 980ms forwards;
+}
+@keyframes boot-message-in {
+  0%   { opacity: 0; transform: translateY(14px) scale(0.97); filter: blur(3px); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+/* Premium input: textarea fades, then bottom bar slides up from below */
+[data-inner="input-box"] {
+  animation: boot-input-box 520ms 320ms forwards;
+}
+[data-inner="input-bottom"] {
+  animation: boot-input-bottom 600ms 520ms forwards;
+}
+@keyframes boot-input-box {
+  0%   { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes boot-input-bottom {
+  0%   { opacity: 0; transform: translateY(18px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Right sidebar: tabs ripple down, content wipes in from right */
+[data-inner="rs-activity"] {
+  animation: boot-tab-in 380ms 280ms forwards;
+}
+[data-inner="rs-header"] {
+  animation: boot-rs-content 500ms 420ms forwards;
+}
+[data-inner="rs-section1"] {
+  animation: boot-rs-content 500ms 560ms forwards;
+}
+[data-inner="rs-section2"] {
+  animation: boot-rs-content 500ms 700ms forwards;
+}
+[data-inner="rs-section3"] {
+  animation: boot-rs-content 500ms 840ms forwards;
+}
+@keyframes boot-tab-in {
+  0%   { opacity: 0; transform: translateY(-6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes boot-rs-content {
+  0%   { opacity: 0; transform: translateX(18px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+/* Footer: items fill in left-to-right */
+[data-inner="ft-left"] {
+  animation: boot-ft-l 460ms 240ms forwards;
+}
+[data-inner="ft-right"] {
+  animation: boot-ft-r 460ms 380ms forwards;
+}
+@keyframes boot-ft-l {
+  0%   { opacity: 0; transform: translateX(-12px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+@keyframes boot-ft-r {
+  0%   { opacity: 0; transform: translateX(12px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
