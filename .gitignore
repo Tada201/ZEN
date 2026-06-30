@@ -6,6 +6,7 @@ src-tauri/gen/
 src-tauri/bin/
 src-tauri/resources/binaries/
 src-tauri/resources/models/
+src-tauri/icons-backup/
 
 
 # Graphify
