@@ -29,6 +29,19 @@ use tokio_util::sync::CancellationToken;
 /// Maximum recursion depth for sub-agent spawning (prevents infinite loops)
 pub const MAX_SPAWN_DEPTH: u32 = 3;
 
+/// Per-iteration `save_assistant_message` calls contend with the parent's
+/// SQLite writer. Children only persist on final completion.
+pub(super) fn should_persist_iteration_state(depth: u32) -> bool {
+    depth == 0
+}
+
+/// Subagent `chat:status` events leak into the parent's active chat slot
+/// in the frontend. Suppress them; status visibility for children is
+/// already provided by the agents panel.
+pub(super) fn should_emit_iteration_status(depth: u32) -> bool {
+    depth == 0
+}
+
 /// Extracts image URIs from `generate_image` tool results in the conversation,
 /// but **only** for tool-call IDs that belong to the current run.
 /// This prevents old images from prior conversation history leaking into later replies.
@@ -277,23 +290,25 @@ impl Runner {
             }
 
             // ── Emit status ──
-            self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
-                message: format!("{} – Step {}", current_agent.name, iteration),
-                chat_id: chat_id.clone(),
-                iteration: Some(iteration),
-                phase: Some(if current_agent.id == "generalist" {
-                    ChatStatusPhase::AGENT_STEP.to_string()
-                } else {
-                    ChatStatusPhase::AGENT_STREAMING.to_string()
-                }),
-                metadata: Some(serde_json::json!({
-                    "status": "running",
-                    "agentId": current_agent.id,
-                    "agentName": current_agent.name,
-                    "iteration": iteration,
-                    "depth": self.depth,
-                })),
-            }));
+            if should_emit_iteration_status(self.depth) {
+                self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
+                    message: format!("{} – Step {}", current_agent.name, iteration),
+                    chat_id: chat_id.clone(),
+                    iteration: Some(iteration),
+                    phase: Some(if current_agent.id == "generalist" {
+                        ChatStatusPhase::AGENT_STEP.to_string()
+                    } else {
+                        ChatStatusPhase::AGENT_STREAMING.to_string()
+                    }),
+                    metadata: Some(serde_json::json!({
+                        "status": "running",
+                        "agentId": current_agent.id,
+                        "agentName": current_agent.name,
+                        "iteration": iteration,
+                        "depth": self.depth,
+                    })),
+                }));
+            }
 
             // ── Context compaction (token-aware, fixes #23) ──
             compact_context_if_needed(&mut conversation, &run_config, summarization_enabled);
@@ -692,26 +707,28 @@ impl Runner {
             };
 
             // Save intermediate commentary & tool calls to DB (fixes #22)
-            if let Some(ref db) = self.db_pool {
-                let serialized_reasoning = response
-                    .reasoning_details
-                    .as_ref()
-                    .and_then(|rd| serde_json::to_string(rd).ok());
-                message_persisted |= save_assistant_message(AssistantMessageSave {
-                    db,
-                    chat_id: &chat_id,
-                    model: &model,
-                    message_id: &mut assistant_message_id,
-                    content: &accumulated_commentary,
-                    is_complete: false,
-                    tokens_in: None,
-                    tokens_out: None,
-                    tool_calls: serialized_tool_calls.as_deref(),
-                    reasoning_details: serialized_reasoning.as_deref(),
-                    metadata: None,
-                    error_context: "Failed to save intermediate assistant message to SQLite",
-                })
-                .await;
+            if should_persist_iteration_state(self.depth) {
+                if let Some(ref db) = self.db_pool {
+                    let serialized_reasoning = response
+                        .reasoning_details
+                        .as_ref()
+                        .and_then(|rd| serde_json::to_string(rd).ok());
+                    message_persisted |= save_assistant_message(AssistantMessageSave {
+                        db,
+                        chat_id: &chat_id,
+                        model: &model,
+                        message_id: &mut assistant_message_id,
+                        content: &accumulated_commentary,
+                        is_complete: false,
+                        tokens_in: None,
+                        tokens_out: None,
+                        tool_calls: serialized_tool_calls.as_deref(),
+                        reasoning_details: serialized_reasoning.as_deref(),
+                        metadata: None,
+                        error_context: "Failed to save intermediate assistant message to SQLite",
+                    })
+                    .await;
+                }
             }
 
             conversation.push(ChatMessage {
@@ -723,26 +740,28 @@ impl Runner {
                 tool_call_id: None,
             });
 
-            self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
-                chat_id: chat_id.clone(),
-                message: format!(
-                    "Planning {} tool {}",
-                    tool_calls.len(),
-                    if tool_calls.len() == 1 {
-                        "call"
-                    } else {
-                        "calls"
-                    }
-                ),
-                iteration: Some(iteration),
-                phase: Some(ChatStatusPhase::TOOL_BATCH_PLANNED.to_string()),
-                metadata: Some(serde_json::json!({
-                    "toolCount": tool_calls.len(),
-                    "parallel": tool_calls.len() > 1,
-                    "tools": tool_calls.iter().map(|tc| tc.name.clone()).collect::<Vec<_>>(),
-                    "iteration": iteration,
-                })),
-            }));
+            if should_emit_iteration_status(self.depth) {
+                self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
+                    chat_id: chat_id.clone(),
+                    message: format!(
+                        "Planning {} tool {}",
+                        tool_calls.len(),
+                        if tool_calls.len() == 1 {
+                            "call"
+                        } else {
+                            "calls"
+                        }
+                    ),
+                    iteration: Some(iteration),
+                    phase: Some(ChatStatusPhase::TOOL_BATCH_PLANNED.to_string()),
+                    metadata: Some(serde_json::json!({
+                        "toolCount": tool_calls.len(),
+                        "parallel": tool_calls.len() > 1,
+                        "tools": tool_calls.iter().map(|tc| tc.name.clone()).collect::<Vec<_>>(),
+                        "iteration": iteration,
+                    })),
+                }));
+            }
 
             let mut ordered_results: Vec<Option<ToolResult>> = vec![None; tool_calls.len()];
             let mut remaining_calls: Vec<ToolCall> = Vec::new();
@@ -839,17 +858,19 @@ impl Runner {
                             tracing::info!("HANDOFF: {} → {}", current_agent.id, next_agent.id);
 
                             // Emit chat:status for general status updates
-                            self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
-                                message: format!("Transferring to {}", next_agent.name),
-                                chat_id: chat_id.clone(),
-                                iteration: Some(iteration),
-                                phase: Some(ChatStatusPhase::HANDOFF.to_string()),
-                                metadata: Some(serde_json::json!({
-                                    "fromAgent": current_agent.name,
-                                    "toAgent": next_agent.name,
-                                    "iteration": iteration,
-                                })),
-                            }));
+                            if should_emit_iteration_status(self.depth) {
+                                self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
+                                    message: format!("Transferring to {}", next_agent.name),
+                                    chat_id: chat_id.clone(),
+                                    iteration: Some(iteration),
+                                    phase: Some(ChatStatusPhase::HANDOFF.to_string()),
+                                    metadata: Some(serde_json::json!({
+                                        "fromAgent": current_agent.name,
+                                        "toAgent": next_agent.name,
+                                        "iteration": iteration,
+                                    })),
+                                }));
+                            }
 
                             // Phase 3.4: Generate handoff summary (context compression)
                             let handoff_summary = generate_handoff_summary(
