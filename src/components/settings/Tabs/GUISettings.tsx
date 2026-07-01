@@ -2,6 +2,7 @@ import { SettingsSection } from "../SettingsSection";
 import { SettingsRow } from "../SettingsRow";
 import { WorkbenchSlider } from "../ui/WorkbenchSlider";
 import { WorkbenchInput } from "../ui/WorkbenchInput";
+import { WorkbenchSelect } from "../ui/WorkbenchSelect";
 import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 import { cn } from "@/lib/utils";
 import { normalizeThemeId, THEME_PRESETS } from "@/atlas/theme";
@@ -72,13 +73,13 @@ export function GUISettings({ settings, onUpdate }: GUISettingsProps) {
 
       <SettingsSection title="Workspace Wallpaper" icon="lucide:palette" description="Custom wallpaper aesthetics settings">
         <SettingsRow
-          label="Custom Wallpaper"
-          description="Remote URL or browse a local image file"
+          label="Background Media"
+          description="Remote URL or browse a local image/video file"
           control={
             <div className="flex w-full items-center gap-2 sm:w-[300px]">
               <WorkbenchInput
                 type="text"
-                placeholder="e.g., https://example.com/wallpaper.jpg"
+                placeholder="e.g., https://example.com/wallpaper.mp4"
                 value={settings["ui.background-image"] || ""}
                 onChange={e => onUpdate("ui.background-image", e.target.value)}
                 className="h-9 w-full min-w-0 px-3 text-xs flex-1"
@@ -89,10 +90,10 @@ export function GUISettings({ settings, onUpdate }: GUISettingsProps) {
                 onClick={async () => {
                   const selected = await open({
                     multiple: false,
-                    title: "Select Wallpaper Image",
+                    title: "Select Background Media",
                     filters: [{
-                      name: "Images",
-                      extensions: ["png", "jpg", "jpeg", "gif", "webp", "bmp", "avif"],
+                      name: "Images and Videos",
+                      extensions: ["png", "jpg", "jpeg", "gif", "webp", "bmp", "avif", "mp4", "webm", "mov", "m4v", "ogv"],
                     }],
                   });
                   if (selected) onUpdate("ui.background-image", selected);
@@ -103,6 +104,44 @@ export function GUISettings({ settings, onUpdate }: GUISettingsProps) {
             </div>
           }
           icon="lucide:palette"
+        />
+
+        <SettingsRow
+          label="Background Type"
+          description="Auto-detect, or force image/video rendering"
+          control={
+            <WorkbenchSelect
+              value={settings["ui.background-media-type"] || "auto"}
+              onValueChange={(value) => onUpdate("ui.background-media-type", value)}
+              options={[
+                { value: "auto", label: "Auto detect" },
+                { value: "image", label: "Image" },
+                { value: "video", label: "Video" },
+              ]}
+              className="h-9 w-full bg-muted/50 text-xs sm:w-[200px]"
+            />
+          }
+          icon="lucide:file-video"
+        />
+
+        <SettingsRow
+          label="Wallpaper Display"
+          description="Choose how the wallpaper fills the app background"
+          control={
+            <WorkbenchSelect
+              value={settings["ui.background-fit"] || "cover"}
+              onValueChange={(value) => onUpdate("ui.background-fit", value)}
+              options={[
+                { value: "cover", label: "Fill screen" },
+                { value: "contain", label: "Fit inside" },
+                { value: "stretch", label: "Stretch" },
+                { value: "original", label: "Original size" },
+                { value: "tile", label: "Tile" },
+              ]}
+              className="h-9 w-full bg-muted/50 text-xs sm:w-[200px]"
+            />
+          }
+          icon="lucide:image"
         />
 
         <SettingsRow

@@ -24,9 +24,15 @@ interface BridgeEntry {
 const DOT_TO_FIELD: Record<string, BridgeEntry> = {
   // Interface
   "ui.theme":              { field: "themeId",            type: "string" },
+  "ui.accent-hsl":         { field: "accentHsl",          type: "string" },
+  "ui.accent-glow":        { field: "accentGlow",         type: "string" },
+  "ui.radius-preset":      { field: "radiusPreset",       type: "string" },
+  "ui.style-mode":         { field: "styleMode",          type: "string" },
   "ui.background-image":   { field: "backgroundImageUrl", type: "string" },
   "ui.background-opacity": { field: "backgroundOpacity", type: "number" },
   "ui.background-blur":    { field: "backgroundBlur",    type: "number" },
+  "ui.background-fit":     { field: "backgroundFit",     type: "string" },
+  "ui.background-media-type": { field: "backgroundMediaType", type: "string" },
   "ui.compact-mode":       { field: "lowResourceMode",  type: "boolean" },
 
   // Workspace

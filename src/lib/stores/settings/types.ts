@@ -48,6 +48,9 @@ export const DIRECT_PROVIDER_URLS: Record<string, string> = {
 
 import { ModelInfo, CustomProviderConfig } from '../../types/provider';
 
+export type BackgroundFit = "cover" | "contain" | "stretch" | "original" | "tile";
+export type BackgroundMediaType = "auto" | "image" | "video";
+
 // ─── Slice Interfaces ─────────────────────────────────────────────────────
 
 export interface AppSlice {
@@ -77,6 +80,15 @@ export interface AppSlice {
 export interface InterfaceSlice {
   themeId: string;
   customThemeSource: string;
+  /** Persisted accent color overrides (HSL triples without hsl() wrapper).
+   *  When non-empty, ZenThemeProvider reapplies them after a preset load so
+   *  user-customized accents survive restarts. */
+  accentHsl: string;
+  accentGlow: string;
+  /** Persisted radius preset override (sharp|smooth|round|pill). */
+  radiusPreset: "" | "sharp" | "smooth" | "round" | "pill";
+  /** Persisted surface style mode override (flat|subtle|bordered|glass). */
+  styleMode: "" | "flat" | "subtle" | "bordered" | "glass";
   animationsEnabled: boolean;
   lowResourceMode: boolean;
   bootEnabled: boolean;
@@ -91,6 +103,8 @@ export interface InterfaceSlice {
   backgroundImageUrl: string;
   backgroundOpacity: number;
   backgroundBlur: number;
+  backgroundFit: BackgroundFit;
+  backgroundMediaType: BackgroundMediaType;
 
   setAnimationsEnabled: (enabled: boolean) => void;
   setLowResourceMode: (enabled: boolean) => void;
@@ -101,6 +115,8 @@ export interface InterfaceSlice {
   setBackgroundImageUrl: (url: string) => void;
   setBackgroundOpacity: (opacity: number) => void;
   setBackgroundBlur: (blur: number) => void;
+  setBackgroundFit: (fit: BackgroundFit) => void;
+  setBackgroundMediaType: (mediaType: BackgroundMediaType) => void;
 }
 
 export interface AudioSlice {
@@ -243,6 +259,10 @@ export interface ProviderSlice {
   lmstudioBaseUrl: string;
   // Custom providers
   customProviders: CustomProviderConfig[];
+  // Transient UI bridge: id of the most recently removed provider. Consumed by
+  // settings tabs that hold local selection state so they can drop the stale
+  // selection and return to the gallery instead of dereferencing missing data.
+  lastRemovedProviderId: string | null;
   // Agent configs
   agentConfigs: AgentConfig[];
   // Per-tool auto-approve IDs (transient runtime list, not persisted)

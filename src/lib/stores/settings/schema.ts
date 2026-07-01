@@ -11,6 +11,10 @@ export const SettingsSchema = z.object({
   // ─── Interface ───────────────────────────────────────────────────────────
   themeId: z.string().default("default-dark"),
   customThemeSource: z.string().default(""),
+  accentHsl: z.string().default(""),
+  accentGlow: z.string().default(""),
+  radiusPreset: z.enum(["", "sharp", "smooth", "round", "pill"]).default(""),
+  styleMode: z.enum(["", "flat", "subtle", "bordered", "glass"]).default(""),
   animationsEnabled: z.boolean().default(true),
   lowResourceMode: z.boolean().default(false),
   bootEnabled: z.boolean().default(true),
@@ -24,6 +28,8 @@ export const SettingsSchema = z.object({
   backgroundImageUrl: z.string().default(""),
   backgroundOpacity: z.number().min(0).max(1).default(0.15),
   backgroundBlur: z.number().min(0).max(100).default(0),
+  backgroundFit: z.enum(["cover", "contain", "stretch", "original", "tile"]).default("cover"),
+  backgroundMediaType: z.enum(["auto", "image", "video"]).default("auto"),
 
   // ─── Audio ───────────────────────────────────────────────────────────────
   ttsEnabled: z.boolean().default(false),

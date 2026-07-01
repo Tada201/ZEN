@@ -1,10 +1,14 @@
 import type { StateCreator } from "zustand";
-import type { SettingsState, InterfaceSlice } from "./types";
+import type { SettingsState, InterfaceSlice, BackgroundFit, BackgroundMediaType } from "./types";
 import { DEFAULT_WIDGET_SETTINGS } from "./types";
 
 export const createInterfaceSlice: StateCreator<SettingsState, [], [], InterfaceSlice> = (_set, get) => ({
   themeId: "default-dark",
   customThemeSource: "",
+  accentHsl: "",
+  accentGlow: "",
+  radiusPreset: "",
+  styleMode: "",
   animationsEnabled: true,
   lowResourceMode: false,
   bootEnabled: true,
@@ -19,6 +23,8 @@ export const createInterfaceSlice: StateCreator<SettingsState, [], [], Interface
   backgroundImageUrl: "",
   backgroundOpacity: 0.15,
   backgroundBlur: 0,
+  backgroundFit: "cover",
+  backgroundMediaType: "auto",
 
   setAnimationsEnabled: (enabled: boolean) => {
     get().updateSetting("animationsEnabled", enabled);
@@ -67,5 +73,13 @@ export const createInterfaceSlice: StateCreator<SettingsState, [], [], Interface
 
   setBackgroundBlur: (blur: number) => {
     get().updateSetting("backgroundBlur", blur);
+  },
+
+  setBackgroundFit: (fit: BackgroundFit) => {
+    get().updateSetting("backgroundFit", fit);
+  },
+
+  setBackgroundMediaType: (mediaType: BackgroundMediaType) => {
+    get().updateSetting("backgroundMediaType", mediaType);
   },
 });
