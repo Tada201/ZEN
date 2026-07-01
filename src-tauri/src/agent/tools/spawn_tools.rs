@@ -15,6 +15,21 @@ use uuid::Uuid;
 
 const MAX_PARALLEL_SUBAGENTS: usize = 8;
 
+/// Skip emitting a `chat:message` event for the spawn announcement.
+/// The dedicated `agent:spawn` lifecycle event is the source of
+/// truth and reaches the agents panel; a redundant `chat:message`
+/// would trigger the frontend's full `setSessionMessages` reducer
+/// and stutter the main chat.
+fn should_emit_inline_chat_message_for_spawn() -> bool {
+    false
+}
+
+/// Skip emitting a `chat:message` event for the completion announcement.
+/// Same reason as above; the agents panel consumes `agent:complete`.
+fn should_emit_inline_chat_message_for_complete() -> bool {
+    false
+}
+
 /// Parameters for spawning a child agent.
 pub(crate) struct SpawnParams<'a> {
     pub app: AppHandle,
@@ -153,15 +168,17 @@ impl SpawnAgentTool {
             ..Default::default()
         };
 
-        let _ = app.emit(
-            "chat:message",
-            json!({
-                "chat_id": chat_id,
-                "kind": MessageKind::AgentSpawn.to_string(),
-                "content": format!("{} to {} for: {}", label, resolved.agent.name, task.chars().take(80).collect::<String>()),
-                "metadata": spawn_meta,
-            }),
-        );
+        if should_emit_inline_chat_message_for_spawn() {
+            let _ = app.emit(
+                "chat:message",
+                json!({
+                    "chat_id": chat_id,
+                    "kind": MessageKind::AgentSpawn.to_string(),
+                    "content": format!("{} to {} for: {}", label, resolved.agent.name, task.chars().take(80).collect::<String>()),
+                    "metadata": spawn_meta,
+                }),
+            );
+        }
 
         let subagent_token = CancellationToken::new();
         {
@@ -501,15 +518,17 @@ fn emit_completion_events(params: CompletionParams<'_>) -> Result<()> {
         )
     };
 
-    let _ = app.emit(
-        "chat:message",
-        json!({
-            "chat_id": chat_id,
-            "kind": MessageKind::AgentSpawn.to_string(),
-            "content": content,
-            "metadata": complete_meta,
-        }),
-    );
+    if should_emit_inline_chat_message_for_complete() {
+        let _ = app.emit(
+            "chat:message",
+            json!({
+                "chat_id": chat_id,
+                "kind": MessageKind::AgentSpawn.to_string(),
+                "content": content,
+                "metadata": complete_meta,
+            }),
+        );
+    }
 
     state
         .agent
@@ -536,4 +555,15 @@ fn emit_completion_events(params: CompletionParams<'_>) -> Result<()> {
     );
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn spawn_completion_skips_chat_message_kind() {
+        assert!(!should_emit_inline_chat_message_for_spawn());
+        assert!(!should_emit_inline_chat_message_for_complete());
+    }
 }
