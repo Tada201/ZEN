@@ -99,6 +99,22 @@ pub async fn delete_chat(state: State<'_, AppState>, chat_id: String) -> ZenResu
             info!(chat_id = %chat_id, "delete_chat: cancelled active stream");
         }
     }
+
+    // 0a. Prune in-memory session permissions, recall cache, and graph sessions
+    //     to guarantee complete resource isolation and prevent memory leaks.
+    {
+        let mut perms = state.session_permissions.lock().await;
+        perms.remove(&chat_id);
+    }
+    {
+        let mut cache = state.recall_cache.lock().await;
+        cache.remove(&chat_id);
+    }
+    {
+        let mut graphs = state.graph_sessions.lock().await;
+        graphs.remove(&chat_id);
+    }
+
     // 1. Remove SQLite rows first (primary source of truth)
     queries::delete_chat(&db, &chat_id).await?;
     // 2. Best-effort: remove conversation vectors from LanceDB so deleted
@@ -129,6 +145,27 @@ pub async fn bulk_delete_chats(state: State<'_, AppState>, chat_ids: Vec<String>
             }
         }
     }
+
+    // 0a. Prune in-memory session permissions, recall cache, and graph sessions
+    {
+        let mut perms = state.session_permissions.lock().await;
+        for chat_id in &chat_ids {
+            perms.remove(chat_id);
+        }
+    }
+    {
+        let mut cache = state.recall_cache.lock().await;
+        for chat_id in &chat_ids {
+            cache.remove(chat_id);
+        }
+    }
+    {
+        let mut graphs = state.graph_sessions.lock().await;
+        for chat_id in &chat_ids {
+            graphs.remove(chat_id);
+        }
+    }
+
     // 1. Remove SQLite rows first
     queries::bulk_delete_chats(&db, &chat_ids).await?;
     // 2. Best-effort vector cleanup — same lifecycle as single delete
