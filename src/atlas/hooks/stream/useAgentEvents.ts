@@ -75,6 +75,21 @@ function markTtftStatusPhase(chatId: string, phase?: unknown) {
   if (marker) ttftMark(chatId, marker);
 }
 
+/**
+ * True when an `agent:chunk` payload carries an actual chat id and is
+ * safe to route into a per-chat message slot. Subagent token deltas
+ * that lack a real `chat_id` (or carry only the parent's active id)
+ * are dropped so they do not race with the parent's `chat:chunk` stream.
+ */
+export function isSubagentChunkRoutable(payload: {
+  chat_id?: unknown;
+  chatId?: unknown;
+}): boolean {
+  const fromSnake = typeof payload.chat_id === "string" ? payload.chat_id.trim() : "";
+  const fromCamel = typeof payload.chatId === "string" ? payload.chatId.trim() : "";
+  return Boolean(fromSnake || fromCamel);
+}
+
 export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeout?: (chatId: string) => void } = {}) {
   const unlistenRefs = useRef<UnlistenFn[]>([]);
   const taskChatIdsRef = useRef<Map<string, string>>(new Map());
@@ -315,8 +330,14 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
       });
 
       const unlistenAgentChunk = await listenAppEvent("agent:chunk", (event) => {
-        focusActiveAgentsPanel({ force: true });
         const payload = event.payload;
+        if (!isSubagentChunkRoutable(payload)) {
+          // Subagent token deltas without a real chat id must NOT fall back
+          // to the parent's active streaming chat — that path races with the
+          // parent's own `chat:chunk` buffer and causes visible stutter.
+          return;
+        }
+        focusActiveAgentsPanel({ force: true });
         const actionPayload = {
           ...payload,
           agent_id: payload.agent_id,
