@@ -23,7 +23,10 @@ interface SmoothMarkdownProps {
 
 const INSTANT_IMMEDIATE_LAG_CHARS = 180;
 const TYPEWRITER_IMMEDIATE_LAG_CHARS = 24;
-const DEFAULT_TICK_MS = 24;
+// 48ms is the floor for SmoothMarkdown reveal. The previous 24ms tick
+// combined with subagent-driven store updates caused main-thread
+// re-parses to dominate the render budget.
+export const DEFAULT_TICK_MS = 48;
 
 function normalizeMathMarkdown(content: string): string {
   return content
@@ -53,6 +56,7 @@ export function SmoothMarkdown({
   const completedContentRef = useRef("");
 
   useEffect(() => {
+    if (content === displayedContent) return;
     const isAppendOnlyUpdate = content.startsWith(displayedContent);
     const lag = Math.max(0, content.length - displayedContent.length);
     const immediateLag = streamingSpeed === 'typewriter'
