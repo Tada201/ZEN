@@ -145,6 +145,11 @@ impl Runner {
     }
 
     /// Create a child runner with bounded iterations for sub-agent spawning.
+    ///
+    /// Children never inherit the parent's direct IPC `Channel` — that
+    /// channel is reserved for the parent's own token stream. Child events
+    /// flow through `app.emit` (the slow path) so they cannot reorder or
+    /// delay the parent's `chat:chunk:first` / `chat:chunk` delivery.
     pub fn child(&self, max_iterations: usize) -> Self {
         Self {
             app: self.app.clone(),
@@ -161,7 +166,7 @@ impl Runner {
             depth: self.depth + 1,
             cache: self.cache.clone(),
             allowed_tools: self.allowed_tools.clone(),
-            on_event: self.on_event.clone(),
+            on_event: None,
         }
     }
 }
