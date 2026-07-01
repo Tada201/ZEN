@@ -10,6 +10,12 @@ interface ParsedTable {
   rows: string[][];
 }
 
+const getAccentColor = () => {
+  if (typeof window === 'undefined') return '262 83% 65%';
+  return getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '262 83% 65%';
+};
+const DEFAULT_COLOR = `hsl(${getAccentColor()})`;
+
 interface MathPlotExpressionItemProps {
   expr: Expression;
   localExprVal: string;
@@ -52,9 +58,9 @@ export function MathPlotExpressionItem({
           onClick={handleToggleVisible}
           className="math-plot__item-visibility"
           style={{
-            backgroundColor: expr.visible ? (expr.color || '#00FF9F') : 'transparent',
-            color: expr.color || '#00FF9F',
-            border: `1.5px solid ${expr.color || '#00FF9F'}`,
+            backgroundColor: expr.visible ? (expr.color || DEFAULT_COLOR) : 'transparent',
+            color: expr.color || DEFAULT_COLOR,
+            border: `1.5px solid ${expr.color || DEFAULT_COLOR}`,
           }}
           title={expr.visible ? "Hide" : "Show"}
         />
@@ -104,7 +110,7 @@ export function MathPlotExpressionItem({
             <label className="math-plot__option-label">Color</label>
             <input
               type="color"
-              value={expr.color || '#00FF9F'}
+              value={expr.color || DEFAULT_COLOR}
               onChange={(e) =>
                 applyAction({ action: 'update_expression_style', id: expr.id, color: e.target.value })
               }

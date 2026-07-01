@@ -11,6 +11,11 @@ import { MathPlotAnnotations } from './MathPlotAnnotations';
 import { MathPlotSettings } from './MathPlotSettings';
 import './math-plot.css';
 
+const getAccentColor = () => {
+  if (typeof window === 'undefined') return '262 83% 65%';
+  return getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '262 83% 65%';
+};
+
 // Table Parsing & Serialization Helpers
 interface ParsedTable {
   numCols: number;
@@ -168,16 +173,16 @@ export function MathPlotInterface() {
       await applyAction({ action: 'reset_session' });
       
       if (presetName === 'regression') {
-        await applyAction({
-          action: 'add_expression',
-          expr: 'table 2 x_1 y_1 1.0 2.1 2.0 3.9 3.0 6.1 4.0 8.0 5.0 9.9',
-          color: '#00FF9F'
-        });
-        await applyAction({
-          action: 'add_expression',
-          expr: 'y_1 ~ m * x_1 + c',
-          color: '#FF0055'
-        });
+          await applyAction({
+            action: 'add_expression',
+            expr: 'table 2 x_1 y_1 1.0 2.1 2.0 3.9 3.0 6.1 4.0 8.0 5.0 9.9',
+            color: `hsl(${getAccentColor()})`
+          });
+          await applyAction({
+            action: 'add_expression',
+            expr: 'y_1 ~ m * x_1 + c',
+            color: '#FF0055'
+          });
         await applyAction({ action: 'set_variable', name: 'm', value: 2.0 });
         await applyAction({ action: 'set_variable', name: 'c', value: 0.0 });
         await applyAction({ action: 'set_viewport', x_min: -1, x_max: 7, y_min: -1, y_max: 12 });
@@ -185,7 +190,7 @@ export function MathPlotInterface() {
         await applyAction({
           action: 'add_expression',
           expr: 'y = sin(x) + sin(3*x)/3 + sin(5*x)/5 + sin(7*x)/7 + sin(9*x)/9',
-          color: '#00FF9F'
+          color: `hsl(${getAccentColor()})`
         });
         await applyAction({ action: 'set_variable', name: 'a', value: 1.0 });
         await applyAction({ action: 'set_viewport', x_min: -10, x_max: 10, y_min: -4, y_max: 4 });
@@ -193,7 +198,7 @@ export function MathPlotInterface() {
         await applyAction({
           action: 'add_expression',
           expr: 'y = a * (x - h)^2 + k',
-          color: '#00FF9F'
+          color: `hsl(${getAccentColor()})`
         });
         await applyAction({ action: 'set_variable', name: 'a', value: 1.0 });
         await applyAction({ action: 'set_variable', name: 'h', value: 0.0 });
@@ -203,7 +208,7 @@ export function MathPlotInterface() {
         await applyAction({
           action: 'add_expression',
           expr: 'r = a * sin(n * theta)',
-          color: '#00FF9F'
+          color: `hsl(${getAccentColor()})`
         });
         await applyAction({ action: 'set_variable', name: 'a', value: 5.0 });
         await applyAction({ action: 'set_variable', name: 'n', value: 5.0 });
