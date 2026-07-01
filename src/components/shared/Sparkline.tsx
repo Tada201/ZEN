@@ -105,7 +105,7 @@ export function Sparkline({
             let resolvedColor = color;
             if (color.startsWith('var(')) {
                 const varName = color.slice(4, -1).trim();
-                resolvedColor = getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || '#00FF9F';
+                resolvedColor = getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || 'hsl(var(--primary))';
             }
 
             // Step 1: Determine the horizon point (interpolated value at now - delay)
