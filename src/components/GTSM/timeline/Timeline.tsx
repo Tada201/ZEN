@@ -79,13 +79,13 @@ export const Timeline: React.FC = () => {
     };
 
     return (
-        <div className={`border border-white/15 bg-black/45 backdrop-blur-md transition-all duration-200 ${isCollapsed ? "h-8 overflow-hidden" : ""}`}>
+        <div className={`border border-border bg-background/45 backdrop-blur-md transition-all duration-200 ${isCollapsed ? "h-8 overflow-hidden" : ""}`}>
             {/* Header */}
             <div
-                className="flex h-8 min-h-8 items-center justify-between px-2 border-b border-white/10 cursor-pointer select-none"
+                className="flex h-8 min-h-8 items-center justify-between px-2 border-b border-border cursor-pointer select-none"
                 onClick={() => togglePanel("timeline")}
             >
-                <div className="flex items-center gap-2 text-zinc-100">
+                <div className="flex items-center gap-2 text-foreground">
                     <WorkbenchIcon
                         name={isPlaying ? "solar:pause-bold" : "solar:play-bold"}
                         size={13}
@@ -93,13 +93,13 @@ export const Timeline: React.FC = () => {
                     />
                     <span className="text-[10px] font-medium">Timeline</span>
                     {historyMode && (
-                        <span className={`text-[9px] px-1.5 py-0.5 border ${isPlaying ? "text-emerald-300 border-emerald-400/30 bg-emerald-400/10" : "text-primary border-primary/30 bg-primary/10"}`}>
+                        <span className={`text-[9px] px-1.5 py-0.5 border ${isPlaying ? "text-success border-emerald-400/30 bg-success/10" : "text-primary border-primary/30 bg-primary/10"}`}>
                             {isPlaying ? "Playing" : "Replay"}
                         </span>
                     )}
                 </div>
                 <div className="flex items-center gap-1.5 pointer-events-auto">
-                    <div className="text-zinc-400">
+                    <div className="text-muted-foreground">
                         {isCollapsed
                             ? <WorkbenchIcon name="solar:alt-arrow-up-bold" size={11} />
                             : <WorkbenchIcon name="solar:alt-arrow-down-bold" size={11} />}
@@ -122,7 +122,7 @@ export const Timeline: React.FC = () => {
                             className={`px-2 py-1 text-[8px] font-bold font-mono tracking-widest border transition-all cursor-pointer ${
                                 historyMode
                                     ? "bg-primary/10 border-primary/60 text-primary"
-                                    : "bg-white/[0.04] border-white/15 text-zinc-200"
+                                    : "bg-muted/50 border-border text-foreground"
                             }`}
                         >
                             {historyMode ? "Replay" : "Live"}
@@ -137,8 +137,8 @@ export const Timeline: React.FC = () => {
                                 historyMode
                                     ? isPlaying
                                         ? "bg-primary/10 border-primary/60 text-primary hover:bg-primary/15"
-                                        : "bg-white/[0.04] border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200"
-                                    : "bg-zinc-950/40 border-zinc-900 text-zinc-700 cursor-not-allowed"
+                                        : "bg-muted/50 border-border text-muted-foreground hover:border-border hover:text-foreground"
+                                    : "bg-card/60 border-border text-foreground/80 cursor-not-allowed"
                             }`}
                             title={isPlaying ? "Pause" : "Play"}
                         >
@@ -158,7 +158,7 @@ export const Timeline: React.FC = () => {
                                     className={`px-1.5 py-0.5 text-[8px] font-bold font-mono border transition-all cursor-pointer ${
                                         playbackSpeed === speed
                                             ? "bg-primary/10 border-primary/60 text-primary"
-                                            : "bg-transparent border-white/10 text-zinc-500 hover:border-white/20 hover:text-zinc-300"
+                                            : "bg-transparent border-border text-muted-foreground hover:border-border hover:text-foreground"
                                     } ${!historyMode ? "opacity-40 cursor-not-allowed" : ""}`}
                                 >
                                     {speed}×
@@ -177,7 +177,7 @@ export const Timeline: React.FC = () => {
                             value={progress}
                             onChange={handleScrub}
                             disabled={!historyMode}
-                            className="w-full h-1 appearance-none bg-zinc-800 rounded-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-0"
+                            className="w-full h-1 appearance-none bg-muted rounded-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-0"
                             style={{
                                 background: historyMode
                                     ? `linear-gradient(to right, hsl(var(--primary)) ${progress * 100}%, #27272a ${progress * 100}%)`
@@ -198,7 +198,7 @@ export const Timeline: React.FC = () => {
                                     className={`px-1.5 py-0.5 text-[7px] font-bold font-mono tracking-wider border transition-all cursor-pointer ${
                                         timeWindow === tw
                                             ? "bg-primary/10 border-primary/60 text-primary"
-                                            : "bg-transparent border-white/10 text-zinc-500 hover:border-white/20 hover:text-zinc-300"
+                                            : "bg-transparent border-border text-muted-foreground hover:border-border hover:text-foreground"
                                     }`}
                                 >
                                     {tw}
@@ -208,10 +208,10 @@ export const Timeline: React.FC = () => {
 
                         {/* Current timestamp */}
                         <div className="flex items-center gap-1.5">
-                            <span className="text-[7px] text-zinc-600 font-bold uppercase tracking-wider">
+                            <span className="text-[7px] text-muted-foreground/70 font-bold uppercase tracking-wider">
                                 {formatDate(currentTime)}
                             </span>
-                            <span className="text-[10px] font-medium text-zinc-100 tracking-wide">
+                            <span className="text-[10px] font-medium text-foreground tracking-wide">
                                 {formatTimestamp(currentTime)}
                             </span>
                         </div>

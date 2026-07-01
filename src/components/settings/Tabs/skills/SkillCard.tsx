@@ -26,14 +26,14 @@ export const SkillCard = memo(({ skill, onToggle }: SkillCardProps) => {
       className={cn(
         "rounded-xl border-2 transition-all duration-300",
         skill.enabled
-          ? "bg-zinc-900/50 border-brand-purple/20"
-          : "bg-zinc-900/30 border-zinc-800 opacity-60"
+          ? "bg-muted/60 border-brand-purple/20"
+          : "bg-muted/40 border-border opacity-60"
       )}
     >
       <div className="p-5 flex flex-col gap-4">
         <div className="flex items-start justify-between">
           <div className="flex flex-col gap-1">
-            <h3 className="text-[14px] font-bold text-white">{skill.name}</h3>
+            <h3 className="text-[14px] font-bold text-foreground">{skill.name}</h3>
             <span className="text-[11px] font-mono text-brand-purple">{skill.invocation_syntax}</span>
           </div>
           <WorkbenchSwitch
@@ -42,16 +42,16 @@ export const SkillCard = memo(({ skill, onToggle }: SkillCardProps) => {
           />
         </div>
 
-        <p className="text-[11px] text-zinc-400 leading-relaxed">{skill.description}</p>
+        <p className="text-[11px] text-muted-foreground leading-relaxed">{skill.description}</p>
 
         {skill.capabilities.length > 0 && (
-          <div className="flex flex-wrap gap-2 py-3 border-t border-zinc-800/50">
+          <div className="flex flex-wrap gap-2 py-3 border-t border-border/50">
             {skill.capabilities.map(cap => (
               <div
                 key={cap}
-                className="px-2 py-0.5 rounded bg-zinc-950 border border-zinc-800"
+                className="px-2 py-0.5 rounded bg-card border border-border"
               >
-                <span className="text-[9px] font-black text-zinc-400 uppercase tracking-wider">
+                <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">
                   {cap}
                 </span>
               </div>
@@ -59,22 +59,22 @@ export const SkillCard = memo(({ skill, onToggle }: SkillCardProps) => {
           </div>
         )}
 
-        <div className="flex gap-2 pt-4 border-t border-zinc-800/80">
+        <div className="flex gap-2 pt-4 border-t border-border/80">
           <WorkbenchButton variant="secondary" className="flex-1 h-8 gap-2">
             <WorkbenchIcon name="codicon:play" size={10} className="text-emerald-500" />
             <span className="text-[11px] font-black uppercase">Execute</span>
           </WorkbenchButton>
-          <WorkbenchButton variant="outline" className="h-8 w-10 border-zinc-800 hover:border-zinc-700">
-            <WorkbenchIcon name="codicon:edit" size={12} className="text-zinc-400" />
+          <WorkbenchButton variant="outline" className="h-8 w-10 border-border hover:border-border">
+            <WorkbenchIcon name="codicon:edit" size={12} className="text-muted-foreground" />
           </WorkbenchButton>
           <WorkbenchButton
             variant="outline"
-            className="h-8 w-10 border-zinc-800 hover:border-red-500/30 group/trash"
+            className="h-8 w-10 border-border hover:border-destructive/30 group/trash"
           >
             <WorkbenchIcon
               name="codicon:trash"
               size={12}
-              className="text-zinc-400 group-hover:text-red-500 transition-colors"
+              className="text-muted-foreground group-hover:text-destructive transition-colors"
             />
           </WorkbenchButton>
         </div>

@@ -153,31 +153,31 @@ export function AgentExecutionTrace({
           setIsExpanded(!isExpanded);
         }}
         aria-expanded={isExpanded}
-        className="flex min-h-8 w-full items-center gap-2 rounded-md border border-white/[0.08] bg-black/35 px-2 py-1 text-left text-zinc-400 backdrop-blur-sm transition-all duration-200 hover:bg-black/45"
+        className="flex min-h-8 w-full items-center gap-2 rounded-md border border-border bg-background/35 px-2 py-1 text-left text-muted-foreground backdrop-blur-sm transition-all duration-200 hover:bg-background/45"
       >
         <span className="flex h-5 w-5 shrink-0 items-center justify-center">
           {trace.active ? (
             <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" />
           ) : trace.errorCount > 0 ? (
-            <XCircle className="h-3.5 w-3.5 text-rose-400/80" />
+            <XCircle className="h-3.5 w-3.5 text-destructive/80" />
           ) : (
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400/80" />
+            <CheckCircle2 className="h-3.5 w-3.5 text-success/80" />
           )}
         </span>
         <span className="flex min-w-0 flex-1 items-center gap-2">
-          <span className={cn("min-w-0 flex-1 truncate text-[12px] font-medium text-zinc-300", trace.active && "text-premium-shimmer")}>
+          <span className={cn("min-w-0 flex-1 truncate text-[12px] font-medium text-foreground", trace.active && "text-premium-shimmer")}>
             {preferCompact
               ? trace.compactLabel
             : `${trace.executionLabel}: ${normalizedToolCalls.length} tool ${normalizedToolCalls.length === 1 ? "call" : "calls"}`}
           </span>
-          {trace.runningCount > 0 && <span className="shrink-0 text-[11px] text-blue-300/80">{trace.runningCount} running</span>}
-          {trace.approvalCount > 0 && <span className="shrink-0 text-[11px] text-amber-300/80">{trace.approvalCount} waiting approval</span>}
-          {trace.errorCount > 0 && <span className="shrink-0 text-[11px] text-rose-400/80">{trace.errorCount} failed</span>}
-          {!preferCompact && trace.completedCount > 0 && <span className="shrink-0 text-[11px] text-zinc-500">{trace.completedCount} done</span>}
-          <span className="h-1 w-14 shrink-0 overflow-hidden rounded-full bg-white/[0.06]">
+          {trace.runningCount > 0 && <span className="shrink-0 text-[11px] text-primary/80">{trace.runningCount} running</span>}
+          {trace.approvalCount > 0 && <span className="shrink-0 text-[11px] text-warning/80">{trace.approvalCount} waiting approval</span>}
+          {trace.errorCount > 0 && <span className="shrink-0 text-[11px] text-destructive/80">{trace.errorCount} failed</span>}
+          {!preferCompact && trace.completedCount > 0 && <span className="shrink-0 text-[11px] text-muted-foreground">{trace.completedCount} done</span>}
+          <span className="h-1 w-14 shrink-0 overflow-hidden rounded-full bg-muted">
             <span className="flex h-full">
               <span
-                className="h-full bg-emerald-400/70 transition-all duration-500"
+                className="h-full bg-success/70 transition-all duration-500"
                 style={{ width: `${trace.completedPercent}%` }}
               />
               <span
@@ -187,11 +187,11 @@ export function AgentExecutionTrace({
             </span>
           </span>
         </span>
-        <ChevronRight className={cn("h-3.5 w-3.5 shrink-0 text-zinc-400 transition-transform duration-200", isExpanded && "rotate-90")} />
+        <ChevronRight className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200", isExpanded && "rotate-90")} />
       </button>
 
       {!isExpanded && collapsedSummary && (
-        <div className="truncate px-9 pb-1 pt-1 text-[11px] text-zinc-400" title={collapsedSummary}>
+        <div className="truncate px-9 pb-1 pt-1 text-[11px] text-muted-foreground" title={collapsedSummary}>
           {collapsedSummary}
         </div>
       )}
@@ -200,7 +200,7 @@ export function AgentExecutionTrace({
         <div className="tool-expand-inner">
           <div className="mt-1">
             {normalizedToolCalls.length > 1 && (
-            <div className="mb-1.5 ml-1 flex flex-wrap items-center gap-2 text-[11px] text-zinc-400">
+            <div className="mb-1.5 ml-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
               <span>{trace.startedTogether || trace.runningCount + trace.approvalCount > 1 ? "Batch started in parallel" : "Sequential tool calls"}</span>
               {trace.batchSummary && <span>batch {trace.batchSummary}</span>}
               {trace.finishedCount > 0 && <span>{trace.finishedCount}/{normalizedToolCalls.length} finished</span>}
@@ -219,26 +219,26 @@ export function AgentExecutionTrace({
           {preferCompact && importantToolCalls.length === 0 ? (
             <div className="grid gap-0.5">
               {normalizedToolCalls.map((tc, idx) => (
-                <div key={`${tc.id}-${idx}`} className="flex min-w-0 items-center gap-2 rounded-md bg-black/30 px-2 py-1 text-[11px] leading-5">
+                <div key={`${tc.id}-${idx}`} className="flex min-w-0 items-center gap-2 rounded-md bg-background/30 px-2 py-1 text-[11px] leading-5">
                   <span
                     className={cn(
                       "h-1.5 w-1.5 shrink-0 rounded-full",
                       tc.status === "awaiting_approval" ? "bg-amber-400"
                         : tc.status === "running" ? "bg-blue-400"
                         : tc.status === "error" ? "bg-rose-400"
-                        : "bg-emerald-400",
+                        : "bg-success",
                     )}
                   />
-                  <code className="shrink-0 rounded bg-white/[0.08] px-1 py-0.5 font-mono text-[11px] text-zinc-300">
+                  <code className="shrink-0 rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground">
                     {compactToolDisplayName(tc)}
                   </code>
-                  <span className="min-w-0 flex-1 truncate text-zinc-500">
+                  <span className="min-w-0 flex-1 truncate text-muted-foreground">
                     {tc.status === "completed" || tc.status === "error"
                       ? (tc.output ? buildToolOutputPreviewImported(tc.output).summary : "") || (tc.status === "error" ? "failed" : "done")
                       : tc.status === "running" ? "running..." : "awaiting approval"}
                   </span>
                   {tc.durationMs != null && tc.durationMs > 0 && (
-                    <span className="shrink-0 text-[11px] text-zinc-400 tabular-nums">
+                    <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
                       {tc.durationMs < 1000 ? `${tc.durationMs}ms` : `${(tc.durationMs / 1000).toFixed(1)}s`}
                     </span>
                   )}
@@ -248,7 +248,7 @@ export function AgentExecutionTrace({
           ) : (
             <div
               className={cn(
-                "relative pl-4 before:absolute before:left-[5px] before:top-1 before:h-[calc(100%-8px)] before:w-px before:bg-zinc-800/80",
+                "relative pl-4 before:absolute before:left-[5px] before:top-1 before:h-[calc(100%-8px)] before:w-px before:bg-muted/80",
                 trace.shouldShowBatchLanes && !preferCompact ? "flex flex-col gap-2" : normalizedToolCalls.length > 1 ? "grid gap-1.5 md:grid-cols-2" : "flex flex-col gap-0.5",
               )}
             >
@@ -293,7 +293,7 @@ function ToolTraceRowInner({
 }) {
   return (
     <div className="relative">
-      <span className="absolute -left-[15px] top-2.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-black">
+      <span className="absolute -left-[15px] top-2.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-background">
         <span
           className={cn(
             "h-1.5 w-1.5 rounded-full",
@@ -303,7 +303,7 @@ function ToolTraceRowInner({
                 ? "bg-blue-400"
               : toolCall.status === "error"
                 ? "bg-rose-400"
-                : "bg-emerald-400",
+                : "bg-success",
           )}
         />
       </span>
@@ -339,25 +339,25 @@ function ToolBatchLaneInner({
   const active = lane.runningCount > 0 || lane.approvalCount > 0;
 
   return (
-    <div className="relative rounded-md border border-white/[0.08] bg-black/35 px-2 py-1.5 backdrop-blur-sm">
-      <span className="absolute -left-[15px] top-3 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-black">
-        <span className={cn("h-1.5 w-1.5 rounded-full", lane.approvalCount > 0 ? "bg-amber-400" : active ? "bg-blue-400" : lane.errorCount > 0 ? "bg-rose-400" : "bg-emerald-400")} />
+    <div className="relative rounded-md border border-border bg-background/35 px-2 py-1.5 backdrop-blur-sm">
+      <span className="absolute -left-[15px] top-3 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-background">
+        <span className={cn("h-1.5 w-1.5 rounded-full", lane.approvalCount > 0 ? "bg-amber-400" : active ? "bg-blue-400" : lane.errorCount > 0 ? "bg-rose-400" : "bg-success")} />
       </span>
-      <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-zinc-400">
-        <span className={cn("min-w-0 max-w-full truncate font-medium text-zinc-400", active && "text-blue-200/80")}>
+      <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+        <span className={cn("min-w-0 max-w-full truncate font-medium text-muted-foreground", active && "text-primary/80")}>
           {lane.label}
         </span>
         <span>{lane.completedCount + lane.errorCount}/{lane.toolCount} finished</span>
         {lane.runningCount > 0 && <span>{lane.runningCount} running</span>}
-        {lane.approvalCount > 0 && <span className="text-amber-300/80">{lane.approvalCount} waiting approval</span>}
+        {lane.approvalCount > 0 && <span className="text-warning/80">{lane.approvalCount} waiting approval</span>}
         {lane.ownerSummary && <span>agents {lane.ownerSummary}</span>}
         {lane.runningToolSummaries.length > 0 && <span>active {lane.runningToolSummaries.join(", ")}</span>}
-        {lane.approvalToolSummaries.length > 0 && <span className="text-amber-300/80">waiting approval {lane.approvalToolSummaries.join(", ")}</span>}
+        {lane.approvalToolSummaries.length > 0 && <span className="text-warning/80">waiting approval {lane.approvalToolSummaries.join(", ")}</span>}
         {lane.resultSummary && <span>results {lane.resultSummary}</span>}
-        <span className="h-1 w-12 overflow-hidden rounded-full bg-white/[0.06]">
+        <span className="h-1 w-12 overflow-hidden rounded-full bg-muted">
           <span className="flex h-full">
             <span
-              className="h-full bg-emerald-400/70 transition-all duration-500"
+              className="h-full bg-success/70 transition-all duration-500"
               style={{ width: `${lane.completedPercent}%` }}
             />
             <span

@@ -150,11 +150,11 @@ export function ImageGallery() {
                 className="h-full w-full object-cover transition duration-300 group-hover:scale-110"
                 loading="lazy"
               />
-              <div className="absolute inset-0 flex flex-col items-start justify-end bg-gradient-to-t from-black/70 via-black/0 to-transparent p-2 opacity-0 transition group-hover:opacity-100">
-                <span className="rounded bg-white/15 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white backdrop-blur">
+              <div className="absolute inset-0 flex flex-col items-start justify-end bg-gradient-to-t from-background/70 via-background/0 to-transparent p-2 opacity-0 transition group-hover:opacity-100">
+                <span className="rounded bg-card/15 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-primary-foreground backdrop-blur">
                   {img.tag}
                 </span>
-                <span className="mt-1 text-xs font-semibold text-white">{img.title}</span>
+                <span className="mt-1 text-xs font-semibold text-primary-foreground">{img.title}</span>
               </div>
             </button>
           ))}
@@ -261,7 +261,7 @@ export function WebcamTile() {
 
   return (
     <div onClick={(e) => e.stopPropagation()} className="space-y-2">
-      <div className="relative aspect-video overflow-hidden rounded-lg border border-border bg-black">
+      <div className="relative aspect-video overflow-hidden rounded-lg border border-border bg-background">
         <video ref={videoRef} muted playsInline className="h-full w-full object-cover" />
         {!on && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground">
@@ -356,12 +356,12 @@ export function DropZoneTile() {
               )}
               <button
                 onClick={(e) => { e.stopPropagation(); remove(i); }}
-                className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
+                className="absolute right-1 top-1 rounded-full bg-background/60 p-0.5 text-primary-foreground opacity-0 transition group-hover:opacity-100"
                 aria-label="Remove"
               >
                 <X className="h-3 w-3" />
               </button>
-              <div className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1.5 py-0.5 text-[9px] text-white">
+              <div className="absolute inset-x-0 bottom-0 truncate bg-background/60 px-1.5 py-0.5 text-[9px] text-primary-foreground">
                 {f.name}
               </div>
             </li>
@@ -434,17 +434,17 @@ export function CompareSlider() {
         </div>
 
         {/* labels */}
-        <span className="absolute left-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">After</span>
-        <span className="absolute right-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">Before</span>
+        <span className="absolute left-2 top-2 rounded bg-background/60 px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">After</span>
+        <span className="absolute right-2 top-2 rounded bg-background/60 px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">Before</span>
 
         {/* divider */}
         <div className="pointer-events-none absolute inset-y-0" style={{ left: `${pos}%` }}>
-          <div className="absolute inset-y-0 -ml-px w-0.5 bg-white/90 shadow-lg" />
-          <div className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-primary p-1.5 shadow-lg">
+          <div className="absolute inset-y-0 -ml-px w-0.5 bg-card/90 shadow-lg" />
+          <div className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-border bg-primary p-1.5 shadow-lg">
             <div className="flex items-center gap-0.5">
-              <div className="h-2 w-0.5 bg-white" />
-              <div className="h-3 w-0.5 bg-white" />
-              <div className="h-2 w-0.5 bg-white" />
+              <div className="h-2 w-0.5 bg-card" />
+              <div className="h-3 w-0.5 bg-card" />
+              <div className="h-2 w-0.5 bg-card" />
             </div>
           </div>
         </div>

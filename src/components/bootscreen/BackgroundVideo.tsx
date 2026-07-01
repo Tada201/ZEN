@@ -3,8 +3,8 @@ import React from "react";
 export const BackgroundVideo = React.memo(({ reducedMotion }: { reducedMotion?: boolean }) => {
   if (reducedMotion) {
     return (
-      <div className="absolute inset-0 z-0 overflow-hidden bg-[#08080a]">
-        <div className="absolute inset-0 bg-black/50" />
+      <div className="absolute inset-0 z-0 overflow-hidden bg-background">
+        <div className="absolute inset-0 bg-background/50" />
       </div>
     );
   }
@@ -21,7 +21,7 @@ export const BackgroundVideo = React.memo(({ reducedMotion }: { reducedMotion?: 
       >
         <source src="/video/boot.mp4" type="video/mp4" />
       </video>
-      <div className="absolute inset-0 bg-black/30" />
+      <div className="absolute inset-0 bg-background/30" />
     </div>
   );
 });

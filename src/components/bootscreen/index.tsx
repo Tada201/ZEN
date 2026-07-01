@@ -1,11 +1,29 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useAppInit } from "@/hooks/useAppInit";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
-import { systemApi } from "@/api/systemApi";
-import { IS_TAURI } from "@/api/tauriClient";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import "./bootReveal.css";
 
+/**
+ * BootScreen — a PASSIVE REVEAL OVERLAY.
+ *
+ * Per the canonical Tauri v2 splash pattern (https://v2.tauri.app/learn/splashscreen/),
+ * Rust owns the splash → main handoff via `SetupFlags`:
+ *   * `backend_ready`  — set in `lib.rs` when `core_complete` becomes true.
+ *   * `frontend_ready` — set when the React `useAppInit` hook finishes and
+ *                        calls `systemApi.setComplete("frontend")`.
+ * When both are true, Rust's `perform_handoff` closes the native splash and
+ * shows the main window. By the time the user sees BootScreen, both signals
+ * have already arrived; BootScreen does no gating of its own.
+ *
+ * BootScreen's only jobs are:
+ *   1. Respect the user's `bootEnabled` setting (skip entirely if false).
+ *   2. Play the wireframe assembly + cover-mask reveal animation.
+ *   3. Call `onComplete` after the reveal so WorkspaceApp can take over.
+ *
+ * If the user disabled the boot screen in settings, this component returns
+ * null immediately and the main window's WorkspaceApp mounts without any
+ * reveal overlay.
+ */
 export function BootScreen({ onComplete }: { onComplete: () => void }) {
   // Stable ref for onComplete to prevent timer resets from inline arrow functions
   const onCompleteRef = useRef(onComplete);
@@ -13,30 +31,6 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
   const done = useCallback(() => onCompleteRef.current(), []);
 
   const bootEnabled = useSettingsStore((s) => s.bootEnabled ?? true);
-  const bootDurationMs = useSettingsStore((s) => s.bootDurationMs ?? 2500);
-  const durationMs = Math.min(5000, Math.max(500, bootDurationMs));
-  // Bounded fail-open: covers assembly (≤1.7s) + reveal choreography (≤4.4s) +
-  // 400ms hold + 250ms breath + 500ms buffer = 7.25s total upper bound.
-  // Honours the 5s product cap on total boot wait time but ensures the
-  // cover-mask reveal finishes before any state collapse fires. (Boot screen
-  // contract — see test/verify-boot-screen.mjs.)
-  //
-  // The previous `min(5000, durationMs + 1000)` cap (3.5s default) was racing
-  // the 4.4s reveal choreography, causing the parent fade to start before
-  // the wireframe covers had finished wiping. Symptom: "splashscreen only
-  // checks halfway done then main UI pops".
-  const failOpenMs = Math.max(
-    durationMs + 1000,
-    1700 /* panel assembly */ + 4400 /* reveal choreography */ + 400 /* hold */,
-  );
-
-  const { isInitialized } = useAppInit();
-  const [minTimeElapsed, setMinTimeElapsed] = useState(false);
-  // Real backend gates: critical init + orchestrator (chat is unusable without it)
-  const [criticalDone, setCriticalDone] = useState(IS_TAURI ? false : true);
-  const [orchestratorDone, setOrchestratorDone] = useState(IS_TAURI ? false : true);
-  // 100% hold phase: gates tripped, but wait 400ms before revealing
-  const [heldAtFull, setHeldAtFull] = useState(false);
 
   // Dynamic layout panel states from store
   const { sidebarOpen, rightPanelOpen } = useUIStore();
@@ -61,17 +55,13 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
     bottomFooter: false,
   });
 
-  // Single reveal trigger — flips to "active" once isLoaded. CSS handles
-  // per-panel choreography via [data-variant] + --boot-delay.
+  // Reveal animation state (purely cosmetic). CSS handles the choreography
+  // — these booleans flip on a fixed schedule after mount.
   const [revealed, setRevealed] = useState(false);
-  // Wireframe fades out AFTER covers finish wiping, so the covers reveal
-  // the wireframe first, then the wireframe cross-fades into the wrapper
-  // fade-out. Prevents the "snap" of bright shimmer items into the workspace.
   const [wireframeFaded, setWireframeFaded] = useState(false);
-  // Wrapper-level phases: revealing → done (wireframe fade-out) → unmount.
   const [parentOpacity, setParentOpacity] = useState(1);
 
-  // Skip boot screen if disabled
+  // Skip boot screen if disabled in settings
   useEffect(() => {
     if (!bootEnabled) {
       done();
@@ -91,123 +81,27 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
     return () => delays.forEach(clearTimeout);
   }, [bootEnabled]);
 
-  // Handle minimum display time
+  // Reveal choreography. Runs on mount, regardless of any readiness signal —
+  // the Rust side has already determined main should be visible by the time
+  // the user sees this overlay. Total: ~4400ms.
+  //   t=0     : mount → wireframe panels already assembling
+  //   t=250   : cover wipe starts (CSS data-state flips to "active")
+  //   t=2800  : wrapper opacity 1→0 cross-fade begins (covers mostly gone)
+  //   t=3200  : wireframe shimmer cross-fades out
+  //   t=4400  : BootScreen unmounts, WorkspaceApp takes over
   useEffect(() => {
     if (!bootEnabled) return;
-    const timer = setTimeout(() => {
-      setMinTimeElapsed(true);
-    }, durationMs);
-    return () => clearTimeout(timer);
-  }, [bootEnabled, durationMs]);
-
-  // Poll backend init status (Tauri) or simulate progress (Web).
-  // Real gates: critical_complete AND bg.orchestrator === done.
-  // 12s hard cap guarantees the app never hangs even if IPC stalls.
-  useEffect(() => {
-    if (!bootEnabled) return;
-    if (!IS_TAURI) {
-      // Browser fallback — simulate backend init
-      const t1 = setTimeout(() => { setCriticalDone(true); setOrchestratorDone(true); }, durationMs);
-      return () => clearTimeout(t1);
-    }
-
-    let mounted = true;
-    let statusTimer: ReturnType<typeof setTimeout> | null = null;
-    let capTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const pollStatus = async () => {
-      try {
-        const status = await systemApi.getInitStatus();
-        if (!mounted) return;
-
-        if (status.critical_complete) setCriticalDone(true);
-        // Orchestrator is the chat-essential background service.
-        // Match its phase id from src-tauri/src/commands/mod.rs:405.
-        const orch = status.phases.find(p => p.id === "bg.orchestrator");
-        if (orch && (orch.status === "done" || orch.status === "skipped")) {
-          setOrchestratorDone(true);
-        }
-      } catch {}
-      if (mounted) statusTimer = setTimeout(pollStatus, 200);
-    };
-
-    pollStatus();
-
-    // Hard cap: if neither gate trips within failOpenMs (stuck IPC, missing
-    // capability per RULES.md §Tauri v2, silent backend error), force
-    // progress so the boot reveal plays instead of freezing on the
-    // outline frame.
-    capTimer = setTimeout(() => {
-      if (!mounted) return;
-      setCriticalDone(true);
-      setOrchestratorDone(true);
-    }, failOpenMs);
-
-    return () => {
-      mounted = false;
-      if (statusTimer) clearTimeout(statusTimer);
-      if (capTimer) clearTimeout(capTimer);
-    };
-  }, [bootEnabled, durationMs]);
-
-  // Three real gates + minimum display time:
-  //   1. minTimeElapsed — fixed UI floor (user sees the boot UI)
-  //   2. isInitialized — frontend app-init hook done
-  //   3. criticalDone — backend critical init (fs/db/settings/services)
-  //   4. orchestratorDone — chat is actually usable
-  const isLoaded = isInitialized && minTimeElapsed && criticalDone && orchestratorDone;
-
-  // 100% hold phase: once isLoaded, hold the bar at 100% with "System Ready"
-  // text for 400ms so the user actually sees completion before the reveal.
-  useEffect(() => {
-    if (!bootEnabled || !isLoaded) return;
-    const hold = setTimeout(() => setHeldAtFull(true), 400);
-    return () => clearTimeout(hold);
-  }, [bootEnabled, isLoaded]);
-
-  // Reveal triggers only AFTER the 100% hold completes. CSS handles per-panel
-  // choreography via [data-variant] + --boot-delay. Wireframe fade is
-  // handled inside the same CSS (inner-element stagger). Wrapper fades
-  // + unmount happen once the longest cover animation finishes.
-  useEffect(() => {
-    if (!bootEnabled || !heldAtFull) return;
-
-    // Close the native splash screen. The renderer is now the single owner
-    // of the transition; the native splashscript only renders progress.
-    if (IS_TAURI) {
-      void systemApi.closeSplashscreen().catch(() => {});
-    }
-
-    // Slight breath before reveal so the wireframe reads as settled.
     const start = setTimeout(() => setRevealed(true), 250);
-    // Longest cover (scale-x 550ms + 1000ms delay) ends ~3150ms after
-    // revealed. Start the wrapper fade mid-covers so the cross-fade
-    // (wireframe → wrapper → workspace) is continuous rather than a snap.
     const fade = setTimeout(() => setParentOpacity(0), 2800);
-    // Fade wireframe AFTER covers finish wiping — covers need the
-    // wireframe underneath to actually reveal something.
     const wireframeFade = setTimeout(() => setWireframeFaded(true), 3200);
-    // 1.2s fade + 400ms buffer so the fade completes before unmount.
     const doneTimer = setTimeout(() => done(), 4400);
-
     return () => {
       clearTimeout(start);
       clearTimeout(fade);
       clearTimeout(wireframeFade);
       clearTimeout(doneTimer);
     };
-  }, [bootEnabled, heldAtFull, done]);
-
-  // Absolute safety timeout. Must exceed failOpenMs + hold (400ms) +
-  // reveal choreography (~3.4s) so it only fires on a genuine hang.
-  // failOpenMs (≤5s) + 8s reveal buffer = ≤13s upper bound.
-  useEffect(() => {
-    if (!bootEnabled) return;
-    const safetyTimer = setTimeout(() => {
-      done();
-    }, failOpenMs + 8000);
-    return () => clearTimeout(safetyTimer);
-  }, [bootEnabled, done, failOpenMs]);
+  }, [bootEnabled, done]);
 
   if (!bootEnabled) return null;
 
@@ -232,7 +126,7 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
     <div
       className="fixed inset-0 z-[9999] overflow-hidden select-none pointer-events-none"
       style={{
-        backgroundColor: "rgba(0, 0, 0, 1)",
+        backgroundColor: "hsl(var(--background))",
         opacity: parentOpacity,
         transition: "opacity 1.2s cubic-bezier(0.16, 1, 0.3, 1)",
       }}
@@ -246,8 +140,8 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
         .shimmer-item {
           position: relative;
           overflow: hidden;
-          background: rgba(255, 255, 255, 0.03) !important;
-          border: 1px solid rgba(255, 255, 255, 0.2) !important;
+          background: hsl(var(--foreground) / 0.03) !important;
+          border: 1px solid hsl(var(--foreground) / 0.2) !important;
         }
         .absolute.shimmer-item {
           position: absolute;
@@ -268,11 +162,11 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
           transform: translateX(-150%);
           background: linear-gradient(
             90deg,
-            rgba(255, 255, 255, 0) 0%,
-            rgba(255, 255, 255, 0.04) 30%,
-            rgba(255, 255, 255, 0.18) 50%,
-            rgba(255, 255, 255, 0.04) 70%,
-            rgba(255, 255, 255, 0) 100%
+            hsl(var(--foreground) / 0) 0%,
+            hsl(var(--foreground) / 0.04) 30%,
+            hsl(var(--foreground) / 0.18) 50%,
+            hsl(var(--foreground) / 0.04) 70%,
+            hsl(var(--foreground) / 0) 100%
           );
           animation: boot-item-shimmer 1.8s infinite linear;
         }
@@ -291,9 +185,9 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
           height: 1px;
           background: linear-gradient(
             90deg,
-            rgba(255, 255, 255, 0) 0%,
-            rgba(255, 255, 255, 0.55) 50%,
-            rgba(255, 255, 255, 0) 100%
+            hsl(var(--foreground) / 0) 0%,
+            hsl(var(--foreground) / 0.55) 50%,
+            hsl(var(--foreground) / 0) 100%
           );
           pointer-events: none;
           z-index: 5;
@@ -363,7 +257,7 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
              </div>
 
              {/* Bottom toolbar (h-10, border-t) */}
-             <div data-inner="sb-toolbar" className="absolute" style={{ left: 0, right: 0, bottom: 0, height: 40, borderTop: "1px solid rgba(255,255,255,0.25)" }}>
+             <div data-inner="sb-toolbar" className="absolute" style={{ left: 0, right: 0, bottom: 0, height: 40, borderTop: "1px solid hsl(var(--foreground) / 0.25)" }}>
                <div className="shimmer-item" style={{ position: "absolute", left: 12, top: "50%", marginTop: -8, width: 14, height: 14, borderRadius: 3 }} />
                <div className="shimmer-item" style={{ position: "absolute", left: 32, top: "50%", marginTop: -3, width: 28, height: 5, borderRadius: 2 }} />
                <div className="shimmer-item" style={{ position: "absolute", left: 78, top: "50%", marginTop: -8, width: 14, height: 14, borderRadius: 3 }} />
@@ -373,11 +267,11 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
         ) : (
           /* Collapsed: icon-only bar (48px) */
           <>
-            <div data-inner="sb-toolbar" style={{ position: "absolute", left: "50%", top: 14, marginLeft: -9, width: 18, height: 18, borderRadius: 4, border: "1px solid rgba(255,255,255,0.35)" }} />
+            <div data-inner="sb-toolbar" style={{ position: "absolute", left: "50%", top: 14, marginLeft: -9, width: 18, height: 18, borderRadius: 4, border: "1px solid hsl(var(--foreground) / 0.35)" }} />
             {[60, 106, 152, 198].map((top, i) => (
-              <div data-inner="sb-toolbar" key={`l${i}`} className="absolute" style={{ left: "50%", top, marginLeft: -9, width: 18, height: 18, borderRadius: 4, border: "1px solid rgba(255,255,255,0.35)" }} />
+              <div data-inner="sb-toolbar" key={`l${i}`} className="absolute" style={{ left: "50%", top, marginLeft: -9, width: 18, height: 18, borderRadius: 4, border: "1px solid hsl(var(--foreground) / 0.35)" }} />
             ))}
-            <div data-inner="sb-toolbar" style={{ position: "absolute", left: "50%", top: `calc(100vh - ${footerHeight}px - 46px)`, marginLeft: -9, width: 18, height: 18, borderRadius: 4, border: "1px solid rgba(255,255,255,0.35)" }} />
+            <div data-inner="sb-toolbar" style={{ position: "absolute", left: "50%", top: `calc(100vh - ${footerHeight}px - 46px)`, marginLeft: -9, width: 18, height: 18, borderRadius: 4, border: "1px solid hsl(var(--foreground) / 0.35)" }} />
           </>
         )}
       </div>
@@ -398,8 +292,8 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
       >
         {/* Top-left: New Case header */}
         <div data-inner="chat-header" className="absolute" style={{ left: 0, right: 0, top: 0, height: 48 }}>
-          <div className="absolute shimmer-item" style={{ left: 24, top: 20, width: 75, height: 8, border: "1px solid rgba(255,255,255,0.3)", borderRadius: 2 }} />
-          <div className="absolute shimmer-item" style={{ right: 24, top: 14, width: 26, height: 26, border: "1px solid rgba(255,255,255,0.32)", borderRadius: 6 }} />
+          <div className="absolute shimmer-item" style={{ left: 24, top: 20, width: 75, height: 8, border: "1px solid hsl(var(--foreground) / 0.3)", borderRadius: 2 }} />
+          <div className="absolute shimmer-item" style={{ right: 24, top: 14, width: 26, height: 26, border: "1px solid hsl(var(--foreground) / 0.32)", borderRadius: 6 }} />
         </div>
 
         {/* Chat message flow skeleton in centered container (max-w-[720px]) */}
@@ -449,7 +343,7 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
           right: `${rightSidebarWidth}px`,
           bottom: `${footerHeight}px`,
           height: `${inputAreaHeight}px`,
-          borderTop: "1px solid rgba(255,255,255,0.1)",
+          borderTop: "1px solid hsl(var(--foreground) / 0.1)",
         })}
       />
       <div
@@ -489,7 +383,7 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
                   <div className="shimmer-item shimmer-item-circle" style={{ width: 22, height: 22 }} />
                   {/* Send button (up-arrow icon) */}
                   <div className="shimmer-item shimmer-item-circle" style={{ width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <div style={{ width: 6, height: 6, borderLeft: "1px solid rgba(255,255,255,0.35)", borderTop: "1px solid rgba(255,255,255,0.35)", transform: "rotate(45deg)", marginTop: 2 }} />
+                    <div style={{ width: 6, height: 6, borderLeft: "1px solid hsl(var(--foreground) / 0.35)", borderTop: "1px solid hsl(var(--foreground) / 0.35)", transform: "rotate(45deg)", marginTop: 2 }} />
                   </div>
                 </div>
               </div>
@@ -505,7 +399,7 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
           top: 0,
           width: `${rightSidebarWidth}px`,
           height: `calc(100vh - ${footerHeight}px)`,
-          borderLeft: "1px solid rgba(255,255,255,0.1)",
+          borderLeft: "1px solid hsl(var(--foreground) / 0.1)",
         })}
       />
       <div
@@ -516,7 +410,7 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
         {rightPanelOpen ? (
           <>
             {/* Activity Bar (48px left strip) */}
-            <div className="absolute left-0 top-0 bottom-0" style={{ width: `${secondaryActivityBarWidth}px`, borderRight: "1px solid rgba(255,255,255,0.28)" }}>
+            <div className="absolute left-0 top-0 bottom-0" style={{ width: `${secondaryActivityBarWidth}px`, borderRight: "1px solid hsl(var(--foreground) / 0.28)" }}>
               {/* Top group: tab icons */}
               <div data-inner="rs-activity" className="absolute flex flex-col items-center gap-4" style={{ left: 0, right: 0, top: 12 }}>
                 {[0, 1, 2, 3, 4, 5].map((i) => (
@@ -531,28 +425,28 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
             {/* Right Panel Content Area */}
             <div className="absolute top-0 bottom-0 overflow-hidden" style={{ left: `${secondaryActivityBarWidth}px`, right: 0 }}>
               {/* Header (h-14 = 56px) */}
-              <div data-inner="rs-header" className="absolute flex items-center justify-between" style={{ left: 0, right: 0, top: 0, height: 56, borderBottom: "1px solid rgba(255,255,255,0.25)", padding: "0 16px" }}>
+              <div data-inner="rs-header" className="absolute flex items-center justify-between" style={{ left: 0, right: 0, top: 0, height: 56, borderBottom: "1px solid hsl(var(--foreground) / 0.25)", padding: "0 16px" }}>
                 <div className="flex items-center gap-2">
-                  <div style={{ width: 16, height: 16, borderRadius: 3, border: "1px solid rgba(255,255,255,0.35)" }} />
-                  <div style={{ width: 50, height: 6, border: "1px solid rgba(255,255,255,0.28)", borderRadius: 2 }} />
+                  <div style={{ width: 16, height: 16, borderRadius: 3, border: "1px solid hsl(var(--foreground) / 0.35)" }} />
+                  <div style={{ width: 50, height: 6, border: "1px solid hsl(var(--foreground) / 0.28)", borderRadius: 2 }} />
                 </div>
-                <div style={{ width: 16, height: 16, borderRadius: 3, border: "1px solid rgba(255,255,255,0.32)" }} />
+                <div style={{ width: 16, height: 16, borderRadius: 3, border: "1px solid hsl(var(--foreground) / 0.32)" }} />
               </div>
               {/* Content sections */}
               <div className="absolute overflow-hidden" style={{ left: 0, right: 0, top: 56, bottom: 0, padding: 12 }}>
-                <div data-inner="rs-section1" style={{ position: "absolute", left: 12, right: 12, top: 8, height: 24, borderBottom: "1px solid rgba(255,255,255,0.25)" }}>
-                  <div style={{ width: "35%", height: 6, border: "1px solid rgba(255,255,255,0.28)", borderRadius: 2 }} />
+                <div data-inner="rs-section1" style={{ position: "absolute", left: 12, right: 12, top: 8, height: 24, borderBottom: "1px solid hsl(var(--foreground) / 0.25)" }}>
+                  <div style={{ width: "35%", height: 6, border: "1px solid hsl(var(--foreground) / 0.28)", borderRadius: 2 }} />
                 </div>
-                <div data-inner="rs-section2" style={{ position: "absolute", left: 12, right: 12, top: 44, height: 80, border: "1px solid rgba(255,255,255,0.25)", borderRadius: 6 }}>
-                  <div style={{ position: "absolute", left: 8, top: 8, width: "60%", height: 5, border: "1px solid rgba(255,255,255,0.25)", borderRadius: 2 }} />
-                  <div style={{ position: "absolute", left: 8, top: 22, width: "80%", height: 5, border: "1px solid rgba(255,255,255,0.22)", borderRadius: 2 }} />
-                  <div style={{ position: "absolute", left: 8, top: 36, width: "50%", height: 5, border: "1px solid rgba(255,255,255,0.22)", borderRadius: 2 }} />
-                  <div style={{ position: "absolute", left: 8, bottom: 8, width: 90, height: 18, border: "1px solid rgba(255,255,255,0.25)", borderRadius: 4 }} />
+                <div data-inner="rs-section2" style={{ position: "absolute", left: 12, right: 12, top: 44, height: 80, border: "1px solid hsl(var(--foreground) / 0.25)", borderRadius: 6 }}>
+                  <div style={{ position: "absolute", left: 8, top: 8, width: "60%", height: 5, border: "1px solid hsl(var(--foreground) / 0.25)", borderRadius: 2 }} />
+                  <div style={{ position: "absolute", left: 8, top: 22, width: "80%", height: 5, border: "1px solid hsl(var(--foreground) / 0.22)", borderRadius: 2 }} />
+                  <div style={{ position: "absolute", left: 8, top: 36, width: "50%", height: 5, border: "1px solid hsl(var(--foreground) / 0.22)", borderRadius: 2 }} />
+                  <div style={{ position: "absolute", left: 8, bottom: 8, width: 90, height: 18, border: "1px solid hsl(var(--foreground) / 0.25)", borderRadius: 4 }} />
                 </div>
-                <div data-inner="rs-section3" style={{ position: "absolute", left: 12, right: 12, top: 136, height: 60, border: "1px solid rgba(255,255,255,0.25)", borderRadius: 6 }}>
-                  <div style={{ position: "absolute", left: 8, top: 8, width: "40%", height: 5, border: "1px solid rgba(255,255,255,0.25)", borderRadius: 2 }} />
-                  <div style={{ position: "absolute", left: 8, top: 22, width: "70%", height: 5, border: "1px solid rgba(255,255,255,0.22)", borderRadius: 2 }} />
-                  <div style={{ position: "absolute", left: 8, top: 36, width: "30%", height: 5, border: "1px solid rgba(255,255,255,0.22)", borderRadius: 2 }} />
+                <div data-inner="rs-section3" style={{ position: "absolute", left: 12, right: 12, top: 136, height: 60, border: "1px solid hsl(var(--foreground) / 0.25)", borderRadius: 6 }}>
+                  <div style={{ position: "absolute", left: 8, top: 8, width: "40%", height: 5, border: "1px solid hsl(var(--foreground) / 0.25)", borderRadius: 2 }} />
+                  <div style={{ position: "absolute", left: 8, top: 22, width: "70%", height: 5, border: "1px solid hsl(var(--foreground) / 0.22)", borderRadius: 2 }} />
+                  <div style={{ position: "absolute", left: 8, top: 36, width: "30%", height: 5, border: "1px solid hsl(var(--foreground) / 0.22)", borderRadius: 2 }} />
                 </div>
               </div>
             </div>
@@ -579,7 +473,7 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
           left: 0,
           right: 0,
           height: `${footerHeight}px`,
-          borderTop: "1px solid rgba(255,255,255,0.1)",
+          borderTop: "1px solid hsl(var(--foreground) / 0.1)",
         })}
       />
       <div
@@ -594,7 +488,7 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
           {/* UNDER ACTIVE DEVELOPMENT — DEV BUILD */}
           <div className="shimmer-item" style={{ width: 175, height: 5, borderRadius: 2 }} />
           {/* Separator */}
-          <div style={{ width: 1, height: 8, borderLeft: "1px solid rgba(255,255,255,0.22)" }} />
+          <div style={{ width: 1, height: 8, borderLeft: "1px solid hsl(var(--foreground) / 0.22)" }} />
           {/* ZEN v0.1.0 */}
           <div className="shimmer-item" style={{ width: 45, height: 5, borderRadius: 2 }} />
         </div>
@@ -606,7 +500,7 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
           {/* Monday, June 29, 2026 */}
           <div className="shimmer-item" style={{ width: 85, height: 5, borderRadius: 2 }} />
           {/* Separator */}
-          <div style={{ width: 1, height: 8, borderLeft: "1px solid rgba(255,255,255,0.22)" }} />
+          <div style={{ width: 1, height: 8, borderLeft: "1px solid hsl(var(--foreground) / 0.22)" }} />
           {/* Clock icon */}
           <div className="shimmer-item shimmer-item-circle" style={{ width: 14, height: 14 }} />
           {/* 09:11 PM */}

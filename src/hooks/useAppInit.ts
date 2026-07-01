@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { chatApi, providersApi } from '@/api';
+import { chatApi, providersApi, systemApi } from '@/api';
+import type { ModelInfo } from '@/lib/types/provider';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
+import { IS_TAURI } from '@/api/tauriClient';
 
 export interface InitStep {
     id: string;
@@ -55,7 +57,6 @@ export function useAppInit(onStepsUpdate?: (steps: InitStep[]) => void) {
     useEffect(() => {
         if (startedRef.current) return;
         startedRef.current = true;
-        let mounted = true;
         const init = async () => {
             try {
                 setStep('settings', 'loading');
@@ -73,16 +74,34 @@ export function useAppInit(onStepsUpdate?: (steps: InitStep[]) => void) {
                 setStep('theme', 'done', s.themeId || 'dark');
 
                 setStep('provider', 'loading');
-                // Model discovery is non-critical and can involve unavailable local servers.
-                // Start it in the background so it never blocks the first usable frame.
-                void providersApi.getAllAvailableModels(null)
-                    .then((models) => setStep('provider', 'done', models?.length ? 'Connected' : 'No models'))
-                    .catch(() => setStep('provider', 'done', 'Local mode'));
+                // Provider discovery is now BLOCKING with a hard 5s timeout.
+                // Previously fire-and-forget — that violated the boot contract
+                // ("actually check before continuing"). Now we either resolve
+                // with a real model list or fall back to local mode after the
+                // ceiling. The chat surface must not mount with an unknown
+                // provider stack.
+                try {
+                    const models = await Promise.race<ModelInfo[] | null>([
+                        providersApi.getAllAvailableModels(null),
+                        new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+                    ]);
+                    if (models == null) {
+                        setStep('provider', 'done', 'Local mode (timeout)');
+                    } else {
+                        setStep('provider', 'done', models.length ? 'Connected' : 'No models');
+                    }
+                } catch {
+                    setStep('provider', 'done', 'Local mode');
+                }
 
                 setStep('model', 'loading');
                 setStep('model', 'done', s.activeModel || 'default');
 
-                setStep('vectorstore', 'done');
+                // Vector store mount is gated on the Rust side via
+                // status.background_complete (covers bg.lancedb + bg.conversation_store +
+                // bg.rag). The frontend no-op is removed so we don't lie about
+                // checking. The boot overlay's status list surfaces the real
+                // per-phase state from get_init_status.
 
                 setStep('updates', 'loading');
                 setStep('updates', 'done');
@@ -100,12 +119,27 @@ export function useAppInit(onStepsUpdate?: (steps: InitStep[]) => void) {
             } catch (err) {
                 console.warn('[ZEN] AppInit fatal error:', err);
             } finally {
-                if (mounted) setIsInitialized(true);
+                // Always mark as initialized and signal Rust, even if the
+                // component has already unmounted. Rust needs the
+                // frontend_ready flag to be true for the handoff;
+                // calling setState after unmount is harmless (React
+                // ignores it), and the Tauri IPC call
+                // (set_complete('frontend')) is idempotent.
+                setIsInitialized(true);
+                if (IS_TAURI) {
+                    systemApi.setComplete('frontend').catch((err) => {
+                        console.warn('[ZEN] set_complete("frontend") failed:', err);
+                    });
+                }
             }
         };
 
         init();
-        return () => { mounted = false; };
+        // No cleanup needed — `startedRef` and the `setComplete` IPC call
+        // are idempotent. The init sequence runs exactly once per app
+        // mount, and we want the setComplete('frontend') signal to reach
+        // Rust even if the consumer component (BootScreen) has already
+        // unmounted by the time the async chain completes.
     }, [isHydrated, setStep]);
 
     return { isInitialized };

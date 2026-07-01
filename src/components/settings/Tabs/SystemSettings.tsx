@@ -48,13 +48,13 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
       </div>
 
       <SettingsSection title="Hardware Resources" icon="lucide:server" description="Detected system capabilities">
-        <div className="flex gap-1 border-b border-white/[0.06] px-3 py-2">
+        <div className="flex gap-1 border-b border-border px-3 py-2">
           {(["overview", "gpus"] as const).map((view) => (
             <button
               key={view}
               type="button"
               onClick={() => setHardwareView(view)}
-              className={`rounded px-2.5 py-1 text-[11px] font-medium ${hardwareView === view ? "bg-white/10 text-foreground" : "text-muted-foreground hover:bg-white/5"}`}
+              className={`rounded px-2.5 py-1 text-[11px] font-medium ${hardwareView === view ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50"}`}
             >
               {view === "overview" ? "Overview" : `GPU Devices (${hardware?.gpus.length ?? 0})`}
             </button>
@@ -88,7 +88,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
             },
           ].map(item => {
             return (
-              <div key={item.label} className="flex items-center gap-2.5 p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06]">
+              <div key={item.label} className="flex items-center gap-2.5 p-2.5 rounded-lg bg-muted/40 border border-border">
                 <WorkbenchIcon name={item.icon} size={16} className="text-muted-foreground shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] font-medium text-muted-foreground">{item.label}</p>
@@ -101,7 +101,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
         </div> : (
           <div className="space-y-2 px-3 py-3">
             {(hardware?.gpus ?? []).map((gpu) => (
-              <div key={gpu.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-md border border-white/[0.06] bg-white/[0.025] px-3 py-2.5">
+              <div key={gpu.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5">
                 <div className="min-w-0">
                   <p className="truncate text-[12px] font-semibold text-foreground">{gpu.name}</p>
                   <p className="mt-0.5 text-[10px] text-muted-foreground">{gpu.vendor} · System #{gpu.system_index} · Backend #{gpu.backend_device_index}</p>
@@ -110,7 +110,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
                 <div className="text-right text-[10px] text-muted-foreground">
                   <p>{gpu.vram_mb ? `${(gpu.vram_mb / 1024).toFixed(1)} GB VRAM` : "VRAM unknown"}</p>
                   <p>{gpu.driver_version ? `Driver ${gpu.driver_version}` : "Driver unknown"}</p>
-                  <p className={gpu.cuda_capable ? "text-emerald-400" : "text-muted-foreground"}>{gpu.cuda_capable ? "CUDA capable" : gpu.vendor === "AMD" || gpu.vendor === "Intel" ? "Vulkan candidate" : "CPU fallback"}</p>
+                  <p className={gpu.cuda_capable ? "text-success" : "text-muted-foreground"}>{gpu.cuda_capable ? "CUDA capable" : gpu.vendor === "AMD" || gpu.vendor === "Intel" ? "Vulkan candidate" : "CPU fallback"}</p>
                 </div>
               </div>
             ))}

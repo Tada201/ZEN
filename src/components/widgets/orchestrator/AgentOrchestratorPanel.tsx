@@ -80,7 +80,7 @@ export function AgentOrchestratorPanel() {
                     {activeTasks.length > 0 && (
                         <WorkbenchButton 
                             onClick={clearTasks}
-                            className="p-1 hover:bg-red-500/10 rounded-sm text-white/40 hover:text-red-500 transition-colors"
+                            className="p-1 hover:bg-destructive/10 rounded-sm text-muted-foreground hover:text-destructive transition-colors"
                             title="Purge Global Logs"
                         >
                             <WorkbenchIcon name="codicon:trash" size={13} />
@@ -91,8 +91,8 @@ export function AgentOrchestratorPanel() {
 
             {!liveModel.message && activeTasks.length === 0 ? (
                 <div className="flex-grow flex flex-col items-center justify-center opacity-25 pointer-events-none p-6 text-center">
-                    <WorkbenchIcon name="codicon:git-branch" size={48} className="text-zinc-500" />
-                    <div className="mt-4 text-[11px] uppercase tracking-widest font-mono text-zinc-400">NO_ACTIVE_NODES</div>
+                    <WorkbenchIcon name="codicon:git-branch" size={48} className="text-muted-foreground" />
+                    <div className="mt-4 text-[11px] uppercase tracking-widest font-mono text-muted-foreground">NO_ACTIVE_NODES</div>
                 </div>
             ) : (
                 <div className="agent-birds-eye__grid pb-10">
@@ -102,8 +102,8 @@ export function AgentOrchestratorPanel() {
 
                     {/* Active Cluster */}
                     {runningTasks.length > 0 && (
-                        <div className="border-b border-white/5">
-                            <div className="text-[11px] text-[#00ff9f] bg-[#18181c] font-bold uppercase tracking-wider px-3.5 py-1.5 border-b border-white/5 flex items-center gap-1.5">
+                        <div className="border-b border-border">
+                            <div className="text-[11px] text-[#00ff9f] bg-[#18181c] font-bold uppercase tracking-wider px-3.5 py-1.5 border-b border-border flex items-center gap-1.5">
                                 <WorkbenchIcon name="codicon:zap" size={12} className="text-[#00ff9f]" />
                                 ACTIVE_NODES
                             </div>
@@ -117,8 +117,8 @@ export function AgentOrchestratorPanel() {
 
                     {/* Pending Queue */}
                     {pendingTasks.length > 0 && (
-                        <div className="border-b border-white/5">
-                            <div className="text-[11px] text-yellow-400 bg-[#18181c] font-bold uppercase tracking-wider px-3.5 py-1.5 border-b border-white/5 flex items-center gap-1.5">
+                        <div className="border-b border-border">
+                            <div className="text-[11px] text-yellow-400 bg-[#18181c] font-bold uppercase tracking-wider px-3.5 py-1.5 border-b border-border flex items-center gap-1.5">
                                 <WorkbenchIcon name="codicon:clock" size={12} className="text-yellow-500" />
                                 PENDING_QUEUE
                             </div>
@@ -132,9 +132,9 @@ export function AgentOrchestratorPanel() {
 
                     {/* Session History */}
                     {historyTasks.length > 0 && (
-                        <div className="border-b border-white/5">
-                            <div className="text-[11px] text-zinc-400 bg-[#18181c] font-bold uppercase tracking-wider px-3.5 py-1.5 border-b border-white/5 flex items-center gap-1.5">
-                                <WorkbenchIcon name="codicon:archive" size={12} className="text-zinc-400" />
+                        <div className="border-b border-border">
+                            <div className="text-[11px] text-muted-foreground bg-[#18181c] font-bold uppercase tracking-wider px-3.5 py-1.5 border-b border-border flex items-center gap-1.5">
+                                <WorkbenchIcon name="codicon:archive" size={12} className="text-muted-foreground" />
                                 SESSION_ARCHIVE
                             </div>
                             <div className="flex flex-col divide-y divide-white/5">
@@ -148,8 +148,8 @@ export function AgentOrchestratorPanel() {
                     {/* Cross-Session History */}
                     {crossSessionTasks.length > 0 && (
                         <div>
-                            <div className="text-[11px] text-zinc-500 bg-[#18181c] font-bold uppercase tracking-wider px-3.5 py-1.5 border-b border-white/5 flex items-center gap-1.5">
-                                <WorkbenchIcon name="codicon:history" size={12} className="text-zinc-500" />
+                            <div className="text-[11px] text-muted-foreground bg-[#18181c] font-bold uppercase tracking-wider px-3.5 py-1.5 border-b border-border flex items-center gap-1.5">
+                                <WorkbenchIcon name="codicon:history" size={12} className="text-muted-foreground" />
                                 CROSS_SESSION_REGISTRY
                             </div>
                             <div className="flex flex-col divide-y divide-white/5 opacity-70">
@@ -191,8 +191,8 @@ export function AgentOrchestratorPanel() {
                         </div>
 
                         <div className="flex flex-col">
-                            <div className="text-[12px] font-bold text-white uppercase tracking-wider">{selectedTask.agentName}</div>
-                            <div className="text-[11px] text-zinc-400 font-mono">
+                            <div className="text-[12px] font-bold text-foreground uppercase tracking-wider">{selectedTask.agentName}</div>
+                            <div className="text-[11px] text-muted-foreground font-mono">
                                 NODE_ID: {selectedTask.id.includes('__') ? selectedTask.id.split('__')[1] : selectedTask.agentId || 'ORCH-01'}
                             </div>
                         </div>
@@ -202,7 +202,7 @@ export function AgentOrchestratorPanel() {
                         <StatusBadge task={selectedTask} />
                         <WorkbenchButton 
                             onClick={() => { removeTask(selectedTask.id); setSelectedTaskId(null); }}
-                            className="p-1.5 hover:bg-red-500/10 rounded-sm text-white/40 hover:text-red-500 transition-colors"
+                            className="p-1.5 hover:bg-destructive/10 rounded-sm text-muted-foreground hover:text-destructive transition-colors"
                             title="Remove log entry"
                         >
                             <WorkbenchIcon name="codicon:trash" size={14} />
@@ -211,19 +211,19 @@ export function AgentOrchestratorPanel() {
                 </div>
 
                 <div className="agent-workspace__content">
-                    <div className="agent-workspace__task-info p-3 px-4 border-b border-white/5 bg-[#18181c]">
+                    <div className="agent-workspace__task-info p-3 px-4 border-b border-border bg-[#18181c]">
                         <div className="flex items-center gap-1.5 text-[11px] text-[#00ff9f] uppercase tracking-wider mb-2 font-bold font-mono">
                             <WorkbenchIcon name="codicon:target" size={12} className="opacity-70" /> MISSION_OBJECTIVE
                         </div>
 
-                        <div className="text-[12px] text-zinc-300 leading-relaxed font-mono p-3 bg-black/20 border border-white/5 rounded-none">
+                        <div className="text-[12px] text-foreground leading-relaxed font-mono p-3 bg-background/20 border border-border rounded-none">
                             {selectedTask.task}
                         </div>
                     </div>
 
                     <div className="agent-workspace__telemetry custom-scrollbar h-full">
-                        <div className="telemetry-header sticky top-0 bg-[#18181c] z-20 px-4 py-1.5 border-b border-white/5 flex justify-between items-center">
-                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-400 tracking-wider uppercase font-mono">
+                        <div className="telemetry-header sticky top-0 bg-[#18181c] z-20 px-4 py-1.5 border-b border-border flex justify-between items-center">
+                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground tracking-wider uppercase font-mono">
                                 <WorkbenchIcon name="codicon:zap" size={12} className="text-[#00ff9f]" /> TASK_CHRONICLE
                             </div>
 
@@ -231,7 +231,7 @@ export function AgentOrchestratorPanel() {
                                 <div className="text-[11px] font-mono text-[#00ff9f]">
                                     LOGS: {taskLogs.length}
                                 </div>
-                                <div className="text-[11px] font-mono text-zinc-400 flex items-center gap-1.5">
+                                <div className="text-[11px] font-mono text-muted-foreground flex items-center gap-1.5">
                                     <WorkbenchIcon name="codicon:clock" size={10} />
                                     <ElapsedTime start={selectedTask.startedAt} end={selectedTask.completedAt} />
                                 </div>
@@ -240,7 +240,7 @@ export function AgentOrchestratorPanel() {
 
                         <div className="agent-workspace__logs px-4">
                             {taskLogs.length === 0 ? (
-                                <div className="py-20 flex flex-col items-center justify-center text-zinc-500 text-[11px] uppercase font-mono italic gap-4 tracking-widest">
+                                <div className="py-20 flex flex-col items-center justify-center text-muted-foreground text-[11px] uppercase font-mono italic gap-4 tracking-widest">
                                     <WorkbenchIcon name="codicon:pulse" size={32} className="motion-safe:animate-pulse opacity-60" />
                                     SYNCING_DATA_LINK...
                                 </div>
@@ -256,24 +256,24 @@ export function AgentOrchestratorPanel() {
                 </div>
 
                 {!!selectedTask.result && (
-                    <div className="agent-workspace__footer p-3 px-4 bg-[#18181c] border-t border-white/5">
+                    <div className="agent-workspace__footer p-3 px-4 bg-[#18181c] border-t border-border">
                         <div className="text-[11px] text-green-400 uppercase tracking-wider mb-2 font-bold font-mono flex items-center gap-1.5">
                             <WorkbenchIcon name="codicon:check" size={12} /> RESOLUTION_PAYLOAD
                         </div>
 
-                        <div className="text-[12px] text-green-400 bg-black/40 p-3 border border-green-500/20 rounded-none overflow-auto max-h-[200px] custom-scrollbar font-mono leading-relaxed">
+                        <div className="text-[12px] text-green-400 bg-background/40 p-3 border border-green-500/20 rounded-none overflow-auto max-h-[200px] custom-scrollbar font-mono leading-relaxed">
                             {typeof selectedTask.result === 'string' ? (selectedTask.result as string) : JSON.stringify(selectedTask.result, null, 2)}
                         </div>
                     </div>
                 )}
 
                 {selectedTask.error && (
-                    <div className="agent-workspace__footer p-3 px-4 bg-[#18181c] border-t border-white/5">
-                        <div className="text-[11px] text-red-400 uppercase tracking-wider mb-2 font-bold font-mono flex items-center gap-1.5">
+                    <div className="agent-workspace__footer p-3 px-4 bg-[#18181c] border-t border-border">
+                        <div className="text-[11px] text-destructive uppercase tracking-wider mb-2 font-bold font-mono flex items-center gap-1.5">
                             <WorkbenchIcon name="codicon:error" size={12} /> SYSTEM_FAULT_DETECTED
                         </div>
 
-                        <div className="text-[12px] text-red-400 bg-red-950/20 p-3 border border-red-500/20 rounded-none font-mono leading-relaxed">
+                        <div className="text-[12px] text-destructive bg-red-950/20 p-3 border border-destructive/20 rounded-none font-mono leading-relaxed">
                             {selectedTask.error}
                         </div>
                     </div>
@@ -303,15 +303,15 @@ function TaskCard({ task, onClick, onCancel }: { task: ActiveAgentTask; onClick:
         >
             <div className="agent-card__header flex items-center justify-between gap-2">
                 <div className="agent-card__identity flex items-center gap-2">
-                    <div className={`agent-card__icon w-7 h-7 flex items-center justify-center rounded-sm ${isRunning ? 'bg-[#00ff9f]/10 text-[#00ff9f]' : 'bg-white/5 text-zinc-400'}`}>
+                    <div className={`agent-card__icon w-7 h-7 flex items-center justify-center rounded-sm ${isRunning ? 'bg-[#00ff9f]/10 text-[#00ff9f]' : 'bg-muted/50 text-muted-foreground'}`}>
                         <WorkbenchIcon name={iconName} size={14} />
                     </div>
 
                     <div>
-                        <div className={`agent-card__name text-[11px] font-bold uppercase tracking-wider ${isRunning ? 'text-[#00ff9f]' : 'text-zinc-300'}`}>
+                        <div className={`agent-card__name text-[11px] font-bold uppercase tracking-wider ${isRunning ? 'text-[#00ff9f]' : 'text-foreground'}`}>
                             {task.agentName}
                         </div>
-                        <div className="agent-card__id text-[11px] font-mono text-zinc-500">
+                        <div className="agent-card__id text-[11px] font-mono text-muted-foreground">
                             ID: {task.id.split('__')[0].substring(0, 6)}
                         </div>
                     </div>
@@ -328,21 +328,21 @@ function TaskCard({ task, onClick, onCancel }: { task: ActiveAgentTask; onClick:
             {onCancel && (isRunning || isPending) && (
                 <WorkbenchButton 
                     onClick={(e) => { e.stopPropagation(); onCancel(); }}
-                    className="w-full py-0.5 text-[11px] font-bold tracking-wider border border-red-500/20 hover:bg-red-500/10 text-red-400 hover:text-red-500 rounded-none transition-all uppercase mb-1"
+                    className="w-full py-0.5 text-[11px] font-bold tracking-wider border border-destructive/20 hover:bg-destructive/10 text-destructive hover:text-destructive rounded-none transition-all uppercase mb-1"
                 >
                     DISMISS_TASK
                 </WorkbenchButton>
             )}
 
-            <div className="agent-card__stats pt-1.5 mt-0.5 border-t border-white/5">
-                <div className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-400 uppercase">
+            <div className="agent-card__stats pt-1.5 mt-0.5 border-t border-border">
+                <div className="flex items-center gap-1.5 text-[11px] font-mono text-muted-foreground uppercase">
                     <WorkbenchIcon name="codicon:clock" size={10} /> 
                     {(isRunning || isPending) ? <ElapsedTime start={task.startedAt} /> : 'FINISHED'}
                 </div>
 
                 <div className="flex items-center gap-0.5 group">
-                    <span className="text-[11px] font-bold text-zinc-400 group-hover:text-[#00ff9f] transition-colors uppercase tracking-wider">Inspect</span>
-                    <WorkbenchIcon name="codicon:chevron-right" size={10} className="text-zinc-500 group-hover:text-[#00ff9f] transition-all" />
+                    <span className="text-[11px] font-bold text-muted-foreground group-hover:text-[#00ff9f] transition-colors uppercase tracking-wider">Inspect</span>
+                    <WorkbenchIcon name="codicon:chevron-right" size={10} className="text-muted-foreground group-hover:text-[#00ff9f] transition-all" />
                 </div>
             </div>
 
@@ -356,7 +356,7 @@ function TaskCard({ task, onClick, onCancel }: { task: ActiveAgentTask; onClick:
 function StatusIcon({ status }: { status: ActiveAgentTask['status'] }) {
     switch (status) {
         case 'completed': return <WorkbenchIcon name="codicon:check" size={14} className="text-green-500" />;
-        case 'failed': return <WorkbenchIcon name="codicon:error" size={14} className="text-red-500" />;
+        case 'failed': return <WorkbenchIcon name="codicon:error" size={14} className="text-destructive" />;
         case 'in_progress': return <WorkbenchIcon name="codicon:pulse" size={14} className="text-[#00ff9f] motion-safe:animate-pulse" />;
         default: return <WorkbenchIcon name="codicon:clock" size={14} className="text-yellow-500 opacity-50" />;
     }
@@ -367,11 +367,11 @@ function StatusBadge({ task }: { task: ActiveAgentTask }) {
         pending: { icon: 'codicon:clock', color: 'text-yellow-500', label: 'PENDING' },
         in_progress: { icon: 'codicon:pulse', color: 'text-neon', label: 'ACTIVE' },
         completed: { icon: 'codicon:check', color: 'text-green-500', label: 'SUCCESS' },
-        failed: { icon: 'codicon:error', color: 'text-red-500', label: 'FAULT' },
+        failed: { icon: 'codicon:error', color: 'text-destructive', label: 'FAULT' },
     }[task.status];
 
     return (
-        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-none bg-[#131316] border border-white/10">
+        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-none bg-[#131316] border border-border">
             <WorkbenchIcon name={config.icon} size={11} className={config.color === 'text-neon' ? 'text-[#00ff9f]' : config.color} />
             <span className={`text-[11px] font-bold tracking-wider font-mono ${config.color === 'text-neon' ? 'text-[#00ff9f]' : config.color}`}>
                 {task.status === 'in_progress' ? (
@@ -404,16 +404,16 @@ function LogEntry({ log, isLast }: { log: AgentActivity; isLast: boolean }) {
 
     return (
         <div className={`log-entry log-entry--${log.type} ${isLast ? 'log-entry--latest' : ''} ${isChatType ? 'log-entry--bubble' : ''} group py-1.5`}>
-            {!isChatType && <span className="log-entry__time text-[11px] font-mono text-zinc-500 group-hover:text-zinc-400 transition-colors">[{time}]</span>}
-            {!isChatType && <span className="log-entry__type text-[11px] font-bold tracking-wider uppercase text-zinc-400 w-[92px] shrink-0">{log.type.toUpperCase().replace('_', ' ')}</span>}
+            {!isChatType && <span className="log-entry__time text-[11px] font-mono text-muted-foreground group-hover:text-muted-foreground transition-colors">[{time}]</span>}
+            {!isChatType && <span className="log-entry__type text-[11px] font-bold tracking-wider uppercase text-muted-foreground w-[92px] shrink-0">{log.type.toUpperCase().replace('_', ' ')}</span>}
             
             <div className={`flex flex-col gap-1.5 flex-grow min-w-0 ${isChatType ? 'chat-bubble-style' : ''}`}>
-                <div className="log-entry__content text-[12px] text-zinc-300 leading-relaxed group-hover:text-white transition-colors">
+                <div className="log-entry__content text-[12px] text-foreground leading-relaxed group-hover:text-foreground transition-colors">
                     <MarkdownContent content={log.message || log.type} />
                 </div>
                 
                 {log.type === 'tool_call' && log.metadata && (
-                    <div className="log-entry__meta bg-black/20 p-2.5 rounded-none border-l border-[#00ff9f]/40 overflow-hidden font-mono transition-all">
+                    <div className="log-entry__meta bg-background/20 p-2.5 rounded-none border-l border-[#00ff9f]/40 overflow-hidden font-mono transition-all">
                         <div className="flex items-center gap-1.5 mb-1">
                             <WorkbenchIcon name="codicon:zap" size={10} className="text-[#00ff9f]" />
                             <span className="text-[11px] text-[#00ff9f] uppercase font-bold tracking-wider">[TOOL_DATA]</span>

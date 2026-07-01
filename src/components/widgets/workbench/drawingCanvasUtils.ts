@@ -127,7 +127,7 @@ export function renderOp(ctx: CanvasRenderingContext2D, op: DrawOp) {
     case 'eraser': {
       if (op.points.length < 1) break;
       ctx.globalCompositeOperation = 'destination-out';
-      ctx.strokeStyle = 'rgba(0,0,0,1)';
+      ctx.strokeStyle = 'hsl(var(--background) / 1)';
       ctx.lineWidth = op.radius * 2;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';

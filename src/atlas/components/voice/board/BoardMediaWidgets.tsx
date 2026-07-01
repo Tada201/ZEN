@@ -43,9 +43,9 @@ export function BoardMap({ widget }: { widget: BoardWidget }) {
   }, [widget.latitude, widget.longitude, widget.zoom]);
 
   if (widget.latitude == null || widget.longitude == null) {
-    return <div className="p-4 text-sm text-white/60">{widget.location || "Map coordinates unavailable."}</div>;
+    return <div className="p-4 text-sm text-primary-foreground/60">{widget.location || "Map coordinates unavailable."}</div>;
   }
-  return <div ref={containerRef} className="h-full min-h-0 w-full bg-black" aria-label={widget.title || "Map"} />;
+  return <div ref={containerRef} className="h-full min-h-0 w-full bg-background" aria-label={widget.title || "Map"} />;
 }
 
 function youtubeEmbed(url: string): string | null {
@@ -65,7 +65,7 @@ function youtubeEmbed(url: string): string | null {
 export function BoardVideo({ widget }: { widget: BoardWidget }) {
   const [playing, setPlaying] = useState(false);
   const embed = widget.url ? youtubeEmbed(widget.url) : null;
-  if (!widget.url || !isSafeGeneratedHref(widget.url)) return <div className="p-4 text-sm text-white/60">Video URL was blocked.</div>;
+  if (!widget.url || !isSafeGeneratedHref(widget.url)) return <div className="p-4 text-sm text-primary-foreground/60">Video URL was blocked.</div>;
 
   if (playing && embed) {
     return (
@@ -80,9 +80,9 @@ export function BoardVideo({ widget }: { widget: BoardWidget }) {
   }
 
   return (
-    <div className="relative flex h-full min-h-0 items-center justify-center overflow-hidden bg-black">
+    <div className="relative flex h-full min-h-0 items-center justify-center overflow-hidden bg-background">
       {widget.thumbnail && isSafeGeneratedHref(widget.thumbnail) && <img src={widget.thumbnail} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />}
-      <button type="button" onClick={() => embed ? setPlaying(true) : window.open(widget.url, "_blank", "noopener,noreferrer")} className="relative z-10 flex h-12 w-12 items-center justify-center rounded-full border border-white/30 bg-black/70 text-white" aria-label={embed ? "Play video" : "Open video"}>
+      <button type="button" onClick={() => embed ? setPlaying(true) : window.open(widget.url, "_blank", "noopener,noreferrer")} className="relative z-10 flex h-12 w-12 items-center justify-center rounded-full border border-border/30 bg-background/70 text-primary-foreground" aria-label={embed ? "Play video" : "Open video"}>
         {embed ? <Play className="h-5 w-5 fill-current" /> : <ExternalLink className="h-5 w-5" />}
       </button>
     </div>
@@ -157,10 +157,10 @@ export function BoardCamera({ widget }: { widget: BoardWidget }) {
   };
 
   return (
-    <div className="relative flex h-full min-h-0 items-center justify-center overflow-hidden bg-black">
+    <div className="relative flex h-full min-h-0 items-center justify-center overflow-hidden bg-background">
       <video ref={videoRef} autoPlay muted playsInline className={active ? "h-full w-full object-cover" : "hidden"} />
-      {!active && <button type="button" disabled={isStarting} onClick={(event) => { event.stopPropagation(); void start(); }} className="flex items-center gap-2 rounded-md border border-white/20 bg-white/[0.04] px-3 py-2 text-sm text-white disabled:opacity-50"><Camera className="h-4 w-4" />{isStarting ? "Starting..." : "Enable camera"}</button>}
-      {active && <button type="button" onClick={(event) => { event.stopPropagation(); stop(); }} className="absolute right-3 top-3 flex items-center gap-2 rounded-md bg-black/70 px-3 py-2 text-xs text-white"><Square className="h-3 w-3" />Stop</button>}
+      {!active && <button type="button" disabled={isStarting} onClick={(event) => { event.stopPropagation(); void start(); }} className="flex items-center gap-2 rounded-md border border-border/20 bg-card/[0.04] px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Camera className="h-4 w-4" />{isStarting ? "Starting..." : "Enable camera"}</button>}
+      {active && <button type="button" onClick={(event) => { event.stopPropagation(); stop(); }} className="absolute right-3 top-3 flex items-center gap-2 rounded-md bg-background/70 px-3 py-2 text-xs text-primary-foreground"><Square className="h-3 w-3" />Stop</button>}
       {error && <div className="absolute bottom-3 text-xs text-red-300">{error}</div>}
       <span className="sr-only">{widget.description}</span>
     </div>

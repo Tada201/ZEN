@@ -1,6 +1,6 @@
 import type { StateCreator } from "zustand";
 import type { SettingsState } from "./types";
-import { settingsApi, toolsApi } from "@/api";
+import { settingsApi } from "@/api";
 import { mapStateToSqlite, mapSqliteToState } from "../settingsMapper";
 
 export interface AppSlice {
@@ -171,20 +171,15 @@ export const createAppSlice: StateCreator<SettingsState, [], [], AppSlice> = (se
       isSyncing: true,
     }));
 
-    // Sync changed settings to Tauri SQLite backend (best-effort, non-blocking)
+    // Sync changed settings to Tauri SQLite backend (best-effort, non-blocking).
+    // Tool permission keys are auto-synced by the backend on every
+    // `set_settings` call — no separate toolsApi.syncPermissions() needed.
     let syncFailed = false;
     try {
       const sqliteData = mapStateToSqlite(flush as Record<string, unknown>);
       const entries = Object.entries(sqliteData);
       if (entries.length > 0) {
         await settingsApi.setSettings(sqliteData);
-      }
-
-      // After syncing all settings, sync tool permissions to ToolManager
-      try {
-        await toolsApi.syncPermissions();
-      } catch (e) {
-        console.warn("[SettingsStore] Failed to sync tool permissions:", e);
       }
     } catch (e) {
       console.warn("[SettingsStore] Failed to sync settings to backend:", e);

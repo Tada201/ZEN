@@ -70,10 +70,10 @@ export const ActionPills = memo(({
         return (
           <div 
             key={i} 
-            className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 bg-zinc-500/10 dark:bg-white/5 border border-zinc-500/10 dark:border-white/5 rounded-lg text-[12px] font-medium text-zinc-700 dark:text-zinc-300 group hover:border-zinc-500/20 dark:hover:border-white/10 transition-all duration-200"
+            className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 bg-muted/10 dark:bg-muted/50 border border-border/10 dark:border-border rounded-lg text-[12px] font-medium text-foreground/80 dark:text-foreground group hover:border-border/20 dark:hover:border-border transition-all duration-200"
           >
             {isImg && imgUrl ? (
-              <div className="relative w-6 h-6 rounded overflow-hidden border border-zinc-500/20 dark:border-white/10 shrink-0 bg-zinc-100 dark:bg-zinc-800">
+              <div className="relative w-6 h-6 rounded overflow-hidden border border-border/20 dark:border-border shrink-0 bg-muted dark:bg-muted">
                 <img 
                   src={imgUrl} 
                   alt={file.name} 
@@ -81,28 +81,28 @@ export const ActionPills = memo(({
                 />
               </div>
             ) : (
-              <div className="w-6 h-6 rounded flex items-center justify-center bg-zinc-500/10 dark:bg-white/5 shrink-0">
+              <div className="w-6 h-6 rounded flex items-center justify-center bg-muted/10 dark:bg-muted/50 shrink-0">
                 {isTxt ? (
-                  <FileText className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
+                  <FileText className="w-3.5 h-3.5 text-primary dark:text-primary" />
                 ) : (
-                  <Paperclip className="w-3.5 h-3.5 text-zinc-400" />
+                  <Paperclip className="w-3.5 h-3.5 text-muted-foreground" />
                 )}
               </div>
             )}
             
             <div className="flex flex-col min-w-0">
               <span className="max-w-[120px] truncate leading-tight">{file.name}</span>
-              <span className="text-[9px] text-zinc-400 dark:text-zinc-500 leading-tight font-normal">
+              <span className="text-[9px] text-muted-foreground dark:text-muted-foreground leading-tight font-normal">
                 {isImg ? 'Image' : isTxt ? 'Text File' : 'Attachment'}
               </span>
             </div>
 
             <button 
               onClick={() => removeFile(i)} 
-              className="hover:bg-zinc-500/20 dark:hover:bg-white/10 p-0.5 rounded-full transition-colors ml-1"
+              className="hover:bg-muted/20 dark:hover:bg-muted p-0.5 rounded-full transition-colors ml-1"
               aria-label={`Remove ${file.name}`}
             >
-              <X className="w-3 h-3 text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+              <X className="w-3 h-3 text-muted-foreground dark:text-muted-foreground hover:text-foreground/80 dark:hover:text-foreground" />
             </button>
           </div>
         );

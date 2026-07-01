@@ -34,11 +34,17 @@ const DENSITY_STORAGE_KEY = "ui-Zen-density";
 
 function applyThemeVariables(vars: Record<string, string>) {
   const root = document.documentElement;
+  // Write the raw HSL triples directly. The @theme block in index.css points
+  // Tailwind utilities at these via `hsl(var(--token))`, so writing here flips
+  // both `hsl(var(--token))` references AND Tailwind utility classes (bg-background,
+  // text-foreground, border-border, ...) at runtime. No duplicate --color-* writes
+  // are needed — the @theme pointers handle that bridge.
   Object.entries(vars).forEach(([key, value]) => {
     root.style.setProperty(key, value);
-    root.style.setProperty(`--color-${key.slice(2)}`, `hsl(${value})`);
   });
-  const aliases = {
+  // Semantic aliases for tokens the presets don't define explicitly. These map
+  // to existing preset values so components can rely on a complete token set.
+  const aliases: Record<string, string | undefined> = {
     "--popover": vars["--card"],
     "--popover-foreground": vars["--foreground"],
     "--accent": vars["--muted"],
@@ -50,11 +56,13 @@ function applyThemeVariables(vars: Record<string, string>) {
     "--sidebar-accent-foreground": vars["--foreground"],
     "--sidebar-primary": vars["--primary"],
     "--sidebar-ring": vars["--ring"],
+    "--primary-foreground": "0 0% 100%",
+    "--destructive-foreground": "0 0% 100%",
+    "--success-foreground": "0 0% 100%",
+    "--warning-foreground": "0 0% 100%",
   };
   Object.entries(aliases).forEach(([key, value]) => {
-    if (!value) return;
-    root.style.setProperty(key, value);
-    root.style.setProperty(`--color-${key.slice(2)}`, `hsl(${value})`);
+    if (value) root.style.setProperty(key, value);
   });
 }
 
@@ -78,6 +86,11 @@ function getInitialDensity(): Density {
 
 export function ZenThemeProvider({ children }: { children: ReactNode }) {
   const configuredThemeId = useSettingsStore((state) => state.themeId);
+  const configuredAccentHsl = useSettingsStore((state) => state.accentHsl);
+  const configuredAccentGlow = useSettingsStore((state) => state.accentGlow);
+  const configuredRadiusPreset = useSettingsStore((state) => state.radiusPreset);
+  const configuredStyleMode = useSettingsStore((state) => state.styleMode);
+  const updateSetting = useSettingsStore((state) => state.updateSetting);
   const [mode, setModeState] = useState<"light" | "dark">("dark");
   const [preset, setPreset] = useState("default-dark");
   const [accent, setAccentState] = useState(ACCENT_SWATCHES[0].hsl);
@@ -133,40 +146,57 @@ export function ZenThemeProvider({ children }: { children: ReactNode }) {
     root.dataset.theme = p.id;
     root.dataset.vibe = p.vibe ?? "standard";
     root.dataset.themeFont = p.font ?? "sans";
-    if (p.radius) {
-      setRadiusState(p.radius);
-      root.style.setProperty("--radius", RADIUS_PRESETS[p.radius]);
+
+    const nextRadius = configuredRadiusPreset || p.radius;
+    if (nextRadius) {
+      setRadiusState(nextRadius);
+      root.style.setProperty("--radius", RADIUS_PRESETS[nextRadius]);
     }
+
     if (p.density) {
-      setDensityState(p.density);
-      root.dataset.density = p.density;
+      setDensity(p.density);
     }
-    if (p.vars["--primary"]) {
-      setAccentState(p.vars["--primary"]);
-      setAccentGlow(p.vars["--primary-glow"] ?? p.vars["--primary"]);
+
+    const nextAccent = configuredAccentHsl || p.vars["--primary"];
+    const nextGlow = configuredAccentGlow || p.vars["--primary-glow"] || nextAccent;
+    if (nextAccent) {
+      setAccentState(nextAccent);
+      setAccentGlow(nextGlow);
+      root.style.setProperty("--primary", nextAccent);
+      root.style.setProperty("--primary-glow", nextGlow);
+      root.style.setProperty("--ring", nextAccent);
+      root.style.setProperty("--sidebar-primary", nextAccent);
+      root.style.setProperty("--sidebar-ring", nextAccent);
     }
-  }, [setMode]);
+
+    const nextStyleMode = configuredStyleMode || "subtle";
+    setStyleModeState(nextStyleMode);
+    root.dataset.style = nextStyleMode;
+  }, [configuredAccentGlow, configuredAccentHsl, configuredRadiusPreset, configuredStyleMode, setDensity, setMode]);
 
   const setAccent = useCallback((hsl: string, glow: string) => {
     setAccentState(hsl);
     setAccentGlow(glow);
+    updateSetting({ accentHsl: hsl, accentGlow: glow });
     const root = document.documentElement;
     root.style.setProperty("--primary", hsl);
     root.style.setProperty("--primary-glow", glow);
     root.style.setProperty("--ring", hsl);
     root.style.setProperty("--sidebar-primary", hsl);
     root.style.setProperty("--sidebar-ring", hsl);
-  }, []);
+  }, [updateSetting]);
 
   const setRadius = useCallback((r: RadiusPreset) => {
     setRadiusState(r);
+    updateSetting({ radiusPreset: r });
     document.documentElement.style.setProperty("--radius", RADIUS_PRESETS[r]);
-  }, []);
+  }, [updateSetting]);
 
   const setStyleMode = useCallback((s: StyleMode) => {
     setStyleModeState(s);
+    updateSetting({ styleMode: s });
     document.documentElement.dataset.style = s;
-  }, []);
+  }, [updateSetting]);
 
   useEffect(() => {
     applyPreset(configuredThemeId || "default-dark");

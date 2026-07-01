@@ -331,7 +331,7 @@ export function AssistantMessage({
               >
                 <div className={cn(
                   "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-transform group-hover/art:scale-105",
-                  "bg-blue-500/10 text-blue-500"
+                  "bg-primary/10 text-primary"
                 )}>
                   {message.artifact.type === "code" ? <Code2 className="h-5 w-5" /> : 
                     <FileText className="h-5 w-5" />}
@@ -354,10 +354,10 @@ export function AssistantMessage({
                 size="sm"
                 variant="ghost"
                 type="button"
-                className="h-7 px-2.5 text-[10px] font-medium text-white/60 hover:text-white bg-white/5 border border-white/[0.06] hover:bg-white/10 gap-1.5 transition-all"
+                className="h-7 px-2.5 text-[10px] font-medium text-muted-foreground hover:text-foreground bg-muted/50 border border-border hover:bg-muted gap-1.5 transition-all"
                 onClick={() => copy(message.content)}
               >
-                {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
                 Copy
               </Button>
               {onRetry && message.status === "failed" && (
@@ -365,7 +365,7 @@ export function AssistantMessage({
                   size="sm"
                   variant="ghost"
                   type="button"
-                  className="h-7 px-2.5 text-[10px] font-medium text-white/60 hover:text-white bg-white/5 border border-white/[0.06] hover:bg-white/10 gap-1.5 transition-all"
+                  className="h-7 px-2.5 text-[10px] font-medium text-muted-foreground hover:text-foreground bg-muted/50 border border-border hover:bg-muted gap-1.5 transition-all"
                   onClick={() => onRetry(message.id)}
                 >
                   <RefreshCcw className="h-3 w-3" />
@@ -377,7 +377,7 @@ export function AssistantMessage({
                   size="sm"
                   variant="ghost"
                   type="button"
-                  className="h-7 px-2.5 text-[10px] font-medium text-white/60 hover:text-white bg-white/5 border border-white/[0.06] hover:bg-white/10 gap-1.5 transition-all"
+                  className="h-7 px-2.5 text-[10px] font-medium text-muted-foreground hover:text-foreground bg-muted/50 border border-border hover:bg-muted gap-1.5 transition-all"
                   onClick={() => onRegenerate(message.id)}
                 >
                   <RefreshCcw className="h-3 w-3" />
@@ -393,7 +393,7 @@ export function AssistantMessage({
                 size="sm"
                 variant="outline"
                 type="button"
-                className="h-7 px-3 text-[10px] font-medium border-amber-400/20 text-amber-300/80 hover:bg-amber-400/5 hover:text-amber-200 gap-1.5"
+                className="h-7 px-3 text-[10px] font-medium border-amber-400/20 text-warning/80 hover:bg-amber-400/5 hover:text-amber-200 gap-1.5"
                 onClick={() => onRetry?.(message.id)}
               >
                 <RefreshCcw className="h-3 w-3" />

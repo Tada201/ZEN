@@ -43,7 +43,7 @@ export const ShellDynamicsConfig = memo(() => {
                             value={shellArgs}
                             onChangeText={(val) => updateSetting({ shellArgs: val })}
                             placeholder="-NoLogo"
-                            className="w-[200px] h-8 bg-zinc-950/50 border border-white/5 rounded-lg font-mono text-[11px] text-zinc-300 focus:border-emerald-500/30 transition-colors"
+                            className="w-[200px] h-8 bg-card/70 border border-border rounded-lg font-mono text-[11px] text-foreground focus:border-emerald-500/30 transition-colors"
                         />
                     }
                 />

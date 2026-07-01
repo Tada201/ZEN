@@ -42,7 +42,7 @@ export function ResearchMatrix() {
           top: 0;
           width: 100%;
           height: 100%;
-          background: #818cf8;
+          background: hsl(var(--primary));
           border-radius: 4px;
         }
 

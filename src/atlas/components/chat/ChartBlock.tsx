@@ -58,7 +58,7 @@ export function ChartBlock({ content, isStreaming }: ChartBlockProps) {
       case 'bar':
         return (
           <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--foreground) / 0.1)" />
             <XAxis 
               dataKey={xAxis} 
               axisLine={false} 
@@ -71,7 +71,7 @@ export function ChartBlock({ content, isStreaming }: ChartBlockProps) {
               tick={{ fill: 'currentColor', fontSize: 11, opacity: 0.6 }} 
             />
             <Tooltip 
-              contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '8px', color: '#fff' }}
+              contentStyle={{ backgroundColor: 'hsl(var(--background) / 0.8)', border: 'none', borderRadius: '8px', color: '#fff' }}
               itemStyle={{ color: '#fff' }}
             />
             <Legend />
@@ -83,11 +83,11 @@ export function ChartBlock({ content, isStreaming }: ChartBlockProps) {
       case 'line':
         return (
           <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--foreground) / 0.1)" />
             <XAxis dataKey={xAxis} axisLine={false} tickLine={false} tick={{ fill: 'currentColor', fontSize: 11, opacity: 0.6 }} />
             <YAxis axisLine={false} tickLine={false} tick={{ fill: 'currentColor', fontSize: 11, opacity: 0.6 }} />
             <Tooltip 
-              contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '8px', color: '#fff' }}
+              contentStyle={{ backgroundColor: 'hsl(var(--background) / 0.8)', border: 'none', borderRadius: '8px', color: '#fff' }}
               itemStyle={{ color: '#fff' }}
             />
             <Legend />
@@ -107,11 +107,11 @@ export function ChartBlock({ content, isStreaming }: ChartBlockProps) {
       case 'area':
         return (
           <AreaChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--foreground) / 0.1)" />
             <XAxis dataKey={xAxis} axisLine={false} tickLine={false} tick={{ fill: 'currentColor', fontSize: 11, opacity: 0.6 }} />
             <YAxis axisLine={false} tickLine={false} tick={{ fill: 'currentColor', fontSize: 11, opacity: 0.6 }} />
             <Tooltip 
-              contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '8px', color: '#fff' }}
+              contentStyle={{ backgroundColor: 'hsl(var(--background) / 0.8)', border: 'none', borderRadius: '8px', color: '#fff' }}
               itemStyle={{ color: '#fff' }}
             />
             <Legend />
@@ -145,7 +145,7 @@ export function ChartBlock({ content, isStreaming }: ChartBlockProps) {
               ))}
             </Pie>
             <Tooltip 
-              contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '8px', color: '#fff' }}
+              contentStyle={{ backgroundColor: 'hsl(var(--background) / 0.8)', border: 'none', borderRadius: '8px', color: '#fff' }}
               itemStyle={{ color: '#fff' }}
             />
             <Legend />
@@ -163,7 +163,7 @@ export function ChartBlock({ content, isStreaming }: ChartBlockProps) {
           {title}
         </div>
       )}
-      <div className="h-[300px] w-full text-zinc-600 dark:text-zinc-400">
+      <div className="h-[300px] w-full text-muted-foreground/70 dark:text-muted-foreground">
         <ResponsiveContainer width="100%" height="100%">
           {renderChart()}
         </ResponsiveContainer>

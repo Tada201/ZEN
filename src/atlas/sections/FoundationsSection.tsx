@@ -98,7 +98,7 @@ export function FoundationsSection() {
                   <span className={`absolute right-1.5 top-1.5 rounded px-1 py-0.5 text-[9px] font-semibold leading-none ${r.cls}`}>
                     {r.label} · {best}
                   </span>
-                  <Check className="absolute left-1.5 bottom-1.5 h-3 w-3 text-white opacity-0 transition-opacity group-active:opacity-100" />
+                  <Check className="absolute left-1.5 bottom-1.5 h-3 w-3 text-primary-foreground opacity-0 transition-opacity group-active:opacity-100" />
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-xs font-medium">{c.name}</div>

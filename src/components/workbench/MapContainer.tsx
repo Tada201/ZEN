@@ -21,7 +21,7 @@ const CesiumMapRenderer = React.lazy(() =>
 );
 
 const MapRendererFallback = () => (
-    <div className="absolute inset-0 flex items-center justify-center bg-black text-[10px] font-mono uppercase tracking-widest text-zinc-500">
+    <div className="absolute inset-0 flex items-center justify-center bg-background text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
         Loading map renderer...
     </div>
 );
@@ -101,7 +101,7 @@ export const CesiumCanvas: React.FC = () => {
 
             {/* Target Inspector on the far right */}
             {selectedTarget && (
-                <div className="z-20 relative pointer-events-auto border-l border-white/10 bg-background/90 backdrop-blur-md shrink-0">
+                <div className="z-20 relative pointer-events-auto border-l border-border/10 bg-background/90 backdrop-blur-md shrink-0">
                     <TargetInspector />
                 </div>
             )}

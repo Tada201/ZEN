@@ -78,7 +78,7 @@ export const DeepResearchSettings = memo(() => {
           icon="lucide:bot"
         />
         {providerModels.length === 0 && (
-          <div className="flex items-start gap-2 border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-200">
+          <div className="flex items-start gap-2 border border-warning/20 bg-warning/5 px-3 py-2 text-[11px] text-amber-200">
             <WorkbenchIcon name="lucide:triangle-alert" size={14} className="mt-0.5 shrink-0" />
             <span>No model list is cached for this provider yet. Deep Research will use the active chat model.</span>
           </div>

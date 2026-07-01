@@ -34,12 +34,12 @@ export function FlashcardComponent({ data }: { data: FlashcardData }) {
   };
 
   return (
-    <div className="w-full max-w-sm rounded-2xl border border-white/[0.08] bg-black/40 backdrop-blur-md p-5 shadow-lg flex flex-col min-h-[220px] justify-between relative overflow-hidden group">
+    <div className="w-full max-w-sm rounded-2xl border border-border/[0.08] bg-background/40 backdrop-blur-md p-5 shadow-lg flex flex-col min-h-[220px] justify-between relative overflow-hidden group">
       {/* Card Header metadata */}
       <div className="flex items-center justify-between gap-4 mb-3">
         <div className="flex items-center gap-1.5 min-w-0">
-          <Layers className="w-3.5 h-3.5 text-white/30 shrink-0" />
-          <span className="text-[9px] font-mono text-white/40 uppercase tracking-widest truncate">
+          <Layers className="w-3.5 h-3.5 text-primary-foreground/30 shrink-0" />
+          <span className="text-[9px] font-mono text-primary-foreground/40 uppercase tracking-widest truncate">
             {deck ? `${deck} · ` : ""}{topic}
           </span>
         </div>
@@ -56,13 +56,13 @@ export function FlashcardComponent({ data }: { data: FlashcardData }) {
             <h4 className="text-[10px] font-mono uppercase tracking-widest text-primary/70 mb-1 flex items-center justify-center gap-1">
               <HelpCircle className="w-3 h-3" /> Question
             </h4>
-            <p className="text-sm font-semibold text-white leading-relaxed font-sans">
+            <p className="text-sm font-semibold text-primary-foreground leading-relaxed font-sans">
               {front}
             </p>
             {hint && (
               <div className="mt-2.5">
                 {showHint ? (
-                  <p className="text-[10px] text-white/40 italic leading-normal">
+                  <p className="text-[10px] text-primary-foreground/40 italic leading-normal">
                     Hint: {hint}
                   </p>
                 ) : (
@@ -82,7 +82,7 @@ export function FlashcardComponent({ data }: { data: FlashcardData }) {
             <h4 className="text-[10px] font-mono uppercase tracking-widest text-emerald-400 mb-1">
               Answer & Explanation
             </h4>
-            <p className="text-sm font-bold text-white leading-relaxed font-sans">
+            <p className="text-sm font-bold text-primary-foreground leading-relaxed font-sans">
               {back}
             </p>
           </div>
@@ -90,7 +90,7 @@ export function FlashcardComponent({ data }: { data: FlashcardData }) {
       </div>
 
       {/* Flip controls */}
-      <div className="flex justify-center mt-3 pt-3.5 border-t border-white/[0.06]">
+      <div className="flex justify-center mt-3 pt-3.5 border-t border-border/[0.06]">
         <Button
           size="sm"
           type="button"

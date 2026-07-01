@@ -3,6 +3,7 @@ import { Check, Copy, Palette, Settings2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useZen } from "./atlasContext";
+import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import { ACCENT_SWATCHES, RADIUS_PRESETS, THEME_PRESETS, type RadiusPreset, type StyleMode } from "./theme";
 
 const STYLE_OPTIONS: StyleMode[] = ["flat", "subtle", "bordered", "glass"];
@@ -10,6 +11,7 @@ const STYLE_OPTIONS: StyleMode[] = ["flat", "subtle", "bordered", "glass"];
 export function ThemeCustomizer() {
   const [open, setOpen] = useState(false);
   const { preset, applyPreset, accent, setAccent, radius, setRadius, styleMode, setStyleMode, exportCSS } = useZen();
+  const updateSetting = useSettingsStore((state) => state.updateSetting);
 
   return (
     <>
@@ -47,7 +49,10 @@ export function ThemeCustomizer() {
                 {THEME_PRESETS.map((p) => (
                   <button
                     key={p.id}
-                    onClick={() => applyPreset(p.id)}
+                    onClick={() => {
+                      updateSetting({ themeId: p.id });
+                      applyPreset(p.id);
+                    }}
                     className={`press flex items-center gap-2 rounded-md border px-2.5 py-2 text-left text-xs transition ${preset === p.id ? "border-primary bg-primary/5" : "border-border hover:bg-muted"}`}
                   >
                     <span

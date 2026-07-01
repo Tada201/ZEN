@@ -353,7 +353,7 @@ export const PremiumChatInput = memo(({
       <div
         ref={containerRef}
         className={cn(
-          "w-full relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.05)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.05)] overflow-visible transition-all duration-200",
+          "w-full relative bg-card border border-border rounded-2xl shadow-[0_8px_32px_hsl(var(--foreground)/0.05)] dark:shadow-[0_8px_32px_hsl(var(--background)/0.4),inset_0_1px_1px_hsl(var(--foreground)/0.05)] overflow-visible transition-all duration-200",
           isLoading && "ring-1 ring-primary/40 dark:ring-primary/50 shadow-[0_0_15px_-3px_rgba(var(--primary-rgb),0.1)]"
         )}
       >
@@ -448,7 +448,7 @@ export const PremiumChatInput = memo(({
                 placeholder="Ask anything..."
                 aria-label="Message"
                 rows={1}
-                className="w-full bg-transparent border-none focus:ring-0 focus:outline-none outline-none ring-0 resize-none text-[15px] py-1 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 shadow-none"
+                className="w-full bg-transparent border-none focus:ring-0 focus:outline-none outline-none ring-0 resize-none text-[15px] py-1 text-foreground dark:text-foreground placeholder:text-muted-foreground dark:placeholder:text-muted-foreground shadow-none"
               />
             </div>
           </div>
@@ -469,7 +469,7 @@ export const PremiumChatInput = memo(({
               )}
               {isAuto && (
                 <span
-                  className="shrink-0 rounded border border-rose-400/25 bg-rose-400/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none text-rose-300"
+                  className="shrink-0 rounded border border-rose-400/25 bg-rose-400/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none text-destructive"
                   title="YOLO mode is enabled: tool confirmations are auto-approved except hardcoded security blocks."
                 >
                   YOLO
@@ -511,7 +511,7 @@ export const PremiumChatInput = memo(({
                   }
                 }}
                 type="button"
-                className="p-1.5 rounded-full text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all duration-200 flex items-center justify-center"
+                className="p-1.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200 flex items-center justify-center"
                 aria-label="Open Voice Mode"
                 title="Open Voice Mode"
               >
@@ -525,10 +525,10 @@ export const PremiumChatInput = memo(({
                 className={cn(
                   "relative p-1.5 rounded-full transition-all duration-300",
                   isLoading
-                    ? "bg-rose-500/90 text-white shadow-lg shadow-rose-500/20 hover:bg-rose-500"
+                    ? "bg-rose-500/90 text-foreground shadow-lg shadow-rose-500/20 hover:bg-rose-500"
                     : (message.trim() || selectedFiles.length > 0)
-                      ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-sm hover:scale-105 active:scale-95"
-                      : "bg-zinc-100 dark:bg-zinc-800 text-zinc-300 dark:text-zinc-600 cursor-not-allowed"
+                      ? "bg-primary text-primary-foreground shadow-sm hover:scale-105 active:scale-95"
+                      : "bg-muted text-muted-foreground cursor-not-allowed"
                 )}
               >
                 {isLoading && (

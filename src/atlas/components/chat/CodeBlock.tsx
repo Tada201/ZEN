@@ -83,9 +83,9 @@ export function CodeBlock({
   }, [code, normalizedLanguage]);
 
   return (
-    <div className="group/code relative my-3 overflow-hidden rounded-xl border border-border/40 bg-slate-950 shadow-sm transition-all duration-300">
-      <div className="flex items-center justify-between border-b border-white/5 bg-white/5 px-3 py-1.5">
-        <Badge variant="outline" className="font-mono text-[10px] text-slate-400 border-slate-600/40 h-5 px-1.5">
+    <div className="group/code relative my-3 overflow-hidden rounded-xl border border-border/40 bg-code-background shadow-sm transition-all duration-300">
+      <div className="flex items-center justify-between border-b border-border bg-muted/50 px-3 py-1.5">
+        <Badge variant="outline" className="font-mono text-[10px] text-muted-foreground border-code-border h-5 px-1.5">
           {language ?? "plaintext"}
         </Badge>
         <div className="flex items-center gap-1">
@@ -93,7 +93,7 @@ export function CodeBlock({
             <Button
               size="sm"
               variant="ghost"
-              className="h-6 gap-1 px-2 text-[11px] text-slate-400 hover:text-white hover:bg-white/10"
+              className="h-6 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted"
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenArtifact({
@@ -111,7 +111,7 @@ export function CodeBlock({
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 gap-1 px-2 text-[11px] text-slate-400 hover:text-white hover:bg-white/10"
+            className="h-6 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted"
             onClick={(e) => {
               e.stopPropagation();
               copy(code);

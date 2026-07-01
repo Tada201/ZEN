@@ -12,8 +12,8 @@ export const StartupConfig = memo(() => {
     return (
         <section className="flex flex-col gap-6">
             <div>
-                <h2 className="text-[11px] font-bold text-white/90 uppercase tracking-widest mb-1">Application Startup</h2>
-                <p className="text-[11px] text-white/50 leading-relaxed">
+                <h2 className="text-[11px] font-bold text-foreground uppercase tracking-widest mb-1">Application Startup</h2>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
                     Configure startup behaviors and initialization sequence.
                 </p>
             </div>
@@ -45,9 +45,9 @@ export const StartupConfig = memo(() => {
                                 onChangeText={(text) => updateSetting({
                                     bootDurationMs: Math.min(5000, Math.max(500, Number.parseInt(text, 10) || 500)),
                                 })}
-                                className="w-[120px] text-center bg-zinc-950/50 rounded-lg border border-white/5 font-mono text-emerald-400 focus:border-emerald-500/30"
+                                className="w-[120px] text-center bg-card/70 rounded-lg border border-border font-mono text-success focus:border-emerald-500/30"
                             />
-                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-white/20 group-focus-within:text-emerald-500/40 transition-colors uppercase">ms</div>
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-muted-foreground/50 group-focus-within:text-emerald-500/40 transition-colors uppercase">ms</div>
                         </div>
                     }
                 />

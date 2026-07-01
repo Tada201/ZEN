@@ -13,10 +13,10 @@ interface InstallLog {
 }
 
 const levelClass: Record<LogLevel, string> = {
-  info: "text-zinc-300",
-  ok: "text-emerald-300",
-  warn: "text-amber-300",
-  error: "text-red-300",
+  info: "text-foreground",
+  ok: "text-success",
+  warn: "text-warning",
+  error: "text-destructive",
 };
 
 export function DependenciesSettings() {
@@ -125,7 +125,7 @@ export function DependenciesSettings() {
         ))}
       </div>
 
-      <div className="rounded-xl border border-border/70 bg-black/40">
+      <div className="rounded-xl border border-border/70 bg-background/40">
         <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
           <div className="flex items-center gap-2">
             <WorkbenchIcon name="lucide:terminal-square" size={15} className="text-primary" />
@@ -141,7 +141,7 @@ export function DependenciesSettings() {
           ) : (
             logs.map((log) => (
               <div key={log.id} className={levelClass[log.level]}>
-                <span className="text-zinc-600">[{log.level.toUpperCase()}]</span> {log.message}
+                <span className="text-muted-foreground/70">[{log.level.toUpperCase()}]</span> {log.message}
               </div>
             ))
           )}
@@ -155,7 +155,7 @@ function SummaryCard({ label, value, tone }: { label: string; value: number; ton
   return (
     <div className="rounded-xl border border-border/70 bg-card/40 p-4">
       <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{label}</div>
-      <div className={cn("mt-2 text-2xl font-bold", tone === "ok" && "text-emerald-300", tone === "warn" && "text-amber-300", tone === "info" && "text-foreground")}>{value}</div>
+      <div className={cn("mt-2 text-2xl font-bold", tone === "ok" && "text-success", tone === "warn" && "text-warning", tone === "info" && "text-foreground")}>{value}</div>
     </div>
   );
 }
@@ -170,17 +170,17 @@ function DependencyRow({ item, onDownload }: { item: DependencyStatus; onDownloa
             <span className={cn(
               "rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em]",
               item.installed
-                ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-300"
-                : "border-amber-400/25 bg-amber-400/10 text-amber-300"
+                ? "border-emerald-400/25 bg-success/10 text-success"
+                : "border-amber-400/25 bg-amber-400/10 text-warning"
             )}>
               {item.status}
             </span>
-            {item.required && <span className="rounded-full border border-red-400/25 bg-red-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-red-300">Required</span>}
+            {item.required && <span className="rounded-full border border-destructive/25 bg-red-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-destructive">Required</span>}
           </div>
-          <div className="text-sm text-zinc-300">{item.feature}</div>
+          <div className="text-sm text-foreground">{item.feature}</div>
           <div className="text-xs text-muted-foreground">{item.notes}</div>
           {(item.version || item.detectedPath || item.installCommand) && (
-            <div className="space-y-1 rounded-lg border border-white/[0.06] bg-black/25 p-2 font-mono text-[11px] text-zinc-400">
+            <div className="space-y-1 rounded-lg border border-border bg-background/25 p-2 font-mono text-[11px] text-muted-foreground">
               {item.version && <div>version: {item.version}</div>}
               {item.detectedPath && <div>path: {item.detectedPath}</div>}
               {item.installCommand && <div>install: {item.installCommand}</div>}

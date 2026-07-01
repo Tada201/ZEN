@@ -22,7 +22,7 @@ export const FeedbackIntensityConfig = memo(() => {
                     description="Global volume for interface cues"
                     control={
                         <div className="flex items-center gap-4 w-[180px]">
-                            <span className="text-[10px] font-mono text-zinc-300 w-[30px] text-right">
+                            <span className="text-[10px] font-mono text-foreground w-[30px] text-right">
                                 {Math.round(masterVolume * 100)}%
                             </span>
                             <div className="flex-1">

@@ -56,7 +56,7 @@ export function AgentsSettings() {
       <div className="space-y-8">
         <div className="flex flex-col items-center justify-center gap-4 py-20">
           <WorkbenchIcon name="codicon:loading" size={32} className="text-brand-purple animate-spin" />
-          <span className="text-[12px] font-bold text-zinc-500 uppercase tracking-widest">
+          <span className="text-[12px] font-bold text-muted-foreground uppercase tracking-widest">
             Loading agent configs...
           </span>
         </div>
@@ -68,8 +68,8 @@ export function AgentsSettings() {
     return (
       <div className="space-y-8">
         <div className="flex flex-col items-center justify-center gap-4 py-20">
-          <WorkbenchIcon name="codicon:warning" size={32} className="text-red-400" />
-          <span className="text-[12px] font-bold text-red-400 uppercase tracking-widest">
+          <WorkbenchIcon name="codicon:warning" size={32} className="text-destructive" />
+          <span className="text-[12px] font-bold text-destructive uppercase tracking-widest">
             {error}
           </span>
           <WorkbenchButton variant="secondary" onClick={loadData} className="h-8">
@@ -98,7 +98,7 @@ export function AgentsSettings() {
         <div className="flex items-center gap-3 flex-wrap">
           <WorkbenchButton
             variant="secondary"
-            className="h-8 gap-2 border-white/5"
+            className="h-8 gap-2 border-border"
             onClick={handleImport}
             disabled={importing}
           >
@@ -107,15 +107,15 @@ export function AgentsSettings() {
               {importing ? 'Importing...' : 'Import Config File'}
             </span>
           </WorkbenchButton>
-          <span className="text-[10px] text-zinc-500">
+          <span className="text-[10px] text-muted-foreground">
             Import a JSON config file to override an agent's settings.
             {tools.length > 0 && ` ${tools.length} tools available.`}
           </span>
         </div>
         {error && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/5 border border-red-500/20">
-            <WorkbenchIcon name="codicon:warning" size={14} className="text-red-400 shrink-0" />
-            <span className="text-[10px] text-red-400">{error}</span>
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
+            <WorkbenchIcon name="codicon:warning" size={14} className="text-destructive shrink-0" />
+            <span className="text-[10px] text-destructive">{error}</span>
           </div>
         )}
       </SettingsSection>
@@ -128,8 +128,8 @@ export function AgentsSettings() {
       >
         {agents.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-12">
-            <WorkbenchIcon name="codicon:robot" size={24} className="text-zinc-500" />
-            <span className="text-[11px] text-zinc-500">No agents registered in the system.</span>
+            <WorkbenchIcon name="codicon:robot" size={24} className="text-muted-foreground" />
+            <span className="text-[11px] text-muted-foreground">No agents registered in the system.</span>
           </div>
         ) : (
           <div className="space-y-4">

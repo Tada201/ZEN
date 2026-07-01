@@ -63,7 +63,7 @@ export function GlobeWidget({ className = '' }: GlobeWidgetProps) {
             {markers.map((_marker, i) => (
               <div
                 key={i}
-                className="absolute w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(167,139,250,0.5)]"
+                className="absolute w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary) / 0.5)]"
                 style={{
                   top: `${30 + (i * 20)}%`,
                   left: `${20 + (i * 25)}%`,

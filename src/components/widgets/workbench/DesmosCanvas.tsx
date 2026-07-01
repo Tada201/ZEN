@@ -366,7 +366,7 @@ export const DesmosCanvas = forwardRef<DesmosCanvasRef, { config: DesmosConfig }
   }
 
   return (
-    <div className="relative w-full h-full bg-[#050505] overflow-hidden border border-white/5 rounded-none">
+    <div className="relative w-full h-full bg-[#050505] overflow-hidden border border-border rounded-none">
       <div
         ref={containerRef}
         className="w-full h-full"
@@ -375,13 +375,13 @@ export const DesmosCanvas = forwardRef<DesmosCanvasRef, { config: DesmosConfig }
 
       {/* HUD overlay for coordinate feedback */}
       <div className="absolute top-2 right-2 pointer-events-none z-10">
-        <div className={`font-mono text-[9px] ${config.invertedColors ? 'text-[#00FF9F]/40 border-[#00FF9F]/10' : 'text-black/40 border-black/10'} bg-black/5 px-2 py-1 border backdrop-blur-sm uppercase tracking-widest`}>
+        <div className={`font-mono text-[9px] ${config.invertedColors ? 'text-[#00FF9F]/40 border-[#00FF9F]/10' : 'text-foreground/40 border-border/10'} bg-background/5 px-2 py-1 border backdrop-blur-sm uppercase tracking-widest`}>
           Desmos Engine Active
         </div>
       </div>
 
       {(loading || !state) && (
-        <div className="absolute inset-0 flex items-center justify-center font-mono text-[#00FF9F]/50 tracking-widest pointer-events-none bg-black/80 backdrop-blur-sm z-20">
+        <div className="absolute inset-0 flex items-center justify-center font-mono text-[#00FF9F]/50 tracking-widest pointer-events-none bg-background/80 backdrop-blur-sm z-20">
           {scriptState === 'loading' ? (
             <div className="flex flex-col items-center gap-3">
               <div className="w-6 h-6 border-2 border-[#00FF9F]/30 border-t-[#00FF9F] rounded-full animate-spin" />

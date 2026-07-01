@@ -43,6 +43,7 @@ pub async fn set_setting(state: State<'_, AppState>, key: String, value: String)
     }
 
     invalidate_provider_cache_if_needed(&state, std::iter::once(key.as_str())).await;
+    maybe_sync_tool_permissions(&state, std::iter::once(key.as_str())).await;
 
     Ok(())
 }
@@ -53,6 +54,9 @@ pub async fn set_settings(
     settings: HashMap<String, String>,
 ) -> AppResult<()> {
     let should_invalidate_provider_cache = settings.keys().any(|key| is_provider_setting_key(key));
+    // Snapshot owned keys so we can iterate them after `settings` is moved
+    // into the secret/public partition below.
+    let changed_keys: Vec<String> = settings.keys().cloned().collect();
     let workspace_root = settings
         .get("workspace.root")
         .or_else(|| settings.get("workspace_path"))
@@ -77,6 +81,8 @@ pub async fn set_settings(
     if should_invalidate_provider_cache {
         clear_provider_cache(&state).await;
     }
+
+    maybe_sync_tool_permissions(&state, changed_keys.iter().map(String::as_str)).await;
 
     Ok(())
 }
@@ -319,8 +325,55 @@ pub async fn fetch_9router_image_models(
 pub async fn sync_tool_permissions(state: State<'_, AppState>) -> AppResult<()> {
     let all_settings = state.settings_manager.get_all().await?;
     let permissions = ToolManager::build_permissions(&all_settings);
-    state.tool_manager.update_permissions(permissions);
+    state
+        .tool_manager
+        .update_permissions(permissions)
+        .await
+        .map_err(crate::error::ZenError::Internal)?;
     Ok(())
+}
+
+/// Returns true if `key` participates in the ToolManager permission policy.
+/// The backend auto-syncs after these keys change so the frontend never has
+/// to issue a separate sync command.
+fn is_tool_permission_key(key: &str) -> bool {
+    matches!(
+        key,
+        "tool_settings"
+            | "tool_global_default"
+            | "tool_yolo_mode"
+            | "tool_auto_approve_low_risk"
+            | "tools.yolo-mode"
+            | "tools.global-default"
+            | "tools.auto-approve-low-risk"
+    ) || key.starts_with("tools.permission.")
+}
+
+/// Rebuild and install the tool permission policy when at least one of the
+/// supplied keys participates in it. Failures are logged, never raised —
+/// the caller already persisted the setting, so the worst case is a stale
+/// ToolManager until the next change.
+async fn maybe_sync_tool_permissions<'a, I>(
+    state: &State<'_, AppState>,
+    keys: I,
+) where
+    I: IntoIterator<Item = &'a str>,
+{
+    let needs_sync = keys.into_iter().any(is_tool_permission_key);
+    if !needs_sync {
+        return;
+    }
+    let all_settings = match state.settings_manager.get_all().await {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(error = %e, "Auto-sync of tool permissions: failed to read settings");
+            return;
+        }
+    };
+    let permissions = ToolManager::build_permissions(&all_settings);
+    if let Err(e) = state.tool_manager.update_permissions(permissions).await {
+        tracing::warn!(error = %e, "Auto-sync of tool permissions: install failed");
+    }
 }
 
 /// Tests connection to a provider and returns discovered models on success.

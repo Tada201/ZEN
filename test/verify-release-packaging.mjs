@@ -52,6 +52,18 @@ const dependencyCommand = await read("src-tauri/src/commands/dependency.rs");
 expect(dependencyCommand.includes("install_managed_dependency") && dependencyCommand.includes("failed SHA-256 verification"),
   "Dependency manager must install managed runtimes through verified downloads.");
 
+const libRs = await read("src-tauri/src/lib.rs");
+expect(
+  libRs.includes("cfg!(debug_assertions)") &&
+    libRs.includes('"novus-dev.db"') &&
+    libRs.includes('"lancedb-dev"'),
+  "Release build must use a production database path and dev builds must use a dev-only path."
+);
+expect(
+  !/let\s+db_path\s*=\s*app_dir\.join\("novus\.db"\)\s*;/.test(libRs),
+  "Hard-coded novus.db path must be replaced with profile-specific selection."
+);
+
 if (failures.length > 0) {
   console.error("Release packaging contract failed:");
   failures.forEach((failure) => console.error(`- ${failure}`));

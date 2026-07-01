@@ -40,23 +40,23 @@ function ImageGenPreview({ status, output, input }: { status: ToolCall['status']
 
   if (status === 'running') {
     return (
-      <div className="relative w-full max-w-[380px] aspect-square rounded-xl border border-white/[0.08] bg-zinc-950/80 overflow-hidden flex flex-col items-center justify-center gap-4 p-6 shadow-2xl backdrop-blur-md animate-pulse">
+      <div className="relative w-full max-w-[380px] aspect-square rounded-xl border border-border bg-card/80 overflow-hidden flex flex-col items-center justify-center gap-4 p-6 shadow-2xl backdrop-blur-md animate-pulse">
         {/* Shimmering/rotating background effect */}
         <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/10 via-purple-500/5 to-pink-500/10" />
-        <div className="absolute w-[150%] h-[150%] -top-[25%] -left-[25%] bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.08)_0%,transparent_60%)] animate-spin [animation-duration:15s]" />
+        <div className="absolute w-[150%] h-[150%] -top-[25%] -left-[25%] bg-[radial-gradient(circle_at_center,hsl(var(--primary) / 0.08)_0%,transparent_60%)] animate-spin [animation-duration:15s]" />
         
         {/* Animated pulsating icon */}
-        <div className="relative flex items-center justify-center w-16 h-16 rounded-full bg-white/[0.03] border border-white/[0.08]">
-          <Brush className="w-6 h-6 text-blue-400 animate-bounce" />
-          <Sparkles className="absolute -top-1 -right-1 w-4 h-4 text-purple-400 animate-pulse" />
+        <div className="relative flex items-center justify-center w-16 h-16 rounded-full bg-muted/40 border border-border">
+          <Brush className="w-6 h-6 text-primary animate-bounce" />
+          <Sparkles className="absolute -top-1 -right-1 w-4 h-4 text-primary animate-pulse" />
         </div>
 
         <div className="flex flex-col items-center gap-1.5 text-center z-10">
-          <div className="text-[13px] font-semibold text-zinc-200 font-sans tracking-tight">
+          <div className="text-[13px] font-semibold text-foreground font-sans tracking-tight">
             {statuses[statusIndex]}
           </div>
-          <div className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest flex items-center gap-1.5">
-            <span className="w-1 h-1 rounded-full bg-blue-500 animate-ping" />
+          <div className="text-[10px] text-muted-foreground font-mono uppercase tracking-widest flex items-center gap-1.5">
+            <span className="w-1 h-1 rounded-full bg-primary animate-ping" />
             Generating Artwork
           </div>
         </div>
@@ -70,8 +70,8 @@ function ImageGenPreview({ status, output, input }: { status: ToolCall['status']
       return (
         <div className="relative w-full max-w-[380px] aspect-square rounded-xl border border-rose-500/20 bg-rose-950/10 overflow-hidden flex flex-col items-center justify-center gap-3 p-6 text-center">
           <ShieldOff className="w-10 h-10 text-rose-500/80" />
-          <div className="text-[12px] font-semibold text-rose-300">Preview Blocked</div>
-          <p className="text-[11px] text-zinc-500 max-w-[280px]">
+          <div className="text-[12px] font-semibold text-destructive">Preview Blocked</div>
+          <p className="text-[11px] text-muted-foreground max-w-[280px]">
             The generated image link was blocked by security policies.
           </p>
         </div>
@@ -79,15 +79,15 @@ function ImageGenPreview({ status, output, input }: { status: ToolCall['status']
     }
 
     return (
-      <div className="relative w-full max-w-[380px] aspect-square rounded-xl border border-white/[0.08] bg-zinc-950 overflow-hidden group shadow-2xl">
+      <div className="relative w-full max-w-[380px] aspect-square rounded-xl border border-border bg-card overflow-hidden group shadow-2xl">
         <img
           src={toAssetUrl(imageUri)}
           alt={String(input.prompt || "Generated Artwork")}
           className="w-full h-full object-cover animate-in fade-in zoom-in-95 duration-700 ease-out"
         />
         {/* Hover overlay with prompt and action */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
-          <p className="text-[11px] text-zinc-300 line-clamp-2 mb-2 font-sans italic">
+        <div className="absolute inset-0 bg-gradient-to-t from-background/85 via-background/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
+          <p className="text-[11px] text-foreground line-clamp-2 mb-2 font-sans italic">
             "{String(input.prompt || '')}"
           </p>
           <div className="flex items-center gap-2">
@@ -95,7 +95,7 @@ function ImageGenPreview({ status, output, input }: { status: ToolCall['status']
               href={imageUri}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-1.5 text-[11px] font-bold text-white bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg transition-colors shadow-lg"
+              className="flex items-center gap-1.5 text-[11px] font-bold text-foreground bg-primary hover:bg-primary px-3 py-1.5 rounded-lg transition-colors shadow-lg"
             >
               <ExternalLink className="w-3.5 h-3.5" />
               Open Fullscreen
@@ -110,8 +110,8 @@ function ImageGenPreview({ status, output, input }: { status: ToolCall['status']
     return (
       <div className="relative w-full max-w-[380px] aspect-square rounded-xl border border-rose-500/20 bg-rose-950/10 overflow-hidden flex flex-col items-center justify-center gap-3 p-6 text-center">
         <XCircle className="w-10 h-10 text-rose-500/80" />
-        <div className="text-[12px] font-semibold text-rose-300">Generation Failed</div>
-        <p className="text-[11px] text-zinc-500 max-w-[280px]">
+        <div className="text-[12px] font-semibold text-destructive">Generation Failed</div>
+        <p className="text-[11px] text-muted-foreground max-w-[280px]">
           Unable to complete image generation. Check settings or API quota.
         </p>
       </div>
@@ -289,9 +289,9 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
   };
 
   const statusStyle = {
-    running: 'border-blue-400/20 bg-blue-400/10 text-blue-200',
+    running: 'border-blue-400/20 bg-blue-400/10 text-primary',
     awaiting_approval: 'border-amber-400/25 bg-amber-400/10 text-amber-200',
-    completed: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200',
+    completed: 'border-emerald-400/20 bg-success/10 text-success',
     error: 'border-rose-400/25 bg-rose-400/10 text-rose-200',
   }[status];
   const durationLabel = formatDuration(durationMs);
@@ -300,11 +300,11 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
     ? `${parentAgentId} -> ${childAgentLabel}`
     : childAgentLabel;
   const riskStyle = {
-    low: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200',
+    low: 'border-emerald-400/20 bg-success/10 text-success',
     medium: 'border-amber-400/20 bg-amber-400/10 text-amber-200',
     high: 'border-orange-400/25 bg-orange-400/10 text-orange-200',
     critical: 'border-rose-400/25 bg-rose-400/10 text-rose-200',
-  }[approvalContext?.riskLevel || ''] || 'border-zinc-500/50 bg-black/45 text-zinc-300';
+  }[approvalContext?.riskLevel || ''] || 'border-border/50 bg-background/45 text-foreground';
   const exactCommand = displayInput.command || displayInput.cmd || displayInput.script || displayInput.query || displayInput.path || displayInput.url || displayInput._previewError;
   const exactCommandText = exactCommand === undefined || exactCommand === null ? "" : String(exactCommand);
   const inputDetail = stringifyDetail(displayInput);
@@ -352,24 +352,24 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
         type="button"
         onClick={handleToggle}
         className={cn(
-          'group flex min-h-8 w-full min-w-0 items-center gap-2 rounded-md border border-white/[0.08] bg-black/40 px-2 py-1 text-left backdrop-blur-sm transition-all duration-200',
-          'hover:border-white/[0.12] hover:bg-black/50',
+          'group flex min-h-8 w-full min-w-0 items-center gap-2 rounded-md border border-border bg-background/40 px-2 py-1 text-left backdrop-blur-sm transition-all duration-200',
+          'hover:border-border hover:bg-background/50',
           status === 'running' && 'animate-border-pulse'
         )}
       >
         <span className={cn(
           "flex h-4 w-4 shrink-0 items-center justify-center",
-          status === 'completed' ? "text-emerald-400/80" : status === 'error' ? "text-rose-400/80" : "text-zinc-400"
+          status === 'completed' ? "text-success/80" : status === 'error' ? "text-destructive/80" : "text-muted-foreground"
         )}>
           {status === 'running' && <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" />}
-          {status === 'awaiting_approval' && <Clock className="h-3.5 w-3.5 text-amber-400/80" />}
+          {status === 'awaiting_approval' && <Clock className="h-3.5 w-3.5 text-warning/80" />}
           {status === 'completed' && <CheckCircle2 className="h-3.5 w-3.5" />}
           {status === 'error' && <XCircle className="h-3.5 w-3.5" />}
         </span>
 
         <span className={cn(
           'min-w-0 flex-1 truncate text-[12px] leading-5',
-          status === 'running' ? 'animate-text-shimmer font-semibold' : status === 'error' ? 'text-rose-300' : 'text-zinc-400'
+          status === 'running' ? 'animate-text-shimmer font-semibold' : status === 'error' ? 'text-destructive' : 'text-muted-foreground'
         )}>
           {actionText}
         </span>
@@ -377,28 +377,28 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
           <img
             src={toAssetUrl(imageGenUri)}
             alt=""
-            className="h-5 w-5 shrink-0 rounded-sm object-cover border border-white/[0.08]"
+            className="h-5 w-5 shrink-0 rounded-sm object-cover border border-border"
           />
         )}
         {isImageGen && status === 'running' && !imageGenUri && (
-          <ImageIcon className="h-3.5 w-3.5 shrink-0 text-blue-400 animate-pulse" />
+          <ImageIcon className="h-3.5 w-3.5 shrink-0 text-primary animate-pulse" />
         )}
         {status === 'running' && <ToolTimer startTime={startTime} />}
-        {status !== 'running' && durationLabel && <span className="shrink-0 text-[11px] text-zinc-500 tabular-nums">{durationLabel}</span>}
+        {status !== 'running' && durationLabel && <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">{durationLabel}</span>}
 
         {status === 'awaiting_approval' && (
           <span className="ml-auto flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onCancel?.(id); }}
-              className="rounded px-1.5 py-0.5 text-[11px] text-zinc-400 hover:bg-white/[0.04] hover:text-rose-300"
+              className="rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-destructive"
             >
               Deny
             </button>
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onRetry?.(id); }}
-              className="rounded px-1.5 py-0.5 text-[11px] text-zinc-400 hover:bg-white/[0.04] hover:text-emerald-300"
+              className="rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-success"
             >
               Approve
             </button>
@@ -406,7 +406,7 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
         )}
 
         <ChevronRight className={cn(
-          'h-3 w-3 shrink-0 text-zinc-500 transition-transform group-hover:text-zinc-300',
+          'h-3 w-3 shrink-0 text-muted-foreground transition-transform group-hover:text-foreground',
           isExpanded && 'rotate-90'
         )} />
       </button>
@@ -415,12 +415,12 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
 
       <div className={cn("ml-2 tool-expand-grid", isExpanded && "open")}>
         <div className="tool-expand-inner">
-          <div className="border-l border-zinc-800/80 py-1 pl-3">
-          <div className="mb-1.5 rounded-md bg-white/[0.018] px-2 py-1.5">
-            <div className="mb-1 text-[11px] uppercase tracking-wider text-zinc-400">Tool</div>
+          <div className="border-l border-border/80 py-1 pl-3">
+          <div className="mb-1.5 rounded-md bg-muted/20 px-2 py-1.5">
+            <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">Tool</div>
             <div className="flex min-w-0 flex-wrap items-center gap-2 text-[12px] leading-5">
-              <ToolIcon className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
-              <code className="min-w-0 max-w-full truncate rounded bg-white/[0.035] px-1.5 py-0.5 font-mono text-zinc-300">
+              <ToolIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <code className="min-w-0 max-w-full truncate rounded bg-muted/40 px-1.5 py-0.5 font-mono text-foreground">
                 {effectiveName}
               </code>
               <span className={cn('shrink-0 rounded border px-1.5 py-0.5 text-[11px] uppercase leading-none', statusStyle)}>
@@ -440,22 +440,22 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
 
           {status === 'awaiting_approval' && approvalContext && (
             <div className="mb-1.5 rounded-md border border-amber-400/10 bg-amber-400/[0.035] px-2 py-1.5">
-              <div className="mb-1 flex items-center gap-2 text-[11px] uppercase tracking-wider text-amber-300/80">
+              <div className="mb-1 flex items-center gap-2 text-[11px] uppercase tracking-wider text-warning/80">
                 <span>Approval context</span>
-                {approvalContext.riskLevel && <span className="rounded bg-black/20 px-1.5 py-0.5">{approvalContext.riskLevel}</span>}
+                {approvalContext.riskLevel && <span className="rounded bg-background/20 px-1.5 py-0.5">{approvalContext.riskLevel}</span>}
               </div>
               {approvalContext.description && (
-                <div className="text-[12px] leading-relaxed text-zinc-300">{approvalContext.description}</div>
+                <div className="text-[12px] leading-relaxed text-foreground">{approvalContext.description}</div>
               )}
               {approvalArgumentsPreview && (
-                <pre className="mt-1 max-h-20 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-zinc-400">
+                <pre className="mt-1 max-h-20 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-muted-foreground">
                   {approvalArgumentsPreview}
                 </pre>
               )}
               {approvalContext.suggestedPatterns && approvalContext.suggestedPatterns.length > 0 && (
                 <div className="mt-1 flex flex-wrap gap-1">
                   {approvalContext.suggestedPatterns.slice(0, 4).map((pattern) => (
-                    <span key={pattern} className="min-w-0 max-w-full truncate rounded bg-white/[0.035] px-1.5 py-0.5 font-mono text-[11px] text-zinc-400">
+                    <span key={pattern} className="min-w-0 max-w-full truncate rounded bg-muted/40 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
                       {pattern}
                     </span>
                   ))}
@@ -464,23 +464,23 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
             </div>
           )}
           {(exactCommandText || inputDetail) && (
-            <div className="mb-1.5 rounded-md bg-white/[0.018] px-2 py-1.5">
-              <div className="mb-1 text-[11px] uppercase tracking-wider text-zinc-400">Input</div>
+            <div className="mb-1.5 rounded-md bg-muted/20 px-2 py-1.5">
+              <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">Input</div>
               {checklistPreview.length > 0 && (
                 <div className="mb-1.5 grid gap-1">
                   {checklistPreview.map((item, index) => (
                     <div key={`${item.label}-${index}`} className="flex min-w-0 items-center gap-1.5 text-[12px] leading-5">
                       {item.completed ? (
-                        <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-300/80" />
+                        <CheckCircle2 className="h-3 w-3 shrink-0 text-success/80" />
                       ) : (
-                        <Clock className="h-3 w-3 shrink-0 text-blue-300/80" />
+                        <Clock className="h-3 w-3 shrink-0 text-primary/80" />
                       )}
-                      <span className="min-w-0 flex-1 truncate text-zinc-400">{item.label}</span>
+                      <span className="min-w-0 flex-1 truncate text-muted-foreground">{item.label}</span>
                     </div>
                   ))}
                 </div>
               )}
-              <pre className="max-h-20 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-zinc-300">
+              <pre className="max-h-20 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-foreground">
                 {exactCommandText || inputDetail}
               </pre>
             </div>
@@ -488,25 +488,25 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
           {(stdout || stderr || exitCode !== undefined || files.length > 0 || outputSummary) && (
             <div className="mb-1.5 grid gap-1.5">
               {(exitCode !== undefined || files.length > 0) && (
-                <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-400">
+                <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                   {exitCode !== undefined && <span>exit {String(exitCode)}</span>}
                   {files.length > 0 && <span>{files.length} file{files.length === 1 ? '' : 's'}</span>}
                 </div>
               )}
               {outputPreview.results.length > 0 && (
-                <div className="rounded-md bg-white/[0.018] px-2 py-1.5">
-                  <div className="mb-1 text-[11px] uppercase tracking-wider text-zinc-400">Result preview</div>
+                <div className="rounded-md bg-muted/20 px-2 py-1.5">
+                  <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">Result preview</div>
                   <div className="grid gap-1">
                     {outputPreview.results.map((result, index) => (
                       <div key={`${result.title}-${index}`} className="min-w-0">
-                        <div className="truncate text-[11px] font-medium leading-5 text-zinc-300">{result.title}</div>
-                        {result.summary && <div className="line-clamp-2 text-[12px] leading-relaxed text-zinc-400">{result.summary}</div>}
+                        <div className="truncate text-[11px] font-medium leading-5 text-foreground">{result.title}</div>
+                        {result.summary && <div className="line-clamp-2 text-[12px] leading-relaxed text-muted-foreground">{result.summary}</div>}
                         {result.url && safeExternalUrl(result.url) && (
                           <a
                             href={safeExternalUrl(result.url) || undefined}
                             target="_blank"
                             rel="noreferrer noopener"
-                            className="flex min-w-0 items-center gap-1 truncate font-mono text-[11px] text-blue-300/80 hover:text-blue-200"
+                            className="flex min-w-0 items-center gap-1 truncate font-mono text-[11px] text-primary/80 hover:text-primary"
                             onClick={(event) => event.stopPropagation()}
                           >
                             <ExternalLink className="h-3 w-3 shrink-0" />
@@ -519,22 +519,22 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
                 </div>
               )}
               {files.length > 0 && (
-                <div className="rounded-md bg-white/[0.018] px-2 py-1.5">
-                  <div className="mb-1 text-[11px] uppercase tracking-wider text-zinc-400">Files</div>
+                <div className="rounded-md bg-muted/20 px-2 py-1.5">
+                  <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">Files</div>
                   <div className="grid gap-1">
                     {files.map((file) => (
                       <div key={file.path} className="min-w-0">
                         <div className="flex min-w-0 items-center gap-2 text-[12px] leading-5">
-                          <span className="shrink-0 text-zinc-400">{file.changeType}</span>
-                          <span className="min-w-0 flex-1 truncate font-mono text-zinc-400">{file.path}</span>
+                          <span className="shrink-0 text-muted-foreground">{file.changeType}</span>
+                          <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">{file.path}</span>
                           {(file.linesAdded !== undefined || file.linesRemoved !== undefined) && (
-                            <span className="shrink-0 font-mono text-zinc-400">
+                            <span className="shrink-0 font-mono text-muted-foreground">
                               +{file.linesAdded || 0}/-{file.linesRemoved || 0}
                             </span>
                           )}
                         </div>
                         {file.diff && (
-                          <pre className="mt-1 max-h-20 overflow-y-auto whitespace-pre-wrap break-words rounded bg-black/20 px-2 py-1 font-mono text-[11px] leading-relaxed text-zinc-400">
+                          <pre className="mt-1 max-h-20 overflow-y-auto whitespace-pre-wrap break-words rounded bg-background/20 px-2 py-1 font-mono text-[11px] leading-relaxed text-muted-foreground">
                             {file.diff.slice(0, 1200)}
                           </pre>
                         )}
@@ -544,16 +544,16 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
                 </div>
               )}
               {artifact && (
-                <div className="rounded-md bg-white/[0.018] px-2 py-1.5">
-                  <div className="mb-1 text-[11px] uppercase tracking-wider text-zinc-400">Artifact</div>
+                <div className="rounded-md bg-muted/20 px-2 py-1.5">
+                  <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">Artifact</div>
                   <div className="flex min-w-0 items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate text-[12px] font-medium leading-5 text-zinc-300">{artifact.title}</span>
-                    <span className="shrink-0 rounded bg-white/[0.035] px-1.5 py-0.5 font-mono text-[11px] text-zinc-400">{artifact.type}</span>
+                    <span className="min-w-0 flex-1 truncate text-[12px] font-medium leading-5 text-foreground">{artifact.title}</span>
+                    <span className="shrink-0 rounded bg-muted/40 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">{artifact.type}</span>
                     {onViewArtifact && (
                       <button
                         type="button"
                         onClick={() => onViewArtifact(artifact)}
-                        className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-300"
+                        className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                       >
                         <ExternalLink className="h-3 w-3" /> Open
                       </button>
@@ -562,55 +562,55 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
                 </div>
               )}
               {outputSummary && outputPreview.results.length === 0 && files.length === 0 && !artifact && !stdout && !stderr && (
-                <div className="rounded-md bg-white/[0.018] px-2 py-1.5">
-                  <div className="mb-1 text-[11px] uppercase tracking-wider text-zinc-400">Result preview</div>
-                  <div className="line-clamp-3 text-[12px] leading-relaxed text-zinc-300">{outputSummary}</div>
+                <div className="rounded-md bg-muted/20 px-2 py-1.5">
+                  <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">Result preview</div>
+                  <div className="line-clamp-3 text-[12px] leading-relaxed text-foreground">{outputSummary}</div>
                 </div>
               )}
               {stdout && (
-                <div className="rounded-md bg-white/[0.018] px-2 py-1.5">
-                  <div className="mb-1 text-[11px] uppercase tracking-wider text-zinc-400">Stdout</div>
-                  <pre className="max-h-28 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-zinc-400">{stdout}</pre>
+                <div className="rounded-md bg-muted/20 px-2 py-1.5">
+                  <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">Stdout</div>
+                  <pre className="max-h-28 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-muted-foreground">{stdout}</pre>
                 </div>
               )}
               {stderr && (
                 <div className="rounded-md bg-rose-950/10 px-2 py-1.5">
-                  <div className="mb-1 text-[11px] uppercase tracking-wider text-rose-400">Stderr</div>
-                  <pre className="max-h-28 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-rose-300">{stderr}</pre>
+                  <div className="mb-1 text-[11px] uppercase tracking-wider text-destructive">Stderr</div>
+                  <pre className="max-h-28 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-destructive">{stderr}</pre>
                 </div>
               )}
             </div>
           )}
           {fallbackOutput ? (
             hasStructuredPreview ? (
-              <details className="rounded-md bg-white/[0.018] p-2">
-                <summary className="cursor-pointer select-none text-[11px] uppercase tracking-wider text-zinc-400 hover:text-zinc-300">
+              <details className="rounded-md bg-muted/20 p-2">
+                <summary className="cursor-pointer select-none text-[11px] uppercase tracking-wider text-muted-foreground hover:text-foreground">
                   Raw output
                 </summary>
-                <pre className="mt-1 max-h-[180px] overflow-y-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-zinc-400">
+                <pre className="mt-1 max-h-[180px] overflow-y-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-muted-foreground">
                   {fallbackOutput}
                 </pre>
               </details>
             ) : (
-              <div className="rounded-md bg-white/[0.018] p-2">
-                <div className="mb-1 text-[11px] uppercase tracking-wider text-zinc-400">Raw output</div>
-                <pre className="max-h-[180px] overflow-y-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-zinc-400">
+              <div className="rounded-md bg-muted/20 p-2">
+                <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">Raw output</div>
+                <pre className="max-h-[180px] overflow-y-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-muted-foreground">
                   {fallbackOutput}
                 </pre>
               </div>
             )
           ) : (
             <div className={cn(
-              "rounded-md bg-white/[0.018] px-2 py-1.5 text-[12px]",
-              status === "error" ? "text-rose-300/80" : "text-zinc-400"
+              "rounded-md bg-muted/20 px-2 py-1.5 text-[12px]",
+              status === "error" ? "text-destructive/80" : "text-muted-foreground"
             )}>
               {status === "running" ? "Waiting for tool output..." : status === "error" ? "Tool failed — no output returned." : "No output returned."}
             </div>
           )}
           {(status === 'running' || durationLabel || agentLabel || iteration !== undefined || batchId || (attempts && attempts.length > 1)) && (
-            <div className="mt-1.5 rounded-md bg-white/[0.018] px-2 py-1.5">
-              <div className="mb-1 text-[11px] uppercase tracking-wider text-zinc-400">Runtime</div>
-              <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] leading-5 text-zinc-400">
+            <div className="mt-1.5 rounded-md bg-muted/20 px-2 py-1.5">
+              <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">Runtime</div>
+              <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] leading-5 text-muted-foreground">
                 {status === 'running' && <ToolTimer startTime={startTime} />}
                 {status !== 'running' && durationLabel && <span>{durationLabel}</span>}
                 {agentLabel && <span className="min-w-0 max-w-full truncate font-mono">agent {agentLabel}</span>}
@@ -620,18 +620,18 @@ export function ToolCallCard({ toolCall, className, onViewArtifact, onCancel, on
               </div>
             </div>
           )}
-          <div className="mt-1.5 flex items-center gap-3 text-[11px] text-zinc-400">
+          <div className="mt-1.5 flex items-center gap-3 text-[11px] text-muted-foreground">
             <button
               type="button"
               onClick={() => copyValue(displayInput, 'Input')}
-              className="flex items-center gap-1 hover:text-zinc-300"
+              className="flex items-center gap-1 hover:text-foreground"
             >
               <Copy className="h-3 w-3" /> Input
             </button>
             <button
               type="button"
               onClick={() => copyValue(output, 'Output')}
-              className="flex items-center gap-1 hover:text-zinc-300"
+              className="flex items-center gap-1 hover:text-foreground"
             >
               <Copy className="h-3 w-3" /> Output
             </button>

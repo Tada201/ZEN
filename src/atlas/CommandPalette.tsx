@@ -200,25 +200,25 @@ export function CommandPalette() {
       onClick={() => setOpen(false)}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-background/50 backdrop-blur-sm" />
 
       {/* Palette Card */}
       <div
-        className="relative w-full max-w-xl overflow-hidden rounded-xl border border-white/[0.06] bg-[#0a0a0b] shadow-2xl"
+        className="relative w-full max-w-xl overflow-hidden rounded-xl border border-border/[0.06] bg-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Input */}
-        <div className="flex items-center gap-2 border-b border-white/[0.06] px-4">
-          <Search className="h-4 w-4 text-zinc-500" />
+        <div className="flex items-center gap-2 border-b border-border/[0.06] px-4">
+          <Search className="h-4 w-4 text-muted-foreground" />
           <input
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Search actions, settings…"
-            className="h-12 w-full bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
+            className="h-12 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
           />
-          <kbd className="hidden items-center gap-1 rounded border border-white/[0.06] bg-zinc-800 px-1.5 py-0.5 font-mono text-[10px] text-zinc-500 sm:inline-flex">
+          <kbd className="hidden items-center gap-1 rounded border border-border/[0.06] bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline-flex">
             ESC
           </kbd>
         </div>
@@ -226,7 +226,7 @@ export function CommandPalette() {
         {/* Results */}
         <ul className="max-h-[50vh] overflow-y-auto py-1.5">
           {filtered.length === 0 && (
-            <li className="px-4 py-6 text-center text-sm text-zinc-500">No results.</li>
+            <li className="px-4 py-6 text-center text-sm text-muted-foreground">No results.</li>
           )}
           {filtered.map((item, idx) => {
             const showHeader = item.group !== lastGroup;
@@ -235,7 +235,7 @@ export function CommandPalette() {
             return (
               <div key={item.id}>
                 {showHeader && (
-                  <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                  <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                     {item.group}
                   </div>
                 )}
@@ -244,13 +244,13 @@ export function CommandPalette() {
                   onClick={() => runItem(item)}
                   className={`mx-1.5 flex cursor-pointer items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors ${
                     idx === active
-                      ? "bg-zinc-800 text-zinc-100"
-                      : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300"
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground hover:bg-muted/50 hover:text-muted-foreground"
                   }`}
                 >
-                  <Icon className="h-4 w-4 shrink-0 text-zinc-500" />
+                  <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span className="flex-1 truncate">{item.label}</span>
-                  <span className="shrink-0 text-xs text-zinc-600">{item.hint}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{item.hint}</span>
                 </li>
               </div>
             );
@@ -258,7 +258,7 @@ export function CommandPalette() {
         </ul>
 
         {/* Footer */}
-        <footer className="flex items-center justify-between border-t border-white/[0.06] px-3 py-2 text-[10px] text-zinc-600">
+        <footer className="flex items-center justify-between border-t border-border/[0.06] px-3 py-2 text-[10px] text-muted-foreground">
           <div className="flex items-center gap-1">
             <Command className="h-3 w-3" />
             {" "}Press ↑↓ to navigate, ↵ to select

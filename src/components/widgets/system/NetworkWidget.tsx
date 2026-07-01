@@ -76,7 +76,7 @@ export const NetworkWidget = memo(function NetworkWidget({ context }: { context:
 
     if (!activeIface) {
         return (
-            <div className="flex items-center justify-center h-24 bg-slate-900/20 border border-slate-800/40 rounded-sm">
+            <div className="flex items-center justify-center h-24 bg-card/20 border border-border/40 rounded-sm">
                 <span className="text-[10px] font-mono text-rose-500 italic">OFFLINE</span>
             </div>
         );
@@ -102,7 +102,7 @@ export const NetworkWidget = memo(function NetworkWidget({ context }: { context:
     return (
         <div className="flex flex-col gap-3 p-1">
             <div className="flex items-center justify-between px-1">
-                <span className="text-[10px] font-mono font-bold text-slate-500 tracking-wider">
+                <span className="text-[10px] font-mono font-bold text-muted-foreground tracking-wider">
                     {activeIface.name.toUpperCase()}
                 </span>
                 <span className="text-[10px] font-mono text-violet-400/80">ONLINE</span>
@@ -110,23 +110,23 @@ export const NetworkWidget = memo(function NetworkWidget({ context }: { context:
 
             {/* Throughput Charts */}
             <div className="flex flex-col gap-2">
-                <div className="flex flex-col gap-1 bg-zinc-950/40 border border-zinc-800/60 rounded-lg p-1.5">
+                <div className="flex flex-col gap-1 bg-card/60 border border-border/60 rounded-lg p-1.5">
                     <div className="flex items-center justify-between px-1">
-                        <span className="text-[9px] font-mono text-slate-500">SENT</span>
-                        <span className="text-[10px] font-mono text-slate-300">{formatBitrate(activeIface.txSec)}</span>
+                        <span className="text-[9px] font-mono text-muted-foreground">SENT</span>
+                        <span className="text-[10px] font-mono text-muted-foreground">{formatBitrate(activeIface.txSec)}</span>
                     </div>
                     <div className="h-8">
-                        <Sparkline data={history.tx} color="#a78bfa" height={32} />
+                        <Sparkline data={history.tx} color="hsl(var(--primary))" height={32} />
                     </div>
                 </div>
 
-                <div className="flex flex-col gap-1 bg-zinc-950/40 border border-zinc-800/60 rounded-lg p-1.5">
+                <div className="flex flex-col gap-1 bg-card/60 border border-border/60 rounded-lg p-1.5">
                     <div className="flex items-center justify-between px-1">
-                        <span className="text-[9px] font-mono text-slate-500">RECV</span>
-                        <span className="text-[10px] font-mono text-slate-300">{formatBitrate(activeIface.rxSec)}</span>
+                        <span className="text-[9px] font-mono text-muted-foreground">RECV</span>
+                        <span className="text-[10px] font-mono text-muted-foreground">{formatBitrate(activeIface.rxSec)}</span>
                     </div>
                     <div className="h-8">
-                        <Sparkline data={history.rx} color="#8b5cf6" height={32} />
+                        <Sparkline data={history.rx} color="hsl(var(--primary))" height={32} />
                     </div>
                 </div>
             </div>
@@ -134,21 +134,21 @@ export const NetworkWidget = memo(function NetworkWidget({ context }: { context:
             {/* Total Traffic Bits */}
             <div className="grid grid-cols-2 gap-2 px-1">
                 <div className="flex flex-col">
-                    <span className="text-[9px] font-mono text-slate-500 leading-none">TX TOTAL</span>
-                    <span className="text-[10px] font-mono text-slate-300">{formatBytes(activeIface.txBytes)}</span>
+                    <span className="text-[9px] font-mono text-muted-foreground leading-none">TX TOTAL</span>
+                    <span className="text-[10px] font-mono text-muted-foreground">{formatBytes(activeIface.txBytes)}</span>
                 </div>
                 <div className="flex flex-col items-end">
-                    <span className="text-[9px] font-mono text-slate-500 leading-none">RX TOTAL</span>
-                    <span className="text-[10px] font-mono text-slate-300">{formatBytes(activeIface.rxBytes)}</span>
+                    <span className="text-[9px] font-mono text-muted-foreground leading-none">RX TOTAL</span>
+                    <span className="text-[10px] font-mono text-muted-foreground">{formatBytes(activeIface.rxBytes)}</span>
                 </div>
             </div>
 
             {/* Connection Metadata */}
-            <div className="flex items-center justify-between px-1 pt-1 border-t border-zinc-800/60">
-                <span className="text-[9px] font-mono text-slate-500 truncate max-w-[160px]">
+            <div className="flex items-center justify-between px-1 pt-1 border-t border-border/60">
+                <span className="text-[9px] font-mono text-muted-foreground truncate max-w-[160px]">
                     {activeIface.ipAddresses.find(ip => !ip.includes(':')) || activeIface.ipAddresses[0] || '127.0.0.1'}
                 </span>
-                <span className="text-[9px] font-mono text-slate-600">NOMINAL</span>
+                <span className="text-[9px] font-mono text-muted-foreground">NOMINAL</span>
             </div>
         </div>
     );

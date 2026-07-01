@@ -36,7 +36,7 @@ export function MathPlotAnnotations({ annotations, applyAction }: MathPlotAnnota
             >
               <WorkbenchIcon name="codicon:trash" size={12} />
             </WorkbenchButton>
-            <div style={{ color: ann.color || '#FFF' }}>
+            <div style={{ color: ann.color || 'hsl(var(--foreground))' }}>
               ({ann.x.toFixed(1)}, {ann.y.toFixed(1)})
             </div>
             <div className="math-plot__annotation-text font-bold">{ann.label}</div>

@@ -42,7 +42,7 @@ export const LogoProgress: React.FC<LogoProgressProps> = ({
         >
           <div
             className="font-extralight tracking-[0.3em] uppercase"
-            style={{ fontSize: "clamp(1.6rem, 5vw, 3.8rem)", color: "rgba(255,255,255,0.9)" }}
+            style={{ fontSize: "clamp(1.6rem, 5vw, 3.8rem)", color: "hsl(var(--foreground) / 0.9)" }}
           >
             ZENOS
           </div>
@@ -52,7 +52,7 @@ export const LogoProgress: React.FC<LogoProgressProps> = ({
           style={{
             fontSize: "clamp(0.5rem, 1vw, 0.75rem)",
             letterSpacing: "0.5em",
-            color: "#71717a",
+            color: "hsl(var(--muted-foreground))",
             opacity: logoSubVisible ? 1 : 0,
             transform: reducedMotion ? 'translateY(0)' : (logoSubVisible ? 'translateY(0)' : 'translateY(6px)'),
             transitionDelay: reducedMotion ? undefined : '300ms',
@@ -65,7 +65,7 @@ export const LogoProgress: React.FC<LogoProgressProps> = ({
           style={{
             fontSize: "clamp(0.45rem, 0.8vw, 0.6rem)",
             letterSpacing: "0.3em",
-            color: "#3f3f46",
+            color: "hsl(var(--muted-foreground) / 0.5)",
             opacity: logoSubVisible ? 0.7 : 0,
             transitionDelay: reducedMotion ? undefined : '500ms',
           }}
@@ -80,7 +80,7 @@ export const LogoProgress: React.FC<LogoProgressProps> = ({
             style={{
               fontSize: "clamp(0.4rem, 0.7vw, 0.55rem)",
               letterSpacing: "0.25em",
-              color: "#3f3f46",
+              color: "hsl(var(--muted-foreground) / 0.5)",
               opacity: 0.5,
               transitionDelay: reducedMotion ? undefined : '700ms',
             }}
@@ -101,19 +101,19 @@ export const LogoProgress: React.FC<LogoProgressProps> = ({
         }}
       >
         <div className="flex items-center justify-between mb-1.5">
-          <span className="uppercase" style={{ fontSize: "clamp(0.45rem, 0.8vw, 0.65rem)", letterSpacing: "0.2em", color: "#71717a" }}>
+          <span className="uppercase" style={{ fontSize: "clamp(0.45rem, 0.8vw, 0.65rem)", letterSpacing: "0.2em", color: "hsl(var(--muted-foreground))" }}>
             {isFinalizing ? "Finalizing Environment" : "Initializing System"}
           </span>
-          <span className="tabular-nums" style={{ fontSize: "clamp(0.45rem, 0.8vw, 0.65rem)", color: "#71717a" }}>
+          <span className="tabular-nums" style={{ fontSize: "clamp(0.45rem, 0.8vw, 0.65rem)", color: "hsl(var(--muted-foreground))" }}>
             {Math.round(progress)}%
           </span>
         </div>
-        <div className="w-full h-[2px] bg-white/[0.06] overflow-hidden rounded-full">          <div className={`h-full ${reducedMotion ? '' : 'transition-all duration-100 ease-linear'} rounded-full`}
+        <div className="w-full h-[2px] bg-border/60 overflow-hidden rounded-full">          <div className={`h-full ${reducedMotion ? '' : 'transition-all duration-100 ease-linear'} rounded-full`}
             style={{
               width: `${progress}%`,
               background: isActuallyReady
-                ? "linear-gradient(90deg, #10b981, #34d399)"
-                : "linear-gradient(90deg, rgba(16,185,129,0.6), rgba(52,211,153,0.8))",
+                ? "linear-gradient(90deg, hsl(var(--success)), hsl(var(--success) / 0.75))"
+                : "linear-gradient(90deg, hsl(var(--success) / 0.6), hsl(var(--success) / 0.8))",
             }}
           />
         </div>
@@ -123,7 +123,7 @@ export const LogoProgress: React.FC<LogoProgressProps> = ({
           style={{
             fontSize: "clamp(0.45rem, 0.8vw, 0.65rem)",
             letterSpacing: "0.3em",
-            color: isActuallyReady ? "rgba(52,211,153,0.8)" : "rgba(251,191,36,0.8)"
+            color: isActuallyReady ? "hsl(var(--success) / 0.8)" : "hsl(var(--warning) / 0.8)"
           }}
         >
             {isActuallyReady ? "System Ready" : "Finalizing..."}

@@ -21,8 +21,8 @@ export const ConnectionStatus = memo(({ providerKey, providerName }: ConnectionS
             className={cn(
                 "flex items-center gap-3 p-3 rounded-lg border transition-all",
                 connectionStatus === 'success' 
-                    ? "bg-emerald-500/5 border-emerald-500/10 text-emerald-400" 
-                    : "bg-red-500/5 border-red-500/10 text-red-400"
+                    ? "bg-success/5 border-emerald-500/10 text-success" 
+                    : "bg-destructive/5 border-destructive/10 text-destructive"
             )}
         >
             <WorkbenchIcon name={connectionStatus === 'success' ? "lucide:shield-check" : "lucide:shield-alert"} size={14} />

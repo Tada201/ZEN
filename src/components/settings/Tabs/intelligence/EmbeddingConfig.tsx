@@ -32,14 +32,14 @@ export const EmbeddingConfig = memo(() => {
                     }
                 />
 
-                <div className="p-4 bg-zinc-900/30 border border-white/[0.04] rounded-lg">
+                <div className="p-4 bg-muted/40 border border-border rounded-lg">
                     <div className="flex items-center gap-2 mb-3">
-                        <WorkbenchIcon name="codicon:info" size={14} className="text-emerald-400" />
-                        <span className="text-[10px] font-bold uppercase text-emerald-400 tracking-wider">
+                        <WorkbenchIcon name="codicon:info" size={14} className="text-success" />
+                        <span className="text-[10px] font-bold uppercase text-success tracking-wider">
                             Model Library
                         </span>
                     </div>
-                    <p className="text-[11px] text-zinc-400 leading-relaxed">
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
                         Download and manage embedding models for local document retrieval.
                         Recommended models: nomic-embed-text (768D), mxbai-embed-large (1024D).
                     </p>

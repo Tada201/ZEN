@@ -49,15 +49,15 @@ export function InvoiceCard({ data }: { data: InvoiceData }) {
   };
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-black/40 backdrop-blur-md p-5 shadow-lg">
+    <div className="w-full max-w-md rounded-2xl border border-border/[0.08] bg-background/40 backdrop-blur-md p-5 shadow-lg">
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center gap-2.5">
-          <div className="p-1.5 rounded-lg border border-white/10 bg-white/5 text-white/70">
+          <div className="p-1.5 rounded-lg border border-border/10 bg-card/5 text-primary-foreground/70">
             <FileText className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-white leading-tight">{vendor}</h3>
-            <span className="text-[10px] font-mono text-white/40">Inv #{invoiceNumber}</span>
+            <h3 className="text-sm font-semibold text-primary-foreground leading-tight">{vendor}</h3>
+            <span className="text-[10px] font-mono text-primary-foreground/40">Inv #{invoiceNumber}</span>
           </div>
         </div>
         <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${getStatusColor(status)}`}>
@@ -69,7 +69,7 @@ export function InvoiceCard({ data }: { data: InvoiceData }) {
         <div className="mb-4">
           <table className="w-full text-left text-[11px]">
             <thead>
-              <tr className="border-b border-white/[0.06] text-white/30 uppercase tracking-wider font-mono">
+              <tr className="border-b border-border/[0.06] text-primary-foreground/30 uppercase tracking-wider font-mono">
                 <th className="pb-1.5 font-normal">Item</th>
                 <th className="pb-1.5 text-center font-normal">Qty</th>
                 <th className="pb-1.5 text-right font-normal">Price</th>
@@ -78,10 +78,10 @@ export function InvoiceCard({ data }: { data: InvoiceData }) {
             </thead>
             <tbody className="divide-y divide-white/[0.04]">
               {lineItems.map((item, idx) => (
-                <tr key={idx} className="text-white/80">
+                <tr key={idx} className="text-primary-foreground/80">
                   <td className="py-2 pr-2 font-medium truncate max-w-[150px]">{item.description}</td>
-                  <td className="py-2 text-center text-white/50 font-mono">{item.qty}</td>
-                  <td className="py-2 text-right text-white/50 font-mono">{formatAmount(item.unitPrice)}</td>
+                  <td className="py-2 text-center text-primary-foreground/50 font-mono">{item.qty}</td>
+                  <td className="py-2 text-right text-primary-foreground/50 font-mono">{formatAmount(item.unitPrice)}</td>
                   <td className="py-2 text-right font-semibold font-mono">{formatAmount(item.total)}</td>
                 </tr>
               ))}
@@ -90,22 +90,22 @@ export function InvoiceCard({ data }: { data: InvoiceData }) {
         </div>
       )}
 
-      <div className="border-t border-white/[0.06] pt-3 space-y-1.5 text-[11px] font-mono">
-        <div className="flex justify-between text-white/40">
+      <div className="border-t border-border/[0.06] pt-3 space-y-1.5 text-[11px] font-mono">
+        <div className="flex justify-between text-primary-foreground/40">
           <span>Subtotal</span>
-          <span className="text-white/70">{formatAmount(subtotal)}</span>
+          <span className="text-primary-foreground/70">{formatAmount(subtotal)}</span>
         </div>
-        <div className="flex justify-between text-white/40">
+        <div className="flex justify-between text-primary-foreground/40">
           <span>Tax</span>
-          <span className="text-white/70">{formatAmount(tax)}</span>
+          <span className="text-primary-foreground/70">{formatAmount(tax)}</span>
         </div>
-        <div className="flex justify-between text-sm pt-1.5 border-t border-white/[0.04] font-semibold text-white">
+        <div className="flex justify-between text-sm pt-1.5 border-t border-border/[0.04] font-semibold text-primary-foreground">
           <span>Total Amount</span>
           <span className="text-primary font-bold">{formatAmount(total)}</span>
         </div>
       </div>
 
-      <div className="flex justify-between items-center mt-4 pt-3 border-t border-white/[0.06] text-[9px] text-white/30 font-mono">
+      <div className="flex justify-between items-center mt-4 pt-3 border-t border-border/[0.06] text-[9px] text-primary-foreground/30 font-mono">
         <span>Issued Date</span>
         <span>{date}</span>
       </div>

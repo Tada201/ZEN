@@ -66,7 +66,7 @@ export function ArtifactPanel({ isEmbedded = false }: { isEmbedded?: boolean }) 
     const content = activeArtifact.content.trim();
     const isSvg = activeArtifact.type === "svg" || language === "svg" || content.startsWith("<svg");
     if (isSvg || activeArtifact.type === "html" || activeArtifact.type === "openui") {
-      return <SandboxedIframe content={activeArtifact.content} title={activeArtifact.title} className="h-full w-full bg-white" />;
+      return <SandboxedIframe content={activeArtifact.content} title={activeArtifact.title} className="h-full w-full bg-card" />;
     }
     if (language === "mermaid") {
       return <Suspense fallback={<PanelLoading />}><div className="h-full overflow-auto p-5"><MermaidDiagram code={activeArtifact.content} /></div></Suspense>;

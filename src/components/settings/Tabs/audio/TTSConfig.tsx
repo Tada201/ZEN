@@ -93,7 +93,7 @@ export const TTSConfig = memo(() => {
     const statusBadge = (() => {
         if (downloading) {
             return (
-                <span className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+                <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                     <Loader2 size={10} className="animate-spin" />
                     Downloading…
                 </span>
@@ -101,14 +101,14 @@ export const TTSConfig = memo(() => {
         }
         if (isDownloaded) {
             return (
-                <span className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400">
+                <span className="flex items-center gap-1.5 text-[10px] font-bold text-success">
                     <CheckCircle2 size={10} />
                     Ready ({Math.round((downloadStatus!.sizeBytes / (1024 * 1024)) * 10) / 10} MB)
                 </span>
             );
         }
         return (
-            <span className="text-[10px] font-bold text-zinc-500">Not downloaded</span>
+            <span className="text-[10px] font-bold text-muted-foreground">Not downloaded</span>
         );
     })();
 
@@ -139,18 +139,18 @@ export const TTSConfig = memo(() => {
                 {isPiper && (
                     <>
                         {/* Inline Piper voice downloader */}
-                        <div className="flex flex-col gap-3 rounded-xl border border-white/[0.04] bg-zinc-900/15 px-4 py-3">
-                            <div className="flex items-center gap-2 text-[11px] font-bold text-white">
+                        <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3">
+                            <div className="flex items-center gap-2 text-[11px] font-bold text-foreground">
                                 <Volume2 size={12} className="text-[#a855f7]" />
                                 <span className="uppercase tracking-wider">Download Piper Voice</span>
                             </div>
-                            <p className="text-[11px] text-zinc-500 leading-relaxed">
+                            <p className="text-[11px] text-muted-foreground leading-relaxed">
                                 Download a Piper voice model from Hugging Face. After download, the voice
                                 appears in the list below and is ready to use immediately.
                             </p>
                             <div className="flex items-end gap-3">
                                 <div className="flex-1">
-                                    <div className="text-[10px] font-medium text-zinc-400 mb-1">Voice</div>
+                                    <div className="text-[10px] font-medium text-muted-foreground mb-1">Voice</div>
                                     <WorkbenchSelect
                                         value={selectedVoice}
                                         onValueChange={(val) => {
@@ -180,12 +180,12 @@ export const TTSConfig = memo(() => {
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
                                 {statusBadge}
-                                <span className="text-[10px] text-zinc-600">
+                                <span className="text-[10px] text-muted-foreground/70">
                                     {PIPER_VOICES.find((v) => v.value === selectedVoice)?.description}
                                 </span>
                             </div>
                             {error && (
-                                <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-[11px] text-red-400">
+                                <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-[11px] text-destructive">
                                     {error}
                                 </div>
                             )}

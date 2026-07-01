@@ -145,10 +145,10 @@ export const CustomVoiceSelector = memo(({ disabled }: CustomVoiceSelectorProps)
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-[11px] font-bold text-white">
+        <div className="flex items-center gap-2 text-[11px] font-bold text-primary-foreground">
           <Volume2 size={12} className="text-brand-purple" />
           <span className="uppercase tracking-wider">Piper Voice Models</span>
-          <span className="text-[10px] font-mono text-zinc-500">
+          <span className="text-[10px] font-mono text-muted-foreground">
             {voices.length} available
           </span>
         </div>
@@ -188,16 +188,16 @@ export const CustomVoiceSelector = memo(({ disabled }: CustomVoiceSelectorProps)
         </div>
       )}
 
-      <div className="max-h-72 space-y-1.5 overflow-y-auto rounded-lg border border-white/[0.04] bg-zinc-950/40 p-1.5">
+      <div className="max-h-72 space-y-1.5 overflow-y-auto rounded-lg border border-border/[0.04] bg-background/40 p-1.5">
         {loading && voices.length === 0 ? (
-          <div className="flex items-center justify-center gap-2 py-8 text-[11px] text-zinc-500">
+          <div className="flex items-center justify-center gap-2 py-8 text-[11px] text-muted-foreground">
             <Loader2 size={12} className="animate-spin" />
             <span>Loading voices…</span>
           </div>
         ) : voices.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-8 text-[11px] text-zinc-500">
+          <div className="flex flex-col items-center justify-center gap-2 py-8 text-[11px] text-muted-foreground">
             <span>No Piper voices found.</span>
-            <span className="text-[10px] text-zinc-600">
+            <span className="text-[10px] text-muted-foreground">
               Click "Import ONNX" to add a custom voice.
             </span>
           </div>
@@ -212,7 +212,7 @@ export const CustomVoiceSelector = memo(({ disabled }: CustomVoiceSelectorProps)
                   "flex items-center gap-3 rounded-md border px-3 py-2 transition-colors",
                   isActive
                     ? "border-brand-purple/40 bg-brand-purple/5"
-                    : "border-white/[0.04] bg-zinc-900/30 hover:bg-zinc-900/60",
+                    : "border-border/[0.04] bg-card/30 hover:bg-card/60",
                 )}
               >
                 <button
@@ -227,14 +227,14 @@ export const CustomVoiceSelector = memo(({ disabled }: CustomVoiceSelectorProps)
                       "h-3.5 w-3.5 shrink-0 rounded-full border-2 transition-colors",
                       isActive
                         ? "border-brand-purple bg-brand-purple"
-                        : "border-zinc-600 bg-transparent",
+                        : "border-border bg-transparent",
                     )}
                   />
                   <div className="flex min-w-0 flex-col">
-                    <span className="truncate text-[12px] font-semibold text-white">
+                    <span className="truncate text-[12px] font-semibold text-primary-foreground">
                       {voice.name}
                     </span>
-                    <span className="truncate text-[10px] text-zinc-500">
+                    <span className="truncate text-[10px] text-muted-foreground">
                       {voiceDetailLabel(voice)}
                     </span>
                   </div>
@@ -254,7 +254,7 @@ export const CustomVoiceSelector = memo(({ disabled }: CustomVoiceSelectorProps)
                 </WorkbenchButton>
                 {!voice.is_default && (
                   <span
-                    className="text-zinc-600"
+                    className="text-muted-foreground"
                     title="Default bundled voice cannot be removed"
                   >
                     <Trash2 size={12} />

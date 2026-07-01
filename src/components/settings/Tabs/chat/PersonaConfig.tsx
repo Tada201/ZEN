@@ -39,38 +39,38 @@ export const PersonaConfig = memo(() => {
                     }
                 />
 
-                <div className="flex flex-col gap-2 p-4 bg-zinc-900/20 border border-white/[0.03] rounded-lg">
+                <div className="flex flex-col gap-2 p-4 bg-muted/30 border border-border/[0.03] rounded-lg">
                     <div className="flex items-center gap-2">
-                        <WorkbenchIcon name="codicon:terminal" size={14} className="text-zinc-400" />
-                        <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                        <WorkbenchIcon name="codicon:terminal" size={14} className="text-muted-foreground" />
+                        <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                             System Instructions
                         </span>
                     </div>
                     <WorkbenchTextArea
-                        className="min-h-[120px] font-mono text-[12px] leading-relaxed bg-black/20 border-white/[0.05]"
+                        className="min-h-[120px] font-mono text-[12px] leading-relaxed bg-background/20 border-border"
                         placeholder="Enter core system instructions..."
                         value={systemPrompt}
                         onChangeText={(text) => updateSetting({ systemPrompt: text })}
                     />
-                    <p className="text-[10px] text-zinc-500 leading-normal italic">
+                    <p className="text-[10px] text-muted-foreground leading-normal italic">
                         Directives provided during initialization to define interaction constraints and behavior.
                     </p>
                 </div>
 
-                <div className="flex flex-col gap-2 p-4 bg-zinc-900/20 border border-white/[0.03] rounded-lg">
+                <div className="flex flex-col gap-2 p-4 bg-muted/30 border border-border/[0.03] rounded-lg">
                     <div className="flex items-center gap-2">
-                        <WorkbenchIcon name="codicon:pulse" size={14} className="text-zinc-400" />
-                        <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                        <WorkbenchIcon name="codicon:pulse" size={14} className="text-muted-foreground" />
+                        <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                             Voice & Audio Instructions
                         </span>
                     </div>
                     <WorkbenchTextArea
-                        className="min-h-[96px] font-mono text-[12px] leading-relaxed bg-black/20 border-white/[0.05]"
+                        className="min-h-[96px] font-mono text-[12px] leading-relaxed bg-background/20 border-border"
                         placeholder="Enter auditory interface instructions..."
                         value={voiceInstructions}
                         onChangeText={(text) => updateSetting({ voiceInstructions: text })}
                     />
-                    <p className="text-[10px] text-zinc-500 leading-normal italic">
+                    <p className="text-[10px] text-muted-foreground leading-normal italic">
                         Specific constraints and guidelines for Voice and STT modalities.
                     </p>
                 </div>

@@ -33,8 +33,8 @@ export const CSSInjection = memo(() => {
     return (
         <section className="flex flex-col gap-6">
             <div>
-                <h2 className="text-[11px] font-bold text-white/90 uppercase tracking-widest mb-1">Custom CSS Injection</h2>
-                <p className="text-[11px] text-white/50 leading-relaxed">
+                <h2 className="text-[11px] font-bold text-foreground uppercase tracking-widest mb-1">Custom CSS Injection</h2>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
                     Inject custom CSS stylesheets to override the workbench appearance.
                     Supports real-time updates and deep visual customization.
                 </p>
@@ -61,13 +61,13 @@ export const CSSInjection = memo(() => {
                                 readOnly
                                 placeholder="Awaiting file selection..."
                                 value={customCssPath}
-                                className="flex-1 text-[11px] font-mono bg-zinc-950/50 rounded-lg border border-white/5"
+                                className="flex-1 text-[11px] font-mono bg-card/70 rounded-lg border border-border"
                             />
                             <WorkbenchButton
                                 onClick={handlePickCssFile}
-                                className="h-10 w-10 flex items-center justify-center p-0 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+                                className="h-10 w-10 flex items-center justify-center p-0 rounded-lg border border-border bg-muted/50 hover:bg-muted transition-colors"
                             >
-                                <WorkbenchIcon name="codicon:folder-opened" size={16} className="text-white/60" />
+                                <WorkbenchIcon name="codicon:folder-opened" size={16} className="text-muted-foreground" />
                             </WorkbenchButton>
                         </div>
                     }
@@ -81,7 +81,7 @@ export const CSSInjection = memo(() => {
                             exit={{ opacity: 0, height: 0 }}
                             className="pt-2"
                         >
-                            <div className="flex items-center gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400">
+                            <div className="flex items-center gap-3 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive">
                                 <WorkbenchIcon name="codicon:warning" size={16} className="shrink-0" />
                                 <span className="text-[11px] font-medium">
                                     Valid CSS file path is required for protocol activation.

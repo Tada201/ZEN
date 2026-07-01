@@ -63,18 +63,18 @@ export const PinnedActionBar = memo(({
                         className={cn(
                           "flex items-center gap-1.5 px-2 py-1 rounded-md transition-all text-[13px] font-medium group relative",
                           isThinking 
-                            ? "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 shadow-sm" 
-                            : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                            ? "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-warning shadow-sm" 
+                            : "text-muted-foreground hover:bg-muted dark:hover:bg-muted"
                         )}
                       >
                         <Brain className="w-3.5 h-3.5" />
                         {!isCompactMode && <span className="responsive-label">Thinking</span>}
-                        <div onClick={(e) => { e.stopPropagation(); togglePin('thinking'); }} role="button" className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 p-0.5 bg-white dark:bg-zinc-900 rounded-full border border-zinc-200 dark:border-zinc-700 shadow-sm transition-opacity cursor-pointer">
-                          <PinOff className="w-2 h-2 text-zinc-400" />
+                        <div onClick={(e) => { e.stopPropagation(); togglePin('thinking'); }} role="button" className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 p-0.5 bg-card dark:bg-muted rounded-full border border-border dark:border-border shadow-sm transition-opacity cursor-pointer">
+                          <PinOff className="w-2 h-2 text-muted-foreground" />
                         </div>
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-80 p-4 border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-xl" side="top" align="center">
+                    <PopoverContent className="w-80 p-4 border-border dark:border-border shadow-2xl rounded-xl" side="top" align="center">
                       <ThinkingConfig 
                         isThinking={isThinking}
                         setIsThinking={setIsThinking}
@@ -104,14 +104,14 @@ export const PinnedActionBar = memo(({
                   className={cn(
                     "flex items-center gap-1.5 px-2 py-1 rounded-md transition-all text-[13px] font-medium group relative",
                     isWebSearch 
-                      ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" 
-                      : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-primary" 
+                      : "text-muted-foreground hover:bg-muted dark:hover:bg-muted"
                   )}
                 >
                   <Globe className="w-3.5 h-3.5" />
                   {!isCompactMode && <span className="responsive-label">Search</span>}
-                  <div onClick={(e) => { e.stopPropagation(); togglePin('search'); }} role="button" className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 p-0.5 bg-white dark:bg-zinc-900 rounded-full border border-zinc-200 dark:border-zinc-700 shadow-sm transition-opacity cursor-pointer">
-                    <PinOff className="w-2 h-2 text-zinc-400" />
+                  <div onClick={(e) => { e.stopPropagation(); togglePin('search'); }} role="button" className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 p-0.5 bg-card dark:bg-muted rounded-full border border-border dark:border-border shadow-sm transition-opacity cursor-pointer">
+                    <PinOff className="w-2 h-2 text-muted-foreground" />
                   </div>
                 </motion.button>
               );
@@ -130,14 +130,14 @@ export const PinnedActionBar = memo(({
                   className={cn(
                     "flex items-center gap-1.5 px-2 py-1 rounded-md transition-all text-[13px] font-medium group relative",
                     isDeepResearch 
-                      ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400" 
-                      : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-primary" 
+                      : "text-muted-foreground hover:bg-muted dark:hover:bg-muted"
                   )}
                 >
                   <Compass className="w-3.5 h-3.5" />
                   {!isCompactMode && <span className="responsive-label">Research</span>}
-                  <div onClick={(e) => { e.stopPropagation(); togglePin('research'); }} role="button" className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 p-0.5 bg-white dark:bg-zinc-900 rounded-full border border-zinc-200 dark:border-zinc-700 shadow-sm transition-opacity cursor-pointer">
-                    <PinOff className="w-2 h-2 text-zinc-400" />
+                  <div onClick={(e) => { e.stopPropagation(); togglePin('research'); }} role="button" className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 p-0.5 bg-card dark:bg-muted rounded-full border border-border dark:border-border shadow-sm transition-opacity cursor-pointer">
+                    <PinOff className="w-2 h-2 text-muted-foreground" />
                   </div>
                 </motion.button>
               );
@@ -157,13 +157,13 @@ export const PinnedActionBar = memo(({
                     "flex items-center gap-1.5 px-2 py-1 rounded-md transition-all text-[13px] font-medium group relative",
                     generativeUI 
                       ? "bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400" 
-                      : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      : "text-muted-foreground hover:bg-muted dark:hover:bg-muted"
                   )}
                 >
                   <Layout className="w-3.5 h-3.5" />
                   {!isCompactMode && <span className="responsive-label">Gen UI</span>}
-                  <div onClick={(e) => { e.stopPropagation(); togglePin('genui'); }} role="button" className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 p-0.5 bg-white dark:bg-zinc-900 rounded-full border border-zinc-200 dark:border-zinc-700 shadow-sm transition-opacity cursor-pointer">
-                    <PinOff className="w-2 h-2 text-zinc-400" />
+                  <div onClick={(e) => { e.stopPropagation(); togglePin('genui'); }} role="button" className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 p-0.5 bg-card dark:bg-muted rounded-full border border-border dark:border-border shadow-sm transition-opacity cursor-pointer">
+                    <PinOff className="w-2 h-2 text-muted-foreground" />
                   </div>
                 </motion.button>
               );
@@ -176,9 +176,9 @@ export const PinnedActionBar = memo(({
 
       {!isCompactMode && (isAuto === false || isToolsDisabled === true) && (
         <div className="flex items-center gap-2 ml-1">
-          <div className="h-3 w-px bg-zinc-200 dark:bg-zinc-800 mx-0.5" />
-          {isAuto === false && <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Manual</span>}
-          {isToolsDisabled === true && <span className="text-[10px] font-bold uppercase tracking-wider text-red-500">No Tools</span>}
+          <div className="h-3 w-px bg-muted dark:bg-muted mx-0.5" />
+          {isAuto === false && <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Manual</span>}
+          {isToolsDisabled === true && <span className="text-[10px] font-bold uppercase tracking-wider text-destructive">No Tools</span>}
         </div>
       )}
     </div>

@@ -73,13 +73,13 @@ export function HlsCameraPlayer({ playback, onPlaybackError }: HlsCameraPlayerPr
   }, [onPlaybackError, playback.streamFormat, playback.streamUrl]);
 
   return (
-    <div className="relative h-full w-full bg-black">
-      {isLoading ? <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 text-[11px] text-zinc-300">Loading stream...</div> : null}
+    <div className="relative h-full w-full bg-background">
+      {isLoading ? <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70 text-[11px] text-foreground">Loading stream...</div> : null}
       <video
         ref={videoRef}
         controls
         playsInline
-        className="h-full w-full bg-black object-contain"
+        className="h-full w-full bg-background object-contain"
         onCanPlay={() => setIsLoading(false)}
         onError={() => onPlaybackError('This camera stream could not be decoded by the current WebView.')}
       />

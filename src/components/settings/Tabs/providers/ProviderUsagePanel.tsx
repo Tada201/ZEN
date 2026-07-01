@@ -61,7 +61,7 @@ export function ProviderUsagePanel({ models }: ProviderUsagePanelProps) {
   }, [refresh]);
 
   return (
-    <section className="border-t border-white/[0.06] pt-6" aria-label="Model usage">
+    <section className="border-t border-border pt-6" aria-label="Model usage">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h4 className="text-sm font-semibold text-foreground">Local Usage</h4>
@@ -79,7 +79,7 @@ export function ProviderUsagePanel({ models }: ProviderUsagePanelProps) {
         </WorkbenchButton>
       </div>
 
-      <div className="mt-4 grid grid-cols-3 divide-x divide-white/[0.06] border-y border-white/[0.06] bg-white/[0.015]">
+      <div className="mt-4 grid grid-cols-3 divide-x divide-white/[0.06] border-y border-border bg-muted/20">
         <Metric label="Responses" value={formatCount(snapshot.totalRequests)} />
         <Metric label="Input Tokens" value={formatCount(snapshot.totalTokensIn)} />
         <Metric label="Output Tokens" value={formatCount(snapshot.totalTokensOut)} />
@@ -87,13 +87,13 @@ export function ProviderUsagePanel({ models }: ProviderUsagePanelProps) {
 
       <div className="mt-4 flex items-center justify-between gap-3">
         <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Usage trend</div>
-        <div className="flex rounded-md border border-white/[0.08] p-0.5" aria-label="Usage time range">
+        <div className="flex rounded-md border border-border p-0.5" aria-label="Usage time range">
           {PERIODS.map((period) => (
             <button
               key={period.days}
               type="button"
               onClick={() => setPeriodDays(period.days)}
-              className={`rounded px-2 py-1 text-[10px] font-medium transition-colors ${period.days === periodDays ? 'bg-white/[0.1] text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`rounded px-2 py-1 text-[10px] font-medium transition-colors ${period.days === periodDays ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               aria-pressed={period.days === periodDays}
             >
               {period.label}
@@ -104,12 +104,12 @@ export function ProviderUsagePanel({ models }: ProviderUsagePanelProps) {
 
       <UsageTrend daily={snapshot.daily} />
 
-      {error ? <p className="mt-3 text-xs text-rose-300">{error}</p> : null}
+      {error ? <p className="mt-3 text-xs text-destructive">{error}</p> : null}
 
       {snapshot.models.length > 0 ? (
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[480px] text-left text-xs">
-            <thead className="border-b border-white/[0.06] text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+            <thead className="border-b border-border text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
               <tr>
                 <th className="py-2 font-medium">Model</th>
                 <th className="py-2 text-right font-medium">Responses</th>
@@ -120,7 +120,7 @@ export function ProviderUsagePanel({ models }: ProviderUsagePanelProps) {
             </thead>
             <tbody>
               {snapshot.models.map((model) => (
-                <tr key={model.model} className="border-b border-white/[0.04] last:border-0">
+                <tr key={model.model} className="border-b border-border last:border-0">
                   <td className="max-w-[180px] truncate py-2.5 font-mono text-foreground" title={model.model}>{model.model}</td>
                   <td className="py-2.5 text-right text-muted-foreground">{formatCount(model.requests)}</td>
                   <td className="py-2.5 text-right text-muted-foreground">{formatCount(model.tokensIn)}</td>
@@ -136,7 +136,7 @@ export function ProviderUsagePanel({ models }: ProviderUsagePanelProps) {
       )}
 
       {snapshot.history.length > 0 ? (
-        <div className="mt-5 border-t border-white/[0.06] pt-4">
+        <div className="mt-5 border-t border-border pt-4">
           <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Recent completed responses</div>
           <div className="space-y-1">
             {snapshot.history.slice(0, 8).map((entry) => (
@@ -161,7 +161,7 @@ function UsageTrend({ daily }: { daily: ProviderUsageSnapshot['daily'] }) {
   }
 
   return (
-    <div className="mt-3 flex h-24 items-end gap-1 border-b border-white/[0.06] pb-1" aria-label="Daily token usage chart">
+    <div className="mt-3 flex h-24 items-end gap-1 border-b border-border pb-1" aria-label="Daily token usage chart">
       {daily.map((item) => {
         const tokens = item.tokensIn + item.tokensOut;
         const height = Math.max(6, Math.round((tokens / peak) * 88));

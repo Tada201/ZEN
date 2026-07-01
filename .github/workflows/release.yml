@@ -104,6 +104,24 @@ jobs:
         working-directory: src-tauri
         run: cargo test --bin zen
 
+      - name: Verify dev/release profile isolation
+        shell: pwsh
+        run: |
+          $lib = Get-Content -Raw src-tauri/src/lib.rs
+          if (-not ($lib -match 'cfg!\(debug_assertions\)')) {
+            Write-Error "src-tauri/src/lib.rs must branch on cfg!(debug_assertions) for dev/release profile isolation"
+            exit 1
+          }
+          if (-not ($lib -match '"novus-dev\.db"')) {
+            Write-Error "Dev database path (novus-dev.db) not found"
+            exit 1
+          }
+          if (-not ($lib -match '"lancedb-dev"')) {
+            Write-Error "Dev LanceDB path (lancedb-dev) not found"
+            exit 1
+          }
+          Write-Host "Profile isolation contract verified."
+
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
 

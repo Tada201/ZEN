@@ -255,14 +255,14 @@ export function WorkspaceApp() {
         }
         main={
           currentWorkspaceTab === "openui" ? (
-            <div className="flex-1 h-full flex flex-col items-center justify-center bg-[#09090b] p-6 text-center select-none font-sans">
-              <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-white/5 flex items-center justify-center mb-6">
-                <Hammer className="w-7 h-7 text-zinc-400" />
+            <div className="flex-1 h-full flex flex-col items-center justify-center bg-background p-6 text-center select-none font-sans">
+              <div className="w-16 h-16 rounded-2xl bg-muted border border-border flex items-center justify-center mb-6">
+                <Hammer className="w-7 h-7 text-muted-foreground" />
               </div>
-              <h3 className="text-sm font-semibold text-zinc-200 mb-2">
+              <h3 className="text-sm font-semibold text-foreground mb-2">
                 Canvas Mode Under Construction
               </h3>
-              <p className="text-xs text-zinc-500 max-w-sm leading-relaxed">
+              <p className="text-xs text-muted-foreground max-w-sm leading-relaxed">
                 This feature is currently undergoing a redesign to bring you an even better visualization and creation experience.
               </p>
             </div>
@@ -274,11 +274,11 @@ export function WorkspaceApp() {
                   <button
                     type="button"
                     onClick={() => useUIStore.getState().setSidebarOpen(true)}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-white/[0.06] md:hidden backdrop-blur-md"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-muted md:hidden backdrop-blur-md"
                     title="Open sidebar"
                     aria-label="Open sidebar"
                   >
-                    <PanelLeftOpen className="h-4 w-4 text-zinc-500" />
+                    <PanelLeftOpen className="h-4 w-4 text-muted-foreground" />
                   </button>
                   <span className="text-sm font-semibold tracking-tight text-foreground/90 font-sans drop-shadow-md truncate max-w-[300px]">
                     {sessions.find(s => s.id === currentSessionId)?.title || "New Chat"}
@@ -290,13 +290,13 @@ export function WorkspaceApp() {
                       setActiveSettingsTab("providers");
                       setSettingsOpen(true);
                     }}
-                    className="h-8 w-8 rounded-lg hover:bg-white/[0.1] backdrop-blur-md flex items-center justify-center transition-colors"
+                    className="h-8 w-8 rounded-lg hover:bg-muted backdrop-blur-md flex items-center justify-center transition-colors"
                     title="Settings"
                     aria-label="Settings"
                     onPointerEnter={preloadSettingsModal}
                     onFocus={preloadSettingsModal}
                   >
-                    <Settings className="h-4 w-4 text-zinc-400" />
+                    <Settings className="h-4 w-4 text-muted-foreground" />
                   </button>
                 </div>
               </div>

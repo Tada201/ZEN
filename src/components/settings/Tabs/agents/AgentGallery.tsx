@@ -106,10 +106,10 @@ export const AgentGallery = memo(() => {
   return (
     <div className="flex flex-col gap-8">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-white/5">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-border">
         <div className="flex flex-col">
-          <span className="text-[14px] font-bold text-zinc-200 uppercase tracking-tight">Agent Command Registry</span>
-          <span className="text-[11px] text-zinc-400">
+          <span className="text-[14px] font-bold text-foreground uppercase tracking-tight">Agent Command Registry</span>
+          <span className="text-[11px] text-muted-foreground">
             Browse and test autonomous agents available in this workspace.
           </span>
         </div>
@@ -127,7 +127,7 @@ export const AgentGallery = memo(() => {
       {loading && (
         <div className="flex flex-col items-center justify-center gap-4 py-20">
           <WorkbenchIcon name="codicon:loading" size={32} className="text-brand-purple animate-spin" />
-          <span className="text-[12px] font-bold text-zinc-300 uppercase tracking-widest">
+          <span className="text-[12px] font-bold text-foreground uppercase tracking-widest">
             Synchronizing Agent Registry...
           </span>
         </div>
@@ -141,31 +141,31 @@ export const AgentGallery = memo(() => {
             return (
               <div
                 key={agent.id}
-                className="rounded-xl bg-zinc-900/15 border border-white/[0.04] p-5 flex flex-col gap-4 hover:bg-white/[0.04] hover:border-white/10 transition-colors"
+                className="rounded-xl bg-muted/30 border border-border p-5 flex flex-col gap-4 hover:bg-muted/50 hover:border-border transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-brand-purple/10 flex items-center justify-center border border-brand-purple/20">
                     <WorkbenchIcon name="codicon:robot" size={20} className="text-brand-purple" />
                   </div>
                   <div className="flex flex-col min-w-0">
-                    <h3 className="text-[13px] font-bold text-white truncate">{agent.name}</h3>
-                    <span className="text-[10px] font-mono text-zinc-500">{agent.id}</span>
+                    <h3 className="text-[13px] font-bold text-foreground truncate">{agent.name}</h3>
+                    <span className="text-[10px] font-mono text-muted-foreground">{agent.id}</span>
                   </div>
                 </div>
 
-                <p className="text-[11px] text-zinc-400 leading-relaxed line-clamp-3">
+                <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-3">
                   {agent.description}
                 </p>
 
-                <div className="bg-zinc-950/45 border border-white/[0.06] rounded-xl p-3 flex flex-col gap-2">
+                <div className="bg-card/70 border border-border rounded-xl p-3 flex flex-col gap-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest">Capabilities</span>
-                    <span className="text-[11px] font-bold text-emerald-400 font-mono">
+                    <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-widest">Capabilities</span>
+                    <span className="text-[11px] font-bold text-success font-mono">
                       {agent.tool_count} ACTIVE
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-4">
-                    <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest flex-shrink-0">Engine</span>
+                    <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-widest flex-shrink-0">Engine</span>
                     <span className="text-[11px] font-bold text-brand-purple truncate text-right">
                       {config?.model_name || agent.model_override || 'UNBOUND'}
                     </span>
@@ -174,7 +174,7 @@ export const AgentGallery = memo(() => {
 
                 <WorkbenchButton
                   variant="secondary"
-                  className="w-full h-8 gap-2 border-white/5 hover:bg-brand-purple/10 hover:border-brand-purple/20 group"
+                  className="w-full h-8 gap-2 border-border hover:bg-brand-purple/10 hover:border-brand-purple/20 group"
                   onClick={() => setSelectedAgent(agent)}
                 >
                   <WorkbenchIcon name="codicon:zap" size={14} className="group-hover:text-brand-purple transition-colors" />
@@ -189,8 +189,8 @@ export const AgentGallery = memo(() => {
       {/* Empty State */}
       {!loading && filteredAgents.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 gap-4 opacity-50">
-          <WorkbenchIcon name="codicon:search" size={40} className="text-zinc-400" />
-          <span className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest">No agents match your query</span>
+          <WorkbenchIcon name="codicon:search" size={40} className="text-muted-foreground" />
+          <span className="text-[12px] font-bold text-muted-foreground uppercase tracking-widest">No agents match your query</span>
         </div>
       )}
 
@@ -201,30 +201,30 @@ export const AgentGallery = memo(() => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/60 backdrop-blur-sm"
             onClick={closeSpawnModal}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 20 }}
-              className="w-full max-w-xl bg-zinc-950 border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+              className="w-full max-w-xl bg-card border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col"
               onClick={e => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-zinc-900/50">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/60">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-brand-purple/10 flex items-center justify-center border border-brand-purple/20">
                     <WorkbenchIcon name="codicon:circuit-board" size={18} className="text-brand-purple" />
                   </div>
                   <div className="flex flex-col">
                     <span className="text-[10px] font-extrabold text-brand-purple uppercase tracking-widest">Cognitive Handshake</span>
-                    <span className="text-[13px] font-bold text-zinc-100 uppercase">{selectedAgent.name}</span>
+                    <span className="text-[13px] font-bold text-foreground uppercase">{selectedAgent.name}</span>
                   </div>
                 </div>
                 <WorkbenchButton
                   onClick={closeSpawnModal}
-                  className="w-8 h-8 rounded-full hover:bg-white/5 flex items-center justify-center transition-colors text-zinc-400 hover:text-white"
+                  className="w-8 h-8 rounded-full hover:bg-muted/50 flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground"
                 >
                   <WorkbenchIcon name="codicon:close" size={18} />
                 </WorkbenchButton>
@@ -232,25 +232,25 @@ export const AgentGallery = memo(() => {
 
               {/* Modal Body */}
               <div className="p-6 flex flex-col gap-6 overflow-y-auto max-h-[70vh]">
-                <div className="bg-zinc-900 border border-white/5 rounded-2xl p-4 flex flex-col gap-4">
+                <div className="bg-muted border border-border rounded-2xl p-4 flex flex-col gap-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1">
-                      <span className="text-[9px] font-extrabold text-zinc-500 uppercase tracking-widest">Registry ID</span>
+                      <span className="text-[9px] font-extrabold text-muted-foreground uppercase tracking-widest">Registry ID</span>
                       <span className="text-[11px] font-bold font-mono text-brand-purple">{selectedAgent.id}</span>
                     </div>
                     <div className="flex flex-col gap-1">
-                      <span className="text-[9px] font-extrabold text-zinc-500 uppercase tracking-widest">Methods</span>
-                      <span className="text-[11px] font-bold text-zinc-200">{selectedAgent.tool_count} Active</span>
+                      <span className="text-[9px] font-extrabold text-muted-foreground uppercase tracking-widest">Methods</span>
+                      <span className="text-[11px] font-bold text-foreground">{selectedAgent.tool_count} Active</span>
                     </div>
                     <div className="flex flex-col gap-1">
-                      <span className="text-[9px] font-extrabold text-zinc-500 uppercase tracking-widest">Model Lock</span>
-                      <span className="text-[11px] font-bold text-zinc-200">
+                      <span className="text-[9px] font-extrabold text-muted-foreground uppercase tracking-widest">Model Lock</span>
+                      <span className="text-[11px] font-bold text-foreground">
                         {getAgentConfig(selectedAgent.id)?.model_name || 'System Default'}
                       </span>
                     </div>
                     <div className="flex flex-col gap-1">
-                      <span className="text-[9px] font-extrabold text-zinc-500 uppercase tracking-widest">Retention</span>
-                      <span className="text-[11px] font-bold text-zinc-200">
+                      <span className="text-[9px] font-extrabold text-muted-foreground uppercase tracking-widest">Retention</span>
+                      <span className="text-[11px] font-bold text-foreground">
                         {getAgentConfig(selectedAgent.id)?.max_messages_in_memory || 10} Messages
                       </span>
                     </div>
@@ -258,11 +258,11 @@ export const AgentGallery = memo(() => {
                 </div>
 
                 <div className="flex flex-col gap-3">
-                  <label className="text-[11px] font-extrabold text-zinc-300 uppercase tracking-widest ml-1">
+                  <label className="text-[11px] font-extrabold text-foreground uppercase tracking-widest ml-1">
                     Sandbox Initialization Params
                   </label>
                   <textarea
-                    className="w-full h-32 bg-zinc-900 border border-white/10 rounded-xl p-4 text-[12px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-brand-purple/50 focus:ring-1 focus:ring-brand-purple/20 transition-[border-color,box-shadow] resize-none"
+                    className="w-full h-32 bg-muted border border-border rounded-xl p-4 text-[12px] text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:border-brand-purple/50 focus:ring-1 focus:ring-brand-purple/20 transition-[border-color,box-shadow] resize-none"
                     placeholder="Input initial protocols or task directives..."
                     value={testMessage}
                     onChange={(e) => setTestMessage(e.target.value)}
@@ -278,16 +278,16 @@ export const AgentGallery = memo(() => {
                       className={cn(
                         "p-4 rounded-xl border flex items-center gap-3",
                         spawnResult.success
-                          ? 'bg-emerald-500/5 border-emerald-500/20'
-                          : 'bg-red-500/5 border-red-500/20'
+                          ? 'bg-success/5 border-emerald-500/20'
+                          : 'bg-destructive/5 border-destructive/20'
                       )}
                     >
                       <WorkbenchIcon
                         name={spawnResult.success ? 'codicon:pass-filled' : 'codicon:warning'}
                         size={18}
-                        className={spawnResult.success ? 'text-emerald-500' : 'text-red-500'}
+                        className={spawnResult.success ? 'text-emerald-500' : 'text-destructive'}
                       />
-                      <span className={cn("text-[11px] font-bold", spawnResult.success ? 'text-zinc-200' : 'text-red-400')}>
+                      <span className={cn("text-[11px] font-bold", spawnResult.success ? 'text-foreground' : 'text-destructive')}>
                         {spawnResult.message}
                       </span>
                     </motion.div>
@@ -296,7 +296,7 @@ export const AgentGallery = memo(() => {
               </div>
 
               {/* Modal Footer */}
-              <div className="px-6 py-4 border-t border-white/5 flex justify-end gap-3 bg-zinc-900/30">
+              <div className="px-6 py-4 border-t border-border flex justify-end gap-3 bg-muted/40">
                 <WorkbenchButton variant="secondary" onClick={closeSpawnModal} className="px-6">
                   <span className="text-[10px] font-extrabold uppercase">Abort</span>
                 </WorkbenchButton>

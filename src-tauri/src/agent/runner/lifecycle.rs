@@ -64,7 +64,10 @@ impl Runner {
             config: RunConfig::default(),
             db_pool: None,
             depth: 0,
-            cache: Arc::new(tokio::sync::Mutex::new(ToolCache::new(300))),
+            // Cache default is a short safety net only; actual TTLs come from
+            // `crate::agent::cache::ttl_for_tool`. Anything not on that allowlist
+            // is not cached and mutating tools clear the cache on completion.
+            cache: Arc::new(tokio::sync::Mutex::new(ToolCache::new(60))),
             allowed_tools: Arc::new(tokio::sync::Mutex::new(HashSet::new())),
             on_event: None,
         }

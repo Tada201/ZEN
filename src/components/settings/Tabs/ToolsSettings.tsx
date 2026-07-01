@@ -26,7 +26,7 @@ const MODES: Array<{
     description: "Confirm every tool action before it runs.",
     detail: "Best for unfamiliar workspaces or sensitive data.",
     icon: "lucide:lock-keyhole",
-    tone: "text-blue-400",
+    tone: "text-primary",
   },
   {
     id: "balanced",
@@ -34,7 +34,7 @@ const MODES: Array<{
     description: "Run safe read-only actions and ask before changes.",
     detail: "Recommended for everyday use.",
     icon: "lucide:shield-check",
-    tone: "text-emerald-400",
+    tone: "text-success",
   },
   {
     id: "autonomous",
@@ -42,23 +42,23 @@ const MODES: Array<{
     description: "Run permitted tools without confirmation.",
     detail: "Use only in a trusted, isolated workspace.",
     icon: "lucide:zap",
-    tone: "text-amber-400",
+    tone: "text-warning",
   },
 ];
 
 const RISK_STYLE: Record<string, string> = {
-  Low: "border-emerald-500/20 bg-emerald-500/10 text-emerald-400",
-  Medium: "border-amber-500/20 bg-amber-500/10 text-amber-400",
+  Low: "border-emerald-500/20 bg-success/10 text-success",
+  Medium: "border-warning/20 bg-warning/10 text-warning",
   High: "border-orange-500/20 bg-orange-500/10 text-orange-400",
-  Critical: "border-red-500/20 bg-red-500/10 text-red-400",
+  Critical: "border-destructive/20 bg-destructive/10 text-destructive",
 };
 
 const STATUS_STYLE: Record<string, string> = {
-  ready: "border-emerald-500/15 bg-emerald-500/10 text-emerald-400",
+  ready: "border-emerald-500/15 bg-success/10 text-success",
   external: "border-sky-500/15 bg-sky-500/10 text-sky-300",
-  requires_config: "border-amber-500/15 bg-amber-500/10 text-amber-300",
+  requires_config: "border-warning/15 bg-warning/10 text-warning",
   partial: "border-orange-500/15 bg-orange-500/10 text-orange-300",
-  frontend_missing: "border-red-500/15 bg-red-500/10 text-red-300",
+  frontend_missing: "border-destructive/15 bg-destructive/10 text-destructive",
 };
 
 const STATUS_LABEL: Record<string, string> = {

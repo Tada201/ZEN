@@ -91,8 +91,8 @@ export function MermaidDiagram({ code, isStreaming }: { code: string; isStreamin
   if (isStreaming) {
     return (
       <div ref={containerRef} className="space-y-2 my-6">
-        <div className="flex items-center gap-2 text-sm text-amber-500 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20">
-          <span className="w-2 h-2 rounded-full bg-amber-500 motion-safe:animate-pulse" />
+        <div className="flex items-center gap-2 text-sm text-warning bg-warning/10 px-3 py-2 rounded-lg border border-warning/20">
+          <span className="w-2 h-2 rounded-full bg-warning motion-safe:animate-pulse" />
           <span>Rendering Mermaid Diagram...</span>
         </div>
         <CodeBlock code={code} language="mermaid" />
@@ -103,9 +103,9 @@ export function MermaidDiagram({ code, isStreaming }: { code: string; isStreamin
   if (error) {
     return (
       <div ref={containerRef} className="space-y-2 my-6">
-        <div className="flex flex-col gap-1 text-sm text-red-500 bg-red-500/10 px-3 py-2 rounded-lg border border-red-500/20">
+        <div className="flex flex-col gap-1 text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-lg border border-destructive/20">
           <div className="flex items-center gap-2 font-medium">
-            <span className="w-2 h-2 rounded-full bg-red-500" />
+            <span className="w-2 h-2 rounded-full bg-destructive" />
             <span>Mermaid Syntax / Parser Error</span>
           </div>
           <p className="text-xs opacity-80">{error}</p>

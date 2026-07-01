@@ -263,6 +263,31 @@ impl ToolRegistry {
         self.tools.get(name).map(|tool| tool.risk_level())
     }
 
+    /// Canonical policy for the non-interactive MCP exposure surface.
+    ///
+    /// Only Low-risk tools are exposed. `SecurityService::evaluate` auto-allows
+    /// Low tools under the default policy and routes everything else through
+    /// `default_decision` (default: Ask), which `execute_non_interactive`
+    /// then rejects. Exposing Medium / High / Critical in the catalog would
+    /// advertise tools that the non-interactive path silently turns away.
+    /// This is the single source of truth shared by:
+    ///   * `mcp/server.rs` `handle_tools_list` (catalog)
+    ///   * `mcp/server.rs` `handle_tools_call` (call-time gate)
+    ///   * `commands/mcp.rs` `mcp_list_tools` (renderer-facing catalog)
+    pub fn is_mcp_exposable(&self, name: &str) -> bool {
+        matches!(self.direct_tool_risk(name), Some(RiskLevel::Low))
+    }
+
+    /// Returns the catalog of tool definitions the non-interactive MCP server
+    /// will actually honor. Use this for both `tools/list` and any renderer
+    /// catalog that mirrors what the server exposes.
+    pub fn mcp_exposable_definitions(&self) -> Vec<ToolDefinition> {
+        self.list_direct_definitions()
+            .into_iter()
+            .filter(|def| matches!(def.risk_level, Some(RiskLevel::Low)))
+            .collect()
+    }
+
     /// List tool definitions (for sending to LLM as available tools)
     pub fn list(&self) -> Vec<ToolInfo> {
         let mut infos: Vec<ToolInfo> = self.tools.values().map(|t| t.info()).collect();

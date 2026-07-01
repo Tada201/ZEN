@@ -392,12 +392,21 @@ impl AgentTool for WriteFileTool {
 pub struct WriteFileTool;
 
 // ─── 5. EditFileTool (Patch-style edits) ───
+//
+// This tool delegates to the canonical implementation in
+// `crate::tools::fs_tools::execute_targeted_edit` so the targeted-edit
+// contract (occurrence selection, mismatch reporting, workspace boundary,
+// file-size checks) lives in exactly one place.
 
 #[derive(Deserialize)]
 struct EditFileArgs {
     file_path: String,
     old_text: String,
     new_text: String,
+    /// Which occurrence of `old_text` to replace (1-indexed).
+    /// If omitted, replaces the first occurrence.
+    #[serde(default)]
+    occurrence: Option<usize>,
 }
 
 #[async_trait]
@@ -408,7 +417,8 @@ impl AgentTool for EditFileTool {
 
     fn description(&self) -> &str {
         "Edits a file by replacing old_text with new_text. Returns unified diff of changes. \
-         Use for precise edits rather than rewriting entire files."
+         Use for precise edits rather than rewriting entire files. Optional `occurrence` \
+         selects which match to replace when `old_text` appears multiple times."
     }
 
     fn input_schema(&self) -> Value {
@@ -417,7 +427,12 @@ impl AgentTool for EditFileTool {
             "properties": {
                 "file_path": { "type": "string", "description": "Path to the file" },
                 "old_text": { "type": "string", "description": "Text to find and replace" },
-                "new_text": { "type": "string", "description": "Replacement text" }
+                "new_text": { "type": "string", "description": "Replacement text" },
+                "occurrence": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "1-indexed occurrence of old_text to replace. Defaults to 1."
+                }
             },
             "required": ["file_path", "old_text", "new_text"],
             "additionalProperties": false
@@ -427,80 +442,24 @@ impl AgentTool for EditFileTool {
     async fn run(
         &self,
         app: AppHandle,
-        _chat_id: String,
+        chat_id: String,
         input: Value,
         _depth: u32,
         _allowed_tools: Option<Arc<Mutex<HashSet<String>>>>,
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
-        use crate::workspace::resolve_workspace_path;
-        use similar::{ChangeTag, TextDiff};
-
         let args: EditFileArgs = serde_json::from_value(input)?;
-
-        // Get workspace folder from AppState
-        let state = app.state::<AppState>();
-        let workspace = state.workspace_folder.read().await.clone();
-
-        // Resolve and validate path is within workspace
-        let target_path = resolve_workspace_path(&workspace, &args.file_path)
-            .map_err(|e| anyhow::anyhow!("Workspace violation: {}", e))?;
-
-        if !target_path.exists() {
-            return Ok(json!({ "error": format!("File not found: {}", args.file_path) }));
-        }
-
-        // Read original content
-        let original_content = tokio::fs::read_to_string(&target_path).await?;
-
-        // Replace old_text with new_text
-        if !original_content.contains(&args.old_text) {
-            return Ok(json!({
-                "error": "old_text not found in file",
-                "hint": "Ensure exact match including whitespace"
-            }));
-        }
-
-        let new_content = original_content.replace(&args.old_text, &args.new_text);
-
-        // Write new content
-        tokio::fs::write(&target_path, &new_content).await?;
-
-        // Generate unified diff
-        let diff = TextDiff::from_lines(&original_content, &new_content);
-
-        let mut diff_lines = Vec::new();
-        let mut lines_added = 0;
-        let mut lines_removed = 0;
-
-        // Add file headers
-        diff_lines.push(format!("--- a/{}", target_path.display()));
-        diff_lines.push(format!("+++ b/{}", target_path.display()));
-
-        for change in diff.iter_all_changes() {
-            match change.tag() {
-                ChangeTag::Delete => {
-                    diff_lines.push(format!("-{}", change.value().trim_end()));
-                    lines_removed += 1;
-                }
-                ChangeTag::Insert => {
-                    diff_lines.push(format!("+{}", change.value().trim_end()));
-                    lines_added += 1;
-                }
-                ChangeTag::Equal => {
-                    diff_lines.push(format!(" {}", change.value().trim_end()));
-                }
-            }
-        }
-
-        Ok(json!({
-            "file_path": target_path.to_string_lossy(),
-            "change_type": "modified",
-            "lines_added": lines_added,
-            "lines_removed": lines_removed,
-            "diff": diff_lines.join("\n"),
-            "success": true
-        }))
+        let output = crate::tools::fs_tools::execute_targeted_edit(
+            &app,
+            chat_id,
+            args.file_path,
+            args.old_text,
+            args.new_text,
+            args.occurrence,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+        Ok(output.content)
     }
 }
 

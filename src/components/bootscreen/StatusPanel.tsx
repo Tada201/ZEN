@@ -34,13 +34,13 @@ export const StatusPanel: React.FC<StatusPanelProps> = ({
       style={{ ...panelStyle, flex: '1 1 0%', minWidth: 0, maxWidth: 'clamp(240px, 30vw, 420px)' }}
     >
       {/* Header */}
-      <div className="px-3 sm:px-4 pt-3 sm:pt-4 pb-2 sm:pb-3 border-b border-white/[0.06]">
+      <div className="px-3 sm:px-4 pt-3 sm:pt-4 pb-2 sm:pb-3 border-b border-border/60">
         <div
           className={`uppercase font-light ${reducedMotion ? '' : 'transition-all duration-700'}`}
           style={{
             fontSize: 'clamp(8px, 0.85vw, 11px)',
             letterSpacing: '0.4em',
-            color: 'rgba(52,211,153,0.9)',
+            color: 'hsl(var(--success) / 0.9)',
             opacity: logoVisible ? 1 : 0,
             transform: reducedMotion ? 'translateY(0)' : (logoVisible ? 'translateY(0)' : 'translateY(-8px)'),
           }}
@@ -52,7 +52,7 @@ export const StatusPanel: React.FC<StatusPanelProps> = ({
           style={{
             fontSize: 'clamp(7px, 0.7vw, 9px)',
             letterSpacing: '0.25em',
-            color: '#71717a',
+            color: 'hsl(var(--muted-foreground))',
             opacity: logoSubVisible ? 1 : 0,
           }}
         >
@@ -61,9 +61,9 @@ export const StatusPanel: React.FC<StatusPanelProps> = ({
       </div>
 
       {/* Phase */}
-      <div className="px-3 sm:px-4 py-2 border-b border-white/[0.06]">
-        <div className="uppercase" style={{ fontSize: 'clamp(7px, 0.7vw, 9px)', letterSpacing: '0.2em', color: '#52525b' }}>Phase</div>
-        <div className="mt-0.5 uppercase font-light" style={{ fontSize: 'clamp(8px, 0.8vw, 10px)', letterSpacing: '0.2em', color: 'rgba(52,211,153,0.8)' }}>
+      <div className="px-3 sm:px-4 py-2 border-b border-border/60">
+        <div className="uppercase" style={{ fontSize: 'clamp(7px, 0.7vw, 9px)', letterSpacing: '0.2em', color: 'hsl(var(--muted-foreground) / 0.65)' }}>Phase</div>
+        <div className="mt-0.5 uppercase font-light" style={{ fontSize: 'clamp(8px, 0.8vw, 10px)', letterSpacing: '0.2em', color: 'hsl(var(--success) / 0.8)' }}>
           {bootPhase}
         </div>
       </div>
@@ -78,19 +78,19 @@ export const StatusPanel: React.FC<StatusPanelProps> = ({
               fontSize: 'clamp(9px, 0.85vw, 11px)',
               lineHeight: '1.4',
               animationDelay: reducedMotion ? undefined : `${i * 40}ms`,
-              backgroundColor: item.status === 'running' ? 'rgba(255,255,255,0.03)' : 'transparent',
+              backgroundColor: item.status === 'running' ? 'hsl(var(--foreground) / 0.03)' : 'transparent',
               transition: reducedMotion ? undefined : 'background-color 75ms ease',
             }}
           >
             <span className="shrink-0 text-right" style={{ width: 'clamp(22px, 2.2vw, 30px)' }}>{getStatusIcon(item.status)}</span>
             <div className="min-w-0">
               <span className="tracking-wider" style={{
-                color: item.status === 'ok' ? '#d4d4d8' : item.status === 'running' ? '#a1a1aa' : '#52525b',
+                color: item.status === 'ok' ? 'hsl(var(--foreground) / 0.85)' : item.status === 'running' ? 'hsl(var(--muted-foreground))' : 'hsl(var(--muted-foreground) / 0.65)',
               }}>
                 {item.label}
               </span>
               {item.status === 'ok' && (
-                <span className="ml-1" style={{ color: '#52525b', fontSize: 'clamp(8px, 0.75vw, 10px)' }}>{item.detail}</span>
+                <span className="ml-1" style={{ color: 'hsl(var(--muted-foreground) / 0.65)', fontSize: 'clamp(8px, 0.75vw, 10px)' }}>{item.detail}</span>
               )}
             </div>
           </div>
@@ -98,13 +98,13 @@ export const StatusPanel: React.FC<StatusPanelProps> = ({
       </div>
 
       {/* Footer */}
-      <div className="px-3 sm:px-4 py-2 border-t border-white/[0.06] flex items-center justify-between">
-        <span className="uppercase" style={{ fontSize: 'clamp(7px, 0.7vw, 9px)', letterSpacing: '0.15em', color: '#52525b' }}>
+      <div className="px-3 sm:px-4 py-2 border-t border-border/60 flex items-center justify-between">
+        <span className="uppercase" style={{ fontSize: 'clamp(7px, 0.7vw, 9px)', letterSpacing: '0.15em', color: 'hsl(var(--muted-foreground) / 0.65)' }}>
           {logsCount}/{totalLogsCount}
         </span>
         <span className="uppercase" style={{
           fontSize: 'clamp(7px, 0.7vw, 9px)', letterSpacing: '0.15em',
-          color: bootComplete ? '#34d399' : '#52525b',
+          color: bootComplete ? 'hsl(var(--success))' : 'hsl(var(--muted-foreground) / 0.65)',
         }}>
           {bootComplete ? 'READY' : 'BOOTING'}
         </span>

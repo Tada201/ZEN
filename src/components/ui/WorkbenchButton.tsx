@@ -15,11 +15,11 @@ export const WorkbenchButton = React.forwardRef<HTMLButtonElement, WorkbenchButt
     ({ className, variant = 'secondary', size = 'md', loading, children, ...props }, ref) => {
         const variants = {
             primary: 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm',
-            secondary: 'bg-white/[0.03] text-zinc-300 border border-white/[0.08] hover:bg-white/[0.06] hover:text-white',
-            outline: 'bg-transparent text-zinc-400 border border-white/[0.1] hover:bg-white/[0.03] hover:text-zinc-200',
-            ghost: 'bg-transparent text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300 border-transparent',
-            danger: 'bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500/20',
-            blue: 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20',
+            secondary: 'bg-muted/50 text-foreground border border-border hover:bg-muted hover:text-foreground',
+            outline: 'bg-transparent text-muted-foreground border border-border hover:bg-muted/50 hover:text-foreground',
+            ghost: 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground border-transparent',
+            danger: 'bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20',
+            blue: 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20',
         };
 
         const sizes = {

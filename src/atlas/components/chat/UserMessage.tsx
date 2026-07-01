@@ -12,7 +12,7 @@ export function UserMessage({ message, compact }: { message: Message; compact?: 
       className={cn(
         "group flex w-full flex-col px-4 transition-all duration-200",
         compact ? "bg-transparent py-1" : "bg-transparent py-2",
-        "hover:bg-white/[0.015]"
+        "hover:bg-muted/20"
       )}
     >
       <div className={cn(
@@ -32,7 +32,7 @@ export function UserMessage({ message, compact }: { message: Message; compact?: 
               >
                 {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
               </Button>
-              <div className="rounded-2xl border border-white/20 dark:border-white/10 bg-primary/10 dark:bg-primary/20 backdrop-blur-xl backdrop-saturate-150 px-5 py-3 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.08)] text-[14px] leading-relaxed text-foreground/90 font-medium ring-1 ring-black/5 dark:ring-white/10">
+              <div className="rounded-2xl border border-border dark:border-border bg-primary/10 dark:bg-primary/20 backdrop-blur-xl backdrop-saturate-150 px-5 py-3 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3),inset_0_1px_1px_hsl(var(--foreground) / 0.08)] text-[14px] leading-relaxed text-foreground/90 font-medium ring-1 ring-ring/5 dark:ring-ring/10">
                 {message.content}
               </div>
             </div>
@@ -52,7 +52,7 @@ export function UserMessage({ message, compact }: { message: Message; compact?: 
                     </div>
                   ) : (
                     <div className="flex h-8 w-8 items-center justify-center rounded bg-muted/50">
-                      {a.type === "pdf" ? <FileText className="h-4 w-4 text-red-500" /> : <Paperclip className="h-4 w-4" />}
+                      {a.type === "pdf" ? <FileText className="h-4 w-4 text-destructive" /> : <Paperclip className="h-4 w-4" />}
                     </div>
                   )}
                   <div className="flex flex-col">

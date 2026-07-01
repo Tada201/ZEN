@@ -130,13 +130,13 @@ export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500 pb-4">
             <div className="flex items-center justify-between px-1">
                 <div className="flex items-center gap-2">
-                    <WorkbenchIcon name="lucide:settings-2" size={14} className="text-white/40" />
-                    <h4 className="text-[11px] font-bold uppercase tracking-widest text-white/40">Model Parameters</h4>
+                    <WorkbenchIcon name="lucide:settings-2" size={14} className="text-muted-foreground" />
+                    <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Model Parameters</h4>
                 </div>
                 <button
                     type="button"
                     onClick={() => setShowAdvanced(value => !value)}
-                    className="rounded px-2 py-1 text-[10px] font-medium text-white/45 hover:bg-white/[0.04] hover:text-white/70"
+                    className="rounded px-2 py-1 text-[10px] font-medium text-foreground/45 hover:bg-muted/50 hover:text-foreground/80"
                 >
                     {showAdvanced ? 'Hide advanced' : 'Advanced'}
                 </button>
@@ -149,11 +149,11 @@ export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string
                         <div key={param.id} className="group space-y-2">
                             <div className="flex items-center justify-between gap-4">
                                 <div className="flex items-center gap-1.5 min-w-0">
-                                    <label className="text-[11px] font-medium text-white/70 truncate">
+                                    <label className="text-[11px] font-medium text-foreground/80 truncate">
                                         {param.label}
                                     </label>
                                     {(providerParams[param.id] !== undefined && providerParams[param.id] !== param.default) && (
-                                        <div className="h-1 w-1 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                                        <div className="h-1 w-1 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary) / 0.5)]" />
                                     )}
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
@@ -161,7 +161,7 @@ export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string
                                         <>
                                             <button 
                                                 onClick={() => resetParam(param.id, param.default)}
-                                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/5 rounded transition-all text-white/30 hover:text-white/60"
+                                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted/50 rounded transition-all text-muted-foreground/70 hover:text-muted-foreground"
                                                 title="Reset to default"
                                             >
                                                 <WorkbenchIcon name="lucide:rotate-ccw" size={10} />
@@ -171,7 +171,7 @@ export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string
                                                 value={providerParams[param.id] ?? param.default}
                                                 onChange={(e) => handleParamChange(param.id, parseFloat(e.target.value))}
                                                 step={param.step}
-                                                className="w-14 h-6 px-1.5 text-[10px] font-mono font-bold bg-white/[0.03] border border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 text-right"
+                                                className="w-14 h-6 px-1.5 text-[10px] font-mono font-bold bg-muted/40 border border-border rounded focus:outline-none focus:border-primary/50 text-primary text-right"
                                             />
                                         </>
                                     )}
@@ -188,7 +188,7 @@ export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string
                                         updateProviderParams(providerKey, { stop: array });
                                     }}
                                     placeholder="Enter strings and press ↵"
-                                    className="w-full h-8 px-3 text-[10px] font-mono bg-white/[0.03] border border-white/[0.08] rounded text-blue-400 placeholder:text-white/10 focus:outline-none focus:border-blue-500/50 transition-colors"
+                                    className="w-full h-8 px-3 text-[10px] font-mono bg-muted/40 border border-border rounded text-primary placeholder:text-muted-foreground/30 focus:outline-none focus:border-primary/50 transition-colors"
                                 />
                             ) : (
                                 <div className="relative flex items-center h-2 px-0.5">
@@ -199,7 +199,7 @@ export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string
                                         step={param.step}
                                         value={providerParams[param.id] ?? param.default}
                                         onChange={(e) => handleParamChange(param.id, parseFloat(e.target.value))}
-                                        className="w-full h-0.5 bg-white/[0.1] rounded-full appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400 transition-all"
+                                        className="w-full h-0.5 bg-muted rounded-full appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400 transition-all"
                                     />
                                 </div>
                             )}
@@ -208,10 +208,10 @@ export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string
                 </div>
 
                 {/* Sampling Group */}
-                {showAdvanced && <div className="mt-6 border-t border-white/[0.04] pt-4">
+                {showAdvanced && <div className="mt-6 border-t border-border pt-4">
                     <div className="flex items-center gap-2 mb-4 px-1">
-                        <WorkbenchIcon name="lucide:git-branch" size={12} className="text-white/20 rotate-90" />
-                        <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Sampling</span>
+                        <WorkbenchIcon name="lucide:git-branch" size={12} className="text-muted-foreground/50 rotate-90" />
+                        <span className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-widest">Sampling</span>
                     </div>
                     
                     <div className="space-y-4 px-1">
@@ -219,17 +219,17 @@ export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string
                             <div key={param.id} className="group space-y-2">
                                 <div className="flex items-center justify-between gap-4">
                                     <div className="flex items-center gap-1.5 min-w-0">
-                                        <label className="text-[11px] font-medium text-white/50 truncate">
+                                        <label className="text-[11px] font-medium text-muted-foreground truncate">
                                             {param.label}
                                         </label>
                                         {(providerParams[param.id] !== undefined && providerParams[param.id] !== param.default) && (
-                                            <div className="h-1 w-1 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                                            <div className="h-1 w-1 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary) / 0.5)]" />
                                         )}
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
                                         <button 
                                             onClick={() => resetParam(param.id, param.default)}
-                                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/5 rounded transition-all text-white/30 hover:text-white/60"
+                                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted/50 rounded transition-all text-muted-foreground/70 hover:text-muted-foreground"
                                             title="Reset to default"
                                         >
                                             <WorkbenchIcon name="lucide:rotate-ccw" size={10} />
@@ -239,7 +239,7 @@ export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string
                                             value={providerParams[param.id] ?? param.default}
                                             onChange={(e) => handleParamChange(param.id, parseFloat(e.target.value))}
                                             step={param.step}
-                                            className="w-14 h-6 px-1.5 text-[10px] font-mono font-bold bg-white/[0.03] border border-white/[0.08] rounded focus:outline-none focus:border-blue-500/50 text-blue-400 text-right"
+                                            className="w-14 h-6 px-1.5 text-[10px] font-mono font-bold bg-muted/40 border border-border rounded focus:outline-none focus:border-primary/50 text-primary text-right"
                                         />
                                     </div>
                                 </div>
@@ -251,7 +251,7 @@ export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string
                                         step={param.step}
                                         value={providerParams[param.id] ?? param.default}
                                         onChange={(e) => handleParamChange(param.id, parseFloat(e.target.value))}
-                                        className="w-full h-0.5 bg-white/[0.05] rounded-full appearance-none cursor-pointer accent-blue-500/50 hover:accent-blue-400 transition-all"
+                                        className="w-full h-0.5 bg-muted rounded-full appearance-none cursor-pointer accent-blue-500/50 hover:accent-blue-400 transition-all"
                                     />
                                 </div>
                             </div>
@@ -260,10 +260,10 @@ export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string
                 </div>}
             </div>
 
-            <div className="mx-1 p-2.5 rounded-lg bg-blue-500/[0.02] border border-blue-500/10 flex gap-2.5">
-                <WorkbenchIcon name="lucide:info" size={12} className="text-blue-400/40 shrink-0 mt-0.5" />
-                <p className="text-[9px] text-blue-400/40 font-medium leading-relaxed">
-                    Adjusting <span className="text-blue-400/60 font-bold uppercase">{providerKey}</span> runtime. 
+            <div className="mx-1 p-2.5 rounded-lg bg-primary/[0.02] border border-primary/10 flex gap-2.5">
+                <WorkbenchIcon name="lucide:info" size={12} className="text-primary/40 shrink-0 mt-0.5" />
+                <p className="text-[9px] text-primary/40 font-medium leading-relaxed">
+                    Adjusting <span className="text-primary/60 font-bold uppercase">{providerKey}</span> runtime. 
                     Changes are applied to the next inference request.
                 </p>
             </div>

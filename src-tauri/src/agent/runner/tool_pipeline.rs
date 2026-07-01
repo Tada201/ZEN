@@ -201,12 +201,16 @@ pub(super) fn cache_key_for(tool_call: &ToolCall) -> String {
     ToolCache::generate_key(&tool_call.name, &tool_call.args)
 }
 
+/// Read-side gate. Only deterministic, side-effect-free tools are cached —
+/// see `crate::agent::cache::ttl_for_tool` for the allowlist.
 pub(super) fn should_read_cache(tool_name: &str) -> bool {
-    tool_name != "write_todos"
+    crate::agent::cache::ttl_for_tool(tool_name).is_some()
 }
 
+/// Write-side gate. Errors are never cached so retries can re-execute.
+/// Otherwise restricted to the same allowlist as `should_read_cache`.
 pub(super) fn should_write_cache(tool_name: &str, is_error: bool) -> bool {
-    !is_error && tool_name != "write_todos"
+    !is_error && crate::agent::cache::ttl_for_tool(tool_name).is_some()
 }
 
 #[allow(clippy::too_many_arguments)]

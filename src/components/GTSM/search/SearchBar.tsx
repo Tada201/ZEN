@@ -109,8 +109,8 @@ export const SearchBar: React.FC = () => {
     return (
         <div ref={containerRef} className="relative w-full">
             {/* Input */}
-            <div className="flex items-center border border-white/15 bg-black/45 focus-within:border-primary/60 transition-colors backdrop-blur-md">
-                <div className="pl-2.5 pr-1.5 text-zinc-400">
+            <div className="flex items-center border border-border bg-background/45 focus-within:border-primary/60 transition-colors backdrop-blur-md">
+                <div className="pl-2.5 pr-1.5 text-muted-foreground">
                     <WorkbenchIcon name="solar:magnifer-linear" size={12} />
                 </div>
                 <input
@@ -123,7 +123,7 @@ export const SearchBar: React.FC = () => {
                     onFocus={() => setIsOpen(true)}
                     onKeyDown={handleKeyDown}
                     placeholder="Search locations and active entities"
-                    className="w-full bg-transparent py-1.5 pr-2 text-[10px] text-zinc-100 placeholder:text-zinc-400 focus:outline-none"
+                    className="w-full bg-transparent py-1.5 pr-2 text-[10px] text-foreground placeholder:text-muted-foreground focus:outline-none"
                     spellCheck={false}
                     autoComplete="off"
                 />
@@ -138,21 +138,21 @@ export const SearchBar: React.FC = () => {
             {isOpen && sections.length > 0 && (
                 <div
                     ref={dropdownRef}
-                    className="absolute top-full left-0 right-0 mt-1 max-h-[380px] overflow-y-auto z-50 border border-white/10 bg-background/95 backdrop-blur-md shadow-2xl shadow-black/60"
+                    className="absolute top-full left-0 right-0 mt-1 max-h-[380px] overflow-y-auto z-50 border border-border bg-background/95 backdrop-blur-md shadow-2xl shadow-black/60"
                 >
                     {sections.map((section) => (
-                        <div key={section.title} className="p-2 border-b border-zinc-900/60 last:border-b-0">
+                        <div key={section.title} className="p-2 border-b border-border/60 last:border-b-0">
                             {/* Section header */}
                             <div className="flex items-center gap-1.5 px-1.5 mb-1.5">
                                 <WorkbenchIcon
                                     name={SECTION_ICONS[section.title] || "solar:hashtag-circle-bold-duotone"}
                                     size={10}
-                                    className="text-zinc-400"
+                                    className="text-muted-foreground"
                                 />
-                                <span className="text-[8px] font-bold uppercase tracking-[0.15em] text-zinc-500">
+                                <span className="text-[8px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
                                     {section.title}
                                 </span>
-                                <span className="text-[7px] font-mono text-zinc-600 ml-auto">
+                                <span className="text-[7px] font-mono text-muted-foreground/70 ml-auto">
                                     {section.results.length}
                                 </span>
                             </div>
@@ -183,12 +183,12 @@ export const SearchBar: React.FC = () => {
                                                         style={{ backgroundColor: layerColor }}
                                                     />
                                                 )}
-                                                <span className="text-[10px] font-mono text-zinc-200 truncate">
+                                                <span className="text-[10px] font-mono text-foreground truncate">
                                                     <HighlightMatch text={result.label} query={query} />
                                                 </span>
                                             </div>
                                             {result.subLabel && (
-                                                <span className="text-[8px] font-mono text-zinc-500 truncate block mt-0.5 pl-3.5">
+                                                <span className="text-[8px] font-mono text-muted-foreground truncate block mt-0.5 pl-3.5">
                                                     <HighlightMatch text={result.subLabel} query={query} />
                                                 </span>
                                             )}
@@ -203,8 +203,8 @@ export const SearchBar: React.FC = () => {
 
             {/* No results */}
             {isOpen && query.trim() && sections.length === 0 && !isSearching && (
-                <div className="absolute top-full left-0 right-0 mt-1 p-3 z-50 border border-white/10 bg-background/95 backdrop-blur-md text-center">
-                    <span className="text-[9px] font-mono text-zinc-500 tracking-wider">
+                <div className="absolute top-full left-0 right-0 mt-1 p-3 z-50 border border-border bg-background/95 backdrop-blur-md text-center">
+                    <span className="text-[9px] font-mono text-muted-foreground tracking-wider">
                         NO_MATCH_FOUND
                     </span>
                 </div>

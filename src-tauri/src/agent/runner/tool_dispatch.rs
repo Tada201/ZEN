@@ -595,10 +595,16 @@ impl Runner {
                                     result.duration_ms = start.elapsed().as_millis() as u64;
 
                                     if should_write_cache(&tc_name, result.is_error) {
-                                        cache
-                                            .lock()
-                                            .await
-                                            .set(cache_key_clone, result.content.clone());
+                                        if let Some(ttl) = crate::agent::cache::ttl_for_tool(&tc_name) {
+                                            cache
+                                                .lock()
+                                                .await
+                                                .set_with_ttl(cache_key_clone, result.content.clone(), ttl);
+                                        }
+                                    } else if !result.is_error {
+                                        // Mutating tool completed successfully — invalidate any
+                                        // cached entries since we can't track which keys it affects.
+                                        cache.lock().await.clear();
                                     }
 
                                     hook_reg.post_tool_use(
@@ -785,10 +791,16 @@ impl Runner {
                         result.duration_ms = start.elapsed().as_millis() as u64;
 
                         if should_write_cache(&tc_name, result.is_error) {
-                            cache
-                                .lock()
-                                .await
-                                .set(cache_key_clone, result.content.clone());
+                            if let Some(ttl) = crate::agent::cache::ttl_for_tool(&tc_name) {
+                                cache
+                                    .lock()
+                                    .await
+                                    .set_with_ttl(cache_key_clone, result.content.clone(), ttl);
+                            }
+                        } else if !result.is_error {
+                            // Mutating tool completed successfully — invalidate any cached
+                            // entries since we can't track which keys it affects.
+                            cache.lock().await.clear();
                         }
 
                         hook_reg.post_tool_use(

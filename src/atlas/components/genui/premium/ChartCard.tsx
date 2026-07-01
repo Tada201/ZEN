@@ -44,9 +44,9 @@ export function ChartCard({ data }: { data: ChartData }) {
   ];
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-black/40 backdrop-blur-md p-5 shadow-lg flex flex-col">
+    <div className="w-full max-w-md rounded-2xl border border-border/[0.08] bg-background/40 backdrop-blur-md p-5 shadow-lg flex flex-col">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-white tracking-tight">{title}</h3>
+        <h3 className="text-sm font-semibold text-primary-foreground tracking-tight">{title}</h3>
         {chartType === "pie" ? (
           <PieChart className="w-4 h-4 text-primary" />
         ) : (
@@ -54,9 +54,9 @@ export function ChartCard({ data }: { data: ChartData }) {
         )}
       </div>
 
-      <div className="w-full h-48 relative flex items-center justify-center bg-white/[0.01] rounded-xl border border-white/[0.04] p-3 overflow-hidden">
+      <div className="w-full h-48 relative flex items-center justify-center bg-card/[0.01] rounded-xl border border-border/[0.04] p-3 overflow-hidden">
         {datasets.length === 0 || labels.length === 0 ? (
-          <span className="text-[10px] font-mono text-white/30">No data provided</span>
+          <span className="text-[10px] font-mono text-primary-foreground/30">No data provided</span>
         ) : chartType === "pie" ? (
           // SVG Pie/Donut Chart
           <svg viewBox="0 0 100 100" className="w-36 h-36">
@@ -85,7 +85,7 @@ export function ChartCard({ data }: { data: ChartData }) {
                     key={idx}
                     d={pathData}
                     fill={color}
-                    className="hover:opacity-95 transition-opacity cursor-pointer border border-black/20"
+                    className="hover:opacity-95 transition-opacity cursor-pointer border border-border/20"
                   >
                     <title>{`${labels[idx]}: ${val}${unit}`}</title>
                   </path>
@@ -105,7 +105,7 @@ export function ChartCard({ data }: { data: ChartData }) {
                 y1={15 + p * 110}
                 x2="290"
                 y2={15 + p * 110}
-                stroke="rgba(255,255,255,0.04)"
+                stroke="hsl(var(--foreground) / 0.04)"
                 strokeWidth="1"
               />
             ))}
@@ -184,7 +184,7 @@ export function ChartCard({ data }: { data: ChartData }) {
       </div>
 
       {/* Legends & Labels */}
-      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 mt-3 text-[10px] font-mono text-white/50 border-t border-white/[0.04] pt-2.5">
+      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 mt-3 text-[10px] font-mono text-primary-foreground/50 border-t border-border/[0.04] pt-2.5">
         {chartType === "pie"
           ? labels.map((label, idx) => (
               <div key={idx} className="flex items-center gap-1.5">

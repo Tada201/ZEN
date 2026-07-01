@@ -166,7 +166,7 @@ export const SessionSidebar = memo(({
         <Button 
           variant="ghost" 
           size="icon" 
-          className="h-9 w-9 text-zinc-500 hover:text-white hover:bg-white/5"
+          className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted/50"
           onClick={onToggleSidebar}
           aria-label="Open sidebar"
           title="Open sidebar"
@@ -174,12 +174,12 @@ export const SessionSidebar = memo(({
           <PanelLeftOpen size={18} />
         </Button>
 
-        <div className="w-8 h-px bg-white/5 my-1" />
+        <div className="w-8 h-px bg-muted/50 my-1" />
 
         <Button 
           variant="ghost" 
           size="icon" 
-          className="h-9 w-9 text-zinc-400 hover:text-white hover:bg-white/5"
+          className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted/50"
           onClick={onCreate}
           aria-label="New chat"
           title="New chat"
@@ -190,7 +190,7 @@ export const SessionSidebar = memo(({
         <Button 
           variant="ghost" 
           size="icon" 
-          className="h-9 w-9 text-zinc-500 hover:text-white hover:bg-white/5"
+          className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted/50"
           onClick={() => setShowArchived(!showArchived)} 
           aria-label={showArchived ? "Back to chats" : "Archive"}
           title={showArchived ? "Back to chats" : "Archive"}
@@ -203,7 +203,7 @@ export const SessionSidebar = memo(({
         <Button 
           variant="ghost" 
           size="icon" 
-          className="h-9 w-9 text-zinc-500 hover:text-white hover:bg-white/5"
+          className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted/50"
           onClick={() => {
             setSettingsTab("providers");
             setShowSettingsModal(true);
@@ -224,14 +224,14 @@ export const SessionSidebar = memo(({
       {/* Header */}
       <div className="p-3 pb-2 flex flex-col gap-2">
         <div className="flex items-center justify-between px-1">
-          <span className="text-[11px] font-semibold text-zinc-400 font-sans tracking-tight">
+          <span className="text-[11px] font-semibold text-muted-foreground font-sans tracking-tight">
             {showArchived ? "Archived Cases" : "Cases & Investigations"}
           </span>
           <div className="flex items-center gap-1">
              <Button 
               variant="ghost" 
               size="icon" 
-              className={cn("h-7 w-7 text-zinc-500 hover:text-white hover:bg-white/5", showArchived && "text-primary")}
+              className={cn("h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/50", showArchived && "text-primary")}
               onClick={() => setShowArchived(!showArchived)}
               aria-label={showArchived ? "Hide archived" : "Show archived"}
               title={showArchived ? "Hide archived" : "Show archived"}
@@ -241,7 +241,7 @@ export const SessionSidebar = memo(({
             <Button 
               variant="ghost" 
               size="icon" 
-              className="h-7 w-7 text-zinc-500 hover:text-white hover:bg-white/5"
+              className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/50"
               onClick={onToggleSidebar}
               aria-label="Close sidebar"
               title="Close sidebar"
@@ -253,12 +253,12 @@ export const SessionSidebar = memo(({
 
         {/* Search */}
         <div className="relative group px-1">
-          <Search size={11} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-primary transition-colors" />
+          <Search size={11} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/70 group-focus-within:text-primary transition-colors" />
           <input
             ref={searchInputRef}
             placeholder="Search chats..."
             aria-label="Search chats"
-            className="w-full h-8 pl-8 pr-3 bg-zinc-900/20 border border-white/5 rounded text-[10px] text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:border-primary/20 transition-all"
+            className="w-full h-8 pl-8 pr-3 bg-muted/30 border border-border rounded text-[10px] text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:border-primary/20 transition-all"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
           />
@@ -271,21 +271,21 @@ export const SessionSidebar = memo(({
           {!showArchived && (
             <div 
               onClick={() => onCreate()}
-              className="group flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer hover:bg-white/5 transition-all border border-transparent hover:border-white/5"
+              className="group flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer hover:bg-muted/50 transition-all border border-transparent hover:border-border"
             >
-              <div className="w-6 h-6 rounded-full border border-white/10 flex items-center justify-center text-zinc-400 group-hover:text-white group-hover:border-white/20 transition-all">
+              <div className="w-6 h-6 rounded-full border border-border flex items-center justify-center text-muted-foreground group-hover:text-foreground group-hover:border-border transition-all">
                 <Plus size={14} />
               </div>
-              <span className="text-xs font-medium text-zinc-300 group-hover:text-white">New chat</span>
+              <span className="text-xs font-medium text-foreground group-hover:text-foreground">New chat</span>
             </div>
           )}
 
           {/* Empty State Case Placeholder */}
           {displaySessions.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 px-4 text-center select-none font-sans">
-              <History className="w-8 h-8 text-zinc-500 mb-2 opacity-40" />
-              <span className="text-xs font-medium text-zinc-400">No active cases</span>
-              <span className="text-[10px] text-zinc-500 mt-1 max-w-[180px] leading-relaxed">
+              <History className="w-8 h-8 text-muted-foreground mb-2 opacity-40" />
+              <span className="text-xs font-medium text-muted-foreground">No active cases</span>
+              <span className="text-[10px] text-muted-foreground mt-1 max-w-[180px] leading-relaxed">
                 Create a new session to start your investigation.
               </span>
             </div>
@@ -294,9 +294,9 @@ export const SessionSidebar = memo(({
           {/* Empty State for active search with no matches */}
           {displaySessions.length > 0 && groupedSessions.length === 0 && deferredSearch.length > 0 && (
             <div className="flex flex-col items-center justify-center py-12 px-4 text-center select-none font-sans">
-              <Search className="w-8 h-8 text-zinc-500 mb-2 opacity-40" />
-              <span className="text-xs font-medium text-zinc-400">No matching cases</span>
-              <span className="text-[10px] text-zinc-500 mt-1 max-w-[180px] leading-relaxed">
+              <Search className="w-8 h-8 text-muted-foreground mb-2 opacity-40" />
+              <span className="text-xs font-medium text-muted-foreground">No matching cases</span>
+              <span className="text-[10px] text-muted-foreground mt-1 max-w-[180px] leading-relaxed">
                 Try a different keyword or clear the search.
               </span>
             </div>
@@ -306,7 +306,7 @@ export const SessionSidebar = memo(({
           {!showArchived && deferredSearch.length === 0 && folders.length > 0 && (
             <div className="space-y-1">
               <div className="px-2 pb-1">
-                <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Folders</span>
+                <span className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-widest">Folders</span>
               </div>
               {folders.map(folder => {
                 const isExpanded = expandedFolders[folder.id];
@@ -316,25 +316,25 @@ export const SessionSidebar = memo(({
                   <div key={folder.id} className="space-y-0.5">
                     <div
                       onClick={() => toggleFolder(folder.id)}
-                      className="group flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-white/5 transition-all"
+                      className="group flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-muted/50 transition-all"
                     >
                       <Folder
                         size={14}
                         className={cn(
                           "transition-colors shrink-0",
-                          isExpanded ? "text-primary" : "text-zinc-500 group-hover:text-zinc-300"
+                          isExpanded ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
                         )}
                       />
-                      <span className="text-xs flex-1 truncate text-zinc-400 group-hover:text-zinc-200">
+                      <span className="text-xs flex-1 truncate text-muted-foreground group-hover:text-foreground">
                         {folder.name}
                       </span>
-                      <span className="text-[10px] text-zinc-600 px-1">{folderChats.length}</span>
+                      <span className="text-[10px] text-muted-foreground/70 px-1">{folderChats.length}</span>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-5 w-5 text-zinc-600 hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                            className="h-5 w-5 text-muted-foreground/70 hover:text-foreground hover:bg-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                             onClick={(e) => e.stopPropagation()}
                             aria-label={`Open actions for folder ${folder.name}`}
                             title={`Folder actions`}
@@ -342,7 +342,7 @@ export const SessionSidebar = memo(({
                             <MoreHorizontal size={12} />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40 bg-zinc-950 border-white/10">
+                        <DropdownMenuContent align="end" className="w-40 bg-card border-border">
                           <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
@@ -352,13 +352,13 @@ export const SessionSidebar = memo(({
                           >
                             <Edit2 className="mr-2 h-3.5 w-3.5" /> Rename
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator className="bg-white/5" />
+                          <DropdownMenuSeparator className="bg-muted/50" />
                           <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
                               setDeleteFolderTarget(folder);
                             }}
-                            className="text-red-400 text-xs focus:bg-red-500/10 focus:text-red-400"
+                            className="text-destructive text-xs focus:bg-destructive/10 focus:text-destructive"
                           >
                             <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
                           </DropdownMenuItem>
@@ -367,9 +367,9 @@ export const SessionSidebar = memo(({
                     </div>
 
                     {isExpanded && (
-                      <div className="ml-4 pl-1 border-l border-white/5 space-y-0.5 mt-0.5">
+                      <div className="ml-4 pl-1 border-l border-border space-y-0.5 mt-0.5">
                         {folderChats.length === 0 ? (
-                          <div className="px-3 py-1 text-[10px] text-zinc-600 italic">Empty folder</div>
+                          <div className="px-3 py-1 text-[10px] text-muted-foreground/70 italic">Empty folder</div>
                         ) : (
                           folderChats.map(s => renderSessionItem(s))
                         )}
@@ -384,7 +384,7 @@ export const SessionSidebar = memo(({
           {groupedSessions.map(([title, items]) => (
             <div key={title} className="space-y-0.5">
               <div className="px-2 pb-1 flex items-center justify-between">
-                <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{title}</span>
+                <span className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-widest">{title}</span>
               </div>
               {items.map((it: Session | SearchResult) => renderSessionItem(it, title === "Search Results"))}
             </div>
@@ -392,19 +392,19 @@ export const SessionSidebar = memo(({
         </div>
       </ScrollArea>
 
-      <div className="mt-auto flex flex-col border-t border-white/5 bg-zinc-950 shrink-0 font-sans">
+      <div className="mt-auto flex flex-col border-t border-border bg-card shrink-0 font-sans">
         <div className="h-10 flex items-center justify-between px-2">
           {/* Segmented Mode Controller */}
           {workspaceModes.length > 1 && (
-            <div className="flex items-center gap-0.5 bg-white/5 p-0.5 rounded-lg border border-white/5 ml-1">
+            <div className="flex items-center gap-0.5 bg-muted/50 p-0.5 rounded-lg border border-border ml-1">
               {workspaceModes.map((mode) => (
                 <button
                   key={mode.id}
                   className={cn(
                     "px-2.5 py-1 text-[11px] font-medium rounded-md transition-all duration-200 select-none",
                     activeTab === mode.id
-                      ? "bg-white/10 text-white shadow-sm"
-                      : "text-zinc-500 hover:text-zinc-300"
+                      ? "bg-muted text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
                   )}
                   onClick={() => onTabChange?.(mode.id)}
                 >
@@ -420,13 +420,13 @@ export const SessionSidebar = memo(({
                 <Button 
                   variant="ghost" 
                   size="sm" 
-                  className="h-8 px-2 gap-1.5 text-zinc-500 hover:text-white hover:bg-white/5"
+                  className="h-8 px-2 gap-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50"
                 >
                   <MessageSquare size={13} />
-                  <span className="text-xs font-semibold text-zinc-400">Cases</span>
+                  <span className="text-xs font-semibold text-muted-foreground">Cases</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48 bg-zinc-950 border-white/10">
+              <DropdownMenuContent align="end" className="w-48 bg-card border-border">
                 <DropdownMenuItem
                   onClick={() => searchInputRef.current?.focus()}
                   className="text-xs"
@@ -439,11 +439,11 @@ export const SessionSidebar = memo(({
                 >
                   <FolderPlus className="mr-2 h-3.5 w-3.5" /> New folder
                 </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-white/5" />
+                <DropdownMenuSeparator className="bg-muted/50" />
                 <DropdownMenuItem 
                   onClick={() => setConfirmPurgeOpen(true)}
                   disabled={sessions.length === 0}
-                  className="text-red-400 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="text-destructive text-xs disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Trash2 className="mr-2 h-3.5 w-3.5" /> Purge history
                 </DropdownMenuItem>
@@ -453,7 +453,7 @@ export const SessionSidebar = memo(({
             <Button 
               variant="ghost" 
               size="sm" 
-              className="h-8 px-2 gap-1.5 text-zinc-500 hover:text-white hover:bg-white/5"
+              className="h-8 px-2 gap-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50"
               onPointerEnter={onPreloadSettings}
               onFocus={onPreloadSettings}
               onClick={() => {
@@ -462,7 +462,7 @@ export const SessionSidebar = memo(({
               }}
             >
               <Settings2 size={13} />
-              <span className="text-xs font-semibold text-zinc-400">Config</span>
+              <span className="text-xs font-semibold text-muted-foreground">Config</span>
             </Button>
           </div>
         </div>

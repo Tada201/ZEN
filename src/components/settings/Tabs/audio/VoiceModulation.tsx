@@ -21,7 +21,7 @@ export const VoiceModulation = memo(() => {
                     description="Adjust the speed of the spoken response"
                     control={
                         <div className="flex items-center gap-4 w-[180px]">
-                            <span className="text-[10px] font-mono text-zinc-300 w-[30px] text-right">
+                            <span className="text-[10px] font-mono text-foreground w-[30px] text-right">
                                 {webTtsRate.toFixed(1)}x
                             </span>
                             <div className="flex-1">
@@ -41,7 +41,7 @@ export const VoiceModulation = memo(() => {
                     description="Acoustic frequency modulation of the vocal stream"
                     control={
                         <div className="flex items-center gap-4 w-[180px]">
-                            <span className="text-[10px] font-mono text-zinc-300 w-[30px] text-right">
+                            <span className="text-[10px] font-mono text-foreground w-[30px] text-right">
                                 {webTtsPitch.toFixed(1)}
                             </span>
                             <div className="flex-1">

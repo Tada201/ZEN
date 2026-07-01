@@ -62,7 +62,7 @@ export const ModelConfig = React.memo(({ providerKey, displayName, requiresKey, 
                                 key={model.id}
                                 type="button"
                                 onClick={() => handleModelChange(model.id)}
-                                className={`min-h-24 border p-3 text-left transition-colors ${selected ? 'border-primary bg-primary/10' : 'border-white/[0.08] bg-white/[0.02] hover:border-white/[0.18] hover:bg-white/[0.04]'}`}
+                                className={`min-h-24 border p-3 text-left transition-colors ${selected ? 'border-primary bg-primary/10' : 'border-border bg-muted/30 hover:border-border/[0.18] hover:bg-muted/50'}`}
                                 aria-pressed={selected}
                                 disabled={requiresKey && !apiKeyPresent}
                             >
@@ -74,7 +74,7 @@ export const ModelConfig = React.memo(({ providerKey, displayName, requiresKey, 
                     })}
                 </div>
             ) : (
-                <p className="rounded border border-dashed border-white/[0.10] px-3 py-4 text-xs text-muted-foreground">{getEmptyHint()}</p>
+                <p className="rounded border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">{getEmptyHint()}</p>
             )}
         </div>
     );

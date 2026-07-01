@@ -14,12 +14,12 @@ export const RISK_BADGE_CONFIG: Record<RiskLevel, RiskBadgeConfig> = {
   low: {
     label: "Low risk",
     icon: Info,
-    classes: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
+    classes: "bg-success/15 text-emerald-700 dark:text-success border-emerald-500/30",
   },
   medium: {
     label: "Medium risk",
     icon: AlertTriangle,
-    classes: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
+    classes: "bg-warning/15 text-amber-700 dark:text-warning border-warning/30",
   },
   high: {
     label: "High risk",
@@ -29,7 +29,7 @@ export const RISK_BADGE_CONFIG: Record<RiskLevel, RiskBadgeConfig> = {
   critical: {
     label: "Critical risk",
     icon: ShieldAlert,
-    classes: "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30",
+    classes: "bg-destructive/15 text-red-700 dark:text-destructive border-destructive/30",
   },
 };
 

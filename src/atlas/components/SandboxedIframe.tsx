@@ -53,7 +53,7 @@ export function SandboxedIframe({ content, className, title = "Artifact Preview"
     svg {
       max-width: 90%;
       max-height: 90%;
-      filter: drop-shadow(0 10px 25px rgba(0,0,0,0.5));
+      filter: drop-shadow(0 10px 25px hsl(var(--background) / 0.5));
     }
   </style>
 </head>

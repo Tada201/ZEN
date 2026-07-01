@@ -99,7 +99,7 @@ export function FeedbackSection() {
               <div role="banner" className="flex items-center gap-3 rounded-lg border border-amber-400/25 bg-amber-500/10 px-4 py-3">
                 <Zap className="h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
                 <p className="flex-1 text-sm text-amber-700 dark:text-amber-300">Your free trial ends in <span className="font-semibold">3 days</span>. Upgrade to keep access.</p>
-                <Button size="sm" className="press h-7 shrink-0 bg-amber-500 text-white hover:bg-amber-600">Upgrade</Button>
+                <Button size="sm" className="press h-7 shrink-0 bg-amber-500 text-primary-foreground hover:bg-amber-600">Upgrade</Button>
                 <button
                   aria-label="Dismiss"
                   onClick={() => setBannerVisible2(false)}
@@ -143,7 +143,7 @@ export function FeedbackSection() {
               </TooltipTrigger>
               <TooltipContent side="top" className="flex items-center gap-2">
                 Delete item
-                <span className="rounded border border-white/20 bg-muted/30 px-1.5 py-0.5 font-mono text-[10px]">⌫</span>
+                <span className="rounded border border-border/20 bg-muted/30 px-1.5 py-0.5 font-mono text-[10px]">⌫</span>
               </TooltipContent>
             </Tooltip>
 
@@ -176,8 +176,8 @@ export function FeedbackSection() {
                 <p className="font-semibold">Keyboard shortcut</p>
                 <p className="text-[11px] text-muted-foreground">Open the command palette to search components, themes, and actions.</p>
                 <div className="flex gap-1 pt-0.5">
-                  <span className="rounded border border-white/20 bg-muted/30 px-1 font-mono text-[10px]">⌘</span>
-                  <span className="rounded border border-white/20 bg-muted/30 px-1 font-mono text-[10px]">K</span>
+                  <span className="rounded border border-border/20 bg-muted/30 px-1 font-mono text-[10px]">⌘</span>
+                  <span className="rounded border border-border/20 bg-muted/30 px-1 font-mono text-[10px]">K</span>
                 </div>
               </TooltipContent>
             </Tooltip>

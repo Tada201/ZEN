@@ -15,28 +15,28 @@ export const CpuMemWidget = memo(function CpuMemWidget({ context }: { context: W
                     <WorkbenchIcon name="solar:cpu-bold" size={12} className="text-violet-400" />
                     <span>CPU</span>
                 </span>
-                <div className="widget-cpu-mem__bar bg-zinc-850 rounded-full overflow-hidden h-1.5 border border-zinc-800/25">
+                <div className="widget-cpu-mem__bar bg-card rounded-full overflow-hidden h-1.5 border border-border/25">
                     <div
                         className="widget-cpu-mem__fill h-full bg-violet-500/80 transition-all duration-300 rounded-full"
                         style={{ width: `${cpuPct}%` }}
                         data-warn={cpuPct > 80 ? '' : undefined}
                     />
                 </div>
-                <span className="widget-cpu-mem__pct text-[10px] font-mono text-zinc-400">{cpuPct}%</span>
+                <span className="widget-cpu-mem__pct text-[10px] font-mono text-muted-foreground">{cpuPct}%</span>
             </div>
             <div className="widget-cpu-mem__row">
                 <span className="widget-cpu-mem__label">
                     <WorkbenchIcon name="solar:ssd-bold" size={12} className="text-violet-400" />
                     <span>MEM</span>
                 </span>
-                <div className="widget-cpu-mem__bar bg-zinc-850 rounded-full overflow-hidden h-1.5 border border-zinc-800/25">
+                <div className="widget-cpu-mem__bar bg-card rounded-full overflow-hidden h-1.5 border border-border/25">
                     <div
                         className="widget-cpu-mem__fill h-full bg-violet-500/80 transition-all duration-300 rounded-full"
                         style={{ width: `${memPct}%` }}
                         data-warn={memPct > 85 ? '' : undefined}
                     />
                 </div>
-                <span className="widget-cpu-mem__pct text-[10px] font-mono text-zinc-400">{memPct}%</span>
+                <span className="widget-cpu-mem__pct text-[10px] font-mono text-muted-foreground">{memPct}%</span>
             </div>
         </div>
     );

@@ -113,7 +113,7 @@ export function WorkspaceLayout({
             <button
               type="button"
               aria-label="Close sidebar"
-              className="fixed inset-0 z-[59] bg-black/60 md:hidden"
+              className="fixed inset-0 z-[59] bg-background/60 md:hidden"
               onClick={() => setSidebarOpen(false)}
             />
             <aside
@@ -145,10 +145,10 @@ export function WorkspaceLayout({
         {!isMobile && rightPanelOpen && rightPanel && (
           <div 
             onMouseDown={handleMouseDown}
-            className={`w-1 cursor-col-resize bg-transparent hover:bg-white/10 transition-colors duration-200 z-50 relative flex items-center justify-center select-none group ${isResizing ? "bg-white/15" : ""}`}
+            className={`w-1 cursor-col-resize bg-transparent hover:bg-card/10 transition-colors duration-200 z-50 relative flex items-center justify-center select-none group ${isResizing ? "bg-card/15" : ""}`}
             style={{ touchAction: "none" }}
           >
-            <div className="z-10 flex h-4 w-3 items-center justify-center rounded-sm border border-white/10 bg-[#0d0d11]/85 backdrop-blur-sm text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <div className="z-10 flex h-4 w-3 items-center justify-center rounded-sm border border-border/10 bg-[#0d0d11]/85 backdrop-blur-sm text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-200">
               <GripVertical className="h-2.5 w-2.5" />
             </div>
           </div>

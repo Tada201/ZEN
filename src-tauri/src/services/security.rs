@@ -70,6 +70,27 @@ impl SecurityService {
     }
 }
 
+impl SecurityService {
+    /// Records that the user explicitly approved an interactive terminal session.
+    /// This is the canonical approval event for interactive shells; the frontend
+    /// confirmation dialog is the human-in-the-loop decision.
+    pub async fn grant_interactive_terminal_approval(
+        &self,
+        caller: impl Into<String>,
+        target: Option<String>,
+        reason: Option<String>,
+    ) {
+        self.record_audit(AuditEvent {
+            operation: PrivilegedOperation::InteractiveTerminal,
+            decision: PermissionDecision::Allow,
+            caller: caller.into(),
+            target,
+            reason,
+        })
+        .await;
+    }
+}
+
 impl Default for SecurityService {
     fn default() -> Self {
         Self::new()
@@ -107,6 +128,7 @@ pub enum RiskLevel {
 #[serde(rename_all = "snake_case")]
 pub enum PrivilegedOperation {
     ShellCommand,
+    InteractiveTerminal,
     FileRead,
     FileWrite,
     NetworkFetch,
@@ -120,6 +142,7 @@ impl PrivilegedOperation {
     pub fn as_str(&self) -> &'static str {
         match self {
             PrivilegedOperation::ShellCommand => "shell_command",
+            PrivilegedOperation::InteractiveTerminal => "interactive_terminal",
             PrivilegedOperation::FileRead => "file_read",
             PrivilegedOperation::FileWrite => "file_write",
             PrivilegedOperation::NetworkFetch => "network_fetch",

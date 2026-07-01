@@ -13,19 +13,19 @@ const speakerConfig = {
   user: {
     label: "YOU",
     badgeClass: "border-purple-400/30 bg-purple-400/10 text-purple-300",
-    textClass: "text-zinc-200",
+    textClass: "text-foreground",
     fallback: "Listening...",
   },
   agent: {
     label: "ZEN",
     badgeClass: "border-cyan-400/30 bg-cyan-400/10 text-cyan-300",
-    textClass: "text-zinc-100",
+    textClass: "text-foreground",
     fallback: "Preparing response...",
   },
   system: {
     label: "SYS",
-    badgeClass: "border-zinc-500/30 bg-zinc-500/10 text-zinc-500",
-    textClass: "text-zinc-500 italic",
+    badgeClass: "border-border/30 bg-muted/10 text-muted-foreground",
+    textClass: "text-muted-foreground italic",
     fallback: "Voice link established. Monitoring channel...",
   },
 } as const;

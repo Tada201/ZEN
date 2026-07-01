@@ -53,14 +53,19 @@ async fn download_and_validate_image(url_str: &str) -> Result<Vec<u8>, ToolError
         message: format!("Invalid download URL: {}", e),
     })?;
 
-    // Perform DNS-resolved address safety validation to prevent SSRF
-    crate::tools::url_safety::validate_url_dns_safety(&parsed_url).await.map_err(|e| ToolError::ExecutionFailed {
-        message: format!("SSRF safety check failed: {}", e),
-    })?;
-
-    // Use the shared, no-redirect HTTP client with explicit timeout
+    // Use the shared, no-redirect HTTP client with explicit timeout.
+    // `build_pinned_get_request` resolves the hostname exactly once,
+    // validates every returned IP against the public-IP rules, and
+    // returns a request pinned to the validated address so the
+    // connection cannot silently re-resolve to a private IP.
     let client = crate::utils::public_no_redirect_http_client();
-    let img_res = client.get(url_str).send().await.map_err(|e| ToolError::ExecutionFailed {
+    let request = crate::tools::url_safety::build_pinned_get_request(client, &parsed_url)
+        .await
+        .map_err(|e| ToolError::ExecutionFailed {
+            message: format!("SSRF safety check failed: {}", e),
+        })?;
+
+    let img_res = request.send().await.map_err(|e| ToolError::ExecutionFailed {
         message: format!("Failed to download image from {}: {}", url_str, e),
     })?;
 

@@ -57,11 +57,11 @@ const stateColors: Record<VoiceState, string> = {
   listening: "text-purple-400 bg-purple-400/10 border-purple-500/20",
   processing: "text-blue-400 bg-blue-400/10 border-blue-500/20",
   speaking: "text-emerald-400 bg-emerald-400/10 border-emerald-500/20",
-  idle: "text-zinc-400 bg-zinc-400/10 border-zinc-500/20",
+  idle: "text-muted-foreground bg-muted/10 border-border/20",
 };
 
 const sttStatusColors: Record<SttServiceStatus, string> = {
-  idle: "border-zinc-500/20 bg-zinc-400/10 text-zinc-300",
+  idle: "border-border/20 bg-muted/10 text-muted-foreground",
   starting: "border-amber-400/20 bg-amber-400/10 text-amber-300",
   ready: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
   recording: "border-cyan-400/20 bg-cyan-400/10 text-cyan-300",
@@ -70,7 +70,7 @@ const sttStatusColors: Record<SttServiceStatus, string> = {
 };
 
 const ttsStatusColors: Record<TtsServiceStatus, string> = {
-  idle: "border-zinc-500/20 bg-zinc-400/10 text-zinc-300",
+  idle: "border-border/20 bg-muted/10 text-muted-foreground",
   starting: "border-amber-400/20 bg-amber-400/10 text-amber-300",
   ready: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
   speaking: "border-cyan-400/20 bg-cyan-400/10 text-cyan-300",
@@ -121,57 +121,57 @@ export function VoiceModePanelInner({
   const ttftLabel = ttftMetric?.ttftMs != null ? `${Math.round(ttftMetric.ttftMs)}ms` : "—";
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black p-3 text-zinc-100 transition-all duration-300 md:p-4">
+    <div className="fixed inset-0 z-50 flex flex-col bg-background p-3 text-foreground transition-all duration-300 md:p-4">
 
       {/* 1. Top Bar — Agent | Speech | TTS | STT | Status */}
-      <header className="z-10 flex w-full items-center justify-between gap-3 border-b border-white/5 pb-2">
-        <div className="flex items-center gap-2 sm:gap-4 font-mono text-[11px] text-zinc-400 flex-wrap">
+      <header className="z-10 flex w-full items-center justify-between gap-3 border-b border-border/5 pb-2">
+        <div className="flex items-center gap-2 sm:gap-4 font-mono text-[11px] text-muted-foreground flex-wrap">
           {/* Agent Model */}
           <div className="flex items-center gap-1.5">
-            <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">Agent</span>
-            <span className="text-zinc-300">{activeModel || "—"}</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Agent</span>
+            <span className="text-muted-foreground">{activeModel || "—"}</span>
           </div>
-          <span className="h-3 w-[1px] bg-white/8 hidden sm:block" />
+          <span className="h-3 w-[1px] bg-card/8 hidden sm:block" />
           {/* Speech Mode */}
           <div className="flex items-center gap-1.5">
-            <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">Speech</span>
-            <span className="text-zinc-300">{voiceInputMode ? "Hold to Talk" : "Voice Activity"}</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Speech</span>
+            <span className="text-muted-foreground">{voiceInputMode ? "Hold to Talk" : "Voice Activity"}</span>
           </div>
-          <span className="h-3 w-[1px] bg-white/8 hidden sm:block" />
+          <span className="h-3 w-[1px] bg-card/8 hidden sm:block" />
           {/* TTS Model */}
           <div className="flex items-center gap-1.5">
-            <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">TTS</span>
-            <span className="text-zinc-300">{ttsModel || "—"}</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">TTS</span>
+            <span className="text-muted-foreground">{ttsModel || "—"}</span>
           </div>
-          <span className="h-3 w-[1px] bg-white/8 hidden sm:block" />
+          <span className="h-3 w-[1px] bg-card/8 hidden sm:block" />
           <div className="hidden sm:flex items-center gap-1.5" title={`Text-to-speech service is ${ttsStatus}`}>
-            <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">TTS</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">TTS</span>
             <span className={cn("rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase", ttsStatusColors[ttsStatus])}>{ttsStatus}</span>
           </div>
-          <span className="h-3 w-[1px] bg-white/8 hidden sm:block" />
+          <span className="h-3 w-[1px] bg-card/8 hidden sm:block" />
           {/* Active STT service */}
           <div className="hidden sm:flex items-center gap-1.5" title={`Active speech-to-text service: ${sttModel || sttEngine || "unknown"}`}>
-            <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">STT Service</span>
-            <span className="font-semibold text-white">{sttModel || sttEngine || "—"}</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">STT Service</span>
+            <span className="font-semibold text-primary-foreground">{sttModel || sttEngine || "—"}</span>
           </div>
-          <span className="h-3 w-[1px] bg-white/8 hidden sm:block" />
+          <span className="h-3 w-[1px] bg-card/8 hidden sm:block" />
           <div className="hidden sm:flex items-center gap-1.5" title={`Speech-to-text service is ${sttStatus}`}>
-            <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">STT</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">STT</span>
             <span className={cn("rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase", sttStatusColors[sttStatus])}>{sttStatus}</span>
           </div>
-          <span className="h-3 w-[1px] bg-white/8 hidden sm:block" />
+          <span className="h-3 w-[1px] bg-card/8 hidden sm:block" />
           <div className="hidden sm:flex items-center gap-1.5" title={whisperBackendDetail}>
-            <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">Runtime</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Runtime</span>
             <span className={cn("rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase", whisperBackend !== "checking" ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300" : "border-amber-400/20 bg-amber-400/10 text-amber-300")}>
               {whisperBackend}
             </span>
           </div>
-          <span className="h-3 w-[1px] bg-white/8 hidden sm:block" />
+          <span className="h-3 w-[1px] bg-card/8 hidden sm:block" />
           <div className="hidden sm:flex items-center gap-1.5">
-            <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">TTFT</span>
-            <span className="text-zinc-300">{ttftLabel}</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">TTFT</span>
+            <span className="text-muted-foreground">{ttftLabel}</span>
           </div>
-          <span className="h-3 w-[1px] bg-white/8" />
+          <span className="h-3 w-[1px] bg-card/8" />
           {/* Status Badge */}
           <div className={cn("rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest transition-colors duration-200", stateColors[voiceState])}>
             {voiceState}
@@ -183,7 +183,7 @@ export function VoiceModePanelInner({
             type="button"
             disabled={!captionsAvailable}
             onClick={() => setCaptionsVisible((value) => !value)}
-            className={cn("rounded border p-1.5 transition-colors", captionsAvailable ? "border-white/5 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white" : "cursor-not-allowed border-white/5 bg-white/[0.02] text-zinc-700")}
+            className={cn("rounded border p-1.5 transition-colors", captionsAvailable ? "border-border/5 bg-card/5 text-muted-foreground hover:bg-card/10 hover:text-primary-foreground" : "cursor-not-allowed border-border/5 bg-card/[0.02] text-foreground")}
             title={captionsAvailable ? (captionsVisible ? "Hide captions" : "Show captions") : "Captions require Web Speech STT"}
           >
             {captionsVisible ? <Captions size={12} /> : <CaptionsOff size={12} />}
@@ -191,7 +191,7 @@ export function VoiceModePanelInner({
           <button
             type="button"
             onClick={onToggleDiagnostics}
-            className="rounded border border-white/5 bg-white/5 p-1.5 text-zinc-400 transition-colors hover:bg-white/10 hover:text-white"
+            className="rounded border border-border/5 bg-card/5 p-1.5 text-muted-foreground transition-colors hover:bg-card/10 hover:text-primary-foreground"
             title="Diagnostics Console"
           >
             <Terminal size={12} />
@@ -199,7 +199,7 @@ export function VoiceModePanelInner({
           <button
             type="button"
             onClick={onRequestClose}
-            className="rounded border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-mono text-zinc-300 transition-all hover:border-red-500/30 hover:bg-red-500/20 hover:text-red-400"
+            className="rounded border border-border/15 bg-card/5 px-3 py-1 text-[11px] font-mono text-muted-foreground transition-all hover:border-red-500/30 hover:bg-red-500/20 hover:text-red-400"
             title="Close Overlay"
           >
             DISCONNECT
@@ -216,7 +216,7 @@ export function VoiceModePanelInner({
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="absolute left-4 top-4 z-30 max-w-sm rounded-xl border border-white/5 bg-zinc-950/90 p-4 backdrop-blur-md shadow-2xl"
+              className="absolute left-4 top-4 z-30 max-w-sm rounded-xl border border-border/5 bg-background/90 p-4 backdrop-blur-md shadow-2xl"
             >
               <VoiceDiagnosticsPanel
                 appUptimeSecs={appUptimeSecs}
@@ -254,9 +254,9 @@ export function VoiceModePanelInner({
           description={hasActiveWork
             ? 'Voice mode is still active. You can leave the visual voice room while the main agent keeps working, or stop the full run.'
             : 'Voice mode is idle. Leaving closes the voice room and keeps the blackboard snapshot for this session.'}
-          footer={<><button type="button" onClick={onConfirmLeaveVoice} className="border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-xs font-medium text-cyan-100 hover:bg-cyan-300/15">Leave Voice Mode</button>{hasActiveWork ? <button type="button" onClick={onConfirmStopEverything} className="border border-red-400/25 bg-red-400/10 px-3 py-2 text-xs font-medium text-red-100 hover:bg-red-400/15">Stop Everything</button> : null}<button type="button" onClick={onCancelExit} className="border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-medium text-zinc-200 hover:bg-white/[0.08]">Stay</button></>}
+          footer={<><button type="button" onClick={onConfirmLeaveVoice} className="border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-xs font-medium text-cyan-100 hover:bg-cyan-300/15">Leave Voice Mode</button>{hasActiveWork ? <button type="button" onClick={onConfirmStopEverything} className="border border-red-400/25 bg-red-400/10 px-3 py-2 text-xs font-medium text-red-100 hover:bg-red-400/15">Stop Everything</button> : null}<button type="button" onClick={onCancelExit} className="border border-border/10 bg-card/[0.04] px-3 py-2 text-xs font-medium text-foreground hover:bg-card/[0.08]">Stay</button></>}
         >
-          <div className="flex items-center gap-2 text-xs text-zinc-400"><AlertTriangle size={15} className="text-amber-200" /> Voice activity and board state are preserved unless you stop the full run.</div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground"><AlertTriangle size={15} className="text-amber-200" /> Voice activity and board state are preserved unless you stop the full run.</div>
         </AppDialog>
 
         <VoiceStage voiceState={voiceState} />
@@ -296,11 +296,11 @@ export function VoiceModePanelInner({
               "flex h-9 items-center gap-2 rounded-full border px-3 transition-colors",
               agentActivity.displayAgentRunning
                 ? "border-cyan-300/30 bg-cyan-300/10 text-cyan-100"
-                : "border-white/10 bg-white/[0.03] text-zinc-500"
+                : "border-border/10 bg-card/[0.03] text-muted-foreground"
             )}
             title={agentActivity.displayAgentRunning ? "Voice display agent is rendering the board" : "Voice display agent is idle"}
           >
-            <span className={cn("h-1.5 w-1.5 rounded-full", agentActivity.displayAgentRunning ? "bg-cyan-300 motion-safe:animate-pulse" : "bg-zinc-700")} />
+            <span className={cn("h-1.5 w-1.5 rounded-full", agentActivity.displayAgentRunning ? "bg-cyan-300 motion-safe:animate-pulse" : "bg-muted")} />
             <Bot size={13} />
             <span>{agentActivity.displayAgentRunning ? "DISPLAY" : "IDLE"}</span>
           </div>

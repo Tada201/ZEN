@@ -38,6 +38,11 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
   }, []);
 
   const openTerminal = useCallback(async () => {
+    // This function runs only after the user explicitly confirmed the
+    // "Open workspace terminal?" dialog. The dialog click is the human
+    // approval event: the backend records it as the canonical
+    // interactive-terminal approval (one-time grant) via
+    // TerminalService::request_interactive_approval.
     setOpening(true);
     setError(null);
     try {
@@ -69,22 +74,22 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? null;
 
   return (
-    <section className={cn('flex h-full min-h-0 flex-col bg-[#09090b] text-zinc-100', className)} aria-label="Terminal">
-      <header className="flex min-h-12 items-center border-b border-white/[0.10] px-3">
+    <section className={cn('flex h-full min-h-0 flex-col bg-code-background text-code-foreground', className)} aria-label="Terminal">
+      <header className="flex min-h-12 items-center border-b border-code-border px-3">
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-          <SquareTerminal size={15} className="mr-2 shrink-0 text-emerald-300" />
+          <SquareTerminal size={15} className="mr-2 shrink-0 text-success" />
           {tabs.map((tab) => (
-            <div key={tab.id} className={cn('flex shrink-0 items-center border-l border-white/[0.08] text-xs', tab.id === activeId ? 'bg-white/[0.08] text-white' : 'text-zinc-400 hover:bg-white/[0.04]')}>
+            <div key={tab.id} className={cn('flex shrink-0 items-center border-l border-code-border text-xs', tab.id === activeId ? 'bg-code-foreground/10 text-code-foreground' : 'text-code-foreground/60 hover:bg-code-foreground/5')}>
               <button type="button" className="px-3 py-3 font-mono" onClick={() => setActiveId(tab.id)}>{tab.name}</button>
-              <button type="button" className="px-2 py-3 text-zinc-500 hover:text-white" onClick={() => void closeTerminal(tab.id)} aria-label={`Close ${tab.name}`}><X size={13} /></button>
+              <button type="button" className="px-2 py-3 text-code-foreground/50 hover:text-code-foreground" onClick={() => void closeTerminal(tab.id)} aria-label={`Close ${tab.name}`}><X size={13} /></button>
             </div>
           ))}
-          <button type="button" className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center border border-white/[0.12] text-zinc-300 hover:bg-white/[0.08] hover:text-white" onClick={() => setConfirmOpen(true)} title="Open terminal"><Plus size={15} /></button>
+          <button type="button" className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center border border-code-border text-code-foreground/75 hover:bg-code-foreground/10 hover:text-code-foreground" onClick={() => setConfirmOpen(true)} title="Open terminal"><Plus size={15} /></button>
         </div>
-        <span className="hidden font-mono text-[10px] uppercase tracking-[0.12em] text-zinc-500 sm:inline">interactive workspace shell</span>
+        <span className="hidden font-mono text-[10px] uppercase tracking-[0.12em] text-code-foreground/50 sm:inline">interactive workspace shell</span>
       </header>
 
-      {error ? <div role="alert" className="border-b border-red-400/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">{error}</div> : null}
+      {error ? <div role="alert" className="border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
 
       <div className="relative min-h-0 flex-1">
         {tabs.map((tab) => (
@@ -94,10 +99,10 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
         ))}
         {!activeTab ? (
           <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-            <SquareTerminal size={22} className="mb-4 text-zinc-500" />
-            <h2 className="text-sm font-medium text-zinc-100">Open a workspace terminal</h2>
-            <p className="mt-2 max-w-sm text-xs leading-5 text-zinc-400">Commands run in the active workspace under your account. Agent commands remain separate and cannot write into this shell.</p>
-            <button type="button" className="mt-5 border border-emerald-300/40 px-3 py-2 text-xs font-medium text-emerald-200 hover:bg-emerald-300/10" onClick={() => setConfirmOpen(true)}>Open terminal</button>
+            <SquareTerminal size={22} className="mb-4 text-code-foreground/50" />
+            <h2 className="text-sm font-medium text-code-foreground">Open a workspace terminal</h2>
+            <p className="mt-2 max-w-sm text-xs leading-5 text-code-foreground/65">Commands run in the active workspace under your account. Agent commands remain separate and cannot write into this shell.</p>
+            <button type="button" className="mt-5 border border-success/40 px-3 py-2 text-xs font-medium text-success hover:bg-success/10" onClick={() => setConfirmOpen(true)}>Open terminal</button>
           </div>
         ) : null}
       </div>
@@ -107,9 +112,9 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
         onOpenChange={setConfirmOpen}
         title="Open workspace terminal?"
         description="This starts an interactive shell in the configured workspace with your user permissions. Agent command execution remains isolated."
-        footer={<><button type="button" className="border border-white/[0.12] px-3 py-2 text-xs text-zinc-300 hover:bg-white/[0.06]" onClick={() => setConfirmOpen(false)} disabled={opening}>Cancel</button><button type="button" className="border border-emerald-300/50 bg-emerald-300/10 px-3 py-2 text-xs font-medium text-emerald-100 hover:bg-emerald-300/20 disabled:opacity-50" onClick={() => void openTerminal()} disabled={opening}>{opening ? 'Opening...' : 'Open terminal'}</button></>}
+        footer={<><button type="button" className="border border-border px-3 py-2 text-xs text-muted-foreground hover:bg-muted" onClick={() => setConfirmOpen(false)} disabled={opening}>Cancel</button><button type="button" className="border border-success/50 bg-success/10 px-3 py-2 text-xs font-medium text-success hover:bg-success/20 disabled:opacity-50" onClick={() => void openTerminal()} disabled={opening}>{opening ? 'Opening...' : 'Open terminal'}</button></>}
       >
-        <p className="text-xs leading-5 text-zinc-400">The shell opens only after you confirm this action. It has your normal account permissions.</p>
+        <p className="text-xs leading-5 text-muted-foreground">The shell opens only after you confirm this action. It has your normal account permissions.</p>
       </AppDialog>
     </section>
   );

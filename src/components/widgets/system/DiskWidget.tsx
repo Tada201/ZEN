@@ -8,8 +8,8 @@ export const DiskWidget = memo(function DiskWidget({ context }: { context: Widge
 
     if (disks.length === 0) {
         return (
-            <div className="flex items-center justify-center h-24 bg-slate-900/20 border border-slate-800/40 rounded-sm">
-                <span className="text-[10px] font-mono text-slate-500 italic">STORAGE VOLUMES OFFLINE</span>
+            <div className="flex items-center justify-center h-24 bg-card/20 border border-border/40 rounded-sm">
+                <span className="text-[10px] font-mono text-muted-foreground italic">STORAGE VOLUMES OFFLINE</span>
             </div>
         );
     }
@@ -31,19 +31,19 @@ export const DiskWidget = memo(function DiskWidget({ context }: { context: Widge
                     <div key={i} className="flex flex-col gap-2">
                         <div className="flex items-center justify-between px-1">
                             <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-mono font-bold text-slate-400">
+                                <span className="text-[10px] font-mono font-bold text-muted-foreground">
                                     {driveLetter}:
                                 </span>
-                                <span className="text-[9px] font-mono text-slate-600 px-1 border border-zinc-800 rounded bg-zinc-900/40">
+                                <span className="text-[9px] font-mono text-muted-foreground px-1 border border-border rounded bg-muted/50">
                                     {disk.isRemovable ? 'REMOVABLE' : 'FIXED'}
                                 </span>
                             </div>
-                            <span className={`text-[10px] font-mono font-bold ${isAlert ? 'text-rose-500' : 'text-zinc-400'}`}>
+                            <span className={`text-[10px] font-mono font-bold ${isAlert ? 'text-rose-500' : 'text-muted-foreground'}`}>
                                 {Math.round(percent)}%
                             </span>
                         </div>
 
-                        <div className="h-1 bg-zinc-850 rounded-full overflow-hidden border border-zinc-800/25">
+                        <div className="h-1 bg-card rounded-full overflow-hidden border border-border/25">
                             <div
                                 className={`h-full transition-all duration-500 rounded-full ${isAlert ? 'bg-rose-500/60' : 'bg-violet-500/60'}`}
                                 style={{ width: `${percent}%` }}
@@ -52,20 +52,20 @@ export const DiskWidget = memo(function DiskWidget({ context }: { context: Widge
 
                         <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-1 mt-1">
                             <div className="flex justify-between">
-                                <span className="text-[9px] font-mono text-slate-500">USED</span>
-                                <span className="text-[10px] font-mono text-slate-300">{(used / 1024 / 1024 / 1024).toFixed(1)}GB</span>
+                                <span className="text-[9px] font-mono text-muted-foreground">USED</span>
+                                <span className="text-[10px] font-mono text-muted-foreground">{(used / 1024 / 1024 / 1024).toFixed(1)}GB</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="text-[9px] font-mono text-slate-500">FREE</span>
-                                <span className="text-[10px] font-mono text-slate-300">{(aSpace / 1024 / 1024 / 1024).toFixed(1)}GB</span>
+                                <span className="text-[9px] font-mono text-muted-foreground">FREE</span>
+                                <span className="text-[10px] font-mono text-muted-foreground">{(aSpace / 1024 / 1024 / 1024).toFixed(1)}GB</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="text-[9px] font-mono text-slate-500">TOTAL</span>
-                                <span className="text-[10px] font-mono text-slate-300">{(tSpace / 1024 / 1024 / 1024).toFixed(0)}GB</span>
+                                <span className="text-[9px] font-mono text-muted-foreground">TOTAL</span>
+                                <span className="text-[10px] font-mono text-muted-foreground">{(tSpace / 1024 / 1024 / 1024).toFixed(0)}GB</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="text-[9px] font-mono text-slate-500">MOUNT</span>
-                                <span className="text-[10px] font-mono text-slate-500 truncate max-w-[80px]" title={disk.mountPoint || "Unknown"}>
+                                <span className="text-[9px] font-mono text-muted-foreground">MOUNT</span>
+                                <span className="text-[10px] font-mono text-muted-foreground truncate max-w-[80px]" title={disk.mountPoint || "Unknown"}>
                                     {disk.mountPoint || "N/A"}
                                 </span>
                             </div>

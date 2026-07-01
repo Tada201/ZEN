@@ -32,7 +32,7 @@ export const AgentConfigRow = memo(() => {
                     description="Maximum memory allocated per agent (MB)"
                     control={
                         <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-mono font-bold text-emerald-400">
+                            <span className="text-[11px] font-mono font-bold text-success">
                                 {agentMemoryLimit} MB
                             </span>
                         </div>

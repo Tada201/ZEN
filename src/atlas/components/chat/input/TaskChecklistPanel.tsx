@@ -18,18 +18,18 @@ export function TaskChecklistPanel({ tasks, isOpen, onToggle }: TaskChecklistPan
 
   return (
     <div className="absolute inset-x-0 bottom-[calc(100%+8px)] px-1 pointer-events-auto">
-      <div className="rounded-xl border border-white/10 bg-[#111113]/95 shadow-2xl overflow-hidden backdrop-blur-xl">
+      <div className="rounded-xl border border-border bg-card/95 shadow-2xl overflow-hidden backdrop-blur-xl">
         <button
           type="button"
           onClick={onToggle}
-          className="w-full h-10 px-3 flex items-center justify-between text-left hover:bg-white/[0.03] transition-colors"
+          className="w-full h-10 px-3 flex items-center justify-between text-left hover:bg-muted/40 transition-colors"
         >
           <span className="flex items-center gap-2 min-w-0">
-            <ListTodo className="w-4 h-4 text-zinc-400" />
-            <span className="text-sm text-zinc-200">Task checklist</span>
-            <span className="text-xs tabular-nums text-zinc-500">{completedTaskCount}/{tasks.length}</span>
+            <ListTodo className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm text-foreground">Task checklist</span>
+            <span className="text-xs tabular-nums text-muted-foreground">{completedTaskCount}/{tasks.length}</span>
           </span>
-          <ChevronDown className={cn("w-4 h-4 text-zinc-500 transition-transform", isOpen && "rotate-180")} />
+          <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
         </button>
         <div className={cn(
           "grid transition-all duration-200 ease-out",
@@ -43,13 +43,13 @@ export function TaskChecklistPanel({ tasks, isOpen, onToggle }: TaskChecklistPan
                 return (
                   <div key={task.id} className="flex items-start gap-2 text-sm">
                     {done ? (
-                      <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-400 shrink-0" />
+                      <CheckCircle2 className="w-4 h-4 mt-0.5 text-success shrink-0" />
                     ) : (
-                      <Circle className={cn("w-4 h-4 mt-0.5 shrink-0", running ? "text-blue-400 animate-pulse" : "text-zinc-600")} />
+                      <Circle className={cn("w-4 h-4 mt-0.5 shrink-0", running ? "text-primary animate-pulse" : "text-muted-foreground/70")} />
                     )}
                     <span className={cn(
                       "leading-5 min-w-0",
-                      done ? "text-zinc-500 line-through" : running ? "text-zinc-200" : "text-zinc-400"
+                      done ? "text-muted-foreground line-through" : running ? "text-foreground" : "text-muted-foreground"
                     )}>
                       {task.description}
                     </span>

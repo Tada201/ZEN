@@ -58,8 +58,8 @@ export const NavigationPanel: React.FC = () => {
     const is2D = viewMode === 'navigation';
     const containerPadding = is2D ? "p-2 flex flex-col gap-2" : "p-3 flex flex-col gap-3";
     const inputClass = is2D 
-        ? "w-full h-6 px-2 bg-black/45 border border-zinc-800 rounded text-foreground focus:outline-none focus:border-cyan-400/40 focus:ring-1 focus:ring-cyan-400/30 transition-all font-mono text-[8px]" 
-        : "w-full h-7 px-2.5 bg-black/40 border border-zinc-800 rounded text-foreground focus:outline-none focus:border-cyan-400/40 focus:ring-1 focus:ring-cyan-400/30 transition-all font-mono text-[9px]";
+        ? "w-full h-6 px-2 bg-background/45 border border-border rounded text-foreground focus:outline-none focus:border-cyan-400/40 focus:ring-1 focus:ring-cyan-400/30 transition-all font-mono text-[8px]" 
+        : "w-full h-7 px-2.5 bg-background/40 border border-border rounded text-foreground focus:outline-none focus:border-cyan-400/40 focus:ring-1 focus:ring-cyan-400/30 transition-all font-mono text-[9px]";
     const labelSizeClass = is2D ? "text-[7.5px]" : "text-[8px]";
     const headingSizeClass = is2D ? "text-[8px]" : "text-[8.5px]";
     const profileBtnClass = (pId: string) => {
@@ -68,17 +68,17 @@ export const NavigationPanel: React.FC = () => {
         const size = is2D ? 'py-1' : 'py-1.5';
         const color = active 
             ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-400' 
-            : 'border-zinc-850 bg-zinc-900/10 hover:bg-zinc-900/30 text-zinc-400 hover:text-white';
+            : 'border-border bg-muted/20 hover:bg-muted/40 text-muted-foreground hover:text-foreground';
         return `${base} ${size} ${color}`;
     };
     const calcBtnClass = is2D
-        ? "w-full h-7 bg-cyan-500/10 hover:bg-cyan-500/20 active:bg-cyan-500/30 border border-cyan-400/30 hover:border-cyan-400/60 text-cyan-400 hover:text-white transition-all text-[8px] font-bold uppercase tracking-wider cursor-pointer rounded flex items-center justify-center gap-1 font-mono"
-        : "w-full h-8 bg-cyan-500/10 hover:bg-cyan-500/20 active:bg-cyan-500/30 border border-cyan-400/30 hover:border-cyan-400/60 text-cyan-400 hover:text-white transition-all text-[8.5px] font-bold uppercase tracking-wider cursor-pointer rounded flex items-center justify-center gap-1.5 font-mono";
+        ? "w-full h-7 bg-cyan-500/10 hover:bg-cyan-500/20 active:bg-cyan-500/30 border border-cyan-400/30 hover:border-cyan-400/60 text-cyan-400 hover:text-foreground transition-all text-[8px] font-bold uppercase tracking-wider cursor-pointer rounded flex items-center justify-center gap-1 font-mono"
+        : "w-full h-8 bg-cyan-500/10 hover:bg-cyan-500/20 active:bg-cyan-500/30 border border-cyan-400/30 hover:border-cyan-400/60 text-cyan-400 hover:text-foreground transition-all text-[8.5px] font-bold uppercase tracking-wider cursor-pointer rounded flex items-center justify-center gap-1.5 font-mono";
 
     return (
-        <div className="border border-zinc-800 bg-black/60 backdrop-blur-md transition-all duration-300 font-mono flex flex-col font-sans">
+        <div className="border border-border bg-background/60 backdrop-blur-md transition-all duration-300 font-mono flex flex-col font-sans">
             {/* Header */}
-            <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-800/50 bg-zinc-950/40">
+            <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/50 bg-card/60">
                 <div className="flex items-center gap-2 text-cyan-400">
                     <WorkbenchIcon name="solar:map-arrow-up-bold-duotone" size={13} />
                     <span className="text-[9px] font-bold tracking-[0.2em] font-mono">A{'>'}B_ROUTING</span>
@@ -87,7 +87,7 @@ export const NavigationPanel: React.FC = () => {
                     <button 
                         type="button" 
                         onClick={cancelNavigation} 
-                        className="text-zinc-500 hover:text-red-400 transition-colors bg-transparent border-0 cursor-pointer p-0.5"
+                        className="text-muted-foreground hover:text-destructive transition-colors bg-transparent border-0 cursor-pointer p-0.5"
                     >
                         <WorkbenchIcon name="solar:close-circle-bold" size={12} />
                     </button>
@@ -107,12 +107,12 @@ export const NavigationPanel: React.FC = () => {
                         {/* Interactive Coordinate Inputs */}
                         <div className={is2D ? "space-y-1.5 text-[8px]" : "space-y-2.5 text-[9px]"}>
                             <div className="space-y-1">
-                                <div className={`flex justify-between items-center ${labelSizeClass} text-zinc-400 font-mono`}>
+                                <div className={`flex justify-between items-center ${labelSizeClass} text-muted-foreground font-mono`}>
                                     <span className="uppercase font-bold tracking-wider">START POINT (LON, LAT)</span>
                                     <button 
                                         type="button" 
                                         onClick={() => setStartCoord(`${viewportCenter.lon.toFixed(4)}, ${viewportCenter.lat.toFixed(4)}`)}
-                                        className="text-cyan-400 hover:text-white bg-transparent border-0 cursor-pointer text-[7.5px]"
+                                        className="text-cyan-400 hover:text-foreground bg-transparent border-0 cursor-pointer text-[7.5px]"
                                     >
                                         [GET CAMERA]
                                     </button>
@@ -127,13 +127,13 @@ export const NavigationPanel: React.FC = () => {
                             </div>
 
                             <div className="space-y-1">
-                                <div className={`flex justify-between items-center ${labelSizeClass} text-zinc-400 font-mono`}>
+                                <div className={`flex justify-between items-center ${labelSizeClass} text-muted-foreground font-mono`}>
                                     <span className="uppercase font-bold tracking-wider">END POINT (LON, LAT)</span>
                                     <div className="flex gap-2">
                                         <button 
                                             type="button" 
                                             onClick={() => setEndCoord('106.6602, 10.7626')} // Saigon HQ preset!
-                                            className="text-cyan-400 hover:text-white bg-transparent border-0 cursor-pointer text-[7.5px]"
+                                            className="text-cyan-400 hover:text-foreground bg-transparent border-0 cursor-pointer text-[7.5px]"
                                         >
                                             [HQ]
                                         </button>
@@ -141,7 +141,7 @@ export const NavigationPanel: React.FC = () => {
                                             <button 
                                                 type="button" 
                                                 onClick={() => setEndCoord(`${selectedTarget.position.lon.toFixed(4)}, ${selectedTarget.position.lat.toFixed(4)}`)}
-                                                className="text-cyan-400 hover:text-white bg-transparent border-0 cursor-pointer text-[7.5px]"
+                                                className="text-cyan-400 hover:text-foreground bg-transparent border-0 cursor-pointer text-[7.5px]"
                                             >
                                                 [TARGET]
                                             </button>
@@ -160,7 +160,7 @@ export const NavigationPanel: React.FC = () => {
 
                         {/* Navigation Profile Buttons */}
                         <div className="space-y-1">
-                            <span className={`${labelSizeClass} text-zinc-400 uppercase font-bold tracking-wider block font-mono`}>Routing Profile</span>
+                            <span className={`${labelSizeClass} text-muted-foreground uppercase font-bold tracking-wider block font-mono`}>Routing Profile</span>
                             <div className="grid grid-cols-4 gap-1.5 font-mono">
                                 {[
                                     { id: 'car', icon: 'solar:car-bold', label: 'Car' },
@@ -182,7 +182,7 @@ export const NavigationPanel: React.FC = () => {
                         </div>
 
                         {routeError && (
-                            <div className="text-[8px] text-red-400 mt-1 font-mono leading-tight">
+                            <div className="text-[8px] text-destructive mt-1 font-mono leading-tight">
                                 ERROR: {routeError}
                             </div>
                         )}
@@ -216,13 +216,13 @@ export const NavigationPanel: React.FC = () => {
                                 </div>
                                 <div className="flex justify-between items-end">
                                     <div>
-                                        <div className="text-[8px] text-zinc-500 uppercase tracking-wider">{navigationRoute.provider} ROUTE</div>
-                                        <div className={`font-bold tracking-tight text-white mt-0.5 ${is2D ? 'text-sm' : 'text-lg'}`}>
+                                        <div className="text-[8px] text-muted-foreground uppercase tracking-wider">{navigationRoute.provider} ROUTE</div>
+                                        <div className={`font-bold tracking-tight text-foreground mt-0.5 ${is2D ? 'text-sm' : 'text-lg'}`}>
                                             {formatTime(navigationRoute.traffic_duration_s || navigationRoute.duration_s)}
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <div className="text-[8px] text-zinc-500 uppercase tracking-wider">DISTANCE</div>
+                                        <div className="text-[8px] text-muted-foreground uppercase tracking-wider">DISTANCE</div>
                                         <div className="text-xs font-bold text-cyan-400 mt-0.5">
                                             {(navigationRoute.distance_m / 1000).toFixed(1)} KM
                                         </div>
@@ -230,13 +230,13 @@ export const NavigationPanel: React.FC = () => {
                                 </div>
 
                                 {navigationRoute.traffic_duration_s && Math.abs(navigationRoute.traffic_duration_s - navigationRoute.duration_s) > 60 && (
-                                    <div className="text-[8.5px] text-amber-400 mt-1 flex items-center gap-1">
+                                    <div className="text-[8.5px] text-warning mt-1 flex items-center gap-1">
                                         <WorkbenchIcon name="solar:danger-bold" size={9} />
                                         {navigationRoute.summary}
                                     </div>
                                 )}
 
-                                <div className="text-[7.5px] text-zinc-500 text-right mt-0.5">
+                                <div className="text-[7.5px] text-muted-foreground text-right mt-0.5">
                                     LAST_SYNC: {new Date(lastRefresh).toLocaleTimeString()}
                                 </div>
                             </div>
@@ -245,11 +245,11 @@ export const NavigationPanel: React.FC = () => {
                         {/* Turn-by-Turn Steps */}
                         <div className={`flex-1 overflow-y-auto pr-1 space-y-2 mt-1 ${is2D ? 'max-h-[100px]' : 'max-h-[140px]'} font-mono`}>
                             {navigationRoute?.steps?.map((step, idx) => (
-                                <div key={idx} className="flex gap-2 text-[9px] items-start border-l border-zinc-800 pl-2 ml-1">
-                                    <div className="w-10 shrink-0 text-zinc-500 text-[8px] mt-0.5 font-bold">
+                                <div key={idx} className="flex gap-2 text-[9px] items-start border-l border-border pl-2 ml-1">
+                                    <div className="w-10 shrink-0 text-muted-foreground text-[8px] mt-0.5 font-bold">
                                         {step.distance_m > 999 ? `${(step.distance_m / 1000).toFixed(1)}km` : `${Math.round(step.distance_m)}m`}
                                     </div>
-                                    <div className="text-zinc-200 leading-normal">
+                                    <div className="text-foreground leading-normal">
                                         {step.instruction}
                                     </div>
                                 </div>

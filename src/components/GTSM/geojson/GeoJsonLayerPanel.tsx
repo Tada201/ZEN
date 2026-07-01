@@ -31,8 +31,8 @@ export const GeoJsonLayerPanel: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col gap-1.5 p-3 border border-zinc-800 bg-black/60 backdrop-blur-md font-mono text-xs w-full max-h-[220px] overflow-y-auto">
-      <div className="flex items-center justify-between text-cyan-400 border-b border-zinc-800/50 pb-1 mb-1">
+    <div className="flex flex-col gap-1.5 p-3 border border-border bg-background/60 backdrop-blur-md font-mono text-xs w-full max-h-[220px] overflow-y-auto">
+      <div className="flex items-center justify-between text-cyan-400 border-b border-border/50 pb-1 mb-1">
         <div className="flex items-center gap-1.5">
           <WorkbenchIcon name="solar:database-bold-duotone" size={12} />
           <span className="text-[9px] font-bold tracking-[0.2em] uppercase">SAVED_GEOJSON_LAYERS</span>
@@ -41,7 +41,7 @@ export const GeoJsonLayerPanel: React.FC = () => {
       </div>
 
       {layers.length === 0 ? (
-        <div className="text-center py-4 text-zinc-600 text-[9px] uppercase tracking-wider">
+        <div className="text-center py-4 text-muted-foreground/70 text-[9px] uppercase tracking-wider">
           No imported layers. Drop a .geojson file to import.
         </div>
       ) : (
@@ -53,7 +53,7 @@ export const GeoJsonLayerPanel: React.FC = () => {
             return (
               <div 
                 key={layer.id} 
-                className="border border-zinc-900 bg-zinc-950/40 p-1.5 rounded flex flex-col gap-1 hover:border-zinc-800/80 transition-colors"
+                className="border border-border bg-card/60 p-1.5 rounded flex flex-col gap-1 hover:border-border/80 transition-colors"
               >
                 {/* Header Row */}
                 <div className="flex items-center justify-between gap-2">
@@ -62,16 +62,16 @@ export const GeoJsonLayerPanel: React.FC = () => {
                     onClick={() => setExpandedId(isExpanded ? null : layer.id)}
                   >
                     <div 
-                      className="w-2.5 h-2.5 rounded-full shrink-0 border border-black/40" 
+                      className="w-2.5 h-2.5 rounded-full shrink-0 border border-border/40" 
                       style={{ backgroundColor: layer.color }}
                     />
-                    <span className="font-bold text-[9px] tracking-wide text-zinc-300 truncate uppercase">{layer.name}</span>
+                    <span className="font-bold text-[9px] tracking-wide text-foreground truncate uppercase">{layer.name}</span>
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       onClick={() => toggleLayerVisibility(layer.id, !isVisible)}
-                      className="text-zinc-500 hover:text-white transition-colors cursor-pointer"
+                      className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                     >
                       <WorkbenchIcon 
                         name={isVisible ? 'solar:eye-bold' : 'solar:eye-closed-bold'} 
@@ -81,14 +81,14 @@ export const GeoJsonLayerPanel: React.FC = () => {
                     </button>
                     <button
                       onClick={() => handleExport(layer.id)}
-                      className="text-zinc-500 hover:text-cyan-400 transition-colors cursor-pointer"
+                      className="text-muted-foreground hover:text-cyan-400 transition-colors cursor-pointer"
                       title="Export Layer"
                     >
                       <WorkbenchIcon name="solar:download-bold" size={12} />
                     </button>
                     <button
                       onClick={() => deleteLayer(layer.id)}
-                      className="text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
+                      className="text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
                       title="Delete Layer"
                     >
                       <WorkbenchIcon name="solar:trash-bin-trash-bold" size={12} />
@@ -98,12 +98,12 @@ export const GeoJsonLayerPanel: React.FC = () => {
 
                 {/* Expanded Details / Controls */}
                 {isExpanded && (
-                  <div className="border-t border-zinc-900 mt-1 pt-1.5 flex flex-col gap-1 text-[9px] text-zinc-500">
+                  <div className="border-t border-border mt-1 pt-1.5 flex flex-col gap-1 text-[9px] text-muted-foreground">
                     {layer.description && (
-                      <p className="text-zinc-400 leading-relaxed break-all">{layer.description}</p>
+                      <p className="text-muted-foreground leading-relaxed break-all">{layer.description}</p>
                     )}
                     <div className="flex justify-between items-center mt-1">
-                      <span>FEATURES: <b className="text-zinc-300">{layer.featureCount}</b></span>
+                      <span>FEATURES: <b className="text-foreground">{layer.featureCount}</b></span>
                       <div className="flex items-center gap-1">
                         <span>COLOR:</span>
                         <input

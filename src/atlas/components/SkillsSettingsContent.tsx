@@ -99,7 +99,7 @@ export function SkillsSettingsContent({
           </p>
         </div>
         {loading && (
-          <span className="text-[10px] font-semibold text-zinc-500 animate-pulse">
+          <span className="text-[10px] font-semibold text-muted-foreground animate-pulse">
             Loading registry...
           </span>
         )}
@@ -182,7 +182,7 @@ export function SkillsSettingsContent({
           ))}
 
           {!loading && filteredTools.length === 0 && (
-            <p className="text-[11px] text-zinc-500 py-4 text-center">
+            <p className="text-[11px] text-muted-foreground py-4 text-center">
               No matching tools in the backend registry.
             </p>
           )}

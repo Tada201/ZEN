@@ -17,6 +17,10 @@ export interface McpTool {
   description?: string;
   parameters?: unknown;
   risk_level?: string;
+  /** True if the non-interactive MCP path will honor this tool. */
+  mcp_exposable?: boolean;
+  /** Human-readable reason the tool is not callable over JSON-RPC. */
+  unavailability_reason?: string;
 }
 
 export type McpConfig = Record<string, unknown>;

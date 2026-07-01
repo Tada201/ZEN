@@ -7,8 +7,8 @@
   --math-bg: #1e1e24;
   --math-sidebar-bg: #18181c;
   --math-input-bg: #131316;
-  --math-border: rgba(255, 255, 255, 0.08);
-  --math-border-dim: rgba(255, 255, 255, 0.04);
+  --math-border: hsl(var(--foreground) / 0.08);
+  --math-border-dim: hsl(var(--foreground) / 0.04);
   --math-fg: #d4d4d4;
   --math-accent: #00ff9f;
   --math-accent-dim: rgba(0, 255, 159, 0.15);
@@ -48,11 +48,11 @@
   background: transparent;
 }
 .math-plot__sidebar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: hsl(var(--foreground) / 0.1);
   border-radius: 0;
 }
 .math-plot__sidebar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: hsl(var(--foreground) / 0.2);
 }
 
 /* ─── Headers ─── */
@@ -61,7 +61,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.15em;
-  color: rgba(255, 255, 255, 0.5);
+  color: hsl(var(--foreground) / 0.5);
   margin-bottom: 8px;
   display: flex;
   align-items: center;
@@ -89,7 +89,7 @@
 
 .math-plot__list::-webkit-scrollbar { width: 4px; }
 .math-plot__list::-webkit-scrollbar-track { background: transparent; }
-.math-plot__list::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); }
+.math-plot__list::-webkit-scrollbar-thumb { background: hsl(var(--foreground) / 0.08); }
 
 .math-plot__item {
   position: relative;
@@ -102,7 +102,7 @@
 
 .math-plot__item:hover {
   background: #2a2d2e;
-  border-color: rgba(255, 255, 255, 0.15);
+  border-color: hsl(var(--foreground) / 0.15);
   box-shadow: none;
 }
 
@@ -133,7 +133,7 @@
 
 .math-plot__item-id {
   font-size: 8px;
-  color: rgba(255, 255, 255, 0.3);
+  color: hsl(var(--foreground) / 0.3);
   font-weight: bold;
   text-transform: uppercase;
 }
@@ -174,7 +174,7 @@
 .math-plot__action-btn {
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.4);
+  color: hsl(var(--foreground) / 0.4);
   cursor: pointer;
   padding: 2px;
   display: flex;
@@ -210,7 +210,7 @@
 .math-plot__option-label {
   width: 50px;
   flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.4);
+  color: hsl(var(--foreground) / 0.4);
 }
 
 .math-plot__color-picker {
@@ -275,7 +275,7 @@
 }
 
 .math-plot__btn {
-  background: rgba(255, 255, 255, 0.04);
+  background: hsl(var(--foreground) / 0.04);
   border: 1px solid var(--math-border);
   border-radius: 2px;
   color: var(--math-fg);
@@ -289,8 +289,8 @@
   gap: 4px;
 }
 .math-plot__btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: hsl(var(--foreground) / 0.08);
+  border-color: hsl(var(--foreground) / 0.2);
 }
 .math-plot__btn--danger:hover {
   background: rgba(244, 135, 113, 0.1);
@@ -341,7 +341,7 @@
   width: 24px;
   text-align: right;
   font-size: 9px;
-  color: rgba(255, 255, 255, 0.4);
+  color: hsl(var(--foreground) / 0.4);
 }
 
 .math-plot__var-minmax {
@@ -349,7 +349,7 @@
   background: transparent;
   border: none;
   border-bottom: 1px solid var(--math-border);
-  color: rgba(255, 255, 255, 0.3);
+  color: hsl(var(--foreground) / 0.3);
   font-size: 9px;
   text-align: center;
   outline: none;
@@ -366,7 +366,7 @@
   align-items: center;
   gap: 6px;
   font-size: 10px;
-  background: rgba(255, 255, 255, 0.02);
+  background: hsl(var(--foreground) / 0.02);
   border: 1px solid var(--math-border-dim);
   padding: 4px 6px;
   border-radius: 2px;
@@ -375,7 +375,7 @@
 .math-plot__annotation-text {
   flex: 1;
   text-align: left;
-  color: rgba(255, 255, 255, 0.7);
+  color: hsl(var(--foreground) / 0.7);
 }
 
 /* ─── Main Content ─── */
@@ -409,13 +409,13 @@
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.1em;
-  color: rgba(255, 255, 255, 0.8);
+  color: hsl(var(--foreground) / 0.8);
   text-transform: uppercase;
 }
 
 .math-plot__toolbar-status {
   font-size: 9px;
-  color: rgba(255, 255, 255, 0.3);
+  color: hsl(var(--foreground) / 0.3);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -424,7 +424,7 @@
 .math-plot__loading {
   width: 10px;
   height: 10px;
-  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  border: 1.5px solid hsl(var(--foreground) / 0.1);
   border-top-color: var(--math-accent);
   border-radius: 50%;
   animation: math-plot-spin 1s linear infinite;
@@ -437,7 +437,7 @@
 .math-plot__toolbar-btn {
   background: transparent;
   border: 1px solid transparent;
-  color: rgba(255, 255, 255, 0.4);
+  color: hsl(var(--foreground) / 0.4);
   cursor: pointer;
   padding: 3px;
   border-radius: 2px;
@@ -447,7 +447,7 @@
   transition: background-color 0.1s ease, color 0.1s ease;
 }
 .math-plot__toolbar-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: hsl(var(--foreground) / 0.06);
   color: #fff;
 }
 .math-plot__toolbar-btn:disabled {
@@ -488,11 +488,11 @@
   width: 100%;
   height: 100%;
   gap: 10px;
-  color: rgba(255, 255, 255, 0.3);
+  color: hsl(var(--foreground) / 0.3);
 }
 
 .math-plot__empty-icon {
-  color: rgba(255, 255, 255, 0.1);
+  color: hsl(var(--foreground) / 0.1);
   width: 32px;
   height: 32px;
 }
@@ -500,14 +500,14 @@
 .math-plot__empty-title {
   font-size: 11px;
   letter-spacing: 0.15em;
-  color: rgba(255, 255, 255, 0.5);
+  color: hsl(var(--foreground) / 0.5);
   text-transform: uppercase;
   font-weight: 700;
 }
 
 .math-plot__empty-hint {
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.2);
+  color: hsl(var(--foreground) / 0.2);
 }
 
 /* ─── Settings Panel ─── */
@@ -520,7 +520,7 @@
   border: 1px solid var(--math-border);
   border-radius: 2px;
   padding: 8px 10px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 12px hsl(var(--background) / 0.5);
   z-index: 50;
   backdrop-filter: none;
   animation: math-plot-fade-in 100ms ease;
@@ -535,7 +535,7 @@
   font-size: 9px;
   text-transform: uppercase;
   letter-spacing: 0.15em;
-  color: rgba(255, 255, 255, 0.4);
+  color: hsl(var(--foreground) / 0.4);
   margin-bottom: 6px;
   padding-bottom: 4px;
   border-bottom: 1px solid var(--math-border);
@@ -551,7 +551,7 @@
 
 .math-plot__settings-list::-webkit-scrollbar { width: 3px; }
 .math-plot__settings-list::-webkit-scrollbar-track { background: transparent; }
-.math-plot__settings-list::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); }
+.math-plot__settings-list::-webkit-scrollbar-thumb { background: hsl(var(--foreground) / 0.1); }
 
 .math-plot__settings-item {
   display: flex;
@@ -563,13 +563,13 @@
 .math-plot__settings-label {
   font-size: 8px;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.6);
+  color: hsl(var(--foreground) / 0.6);
 }
 
 .math-plot__settings-toggle {
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.3);
+  color: hsl(var(--foreground) / 0.3);
   cursor: pointer;
   padding: 2px;
   border-radius: 2px;
@@ -636,14 +636,14 @@
 .math-plot__spreadsheet-header {
   display: flex;
   border-bottom: 1px solid var(--math-border);
-  background: rgba(255, 255, 255, 0.03);
+  background: hsl(var(--foreground) / 0.03);
 }
 
 .math-plot__spreadsheet-col {
   flex: 1;
   padding: 3px 4px;
   font-size: 9px;
-  color: rgba(255, 255, 255, 0.4);
+  color: hsl(var(--foreground) / 0.4);
   text-align: center;
   font-weight: bold;
   min-width: 0;
@@ -705,7 +705,7 @@
   padding: 2px 0;
 }
 .math-plot__spreadsheet-cell-input:focus {
-  background: rgba(255, 255, 255, 0.03);
+  background: hsl(var(--foreground) / 0.03);
 }
 
 .math-plot__spreadsheet-actions {
@@ -715,7 +715,7 @@
   justify-content: space-between;
   align-items: center;
   border-top: 1px solid var(--math-border);
-  background: rgba(255, 255, 255, 0.01);
+  background: hsl(var(--foreground) / 0.01);
 }
 
 .math-plot__spreadsheet-row-del {
@@ -723,7 +723,7 @@
   height: 16px;
   border: none;
   background: transparent;
-  color: rgba(255, 255, 255, 0.25);
+  color: hsl(var(--foreground) / 0.25);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -739,7 +739,7 @@
 .math-plot__var-play-btn {
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.35);
+  color: hsl(var(--foreground) / 0.35);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -757,7 +757,7 @@
 /* ─── Collapsible Sidebar Folder Panels ─── */
 .math-plot__folder {
   border: 1px solid var(--math-border);
-  background: rgba(255, 255, 255, 0.01);
+  background: hsl(var(--foreground) / 0.01);
   border-radius: 2px;
   margin-top: 4px;
 }
@@ -773,7 +773,7 @@
   transition: background-color 0.1s ease;
 }
 .math-plot__folder-header:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: hsl(var(--foreground) / 0.03);
 }
 
 .math-plot__folder-title {
@@ -784,7 +784,7 @@
   font-weight: bold;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.6);
+  color: hsl(var(--foreground) / 0.6);
 }
 
 .math-plot__folder-content {
@@ -812,7 +812,7 @@
 .math-plot__viewport-label {
   font-size: 8px;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.35);
+  color: hsl(var(--foreground) / 0.35);
 }
 
 .math-plot__viewport-input {
@@ -847,7 +847,7 @@
   max-width: 140px;
 }
 .math-plot__preset-select:hover {
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: hsl(var(--foreground) / 0.2);
 }
 .math-plot__preset-select:focus {
   border-color: var(--math-accent);

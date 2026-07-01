@@ -21,11 +21,11 @@ export function BoardQr({ block }: { block: VoiceStageQrBlock }) {
     return () => { active = false; };
   }, [block.data, block.size]);
 
-  if (error) return <div className="p-3 text-xs text-white/55">QR generation failed.</div>;
+  if (error) return <div className="p-3 text-xs text-primary-foreground/55">QR generation failed.</div>;
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2 p-3">
-      {block.title && <div className="text-xs font-semibold text-white/70">{block.title}</div>}
-      {source ? <img src={source} alt={block.title || "QR code"} className="min-h-0 max-h-full max-w-full object-contain" /> : <div className="h-28 w-28 animate-pulse bg-white/[0.04]" />}
+      {block.title && <div className="text-xs font-semibold text-primary-foreground/70">{block.title}</div>}
+      {source ? <img src={source} alt={block.title || "QR code"} className="min-h-0 max-h-full max-w-full object-contain" /> : <div className="h-28 w-28 animate-pulse bg-card/[0.04]" />}
     </div>
   );
 }

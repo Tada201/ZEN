@@ -110,7 +110,7 @@ export const STTConfig = memo(() => {
     const statusBadge = (() => {
         if (downloading) {
             return (
-                <span className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+                <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                     <Loader2 size={10} className="animate-spin" />
                     Downloading…
                 </span>
@@ -118,7 +118,7 @@ export const STTConfig = memo(() => {
         }
         if (status?.valid) {
             return (
-                <span className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400">
+                <span className="flex items-center gap-1.5 text-[10px] font-bold text-success">
                     <CheckCircle2 size={10} />
                     Ready ({Math.round((status.size_bytes / (1024 * 1024)) * 10) / 10} MB)
                 </span>
@@ -126,11 +126,11 @@ export const STTConfig = memo(() => {
         }
         if (status?.exists && !status.valid) {
             return (
-                <span className="text-[10px] font-bold text-amber-400">Truncated — re-download</span>
+                <span className="text-[10px] font-bold text-warning">Truncated — re-download</span>
             );
         }
         return (
-            <span className="text-[10px] font-bold text-zinc-500">Not installed</span>
+            <span className="text-[10px] font-bold text-muted-foreground">Not installed</span>
         );
     })();
 
@@ -194,24 +194,24 @@ export const STTConfig = memo(() => {
                             }
                         />
 
-                        <div className="rounded-xl border border-white/[0.04] bg-zinc-900/15 px-4 py-3">
+                        <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
                             <div className="flex items-center justify-between gap-3">
                                 <div className="flex min-w-0 flex-col gap-1">
-                                    <div className="flex items-center gap-2 text-[12px] font-bold text-white">
+                                    <div className="flex items-center gap-2 text-[12px] font-bold text-foreground">
                                         <Settings2 size={12} className="text-primary" />
                                         <span className="uppercase tracking-wider">
                                             {WHISPER_VARIANTS.find((v) => v.value === sttWhisperModel)?.label ?? sttWhisperModel}
                                         </span>
                                     </div>
-                                    <span className="text-[11px] text-zinc-500">
+                                    <span className="text-[11px] text-muted-foreground">
                                         {WHISPER_VARIANTS.find((v) => v.value === sttWhisperModel)?.description}
                                     </span>
                                     <div className="mt-0.5">{statusBadge}</div>
                                     <div className="mt-1 flex items-center gap-2 text-[10px]">
-                                        <span className={runtimeStatus?.backend === 'cuda' || runtimeStatus?.backend === 'vulkan' ? 'font-bold text-emerald-400' : 'font-bold text-amber-300'}>
+                                        <span className={runtimeStatus?.backend === 'cuda' || runtimeStatus?.backend === 'vulkan' ? 'font-bold text-success' : 'font-bold text-warning'}>
                                             Backend: {backendLabel}
                                         </span>
-                                        <span className="truncate text-zinc-600">{backendDetail}</span>
+                                        <span className="truncate text-muted-foreground/70">{backendDetail}</span>
                                     </div>
                                 </div>
                                 <WorkbenchButton
@@ -228,7 +228,7 @@ export const STTConfig = memo(() => {
                                 </WorkbenchButton>
                             </div>
                             {error && (
-                                <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-[11px] text-red-400">
+                                <div className="mt-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-[11px] text-destructive">
                                     {error}
                                 </div>
                             )}
@@ -237,8 +237,8 @@ export const STTConfig = memo(() => {
                 )}
 
                 {sttEngine === 'web' && (
-                    <div className="flex flex-col gap-3 rounded-xl border border-white/[0.04] bg-zinc-900/15 px-4 py-3 text-[11px] text-zinc-500">
-                        <div className="flex items-center gap-2 text-white">
+                    <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3 text-[11px] text-muted-foreground">
+                        <div className="flex items-center gap-2 text-foreground">
                             <Mic size={12} className="text-primary" />
                             <span className="font-bold">Browser Web Speech</span>
                         </div>
@@ -251,12 +251,12 @@ export const STTConfig = memo(() => {
                 )}
 
                 {sttEngine === 'moonshine' && (
-                    <div className="rounded-lg border border-emerald-400/15 bg-emerald-400/[0.04] px-4 py-3">
-                        <div className="flex items-center gap-2 text-[12px] font-semibold text-white">
-                            <Mic size={13} className="text-emerald-400" />
+                    <div className="rounded-lg border border-emerald-400/15 bg-success/[0.04] px-4 py-3">
+                        <div className="flex items-center gap-2 text-[12px] font-semibold text-foreground">
+                            <Mic size={13} className="text-success" />
                             Moonshine Tiny
                         </div>
-                        <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
+                        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
                             Local English speech recognition optimized for short commands and low-power CPUs. The approximately 28 MB model and WebAssembly runtime download on first use and are then browser-cached.
                         </p>
                     </div>
@@ -264,8 +264,8 @@ export const STTConfig = memo(() => {
 
                 <div className="flex flex-col gap-2">
                     <div>
-                        <h4 className="text-[12px] font-semibold text-white">Engine capabilities</h4>
-                        <p className="mt-0.5 text-[11px] text-zinc-500">
+                        <h4 className="text-[12px] font-semibold text-foreground">Engine capabilities</h4>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
                             Relative guidance for short voice commands. Actual speed and accuracy depend on hardware, language, microphone, and noise.
                         </p>
                     </div>

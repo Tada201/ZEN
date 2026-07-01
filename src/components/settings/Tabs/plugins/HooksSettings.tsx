@@ -28,10 +28,10 @@ interface HookLogEntry {
 }
 
 const TRIGGER_CONFIG: Record<Hook['trigger'], { icon: string; label: string; color: string }> = {
-    SessionStart: { icon: 'codicon:play', label: 'Session Start', color: 'text-amber-400' },
-    PreToolUse: { icon: 'codicon:zap', label: 'Pre-Tool', color: 'text-rose-400' },
-    PostToolUse: { icon: 'codicon:check', label: 'Post-Tool', color: 'text-purple-400' },
-    PostEdit: { icon: 'codicon:edit', label: 'Post-Edit', color: 'text-indigo-400' },
+    SessionStart: { icon: 'codicon:play', label: 'Session Start', color: 'text-warning' },
+    PreToolUse: { icon: 'codicon:zap', label: 'Pre-Tool', color: 'text-destructive' },
+    PostToolUse: { icon: 'codicon:check', label: 'Post-Tool', color: 'text-primary' },
+    PostEdit: { icon: 'codicon:edit', label: 'Post-Edit', color: 'text-primary' },
     UserStop: { icon: 'codicon:debug-stop', label: 'User Stop', color: 'text-orange-400' },
 };
 
@@ -122,13 +122,13 @@ export const HooksSettings = memo(({ embedded }: { embedded?: boolean }) => {
             >
                 <div className="flex flex-col gap-4">
                     {loading ? (
-                        <div className="py-8 text-center text-[11px] text-zinc-500">
+                        <div className="py-8 text-center text-[11px] text-muted-foreground">
                             Loading hook configurations...
                         </div>
                     ) : hookDetails.length === 0 ? (
                         <div className="py-8 text-center">
-                            <WorkbenchIcon name="codicon:blank" size={32} className="text-zinc-600 mx-auto mb-3" />
-                            <p className="text-[11px] text-zinc-500">No hooks configured</p>
+                            <WorkbenchIcon name="codicon:blank" size={32} className="text-muted-foreground/70 mx-auto mb-3" />
+                            <p className="text-[11px] text-muted-foreground">No hooks configured</p>
                         </div>
                     ) : (
                         hookDetails.map(hook => {
@@ -136,18 +136,18 @@ export const HooksSettings = memo(({ embedded }: { embedded?: boolean }) => {
                             return (
                                 <div
                                     key={hook.id}
-                                    className="flex items-center gap-4 p-4 rounded-xl bg-zinc-900/50 border border-white/5 hover:border-white/10 transition-colors"
+                                    className="flex items-center gap-4 p-4 rounded-xl bg-muted/60 border border-border hover:border-border transition-colors"
                                 >
                                     <WorkbenchIcon name={trigger.icon} size={18} className={trigger.color} />
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
-                                            <span className="text-[12px] font-bold text-white truncate">{hook.name}</span>
-                                            <span className={cn("text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 border border-white/10", trigger.color)}>
+                                            <span className="text-[12px] font-bold text-foreground truncate">{hook.name}</span>
+                                            <span className={cn("text-[10px] font-mono px-2 py-0.5 rounded-full bg-muted border border-border", trigger.color)}>
                                                 {trigger.label}
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-4 mt-1">
-                                            <span className="text-[10px] text-zinc-500">ID: {hook.id}</span>
+                                            <span className="text-[10px] text-muted-foreground">ID: {hook.id}</span>
                                             <span className="text-[10px] text-emerald-500/70">{hook.trigger_count} triggers</span>
                                         </div>
                                     </div>
@@ -169,7 +169,7 @@ export const HooksSettings = memo(({ embedded }: { embedded?: boolean }) => {
             >
                 <div className="flex flex-col gap-4">
                     <div className="flex items-center justify-between">
-                        <p className="text-[11px] text-zinc-400">
+                        <p className="text-[11px] text-muted-foreground">
                             {logs.length > 0 ? `${logs.length} entries` : 'No activity recorded'}
                         </p>
                         <WorkbenchButton
@@ -190,26 +190,26 @@ export const HooksSettings = memo(({ embedded }: { embedded?: boolean }) => {
                                 exit={{ height: 0, opacity: 0 }}
                                 className="overflow-hidden"
                             >
-                                <div className="max-h-[300px] overflow-y-auto bg-zinc-950/50 rounded-lg border border-white/5">
+                                <div className="max-h-[300px] overflow-y-auto bg-card/70 rounded-lg border border-border">
                                     {logs.length === 0 ? (
-                                        <div className="py-8 text-center text-[11px] text-zinc-600">
+                                        <div className="py-8 text-center text-[11px] text-muted-foreground/70">
                                             No log entries
                                         </div>
                                     ) : (
                                         <div className="divide-y divide-white/5">
                                             {logs.map((log, i) => (
-                                                <div key={i} className="flex items-center gap-3 px-4 py-3 text-[10px] font-mono hover:bg-white/[0.02]">
-                                                    <span className="text-zinc-500">{formatTime(log.timestamp)}</span>
+                                                <div key={i} className="flex items-center gap-3 px-4 py-3 text-[10px] font-mono hover:bg-muted/30">
+                                                    <span className="text-muted-foreground">{formatTime(log.timestamp)}</span>
                                                     <span className={cn("px-1.5 py-0.5 rounded text-[9px] font-bold",
-                                                        log.result === 'success' ? 'bg-emerald-500/10 text-emerald-400' :
-                                                        log.result === 'blocked' ? 'bg-amber-500/10 text-amber-400' :
-                                                        'bg-rose-500/10 text-rose-400'
+                                                        log.result === 'success' ? 'bg-success/10 text-success' :
+                                                        log.result === 'blocked' ? 'bg-warning/10 text-warning' :
+                                                        'bg-rose-500/10 text-destructive'
                                                     )}>
                                                         {log.result}
                                                     </span>
-                                                    <span className="text-zinc-300">{log.hook_name}</span>
-                                                    <span className="text-zinc-500">→ {log.trigger}</span>
-                                                    {log.message && <span className="text-rose-400/70 ml-auto">{log.message}</span>}
+                                                    <span className="text-foreground">{log.hook_name}</span>
+                                                    <span className="text-muted-foreground">→ {log.trigger}</span>
+                                                    {log.message && <span className="text-destructive/70 ml-auto">{log.message}</span>}
                                                 </div>
                                             ))}
                                         </div>

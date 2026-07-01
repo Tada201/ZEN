@@ -374,6 +374,17 @@ pub fn run() {
                     "init.bg.orchestrator"
                 );
 
+                // Backend is ready: critical phases are done (set earlier in
+                // the critical-init spawn) and bg.orchestrator just
+                // completed. Per the canonical Tauri splash contract, signal
+                // readiness so the handoff can fire the moment the frontend
+                // also calls `set_complete("frontend")`. If frontend already
+                // signaled, perform the handoff immediately.
+                state.setup_flags.lock().await.backend_ready = true;
+                if state.setup_flags.lock().await.both_ready() {
+                    crate::commands::system::perform_handoff(&bg_app_handle).await;
+                }
+
                 tracing::info!(
                     elapsed_ms = _start_bg.elapsed().as_millis(),
                     "init.bg.total: all background services initialized"
@@ -386,7 +397,7 @@ pub fn run() {
             commands::system::get_system_metrics,
             commands::system::get_system_status,
             commands::system::get_init_status,
-            commands::system::close_splashscreen,
+            commands::system::set_complete,
             commands::system::get_system_stats,
             commands::system::get_hardware_info,
             commands::system::browse_folder,

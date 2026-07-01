@@ -70,31 +70,18 @@ function renderStatus(status) {
   else if (pct >= 100) phaseLabel.textContent = "System Ready";
 }
 
-// ── Minimum splash display time (ms) ──
-const MIN_SPLASH_MS = 2500;
-const splashStart = performance.now();
-
-let closeRequested = false;
-function scheduleClose() {
-  if (closeRequested) return;
-  closeRequested = true;
-  const elapsed = performance.now() - splashStart;
-  const remaining = Math.max(0, MIN_SPLASH_MS - elapsed);
-  setTimeout(() => {
-    const invoke = window.__TAURI_INTERNALS__?.invoke;
-    if (!invoke) return;
-    invoke("close_splashscreen").catch(() => {});
-  }, remaining);
-}
-
 // ── Browser-only simulation fallback ──
+// The renderer boot screen is the single owner of the transition.
+// It calls close_splashscreen after its readiness gates complete.
+// We keep polling so the user sees live progress, but we never close
+// the native window from here.
 function startSimulatedLoader() {
   let currentPct = 0;
   const simInterval = setInterval(() => {
     currentPct += 4;
     if (currentPct > 100) {
       clearInterval(simInterval);
-      scheduleClose();
+      // native window stays open; renderer will close it
       return;
     }
     if (currentPct < 30) phaseLabel.textContent = "Initializing BIOS";
@@ -125,8 +112,7 @@ if (invoke) {
       polledOnce = true;
       renderStatus(status);
       if (status.critical_complete) {
-        clearInterval(pollTimer);
-        scheduleClose();
+        // native window stays open; renderer will close it
       }
     } catch {
       if (!polledOnce) {

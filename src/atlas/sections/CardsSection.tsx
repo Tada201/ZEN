@@ -72,7 +72,7 @@ function NotificationCard() {
         ].map((n, i) => (
           <li key={n.who} className="flex items-start gap-2.5">
             <span
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-primary-foreground"
               style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}
             >
               {n.who[0]}
@@ -143,7 +143,7 @@ function KanbanTaskCard() {
       <div className="mt-3 flex items-center justify-between">
         <div className="flex -space-x-1.5">
           {["SC", "MR", "AT"].map((init, i) => (
-            <span key={init} className="flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-semibold text-white ring-2 ring-card" style={{ background: AVATAR_COLORS[i] }}>
+            <span key={init} className="flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-semibold text-primary-foreground ring-2 ring-card" style={{ background: AVATAR_COLORS[i] }}>
               {init}
             </span>
           ))}

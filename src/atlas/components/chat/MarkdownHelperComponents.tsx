@@ -26,11 +26,11 @@ export class MarkdownErrorBoundary extends Component<
     if (this.state.hasError) {
       return (
         <div className="my-4 p-4 rounded-xl border border-rose-500/20 bg-rose-500/5">
-          <div className="flex items-center gap-2 text-rose-400 text-[10px] font-mono uppercase tracking-widest mb-2">
+          <div className="flex items-center gap-2 text-destructive text-[10px] font-mono uppercase tracking-widest mb-2">
             <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
             Markdown Render Error
           </div>
-          <pre className="text-[11px] font-mono text-rose-300 whitespace-pre-wrap overflow-auto max-h-32">
+          <pre className="text-[11px] font-mono text-destructive whitespace-pre-wrap overflow-auto max-h-32">
             {this.props.content || "Content could not be rendered"}
           </pre>
         </div>
@@ -72,7 +72,7 @@ export function YoutubePreview({ videoId }: { videoId: string }) {
       rel="noreferrer"
       className="block my-4 group relative overflow-hidden rounded-xl border border-border/30 bg-card/90 hover:border-primary/30 transition-all duration-200 max-w-[480px]"
     >
-      <div className="relative aspect-video bg-black/90 overflow-hidden">
+      <div className="relative aspect-video bg-background/90 overflow-hidden">
         <img
           src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
           alt="YouTube video preview"
@@ -80,8 +80,8 @@ export function YoutubePreview({ videoId }: { videoId: string }) {
           loading="lazy"
         />
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-12 h-12 rounded-full bg-black/60 flex items-center justify-center group-hover:bg-red-600/80 transition-colors">
-            <Play className="w-5 h-5 text-white ml-0.5" />
+          <div className="w-12 h-12 rounded-full bg-background/60 flex items-center justify-center group-hover:bg-red-600/80 transition-colors">
+            <Play className="w-5 h-5 text-foreground ml-0.5" />
           </div>
         </div>
       </div>
@@ -155,7 +155,7 @@ export function ImageGallery({ images }: { images: Array<{ src: string; alt: str
         title={lightboxIndex !== null && lightboxIndex >= 0 && lightboxIndex < images.length ? (images[lightboxIndex].alt || "Image Preview") : "Image Preview"}
         footer={
           <div className="flex w-full items-center justify-between">
-            <span className="text-[10px] text-zinc-400 font-mono">
+            <span className="text-[10px] text-muted-foreground font-mono">
               {lightboxIndex !== null && lightboxIndex >= 0 && lightboxIndex < images.length ? `${lightboxIndex + 1} / ${images.length}` : ""}
             </span>
             <div className="flex gap-2">
@@ -163,7 +163,7 @@ export function ImageGallery({ images }: { images: Array<{ src: string; alt: str
                 type="button"
                 onClick={handleExport}
                 disabled={exporting}
-                className="flex items-center gap-1.5 border border-white/10 px-3 py-1.5 text-[11px] rounded text-zinc-200 hover:bg-white/[0.06] transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 border border-border px-3 py-1.5 text-[11px] rounded text-foreground hover:bg-muted transition-colors disabled:opacity-50"
               >
                 <Download size={12} />
                 <span>{exporting ? "Saving..." : "Export to Workspace"}</span>
@@ -171,7 +171,7 @@ export function ImageGallery({ images }: { images: Array<{ src: string; alt: str
               <button
                 type="button"
                 onClick={close}
-                className="border border-white/10 px-3 py-1.5 text-[11px] rounded text-zinc-400 hover:text-white transition-colors"
+                className="border border-border px-3 py-1.5 text-[11px] rounded text-muted-foreground hover:text-foreground transition-colors"
               >
                 Close
               </button>
@@ -185,10 +185,10 @@ export function ImageGallery({ images }: { images: Array<{ src: string; alt: str
               <button
                 type="button"
                 onClick={prev}
-                className="absolute left-0 p-2 rounded-full bg-black/40 hover:bg-black/60 transition-colors z-10"
+                className="absolute left-0 p-2 rounded-full bg-background/40 hover:bg-background/60 transition-colors z-10"
                 aria-label="Previous"
               >
-                <ChevronLeft className="w-5 h-5 text-white" />
+                <ChevronLeft className="w-5 h-5 text-foreground" />
               </button>
             )}
             <img
@@ -200,10 +200,10 @@ export function ImageGallery({ images }: { images: Array<{ src: string; alt: str
               <button
                 type="button"
                 onClick={next}
-                className="absolute right-0 p-2 rounded-full bg-black/40 hover:bg-black/60 transition-colors z-10"
+                className="absolute right-0 p-2 rounded-full bg-background/40 hover:bg-background/60 transition-colors z-10"
                 aria-label="Next"
               >
-                <ChevronRight className="w-5 h-5 text-white" />
+                <ChevronRight className="w-5 h-5 text-foreground" />
               </button>
             )}
           </div>

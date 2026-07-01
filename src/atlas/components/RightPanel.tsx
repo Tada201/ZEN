@@ -16,27 +16,27 @@ const AgentOrchestratorPanel = React.lazy(() => import("@/components/widgets/orc
 const InteractiveDrawingCanvas = React.lazy(() => import("@/components/widgets/workbench/InteractiveDrawingCanvas"));
 
 const LoadingFallback = () => (
-  <div className="flex flex-col items-center justify-center h-full py-32 text-zinc-500 italic opacity-60">
+  <div className="flex flex-col items-center justify-center h-full py-32 text-muted-foreground italic opacity-60">
     <div className="relative w-10 h-10 mb-4 flex items-center justify-center">
       <svg width="40" height="40" viewBox="0 0 100 100" className="text-primary motion-safe:animate-spin">
         <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" strokeWidth="4" strokeDasharray="80 100" />
       </svg>
     </div>
-    <p className="text-[11px] uppercase tracking-widest font-black text-zinc-400">
+    <p className="text-[11px] uppercase tracking-widest font-black text-muted-foreground">
       Initializing Module...
     </p>
   </div>
 );
 
 const MathGraphPlaceholder = () => (
-  <div className="flex h-full flex-col items-center justify-center bg-black p-8 text-center">
+  <div className="flex h-full flex-col items-center justify-center bg-background p-8 text-center">
     <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
       <Sigma size={24} />
     </div>
-    <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-200">
+    <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-foreground">
       Math Graph TODO
     </h3>
-    <p className="mt-3 max-w-[360px] text-[12px] leading-relaxed text-zinc-500">
+    <p className="mt-3 max-w-[360px] text-[12px] leading-relaxed text-muted-foreground">
       The Desmos-backed graph renderer is disabled. This space is reserved for a future local graphing engine that works offline and renders graph_session tool output without third-party script loading.
     </p>
   </div>
@@ -64,7 +64,7 @@ export function RightPanel() {
   const renderContent = () => {
     if (!isRightPanelFeatureVisible(visibleActiveRightTab)) {
       return (
-        <div className="flex flex-col items-center justify-center h-full py-32 text-slate-500 italic opacity-40">
+        <div className="flex flex-col items-center justify-center h-full py-32 text-muted-foreground italic opacity-40">
           <Zap size={40} className="mb-4 text-primary/30" />
           <p className="text-[11px] uppercase tracking-widest font-black">
             Module Hidden
@@ -101,7 +101,7 @@ export function RightPanel() {
         return null;
       default:
         return (
-          <div className="flex flex-col items-center justify-center h-full py-32 text-slate-500 italic opacity-40">
+          <div className="flex flex-col items-center justify-center h-full py-32 text-muted-foreground italic opacity-40">
             <Zap size={40} className="mb-4 text-primary/30" />
           <p className="text-[11px] uppercase tracking-widest font-black">
               Module "{visibleActiveRightTab}" Locked
@@ -153,12 +153,12 @@ export function RightPanel() {
       <header className="h-14 border-b border-border flex items-center justify-between px-4 bg-card/20 backdrop-blur shrink-0">
         <div className="flex items-center gap-2.5">
           {getIcon()}
-          <span className="text-[12px] font-bold uppercase tracking-[0.15em] text-zinc-300">{getTitle()}</span>
+          <span className="text-[12px] font-bold uppercase tracking-[0.15em] text-foreground">{getTitle()}</span>
           {visibleActiveRightTab === 'drawing' && (
-            <div className="ml-2 flex rounded-lg border border-border bg-black/40 p-0.5">
+            <div className="ml-2 flex rounded-lg border border-border bg-muted/40 p-0.5">
               <button
                 type="button"
-                className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-bold uppercase tracking-wider transition-colors ${rightPanelCanvasMode === 'draw' ? 'bg-primary/15 text-primary' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
+                className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-bold uppercase tracking-wider transition-colors ${rightPanelCanvasMode === 'draw' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
                 onClick={() => setRightPanelCanvasMode('draw')}
                 title="Switch to free drawing canvas"
               >
@@ -167,7 +167,7 @@ export function RightPanel() {
               </button>
               <button
                 type="button"
-                className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-bold uppercase tracking-wider transition-colors ${rightPanelCanvasMode === 'mathplot' ? 'bg-primary/15 text-primary' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
+                className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-bold uppercase tracking-wider transition-colors ${rightPanelCanvasMode === 'mathplot' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
                 onClick={() => setRightPanelCanvasMode('mathplot')}
                 title="Switch to math graph mode"
               >
@@ -178,10 +178,10 @@ export function RightPanel() {
           )}
           {visibleActiveRightTab === 'map' && mapActivated && (
             <div className="flex items-center gap-2 ml-4">
-              <div className="flex rounded-lg border border-border bg-black/40 p-0.5">
+              <div className="flex rounded-lg border border-border bg-muted/40 p-0.5">
                 <button
                   type="button"
-                  className={`inline-flex h-7 items-center rounded-md px-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${mapMode === '2D' ? 'bg-primary/15 text-primary' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
+                  className={`inline-flex h-7 items-center rounded-md px-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${mapMode === '2D' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
                   onClick={() => setMapMode('2D')}
                   title="Switch to 2D Map"
                 >
@@ -189,7 +189,7 @@ export function RightPanel() {
                 </button>
                 <button
                   type="button"
-                  className={`inline-flex h-7 items-center rounded-md px-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${mapMode === '3D' ? 'bg-primary/15 text-primary' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
+                  className={`inline-flex h-7 items-center rounded-md px-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${mapMode === '3D' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
                   onClick={() => setMapMode('3D')}
                   title="Switch to 3D Globe"
                 >
@@ -200,7 +200,7 @@ export function RightPanel() {
                 type="button"
                 onClick={() => setMapClosing(true)}
                 disabled={mapClosing}
-                className="px-2 py-0.5 text-[11px] font-bold font-mono tracking-widest cursor-pointer border border-red-500/30 rounded transition-all text-red-400/80 hover:bg-red-500/15 hover:text-red-300 hover:border-red-500/50 disabled:opacity-50 disabled:pointer-events-none"
+                className="px-2 py-0.5 text-[11px] font-bold font-mono tracking-widest cursor-pointer border border-destructive/30 rounded transition-all text-destructive hover:bg-destructive/15 hover:border-destructive/50 disabled:opacity-50 disabled:pointer-events-none"
                 title="Close map and free GPU resources"
               >
                 {mapClosing ? 'CLOSING…' : 'CLOSE_MAP'}
@@ -210,12 +210,12 @@ export function RightPanel() {
         </div>
         <button 
           onClick={() => setRightPanelOpen(false)}
-          className="p-1.5 rounded-lg hover:bg-white/5 text-zinc-400 hover:text-zinc-200 transition-all"
+          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
         >
           <X size={16} />
         </button>
       </header>          {visibleActiveRightTab === 'map' ? (
-        <div className="flex-1 flex flex-col relative overflow-hidden bg-black select-none">
+        <div className="flex-1 flex flex-col relative overflow-hidden bg-background select-none">
           <div className="flex-1 relative w-full h-full flex flex-col">
             {mapActivated ? (
               <motion.div
@@ -239,10 +239,10 @@ export function RightPanel() {
                 <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-4 motion-safe:animate-pulse">
                   <MapIcon size={24} />
                 </div>
-                <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-200">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-foreground">
                   Operational Map
                 </h3>
-                <p className="text-[12px] text-zinc-400 max-w-[260px] mt-2 leading-relaxed">
+                <p className="text-[12px] text-muted-foreground max-w-[260px] mt-2 leading-relaxed">
                   Initializing this viewer loads heavy WebGL and Cesium 3D asset engines. Click below to confirm and activate the canvas.
                 </p>
                 <button
@@ -260,7 +260,7 @@ export function RightPanel() {
           </div>
         </div>
       ) : visibleActiveRightTab === 'drawing' || visibleActiveRightTab === 'agents' || visibleActiveRightTab === 'terminal' || visibleActiveRightTab === 'artifacts' ? (
-        <div className="flex-grow flex-1 relative overflow-hidden bg-black flex flex-col">
+        <div className="flex-grow flex-1 relative overflow-hidden bg-background flex flex-col">
           <AnimatePresence mode="wait">
             <motion.div
               key={visibleActiveRightTab}

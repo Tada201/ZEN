@@ -53,14 +53,14 @@ export const LayerManager: React.FC = () => {
   return (
     <div className="space-y-5">
       <section>
-        <p className="mb-2 text-[10px] font-medium text-zinc-400">Basemap</p>
-        <div className="grid grid-cols-3 border border-white/10">
+        <p className="mb-2 text-[10px] font-medium text-muted-foreground">Basemap</p>
+        <div className="grid grid-cols-3 border border-border">
           {BASEMAPS.map((basemap) => (
             <button
               key={basemap.id}
               type="button"
               onClick={() => setImageryProvider(basemap.id)}
-              className={`border-r border-white/10 px-2 py-2 text-[10px] font-medium last:border-r-0 ${imageryProvider === basemap.id ? 'bg-primary/15 text-primary' : 'text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-100'}`}
+              className={`border-r border-border px-2 py-2 text-[10px] font-medium last:border-r-0 ${imageryProvider === basemap.id ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}
             >
               {basemap.label}
             </button>
@@ -69,8 +69,8 @@ export const LayerManager: React.FC = () => {
       </section>
 
       <section>
-        <p className="mb-2 text-[10px] font-medium text-zinc-400">Data layers</p>
-        <div className="border border-white/10">
+        <p className="mb-2 text-[10px] font-medium text-muted-foreground">Data layers</p>
+        <div className="border border-border">
           {LAYERS.map((layer) => {
             const active = selectedLayers.includes(layer.id);
             const error = errorLayers[layer.id];
@@ -81,13 +81,13 @@ export const LayerManager: React.FC = () => {
                 key={layer.id}
                 type="button"
                 onClick={() => toggleLayer(layer.id)}
-                className="flex w-full items-center gap-3 border-b border-white/10 px-3 py-2 text-left last:border-b-0 hover:bg-white/[0.035]"
+                className="flex w-full items-center gap-3 border-b border-border px-3 py-2 text-left last:border-b-0 hover:bg-muted/40"
               >
-                <span aria-hidden="true" className={`flex h-3.5 w-3.5 items-center justify-center border ${active ? 'border-primary bg-primary text-primary-foreground' : 'border-zinc-600 bg-transparent'}`}>
+                <span aria-hidden="true" className={`flex h-3.5 w-3.5 items-center justify-center border ${active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-transparent'}`}>
                   {active && <WorkbenchIcon name="solar:check-read-linear" size={10} />}
                 </span>
-                <span className="min-w-0 flex-1 text-[11px] text-zinc-200">{layer.label}</span>
-                {error ? <span className="text-[9px] text-rose-300">Error</span> : loading ? <span className="text-[9px] text-zinc-400">Updating</span> : count !== null ? <span className="text-[9px] text-zinc-500">{count}</span> : null}
+                <span className="min-w-0 flex-1 text-[11px] text-foreground">{layer.label}</span>
+                {error ? <span className="text-[9px] text-destructive">Error</span> : loading ? <span className="text-[9px] text-muted-foreground">Updating</span> : count !== null ? <span className="text-[9px] text-muted-foreground">{count}</span> : null}
               </button>
             );
           })}

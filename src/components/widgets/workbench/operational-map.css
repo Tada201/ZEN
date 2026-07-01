@@ -65,7 +65,7 @@
     /* Warning */
     --hud-glass: rgba(10, 15, 26, 0.85);
     --hud-border: rgba(0, 230, 230, 0.25);
-    --hud-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    --hud-shadow: 0 8px 32px hsl(var(--background) / 0.6);
 }
 
 .tactical-map-sidebar {

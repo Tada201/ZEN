@@ -98,7 +98,7 @@ export const VoiceSettings = memo(() => {
           description={`${providerLabel}${activeModel ? ` / ${activeModel}` : ""}`}
           control={
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase text-zinc-500">{status}</span>
+              <span className="text-[10px] font-bold uppercase text-muted-foreground">{status}</span>
               <WorkbenchButton size="sm" variant="outline" loading={isTesting} onClick={handleProviderTest}>
                 <WorkbenchIcon name="lucide:plug-zap" size={13} />
                 Test
@@ -106,18 +106,18 @@ export const VoiceSettings = memo(() => {
             </div>
           }
         />
-        <div className="rounded-xl border border-white/[0.04] bg-zinc-950/40 px-4 py-3 text-[11px] text-zinc-500">
+        <div className="rounded-xl border border-border bg-card/60 px-4 py-3 text-[11px] text-muted-foreground">
           {selectedModel ? (
             <span>
               Selected model context:{" "}
-              <span className="font-bold text-zinc-300">
+              <span className="font-bold text-foreground">
                 {selectedModel.contextWindow ? `${selectedModel.contextWindow.toLocaleString()} tokens` : "unknown"}
               </span>
             </span>
           ) : (
             <span>No selected model metadata is cached for this provider yet.</span>
           )}
-          {testMessage && <div className="mt-2 text-zinc-400">{testMessage}</div>}
+          {testMessage && <div className="mt-2 text-muted-foreground">{testMessage}</div>}
         </div>
       </SettingsSection>
 
@@ -139,13 +139,13 @@ export const VoiceSettings = memo(() => {
         />
         {voiceDisplayAgentEnabled && (
           <>
-            <div className="rounded-xl border border-white/[0.05] bg-zinc-950/40 p-4 mb-2 space-y-2">
+            <div className="rounded-xl border border-border bg-card/60 p-4 mb-2 space-y-2">
               <div className="flex items-center gap-2">
-                <WorkbenchIcon name="lucide:info" size={13} className="text-blue-400" />
-                <span className="text-[11px] font-semibold text-blue-300">How it works</span>
+                <WorkbenchIcon name="lucide:info" size={13} className="text-primary" />
+                <span className="text-[11px] font-semibold text-primary">How it works</span>
               </div>
-              <p className="text-[11px] text-zinc-400 leading-relaxed">
-                The display agent runs alongside the main conversation. It uses the <code className="text-zinc-300 bg-white/[0.04] px-1 rounded">manage_board</code> tool to update the scratch pad with notes, metrics, tables, charts, code, diagrams, SVGs, palettes, diffs, and more. The main agent handles your requests normally — the display agent just keeps the board populated visually.
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                The display agent runs alongside the main conversation. It uses the <code className="text-foreground bg-muted/50 px-1 rounded">manage_board</code> tool to update the scratch pad with notes, metrics, tables, charts, code, diagrams, SVGs, palettes, diffs, and more. The main agent handles your requests normally — the display agent just keeps the board populated visually.
               </p>
               <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {[
@@ -157,8 +157,8 @@ export const VoiceSettings = memo(() => {
                   { icon: "lucide:x", text: "No message sending" },
                 ].map((item) => (
                   <div key={item.text} className="flex items-center gap-1.5 text-[10px]">
-                    <WorkbenchIcon name={item.icon} size={10} className={item.icon.includes("check") ? "text-emerald-400" : "text-zinc-600"} />
-                    <span className="text-zinc-500">{item.text}</span>
+                    <WorkbenchIcon name={item.icon} size={10} className={item.icon.includes("check") ? "text-success" : "text-muted-foreground/70"} />
+                    <span className="text-muted-foreground">{item.text}</span>
                   </div>
                 ))}
               </div>
@@ -170,7 +170,7 @@ export const VoiceSettings = memo(() => {
                 <select
                   value={displayAgentModel || ""}
                   onChange={(e) => updateSetting("voiceDisplayAgentModel", e.target.value)}
-                  className="h-8 rounded-lg border border-white/[0.08] bg-zinc-950/60 px-2.5 text-xs text-zinc-200 outline-none focus:border-white/[0.15]"
+                  className="h-8 rounded-lg border border-border bg-card/80 px-2.5 text-xs text-foreground outline-none focus:border-border/[0.15]"
                 >
                   <option value="">Same as main agent</option>
                   {displayAgentModels.map((model) => (
@@ -206,8 +206,8 @@ export const VoiceSettings = memo(() => {
               description="Oldest retained board is removed when this limit is exceeded."
               control={<div className="flex w-40 items-center gap-3"><WorkbenchSlider value={[boardMemoryLimit]} min={1} max={3} step={1} onValueChange={([value]) => setNumberSetting("voiceDisplayAgentBoardMemoryLimit", value, 1, 3)} /><span className="w-7 text-right text-xs">{boardMemoryLimit}</span></div>}
             />
-            <div className="space-y-2 rounded-lg border border-white/[0.05] bg-black/20 p-3">
-              <div className="flex items-center justify-between"><span className="text-xs font-medium text-zinc-300">Render prompt</span><WorkbenchButton size="sm" variant="outline" onClick={() => updateSetting("voiceDisplayAgentPrompt", VOICE_DISPLAY_AGENT_DEFAULT_PROMPT)}>Reset Default</WorkbenchButton></div>
+            <div className="space-y-2 rounded-lg border border-border bg-background/20 p-3">
+              <div className="flex items-center justify-between"><span className="text-xs font-medium text-foreground">Render prompt</span><WorkbenchButton size="sm" variant="outline" onClick={() => updateSetting("voiceDisplayAgentPrompt", VOICE_DISPLAY_AGENT_DEFAULT_PROMPT)}>Reset Default</WorkbenchButton></div>
               <WorkbenchTextArea value={voicePrompt} onChangeText={(value) => updateSetting("voiceDisplayAgentPrompt", value)} className="min-h-36 resize-y text-xs" />
             </div>
           </>

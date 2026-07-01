@@ -87,7 +87,7 @@ function renderSearchSnippet(snippet: string) {
 
     const text = decodeEntities(token);
     return highlighted ? (
-      <mark key={index} className="rounded bg-amber-500/20 px-0.5 text-amber-200">
+      <mark key={index} className="rounded bg-warning/20 px-0.5 text-amber-200">
         {text}
       </mark>
     ) : (
@@ -136,8 +136,8 @@ export function SessionSidebarItemInner({
         "group relative flex flex-col gap-1 pl-3 pr-2 py-2 rounded-lg cursor-pointer transition-all",
         "before:absolute before:left-0 before:top-1 before:bottom-1 before:w-[2px] before:rounded-full before:bg-primary/70 before:opacity-0 before:transition-opacity",
         id === currentId
-          ? "bg-white/[0.07] before:opacity-100"
-          : "hover:bg-white/[0.04]",
+          ? "bg-card/[0.07] before:opacity-100"
+          : "hover:bg-muted/50",
       )}
       onClick={() => onSelect(id)}
     >
@@ -167,7 +167,7 @@ export function SessionSidebarItemInner({
               <span
                 className={cn(
                   "truncate text-xs block flex-1 tracking-tight transition-colors",
-                  id === currentId ? "text-white font-medium" : "text-zinc-400 group-hover:text-zinc-200",
+                  id === currentId ? "text-foreground font-medium" : "text-muted-foreground group-hover:text-foreground",
                 )}
               >
                 {displayTitle}
@@ -183,7 +183,7 @@ export function SessionSidebarItemInner({
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-6 w-6 text-zinc-600 hover:text-white hover:bg-white/10"
+                className="h-6 w-6 text-muted-foreground/70 hover:text-foreground hover:bg-muted"
                 onClick={(e) => e.stopPropagation()}
                 aria-label={`Open actions for ${displayTitle}`}
                 title={`Open actions for ${displayTitle}`}
@@ -191,7 +191,7 @@ export function SessionSidebarItemInner({
                 <MoreHorizontal size={14} />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44 bg-zinc-950 border-white/10">
+            <DropdownMenuContent align="end" className="w-44 bg-card border-border">
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
@@ -228,7 +228,7 @@ export function SessionSidebarItemInner({
                   <DropdownMenuSubTrigger className="text-xs" onClick={(e) => e.stopPropagation()}>
                     <Folder className="mr-2 h-3.5 w-3.5" /> Move to Folder
                   </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className="bg-zinc-950 border-white/10">
+                  <DropdownMenuSubContent className="bg-card border-border">
                     <DropdownMenuItem
                       onClick={(e) => {
                         e.stopPropagation();
@@ -250,7 +250,7 @@ export function SessionSidebarItemInner({
                         {folder.name}
                       </DropdownMenuItem>
                     ))}
-                    <DropdownMenuSeparator className="bg-white/5" />
+                    <DropdownMenuSeparator className="bg-muted/50" />
                     <DropdownMenuItem
                       onClick={(e) => {
                         e.stopPropagation();
@@ -274,7 +274,7 @@ export function SessionSidebarItemInner({
                 <Download className="mr-2 h-3.5 w-3.5" /> Export
               </DropdownMenuItem>
 
-              <DropdownMenuSeparator className="bg-white/5" />
+              <DropdownMenuSeparator className="bg-muted/50" />
 
               {showArchived ? (
                 <DropdownMenuItem
@@ -303,7 +303,7 @@ export function SessionSidebarItemInner({
                   e.stopPropagation();
                   onDelete(id);
                 }}
-                className="text-red-400 focus:bg-red-500/10 focus:text-red-400 text-xs"
+                className="text-destructive focus:bg-destructive/10 focus:text-destructive text-xs"
               >
                 <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
               </DropdownMenuItem>
@@ -313,20 +313,20 @@ export function SessionSidebarItemInner({
       </div>
 
       {isSearchResult && (item as SearchResult).messageContent && (
-        <div className="text-[10px] text-zinc-500 line-clamp-2 leading-relaxed">
+        <div className="text-[10px] text-muted-foreground line-clamp-2 leading-relaxed">
           {renderSearchSnippet((item as SearchResult).messageContent)}
         </div>
       )}
 
       {!isSearchResult && (folderName || relativeTime) && (
-        <div className="flex items-center gap-1.5 text-[10px] text-zinc-600 leading-none">
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70 leading-none">
           {folderName ? (
-            <span className="inline-flex items-center gap-1 max-w-[60%] truncate text-zinc-500">
+            <span className="inline-flex items-center gap-1 max-w-[60%] truncate text-muted-foreground">
               <Folder size={9} className="shrink-0" />
               {folderName}
             </span>
           ) : null}
-          {folderName && relativeTime ? <span className="text-zinc-700">·</span> : null}
+          {folderName && relativeTime ? <span className="text-foreground/80">·</span> : null}
           {relativeTime ? <span className="shrink-0">{relativeTime}</span> : null}
         </div>
       )}

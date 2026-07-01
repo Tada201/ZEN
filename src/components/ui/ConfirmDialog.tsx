@@ -43,7 +43,7 @@ export function ConfirmDialog({
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 px-3 text-xs text-zinc-400 hover:text-white"
+            className="h-8 px-3 text-xs text-muted-foreground hover:text-primary-foreground"
             onClick={() => onOpenChange(false)}
           >
             {cancelLabel}
@@ -52,7 +52,7 @@ export function ConfirmDialog({
             size="sm"
             className={
               destructive
-                ? 'h-8 px-3 text-xs bg-red-500/90 text-white hover:bg-red-500'
+                ? 'h-8 px-3 text-xs bg-red-500/90 text-primary-foreground hover:bg-red-500'
                 : 'h-8 px-3 text-xs'
             }
             onClick={handleConfirm}
@@ -62,7 +62,7 @@ export function ConfirmDialog({
         </>
       }
     >
-      <p className="text-xs leading-relaxed text-zinc-400">
+      <p className="text-xs leading-relaxed text-muted-foreground">
         {description ?? 'This action cannot be undone.'}
       </p>
     </AppDialog>

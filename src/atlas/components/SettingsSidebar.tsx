@@ -29,7 +29,7 @@ export function SettingsSidebar({
     <aside className="flex w-full shrink-0 flex-col border-b border-border/60 bg-muted/10 md:w-60 md:border-b-0 md:border-r">
       <div className="border-b border-border/60 p-4">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-bold text-sm flex items-center gap-2 tracking-tight text-zinc-100">
+          <h2 className="font-bold text-sm flex items-center gap-2 tracking-tight text-foreground">
             <WorkbenchIcon name="lucide:settings-2" size={16} className="text-primary" />
             Settings
           </h2>
@@ -45,7 +45,7 @@ export function SettingsSidebar({
             placeholder="Search settings..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white/[0.03] border border-white/[0.06] rounded-md pl-7 pr-2.5 py-1 text-[11px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 transition-colors"
+            className="w-full bg-card/[0.03] border border-border/[0.06] rounded-md pl-7 pr-2.5 py-1 text-[11px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 transition-colors"
           />
         </div>
       </div>
@@ -109,12 +109,12 @@ export function SettingsSidebar({
         )}
       </nav>
 
-      <div className="hidden md:block p-4 border-t border-white/[0.06]">
+      <div className="hidden md:block p-4 border-t border-border/[0.06]">
         <div className="flex items-center gap-2 mb-1">
           <WorkbenchIcon name="lucide:sparkles" size={12} className="text-primary" />
           <span className="text-xs font-semibold text-primary">Zen</span>
         </div>
-        <p className="text-[11px] text-zinc-400">v1.0 Stable Build</p>
+        <p className="text-[11px] text-muted-foreground">v1.0 Stable Build</p>
       </div>
     </aside>
   );

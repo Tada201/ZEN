@@ -30,13 +30,13 @@ export const ProviderHeader = React.memo(({ currentProvider }: ProviderHeaderPro
             <div className="flex items-center gap-1.5 shrink-0">
                 <span className={cn(
                     "inline-flex items-center gap-1.5 px-2 h-5.5 rounded-md text-[10px] font-bold uppercase tracking-wider",
-                    connectionStatus === 'success' && "bg-emerald-500/10 text-emerald-400",
-                    connectionStatus === 'error' && "bg-red-500/10 text-rose-400",
-                    connectionStatus !== 'success' && connectionStatus !== 'error' && "bg-amber-500/10 text-amber-400"
+                    connectionStatus === 'success' && "bg-success/10 text-success",
+                    connectionStatus === 'error' && "bg-destructive/10 text-destructive",
+                    connectionStatus !== 'success' && connectionStatus !== 'error' && "bg-warning/10 text-warning"
                 )}>
                     <span className={cn(
                         "w-1 h-1 rounded-full",
-                        connectionStatus === 'success' && "bg-emerald-400",
+                        connectionStatus === 'success' && "bg-success",
                         connectionStatus === 'error' && "bg-rose-400",
                         connectionStatus !== 'success' && connectionStatus !== 'error' && "bg-amber-400"
                     )} />

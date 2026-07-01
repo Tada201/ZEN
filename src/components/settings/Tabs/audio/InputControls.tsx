@@ -83,21 +83,21 @@ export const InputControls = memo(() => {
                         <button
                             type="button"
                             onClick={() => applyCaptureProfile('quiet')}
-                            className="h-8 rounded-md border border-white/[0.08] bg-white/[0.03] px-3 text-[11px] font-bold text-zinc-300 hover:bg-white/[0.06]"
+                            className="h-8 rounded-md border border-border bg-muted/40 px-3 text-[11px] font-bold text-foreground hover:bg-muted"
                         >
                             Quiet Room
                         </button>
                         <button
                             type="button"
                             onClick={() => applyCaptureProfile('noisy')}
-                            className="h-8 rounded-md border border-white/[0.08] bg-white/[0.03] px-3 text-[11px] font-bold text-zinc-300 hover:bg-white/[0.06]"
+                            className="h-8 rounded-md border border-border bg-muted/40 px-3 text-[11px] font-bold text-foreground hover:bg-muted"
                         >
                             Noisy Room
                         </button>
                         <button
                             type="button"
                             onClick={() => applyCaptureProfile('headset')}
-                            className="h-8 rounded-md border border-white/[0.08] bg-white/[0.03] px-3 text-[11px] font-bold text-zinc-300 hover:bg-white/[0.06]"
+                            className="h-8 rounded-md border border-border bg-muted/40 px-3 text-[11px] font-bold text-foreground hover:bg-muted"
                         >
                             Headset
                         </button>
@@ -117,7 +117,7 @@ export const InputControls = memo(() => {
                                 step={1}
                                 className="flex-1"
                             />
-                            <span className="text-[10px] font-mono text-zinc-500 w-10 text-right">
+                            <span className="text-[10px] font-mono text-muted-foreground w-10 text-right">
                                 {vadThreshold.toFixed(3)}
                             </span>
                         </div>
@@ -172,8 +172,8 @@ export const InputControls = memo(() => {
                     }
                 />
 
-                <div className="rounded-xl border border-white/[0.04] bg-zinc-950/40 px-4 py-3 text-[11px] text-zinc-500">
-                    Current mode: <span className="font-bold text-zinc-300">{voiceInputMode ? 'Hold Spacebar to speak' : 'Voice activity detection'}</span>
+                <div className="rounded-xl border border-border bg-card/60 px-4 py-3 text-[11px] text-muted-foreground">
+                    Current mode: <span className="font-bold text-foreground">{voiceInputMode ? 'Hold Spacebar to speak' : 'Voice activity detection'}</span>
                 </div>
             </div>
         </SettingsCard>

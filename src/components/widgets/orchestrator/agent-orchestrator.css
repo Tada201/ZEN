@@ -26,7 +26,7 @@
     padding: 8px 12px;
     height: 36px;
     background: #18181c;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid hsl(var(--foreground) / 0.08);
     font-size: 10px;
 }
 
@@ -34,7 +34,7 @@
     font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.15em;
-    color: rgba(255, 255, 255, 0.7);
+    color: hsl(var(--foreground) / 0.7);
     text-transform: uppercase;
 }
 
@@ -57,11 +57,11 @@
     gap: 10px;
     padding: 8px 12px;
     background: #18181c;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid hsl(var(--foreground) / 0.06);
 }
 
 .live-agent-panel__title {
-    color: rgba(255, 255, 255, 0.78);
+    color: hsl(var(--foreground) / 0.78);
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.08em;
@@ -70,16 +70,16 @@
 
 .live-agent-panel__summary {
     max-width: 245px;
-    color: rgba(255, 255, 255, 0.34);
+    color: hsl(var(--foreground) / 0.34);
     font-size: 9px;
     line-height: 1.35;
 }
 
 .live-agent-panel__state {
     flex-shrink: 0;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.03);
-    color: rgba(255, 255, 255, 0.38);
+    border: 1px solid hsl(var(--foreground) / 0.08);
+    background: hsl(var(--foreground) / 0.03);
+    color: hsl(var(--foreground) / 0.38);
     padding: 3px 6px;
     font-size: 8px;
     font-weight: 700;
@@ -96,7 +96,7 @@
 .live-agent-panel__metrics {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid hsl(var(--foreground) / 0.06);
 }
 
 .live-agent-panel__metric {
@@ -105,7 +105,7 @@
     flex-direction: column;
     gap: 1px;
     padding: 7px 10px;
-    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    border-right: 1px solid hsl(var(--foreground) / 0.06);
 }
 
 .live-agent-panel__metric:last-child {
@@ -113,14 +113,14 @@
 }
 
 .live-agent-panel__metric span:first-child {
-    color: rgba(255, 255, 255, 0.78);
+    color: hsl(var(--foreground) / 0.78);
     font-size: 14px;
     font-weight: 700;
     line-height: 1;
 }
 
 .live-agent-panel__metric span:last-child {
-    color: rgba(255, 255, 255, 0.34);
+    color: hsl(var(--foreground) / 0.34);
     font-size: 8px;
     font-weight: 700;
     letter-spacing: 0.08em;
@@ -137,12 +137,12 @@
 
 .live-agent-panel__section {
     padding: 10px 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid hsl(var(--foreground) / 0.05);
 }
 
 .live-agent-panel__section-title {
     margin-bottom: 6px;
-    color: rgba(255, 255, 255, 0.38);
+    color: hsl(var(--foreground) / 0.38);
     font-size: 8px;
     font-weight: 700;
     letter-spacing: 0.12em;
@@ -161,9 +161,9 @@
     min-width: 0;
     align-items: center;
     gap: 7px;
-    background: rgba(255, 255, 255, 0.02);
+    background: hsl(var(--foreground) / 0.02);
     padding: 4px 7px;
-    color: rgba(255, 255, 255, 0.5);
+    color: hsl(var(--foreground) / 0.5);
     font-size: 10px;
 }
 
@@ -172,7 +172,7 @@
     height: 6px;
     flex-shrink: 0;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.22);
+    background: hsl(var(--foreground) / 0.22);
 }
 
 .live-agent-panel__tool-status--running {
@@ -194,7 +194,7 @@
 /* VS Code Flat List Card */
 .agent-card {
     background: #1e1e24;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid hsl(var(--foreground) / 0.06);
     padding: 10px 14px;
     cursor: pointer;
     transition: background 0.1s ease;
@@ -246,12 +246,12 @@
 
 .agent-card__id {
     font-size: 8px;
-    color: rgba(255, 255, 255, 0.2);
+    color: hsl(var(--foreground) / 0.2);
 }
 
 .agent-card__task {
     font-size: 10px;
-    color: rgba(255, 255, 255, 0.5);
+    color: hsl(var(--foreground) / 0.5);
     line-height: 1.4;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -286,7 +286,7 @@
 .agent-workspace__header {
     padding: 6px 12px;
     height: 36px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid hsl(var(--foreground) / 0.08);
     background: #18181c;
     display: flex;
     align-items: center;
@@ -303,12 +303,12 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    color: rgba(255, 255, 255, 0.5);
+    color: hsl(var(--foreground) / 0.5);
     transition: background 0.1s ease;
 }
 
 .back-button:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: hsl(var(--foreground) / 0.08);
     color: #e1e1e1;
 }
 
@@ -322,7 +322,7 @@
 .agent-workspace__task-info {
     padding: 10px 14px;
     background: #1e1e24;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid hsl(var(--foreground) / 0.06);
 }
 
 .agent-workspace__telemetry {
@@ -338,7 +338,7 @@
     z-index: 10;
     padding: 6px 14px;
     height: 28px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid hsl(var(--foreground) / 0.06);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -350,7 +350,7 @@
 
 .agent-workspace__footer {
     padding: 12px 14px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 1px solid hsl(var(--foreground) / 0.08);
     background: #18181c;
 }
 
@@ -389,7 +389,7 @@
 /* Flat Log bubble */
 .chat-bubble-style {
     background: #1e1e1e;
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    border: 1px solid hsl(var(--foreground) / 0.06);
     border-radius: 2px;
     padding: 8px 10px;
     position: relative;
@@ -415,5 +415,5 @@
 
 .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 0; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: hsl(var(--foreground) / 0.1); border-radius: 0; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: hsl(var(--foreground) / 0.2); }

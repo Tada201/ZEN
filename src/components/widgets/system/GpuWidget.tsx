@@ -27,8 +27,8 @@ export const GpuWidget = memo(function GpuWidget({ context }: { context: WidgetC
 
     if (!activeGpu) {
         return (
-            <div className="flex items-center justify-center h-24 bg-slate-900/20 border border-slate-800/40 rounded-sm">
-                <span className="text-[10px] font-mono text-slate-500 italic">GPU TELEMETRY OFFLINE</span>
+            <div className="flex items-center justify-center h-24 bg-card/20 border border-border/40 rounded-sm">
+                <span className="text-[10px] font-mono text-muted-foreground italic">GPU TELEMETRY OFFLINE</span>
             </div>
         );
     }
@@ -39,15 +39,15 @@ export const GpuWidget = memo(function GpuWidget({ context }: { context: WidgetC
         <div className="flex flex-col gap-3 p-1">
             <div className="flex flex-col gap-1 px-1">
                 <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-mono font-bold text-slate-500 px-1 border border-zinc-800 rounded bg-zinc-900/40">GPU</span>
+                    <span className="text-[9px] font-mono font-bold text-muted-foreground px-1 border border-border rounded bg-muted/50">GPU</span>
                     {context.dgpu && (
-                        <div className="flex border border-zinc-850 rounded bg-zinc-955 p-[1px] shadow-sm">
+                        <div className="flex border border-border rounded bg-background p-[1px] shadow-sm">
                             <button
                                 onClick={() => setSelectedGpuType('igpu')}
                                 className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded transition-all duration-200 ${
                                     selectedGpuType === 'igpu'
                                         ? 'bg-violet-500/10 text-violet-400 border border-violet-500/20'
-                                        : 'text-slate-500 hover:text-slate-400 border border-transparent'
+                                        : 'text-muted-foreground hover:text-muted-foreground border border-transparent'
                                 }`}
                             >
                                 iGPU
@@ -57,7 +57,7 @@ export const GpuWidget = memo(function GpuWidget({ context }: { context: WidgetC
                                 className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded transition-all duration-200 ${
                                     selectedGpuType === 'dgpu'
                                         ? 'bg-violet-500/10 text-violet-400 border border-violet-500/20'
-                                        : 'text-slate-500 hover:text-slate-400 border border-transparent'
+                                        : 'text-muted-foreground hover:text-muted-foreground border border-transparent'
                                 }`}
                             >
                                 dGPU
@@ -66,16 +66,16 @@ export const GpuWidget = memo(function GpuWidget({ context }: { context: WidgetC
                     )}
                 </div>
                 <div className="flex items-center justify-between mt-0.5">
-                    <span className="text-[10px] font-mono text-slate-300 truncate max-w-[200px]" title={activeGpu.name}>
+                    <span className="text-[10px] font-mono text-muted-foreground truncate max-w-[200px]" title={activeGpu.name}>
                         {activeGpu.name}
                     </span>
                 </div>
             </div>
 
-            <div className="bg-zinc-950/40 border border-zinc-800 rounded-lg p-1">
+            <div className="bg-card/60 border border-border rounded-lg p-1">
                 <Sparkline
                     data={activeHistory}
-                    color="#8b5cf6" // violet-500
+                    color="hsl(var(--primary))" // violet-500
                     height={32}
                     showDot={true}
                     maxValue={100}
@@ -84,29 +84,29 @@ export const GpuWidget = memo(function GpuWidget({ context }: { context: WidgetC
 
             <div className="grid grid-cols-3 gap-1 px-1 mt-1">
                 <div className="flex flex-col">
-                    <span className="text-[9px] font-mono text-slate-500 leading-none">UTIL</span>
-                    <span className="text-xs font-mono text-slate-300">{Math.round(activeGpu.usage)}%</span>
+                    <span className="text-[9px] font-mono text-muted-foreground leading-none">UTIL</span>
+                    <span className="text-xs font-mono text-muted-foreground">{Math.round(activeGpu.usage)}%</span>
                 </div>
                 <div className="flex flex-col">
-                    <span className="text-[9px] font-mono text-slate-500 leading-none">TEMP</span>
-                    <span className="text-xs font-mono text-slate-300">
+                    <span className="text-[9px] font-mono text-muted-foreground leading-none">TEMP</span>
+                    <span className="text-xs font-mono text-muted-foreground">
                         {activeGpu.temperature !== null ? `${activeGpu.temperature}°C` : '--'}
                     </span>
                 </div>
                 <div className="flex flex-col items-end">
-                    <span className="text-[9px] font-mono text-slate-500 leading-none">VRAM</span>
+                    <span className="text-[9px] font-mono text-muted-foreground leading-none">VRAM</span>
                     <span className="text-xs font-mono text-violet-400 font-bold">{Math.round(memPercent)}%</span>
                 </div>
             </div>
 
             <div className="flex flex-col gap-1 px-1 mt-1">
                 <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-mono text-slate-500">VRAM LOAD</span>
-                    <span className="text-[9px] font-mono text-slate-400">
+                    <span className="text-[9px] font-mono text-muted-foreground">VRAM LOAD</span>
+                    <span className="text-[9px] font-mono text-muted-foreground">
                         {(activeGpu.memoryUsed / 1024 / 1024 / 1024).toFixed(1)}G / {(activeGpu.memoryTotal / 1024 / 1024 / 1024).toFixed(0)}G
                     </span>
                 </div>
-                <div className="h-1 bg-zinc-850 rounded-full overflow-hidden border border-zinc-800/25">
+                <div className="h-1 bg-card rounded-full overflow-hidden border border-border/25">
                     <div
                         className="h-full bg-violet-500/60 transition-all duration-300 rounded-full"
                         style={{ width: `${memPercent}%` }}

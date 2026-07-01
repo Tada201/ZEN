@@ -59,33 +59,33 @@ export function ProviderCard({
       className={cn(
         "rounded-xl border transition-all duration-150",
         enabled
-          ? "border-white/[0.06] bg-white/[0.02]"
-          : "border-white/[0.03] bg-white/[0.01] opacity-60",
+          ? "border-border bg-muted/30"
+          : "border-border/[0.03] bg-muted/20 opacity-60",
         expanded && "ring-1 ring-primary/20"
       )}
     >
       {/* Header */}
       <div className="flex items-center justify-between p-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="h-8 w-8 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+          <div className="h-8 w-8 rounded-lg bg-muted/50 border border-border flex items-center justify-center shrink-0">
             {provider.icon}
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-[13px] font-semibold text-zinc-200 truncate">
+              <span className="text-[13px] font-semibold text-foreground truncate">
                 {provider.name}
               </span>
               {isConfigured && (
                 <Badge
                   variant="outline"
                   className="h-4 px-1.5 text-[8px] font-bold uppercase tracking-wider
-                    border-emerald-500/20 text-emerald-400 bg-emerald-500/5"
+                    border-emerald-500/20 text-success bg-success/5"
                 >
                   Active
                 </Badge>
               )}
             </div>
-            <span className="text-[10px] text-zinc-600 font-mono">{provider.id}</span>
+            <span className="text-[10px] text-muted-foreground/70 font-mono">{provider.id}</span>
           </div>
         </div>
 
@@ -107,8 +107,8 @@ export function ProviderCard({
           {!compact && (provider.usesKey || provider.usesUrl) && (
             <button
               onClick={() => setExpanded(!expanded)}
-              className="h-6 px-1.5 text-[10px] text-zinc-600 hover:text-zinc-300
-                hover:bg-white/[0.06] rounded transition-colors"
+              className="h-6 px-1.5 text-[10px] text-muted-foreground/70 hover:text-foreground
+                hover:bg-muted rounded transition-colors"
             >
               {expanded ? "Hide" : "Edit"}
             </button>
@@ -118,10 +118,10 @@ export function ProviderCard({
 
       {/* Expanded: API Key / URL fields */}
       {expanded && !compact && (
-        <div className="px-3 pb-3 pt-0 space-y-2.5 border-t border-white/[0.04]">
+        <div className="px-3 pb-3 pt-0 space-y-2.5 border-t border-border">
           {provider.usesKey && (
             <div className="pt-2.5 space-y-1.5">
-              <Label className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">
+              <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                 API Key
               </Label>
               <ApiKeyInput
@@ -134,7 +134,7 @@ export function ProviderCard({
           )}
           {provider.usesUrl && (
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">
+              <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                 Base URL
               </Label>
               <Input
@@ -143,9 +143,9 @@ export function ProviderCard({
                 onChange={(e) => onBaseUrlChange?.(e.target.value)}
                 placeholder={provider.urlPlaceholder || "http://localhost:11434"}
                 disabled={!enabled}
-                className="h-8 text-[12px] bg-white/[0.03] border-white/[0.08] font-mono
+                className="h-8 text-[12px] bg-muted/40 border-border font-mono
                   focus:border-primary/40 focus:ring-1 focus:ring-primary/20
-                  placeholder:text-zinc-700"
+                  placeholder:text-foreground/80"
               />
             </div>
           )}

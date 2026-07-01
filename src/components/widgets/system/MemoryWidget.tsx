@@ -87,15 +87,15 @@ export const MemoryWidget = memo(function MemoryWidget({ context }: { context: S
     return (
         <div className="flex flex-col gap-3 p-1">
             <div className="flex items-center justify-between px-1">
-                <span className="text-[10px] font-mono font-bold text-slate-500 tracking-wider">
+                <span className="text-[10px] font-mono font-bold text-muted-foreground tracking-wider">
                     RAM USAGE
                 </span>
-                <span className="text-[10px] font-mono text-slate-300">
+                <span className="text-[10px] font-mono text-muted-foreground">
                     {usedGiB} / {totalGiB} GiB
                 </span>
             </div>
 
-            <div ref={containerRef} className="bg-zinc-950/40 border border-zinc-800/60 rounded-lg p-1 flex justify-center overflow-hidden">
+            <div ref={containerRef} className="bg-card/60 border border-border/60 rounded-lg p-1 flex justify-center overflow-hidden">
                 <canvas
                     ref={canvasRef}
                     style={{ width: '100%', height: '64px' }}
@@ -104,10 +104,10 @@ export const MemoryWidget = memo(function MemoryWidget({ context }: { context: S
 
             <div className="flex flex-col gap-1 px-1">
                 <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-mono text-slate-500">SWAP</span>
-                    <span className="text-[9px] font-mono text-slate-400">{Math.round(swapPercent)}%</span>
+                    <span className="text-[9px] font-mono text-muted-foreground">SWAP</span>
+                    <span className="text-[9px] font-mono text-muted-foreground">{Math.round(swapPercent)}%</span>
                 </div>
-                <div className="h-1 bg-zinc-850 rounded-full overflow-hidden border border-zinc-800/25">
+                <div className="h-1 bg-card rounded-full overflow-hidden border border-border/25">
                     <div
                         className="h-full bg-violet-500/60 transition-all duration-300 rounded-full"
                         style={{ width: `${swapPercent}%` }}

@@ -51,8 +51,8 @@ export const UpdatesSettings = memo(() => {
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div className="flex flex-col gap-1">
-              <span className="text-[12px] font-bold text-white">Automatic Updates</span>
-              <span className="text-[11px] text-zinc-500">Check for stable release updates automatically</span>
+              <span className="text-[12px] font-bold text-foreground">Automatic Updates</span>
+              <span className="text-[11px] text-muted-foreground">Check for stable release updates automatically</span>
             </div>
             <WorkbenchSwitch
               checked={autoCheckEnabled}
@@ -62,8 +62,8 @@ export const UpdatesSettings = memo(() => {
 
           <div className="flex items-center justify-between">
             <div className="flex flex-col gap-1">
-              <span className="text-[12px] font-bold text-white">Beta Channel</span>
-              <span className="text-[11px] text-zinc-500">Opt-in for early access to experimental features</span>
+              <span className="text-[12px] font-bold text-foreground">Beta Channel</span>
+              <span className="text-[11px] text-muted-foreground">Opt-in for early access to experimental features</span>
             </div>
             <WorkbenchSwitch
               checked={checkBeta}
@@ -81,20 +81,20 @@ export const UpdatesSettings = memo(() => {
           icon="codicon:history"
         >
           <div className="flex gap-4">
-            <div className="flex-1 p-4 bg-zinc-900 border border-white/5 rounded-xl flex flex-col gap-2">
+            <div className="flex-1 p-4 bg-muted border border-border rounded-xl flex flex-col gap-2">
               <div className="flex items-center gap-2">
-                <WorkbenchIcon name="codicon:archive" size={14} className="text-zinc-400" />
-                <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest">Version</span>
+                <WorkbenchIcon name="codicon:archive" size={14} className="text-muted-foreground" />
+                <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-widest">Version</span>
               </div>
               <span className="text-2xl font-bold text-brand-purple font-mono">v{currentVersion || '...'}</span>
             </div>
 
-            <div className="flex-1 p-4 bg-zinc-900 border border-white/5 rounded-xl flex flex-col gap-2">
+            <div className="flex-1 p-4 bg-muted border border-border rounded-xl flex flex-col gap-2">
               <div className="flex items-center gap-2">
-                <WorkbenchIcon name="codicon:history" size={14} className="text-zinc-400" />
-                <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest">Last Check</span>
+                <WorkbenchIcon name="codicon:history" size={14} className="text-muted-foreground" />
+                <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-widest">Last Check</span>
               </div>
-              <span className="text-sm font-bold text-zinc-200">{formatDate(lastCheck)}</span>
+              <span className="text-sm font-bold text-foreground">{formatDate(lastCheck)}</span>
             </div>
           </div>
         </SettingsCard>
@@ -112,9 +112,9 @@ export const UpdatesSettings = memo(() => {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 overflow-hidden"
+                  className="p-4 bg-destructive/10 border border-destructive/20 rounded-xl flex items-center gap-3 overflow-hidden"
                 >
-                  <WorkbenchIcon name="codicon:error" size={16} className="text-red-500 flex-shrink-0" />
+                  <WorkbenchIcon name="codicon:error" size={16} className="text-destructive flex-shrink-0" />
                   <span className="text-xs font-bold text-red-100">Check Failed: {error}</span>
                 </motion.div>
               )}
@@ -145,7 +145,7 @@ export const UpdatesSettings = memo(() => {
                 </WorkbenchButton>
 
                 {isDownloading && (
-                  <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                  <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
                     <motion.div
                       className="h-full bg-brand-purple"
                       initial={{ width: 0 }}

@@ -31,13 +31,13 @@ export function TranslationCard({ data }: { data: TranslationData }) {
   };
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-black/40 backdrop-blur-md p-5 shadow-lg flex flex-col">
+    <div className="w-full max-w-md rounded-2xl border border-border/[0.08] bg-background/40 backdrop-blur-md p-5 shadow-lg flex flex-col">
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
+          <span className="text-[10px] font-bold text-primary-foreground/40 uppercase tracking-widest">
             {sourceLang}
           </span>
-          <ArrowRight className="w-3.5 h-3.5 text-white/30" />
+          <ArrowRight className="w-3.5 h-3.5 text-primary-foreground/30" />
           <span className="text-[10px] font-bold text-primary uppercase tracking-widest">
             {targetLang}
           </span>
@@ -52,19 +52,19 @@ export function TranslationCard({ data }: { data: TranslationData }) {
 
       <div className="space-y-4">
         <div className="flex flex-col">
-          <span className="text-[9px] uppercase font-mono tracking-widest text-white/20 mb-1">
+          <span className="text-[9px] uppercase font-mono tracking-widest text-primary-foreground/20 mb-1">
             Original Text
           </span>
-          <p className="text-sm font-medium text-white/70 leading-relaxed font-sans">
+          <p className="text-sm font-medium text-primary-foreground/70 leading-relaxed font-sans">
             {sourceText}
           </p>
         </div>
 
-        <div className="flex flex-col pt-3.5 border-t border-white/[0.06]">
+        <div className="flex flex-col pt-3.5 border-t border-border/[0.06]">
           <span className="text-[9px] uppercase font-mono tracking-widest text-primary/60 mb-1">
             Translation
           </span>
-          <p className="text-base font-bold text-white leading-relaxed font-sans">
+          <p className="text-base font-bold text-primary-foreground leading-relaxed font-sans">
             {targetText}
           </p>
           {romanization && (
@@ -76,13 +76,13 @@ export function TranslationCard({ data }: { data: TranslationData }) {
       </div>
 
       {alternatives.length > 0 && (
-        <div className="mt-5 pt-3.5 border-t border-white/[0.06]">
-          <span className="text-[9px] uppercase font-mono tracking-widest text-white/20 block mb-2">
+        <div className="mt-5 pt-3.5 border-t border-border/[0.06]">
+          <span className="text-[9px] uppercase font-mono tracking-widest text-primary-foreground/20 block mb-2">
             Alternative Translations
           </span>
           <ul className="space-y-1.5 list-none pl-0">
             {alternatives.map((alt, idx) => (
-              <li key={idx} className="text-[11px] text-white/50 leading-relaxed pl-3 relative before:absolute before:left-0 before:top-1.5 before:w-1.5 before:h-1.5 before:rounded-full before:bg-white/10">
+              <li key={idx} className="text-[11px] text-primary-foreground/50 leading-relaxed pl-3 relative before:absolute before:left-0 before:top-1.5 before:w-1.5 before:h-1.5 before:rounded-full before:bg-card/10">
                 {alt}
               </li>
             ))}

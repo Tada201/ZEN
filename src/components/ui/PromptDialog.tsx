@@ -76,7 +76,7 @@ export function PromptDialog({
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 px-3 text-xs text-zinc-400 hover:text-white"
+            className="h-8 px-3 text-xs text-muted-foreground hover:text-primary-foreground"
             onClick={() => onOpenChange(false)}
           >
             {cancelLabel}
@@ -93,7 +93,7 @@ export function PromptDialog({
     >
       <div className="flex flex-col gap-2">
         {label ? (
-          <label className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+          <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
             {label}
           </label>
         ) : null}
@@ -112,7 +112,7 @@ export function PromptDialog({
             }
           }}
           aria-invalid={Boolean(error)}
-          className="h-9 bg-zinc-900/40 border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600"
+          className="h-9 bg-card/40 border-border/10 text-sm text-foreground placeholder:text-muted-foreground"
         />
         {error ? (
           <span className="text-[11px] text-red-400">{error}</span>

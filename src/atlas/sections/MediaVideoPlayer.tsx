@@ -156,7 +156,7 @@ export function VideoPlayer() {
         tabIndex={0}
         onMouseMove={bumpControls}
         onMouseLeave={() => playing && setShowControls(false)}
-        className="group relative aspect-video overflow-hidden rounded-lg border border-border bg-black focus:outline-none focus:ring-2 focus:ring-ring"
+        className="group relative aspect-video overflow-hidden rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring"
       >
         <video
           ref={videoRef}
@@ -174,15 +174,15 @@ export function VideoPlayer() {
 
         {captionsOn && (
           <div className="pointer-events-none absolute inset-x-0 bottom-16 flex justify-center px-4">
-            <span className="rounded bg-black/70 px-3 py-1 text-xs font-medium text-white">
+            <span className="rounded bg-background/70 px-3 py-1 text-xs font-medium text-primary-foreground">
               [Demo caption — “C” to toggle]
             </span>
           </div>
         )}
 
         {loading && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/30">
-            <Loader2 className="h-8 w-8 animate-spin text-white/80" />
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/30">
+            <Loader2 className="h-8 w-8 animate-spin text-primary-foreground/80" />
           </div>
         )}
 
@@ -190,7 +190,7 @@ export function VideoPlayer() {
           <button
             onClick={togglePlay}
             aria-label="Play"
-            className="absolute inset-0 flex items-center justify-center bg-black/20 transition hover:bg-black/30"
+            className="absolute inset-0 flex items-center justify-center bg-background/20 transition hover:bg-background/30"
           >
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/90 text-primary-foreground shadow-lg backdrop-blur transition hover:scale-105">
               <Play className="ml-1 h-7 w-7" fill="currentColor" />
@@ -200,7 +200,7 @@ export function VideoPlayer() {
 
         {/* Bottom control bar */}
         <div
-          className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3 transition-opacity duration-200 ${
+          className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/80 via-background/40 to-transparent p-3 transition-opacity duration-200 ${
             showControls || !playing ? "opacity-100" : "opacity-0"
           }`}
         >
@@ -210,9 +210,9 @@ export function VideoPlayer() {
             onClick={handleSeekClick}
             onMouseMove={handleSeekHover}
             onMouseLeave={() => setHoverPct(null)}
-            className="group/seek relative h-1.5 w-full cursor-pointer rounded-full bg-white/20"
+            className="group/seek relative h-1.5 w-full cursor-pointer rounded-full bg-card/20"
           >
-            <div className="absolute inset-y-0 left-0 rounded-full bg-white/30" style={{ width: `${buffered}%` }} />
+            <div className="absolute inset-y-0 left-0 rounded-full bg-card/30" style={{ width: `${buffered}%` }} />
             <div
               className="absolute inset-y-0 left-0 rounded-full bg-primary"
               style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
@@ -223,7 +223,7 @@ export function VideoPlayer() {
             />
             {hoverPct !== null && (
               <div
-                className="pointer-events-none absolute -top-7 -translate-x-1/2 rounded bg-black/85 px-1.5 py-0.5 font-mono text-[10px] text-white"
+                className="pointer-events-none absolute -top-7 -translate-x-1/2 rounded bg-background/85 px-1.5 py-0.5 font-mono text-[10px] text-primary-foreground"
                 style={{ left: hoverX }}
               >
                 {formatTime(hoverPct * (duration || 0))}
@@ -232,14 +232,14 @@ export function VideoPlayer() {
           </div>
 
           {/* Buttons row */}
-          <div className="mt-2 flex items-center gap-1.5 text-white">
-            <button onClick={togglePlay} aria-label="Play/Pause" className="press rounded-md p-1.5 hover:bg-white/10">
+          <div className="mt-2 flex items-center gap-1.5 text-primary-foreground">
+            <button onClick={togglePlay} aria-label="Play/Pause" className="press rounded-md p-1.5 hover:bg-card/10">
               {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
             </button>
-            <button onClick={() => seekBy(-10)} aria-label="Back 10s" className="press rounded-md p-1.5 hover:bg-white/10">
+            <button onClick={() => seekBy(-10)} aria-label="Back 10s" className="press rounded-md p-1.5 hover:bg-card/10">
               <SkipBack className="h-4 w-4" />
             </button>
-            <button onClick={() => seekBy(10)} aria-label="Forward 10s" className="press rounded-md p-1.5 hover:bg-white/10">
+            <button onClick={() => seekBy(10)} aria-label="Forward 10s" className="press rounded-md p-1.5 hover:bg-card/10">
               <SkipForward className="h-4 w-4" />
             </button>
 
@@ -255,7 +255,7 @@ export function VideoPlayer() {
                   v.muted = !muted; setMuted(!muted);
                 }}
                 aria-label="Mute"
-                className="press rounded-md p-1.5 hover:bg-white/10"
+                className="press rounded-md p-1.5 hover:bg-card/10"
               >
                 {muted || volume === 0 ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
               </button>
@@ -269,13 +269,13 @@ export function VideoPlayer() {
                     v.volume = val; setVolume(val);
                     if (val > 0 && muted) { v.muted = false; setMuted(false); }
                   }}
-                  className="ml-2 h-1 w-16 appearance-none rounded-full bg-white/30 accent-primary"
+                  className="ml-2 h-1 w-16 appearance-none rounded-full bg-card/30 accent-primary"
                   aria-label="Volume"
                 />
               </div>
             </div>
 
-            <span className="ml-1 font-mono text-[11px] tabular-nums text-white/85">
+            <span className="ml-1 font-mono text-[11px] tabular-nums text-primary-foreground/85">
               {formatTime(currentTime)} / {formatTime(duration)}
             </span>
 
@@ -285,7 +285,7 @@ export function VideoPlayer() {
                 onClick={() => setCaptionsOn((c) => !c)}
                 aria-label="Toggle captions"
                 aria-pressed={captionsOn}
-                className={`press rounded-md p-1.5 hover:bg-white/10 ${captionsOn ? "text-primary" : ""}`}
+                className={`press rounded-md p-1.5 hover:bg-card/10 ${captionsOn ? "text-primary" : ""}`}
               >
                 <Captions className="h-4 w-4" />
               </button>
@@ -294,7 +294,7 @@ export function VideoPlayer() {
               <div className="relative">
                 <button
                   onClick={() => setShowRate((s) => !s)}
-                  className="press flex items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium hover:bg-white/10"
+                  className="press flex items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium hover:bg-card/10"
                   aria-label="Playback speed"
                 >
                   <Gauge className="h-3.5 w-3.5" />
@@ -325,7 +325,7 @@ export function VideoPlayer() {
                 onClick={togglePip}
                 aria-label="Picture in picture"
                 aria-pressed={pip}
-                className={`press rounded-md p-1.5 hover:bg-white/10 ${pip ? "text-primary" : ""}`}
+                className={`press rounded-md p-1.5 hover:bg-card/10 ${pip ? "text-primary" : ""}`}
               >
                 <PictureInPicture2 className="h-4 w-4" />
               </button>
@@ -334,7 +334,7 @@ export function VideoPlayer() {
               <button
                 onClick={toggleFullscreen}
                 aria-label="Fullscreen"
-                className="press rounded-md p-1.5 hover:bg-white/10"
+                className="press rounded-md p-1.5 hover:bg-card/10"
               >
                 {fullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
               </button>

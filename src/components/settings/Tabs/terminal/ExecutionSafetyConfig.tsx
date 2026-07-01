@@ -39,7 +39,7 @@ export const ExecutionSafetyConfig = memo(() => {
                                 onChangeText={(text) => updateSetting({ maxExecutionTime: parseInt(text) || 30 })}
                                 className="w-[80px] text-center font-mono text-[11px]"
                             />
-                            <span className="text-[10px] text-zinc-500 font-bold">seconds</span>
+                            <span className="text-[10px] text-muted-foreground font-bold">seconds</span>
                         </div>
                     }
                 />

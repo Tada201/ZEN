@@ -1,7 +1,7 @@
 use crate::commands::{AppState, InitStatus};
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::models::SystemMetrics;
-use tauri::{Manager, State};
+use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
 pub async fn get_system_metrics(state: State<'_, AppState>) -> AppResult<SystemMetrics> {
@@ -19,15 +19,50 @@ pub async fn get_init_status(state: State<'_, AppState>) -> AppResult<InitStatus
     Ok(state.init_progress.snapshot().await)
 }
 
-#[tauri::command]
-pub async fn close_splashscreen(window: tauri::Window) -> AppResult<()> {
-    // Get both windows
-    if let Some(splashscreen) = window.get_webview_window("splashscreen") {
-        splashscreen.close().ok();
+/// Canonical Tauri splash → main handoff helper. Closes the native splash
+/// window and shows + focuses the main window. Idempotent: calling it when
+/// either window is missing is a no-op.
+///
+/// Called from `set_complete` (frontend signal) AND from `lib.rs`
+/// (backend-ready signal). Both call sites must agree on the rule:
+/// "perform the handoff only when both `frontend_ready` and
+/// `backend_ready` are true."
+pub async fn perform_handoff(app: &AppHandle) {
+    if let Some(splash) = app.get_webview_window("splashscreen") {
+        splash.close().ok();
     }
-    if let Some(main) = window.get_webview_window("main") {
+    if let Some(main) = app.get_webview_window("main") {
         main.show().ok();
         main.set_focus().ok();
+    }
+}
+
+/// Frontend signals that its own init hook (useAppInit) has finished. Rust
+/// pairs this with `backend_ready` (set when core_complete becomes true);
+/// when both are true, the splash is dismissed and the main window is
+/// shown. Per https://v2.tauri.app/learn/splashscreen/.
+#[tauri::command]
+pub async fn set_complete(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    task: String,
+) -> AppResult<()> {
+    let mut flags = state.setup_flags.lock().await;
+    match task.as_str() {
+        "frontend" => flags.frontend_ready = true,
+        "backend" => flags.backend_ready = true,
+        other => {
+            return Err(AppError::Internal(format!(
+                "set_complete: unknown task '{}' (expected 'frontend' or 'backend')",
+                other
+            )));
+        }
+    }
+    let both_ready = flags.both_ready();
+    drop(flags);
+
+    if both_ready {
+        perform_handoff(&app).await;
     }
     Ok(())
 }

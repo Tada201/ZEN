@@ -67,7 +67,7 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                         "flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all",
                         isPinging
                             ? "bg-muted border-border/40 text-muted-foreground/40 cursor-wait"
-                            : "bg-blue-500/10 border-blue-500/20 text-blue-400 hover:bg-blue-500/20"
+                            : "bg-primary/10 border-primary/20 text-primary hover:bg-primary/20"
                     )}
                 >
                     <WorkbenchIcon name={isPinging ? "lucide:loader-2" : "lucide:radio"} size={10} className={isPinging ? "animate-spin" : undefined} />
@@ -78,13 +78,13 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                     className={cn(
                         "flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all",
                         isEnabled
-                            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                            ? "bg-success/10 border-emerald-500/20 text-success"
                             : "bg-muted border-border/40 text-muted-foreground/40"
                     )}
                 >
                     <div className={cn(
                         "w-1 h-1 rounded-full transition-all",
-                        isEnabled ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" : "bg-muted-foreground/20"
+                        isEnabled ? "bg-success shadow-[0_0_8px_hsl(var(--primary) / 0.4)]" : "bg-muted-foreground/20"
                     )} />
                     <span className="text-[9px] font-bold uppercase tracking-widest">{isEnabled ? 'ACTIVE' : 'OFF'}</span>
                 </button>
@@ -114,11 +114,11 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                     onBlur={() => { void updateCustomProvider(providerId, { baseUrl: localUrl } as any).catch(error => setSaveError(String(error))); }}
                     className={cn(
                         "max-w-lg h-9 font-mono text-xs bg-muted/20 border-border/60 rounded-lg",
-                        providerError && "border-red-500/30 bg-red-500/5"
+                        providerError && "border-destructive/30 bg-destructive/5"
                     )}
                 />
                 {providerError && (
-                    <div className="flex items-center gap-2 mt-1 px-1 text-[10px] text-red-400">
+                    <div className="flex items-center gap-2 mt-1 px-1 text-[10px] text-destructive">
                         <WorkbenchIcon name="lucide:alert-circle" size={12} />
                         <span>{providerError}</span>
                     </div>
@@ -183,12 +183,12 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                 />
             </details>
 
-            {saveError && <div className="rounded-md border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-[11px] text-rose-300">{saveError}</div>}
+            {saveError && <div className="rounded-md border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-[11px] text-destructive">{saveError}</div>}
 
             <div className="pt-3 border-t border-border/40 flex justify-end">
                 <WorkbenchButton
                     variant="ghost"
-                    className="h-8 px-3 text-[10px] font-bold text-rose-400/60 hover:text-rose-400 hover:bg-rose-500/10"
+                    className="h-8 px-3 text-[10px] font-bold text-destructive/60 hover:text-destructive hover:bg-rose-500/10"
                     onClick={async () => {
                         const confirmed = await ask('Permanently delete this custom node?', {
                             title: 'ZEN_NODE_PURGE',

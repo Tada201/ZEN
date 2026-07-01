@@ -157,7 +157,7 @@ export const OutputConfig = memo(() => {
                     description="System-wide audio output level"
                     control={
                         <div className="flex items-center gap-2 w-[180px]">
-                            <Volume2 size={12} className={cn(isMuted ? 'text-zinc-600' : 'text-zinc-400')} />
+                            <Volume2 size={12} className={cn(isMuted ? 'text-muted-foreground/70' : 'text-muted-foreground')} />
                             <WorkbenchSlider
                                 value={[masterVolume * 100]}
                                 onValueChange={([v]) => updateSetting({ masterVolume: v / 100 })}
@@ -165,7 +165,7 @@ export const OutputConfig = memo(() => {
                                 step={1}
                                 className="flex-1"
                             />
-                            <span className="text-[10px] font-mono text-zinc-500 w-8 text-right">
+                            <span className="text-[10px] font-mono text-muted-foreground w-8 text-right">
                                 {Math.round(masterVolume * 100)}%
                             </span>
                         </div>
@@ -177,7 +177,7 @@ export const OutputConfig = memo(() => {
                     description="Playback level for the selected output device"
                     control={
                         <div className="flex items-center gap-2 w-[180px]">
-                            <Volume2 size={12} className="text-zinc-400" />
+                            <Volume2 size={12} className="text-muted-foreground" />
                             <WorkbenchSlider
                                 value={[speakerVolume * 100]}
                                 onValueChange={([v]) => updateSetting({ speakerVolume: v / 100 })}
@@ -185,7 +185,7 @@ export const OutputConfig = memo(() => {
                                 step={1}
                                 className="flex-1"
                             />
-                            <span className="text-[10px] font-mono text-zinc-500 w-8 text-right">
+                            <span className="text-[10px] font-mono text-muted-foreground w-8 text-right">
                                 {Math.round(speakerVolume * 100)}%
                             </span>
                         </div>
@@ -203,14 +203,14 @@ export const OutputConfig = memo(() => {
                     }
                 />
 
-                <div className="rounded-xl border border-white/[0.04] bg-zinc-900/15 px-4 py-3">
+                <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
                         <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-2 text-[12px] font-bold text-white">
+                            <div className="flex items-center gap-2 text-[12px] font-bold text-foreground">
                                 <Volume2 size={12} className="text-brand-purple" />
                                 <span className="uppercase tracking-wider">Speaker Test</span>
                             </div>
-                            <span className="text-[11px] text-zinc-500">
+                            <span className="text-[11px] text-muted-foreground">
                                 Plays a 440Hz tone for 1 second on the selected device.
                             </span>
                         </div>
@@ -225,7 +225,7 @@ export const OutputConfig = memo(() => {
                         </WorkbenchButton>
                     </div>
                     {error && (
-                        <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-[11px] text-red-400">
+                        <div className="mt-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-[11px] text-destructive">
                             {error}
                         </div>
                     )}

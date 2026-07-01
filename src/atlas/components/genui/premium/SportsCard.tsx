@@ -15,10 +15,10 @@ export function SportsCard({ data }: { data: any }) {
   const isFinal = status === 'Final' || status === 'final' || status === 'FT' || status === 'Finished';
 
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-black/40 backdrop-blur-md p-5 shadow-lg w-full max-w-md">
+    <div className="rounded-2xl border border-border/[0.08] bg-background/40 backdrop-blur-md p-5 shadow-lg w-full max-w-md">
       {league && (
         <div className="flex items-center justify-between mb-3">
-          <span className="text-[9px] font-black text-white/30 uppercase tracking-widest">{league}</span>
+          <span className="text-[9px] font-black text-primary-foreground/30 uppercase tracking-widest">{league}</span>
           {isLive && (
             <span className="flex items-center gap-1 text-[9px] font-bold text-red-400 uppercase">
               <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
@@ -26,51 +26,51 @@ export function SportsCard({ data }: { data: any }) {
             </span>
           )}
           {isFinal && (
-            <span className="text-[9px] font-bold text-white/30 uppercase">FINAL</span>
+            <span className="text-[9px] font-bold text-primary-foreground/30 uppercase">FINAL</span>
           )}
         </div>
       )}
       <div className="flex items-center justify-between gap-4">
         <div className="flex-1 text-center">
-          <p className="text-xs text-white/40 mb-1 truncate">{home}</p>
-          <span className={isLive ? "text-2xl font-black text-white" : "text-2xl font-black text-white/80"}>
+          <p className="text-xs text-primary-foreground/40 mb-1 truncate">{home}</p>
+          <span className={isLive ? "text-2xl font-black text-primary-foreground" : "text-2xl font-black text-primary-foreground/80"}>
             {homeScore != null ? homeScore : '—'}
           </span>
         </div>
         <div className="shrink-0 flex flex-col items-center gap-0.5">
-          <span className="text-[10px] font-bold text-white/20 uppercase">VS</span>
-          {period && <span className="text-[9px] text-white/30">{period}</span>}
+          <span className="text-[10px] font-bold text-primary-foreground/20 uppercase">VS</span>
+          {period && <span className="text-[9px] text-primary-foreground/30">{period}</span>}
         </div>
         <div className="flex-1 text-center">
-          <p className="text-xs text-white/40 mb-1 truncate">{away}</p>
-          <span className={isLive ? "text-2xl font-black text-white" : "text-2xl font-black text-white/80"}>
+          <p className="text-xs text-primary-foreground/40 mb-1 truncate">{away}</p>
+          <span className={isLive ? "text-2xl font-black text-primary-foreground" : "text-2xl font-black text-primary-foreground/80"}>
             {awayScore != null ? awayScore : '—'}
           </span>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2 border-t border-white/[0.06] pt-3 mt-3">
+      <div className="grid grid-cols-2 gap-2 border-t border-border/[0.06] pt-3 mt-3">
         {venue && (
           <div className="flex items-center gap-1.5">
-            <MapPin size={12} className="text-white/30 shrink-0" />
-            <span className="text-[10px] text-white/50 truncate">{venue}</span>
+            <MapPin size={12} className="text-primary-foreground/30 shrink-0" />
+            <span className="text-[10px] text-primary-foreground/50 truncate">{venue}</span>
           </div>
         )}
         {time && (
           <div className="flex items-center gap-1.5">
-            <Clock size={12} className="text-white/30 shrink-0" />
-            <span className="text-[10px] text-white/50">{time}</span>
+            <Clock size={12} className="text-primary-foreground/30 shrink-0" />
+            <span className="text-[10px] text-primary-foreground/50">{time}</span>
           </div>
         )}
       </div>
       {(data.players && Array.isArray(data.players)) && (
-        <div className="flex flex-wrap gap-1 mt-3 pt-3 border-t border-white/[0.06]">
+        <div className="flex flex-wrap gap-1 mt-3 pt-3 border-t border-border/[0.06]">
           {data.players.slice(0, 6).map((player: any, i: number) => (
-            <span key={i} className="px-2 py-0.5 rounded-full bg-white/[0.04] text-[10px] text-white/50 border border-white/[0.04]">
+            <span key={i} className="px-2 py-0.5 rounded-full bg-card/[0.04] text-[10px] text-primary-foreground/50 border border-border/[0.04]">
               {player.name || player}
             </span>
           ))}
           {data.players.length > 6 && (
-            <span className="px-2 py-0.5 text-[10px] text-white/30">+{data.players.length - 6} more</span>
+            <span className="px-2 py-0.5 text-[10px] text-primary-foreground/30">+{data.players.length - 6} more</span>
           )}
         </div>
       )}

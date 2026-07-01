@@ -90,7 +90,7 @@ export function PromptPicker({ selectedId, onSelect, compact }: PromptPickerProp
               type="button"
               onClick={() => handleSelect(prompt)}
               className={cn(
-                "flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border border-white/[0.06] bg-white/[0.02] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.05] hover:border-white/[0.1] transition-all duration-150",
+                "flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border border-border bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted hover:border-border transition-all duration-150",
                 selectedId === prompt.id && "border-primary/30 bg-primary/10 text-primary"
               )}
               title={prompt.description}
@@ -102,7 +102,7 @@ export function PromptPicker({ selectedId, onSelect, compact }: PromptPickerProp
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
-            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border border-white/[0.06] bg-white/[0.02] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05] transition-all duration-150"
+            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border border-border bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-150"
             title="Search all prompts"
           >
             <Search className="w-3 h-3" />
@@ -128,7 +128,7 @@ export function PromptPicker({ selectedId, onSelect, compact }: PromptPickerProp
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
-            className="px-2 py-0.5 rounded-full text-[10px] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05] transition-all duration-150"
+            className="px-2 py-0.5 rounded-full text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-150"
           >
             Change
           </button>
@@ -136,21 +136,21 @@ export function PromptPicker({ selectedId, onSelect, compact }: PromptPickerProp
       )}
 
       {searchOpen && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-zinc-900/95 backdrop-blur-lg border border-white/[0.08] rounded-xl shadow-2xl overflow-hidden max-h-72 flex flex-col">
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.05]">
-            <Search className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+        <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-popover backdrop-blur-lg border border-border rounded-xl shadow-2xl overflow-hidden max-h-72 flex flex-col">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+            <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
             <input
               ref={inputRef}
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search prompts..."
-              className="flex-1 bg-transparent text-xs text-zinc-200 placeholder:text-zinc-500 outline-none"
+              className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground outline-none"
             />
             <button
               type="button"
               onClick={() => { setSearchOpen(false); setQuery(""); }}
-              className="text-zinc-500 hover:text-zinc-300 transition-colors"
+              className="text-muted-foreground hover:text-foreground transition-colors"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -165,23 +165,23 @@ export function PromptPicker({ selectedId, onSelect, compact }: PromptPickerProp
                   "w-full flex items-start gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors",
                   selectedId === prompt.id
                     ? "bg-primary/10"
-                    : "hover:bg-white/[0.04]"
+                    : "hover:bg-muted/50"
                 )}
               >
                 <span className="text-base shrink-0 mt-0.5">{prompt.icon}</span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-zinc-200">{prompt.name}</span>
-                    <span className="text-[9px] uppercase tracking-wider text-zinc-600 font-medium">
+                    <span className="text-xs font-medium text-foreground">{prompt.name}</span>
+                    <span className="text-[9px] uppercase tracking-wider text-muted-foreground/70 font-medium">
                       {CATEGORY_LABELS[prompt.category] || prompt.category}
                     </span>
                   </div>
-                  <p className="text-[10px] text-zinc-500 mt-0.5 line-clamp-1">{prompt.description}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{prompt.description}</p>
                 </div>
               </button>
             ))}
             {filteredPrompts.length === 0 && (
-              <div className="px-3 py-4 text-center text-[10px] text-zinc-500">
+              <div className="px-3 py-4 text-center text-[10px] text-muted-foreground">
                 No prompts matching "{query}"
               </div>
             )}

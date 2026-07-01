@@ -294,9 +294,9 @@ export default function InteractiveDrawingCanvas({ minimal = false }: Interactiv
           animate={{ y: 0, opacity: 1 }}
           className="absolute bottom-10 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-4 w-full max-w-2xl px-6"
         >
-          <div className="flex items-center gap-2 p-1.5 bg-[#0A0F0A]/80 backdrop-blur-xl border border-[#00FF9F]/30 rounded-2xl shadow-[0_-20px_40px_-10px_rgba(0,0,0,0.5)]">
+          <div className="flex items-center gap-2 p-1.5 bg-[#0A0F0A]/80 backdrop-blur-xl border border-[#00FF9F]/30 rounded-2xl shadow-[0_-20px_40px_-10px_hsl(var(--background) / 0.5)]">
             {/* Main Tools */}
-            <div className="flex items-center gap-1 p-1 bg-black/40 rounded-xl border border-[#00FF9F]/5">
+            <div className="flex items-center gap-1 p-1 bg-background/40 rounded-xl border border-[#00FF9F]/5">
               {[
                 { id: 'select', icon: 'codicon:cursor-pointer', label: 'V' },
                 { id: 'pen', icon: 'codicon:edit', label: 'P' },
@@ -326,13 +326,13 @@ export default function InteractiveDrawingCanvas({ minimal = false }: Interactiv
                 onClick={() => setColorPickerOpen(colorPickerOpen === 'stroke' ? null : 'stroke')}
                 className={`p-2.5 rounded-lg transition-all ${colorPickerOpen === 'stroke' ? 'bg-[#00FF9F]/20' : 'hover:bg-[#00FF9F]/10'}`}
               >
-                <div className="w-5 h-5 rounded border border-white/20" style={{ backgroundColor: toolStyle.stroke }} title="Stroke Color" />
+                <div className="w-5 h-5 rounded border border-border" style={{ backgroundColor: toolStyle.stroke }} title="Stroke Color" />
               </WorkbenchButton>
               <WorkbenchButton 
                 onClick={() => setColorPickerOpen(colorPickerOpen === 'fill' ? null : 'fill')}
                 className={`p-2.5 rounded-lg transition-all ${colorPickerOpen === 'fill' ? 'bg-[#00FF9F]/20' : 'hover:bg-[#00FF9F]/10'}`}
               >
-                <div className="w-5 h-5 rounded border border-white/20 overflow-hidden relative" style={{ backgroundColor: toolStyle.fill || 'transparent' }} title="Fill Color">
+                <div className="w-5 h-5 rounded border border-border overflow-hidden relative" style={{ backgroundColor: toolStyle.fill || 'transparent' }} title="Fill Color">
                   {!toolStyle.fill && <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-rose-500/40 to-transparent rotate-45" />}
                 </div>
               </WorkbenchButton>
@@ -374,7 +374,7 @@ export default function InteractiveDrawingCanvas({ minimal = false }: Interactiv
                       onClick={() => { setToolStyle({ fill: null }); setColorPickerOpen(null); }}
                       className="w-8 h-8 rounded-lg border border-[#00FF9F]/20 flex items-center justify-center hover:bg-rose-500/10 hover:border-rose-500/50 transition-colors"
                     >
-                      <WorkbenchIcon name="codicon:close" size={16} className="text-white/40" />
+                      <WorkbenchIcon name="codicon:close" size={16} className="text-muted-foreground" />
                     </WorkbenchButton>
                   )}
                 </div>

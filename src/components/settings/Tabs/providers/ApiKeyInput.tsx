@@ -42,9 +42,9 @@ export function ApiKeyInput({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
-        className="pr-20 h-8 text-[12px] bg-white/[0.03] border-white/[0.08] font-mono
+        className="pr-20 h-8 text-[12px] bg-muted/40 border-border font-mono
           focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all
-          placeholder:text-zinc-700"
+          placeholder:text-foreground/80"
       />
       <div className="absolute right-1 flex items-center gap-0.5">
         {value && (
@@ -52,7 +52,7 @@ export function ApiKeyInput({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-6 w-6 text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06]"
+            className="h-6 w-6 text-muted-foreground/70 hover:text-foreground hover:bg-muted"
             onClick={() => onChange("")}
             title="Clear"
           >
@@ -63,7 +63,7 @@ export function ApiKeyInput({
           type="button"
           variant="ghost"
           size="icon"
-          className="h-6 w-6 text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06]"
+          className="h-6 w-6 text-muted-foreground/70 hover:text-foreground hover:bg-muted"
           onClick={handlePaste}
           title="Paste from clipboard"
         >
@@ -73,7 +73,7 @@ export function ApiKeyInput({
           type="button"
           variant="ghost"
           size="icon"
-          className="h-6 w-6 text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06]"
+          className="h-6 w-6 text-muted-foreground/70 hover:text-foreground hover:bg-muted"
           onClick={() => setVisible(!visible)}
           title={visible ? "Hide" : "Show"}
         >

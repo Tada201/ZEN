@@ -35,7 +35,7 @@ const PROVIDER_COLORS: Record<string, string> = {
   openai: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
   anthropic: "bg-orange-500/10 text-orange-500 border-orange-500/20",
   google: "bg-blue-500/10 text-blue-500 border-blue-500/20",
-  xai: "bg-slate-500/10 text-slate-500 border-slate-500/20",
+  xai: "bg-muted/10 text-muted-foreground border-border/20",
   mistral: "bg-orange-600/10 text-orange-600 border-orange-600/20",
   groq: "bg-orange-400/10 text-orange-400 border-orange-400/20",
   perplexity: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20",
@@ -45,8 +45,8 @@ const PROVIDER_COLORS: Record<string, string> = {
   together: "bg-blue-400/10 text-blue-400 border-blue-400/20",
   nvidia: "bg-emerald-600/10 text-emerald-600 border-emerald-600/20",
   kilocode: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20",
-  ollama: "bg-slate-400/10 text-slate-400 border-slate-400/20",
-  lmstudio: "bg-slate-600/10 text-slate-600 border-slate-600/20",
+  ollama: "bg-muted/10 text-muted-foreground border-border/20",
+  lmstudio: "bg-muted/10 text-muted-foreground border-border/20",
 };
 
 export function ModelSettingsContent({

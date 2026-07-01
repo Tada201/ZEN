@@ -233,19 +233,19 @@ export const MicrophoneConfig = memo(() => {
                                 step={1}
                                 className="flex-1"
                             />
-                            <span className="text-[10px] font-mono text-zinc-500 w-9 text-right">
+                            <span className="text-[10px] font-mono text-muted-foreground w-9 text-right">
                                 {Math.round(micVolume * 100)}%
                             </span>
                         </div>
                     }
                 />
 
-                <div className="rounded-xl border border-white/[0.04] bg-zinc-900/15 px-4 py-3">
+                <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
                         <div className="flex min-w-0 flex-col gap-1">
-                            <div className="flex items-center gap-2 text-[12px] font-bold text-white">
+                            <div className="flex items-center gap-2 text-[12px] font-bold text-foreground">
                                 {status === 'recording' ? (
-                                    <Volume2 size={12} className="text-emerald-400" />
+                                    <Volume2 size={12} className="text-success" />
                                 ) : (
                                     <Mic size={12} className="text-brand-purple" />
                                 )}
@@ -253,20 +253,20 @@ export const MicrophoneConfig = memo(() => {
                                     {status === 'recording' ? 'Recording' : status === 'playing' ? 'Playing back' : 'Mic Test'}
                                 </span>
                             </div>
-                            <span className="text-[11px] text-zinc-500">
+                            <span className="text-[11px] text-muted-foreground">
                                 Speak to record, release to hear your voice played back.
                             </span>
                             <div className="mt-1 flex items-center gap-2">
-                                <div className="relative h-1.5 w-32 overflow-hidden rounded-full bg-zinc-800">
+                                <div className="relative h-1.5 w-32 overflow-hidden rounded-full bg-muted">
                                     <div
                                         className={cn(
                                             'h-full transition-all duration-50',
-                                            amplitude > 0.05 ? 'bg-emerald-400' : 'bg-zinc-600',
+                                            amplitude > 0.05 ? 'bg-success' : 'bg-muted',
                                         )}
                                         style={{ width: `${Math.min(100, amplitude * 100 * 2)}%` }}
                                     />
                                 </div>
-                                <span className="font-mono text-[10px] text-zinc-500">
+                                <span className="font-mono text-[10px] text-muted-foreground">
                                     {Math.round(amplitude * 100)}%
                                 </span>
                             </div>
@@ -288,7 +288,7 @@ export const MicrophoneConfig = memo(() => {
                         </WorkbenchButton>
                     </div>
                     {error && (
-                        <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-[11px] text-red-400">
+                        <div className="mt-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-[11px] text-destructive">
                             {error}
                         </div>
                     )}

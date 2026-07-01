@@ -87,13 +87,13 @@ export function CodeEditor({ activeFile }: { activeFile: string | null }) {
   return (
     <div className="h-full flex flex-col bg-[#1e1e1e]">
       {/* Tabs Header */}
-      <div className="flex bg-[#252526] border-b border-black/20 overflow-x-auto no-scrollbar h-9">
+      <div className="flex bg-[#252526] border-b border-border/20 overflow-x-auto no-scrollbar h-9">
         {tabs.map((tab) => (
           <div
             key={tab.path}
             onClick={() => setActiveTabPath(tab.path)}
             className={cn(
-              "flex items-center gap-2 px-3 h-full border-r border-black/20 cursor-pointer transition-colors text-[11px] group min-w-[120px] max-w-[200px]",
+              "flex items-center gap-2 px-3 h-full border-r border-border/20 cursor-pointer transition-colors text-[11px] group min-w-[120px] max-w-[200px]",
               activeTabPath === tab.path 
                 ? "bg-[#1e1e1e] text-foreground border-t-2 border-t-primary" 
                 : "bg-[#2d2d2d] text-muted-foreground hover:bg-[#2a2d2e]"
@@ -101,7 +101,7 @@ export function CodeEditor({ activeFile }: { activeFile: string | null }) {
           >
             <span className="truncate flex-1">{tab.name}</span>
             <X 
-              className="h-3 w-3 opacity-0 group-hover:opacity-60 hover:bg-white/10 rounded-sm transition-all"
+              className="h-3 w-3 opacity-0 group-hover:opacity-60 hover:bg-card/10 rounded-sm transition-all"
               onClick={(e) => closeTab(tab.path, e)}
             />
           </div>
@@ -111,7 +111,7 @@ export function CodeEditor({ activeFile }: { activeFile: string | null }) {
       {/* Editor Content */}
       <div className="flex-1 relative">
         {loading && (
-          <div className="absolute inset-0 z-50 bg-black/40 backdrop-blur-[1px] flex items-center justify-center">
+          <div className="absolute inset-0 z-50 bg-background/40 backdrop-blur-[1px] flex items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>
         )}

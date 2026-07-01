@@ -32,7 +32,7 @@ export const HardwareResourcesConfig = memo(() => {
                     description="Maximum RAM allocated for model operations (MB)"
                     control={
                         <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-mono font-bold text-emerald-400">
+                            <span className="text-[11px] font-mono font-bold text-success">
                                 {maxMemoryAllocation} MB
                             </span>
                         </div>

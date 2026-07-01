@@ -121,10 +121,10 @@ export function ProviderGallery({
                                             )}
                                             <span className={cn(
                                                 "h-2 w-2 shrink-0 rounded-full",
-                                                status === "active" && "bg-emerald-400",
+                                                status === "active" && "bg-success",
                                                 status === "failed" && "bg-rose-400",
                                                 status === "configured" && "bg-amber-400",
-                                                status === "none" && "bg-zinc-600"
+                                                status === "none" && "bg-muted"
                                             )} />
                                             <WorkbenchIcon name="lucide:chevron-right" size={14} className="shrink-0 text-muted-foreground/60" />
                                         </button>

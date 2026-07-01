@@ -32,7 +32,7 @@ export const OrchestratorConfig = memo(() => {
                     description="Maximum time in seconds before agent task is terminated"
                     control={
                         <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-mono font-bold text-emerald-400">
+                            <span className="text-[11px] font-mono font-bold text-success">
                                 {agentTimeout}s
                             </span>
                         </div>

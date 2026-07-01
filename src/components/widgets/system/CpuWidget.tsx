@@ -33,7 +33,7 @@ export const CpuWidget = memo(function CpuWidget({ context }: { context: SystemM
     return (
         <div className="flex flex-col gap-3 p-1">
             <div className="flex items-center justify-between px-1">
-                <span className="text-[10px] font-mono font-bold text-slate-500 tracking-wider">
+                <span className="text-[10px] font-mono font-bold text-muted-foreground tracking-wider">
                     {cpuBrand.toUpperCase()}
                 </span>
                 <span className="text-[10px] font-mono text-violet-400/80">ACTIVE</span>
@@ -44,7 +44,7 @@ export const CpuWidget = memo(function CpuWidget({ context }: { context: SystemM
                 {cpuUsagePerCore.map((usage, i) => (
                     <div
                         key={i}
-                        className="h-8 bg-zinc-900/30 border border-zinc-800/60 rounded relative overflow-hidden"
+                        className="h-8 bg-muted/40 border border-border/60 rounded relative overflow-hidden"
                         title={`Core ${i}: ${Math.round(usage)}%`}
                     >
                         <div
@@ -57,26 +57,26 @@ export const CpuWidget = memo(function CpuWidget({ context }: { context: SystemM
 
             {/* Dual Sparklines */}
             <div className="grid grid-cols-2 gap-2 px-1">
-                <div className="bg-zinc-950/40 border border-zinc-800/60 rounded-lg p-1">
-                    <Sparkline data={history.left} color="#8b5cf6" height={32} showDot={true} maxValue={100} />
+                <div className="bg-card/60 border border-border/60 rounded-lg p-1">
+                    <Sparkline data={history.left} color="hsl(var(--primary))" height={32} showDot={true} maxValue={100} />
                 </div>
-                <div className="bg-zinc-950/40 border border-zinc-800/60 rounded-lg p-1">
-                    <Sparkline data={history.right} color="#8b5cf6" height={32} showDot={true} maxValue={100} />
+                <div className="bg-card/60 border border-border/60 rounded-lg p-1">
+                    <Sparkline data={history.right} color="hsl(var(--primary))" height={32} showDot={true} maxValue={100} />
                 </div>
             </div>
 
             {/* Bottom Metadata */}
             <div className="grid grid-cols-3 gap-1 px-1 mt-1">
                 <div className="flex flex-col">
-                    <span className="text-[9px] font-mono text-slate-500 leading-none">SPD</span>
-                    <span className="text-xs font-mono text-slate-300">{cpuFrequency.toFixed(2)}G</span>
+                    <span className="text-[9px] font-mono text-muted-foreground leading-none">SPD</span>
+                    <span className="text-xs font-mono text-muted-foreground">{cpuFrequency.toFixed(2)}G</span>
                 </div>
                 <div className="flex flex-col">
-                    <span className="text-[9px] font-mono text-slate-500 leading-none">TASKS</span>
-                    <span className="text-xs font-mono text-slate-300">{numProcesses}</span>
+                    <span className="text-[9px] font-mono text-muted-foreground leading-none">TASKS</span>
+                    <span className="text-xs font-mono text-muted-foreground">{numProcesses}</span>
                 </div>
                 <div className="flex flex-col items-end">
-                    <span className="text-[9px] font-mono text-slate-500 leading-none">USAGE</span>
+                    <span className="text-[9px] font-mono text-muted-foreground leading-none">USAGE</span>
                     <span className="text-xs font-mono text-violet-400 font-bold">{Math.round(cpuUsage)}%</span>
                 </div>
             </div>

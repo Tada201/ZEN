@@ -18,41 +18,41 @@ export function CurrencyCard({ data }: { data: CurrencyData }) {
   const updatedAt = data.updatedAt;
 
   return (
-    <div className="w-full max-w-sm rounded-2xl border border-white/[0.08] bg-black/40 backdrop-blur-md p-5 shadow-lg">
+    <div className="w-full max-w-sm rounded-2xl border border-border/[0.08] bg-background/40 backdrop-blur-md p-5 shadow-lg">
       <div className="flex items-center justify-between mb-4">
-        <span className="text-[10px] font-mono tracking-wider text-white/40 uppercase">Currency Converter</span>
+        <span className="text-[10px] font-mono tracking-wider text-primary-foreground/40 uppercase">Currency Converter</span>
         <TrendingUp className="w-4 h-4 text-emerald-400" />
       </div>
 
       <div className="flex items-center gap-4 mb-4">
         <div className="flex-1 min-w-0">
-          <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1">{from}</div>
-          <div className="text-xl font-bold text-white truncate tabular-nums">
+          <div className="text-[10px] font-bold text-primary-foreground/40 uppercase tracking-widest mb-1">{from}</div>
+          <div className="text-xl font-bold text-primary-foreground truncate tabular-nums">
             {amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
         </div>
 
-        <div className="flex items-center justify-center w-8 h-8 rounded-full border border-white/10 bg-white/5 shrink-0 text-white/60">
+        <div className="flex items-center justify-center w-8 h-8 rounded-full border border-border/10 bg-card/5 shrink-0 text-primary-foreground/60">
           <ArrowRight className="w-4 h-4" />
         </div>
 
         <div className="flex-1 min-w-0 text-right">
-          <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1">{to}</div>
+          <div className="text-[10px] font-bold text-primary-foreground/40 uppercase tracking-widest mb-1">{to}</div>
           <div className="text-xl font-bold text-primary truncate tabular-nums">
             {result.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
         </div>
       </div>
 
-      <div className="flex flex-col gap-1 pt-3.5 border-t border-white/[0.06] text-[10px] text-white/40 font-mono">
+      <div className="flex flex-col gap-1 pt-3.5 border-t border-border/[0.06] text-[10px] text-primary-foreground/40 font-mono">
         <div className="flex justify-between">
           <span>Exchange Rate</span>
-          <span className="text-white/80 font-bold">
+          <span className="text-primary-foreground/80 font-bold">
             1 {from} = {Number(rate).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })} {to}
           </span>
         </div>
         {updatedAt && (
-          <div className="flex justify-between items-center mt-1 text-[9px] text-white/30">
+          <div className="flex justify-between items-center mt-1 text-[9px] text-primary-foreground/30">
             <span className="flex items-center gap-1">
               <RefreshCw className="w-2.5 h-2.5" /> Rate updated
             </span>

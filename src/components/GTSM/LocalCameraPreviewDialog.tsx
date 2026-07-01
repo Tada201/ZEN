@@ -42,7 +42,7 @@ export function LocalCameraPreviewDialog({ latitude, longitude, onActive, onClos
     onClose();
   };
 
-  return <AppDialog open onOpenChange={(open) => { if (!open) close(); }} title="This device camera" description="Local preview only. Video stays on this device and is not sent to Zen services." footer={<button type="button" onClick={close} className="border border-white/10 px-3 py-2 text-[11px] text-zinc-300 hover:bg-white/[0.06]">Stop camera</button>}>
-    <div className="space-y-3"><div className="aspect-video bg-black">{error ? <div role="alert" className="flex h-full items-center justify-center px-6 text-center text-xs text-rose-200">{error}</div> : <video ref={videoRef} autoPlay muted playsInline className="h-full w-full object-contain" />}</div><p className="text-[10px] leading-5 text-zinc-500">{ready ? `Map marker follows the current viewport: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}.` : 'Requesting local camera permission...'}</p></div>
+  return <AppDialog open onOpenChange={(open) => { if (!open) close(); }} title="This device camera" description="Local preview only. Video stays on this device and is not sent to Zen services." footer={<button type="button" onClick={close} className="border border-border px-3 py-2 text-[11px] text-foreground hover:bg-muted">Stop camera</button>}>
+    <div className="space-y-3"><div className="aspect-video bg-background">{error ? <div role="alert" className="flex h-full items-center justify-center px-6 text-center text-xs text-rose-200">{error}</div> : <video ref={videoRef} autoPlay muted playsInline className="h-full w-full object-contain" />}</div><p className="text-[10px] leading-5 text-muted-foreground">{ready ? `Map marker follows the current viewport: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}.` : 'Requesting local camera permission...'}</p></div>
   </AppDialog>;
 }

@@ -215,9 +215,9 @@ export const VoiceOscilloscope: React.FC<VoiceOscilloscopeProps> = ({
       type="button"
       onClick={togglePtt}
       className={cn(
-        "relative h-[70px] overflow-hidden border border-white/20 bg-white/[0.025] p-2 text-white shadow-[0_0_24px_rgba(255,255,255,0.04)] transition-[width,border-radius,background-color,box-shadow] duration-500 ease-[cubic-bezier(0.34,1.4,0.64,1)]",
-        expanded ? "w-[280px] rounded-[35px] bg-white/[0.035]" : "w-[70px] rounded-[22px]",
-        voiceInputMode ? "cursor-pointer hover:border-white/45" : "cursor-default",
+        "relative h-[70px] overflow-hidden border border-border/20 bg-card/[0.025] p-2 text-primary-foreground shadow-[0_0_24px_hsl(var(--foreground) / 0.04)] transition-[width,border-radius,background-color,box-shadow] duration-500 ease-[cubic-bezier(0.34,1.4,0.64,1)]",
+        expanded ? "w-[280px] rounded-[35px] bg-card/[0.035]" : "w-[70px] rounded-[22px]",
+        voiceInputMode ? "cursor-pointer hover:border-border/45" : "cursor-default",
       )}
       title={voiceInputMode ? (isCapturing ? "Stop speaking" : "Click or hold Space to speak") : "Voice activity mode"}
       aria-label={voiceInputMode ? (isCapturing ? "Stop speaking" : "Start speaking") : "Voice waveform"}
@@ -225,7 +225,7 @@ export const VoiceOscilloscope: React.FC<VoiceOscilloscopeProps> = ({
       <div
         className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-80"
         style={{
-          background: isCapturing ? `conic-gradient(from -90deg, rgba(255,255,255,.95) ${limitProgress * 360}deg, rgba(255,255,255,.12) 0deg)` : "transparent",
+          background: isCapturing ? `conic-gradient(from -90deg, hsl(var(--foreground) / .95) ${limitProgress * 360}deg, hsl(var(--foreground) / .12) 0deg)` : "transparent",
           mask: "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
           WebkitMask: "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
           padding: 1,

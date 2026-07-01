@@ -131,8 +131,8 @@ export const EmbeddingModelDownloader = memo(({
                 <div className="flex flex-col gap-4 mb-6">
                     <div className="flex items-center justify-between">
                         <div className="flex flex-col gap-1">
-                            <span className="text-[12px] font-bold text-white">{serviceName} Service</span>
-                            <span className="text-[11px] text-zinc-500">Local inference engine status</span>
+                            <span className="text-[12px] font-bold text-foreground">{serviceName} Service</span>
+                            <span className="text-[11px] text-muted-foreground">Local inference engine status</span>
                         </div>
                         <WorkbenchButton
                             variant="secondary"
@@ -153,11 +153,11 @@ export const EmbeddingModelDownloader = memo(({
                                 <div className={cn(
                                     "flex items-center gap-2 px-3 py-1 rounded border",
                                     ollamaStatus?.running
-                                        ? "bg-emerald-500/10 border-emerald-500/20"
-                                        : "bg-red-500/10 border-red-500/20"
+                                        ? "bg-success/10 border-emerald-500/20"
+                                        : "bg-destructive/10 border-destructive/20"
                                 )}>
-                                    <div className={cn("w-1.5 h-1.5 rounded-full", ollamaStatus?.running ? "bg-emerald-500" : "bg-red-500")} />
-                                    <span className={cn("text-[10px] font-bold uppercase tracking-wider", ollamaStatus?.running ? "text-emerald-400" : "text-red-400")}>
+                                    <div className={cn("w-1.5 h-1.5 rounded-full", ollamaStatus?.running ? "bg-success" : "bg-destructive")} />
+                                    <span className={cn("text-[10px] font-bold uppercase tracking-wider", ollamaStatus?.running ? "text-success" : "text-destructive")}>
                                         {ollamaStatus?.running ? 'Connected' : 'Offline'}
                                     </span>
                                 </div>
@@ -172,10 +172,10 @@ export const EmbeddingModelDownloader = memo(({
                                     "flex items-center gap-2 px-3 py-1 rounded border",
                                     ollamaStatus?.has_embedding_model
                                         ? "bg-brand-purple/10 border-brand-purple/20"
-                                        : "bg-zinc-800/60 border-white/[0.04]"
+                                        : "bg-muted/60 border-border"
                                 )}>
-                                    <WorkbenchIcon name="codicon:pulse" size={12} className={cn(ollamaStatus?.has_embedding_model ? "text-brand-purple" : "text-zinc-400")} />
-                                    <span className={cn("text-[10px] font-bold uppercase tracking-wider", ollamaStatus?.has_embedding_model ? "text-brand-purple" : "text-zinc-400")}>
+                                    <WorkbenchIcon name="codicon:pulse" size={12} className={cn(ollamaStatus?.has_embedding_model ? "text-brand-purple" : "text-muted-foreground")} />
+                                    <span className={cn("text-[10px] font-bold uppercase tracking-wider", ollamaStatus?.has_embedding_model ? "text-brand-purple" : "text-muted-foreground")}>
                                         {ollamaStatus?.has_embedding_model ? 'Ready' : 'Pending'}
                                     </span>
                                 </div>
@@ -184,10 +184,10 @@ export const EmbeddingModelDownloader = memo(({
                     </div>
 
                     {!ollamaStatus?.installed && (
-                        <div className="p-4 bg-zinc-900/30 border border-white/[0.04] rounded-xl flex flex-col gap-3">
+                        <div className="p-4 bg-muted/40 border border-border rounded-xl flex flex-col gap-3">
                             <div className="flex gap-3 items-center">
-                                <WorkbenchIcon name="codicon:warning" size={16} className="text-red-500" />
-                                <p className="text-[11px] text-zinc-400 flex-1 leading-relaxed">
+                                <WorkbenchIcon name="codicon:warning" size={16} className="text-destructive" />
+                                <p className="text-[11px] text-muted-foreground flex-1 leading-relaxed">
                                     {serviceName} binary not found. Handshake unavailable.
                                 </p>
                             </div>
@@ -206,8 +206,8 @@ export const EmbeddingModelDownloader = memo(({
                 {/* Model Catalog */}
                 <div className="flex flex-col gap-3">
                     <div className="flex flex-col gap-0.5">
-                        <span className="text-[11px] font-bold text-white uppercase tracking-tight">Curated Model Catalog</span>
-                        <span className="text-[10px] text-zinc-500">Verified models for knowledge retrieval</span>
+                        <span className="text-[11px] font-bold text-foreground uppercase tracking-tight">Curated Model Catalog</span>
+                        <span className="text-[10px] text-muted-foreground">Verified models for knowledge retrieval</span>
                     </div>
 
                     {RECOMMENDED_MODELS.map((model, idx) => {
@@ -216,24 +216,24 @@ export const EmbeddingModelDownloader = memo(({
 
                         return (
                             <div key={model.name}>
-                                {idx > 0 && <div className="h-px bg-white/5 my-1" />}
+                                {idx > 0 && <div className="h-px bg-muted/50 my-1" />}
                                 <div className="flex items-center justify-between py-3">
                                     <div className="flex flex-col gap-1 flex-1 text-left">
                                         <div className="flex items-center gap-2">
-                                            <span className="text-[12px] font-bold text-white">{model.name}</span>
+                                            <span className="text-[12px] font-bold text-foreground">{model.name}</span>
                                             <span className="text-[9px] font-black text-brand-purple bg-brand-purple/10 px-1.5 py-0.5 rounded border border-brand-purple/20 uppercase tracking-tighter">
                                                 {model.category}
                                             </span>
                                         </div>
-                                        <p className="text-[11px] text-zinc-400 leading-tight m-0">{model.description}</p>
+                                        <p className="text-[11px] text-muted-foreground leading-tight m-0">{model.description}</p>
                                         <div className="flex gap-4 mt-1 items-center opacity-70">
                                             <div className="flex items-center gap-1.5">
-                                                <WorkbenchIcon name="codicon:package" size={10} className="text-zinc-400" />
-                                                <span className="text-[10px] font-mono text-zinc-400 font-semibold uppercase">{model.size}</span>
+                                                <WorkbenchIcon name="codicon:package" size={10} className="text-muted-foreground" />
+                                                <span className="text-[10px] font-mono text-muted-foreground font-semibold uppercase">{model.size}</span>
                                             </div>
                                             <div className="flex items-center gap-1.5">
-                                                <WorkbenchIcon name="codicon:pulse" size={10} className="text-zinc-400" />
-                                                <span className="text-[10px] font-mono text-zinc-400 font-semibold uppercase">{model.dimensions}D</span>
+                                                <WorkbenchIcon name="codicon:pulse" size={10} className="text-muted-foreground" />
+                                                <span className="text-[10px] font-mono text-muted-foreground font-semibold uppercase">{model.dimensions}D</span>
                                             </div>
                                         </div>
                                     </div>
@@ -258,9 +258,9 @@ export const EmbeddingModelDownloader = memo(({
                                                 </span>
                                             </WorkbenchButton>
                                         ) : (
-                                            <div className="flex items-center gap-2 bg-emerald-500/10 px-3 py-1 rounded border border-emerald-500/20">
+                                            <div className="flex items-center gap-2 bg-success/10 px-3 py-1 rounded border border-emerald-500/20">
                                                 <WorkbenchIcon name="codicon:check" size={12} className="text-emerald-500" />
-                                                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wider">Synced</span>
+                                                <span className="text-[10px] font-black text-success uppercase tracking-wider">Synced</span>
                                             </div>
                                         )}
                                     </div>
@@ -292,9 +292,9 @@ export const EmbeddingModelDownloader = memo(({
                                     </span>
                                 </div>
 
-                                <div className="h-2 bg-zinc-800 rounded-full overflow-hidden border border-white/[0.04]">
+                                <div className="h-2 bg-muted rounded-full overflow-hidden border border-border">
                                     <motion.div
-                                        className="h-full bg-brand-purple shadow-[0_0_10px_rgba(147,51,234,0.3)]"
+                                        className="h-full bg-brand-purple shadow-[0_0_10px_hsl(var(--primary) / 0.3)]"
                                         initial={{ width: 0 }}
                                         animate={{ width: `${getProgressPercent()}%` }}
                                         transition={{ duration: 0.4, ease: "circOut" }}
@@ -303,9 +303,9 @@ export const EmbeddingModelDownloader = memo(({
 
                                 <div className="flex justify-between items-center">
                                     <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-mono font-bold text-zinc-400">{formatBytes(downloadProgress.downloaded_bytes)}</span>
-                                        <span className="text-[10px] text-zinc-700">/</span>
-                                        <span className="text-[10px] font-mono font-bold text-zinc-400">{formatBytes(downloadProgress.total_bytes)}</span>
+                                        <span className="text-[10px] font-mono font-bold text-muted-foreground">{formatBytes(downloadProgress.downloaded_bytes)}</span>
+                                        <span className="text-[10px] text-foreground/80">/</span>
+                                        <span className="text-[10px] font-mono font-bold text-muted-foreground">{formatBytes(downloadProgress.total_bytes)}</span>
                                     </div>
                                     <span className="text-[10px] font-black text-brand-purple/60 bg-brand-purple/10 px-2 py-0.5 rounded border border-brand-purple/10">OLLAMA-API-v1</span>
                                 </div>
@@ -318,17 +318,17 @@ export const EmbeddingModelDownloader = memo(({
                     <motion.div
                         initial={{ opacity: 0, scale: 0.98, y: 10 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                        className="flex items-center gap-4 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl"
+                        className="flex items-center gap-4 p-4 bg-success/10 border border-emerald-500/20 rounded-xl"
                     >
-                        <div className="bg-emerald-500 p-1.5 rounded-full ring-4 ring-emerald-500/20">
-                            <WorkbenchIcon name="codicon:check" size={14} className="text-white" />
+                        <div className="bg-success p-1.5 rounded-full ring-4 ring-emerald-500/20">
+                            <WorkbenchIcon name="codicon:check" size={14} className="text-foreground" />
                         </div>
                         <div className="flex-1 flex flex-col gap-0.5 text-left">
-                            <span className="text-[12px] font-bold text-zinc-100 uppercase">Model Successfully Installed</span>
-                            <p className="text-[10px] text-zinc-400 leading-tight m-0">The selected model is now available for local document indexing.</p>
+                            <span className="text-[12px] font-bold text-foreground uppercase">Model Successfully Installed</span>
+                            <p className="text-[10px] text-muted-foreground leading-tight m-0">The selected model is now available for local document indexing.</p>
                         </div>
-                        <WorkbenchButton variant="ghost" size="icon" onClick={() => setDownloadComplete(false)} className="h-8 w-8 !p-0 hover:bg-emerald-500/20">
-                            <WorkbenchIcon name="codicon:close" size={14} className="text-zinc-400" />
+                        <WorkbenchButton variant="ghost" size="icon" onClick={() => setDownloadComplete(false)} className="h-8 w-8 !p-0 hover:bg-success/20">
+                            <WorkbenchIcon name="codicon:close" size={14} className="text-muted-foreground" />
                         </WorkbenchButton>
                     </motion.div>
                 )}
@@ -337,17 +337,17 @@ export const EmbeddingModelDownloader = memo(({
                     <motion.div
                         initial={{ opacity: 0, scale: 0.98, y: 10 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                        className="flex items-center gap-4 p-4 bg-red-500/10 border border-red-500/20 rounded-xl"
+                        className="flex items-center gap-4 p-4 bg-destructive/10 border border-destructive/20 rounded-xl"
                     >
-                        <div className="bg-red-500 p-1.5 rounded-full ring-4 ring-red-500/20">
-                            <WorkbenchIcon name="codicon:warning" size={18} className="text-white" />
+                        <div className="bg-destructive p-1.5 rounded-full ring-4 ring-red-500/20">
+                            <WorkbenchIcon name="codicon:warning" size={18} className="text-foreground" />
                         </div>
                         <div className="flex-1 flex flex-col gap-0.5 text-left">
                             <span className="text-[12px] font-bold text-red-100 uppercase">Download Failed</span>
-                            <p className="text-[10px] text-red-200/60 leading-tight m-0">{error}</p>
+                            <p className="text-[10px] text-destructive/60 leading-tight m-0">{error}</p>
                         </div>
-                        <WorkbenchButton variant="ghost" size="icon" onClick={() => setError(null)} className="h-8 w-8 !p-0 hover:bg-red-500/20">
-                            <WorkbenchIcon name="codicon:close" size={14} className="text-red-300" />
+                        <WorkbenchButton variant="ghost" size="icon" onClick={() => setError(null)} className="h-8 w-8 !p-0 hover:bg-destructive/20">
+                            <WorkbenchIcon name="codicon:close" size={14} className="text-destructive" />
                         </WorkbenchButton>
                     </motion.div>
                 )}
@@ -368,10 +368,10 @@ export const EmbeddingModelDownloader = memo(({
                             'Refresh this view to confirm connection'
                         ].map((step, i) => (
                             <div key={i} className="flex gap-4 items-start text-left">
-                                <div className="w-5 h-5 rounded bg-zinc-800 border border-white/[0.04] flex items-center justify-center shrink-0 mt-0.5 shadow-inner">
+                                <div className="w-5 h-5 rounded bg-muted border border-border flex items-center justify-center shrink-0 mt-0.5 shadow-inner">
                                     <span className="text-[9px] font-black text-brand-purple font-mono">{i + 1}</span>
                                 </div>
-                                <p className="text-[12px] text-zinc-400 flex-1 leading-relaxed font-medium m-0">{step}</p>
+                                <p className="text-[12px] text-muted-foreground flex-1 leading-relaxed font-medium m-0">{step}</p>
                             </div>
                         ))}
                     </div>

@@ -26,12 +26,12 @@ export function SuggestedPromptStrip({
           onClick={() => onSelect(item.prompt)}
           disabled={isLoading}
           aria-label={item.label}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium bg-zinc-50/80 dark:bg-zinc-900/60 border border-zinc-200/40 dark:border-zinc-800/60 hover:bg-zinc-100 dark:hover:bg-indigo-950/20 hover:border-zinc-300 dark:hover:border-indigo-500/30 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 active:scale-95 shadow-[0_1px_2px_rgba(0,0,0,0.01)]"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium bg-muted/80 dark:bg-muted/60 border border-border/40 dark:border-border/60 hover:bg-muted dark:hover:bg-indigo-950/20 hover:border-border dark:hover:border-primary/30 text-muted-foreground/70 dark:text-muted-foreground hover:text-foreground dark:hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 active:scale-95 shadow-[0_1px_2px_hsl(var(--background) / 0.01)]"
         >
           <span className="text-[12px] font-semibold leading-none">{item.icon}</span>
           <div className="flex flex-col items-start leading-tight">
             <span className="font-semibold">{item.label}</span>
-            <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-normal">{item.description}</span>
+            <span className="text-[11px] text-muted-foreground dark:text-muted-foreground font-normal">{item.description}</span>
           </div>
         </button>
       ))}

@@ -92,7 +92,7 @@ export const ModelSearchDropdown = memo(({
         aria-label={`Select model: ${selectedModelInfo.name}`}
         title={`Select model: ${selectedModelInfo.name}`}
         className={cn(
-          "flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-[13px] font-semibold text-zinc-600 dark:text-zinc-400 shrink-0",
+          "flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-muted dark:hover:bg-muted transition-colors text-[13px] font-semibold text-muted-foreground/70 dark:text-muted-foreground shrink-0",
           isCompact ? "max-w-[40px] min-w-0" : "max-w-[160px] min-w-[100px]"
         )}
       >
@@ -109,11 +109,11 @@ export const ModelSearchDropdown = memo(({
               initial={{ opacity: 0, y: -10 }} 
               animate={{ opacity: 1, y: 0 }} 
               exit={{ opacity: 0, y: -10 }} 
-              className="absolute bottom-full left-0 mb-2 min-w-[280px] max-w-[320px] bg-white dark:bg-[#1e1e1e] border border-zinc-200 dark:border-zinc-800 rounded-md shadow-2xl z-20 py-1 flex flex-col overflow-hidden font-sans"
+              className="absolute bottom-full left-0 mb-2 min-w-[280px] max-w-[320px] bg-card dark:bg-card border border-border dark:border-border rounded-md shadow-2xl z-20 py-1 flex flex-col overflow-hidden font-sans"
             >
-              <div className="px-2 pb-2 mb-1 border-b border-zinc-100 dark:border-zinc-800/50 space-y-2">
+              <div className="px-2 pb-2 mb-1 border-b border-border dark:border-border/50 space-y-2">
                 <div className="flex items-center justify-between px-1">
-                  <div className="text-[10px] font-semibold text-zinc-400 capitalize">Select AI Model</div>
+                  <div className="text-[10px] font-semibold text-muted-foreground capitalize">Select AI Model</div>
                   {modelSearch && (
                     <button 
                       onClick={() => setModelSearch('')}
@@ -124,7 +124,7 @@ export const ModelSearchDropdown = memo(({
                   )}
                 </div>
                 <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                   <input 
                     type="text"
                     placeholder="Search models..."
@@ -133,7 +133,7 @@ export const ModelSearchDropdown = memo(({
                     onChange={(e) => setModelSearch(e.target.value)}
                     onKeyDown={handleModelKeyDown}
                     autoFocus
-                    className="w-full bg-zinc-50 dark:bg-zinc-900/50 text-zinc-900 dark:text-zinc-100 rounded border border-zinc-200 dark:border-zinc-800 pl-8 pr-2 py-1.5 text-[12px] focus:ring-1 focus:ring-primary/20 outline-none transition-all focus:border-primary/20"
+                    className="w-full bg-muted dark:bg-muted/60 text-foreground dark:text-foreground rounded border border-border dark:border-border pl-8 pr-2 py-1.5 text-[12px] focus:ring-1 focus:ring-primary/20 outline-none transition-all focus:border-primary/20"
                   />
                 </div>
                 
@@ -143,8 +143,8 @@ export const ModelSearchDropdown = memo(({
                     className={cn(
                       "px-2 py-0.5 rounded text-[10px] font-medium capitalize whitespace-nowrap transition-all border",
                       !modelSearch
-                        ? "bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900 border-transparent shadow-sm"
-                        : "bg-zinc-50 dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300"
+                        ? "bg-muted dark:bg-muted text-foreground dark:text-foreground border-transparent shadow-sm"
+                        : "bg-muted dark:bg-muted text-muted-foreground border-border dark:border-border hover:border-border"
                     )}
                   >
                     All
@@ -158,8 +158,8 @@ export const ModelSearchDropdown = memo(({
                         className={cn(
                           "px-2 py-0.5 rounded text-[10px] font-medium capitalize whitespace-nowrap transition-all border",
                           isSelected
-                            ? "bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900 border-transparent shadow-sm"
-                            : "bg-zinc-50 dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                            ? "bg-muted dark:bg-muted text-foreground dark:text-foreground border-transparent shadow-sm"
+                            : "bg-muted dark:bg-muted text-muted-foreground border-border dark:border-border hover:border-border hover:bg-muted dark:hover:bg-muted"
                         )}
                       >
                         {p}
@@ -171,15 +171,15 @@ export const ModelSearchDropdown = memo(({
 
               <div className="max-h-[350px] overflow-y-auto no-scrollbar px-1">
                 {filteredModels.length === 0 ? (
-                  <div className="py-12 text-center text-zinc-400 text-xs italic">
+                  <div className="py-12 text-center text-muted-foreground text-xs italic">
                     No models found matching "{modelSearch}"
                   </div>
                 ) : (
                   Object.entries(groupedVisibleModels).map(([provider, providerModels]) => (
                     <div key={provider} className="mb-2 font-sans text-xs">
-                      <div className="px-3 py-1 text-[10px] font-semibold capitalize text-zinc-500 flex items-center gap-2">
+                      <div className="px-3 py-1 text-[10px] font-semibold capitalize text-muted-foreground flex items-center gap-2">
                         {provider}
-                        <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800/30" />
+                        <div className="h-px flex-1 bg-muted dark:bg-muted/30" />
                       </div>
                       <div className="px-1 space-y-0.5 mt-0.5">
                         {providerModels.map((model) => {
@@ -197,8 +197,8 @@ export const ModelSearchDropdown = memo(({
                                 isSelected 
                                   ? "bg-primary/10 dark:bg-primary/20 text-primary" 
                                   : isFocused 
-                                    ? "bg-zinc-100 dark:bg-zinc-800"
-                                    : "hover:bg-zinc-50 dark:hover:bg-zinc-800/30"
+                                    ? "bg-muted dark:bg-muted"
+                                    : "hover:bg-muted dark:hover:bg-muted/30"
                               )}
                             >
                               <div className="flex items-center gap-2 min-w-0">
@@ -208,15 +208,15 @@ export const ModelSearchDropdown = memo(({
                                     "text-[12px] truncate transition-colors",
                                     isSelected 
                                       ? "font-bold text-primary" 
-                                      : "text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-white"
+                                      : "text-foreground/80 dark:text-foreground group-hover:text-foreground dark:group-hover:text-foreground"
                                   )}>
                                     {model.name}
                                   </span>
                                 </div>
                               </div>
                               {isSelected && (
-                                <motion.div layoutId="active-check" className="bg-blue-600 dark:bg-blue-500 rounded-full p-1 shadow-sm">
-                                  <Check className="w-3 h-3 text-white" />
+                                <motion.div layoutId="active-check" className="bg-primary dark:bg-primary rounded-full p-1 shadow-sm">
+                                  <Check className="w-3 h-3 text-foreground" />
                                 </motion.div>
                               )}
                             </button>
@@ -229,10 +229,10 @@ export const ModelSearchDropdown = memo(({
               </div>
               
               {onOpenModelSelector && (
-                 <div className="mt-1 pt-1 border-t border-zinc-100 dark:border-zinc-800/50 px-2">
+                 <div className="mt-1 pt-1 border-t border-border dark:border-border/50 px-2">
                    <button 
                      onClick={() => { setIsOpen(false); onOpenModelSelector(); }}
-                     className="w-full flex items-center justify-center gap-2 text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 py-2.5 font-medium transition-colors"
+                     className="w-full flex items-center justify-center gap-2 text-xs text-muted-foreground hover:text-foreground dark:hover:text-foreground py-2.5 font-medium transition-colors"
                    >
                      <Sliders className="w-3.5 h-3.5" />
                      Manage AI Providers...

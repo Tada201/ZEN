@@ -13,8 +13,8 @@ use url::Url;
 use crate::agent::tools::AgentTool;
 
 use super::url_safety::{
-    resolve_redirect_url, validate_public_http_url, validate_public_ip, MAX_DIRECT_RESPONSE_BYTES,
-    MAX_OUTPUT_CHARS, MAX_REDIRECTS,
+    build_pinned_get_request, resolve_redirect_url, validate_public_http_url,
+    validate_url_dns_safety, MAX_DIRECT_RESPONSE_BYTES, MAX_OUTPUT_CHARS, MAX_REDIRECTS,
 };
 use super::{permission::RiskLevel, Tool, ToolError, ToolOutput};
 
@@ -25,29 +25,27 @@ struct WebFetchArgs {
     url: String,
 }
 
-async fn validate_resolved_ips(url: &Url) -> Result<(), String> {
-    let host = url
-        .host_str()
-        .ok_or_else(|| "URL must include a host".to_string())?;
-    let port = url
-        .port_or_known_default()
-        .ok_or_else(|| "URL must include a valid port".to_string())?;
+/// Categorized fetch failure.
+///
+/// `Safety` errors MUST NEVER trigger the Nine Router fallback — the URL
+/// failed validation and retrying through a different transport would defeat
+/// the safety boundary. `Transport` and `Content` errors are recoverable
+/// runtime failures and may use the fallback.
+#[derive(Debug)]
+enum FetchError {
+    Safety(String),
+    Transport(String),
+    Content(String),
+}
 
-    let addrs = tokio::net::lookup_host((host, port))
-        .await
-        .map_err(|e| format!("DNS resolution failed: {}", e))?;
-
-    let mut resolved_any = false;
-    for addr in addrs {
-        resolved_any = true;
-        validate_public_ip(addr.ip())?;
+impl std::fmt::Display for FetchError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FetchError::Safety(s)
+            | FetchError::Transport(s)
+            | FetchError::Content(s) => write!(f, "{}", s),
+        }
     }
-
-    if !resolved_any {
-        return Err("DNS resolution returned no addresses".to_string());
-    }
-
-    Ok(())
 }
 
 async fn read_capped_text(response: reqwest::Response) -> Result<String, String> {
@@ -77,51 +75,100 @@ async fn read_capped_text(response: reqwest::Response) -> Result<String, String>
     String::from_utf8(bytes).map_err(|e| format!("Response body is not valid UTF-8: {}", e))
 }
 
-async fn fetch_public_url(client: &reqwest::Client, start_url: Url) -> Result<String, String> {
+async fn fetch_public_url(client: &reqwest::Client, start_url: Url) -> Result<String, FetchError> {
     let mut current_url = start_url;
 
     for redirect_count in 0..=MAX_REDIRECTS {
-        validate_resolved_ips(&current_url).await?;
+        // DNS / IP safety — never falls back. The pinned helper resolves
+        // the hostname exactly once, validates every returned IP, and
+        // returns a RequestBuilder whose underlying client is locked to
+        // the validated address so the connection cannot re-resolve to a
+        // private IP mid-flight.
+        let request = build_pinned_get_request(client, &current_url)
+            .await
+            .map_err(FetchError::Safety)?;
 
-        let response = client
-            .get(current_url.clone())
+        // Network send — recoverable, may fall back.
+        let response = request
             .send()
             .await
-            .map_err(|e| format!("Fetch failed: {}", e))?;
+            .map_err(|e| FetchError::Transport(format!("Fetch failed: {}", e)))?;
 
         if response.status().is_redirection() {
             if redirect_count == MAX_REDIRECTS {
-                return Err(format!("Too many redirects, max is {}", MAX_REDIRECTS));
+                return Err(FetchError::Safety(format!(
+                    "Too many redirects, max is {}",
+                    MAX_REDIRECTS
+                )));
             }
 
+            // Redirect handling is a safety boundary: each hop must be
+            // re-validated against the URL safety rules.
             let location = response
                 .headers()
                 .get(reqwest::header::LOCATION)
                 .and_then(|value| value.to_str().ok())
-                .ok_or_else(|| "Redirect response missing Location header".to_string())?;
-            current_url = resolve_redirect_url(&current_url, location)?;
+                .ok_or_else(|| {
+                    FetchError::Safety("Redirect response missing Location header".to_string())
+                })?;
+            current_url = resolve_redirect_url(&current_url, location).map_err(FetchError::Safety)?;
             continue;
         }
 
         if !response.status().is_success() {
-            return Err(format!(
+            return Err(FetchError::Content(format!(
                 "Direct fetch returned status: {}",
                 response.status()
-            ));
+            )));
         }
 
-        return read_capped_text(response).await;
+        // Body read — content-level, may fall back on size / decode failure.
+        return read_capped_text(response).await.map_err(FetchError::Content);
     }
 
-    Err(format!("Too many redirects, max is {}", MAX_REDIRECTS))
+    Err(FetchError::Safety(format!(
+        "Too many redirects, max is {}",
+        MAX_REDIRECTS
+    )))
 }
 
 fn truncate_chars(text: &str, max_chars: usize) -> String {
     text.chars().take(max_chars).collect()
 }
 
+/// Fallback path used when the direct pinned-address fetch fails with a
+/// recoverable transport or content error.
+///
+/// **SSRF contract:** Zen owns the HTTP fetch. The URL is fetched once
+/// through `fetch_public_url` (pinned-address DNS resolution + IP
+/// validation) so the connection can never silently re-resolve to a
+/// private IP. Only the *already-fetched* content is forwarded to
+/// 9Router for text extraction — the URL itself is never sent to 9Router
+/// for fetching.
 async fn nine_router_fetch_fallback(app: &AppHandle, url: &str) -> Result<String, String> {
     use tauri::Manager;
+
+    // 1. Validate the URL through the same safety gates the direct path
+    //    uses. A safety failure here means the URL is forbidden — never
+    //    fall back to a different transport.
+    let validated = validate_public_http_url(url)
+        .map_err(|e| format!("Fallback URL safety check failed: {}", e))?;
+    validate_url_dns_safety(&validated)
+        .await
+        .map_err(|e| format!("Fallback DNS safety check failed: {}", e))?;
+
+    // 2. Fetch the content ourselves using the pinned-address client.
+    //    This is the same SSRF-safe fetch the direct path uses — Zen
+    //    resolves DNS once, validates every IP, pins the connection, and
+    //    streams the body under the byte cap.
+    let pinned_client = crate::utils::public_no_redirect_http_client();
+    let raw_html = fetch_public_url(pinned_client, validated)
+        .await
+        .map_err(|e| format!("Fallback pinned fetch failed: {}", e))?;
+
+    // 3. Send the *already-fetched content* to 9Router for text
+    //    extraction only. The URL is included only as metadata so the
+    //    model can contextualise the content — it must NOT re-fetch it.
     let state = app
         .try_state::<crate::AppState>()
         .ok_or_else(|| "AppState not found in Tauri manager".to_string())?;
@@ -145,7 +192,15 @@ async fn nine_router_fetch_fallback(app: &AppHandle, url: &str) -> Result<String
         .unwrap_or_default()
         .unwrap_or_default();
 
-    // 2. Fetch models to perform dynamic search model discovery
+    // Apply the same remote-auth safety guard used by provider/model
+    // discovery before attaching a bearer credential. Loopback HTTP is
+    // allowed; remote HTTP without TLS is rejected.
+    crate::utils::validate_remote_auth_safety(
+        &nine_router_base_url,
+        !nine_router_api_key.is_empty(),
+    )
+    .map_err(|e| format!("9Router endpoint auth safety check failed: {}", e))?;
+
     let client = crate::utils::default_http_client();
     let models_url = format!("{}/models", nine_router_base_url.trim_end_matches('/'));
 
@@ -187,7 +242,6 @@ async fn nine_router_fetch_fallback(app: &AppHandle, url: &str) -> Result<String
                 }
 
                 if let Ok(models_data) = resp.json::<ModelsResp>().await {
-                    // Find model that matches keywords: sonar, perplexity, search, online
                     let keywords = ["sonar", "perplexity", "search", "online"];
                     for m in models_data.data {
                         let id_lower = m.id.to_lowercase();
@@ -201,21 +255,26 @@ async fn nine_router_fetch_fallback(app: &AppHandle, url: &str) -> Result<String
         }
     }
 
-    // 3. Post to chat completion endpoint
+    // 4. Post to chat completion endpoint — send the *content*, not the
+    //    URL, so 9Router never performs its own fetch.
     let chat_url = format!(
         "{}/chat/completions",
         nine_router_base_url.trim_end_matches('/')
     );
+
+    // Truncate raw HTML to fit within a reasonable prompt window.
+    let content_for_extraction = truncate_chars(&raw_html, MAX_OUTPUT_CHARS);
+
     let payload = json!({
         "model": selected_model,
         "messages": [
             {
                 "role": "system",
-                "content": "You are a web retriever helper. Your task is to fetch the full text or clean markdown content of the requested URL. Return ONLY the clean extracted text/markdown of the target page's contents. Do not explain, do not add introductions, just return the text of the page directly."
+                "content": "You are a text extraction helper. You will receive the raw HTML/text content that was already fetched from a web page. Your task is to extract and clean the meaningful text. Return ONLY the clean extracted text/markdown. Do not explain, do not add introductions, just return the clean text directly."
             },
             {
                 "role": "user",
-                "content": format!("Fetch and extract page contents for: {}", url)
+                "content": format!("Extract clean text from the following content (originally fetched from {}):\n\n{}", url, content_for_extraction)
             }
         ],
         "temperature": 0.2
@@ -321,9 +380,23 @@ impl Tool for WebFetchTool {
 
         let text = match fetch_public_url(client, validated_url).await {
             Ok(text) => text,
+            Err(FetchError::Safety(reason)) => {
+                // Safety failures must NEVER fall back to 9Router — the URL
+                // failed validation, and retrying through a different
+                // transport would defeat the safety boundary.
+                return Err(ToolError::InvalidArguments {
+                    details: format!(
+                        "URL safety check failed (no fallback used): {}",
+                        reason
+                    ),
+                });
+            }
             Err(err) => nine_router_fetch_fallback(&app, url).await.map_err(|e| {
                 ToolError::ExecutionFailed {
-                    message: format!("Direct fetch failed: {}. Fallback fetch failed: {}", err, e),
+                    message: format!(
+                        "Direct fetch failed: {}. Fallback fetch failed: {}",
+                        err, e
+                    ),
                 }
             })?,
         };

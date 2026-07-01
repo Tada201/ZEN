@@ -45,7 +45,7 @@ export const RetrievalConfig = memo(() => {
                     description="Number of document segments to retrieve for each query"
                     control={
                         <div className="flex items-center gap-4">
-                            <span className="text-[11px] font-bold font-mono text-emerald-400 w-10 text-right">
+                            <span className="text-[11px] font-bold font-mono text-success w-10 text-right">
                                 k={topK}
                             </span>
                             <div className="w-[120px]">

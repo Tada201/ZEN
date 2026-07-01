@@ -218,11 +218,11 @@ export function OpenUIRenderer({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
               transition={{ duration: 0.2 }}
-              className="rounded-2xl border border-border/40 bg-slate-950 overflow-hidden"
+              className="rounded-2xl border border-border/40 bg-background overflow-hidden"
             >
-              <div className="flex items-center gap-2 border-b border-white/5 bg-white/5 px-4 py-2 relative z-10">
-                <Terminal className="h-3 w-3 text-slate-500" />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">OpenUI Lang Source</span>
+              <div className="flex items-center gap-2 border-b border-border/5 bg-card/5 px-4 py-2 relative z-10">
+                <Terminal className="h-3 w-3 text-muted-foreground" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">OpenUI Lang Source</span>
               </div>
               <SourceEditor 
                 content={extractedCode} 

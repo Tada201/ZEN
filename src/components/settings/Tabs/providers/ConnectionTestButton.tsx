@@ -28,11 +28,11 @@ export function ConnectionTestButton({
       case "testing":
         return <Loader2 className="h-3 w-3 animate-spin" />;
       case "connected":
-        return <CheckCircle2 className="h-3 w-3 text-emerald-400" />;
+        return <CheckCircle2 className="h-3 w-3 text-success" />;
       case "failed":
-        return <XCircle className="h-3 w-3 text-red-400" />;
+        return <XCircle className="h-3 w-3 text-destructive" />;
       default:
-        return <HelpCircle className="h-3 w-3 text-zinc-600" />;
+        return <HelpCircle className="h-3 w-3 text-muted-foreground/70" />;
     }
   })();
 
@@ -60,17 +60,17 @@ export function ConnectionTestButton({
         className={cn(
           "h-6 px-2 text-[10px] font-medium gap-1",
           status.state === "connected"
-            ? "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+            ? "text-success hover:text-success hover:bg-success/10"
             : status.state === "failed"
-            ? "text-red-400 hover:text-red-300 hover:bg-red-500/10"
-            : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]"
+            ? "text-destructive hover:text-destructive hover:bg-destructive/10"
+            : "text-muted-foreground hover:text-foreground hover:bg-muted"
         )}
       >
         {icon}
         {label}
       </Button>
       {status.state === "failed" && status.error && (
-        <span className="text-[9px] text-zinc-600 max-w-[120px] truncate" title={status.error}>
+        <span className="text-[9px] text-muted-foreground/70 max-w-[120px] truncate" title={status.error}>
           {status.error}
         </span>
       )}

@@ -395,7 +395,7 @@ export function MathPlotInterface() {
               onClick={() => handleClearAll(applyAction)} 
               className="math-plot__toolbar-btn" 
               title="Clear Session"
-              style={{ color: '#f48771' }}
+              style={{ color: 'hsl(var(--destructive))' }}
             >
               <WorkbenchIcon name="codicon:clear-all" size={14} />
             </WorkbenchButton>

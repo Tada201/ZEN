@@ -27,19 +27,19 @@ export function OpenUICanvas({ selectedModelId, selectedProvider }: OpenUICanvas
   if (!selectedModelId || selectedModelId === "No Model") {
     return (
       <div className="flex flex-col items-center justify-center h-full bg-background p-6 text-center select-none">
-        <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-white/5 flex items-center justify-center mb-4">
-          <Sparkles className="w-5 h-5 text-zinc-500" />
+        <div className="w-12 h-12 rounded-2xl bg-card border border-border/5 flex items-center justify-center mb-4">
+          <Sparkles className="w-5 h-5 text-muted-foreground" />
         </div>
-        <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-1">
+        <h3 className="text-sm font-bold text-primary-foreground uppercase tracking-wider mb-1">
           No Model Selected
         </h3>
-        <p className="text-xs text-zinc-500 max-w-sm mb-4">
+        <p className="text-xs text-muted-foreground max-w-sm mb-4">
           Please configure and select an active inference model in settings to initialize the Generative UI canvas.
         </p>
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 px-4 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white rounded-lg border border-white/5 transition-all duration-200"
+          className="h-8 px-4 bg-card/5 text-muted-foreground hover:bg-card/10 hover:text-primary-foreground rounded-lg border border-border/5 transition-all duration-200"
           onClick={handleOpenSettings}
         >
           Open Configuration

@@ -36,7 +36,7 @@ export function TabSystem({
   return (
     <div className="h-full flex flex-col bg-[#1e1e1e]">
       {/* Tab Bar */}
-      <div className="flex items-center bg-[#252526] border-b border-white/5 overflow-x-auto no-scrollbar group">
+      <div className="flex items-center bg-[#252526] border-b border-border/5 overflow-x-auto no-scrollbar group">
         <div className="flex h-10">
           {tabs.map((tab) => {
             const isActive = tab.id === activeTabId;
@@ -47,10 +47,10 @@ export function TabSystem({
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
                 className={cn(
-                  "relative flex items-center gap-2 px-4 py-2 cursor-pointer border-r border-white/5 min-w-[120px] max-w-[200px] transition-all group/tab",
+                  "relative flex items-center gap-2 px-4 py-2 cursor-pointer border-r border-border/5 min-w-[120px] max-w-[200px] transition-all group/tab",
                   isActive 
-                    ? "bg-[#1e1e1e] text-white" 
-                    : "text-white/40 hover:bg-white/5 hover:text-white/60"
+                    ? "bg-[#1e1e1e] text-primary-foreground" 
+                    : "text-primary-foreground/40 hover:bg-card/5 hover:text-primary-foreground/60"
                 )}
               >
                 {isActive && (
@@ -67,7 +67,7 @@ export function TabSystem({
                       onTabClose?.(tab.id);
                     }}
                     className={cn(
-                      "p-0.5 rounded-md hover:bg-white/10 transition-all opacity-0 group-hover/tab:opacity-100 ml-auto",
+                      "p-0.5 rounded-md hover:bg-card/10 transition-all opacity-0 group-hover/tab:opacity-100 ml-auto",
                       isActive && "opacity-100"
                     )}
                   >
@@ -82,7 +82,7 @@ export function TabSystem({
         {onTabAdd && (
           <button 
             onClick={onTabAdd}
-            className="p-2 text-white/20 hover:text-white/60 hover:bg-white/5 transition-all"
+            className="p-2 text-primary-foreground/20 hover:text-primary-foreground/60 hover:bg-card/5 transition-all"
           >
             <Plus className="w-4 h-4" />
           </button>

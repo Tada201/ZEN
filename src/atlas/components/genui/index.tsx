@@ -20,7 +20,7 @@ export const RootDef = defineComponent({
     className: z.string().optional()
   }) as any,
   component: ({ props, renderNode }: any) => (
-    <div className={cn("w-full flex flex-col bg-[#0a0a0c] border border-white/10 rounded-2xl p-5 shadow-2xl overflow-hidden", props.className)}>
+    <div className={cn("w-full flex flex-col bg-[#0a0a0c] border border-border/10 rounded-2xl p-5 shadow-2xl overflow-hidden", props.className)}>
       <Stack gap={props.gap} direction="column" className="w-full">
         {renderNode(props.children)}
       </Stack>

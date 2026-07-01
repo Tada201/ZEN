@@ -10,7 +10,7 @@ use serde::Serialize;
 
 use crate::error::{ZenError, ZenResult};
 use crate::services::{
-    AuditEvent, PermissionDecision, PermissionRequest, PrivilegedOperation, RiskLevel,
+    AuditEvent, PermissionDecision, PrivilegedOperation,
     SecurityService,
 };
 use crate::terminal::TerminalManager;
@@ -74,29 +74,6 @@ impl TerminalService {
         cwd: Option<String>,
     ) -> ZenResult<TerminalApprovalGrant> {
         let cwd = resolve_terminal_cwd(&workspace, cwd)?;
-        let decision = security.evaluate(&PermissionRequest {
-            operation: PrivilegedOperation::ShellCommand,
-            risk: RiskLevel::Critical,
-            caller: "terminal_request_approval".to_string(),
-            target: Some("interactive_shell".to_string()),
-            workspace: Some(workspace),
-            reason: Some("user approved opening an interactive terminal shell".to_string()),
-        });
-
-        if decision != PermissionDecision::Allow {
-            security
-                .record_audit(AuditEvent {
-                    operation: PrivilegedOperation::ShellCommand,
-                    decision,
-                    caller: "terminal_request_approval".to_string(),
-                    target: Some("interactive_shell".to_string()),
-                    reason: Some("interactive terminal requires explicit approval".to_string()),
-                })
-                .await;
-            return Err(ZenError::Custom(
-                "Terminal access requires explicit approval".to_string(),
-            ));
-        }
 
         let approval_id = uuid::Uuid::new_v4().to_string();
         let expires_at = Instant::now() + INTERACTIVE_APPROVAL_TTL;
@@ -109,13 +86,11 @@ impl TerminalService {
         drop(approvals);
 
         security
-            .record_audit(AuditEvent {
-                operation: PrivilegedOperation::ShellCommand,
-                decision: PermissionDecision::Allow,
-                caller: "terminal_request_approval".to_string(),
-                target: Some("interactive_shell".to_string()),
-                reason: Some("issued one-time interactive terminal approval".to_string()),
-            })
+            .grant_interactive_terminal_approval(
+                "terminal_request_approval",
+                Some("interactive_shell".to_string()),
+                Some("user confirmed opening an interactive terminal shell via UI dialog".to_string()),
+            )
             .await;
 
         Ok(TerminalApprovalGrant {

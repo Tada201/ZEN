@@ -118,10 +118,26 @@ impl InitPhase {
 }
 
 /// Snapshot of all init phases for the frontend.
+///
+/// `critical_complete`  — every `critical.*` phase reached a terminal state
+///                        (`done | skipped`). Critical failures should
+///                        still block the boot gate.
+/// `core_complete`      — `critical_complete` AND `bg.orchestrator` (the
+///                        chat-essential background service) reached a
+///                        terminal state. This is the readiness signal the
+///                        splash UI gates on: chat is usable.
+/// `background_complete`— every `bg.*` phase reached a terminal state
+///                        (`done | skipped | error`). Informational only;
+///                        external/optional subsystems (speech, tts,
+///                        lancedb, conversation_store, rag) can be
+///                        unavailable without blocking the app. See lib.rs
+///                        setup(): "the app works without them being
+///                        fully ready".
 #[derive(Debug, Clone, Serialize)]
 pub struct InitStatus {
     pub phases: Vec<InitPhase>,
     pub critical_complete: bool,
+    pub core_complete: bool,
     pub background_complete: bool,
 }
 
@@ -143,18 +159,30 @@ impl InitProgress {
         let guard = self.phases.read().await;
         let mut critical_complete = true;
         let mut background_complete = true;
+        let mut orchestrator_terminal = false;
         let phases: Vec<InitPhase> = guard.iter().map(|m| m.lock().unwrap().clone()).collect();
         for p in &phases {
             if p.id.starts_with("critical.") && p.status != "done" && p.status != "skipped" {
                 critical_complete = false;
             }
-            if p.id.starts_with("bg.") && p.status != "done" && p.status != "skipped" {
+            // The orchestrator is the only core background service — chat is
+            // unusable without it. Other `bg.*` phases (speech, tts, lancedb,
+            // conversation_store, rag) are external/optional and may be
+            // `error` (e.g. LanceDB can't mount on this machine) without
+            // blocking the boot gate.
+            if p.id == "bg.orchestrator" {
+                if p.status == "done" || p.status == "skipped" || p.status == "error" {
+                    orchestrator_terminal = true;
+                }
+            }
+            if p.id.starts_with("bg.") && p.status != "done" && p.status != "skipped" && p.status != "error" {
                 background_complete = false;
             }
         }
         InitStatus {
             phases,
             critical_complete,
+            core_complete: critical_complete && orchestrator_terminal,
             background_complete,
         }
     }
@@ -200,6 +228,39 @@ impl SysInfoState {
     }
 }
 
+/// Boot handoff flags — the single source of truth for "may the splash
+/// dismiss and the main window become visible".
+///
+/// Both signals must be `true` for the canonical Tauri splash → main
+/// transition (see https://v2.tauri.app/learn/splashscreen/):
+///   * `backend_ready`  — critical init + bg.orchestrator (chat-essential)
+///                        reached terminal state (set in lib.rs).
+///   * `frontend_ready` — the React app called `set_complete("frontend")`
+///                        after its own init hook (useAppInit) finished.
+pub struct SetupFlags {
+    pub frontend_ready: bool,
+    pub backend_ready: bool,
+}
+
+impl SetupFlags {
+    pub fn new() -> Self {
+        Self {
+            frontend_ready: false,
+            backend_ready: false,
+        }
+    }
+
+    pub fn both_ready(&self) -> bool {
+        self.frontend_ready && self.backend_ready
+    }
+}
+
+impl Default for SetupFlags {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[allow(clippy::type_complexity)]
 pub struct AppState {
     pub db: InitState<SqlitePool>,
@@ -226,6 +287,7 @@ pub struct AppState {
         Arc<tokio::sync::Mutex<HashMap<String, crate::canvas::session::GraphSession>>>,
     pub session_memory: Arc<RwLock<Arc<crate::rag::session_memory::SessionMemoryManager>>>,
     pub mcp_server: Arc<RwLock<crate::mcp::McpServer>>,
+    pub mcp_config: Arc<crate::services::McpConfigService>,
     pub pending_tool_approvals:
         Arc<tokio::sync::Mutex<HashMap<String, crate::services::tool::PendingToolApproval>>>,
     pub pending_orchestrator_approvals:
@@ -249,6 +311,10 @@ pub struct AppState {
         Arc<tokio::sync::Mutex<HashMap<String, (Arc<dyn LlmProvider>, std::time::Instant)>>>,
     pub provider_registry: Arc<ProviderRegistry>,
     pub init_progress: Arc<InitProgress>,
+    /// Single-source-of-truth boot handoff flags. Both must be true before
+    /// Rust closes the splash window and shows the main window. See
+    /// `SetupFlags` for the contract.
+    pub setup_flags: Arc<tokio::sync::Mutex<SetupFlags>>,
     pub usage: Arc<UsageService>,
 }
 
@@ -323,6 +389,7 @@ impl AppState {
         }
 
         let default_workspace = crate::workspace::get_default_workspace();
+        let workspace_folder_arc = Arc::new(RwLock::new(default_workspace.clone()));
         let shared_session_memory = Arc::new(
             crate::rag::session_memory::SessionMemoryManager::new(default_workspace.clone()),
         );
@@ -340,6 +407,11 @@ impl AppState {
             security.clone(),
             pending_tool_approvals.clone(),
         ));
+
+        // Pre-clone the security Arc for McpConfigService. The `security`
+        // local is moved into AppState below; the service needs its own
+        // independent Arc to keep working after that move.
+        let security_for_mcp_config = security.clone();
 
         Self {
             db: InitState::new(),
@@ -363,9 +435,13 @@ impl AppState {
             chat_cancellation_tokens: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             rag: InitState::new(),
             conversation_store: InitState::new(),
-            workspace_folder: Arc::new(RwLock::new(default_workspace.clone())),
+            workspace_folder: workspace_folder_arc.clone(),
             graph_sessions: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             session_memory: Arc::new(RwLock::new(shared_session_memory)),
+            mcp_config: Arc::new(crate::services::McpConfigService::new(
+                workspace_folder_arc.clone(),
+                security_for_mcp_config,
+            )),
             mcp_server: Arc::new(RwLock::new(crate::mcp::McpServer::new(
                 crate::mcp::McpServerConfig::default(),
                 tool_registry_v2.clone(),
@@ -404,6 +480,7 @@ impl AppState {
                 InitPhase::new("bg.rag", "Embeddings"),
                 InitPhase::new("bg.orchestrator", "Orchestrator"),
             ])),
+            setup_flags: Arc::new(tokio::sync::Mutex::new(SetupFlags::new())),
             usage: Arc::new(UsageService),
         }
     }

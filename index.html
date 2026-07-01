@@ -1,14 +1,34 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tauri + React + Typescript</title>
     <script defer src="/error-monitor.js"></script>
+    <!-- Pre-hydration theme bootstrap: apply persisted theme before React mounts
+         to avoid a flash of unstyled/wrong-theme content. Defaults to dark. -->
+    <script>
+      (function () {
+        try {
+          var ls = localStorage.getItem("zen-settings-storage");
+          var themeId = null;
+          if (ls) {
+            var s = JSON.parse(ls);
+            themeId = s && s.state && (s.state.themeId || s.state.theme_id);
+          }
+          var prefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
+          var knownLight = ["default-light", "rose-garden", "startup-fresh", "corporate-navy", "minimal-mono"];
+          var isLight = knownLight.indexOf(themeId) >= 0 || (!themeId && prefersLight);
+          document.documentElement.classList.toggle("dark", !isLight);
+        } catch (e) {
+          document.documentElement.classList.add("dark");
+        }
+      })();
+    </script>
   </head>
 
-  <body style="background:#000; margin:0">
+  <body style="margin:0">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

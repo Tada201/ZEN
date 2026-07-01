@@ -42,13 +42,13 @@ export const ProcessingConfig = memo(() => {
                             exit={{ opacity: 0, height: 0 }}
                             className="overflow-hidden"
                         >
-                            <div className="ml-6 p-5 bg-zinc-900/30 border-l-2 border-emerald-500/30 rounded-r-lg flex flex-col gap-4">
+                            <div className="ml-6 p-5 bg-muted/40 border-l-2 border-emerald-500/30 rounded-r-lg flex flex-col gap-4">
                                 <WorkbenchSettingRow
                                     label="Reasoning Token Budget"
                                     description="Maximum tokens allocated for internal processing"
                                     control={
                                         <div className="flex items-center gap-4">
-                                            <span className="text-[10px] font-mono font-bold text-zinc-300 bg-zinc-800/50 px-2 py-0.5 rounded border border-white/[0.05] min-w-[70px] text-center">
+                                            <span className="text-[10px] font-mono font-bold text-foreground bg-muted/50 px-2 py-0.5 rounded border border-border min-w-[70px] text-center">
                                                 {thinkingBudget} TK
                                             </span>
                                             <WorkbenchSlider

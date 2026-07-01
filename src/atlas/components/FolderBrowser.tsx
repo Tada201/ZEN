@@ -248,7 +248,7 @@ export function FolderBrowser({ value, onChange }: FolderBrowserProps) {
                       {isDir ? (
                         <ChevronRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-40 transition-opacity" />
                       ) : (
-                        <span className="shrink-0 rounded bg-white/[0.035] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground/50">
+                        <span className="shrink-0 rounded bg-card/[0.035] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground/50">
                           file
                         </span>
                       )}

@@ -103,37 +103,37 @@ export function MemoryStatsWidget() {
   return (
     <div className="flex flex-col h-full bg-[#050506] font-sans overflow-hidden">
       {/* ── Dashboard Stats Header ── */}
-      <div className="p-4 border-b border-white/[0.04] bg-[#09090c]/40 shrink-0">
+      <div className="p-4 border-b border-border bg-[#09090c]/40 shrink-0">
         <div className="grid grid-cols-2 gap-3 mb-4">
-          <div className="bg-[#0b0c10] border border-white/[0.04] p-3 rounded-lg flex flex-col justify-between">
-            <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
+          <div className="bg-[#0b0c10] border border-border p-3 rounded-lg flex flex-col justify-between">
+            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
               <Database size={10} className="text-primary" /> Memory Pool
             </span>
             <div className="mt-2 flex items-baseline gap-1">
               <span className="text-xl font-bold font-mono text-foreground tracking-tight">
                 {stats?.total_vectors ?? 0}
               </span>
-              <span className="text-[9px] text-zinc-600 font-medium">vectors</span>
+              <span className="text-[9px] text-muted-foreground/70 font-medium">vectors</span>
             </div>
           </div>
 
-          <div className="bg-[#0b0c10] border border-white/[0.04] p-3 rounded-lg flex flex-col justify-between">
-            <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
+          <div className="bg-[#0b0c10] border border-border p-3 rounded-lg flex flex-col justify-between">
+            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
               <Cpu size={10} className="text-[#00ff9f]" /> Vector Size
             </span>
             <div className="mt-2 flex items-baseline gap-1">
               <span className="text-xl font-bold font-mono text-[#00ff9f] tracking-tight">
                 {estimatedStorageSize}
               </span>
-              <span className="text-[9px] text-zinc-600 font-medium">disk</span>
+              <span className="text-[9px] text-muted-foreground/70 font-medium">disk</span>
             </div>
           </div>
         </div>
 
         {/* Telemetry info */}
-        <div className="bg-[#0b0c10] border border-white/[0.04] px-3 py-2 rounded-lg text-[10px] text-zinc-400 font-mono flex items-center justify-between mb-2">
-          <span className="flex items-center gap-1"><Brain size={11} className="text-purple-400" /> Vector Space:</span>
-          <span className="text-zinc-500 font-bold uppercase">768-D LanceDB</span>
+        <div className="bg-[#0b0c10] border border-border px-3 py-2 rounded-lg text-[10px] text-muted-foreground font-mono flex items-center justify-between mb-2">
+          <span className="flex items-center gap-1"><Brain size={11} className="text-primary" /> Vector Space:</span>
+          <span className="text-muted-foreground font-bold uppercase">768-D LanceDB</span>
         </div>
 
         {/* Actions panel */}
@@ -141,7 +141,7 @@ export function MemoryStatsWidget() {
           <button
             onClick={handleRefresh}
             disabled={loading || actionLoading}
-            className="flex-1 py-1.5 bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.04] rounded-md text-[10px] font-bold uppercase tracking-wider text-zinc-300 transition-colors flex items-center justify-center gap-1.5"
+            className="flex-1 py-1.5 bg-muted/30 hover:bg-muted border border-border rounded-md text-[10px] font-bold uppercase tracking-wider text-foreground transition-colors flex items-center justify-center gap-1.5"
           >
             <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
             Refresh
@@ -150,7 +150,7 @@ export function MemoryStatsWidget() {
           <button
             onClick={handleClearSession}
             disabled={!activeSessionId || loading || actionLoading || memories.length === 0}
-            className="flex-1 py-1.5 bg-red-950/10 hover:bg-red-950/20 border border-red-500/20 rounded-md text-[10px] font-bold uppercase tracking-wider text-red-400/80 hover:text-red-400 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-30 disabled:pointer-events-none"
+            className="flex-1 py-1.5 bg-red-950/10 hover:bg-red-950/20 border border-destructive/20 rounded-md text-[10px] font-bold uppercase tracking-wider text-destructive/80 hover:text-destructive transition-colors flex items-center justify-center gap-1.5 disabled:opacity-30 disabled:pointer-events-none"
           >
             <Trash2 size={11} />
             Purge Turn
@@ -159,7 +159,7 @@ export function MemoryStatsWidget() {
           <button
             onClick={handlePurgeAll}
             disabled={loading || actionLoading || !stats?.total_vectors}
-            className="p-1.5 bg-red-950/15 hover:bg-red-950/30 border border-red-500/30 rounded-md text-red-500 hover:text-red-400 transition-colors flex items-center justify-center disabled:opacity-30 disabled:pointer-events-none"
+            className="p-1.5 bg-red-950/15 hover:bg-red-950/30 border border-destructive/30 rounded-md text-destructive hover:text-destructive transition-colors flex items-center justify-center disabled:opacity-30 disabled:pointer-events-none"
             title="Reset Entire Vector Database"
           >
             <ShieldAlert size={12} />
@@ -168,15 +168,15 @@ export function MemoryStatsWidget() {
       </div>
 
       {/* ── Search Bar ── */}
-      <form onSubmit={handleSearch} className="px-4 py-2 border-b border-white/[0.04] bg-[#070709] flex gap-2 shrink-0">
+      <form onSubmit={handleSearch} className="px-4 py-2 border-b border-border bg-[#070709] flex gap-2 shrink-0">
         <div className="relative flex-1">
-          <Search size={12} className="absolute left-2.5 top-2.5 text-zinc-500" />
+          <Search size={12} className="absolute left-2.5 top-2.5 text-muted-foreground" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search recalled vector memories..."
-            className="w-full pl-7 pr-3 py-1.5 bg-black/40 border border-white/[0.04] focus:border-primary/40 rounded-md text-[11px] text-foreground font-mono placeholder:text-zinc-600 focus:outline-none transition-all"
+            className="w-full pl-7 pr-3 py-1.5 bg-background/40 border border-border focus:border-primary/40 rounded-md text-[11px] text-foreground font-mono placeholder:text-muted-foreground/70 focus:outline-none transition-all"
           />
         </div>
         <button
@@ -188,33 +188,33 @@ export function MemoryStatsWidget() {
       </form>
 
       {/* ── Memories List/Console ── */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3 bg-black/25">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3 bg-background/25">
         {loading && memories.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-zinc-600 font-mono py-16">
-            <RefreshCw size={24} className="animate-spin text-zinc-600 mb-3 opacity-40" />
+          <div className="h-full flex flex-col items-center justify-center text-muted-foreground/70 font-mono py-16">
+            <RefreshCw size={24} className="animate-spin text-muted-foreground/70 mb-3 opacity-40" />
             <span className="text-[9px] uppercase tracking-widest">Scanning local vector memory...</span>
           </div>
         ) : error ? (
           <div className="p-4 bg-red-950/5 border border-red-950/10 rounded-lg flex flex-col items-center text-center font-mono py-12">
-            <ShieldAlert size={28} className="text-red-500 mb-3 opacity-60 animate-pulse" />
-            <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-2">Local Connection Interrupted</span>
-            <p className="text-[9px] text-zinc-500 max-w-[200px] leading-relaxed">
+            <ShieldAlert size={28} className="text-destructive mb-3 opacity-60 animate-pulse" />
+            <span className="text-[10px] font-bold text-destructive uppercase tracking-wider mb-2">Local Connection Interrupted</span>
+            <p className="text-[9px] text-muted-foreground max-w-[200px] leading-relaxed">
               {error}
             </p>
           </div>
         ) : memories.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center text-zinc-600 py-20 px-6 font-mono">
-            <Brain size={32} className="text-zinc-800 mb-4 opacity-50" />
-            <h4 className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Memory Repository Empty</h4>
-            <p className="text-[9px] text-zinc-600 mt-2 max-w-[200px] leading-relaxed">
+          <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground/70 py-20 px-6 font-mono">
+            <Brain size={32} className="text-foreground mb-4 opacity-50" />
+            <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Memory Repository Empty</h4>
+            <p className="text-[9px] text-muted-foreground/70 mt-2 max-w-[200px] leading-relaxed">
               Start chatting! When you complete turns, high-value conversation context is automatically embedded and stored in your local LanceDB store.
             </p>
           </div>
         ) : (
           <div className="space-y-3 pb-8">
-            <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 flex items-center justify-between font-mono">
+            <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5 flex items-center justify-between font-mono">
               <span>Memory Log Registry</span>
-              <span className="text-zinc-600">{memories.length} entries shown</span>
+              <span className="text-muted-foreground/70">{memories.length} entries shown</span>
             </div>
             
             <AnimatePresence initial={false}>
@@ -229,20 +229,20 @@ export function MemoryStatsWidget() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.15 }}
-                    className="p-3 bg-[#0a0a0d] border border-white/[0.04] rounded-lg hover:border-white/[0.08] transition-all relative overflow-hidden group shadow-sm"
+                    className="p-3 bg-[#0a0a0d] border border-border rounded-lg hover:border-border transition-all relative overflow-hidden group shadow-sm"
                   >
                     {/* Header bar with role and cosine similarity score */}
                     <div className="flex items-center justify-between mb-2">
                       <span className={`text-[8.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded font-mono ${
                         isUser 
                           ? 'bg-primary/10 text-primary border border-primary/10' 
-                          : 'bg-purple-500/10 text-purple-400 border border-purple-500/10'
+                          : 'bg-primary/10 text-primary border border-primary/10'
                       }`}>
                         {entry.role}
                       </span>
                       
                       {score > 0 && (
-                        <div className="text-[8.5px] font-mono text-zinc-500 flex items-center gap-1 select-none">
+                        <div className="text-[8.5px] font-mono text-muted-foreground flex items-center gap-1 select-none">
                           <span>SIMILARITY:</span>
                           <span className="font-bold text-[#00ff9f]">{(1 - score).toFixed(3)}</span>
                         </div>
@@ -250,14 +250,14 @@ export function MemoryStatsWidget() {
                     </div>
 
                     {/* Verbatim message content */}
-                    <div className="text-[11px] text-zinc-300 leading-relaxed font-mono whitespace-pre-wrap break-all px-1 py-1">
+                    <div className="text-[11px] text-foreground leading-relaxed font-mono whitespace-pre-wrap break-all px-1 py-1">
                       {entry.text}
                     </div>
 
                     {/* Metadata footer */}
-                    <div className="mt-3 border-t border-white/[0.03] pt-2.5 text-[8px] font-mono text-zinc-600 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <div className="mt-3 border-t border-border/[0.03] pt-2.5 text-[8px] font-mono text-muted-foreground/70 flex flex-wrap items-center gap-x-3 gap-y-1">
                       <span className="flex items-center gap-1"><Calendar size={9} /> {formattedTime}</span>
-                      <span className="flex items-center gap-1 cursor-pointer hover:text-zinc-400" title={entry.message_id}>
+                      <span className="flex items-center gap-1 cursor-pointer hover:text-muted-foreground" title={entry.message_id}>
                         <Info size={9} /> ID_{entry.id.substring(0, 8)}
                       </span>
                     </div>

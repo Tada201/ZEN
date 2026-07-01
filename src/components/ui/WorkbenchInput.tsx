@@ -34,7 +34,7 @@ export const WorkbenchInput = memo(React.forwardRef<HTMLInputElement, WorkbenchI
                     ref={ref}
                     onChange={handleChange}
                     className={cn(
-                        'h-9 w-full rounded-md bg-slate-950 border border-border px-3 text-xs text-foreground transition-all duration-200 outline-none hover:border-border/80 focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-primary/20 placeholder:text-muted-foreground/40',
+                        'h-9 w-full rounded-md bg-muted/50 border border-border px-3 text-xs text-foreground transition-all duration-200 outline-none hover:border-border-strong focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-primary/20 placeholder:text-muted-foreground/60',
                         IconProp && 'pl-9',
                         className
                     )}

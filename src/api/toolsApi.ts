@@ -63,13 +63,19 @@ export const toolsApi = {
     }),
 
   setYoloMode: async (enabled: boolean) => {
+    // The backend auto-syncs ToolManager whenever tool-related keys change,
+    // so the frontend no longer has to issue a separate sync command.
     await callCommand<void>("set_setting", {
       key: "tools.yolo-mode",
       value: String(enabled),
     });
-    await callCommand<void>("sync_tool_permissions");
   },
 
+  /**
+   * @deprecated The backend now auto-syncs tool permissions whenever a
+   * tool-related setting changes. This call is kept for explicit/forced
+   * syncs (e.g. tests) but should not be called from normal UI flows.
+   */
   syncPermissions: () =>
     callCommand<void>("sync_tool_permissions"),
 

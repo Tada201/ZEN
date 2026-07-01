@@ -21,8 +21,8 @@
    * outline phase; border + glow remain as decorative panel outlines */
   background: transparent;
   pointer-events: none;
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  box-shadow: 0 0 16px rgba(255, 255, 255, 0.15);
+  border: 1px solid hsl(var(--foreground) / 0.65);
+  box-shadow: 0 0 16px hsl(var(--foreground) / 0.15);
   will-change: clip-path, transform, opacity, filter;
 }
 

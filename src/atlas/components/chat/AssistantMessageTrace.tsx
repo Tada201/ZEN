@@ -44,7 +44,7 @@ function getActionPresentation(step: Step) {
   const status = step.status || "running";
   const isError = status === "error";
   const isDone = status === "completed";
-  const iconClass = isError ? "text-rose-400/80" : isDone ? "text-zinc-400" : "text-zinc-500";
+  const iconClass = isError ? "text-destructive/80" : isDone ? "text-muted-foreground" : "text-muted-foreground";
   const phase = typeof step.metadata?.phase === "string" ? step.metadata.phase : undefined;
 
   if (kind === "agent_spawn") {
@@ -53,7 +53,7 @@ function getActionPresentation(step: Step) {
       Icon: Bot,
       label: `Spawned ${spawn?.childAgent || "agent"}`,
       detail: spawn?.task || step.content,
-      iconClass: "text-zinc-500",
+      iconClass: "text-muted-foreground",
     };
   }
   if (kind === "agent_complete") {
@@ -71,7 +71,7 @@ function getActionPresentation(step: Step) {
       Icon: ArrowRightLeft,
       label: `${handoff?.fromAgent || "Agent"} handed off to ${handoff?.toAgent || "agent"}`,
       detail: handoff?.reason || step.content,
-      iconClass: "text-zinc-500",
+      iconClass: "text-muted-foreground",
     };
   }
   if (kind === "approval_request") {
@@ -79,7 +79,7 @@ function getActionPresentation(step: Step) {
       Icon: ShieldAlert,
       label: `Approval required: ${step.metadata?.approvalRequest?.tool_name || "tool"}`,
       detail: step.metadata?.approvalRequest?.context?.description || step.content,
-      iconClass: "text-amber-400/80",
+      iconClass: "text-warning/80",
     };
   }
   if (kind === "clarification_request") {
@@ -87,7 +87,7 @@ function getActionPresentation(step: Step) {
       Icon: HelpCircle,
       label: "Clarification needed",
       detail: step.metadata?.clarificationRequest?.question || step.content,
-      iconClass: "text-amber-400/80",
+      iconClass: "text-warning/80",
     };
   }
   if (kind.startsWith("task_")) {
@@ -106,7 +106,7 @@ function getActionPresentation(step: Step) {
         Icon: Workflow,
         label: "Task plan analyzed",
         detail: step.content,
-        iconClass: "text-blue-300/80",
+        iconClass: "text-primary/80",
       };
     }
     return {
@@ -148,7 +148,7 @@ function getActionPresentation(step: Step) {
         Icon: Wrench,
         label: `${preview?.toolName || "Tool call"} ready`,
         detail,
-        iconClass: "text-emerald-300/80",
+        iconClass: "text-success/80",
       };
     }
     if (phase === CHAT_STATUS_PHASES.ToolCallStreaming) {
@@ -158,7 +158,7 @@ function getActionPresentation(step: Step) {
         Icon: Wrench,
         label: `Preparing ${preview?.toolName || "tool call"}`,
         detail: args || step.content || step.metadata?.message,
-        iconClass: "text-blue-300/80",
+        iconClass: "text-primary/80",
       };
     }
     if (phase === CHAT_STATUS_PHASES.ToolBatchPlanned) {
@@ -166,7 +166,7 @@ function getActionPresentation(step: Step) {
         Icon: Wrench,
         label: step.metadata?.parallel ? "Parallel tool batch" : "Tool call planned",
         detail: tools.length > 0 ? tools.join(", ") : step.content || step.metadata?.message,
-        iconClass: "text-blue-300/80",
+        iconClass: "text-primary/80",
       };
     }
     if (phase === CHAT_STATUS_PHASES.AgentStreaming) {
@@ -174,7 +174,7 @@ function getActionPresentation(step: Step) {
         Icon: Bot,
         label: `${step.metadata?.agentName || step.metadata?.agentId || "Agent"} is working`,
         detail: step.content || step.metadata?.message,
-        iconClass: "text-blue-300/80",
+        iconClass: "text-primary/80",
       };
     }
     if (phase === CHAT_STATUS_PHASES.ProviderReady) {
@@ -191,7 +191,7 @@ function getActionPresentation(step: Step) {
       Icon: status === "running" ? Loader2 : CircleDot,
       label: phaseLabel || "Agent status",
       detail: step.content || step.metadata?.message,
-      iconClass: status === "running" ? "text-blue-300/80" : iconClass,
+      iconClass: status === "running" ? "text-primary/80" : iconClass,
     };
   }
   if (kind === "tool_result") {
@@ -306,8 +306,8 @@ export function AgentActionStepInner({ step, isStreaming }: { step: Step; isStre
 
   return (
     <div className="font-sans">
-      <div className="flex min-h-8 items-start gap-2 rounded-md px-1 py-1 transition-colors hover:bg-white/[0.018]">
-        <div className={cn("mt-[3px] flex h-4 w-4 shrink-0 items-center justify-center text-zinc-500", presentation.iconClass)}>
+      <div className="flex min-h-8 items-start gap-2 rounded-md px-1 py-1 transition-colors hover:bg-muted/20">
+        <div className={cn("mt-[3px] flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground", presentation.iconClass)}>
           <Icon className={cn("h-3.5 w-3.5", isRunning && "motion-safe:animate-spin")} />
         </div>
         <div className="min-w-0 flex-1">
@@ -319,29 +319,29 @@ export function AgentActionStepInner({ step, isStreaming }: { step: Step; isStre
               onClick={() => canExpand && setIsExpanded(!isExpanded)}
               className={cn(
                 "flex min-w-0 flex-1 items-center gap-1 text-left",
-                canExpand && "hover:text-zinc-300",
+                canExpand && "hover:text-foreground",
               )}
             >
               {canExpand && (
-                <ChevronRight className={cn("h-3 w-3 shrink-0 text-zinc-400 transition-transform", isExpanded && "rotate-90")} />
+                <ChevronRight className={cn("h-3 w-3 shrink-0 text-muted-foreground transition-transform", isExpanded && "rotate-90")} />
               )}
-              <span className={cn("min-w-0 flex-1 truncate text-[12px] capitalize leading-5 text-zinc-400", isRunning && "text-premium-shimmer")}>
+              <span className={cn("min-w-0 flex-1 truncate text-[12px] capitalize leading-5 text-muted-foreground", isRunning && "text-premium-shimmer")}>
               {presentation.label}
               </span>
             </button>
             {step.metadata?.iteration !== undefined && (
-              <span className="font-mono text-[11px] text-zinc-400">
+              <span className="font-mono text-[11px] text-muted-foreground">
                 iter {step.metadata.iteration}
               </span>
             )}
-            {eventTime && <span className="shrink-0 font-mono text-[11px] text-zinc-500">{eventTime}</span>}
+            {eventTime && <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{eventTime}</span>}
             {step.status && (
               <span
                 className={cn(
                   "text-[11px]",
-                  step.status === "error" && "text-rose-400/80",
-                  step.status === "completed" && "text-zinc-400",
-                  step.status === "running" && "text-zinc-400",
+                  step.status === "error" && "text-destructive/80",
+                  step.status === "completed" && "text-muted-foreground",
+                  step.status === "running" && "text-muted-foreground",
                 )}
               >
                 {step.status}
@@ -349,7 +349,7 @@ export function AgentActionStepInner({ step, isStreaming }: { step: Step; isStre
             )}
           </div>
           {presentation.detail && (
-            <div className="line-clamp-2 text-[12px] leading-5 text-zinc-400">
+            <div className="line-clamp-2 text-[12px] leading-5 text-muted-foreground">
               {presentation.detail}
             </div>
           )}
@@ -359,9 +359,9 @@ export function AgentActionStepInner({ step, isStreaming }: { step: Step; isStre
                 <span
                   key={`${chip.label}-${idx}`}
                   className={cn(
-                    "max-w-full truncate rounded bg-white/[0.025] px-1.5 py-0.5 font-mono text-[11px] leading-none text-zinc-400",
-                    chip.tone === "warning" && "bg-amber-400/10 text-amber-300/80",
-                    chip.tone === "danger" && "bg-rose-400/10 text-rose-300/80",
+                    "max-w-full truncate rounded bg-muted/30 px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground",
+                    chip.tone === "warning" && "bg-amber-400/10 text-warning/80",
+                    chip.tone === "danger" && "bg-rose-400/10 text-destructive/80",
                   )}
                 >
                   {chip.label}
@@ -371,15 +371,15 @@ export function AgentActionStepInner({ step, isStreaming }: { step: Step; isStre
           )}
           <AssistantTaskPlanPreview step={step} />
           {typeof progress === "number" && (
-            <div className="mt-1.5 h-px overflow-hidden bg-zinc-800">
-              <div className="h-full bg-zinc-500 transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, progress))}%` }} />
+            <div className="mt-1.5 h-px overflow-hidden bg-muted">
+              <div className="h-full bg-muted transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, progress))}%` }} />
             </div>
           )}
           {approval && <InlineApprovalControls approval={approval} metadata={step.metadata} />}
           {isExpanded && (
-            <div className="mt-1.5 rounded-md bg-white/[0.018] px-2 py-1.5">
-              <div className="mb-1 text-[11px] uppercase tracking-wider text-zinc-400">Event details</div>
-              <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-zinc-400">
+            <div className="mt-1.5 rounded-md bg-muted/20 px-2 py-1.5">
+              <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">Event details</div>
+              <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-muted-foreground">
                 {serializeActionDetails(step)}
               </pre>
             </div>
@@ -408,7 +408,7 @@ function InlineApprovalControls({ approval, metadata }: { approval: ApprovalRequ
     <div className="mt-3 rounded-lg border border-amber-400/15 bg-amber-400/[0.035] p-2">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <span className="min-w-0 flex-1 text-[11px] leading-5 text-amber-100/80">
-          Permission needed for <code className="rounded bg-black/20 px-1.5 py-0.5 text-amber-100">{toolName}</code>
+          Permission needed for <code className="rounded bg-background/20 px-1.5 py-0.5 text-amber-100">{toolName}</code>
         </span>
         {risk && (
           <span
@@ -418,7 +418,7 @@ function InlineApprovalControls({ approval, metadata }: { approval: ApprovalRequ
                 ? "border-rose-400/25 bg-rose-400/10 text-rose-200"
                 : risk === "medium"
                   ? "border-amber-400/25 bg-amber-400/10 text-amber-200"
-                  : "border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
+                  : "border-emerald-400/20 bg-success/10 text-success",
             )}
           >
             {risk} risk
@@ -426,13 +426,13 @@ function InlineApprovalControls({ approval, metadata }: { approval: ApprovalRequ
         )}
       </div>
       {context?.description && (
-        <div className="mt-1 text-[11px] leading-relaxed text-zinc-400">{context.description}</div>
+        <div className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{context.description}</div>
       )}
       {agentLabel && (
-        <div className="mt-1 font-mono text-[11px] leading-5 text-zinc-400">{agentLabel}</div>
+        <div className="mt-1 font-mono text-[11px] leading-5 text-muted-foreground">{agentLabel}</div>
       )}
       {argsPreview && (
-        <pre className="mt-1 max-h-20 overflow-y-auto whitespace-pre-wrap break-words rounded bg-black/20 px-2 py-1 font-mono text-[12px] leading-relaxed text-zinc-400">
+        <pre className="mt-1 max-h-20 overflow-y-auto whitespace-pre-wrap break-words rounded bg-background/20 px-2 py-1 font-mono text-[12px] leading-relaxed text-muted-foreground">
           {argsPreview}
         </pre>
       )}
@@ -441,7 +441,7 @@ function InlineApprovalControls({ approval, metadata }: { approval: ApprovalRequ
           size="sm"
           variant="outline"
           type="button"
-          className="h-7 border-zinc-700/80 px-3 text-[11px] text-zinc-300 hover:bg-zinc-800"
+          className="h-7 border-border/80 px-3 text-[11px] text-foreground hover:bg-muted"
           onClick={() => resolveToolApproval(toolCallId, false)}
         >
           Deny
@@ -449,7 +449,7 @@ function InlineApprovalControls({ approval, metadata }: { approval: ApprovalRequ
         <Button
           size="sm"
           type="button"
-          className="h-7 bg-amber-500/20 px-3 text-[11px] text-amber-100 hover:bg-amber-500/30"
+          className="h-7 bg-warning/20 px-3 text-[11px] text-amber-100 hover:bg-warning/30"
           onClick={() => resolveToolApproval(toolCallId, true)}
         >
           Approve
@@ -457,7 +457,7 @@ function InlineApprovalControls({ approval, metadata }: { approval: ApprovalRequ
         <Button
           size="sm"
           type="button"
-          className="h-7 bg-zinc-800 px-3 text-[11px] text-zinc-100 hover:bg-zinc-700"
+          className="h-7 bg-muted px-3 text-[11px] text-foreground hover:bg-muted"
           onClick={() => resolveToolApproval(toolCallId, true, true)}
         >
           Always allow exact

@@ -86,9 +86,9 @@ function ScenePrimitives({ wireframe, paused, autoRotate }: { wireframe: boolean
 /* ───────────────────── Material Studio ───────────────────── */
 
 const MAT_PRESETS = [
-  { label: "Brushed", color: "#a78bfa", metal: 0.85, rough: 0.35 },
+  { label: "Brushed", color: "hsl(var(--primary))", metal: 0.85, rough: 0.35 },
   { label: "Glossy", color: "#22d3ee", metal: 0.2, rough: 0.05 },
-  { label: "Matte", color: "#f59e0b", metal: 0.0, rough: 0.95 },
+  { label: "Matte", color: "hsl(var(--warning))", metal: 0.0, rough: 0.95 },
   { label: "Chrome", color: "#e2e8f0", metal: 1.0, rough: 0.05 },
 ];
 
@@ -102,7 +102,7 @@ function MaterialStudio({ idx }: { idx: number }) {
     <>
       <ambientLight intensity={0.25} />
       <directionalLight position={[5, 6, 4]} intensity={1.4} castShadow />
-      <directionalLight position={[-4, 2, -3]} intensity={0.5} color="#7c3aed" />
+      <directionalLight position={[-4, 2, -3]} intensity={0.5} color="hsl(var(--primary))" />
       <group ref={groupRef}>
         <RoundedBox args={[1.6, 1.6, 1.6]} radius={0.2} smoothness={6}>
           <meshStandardMaterial color={preset.color} metalness={preset.metal} roughness={preset.rough} />
@@ -135,7 +135,7 @@ function DistortBlob({ speed, distort }: { speed: number; distort: number }) {
       <Float floatIntensity={1.2} rotationIntensity={1.6} speed={1.4}>
         <Sphere args={[1.2, 96, 96]}>
           {/* @ts-ignore drei material props */}
-          <MeshDistortMaterial color="#a78bfa" distort={distort} speed={speed} roughness={0.15} metalness={0.4} />
+          <MeshDistortMaterial color="hsl(var(--primary))" distort={distort} speed={speed} roughness={0.15} metalness={0.4} />
         </Sphere>
       </Float>
       <ContactShadows position={[0, -1.4, 0]} opacity={0.35} blur={2} scale={6} />
@@ -191,11 +191,11 @@ function ParticleField({ count = 1500 }: { count?: number }) {
     <>
       <color attach="background" args={["#070611"]} />
       <ambientLight intensity={0.4} />
-      <pointLight position={[3, 3, 3]} intensity={0.8} color="#a78bfa" />
+      <pointLight position={[3, 3, 3]} intensity={0.8} color="hsl(var(--primary))" />
       <pointLight position={[-3, -3, -3]} intensity={0.6} color="#22d3ee" />
       <instancedMesh ref={meshRef} args={[undefined, undefined, count]}>
         <sphereGeometry args={[1, 8, 8]} />
-        <meshStandardMaterial color="#e0e7ff" emissive="#7c3aed" emissiveIntensity={0.6} />
+        <meshStandardMaterial color="#e0e7ff" emissive="hsl(var(--primary))" emissiveIntensity={0.6} />
       </instancedMesh>
       <OrbitControls enableZoom={false} enablePan={false} autoRotate autoRotateSpeed={0.5} />
     </>
@@ -300,13 +300,13 @@ export function Lab3DSection() {
         className="md:col-span-2 xl:col-span-2"
       >
         <div onClick={(e) => e.stopPropagation()} className="space-y-2">
-          <LazyCanvas className="relative h-72 overflow-hidden rounded-lg border border-border bg-gradient-to-b from-slate-900 to-slate-800">
+          <LazyCanvas className="relative h-72 overflow-hidden rounded-lg border border-border bg-gradient-to-b from-card to-muted">
             <Canvas key={`m-${resetKey}`} dpr={[1, 1.6]} shadows>
               <Suspense fallback={<CanvasLoader />}>
                 <MaterialStudio idx={matIdx} />
               </Suspense>
             </Canvas>
-            <div className="pointer-events-none absolute left-2 top-2 rounded-md bg-black/60 px-1.5 py-0.5 font-mono text-[10px] text-white/80 backdrop-blur">
+            <div className="pointer-events-none absolute left-2 top-2 rounded-md bg-background/60 px-1.5 py-0.5 font-mono text-[10px] text-primary-foreground/80 backdrop-blur">
               {MAT_PRESETS[matIdx].label} · m {MAT_PRESETS[matIdx].metal} · r {MAT_PRESETS[matIdx].rough}
             </div>
           </LazyCanvas>
@@ -338,13 +338,13 @@ export function Lab3DSection() {
         className="md:col-span-2 xl:col-span-2"
       >
         <div onClick={(e) => e.stopPropagation()} className="space-y-2">
-          <LazyCanvas className="relative h-72 overflow-hidden rounded-lg border border-border bg-gradient-to-br from-slate-950 via-violet-950 to-slate-900">
+          <LazyCanvas className="relative h-72 overflow-hidden rounded-lg border border-border bg-gradient-to-br from-background via-primary/10 to-card">
             <Canvas key={`d-${resetKey}`} dpr={[1, 1.6]} camera={{ position: [0, 0, 4.2], fov: 45 }}>
               <Suspense fallback={<CanvasLoader />}>
                 <DistortBlob distort={distort} speed={3} />
               </Suspense>
             </Canvas>
-            <div className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-md bg-black/60 px-1.5 py-0.5 font-mono text-[10px] text-white/80 backdrop-blur">
+            <div className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-md bg-background/60 px-1.5 py-0.5 font-mono text-[10px] text-primary-foreground/80 backdrop-blur">
               <Sparkles className="h-3 w-3" /> distort
             </div>
           </LazyCanvas>
@@ -385,7 +385,7 @@ export function Lab3DSection() {
                 <ParticleField count={particles} />
               </Suspense>
             </Canvas>
-            <div className="pointer-events-none absolute left-2 top-2 rounded-md bg-black/60 px-1.5 py-0.5 font-mono text-[10px] text-white/80 backdrop-blur">
+            <div className="pointer-events-none absolute left-2 top-2 rounded-md bg-background/60 px-1.5 py-0.5 font-mono text-[10px] text-primary-foreground/80 backdrop-blur">
               {particles.toLocaleString()} instances
             </div>
           </LazyCanvas>

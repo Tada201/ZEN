@@ -74,7 +74,7 @@ function InteractiveImage({ src, alt }: { src: string; alt: string }) {
               type="button"
               onClick={handleExport}
               disabled={exporting}
-              className="flex items-center gap-1.5 border border-white/10 px-3 py-1.5 text-[11px] rounded text-zinc-200 hover:bg-white/[0.06] transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 border border-border px-3 py-1.5 text-[11px] rounded text-foreground hover:bg-muted transition-colors disabled:opacity-50"
             >
               <Download size={12} />
               <span>{exporting ? "Saving..." : "Export to Workspace"}</span>
@@ -82,7 +82,7 @@ function InteractiveImage({ src, alt }: { src: string; alt: string }) {
             <button
               type="button"
               onClick={() => setIsOpen(false)}
-              className="border border-white/10 px-3 py-1.5 text-[11px] rounded text-zinc-400 hover:text-white transition-colors"
+              className="border border-border px-3 py-1.5 text-[11px] rounded text-muted-foreground hover:text-foreground transition-colors"
             >
               Close
             </button>
@@ -405,14 +405,14 @@ export function MarkdownContent({
 
       if (match) {
         const type = match[1].toUpperCase();
-        let colorClass = "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-400";
+        let colorClass = "border-primary/40 bg-primary/10 text-blue-700 dark:text-primary";
         let icon = "ℹ️";
         let title = "Note";
 
         if (type === "TIP") { colorClass = "border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-400"; icon = "💡"; title = "Tip"; }
-        if (type === "IMPORTANT") { colorClass = "border-purple-500/40 bg-purple-500/10 text-purple-700 dark:text-purple-400"; icon = "✨"; title = "Important"; }
-        if (type === "WARNING") { colorClass = "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400"; icon = "⚠️"; title = "Warning"; }
-        if (type === "CAUTION") { colorClass = "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-400"; icon = "🛑"; title = "Caution"; }
+        if (type === "IMPORTANT") { colorClass = "border-primary/40 bg-primary/10 text-purple-700 dark:text-primary"; icon = "✨"; title = "Important"; }
+        if (type === "WARNING") { colorClass = "border-warning/40 bg-warning/10 text-amber-700 dark:text-warning"; icon = "⚠️"; title = "Warning"; }
+        if (type === "CAUTION") { colorClass = "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-destructive"; icon = "🛑"; title = "Caution"; }
 
         const cleanChildren = removeAlertTag(children);
 

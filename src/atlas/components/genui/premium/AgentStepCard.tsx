@@ -44,17 +44,17 @@ export function AgentStepCard({ data }: { data: AgentStepData }) {
   };
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-black/40 backdrop-blur-md p-5 shadow-lg flex flex-col">
+    <div className="w-full max-w-md rounded-2xl border border-border/[0.08] bg-background/40 backdrop-blur-md p-5 shadow-lg flex flex-col">
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center gap-2.5">
-          <div className="p-1.5 rounded-lg border border-white/10 bg-white/5 text-white/70">
+          <div className="p-1.5 rounded-lg border border-border/10 bg-card/5 text-primary-foreground/70">
             <Cpu className="w-4 h-4 text-primary" />
           </div>
           <div>
-            <span className="text-[9px] font-mono text-white/30 uppercase tracking-widest block">
+            <span className="text-[9px] font-mono text-primary-foreground/30 uppercase tracking-widest block">
               Step {stepNumber}{totalSteps ? ` of ${totalSteps}` : ""}
             </span>
-            <h3 className="text-sm font-semibold text-white leading-tight font-mono">
+            <h3 className="text-sm font-semibold text-primary-foreground leading-tight font-mono">
               {tool}
             </h3>
           </div>
@@ -62,7 +62,7 @@ export function AgentStepCard({ data }: { data: AgentStepData }) {
 
         <div className="flex items-center gap-2">
           {duration !== undefined && (
-            <span className="flex items-center gap-1 text-[9px] font-mono text-white/40">
+            <span className="flex items-center gap-1 text-[9px] font-mono text-primary-foreground/40">
               <Clock className="w-2.5 h-2.5" /> {duration}ms
             </span>
           )}
@@ -74,32 +74,32 @@ export function AgentStepCard({ data }: { data: AgentStepData }) {
       </div>
 
       {reasoning && (
-        <div className="mb-3.5 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-          <span className="text-[9px] font-mono uppercase tracking-wider text-white/30 block mb-1">
+        <div className="mb-3.5 p-3 rounded-xl bg-card/[0.02] border border-border/[0.04]">
+          <span className="text-[9px] font-mono uppercase tracking-wider text-primary-foreground/30 block mb-1">
             Agent Reasoning
           </span>
-          <p className="text-[11px] text-white/70 leading-relaxed italic">
+          <p className="text-[11px] text-primary-foreground/70 leading-relaxed italic">
             "{reasoning}"
           </p>
         </div>
       )}
 
       <div className="space-y-2 text-[10px] font-mono">
-        <div className="flex flex-col p-2.5 rounded-lg bg-black/50 border border-white/[0.03]">
-          <span className="text-[9px] uppercase tracking-wider text-white/30 mb-1 flex items-center gap-1">
-            <Terminal className="w-2.5 h-2.5 text-white/20" /> Input Payload
+        <div className="flex flex-col p-2.5 rounded-lg bg-background/50 border border-border/[0.03]">
+          <span className="text-[9px] uppercase tracking-wider text-primary-foreground/30 mb-1 flex items-center gap-1">
+            <Terminal className="w-2.5 h-2.5 text-primary-foreground/20" /> Input Payload
           </span>
-          <p className="text-white/80 leading-normal line-clamp-3 select-all whitespace-pre-wrap break-all">
+          <p className="text-primary-foreground/80 leading-normal line-clamp-3 select-all whitespace-pre-wrap break-all">
             {input}
           </p>
         </div>
 
         {output && (
-          <div className="flex flex-col p-2.5 rounded-lg bg-black/50 border border-white/[0.03]">
-            <span className="text-[9px] uppercase tracking-wider text-white/30 mb-1 flex items-center gap-1">
-              <Terminal className="w-2.5 h-2.5 text-white/20" /> Result Output
+          <div className="flex flex-col p-2.5 rounded-lg bg-background/50 border border-border/[0.03]">
+            <span className="text-[9px] uppercase tracking-wider text-primary-foreground/30 mb-1 flex items-center gap-1">
+              <Terminal className="w-2.5 h-2.5 text-primary-foreground/20" /> Result Output
             </span>
-            <p className="text-white/80 leading-normal line-clamp-4 select-all whitespace-pre-wrap break-all">
+            <p className="text-primary-foreground/80 leading-normal line-clamp-4 select-all whitespace-pre-wrap break-all">
               {output}
             </p>
           </div>

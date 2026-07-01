@@ -26,7 +26,7 @@ export const WorkbenchSelect = memo(({ value, onValueChange, options, placeholde
 
     return (
         <Select value={sentinelValue} onValueChange={handleValueChange}>
-            <SelectTrigger className={className || "h-9 text-xs bg-zinc-950 border-white/10"} style={width ? { width } : undefined}>
+            <SelectTrigger className={className || "h-9 text-xs bg-muted/50 border-border"} style={width ? { width } : undefined}>
                 <SelectValue placeholder={placeholder} />
             </SelectTrigger>
             <SelectContent>

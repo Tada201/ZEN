@@ -48,7 +48,7 @@ export function PremiumCard({ type, data }: CardProps) {
   // Specialized inline layouts
   if (t === 'map') {
     return (
-      <div className="w-full max-w-sm p-1 rounded-2xl border border-white/[0.08] bg-black/40 backdrop-blur-md overflow-hidden shadow-lg">
+      <div className="w-full max-w-sm p-1 rounded-2xl border border-border/[0.08] bg-background/40 backdrop-blur-md overflow-hidden shadow-lg">
         <MapComponent
           latitude={data.latitude ?? data.lat ?? 0}
           longitude={data.longitude ?? data.lng ?? data.long ?? 0}
@@ -218,12 +218,12 @@ export function PremiumCard({ type, data }: CardProps) {
 
   // Fallback visual display for raw custom cards
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-black/40 backdrop-blur-md p-4 max-w-sm">
+    <div className="rounded-xl border border-border/[0.08] bg-background/40 backdrop-blur-md p-4 max-w-sm">
       <div className="flex items-center gap-2 mb-2 text-primary">
         <CheckCircle2 size={16} />
         <span className="text-xs font-black uppercase tracking-wider font-mono">{t} Visualizer</span>
       </div>
-      <pre className="text-[10px] font-mono text-white/60 bg-white/5 p-2.5 rounded border border-white/[0.04] overflow-x-auto">
+      <pre className="text-[10px] font-mono text-primary-foreground/60 bg-card/5 p-2.5 rounded border border-border/[0.04] overflow-x-auto">
         {JSON.stringify(data, null, 2)}
       </pre>
     </div>

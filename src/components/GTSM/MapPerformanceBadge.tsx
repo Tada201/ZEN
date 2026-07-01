@@ -45,8 +45,8 @@ export function MapPerformanceBadge() {
   if (!enabled) return null;
 
   return (
-    <div className="pointer-events-none flex h-7 items-center gap-1.5 border border-white/15 bg-black/45 px-2 text-[10px] text-zinc-300 backdrop-blur-md">
-      <WorkbenchIcon name="solar:chart-square-linear" size={12} className="text-zinc-400" />
+    <div className="pointer-events-none flex h-7 items-center gap-1.5 border border-border bg-background/45 px-2 text-[10px] text-foreground backdrop-blur-md">
+      <WorkbenchIcon name="solar:chart-square-linear" size={12} className="text-muted-foreground" />
       <span>{fps === null ? 'FPS --' : `${fps} FPS`}</span>
     </div>
   );

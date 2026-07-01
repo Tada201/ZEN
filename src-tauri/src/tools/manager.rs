@@ -131,19 +131,19 @@ impl ToolManager {
     /// Update permissions from a ToolPermissions struct.
     /// Pushes the permissions to both the ToolManager (central authority)
     /// and the v2 ToolRegistry (used by the Runner for per-call checks).
-    pub fn update_permissions(&self, permissions: ToolPermissions) {
-        // Update our own copy
-        match self.permissions.try_write() {
-            Ok(mut p) => *p = permissions.clone(),
-            Err(_) => {
-                eprintln!("[ToolManager] Failed to acquire permissions write lock — update skipped")
-            }
-        }
-        // Push to v2 registry (used by Runner's per-call permission checks)
-        match self.v2.try_write() {
-            Ok(mut v2_guard) => v2_guard.update_permissions(permissions),
-            Err(_) => eprintln!("[ToolManager] Failed to acquire v2 registry write lock — permission update skipped"),
-        }
+    ///
+    /// Awaits the write locks so callers see a deterministic ordering and
+    /// surface a failure when the policy cannot be installed — the previous
+    /// `try_write` path silently dropped updates under contention.
+    pub async fn update_permissions(
+        &self,
+        permissions: ToolPermissions,
+    ) -> Result<(), String> {
+        let mut p = self.permissions.write().await;
+        *p = permissions.clone();
+        let mut v2_guard = self.v2.write().await;
+        v2_guard.update_permissions(permissions);
+        Ok(())
     }
 
     /// Hydrate the canonical registry with schemas/descriptions from the legacy

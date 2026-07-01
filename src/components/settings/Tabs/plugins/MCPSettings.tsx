@@ -86,7 +86,7 @@ export const MCPSettings = memo((_props: { embedded?: boolean }) => {
                 description="Manage built-in MCP server tools and external server connections."
             >
                 <div className="py-12 flex items-center justify-center">
-                    <span className="text-zinc-500 animate-pulse text-[13px]">
+                    <span className="text-muted-foreground animate-pulse text-[13px]">
                         Loading Model Context Protocol settings...
                     </span>
                 </div>
@@ -105,44 +105,44 @@ export const MCPSettings = memo((_props: { embedded?: boolean }) => {
         >
             <div className="space-y-8">
                 {error && (
-                    <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-500/5 border border-red-500/15">
-                        <WorkbenchIcon name="lucide:alert-circle" className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
+                    <div className="flex items-start gap-2.5 p-3 rounded-xl bg-destructive/5 border border-destructive/15">
+                        <WorkbenchIcon name="lucide:alert-circle" className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
                         <div>
-                            <p className="text-[11px] font-bold text-red-400">MCP Integration Error</p>
-                            <p className="text-[10px] text-red-300/60 leading-relaxed font-mono">{error}</p>
+                            <p className="text-[11px] font-bold text-destructive">MCP Integration Error</p>
+                            <p className="text-[10px] text-destructive/60 leading-relaxed font-mono">{error}</p>
                         </div>
                     </div>
                 )}
 
                 {/* ── Section 1: Built-in ZEN Tools Server ── */}
                 <div className="space-y-4">
-                    <div className="border-b border-white/5 pb-2">
-                        <h3 className="text-[13px] font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                    <div className="border-b border-border pb-2">
+                        <h3 className="text-[13px] font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
                             <WorkbenchIcon name="lucide:server" size={14} className="text-primary" />
                             ZEN Tools Server (Local MCP Server)
                         </h3>
-                        <p className="text-[11px] text-zinc-500 mt-1">
+                        <p className="text-[11px] text-muted-foreground mt-1">
                             Expose ZEN's built-in tools (such as file edits, web searches, and command execution) to external clients (e.g., Claude Desktop, Cursor, or other MCP clients) using standard transport layers.
                         </p>
                     </div>
 
-                    <div className="py-6 px-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 border border-white/5 rounded-2xl bg-zinc-950/20">
+                    <div className="py-6 px-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 border border-border rounded-2xl bg-card/20">
                         <div className="flex items-center gap-4">
                             <div className={`w-14 h-14 rounded-full flex items-center justify-center border transition-all duration-300 ${
                                 isRunning 
-                                    ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
-                                    : "bg-zinc-900 border-white/5 text-zinc-500"
+                                    ? "bg-success/10 border-emerald-500/20 text-success" 
+                                    : "bg-muted border-border text-muted-foreground"
                             }`}>
                                 <WorkbenchIcon name="codicon:plug" size={24} className={isRunning ? "animate-pulse" : ""} />
                             </div>
                             <div>
-                                <h3 className="text-[14px] font-bold text-zinc-100 uppercase tracking-tight flex items-center gap-2">
+                                <h3 className="text-[14px] font-bold text-foreground uppercase tracking-tight flex items-center gap-2">
                                     Local Server Status: 
-                                    <span className={isRunning ? "text-emerald-400" : "text-zinc-500"}>
+                                    <span className={isRunning ? "text-success" : "text-muted-foreground"}>
                                         {isRunning ? "Online" : "Offline"}
                                     </span>
                                 </h3>
-                                <p className="text-[11px] text-zinc-400 mt-0.5">
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
                                     {isRunning 
                                         ? `Exposing tools over JSON-RPC 2.0 at ${status.http_bind_host}:${status.http_port}.` 
                                         : "Start the local server to allow other apps to connect to Zen's tools."}
@@ -171,24 +171,24 @@ export const MCPSettings = memo((_props: { embedded?: boolean }) => {
 
                     {isRunning && (
                         <div className="space-y-4 pl-2">
-                            <div className="rounded-xl border border-white/[0.06] bg-zinc-950/30 p-3 space-y-3">
+                            <div className="rounded-xl border border-border bg-card/50 p-3 space-y-3">
                                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                                     <div>
-                                        <h4 className="text-[11px] font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
-                                            <WorkbenchIcon name="lucide:key-round" size={13} className="text-zinc-400" />
+                                        <h4 className="text-[11px] font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                            <WorkbenchIcon name="lucide:key-round" size={13} className="text-muted-foreground" />
                                             HTTP Client Access
                                         </h4>
-                                        <p className="text-[10px] text-zinc-500 mt-1 leading-relaxed">
-                                            External clients must send the token in the <code className="bg-white/5 px-1 py-0.5 rounded text-[9px]">x-zen-mcp-token</code> header.
+                                        <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed">
+                                            External clients must send the token in the <code className="bg-muted/50 px-1 py-0.5 rounded text-[9px]">x-zen-mcp-token</code> header.
                                         </p>
                                     </div>
-                                    <Badge variant="outline" className="h-5 text-[8px] font-mono border-emerald-500/20 text-emerald-300 bg-emerald-500/5 shrink-0">
+                                    <Badge variant="outline" className="h-5 text-[8px] font-mono border-emerald-500/20 text-success bg-success/5 shrink-0">
                                         Auth Required
                                     </Badge>
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 items-center">
-                                    <code className="min-w-0 rounded-lg border border-white/[0.06] bg-black/20 px-2.5 py-2 text-[10px] text-zinc-300 font-mono truncate">
+                                    <code className="min-w-0 rounded-lg border border-border bg-background/20 px-2.5 py-2 text-[10px] text-foreground font-mono truncate">
                                         {mcpEndpoint}
                                     </code>
                                     <WorkbenchButton
@@ -202,56 +202,87 @@ export const MCPSettings = memo((_props: { embedded?: boolean }) => {
                                     </WorkbenchButton>
                                 </div>
 
-                                <div className="rounded-lg border border-amber-500/10 bg-amber-500/[0.03] px-2.5 py-2">
+                                <div className="rounded-lg border border-warning/10 bg-warning/[0.03] px-2.5 py-2">
                                     <p className="text-[10px] text-amber-200/80 leading-relaxed">
                                         The MCP bearer token is intentionally not exposed to the renderer. This prevents generated UI, browser extensions, or XSS from copying a token that can call local tools.
                                     </p>
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-between border-b border-white/5 pb-1">
-                                <h4 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-                                    <WorkbenchIcon name="lucide:cpu" size={13} className="text-zinc-400" />
-                                    Active Exposed Tools ({tools.length})
+                            <div className="flex items-center justify-between border-b border-border pb-1">
+                                <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                    <WorkbenchIcon name="lucide:cpu" size={13} className="text-muted-foreground" />
+                                    Tool Catalog ({tools.length})
                                 </h4>
-                                <span className="text-[10px] text-zinc-500">Available over JSON-RPC</span>
+                                <span className="text-[10px] text-muted-foreground">
+                                    Mirrors what the server will actually honor
+                                </span>
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[180px] overflow-y-auto pr-1">
-                                {tools.map((tool) => (
-                                    <div key={tool.name} className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.04] flex flex-col gap-1 hover:border-white/10 transition-colors">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <span className="text-[11px] font-mono text-zinc-200 truncate">{tool.name}</span>
-                                            {tool.risk_level && (
-                                                <Badge variant="outline" className="text-[8px] h-4 font-mono">
-                                                    {tool.risk_level}
-                                                </Badge>
+                                {tools.map((tool) => {
+                                    const callable = tool.mcp_exposable !== false;
+                                    return (
+                                        <div
+                                            key={tool.name}
+                                            className={`p-3 rounded-xl border flex flex-col gap-1 transition-colors ${
+                                                callable
+                                                    ? 'bg-muted/30 border-border hover:border-border'
+                                                    : 'bg-warning/[0.03] border-warning/15'
+                                            }`}
+                                            title={tool.unavailability_reason}
+                                        >
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className={`text-[11px] font-mono truncate ${callable ? 'text-foreground' : 'text-amber-100/80'}`}>
+                                                    {tool.name}
+                                                </span>
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    {callable ? (
+                                                        <Badge variant="outline" className="text-[8px] h-4 font-mono border-emerald-500/20 text-success bg-success/5">
+                                                            Over MCP
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge variant="outline" className="text-[8px] h-4 font-mono border-warning/30 text-amber-200 bg-warning/10">
+                                                            Approval Required
+                                                        </Badge>
+                                                    )}
+                                                    {tool.risk_level && (
+                                                        <Badge variant="outline" className="text-[8px] h-4 font-mono">
+                                                            {tool.risk_level}
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <p className={`text-[10px] leading-relaxed line-clamp-2 ${callable ? 'text-muted-foreground' : 'text-amber-200/60'}`}>
+                                                {tool.description || "No tool description provided."}
+                                            </p>
+                                            {!callable && tool.unavailability_reason && (
+                                                <p className="text-[9.5px] text-warning/70 leading-relaxed italic">
+                                                    {tool.unavailability_reason}
+                                                </p>
                                             )}
                                         </div>
-                                        <p className="text-[10px] text-zinc-400 leading-relaxed line-clamp-2">
-                                            {tool.description || "No tool description provided."}
-                                        </p>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     )}
                 </div>
 
                 {/* ── Section 2: External Client Integrations (.mcp.json) ── */}
-                <div className="space-y-4 pt-4 border-t border-white/5">
-                    <div className="border-b border-white/5 pb-2">
+                <div className="space-y-4 pt-4 border-t border-border">
+                    <div className="border-b border-border pb-2">
                         <div className="flex items-center gap-2">
-                            <h3 className="text-[13px] font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                            <h3 className="text-[13px] font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
                                 <WorkbenchIcon name="lucide:settings" size={14} className="text-primary" />
                                 External MCP Configuration Editor (.mcp.json)
                             </h3>
-                            <Badge variant="outline" className="text-[8px] h-4 font-mono text-zinc-500 border-white/10 bg-white/[0.02]">
+                            <Badge variant="outline" className="text-[8px] h-4 font-mono text-muted-foreground border-border bg-muted/30">
                                 Config Only
                             </Badge>
                         </div>
-                        <p className="text-[11px] text-zinc-500 mt-1">
-                            View and edit the <code className="bg-white/5 px-1 py-0.5 rounded text-[10px]">.mcp.json</code> file in your workspace. Note: This section functions as a configuration manager; the active client runtime for launching and connecting to these external servers from within ZEN is currently in development.
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                            View and edit the <code className="bg-muted/50 px-1 py-0.5 rounded text-[10px]">.mcp.json</code> file in your workspace. Note: This section functions as a configuration manager; the active client runtime for launching and connecting to these external servers from within ZEN is currently in development.
                         </p>
                     </div>
 
@@ -260,11 +291,11 @@ export const MCPSettings = memo((_props: { embedded?: boolean }) => {
                             value={configText}
                             onChange={(e) => setConfigText(e.target.value)}
                             placeholder={`{\n  "mcpServers": {}\n}`}
-                            className="w-full min-h-[180px] p-3 rounded-xl border border-white/[0.08] bg-zinc-950/40 text-[11px] font-mono text-zinc-300 focus:outline-none focus:border-brand-purple/50 resize-none transition-colors"
+                            className="w-full min-h-[180px] p-3 rounded-xl border border-border bg-card/60 text-[11px] font-mono text-foreground focus:outline-none focus:border-brand-purple/50 resize-none transition-colors"
                         />
                         <div className="flex items-center justify-between gap-4">
-                            <p className="text-[9.5px] text-zinc-500 leading-relaxed">
-                                Define external MCP servers under the <code className="bg-white/5 px-1 py-0.5 rounded text-[8.5px]">mcpServers</code> block. Changes are saved directly to <code className="bg-white/5 px-1 py-0.5 rounded text-[8.5px]">.mcp.json</code> in your workspace root, ready to be utilized once full client-side tool integration is completed.
+                            <p className="text-[9.5px] text-muted-foreground leading-relaxed">
+                                Define external MCP servers under the <code className="bg-muted/50 px-1 py-0.5 rounded text-[8.5px]">mcpServers</code> block. Changes are saved directly to <code className="bg-muted/50 px-1 py-0.5 rounded text-[8.5px]">.mcp.json</code> in your workspace root, ready to be utilized once full client-side tool integration is completed.
                             </p>
                             <WorkbenchButton 
                                 variant="primary" 

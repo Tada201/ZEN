@@ -53,7 +53,7 @@ const HooksSettings = React.lazy(() => import("@/components/settings/Tabs/plugin
 
 function SettingsTabFallback() {
   return (
-    <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.02]">
+    <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-border bg-muted/30">
       <WorkbenchIcon name="lucide:loader-2" className="h-5 w-5 animate-spin text-primary" />
     </div>
   );
@@ -231,25 +231,25 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
                 {activeTab === "general" && (
                   <section className="space-y-6">
                     <div className="space-y-1">
-                      <h3 className="text-lg font-bold tracking-tight text-zinc-100">General</h3>
-                      <p className="text-[13px] text-zinc-500">Manage workspace and UI preferences.</p>
+                      <h3 className="text-lg font-bold tracking-tight text-foreground">General</h3>
+                      <p className="text-[13px] text-muted-foreground">Manage workspace and UI preferences.</p>
                     </div>
 
                     <div className="space-y-4">
                       <div className="space-y-2">
-                        <Label className="text-[13px] font-bold text-zinc-300">Workspace Root</Label>
+                        <Label className="text-[13px] font-bold text-foreground">Workspace Root</Label>
                         <FolderBrowser
                           value={settings["workspace.root"] || ""}
                           onChange={(path) => handleUpdate("workspace.root", path)}
                         />
-                        <p className="text-[10px] text-zinc-600">
+                        <p className="text-[10px] text-muted-foreground/70">
                           File tools apply this folder after settings are saved.
                         </p>
                       </div>
 
                       <div className="grid grid-cols-1 gap-2 pt-2 lg:grid-cols-2">
-                        <div className="flex items-center justify-between p-3 rounded-xl border border-white/[0.06] bg-white/[0.02]">
-                          <Label className="text-[13px] font-medium text-zinc-300">Interface Theme</Label>
+                        <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30">
+                          <Label className="text-[13px] font-medium text-foreground">Interface Theme</Label>
                           <Select
                             value={settings["ui.theme"] || "dark"}
                             onValueChange={(v) => handleUpdate("ui.theme", v)}
@@ -265,10 +265,10 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
                           </Select>
                         </div>
 
-                        <div className="flex items-center justify-between p-3 rounded-xl border border-white/[0.06] bg-white/[0.02]">
+                        <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30">
                           <div className="space-y-0.5">
-                            <Label className="text-[13px] font-medium text-zinc-300">Interface Animations</Label>
-                            <p className="text-[10px] text-zinc-500">Shimmer, pulses and transitions</p>
+                            <Label className="text-[13px] font-medium text-foreground">Interface Animations</Label>
+                            <p className="text-[10px] text-muted-foreground">Shimmer, pulses and transitions</p>
                           </div>
                           <Switch
                             checked={settings["ui.animations"] !== "false"}
@@ -277,8 +277,8 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
                           />
                         </div>
 
-                         <div className="flex items-center justify-between p-3 rounded-xl border border-white/[0.06] bg-white/[0.02]">
-                           <Label className="text-[13px] font-medium text-zinc-300">Compact Mode</Label>
+                         <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30">
+                           <Label className="text-[13px] font-medium text-foreground">Compact Mode</Label>
                            <Switch
                              checked={settings["ui.compact-mode"] === "true"}
                              onCheckedChange={(v) => handleUpdate("ui.compact-mode", String(v))}
@@ -305,19 +305,19 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
                 {activeTab === "capabilities" && (
                   <div className="space-y-8">
                     <div className="space-y-1">
-                      <h3 className="text-lg font-bold tracking-tight text-zinc-100">Capabilities</h3>
-                      <p className="text-[13px] text-zinc-500">Configure agent skills and advanced behavior.</p>
+                      <h3 className="text-lg font-bold tracking-tight text-foreground">Capabilities</h3>
+                      <p className="text-[13px] text-muted-foreground">Configure agent skills and advanced behavior.</p>
                     </div>
                     <SkillsSettingsContent settings={settings} onUpdate={handleUpdate} />
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                      <span className="text-[11px] font-bold text-zinc-500">Show advanced agent behavior</span>
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-muted/40 border border-border">
+                      <span className="text-[11px] font-bold text-muted-foreground">Show advanced agent behavior</span>
                       <Switch checked={showAdvanced} onCheckedChange={setShowAdvanced} className="scale-75" />
                     </div>
 
                     {showAdvanced && (
                       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 pt-2">
-                         <div className="flex items-center justify-between p-3 rounded-xl border border-white/[0.06] bg-white/[0.02]">
-                            <Label className="text-[13px] font-medium text-zinc-300">Max Reasoning Steps</Label>
+                         <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30">
+                            <Label className="text-[13px] font-medium text-foreground">Max Reasoning Steps</Label>
                             <Input
                               type="number" className="w-16 h-8 text-xs text-center bg-background"
                               value={settings["chat.reasoning-budget"] || "5"}

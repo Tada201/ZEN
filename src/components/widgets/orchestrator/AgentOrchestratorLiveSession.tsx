@@ -6,10 +6,10 @@ export function LiveSessionExecution({ model, isStreaming }: { model: LiveAgentP
     const recentTools = model.toolCalls.slice(-6).reverse();
 
     return (
-        <div className="live-agent-panel border-b border-white/5">
+        <div className="live-agent-panel border-b border-border">
             <div className="live-agent-panel__header">
                 <div className="flex min-w-0 items-center gap-2">
-                    <WorkbenchIcon name="codicon:run-all" size={13} className={isStreaming ? "text-[#00ff9f]" : "text-zinc-400"} />
+                    <WorkbenchIcon name="codicon:run-all" size={13} className={isStreaming ? "text-[#00ff9f]" : "text-muted-foreground"} />
                     <div className="min-w-0">
                         <div className="live-agent-panel__title">Live session execution</div>
                         <div className="live-agent-panel__summary truncate">{model.activeSummary}</div>
@@ -57,9 +57,9 @@ export function LiveSessionExecution({ model, isStreaming }: { model: LiveAgentP
                             return (
                                 <div key={key} className="live-agent-panel__tool-row">
                                     <span className={`live-agent-panel__tool-status live-agent-panel__tool-status--${status}`} />
-                                    <span className="min-w-0 flex-1 truncate text-zinc-300">{tool.name || 'Tool'}</span>
-                                    {tool.agentName && <span className="max-w-[96px] truncate text-zinc-400">{tool.agentName}</span>}
-                                    <span className="uppercase text-zinc-400">{status.replace('_', ' ')}</span>
+                                    <span className="min-w-0 flex-1 truncate text-foreground">{tool.name || 'Tool'}</span>
+                                    {tool.agentName && <span className="max-w-[96px] truncate text-muted-foreground">{tool.agentName}</span>}
+                                    <span className="uppercase text-muted-foreground">{status.replace('_', ' ')}</span>
                                 </div>
                             );
                         })}

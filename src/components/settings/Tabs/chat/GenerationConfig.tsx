@@ -17,17 +17,17 @@ export const GenerationConfig = memo(() => {
             description="Fine-tune token generation and randomness."
         >
             <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-3 p-4 bg-zinc-900/20 border border-white/[0.03] rounded-lg">
+                <div className="flex flex-col gap-3 p-4 bg-muted/30 border border-border/[0.03] rounded-lg">
                     <div className="flex justify-between items-center">
                         <div className="flex flex-col">
-                            <span className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider">
+                            <span className="text-[11px] font-bold text-foreground uppercase tracking-wider">
                                 Temperature
                             </span>
-                            <p className="text-[10px] text-zinc-500 leading-normal">
+                            <p className="text-[10px] text-muted-foreground leading-normal">
                                 Randomness coefficient for token selection
                             </p>
                         </div>
-                        <span className="text-[11px] font-mono font-bold text-zinc-200 bg-zinc-800/50 px-2 py-0.5 rounded border border-white/[0.05]">
+                        <span className="text-[11px] font-mono font-bold text-foreground bg-muted/50 px-2 py-0.5 rounded border border-border">
                             {temperature.toFixed(2)}
                         </span>
                     </div>
@@ -41,10 +41,10 @@ export const GenerationConfig = memo(() => {
                         />
                     </div>
                     <div className="flex justify-between">
-                        <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-tighter">
+                        <span className="text-[9px] text-muted-foreground/70 font-bold uppercase tracking-tighter">
                             Deterministic
                         </span>
-                        <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-tighter">
+                        <span className="text-[9px] text-muted-foreground/70 font-bold uppercase tracking-tighter">
                             Creative
                         </span>
                     </div>
@@ -61,7 +61,7 @@ export const GenerationConfig = memo(() => {
                                 type="number"
                                 onChangeText={(text) => updateSetting({ maxTokens: parseInt(text) || 0 })}
                             />
-                            <span className="text-[10px] text-zinc-600 font-bold font-mono">TK</span>
+                            <span className="text-[10px] text-muted-foreground/70 font-bold font-mono">TK</span>
                         </div>
                     }
                 />

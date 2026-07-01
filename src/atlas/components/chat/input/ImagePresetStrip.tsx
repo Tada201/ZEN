@@ -60,9 +60,9 @@ export const ImagePresetStrip = memo(({
 
   return (
     <div className="w-full overflow-x-auto scrollbar-none flex items-center gap-2 px-1 py-1 mb-1 animate-in fade-in slide-in-from-top-1 duration-200">
-      <div className="flex items-center gap-1.5 shrink-0 pr-2 mr-2 border-r border-zinc-500/10 dark:border-white/5">
-        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-        <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 select-none">Presets</span>
+      <div className="flex items-center gap-1.5 shrink-0 pr-2 mr-2 border-r border-border/10 dark:border-border">
+        <Sparkles className="w-3.5 h-3.5 text-warning" />
+        <span className="text-[11px] font-semibold text-muted-foreground dark:text-muted-foreground select-none">Presets</span>
       </div>
       <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
         {STYLE_PRESETS.map((preset) => {
@@ -72,9 +72,9 @@ export const ImagePresetStrip = memo(({
               key={preset.id}
               type="button"
               onClick={() => onSelectPreset(preset.prompt)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-200 dark:bg-zinc-800/90 border border-zinc-300 dark:border-zinc-700/50 hover:bg-zinc-300 dark:hover:bg-zinc-750 text-[11px] font-semibold text-zinc-800 dark:text-zinc-100 hover:text-black dark:hover:text-white shadow-sm transition-all duration-200 whitespace-nowrap active:scale-95"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted dark:bg-muted/90 border border-border dark:border-border/50 hover:bg-muted dark:hover:bg-muted text-[11px] font-semibold text-foreground dark:text-foreground hover:text-foreground dark:hover:text-foreground shadow-sm transition-all duration-200 whitespace-nowrap active:scale-95"
             >
-              <Icon className="w-3 h-3 text-zinc-600 dark:text-zinc-300" />
+              <Icon className="w-3 h-3 text-muted-foreground/70 dark:text-foreground" />
               {preset.name}
             </button>
           );

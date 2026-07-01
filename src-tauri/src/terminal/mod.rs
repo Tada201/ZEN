@@ -9,6 +9,20 @@ use tokio::sync::Mutex;
 const OUTPUT_BUFFER_LIMIT: usize = 64 * 1024; // 64KB max buffer per session
 type OutputCallback = Box<dyn Fn(&str, u64, &str) + Send + 'static>;
 
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+/// Apply Windows hidden-process configuration to non-interactive commands so that
+/// PowerShell windows do not flash on screen. Interactive PTY spawns (via
+/// `portable_pty`) are explicitly excluded — they require a visible PTY surface.
+#[cfg(target_os = "windows")]
+fn hide_console(cmd: &mut tokio::process::Command) {
+    cmd.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(target_os = "windows"))]
+fn hide_console(_cmd: &mut tokio::process::Command) {}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalOutputSnapshot {
@@ -253,6 +267,7 @@ impl TerminalManager {
                 "-Command",
                 command,
             ]);
+            hide_console(&mut c);
             c
         } else {
             let mut c = tokio::process::Command::new("sh");

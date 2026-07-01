@@ -31,15 +31,15 @@ export const StreamingSpeedConfig = memo(() => {
                     }
                 />
 
-                <div className="ml-2 mt-1 px-4 py-3 bg-zinc-900/30 border-l-2 border-zinc-700/40 rounded-r-lg">
+                <div className="ml-2 mt-1 px-4 py-3 bg-muted/40 border-l-2 border-border/40 rounded-r-lg">
                     {streamingSpeed === 'instant' ? (
-                        <p className="text-[10px] text-zinc-500 leading-relaxed">
-                            <span className="text-zinc-300 font-semibold">Instant</span> — tokens appear as they
+                        <p className="text-[10px] text-muted-foreground leading-relaxed">
+                            <span className="text-foreground font-semibold">Instant</span> — tokens appear as they
                             arrive from the model. Best for fast hardware and keyboard-focused workflows.
                         </p>
                     ) : (
-                        <p className="text-[10px] text-zinc-500 leading-relaxed">
-                            <span className="text-zinc-300 font-semibold">Typewriter</span> — characters are
+                        <p className="text-[10px] text-muted-foreground leading-relaxed">
+                            <span className="text-foreground font-semibold">Typewriter</span> — characters are
                             smoothed into a constant reveal rate (~80 chars/sec). Easier on the eyes during long
                             responses; auto-accelerates to keep up with large token bursts.
                         </p>
