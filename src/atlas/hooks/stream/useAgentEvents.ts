@@ -310,7 +310,7 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
       });
 
       const unlistenAgentSpawn = await listenAppEvent("agent:spawn", (event) => {
-        const spawnId = event.payload.spawn_id || event.payload.spawnId;
+        const spawnId = event.payload.spawn_id;
         if (shouldFocusAgentsForSpawn(spawnId, spawnIdRegistryRef.current)) {
           focusActiveAgentsPanel({ force: true });
         }
@@ -320,7 +320,7 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
       });
 
       const unlistenAgentComplete = await listenAppEvent("agent:complete", (event) => {
-        const spawnId = event.payload.spawn_id || event.payload.spawnId;
+        const spawnId = event.payload.spawn_id;
         if (shouldFocusAgentsForSpawn(spawnId, spawnIdRegistryRef.current)) {
           focusActiveAgentsPanel();
         }
@@ -330,7 +330,7 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
       });
 
       const unlistenAgentHandoff = await listenAppEvent("agent:handoff", (event) => {
-        const spawnId = event.payload.spawn_id || event.payload.spawnId;
+        const spawnId = event.payload.spawn_id;
         if (shouldFocusAgentsForSpawn(spawnId, spawnIdRegistryRef.current)) {
           focusActiveAgentsPanel({ force: true });
         }
@@ -346,10 +346,6 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
           // to the parent's active streaming chat — that path races with the
           // parent's own `chat:chunk` buffer and causes visible stutter.
           return;
-        }
-        const spawnId = payload.spawn_id || payload.spawnId;
-        if (shouldFocusAgentsForSpawn(spawnId, spawnIdRegistryRef.current)) {
-          focusActiveAgentsPanel({ force: true });
         }
         const actionPayload = {
           ...payload,

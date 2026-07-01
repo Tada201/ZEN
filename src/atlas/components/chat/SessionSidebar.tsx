@@ -1,4 +1,4 @@
-import { useState, useMemo, memo, useDeferredValue, useRef } from "react";
+import { useState, useMemo, memo, useDeferredValue, useRef, useEffect } from "react";
 import { type TabId } from "../SettingsModal";
 import { 
   Plus, Search, Trash2, Settings2,
@@ -66,6 +66,14 @@ export const SessionSidebar = memo(({
   const [renameFolderTarget, setRenameFolderTarget] = useState<{ id: string; name: string } | null>(null);
   const [deleteFolderTarget, setDeleteFolderTarget] = useState<ChatFolder | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Force re-renders every 60s so relative timestamps (e.g. \"5m ago\")
+  // update dynamically on inactive items.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const deferredSearch = useDeferredValue(search);
 

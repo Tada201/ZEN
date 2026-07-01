@@ -19,12 +19,32 @@ export const mapChatToSession = (chat: BackendChat): Session => ({
   title: chat.title || "No Title",
   model: chat.model || "No Model",
   systemPrompt: "",
-  createdAt: new Date(chat.createdAt).getTime(),
-  updatedAt: new Date(chat.updatedAt).getTime(),
+  createdAt: parseBackendDate(chat.createdAt).getTime(),
+  updatedAt: parseBackendDate(chat.updatedAt).getTime(),
   pinned: chat.pinned === 1,
   folderId: chat.folderId,
   archived: chat.isArchived === 1,
 });
+
+/**
+ * Parse date strings returned by the backend. Raw SQLite timestamp strings
+ * (e.g. "YYYY-MM-DD HH:MM:SS") have no timezone info, causing JS to interpret
+ * them as local time. This helper suffixes 'Z' to force UTC parsing, resolving
+ * timezone offsets like Vietnam GMT+7 displaying as "7h ago".
+ */
+export function parseBackendDate(val: string | number): Date {
+  if (typeof val === "number") return new Date(val);
+  if (typeof val === "string") {
+    let clean = val.trim();
+    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(clean)) {
+      clean = clean.replace(" ", "T") + "Z";
+    } else if (!clean.endsWith("Z") && !/[+-]\d{2}:?\d{2}$/.test(clean)) {
+      clean += "Z";
+    }
+    return new Date(clean);
+  }
+  return new Date();
+}
 
 export const mapChatFolderToFolder = (f: BackendFolder): ChatFolder => ({
   id: f.id,
