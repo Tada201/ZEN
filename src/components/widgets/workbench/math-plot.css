@@ -316,13 +316,13 @@
   width: 18px;
   text-align: right;
   font-weight: bold;
-  color: #c586c0; /* VS Code pink/purple */
+  color: hsl(var(--primary));
   flex-shrink: 0;
 }
 
 .math-plot__var-range {
   flex: 1;
-  accent-color: #c586c0;
+  accent-color: hsl(var(--primary));
   height: 1px;
   background: var(--math-border);
   appearance: none;
@@ -333,7 +333,7 @@
   width: 8px;
   height: 8px;
   border-radius: 0;
-  background: #c586c0;
+  background: hsl(var(--primary));
   cursor: pointer;
 }
 
@@ -448,7 +448,7 @@
 }
 .math-plot__toolbar-btn:hover {
   background: hsl(var(--foreground) / 0.06);
-  color: #fff;
+  color: hsl(var(--foreground));
 }
 .math-plot__toolbar-btn:disabled {
   opacity: 0.25;
