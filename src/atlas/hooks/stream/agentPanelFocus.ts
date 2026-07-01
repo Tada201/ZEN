@@ -37,3 +37,21 @@ export function shouldFocusAgentsForTool(payload: {
     payload.toolBatchId,
   );
 }
+
+const GLOBAL_FOCUS_SPAWN_IDS = new Set<string>();
+
+/**
+ * Return true only the first time we see a given `spawn_id` in this
+ * session. Subsequent calls for the same id are silent so the agents
+ * panel state does not thrash on every subagent chunk.
+ */
+export function shouldFocusAgentsForSpawn(
+  spawnId: string | undefined,
+  registry: Set<string> = GLOBAL_FOCUS_SPAWN_IDS,
+): boolean {
+  if (!spawnId) return false;
+  if (registry.has(spawnId)) return false;
+  registry.add(spawnId);
+  return true;
+}
+

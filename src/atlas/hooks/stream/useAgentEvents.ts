@@ -17,7 +17,7 @@ import {
   rememberTaskListChats,
   rememberWorkflowChat,
 } from "./taskWorkflowRouting";
-import { focusActiveAgentsPanel } from "./agentPanelFocus";
+import { focusActiveAgentsPanel, shouldFocusAgentsForSpawn } from "./agentPanelFocus";
 import {
   syncAgentCompleteToActivity,
   syncAgentHandoffToActivity,
@@ -97,6 +97,7 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
   const workflowChatIdsRef = useRef<Map<string, string>>(new Map());
   const agentChunkBufferRef = useRef<Array<{ chatId: string; payload: AgentActionEventPayload }>>([]);
   const agentChunkFrameRef = useRef<number | null>(null);
+  const spawnIdRegistryRef = useRef<Set<string>>(new Set());
 
   const appendTaskActionStep = (payload: AgentActionEventPayload, kind: string) => {
     const chatId = getTaskChatId(taskChatIdsRef.current, useChatStore.getState(), payload);
@@ -309,21 +310,30 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
       });
 
       const unlistenAgentSpawn = await listenAppEvent("agent:spawn", (event) => {
-        focusActiveAgentsPanel({ force: true });
+        const spawnId = event.payload.spawn_id || event.payload.spawnId;
+        if (shouldFocusAgentsForSpawn(spawnId, spawnIdRegistryRef.current)) {
+          focusActiveAgentsPanel({ force: true });
+        }
         const chatId = getAgentChatId(agentChatIdsRef.current, event.payload, useChatStore.getState());
         if (chatId) syncAgentSpawnToActivity(chatId, event.payload);
         appendAgentActionStep(event.payload, "agent_spawn");
       });
 
       const unlistenAgentComplete = await listenAppEvent("agent:complete", (event) => {
-        focusActiveAgentsPanel();
+        const spawnId = event.payload.spawn_id || event.payload.spawnId;
+        if (shouldFocusAgentsForSpawn(spawnId, spawnIdRegistryRef.current)) {
+          focusActiveAgentsPanel();
+        }
         const chatId = getAgentChatId(agentChatIdsRef.current, event.payload, useChatStore.getState());
         if (chatId) syncAgentCompleteToActivity(chatId, event.payload);
         appendAgentActionStep(event.payload, "agent_complete");
       });
 
       const unlistenAgentHandoff = await listenAppEvent("agent:handoff", (event) => {
-        focusActiveAgentsPanel({ force: true });
+        const spawnId = event.payload.spawn_id || event.payload.spawnId;
+        if (shouldFocusAgentsForSpawn(spawnId, spawnIdRegistryRef.current)) {
+          focusActiveAgentsPanel({ force: true });
+        }
         const chatId = getAgentChatId(agentChatIdsRef.current, event.payload, useChatStore.getState());
         if (chatId) syncAgentHandoffToActivity(chatId, event.payload);
         appendAgentActionStep(event.payload, "agent_handoff");
@@ -337,7 +347,10 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
           // parent's own `chat:chunk` buffer and causes visible stutter.
           return;
         }
-        focusActiveAgentsPanel({ force: true });
+        const spawnId = payload.spawn_id || payload.spawnId;
+        if (shouldFocusAgentsForSpawn(spawnId, spawnIdRegistryRef.current)) {
+          focusActiveAgentsPanel({ force: true });
+        }
         const actionPayload = {
           ...payload,
           agent_id: payload.agent_id,
