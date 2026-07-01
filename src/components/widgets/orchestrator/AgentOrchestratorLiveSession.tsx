@@ -9,7 +9,7 @@ export function LiveSessionExecution({ model, isStreaming }: { model: LiveAgentP
         <div className="live-agent-panel border-b border-border">
             <div className="live-agent-panel__header">
                 <div className="flex min-w-0 items-center gap-2">
-                    <WorkbenchIcon name="codicon:run-all" size={13} className={isStreaming ? "text-[#00ff9f]" : "text-muted-foreground"} />
+                    <WorkbenchIcon name="codicon:run-all" size={13} className={isStreaming ? "text-primary" : "text-muted-foreground"} />
                     <div className="min-w-0">
                         <div className="live-agent-panel__title">Live session execution</div>
                         <div className="live-agent-panel__summary truncate">{model.activeSummary}</div>

@@ -68,14 +68,14 @@ export function AgentOrchestratorPanel() {
         >
             <div className="agent-birds-eye__header">
                 <div className="flex items-center gap-2">
-                    <WorkbenchIcon name="codicon:dashboard" size={14} className="text-[#00ff9f]" />
+                    <WorkbenchIcon name="codicon:dashboard" size={14} className="text-primary" />
                     <span className="agent-birds-eye__title font-mono tracking-wider">ORCHESTRATOR_DASHBOARD</span>
                 </div>
 
                 <div className="flex items-center gap-3">
                     <div className="flex items-center gap-1.5">
-                        <div className="w-1.5 h-1.5 rounded-full bg-[#00ff9f] motion-safe:animate-pulse" />
-                        <span className="text-[11px] font-mono text-[#00ff9f] uppercase">{runningTasks.length} ACTIVE</span>
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary motion-safe:animate-pulse" />
+                        <span className="text-[11px] font-mono text-primary uppercase">{runningTasks.length} ACTIVE</span>
                     </div>
                     {activeTasks.length > 0 && (
                         <WorkbenchButton 
@@ -103,8 +103,8 @@ export function AgentOrchestratorPanel() {
                     {/* Active Cluster */}
                     {runningTasks.length > 0 && (
                         <div className="border-b border-border">
-                            <div className="text-[11px] text-[#00ff9f] bg-[#18181c] font-bold uppercase tracking-wider px-3.5 py-1.5 border-b border-border flex items-center gap-1.5">
-                                <WorkbenchIcon name="codicon:zap" size={12} className="text-[#00ff9f]" />
+                            <div className="text-[11px] text-primary bg-card font-bold uppercase tracking-wider px-3.5 py-1.5 border-b border-border flex items-center gap-1.5">
+                                <WorkbenchIcon name="codicon:zap" size={12} className="text-primary" />
                                 ACTIVE_NODES
                             </div>
                             <div className="flex flex-col divide-y divide-white/5">
@@ -118,8 +118,8 @@ export function AgentOrchestratorPanel() {
                     {/* Pending Queue */}
                     {pendingTasks.length > 0 && (
                         <div className="border-b border-border">
-                            <div className="text-[11px] text-yellow-400 bg-[#18181c] font-bold uppercase tracking-wider px-3.5 py-1.5 border-b border-border flex items-center gap-1.5">
-                                <WorkbenchIcon name="codicon:clock" size={12} className="text-yellow-500" />
+                            <div className="text-[11px] text-warning bg-card font-bold uppercase tracking-wider px-3.5 py-1.5 border-b border-border flex items-center gap-1.5">
+                                <WorkbenchIcon name="codicon:clock" size={12} className="text-warning" />
                                 PENDING_QUEUE
                             </div>
                             <div className="flex flex-col divide-y divide-white/5 opacity-80">
@@ -133,7 +133,7 @@ export function AgentOrchestratorPanel() {
                     {/* Session History */}
                     {historyTasks.length > 0 && (
                         <div className="border-b border-border">
-                            <div className="text-[11px] text-muted-foreground bg-[#18181c] font-bold uppercase tracking-wider px-3.5 py-1.5 border-b border-border flex items-center gap-1.5">
+                            <div className="text-[11px] text-muted-foreground bg-card font-bold uppercase tracking-wider px-3.5 py-1.5 border-b border-border flex items-center gap-1.5">
                                 <WorkbenchIcon name="codicon:archive" size={12} className="text-muted-foreground" />
                                 SESSION_ARCHIVE
                             </div>
@@ -148,7 +148,7 @@ export function AgentOrchestratorPanel() {
                     {/* Cross-Session History */}
                     {crossSessionTasks.length > 0 && (
                         <div>
-                            <div className="text-[11px] text-muted-foreground bg-[#18181c] font-bold uppercase tracking-wider px-3.5 py-1.5 border-b border-border flex items-center gap-1.5">
+                            <div className="text-[11px] text-muted-foreground bg-card font-bold uppercase tracking-wider px-3.5 py-1.5 border-b border-border flex items-center gap-1.5">
                                 <WorkbenchIcon name="codicon:history" size={12} className="text-muted-foreground" />
                                 CROSS_SESSION_REGISTRY
                             </div>
@@ -186,7 +186,7 @@ export function AgentOrchestratorPanel() {
                     </WorkbenchButton>
                     
                     <div className="flex items-center gap-2 flex-grow">
-                        <div className="task-item__icon w-7 h-7 bg-[#00ff9f]/10 border border-[#00ff9f]/20 flex items-center justify-center text-[#00ff9f] rounded-sm">
+                        <div className="task-item__icon w-7 h-7 bg-primary/10 border border-primary/20 flex items-center justify-center text-primary rounded-sm">
                             <WorkbenchIcon name={AGENT_ICONS[selectedTask.agentId] || 'codicon:circuit-board'} size={15} />
                         </div>
 
@@ -211,24 +211,24 @@ export function AgentOrchestratorPanel() {
                 </div>
 
                 <div className="agent-workspace__content">
-                    <div className="agent-workspace__task-info p-3 px-4 border-b border-border bg-[#18181c]">
-                        <div className="flex items-center gap-1.5 text-[11px] text-[#00ff9f] uppercase tracking-wider mb-2 font-bold font-mono">
+                    <div className="agent-workspace__task-info p-3 px-4 border-b border-border bg-card">
+                        <div className="flex items-center gap-1.5 text-[11px] text-primary uppercase tracking-wider mb-2 font-bold font-mono">
                             <WorkbenchIcon name="codicon:target" size={12} className="opacity-70" /> MISSION_OBJECTIVE
                         </div>
 
-                        <div className="text-[12px] text-foreground leading-relaxed font-mono p-3 bg-background/20 border border-border rounded-none">
+                        <div className="text-[12px] text-foreground leading-relaxed font-mono p-3 bg-muted border border-border rounded-md">
                             {selectedTask.task}
                         </div>
                     </div>
 
                     <div className="agent-workspace__telemetry custom-scrollbar h-full">
-                        <div className="telemetry-header sticky top-0 bg-[#18181c] z-20 px-4 py-1.5 border-b border-border flex justify-between items-center">
+                        <div className="telemetry-header sticky top-0 bg-card z-20 px-4 py-1.5 border-b border-border flex justify-between items-center">
                             <div className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground tracking-wider uppercase font-mono">
-                                <WorkbenchIcon name="codicon:zap" size={12} className="text-[#00ff9f]" /> TASK_CHRONICLE
+                                <WorkbenchIcon name="codicon:zap" size={12} className="text-primary" /> TASK_CHRONICLE
                             </div>
 
                             <div className="flex items-center gap-3">
-                                <div className="text-[11px] font-mono text-[#00ff9f]">
+                                <div className="text-[11px] font-mono text-primary">
                                     LOGS: {taskLogs.length}
                                 </div>
                                 <div className="text-[11px] font-mono text-muted-foreground flex items-center gap-1.5">
@@ -256,24 +256,24 @@ export function AgentOrchestratorPanel() {
                 </div>
 
                 {!!selectedTask.result && (
-                    <div className="agent-workspace__footer p-3 px-4 bg-[#18181c] border-t border-border">
-                        <div className="text-[11px] text-green-400 uppercase tracking-wider mb-2 font-bold font-mono flex items-center gap-1.5">
+                    <div className="agent-workspace__footer p-3 px-4 bg-card border-t border-border">
+                        <div className="text-[11px] text-success uppercase tracking-wider mb-2 font-bold font-mono flex items-center gap-1.5">
                             <WorkbenchIcon name="codicon:check" size={12} /> RESOLUTION_PAYLOAD
                         </div>
 
-                        <div className="text-[12px] text-green-400 bg-background/40 p-3 border border-green-500/20 rounded-none overflow-auto max-h-[200px] custom-scrollbar font-mono leading-relaxed">
+                        <div className="text-[12px] text-success bg-muted p-3 border border-success/20 rounded-md overflow-auto max-h-[200px] custom-scrollbar font-mono leading-relaxed">
                             {typeof selectedTask.result === 'string' ? (selectedTask.result as string) : JSON.stringify(selectedTask.result, null, 2)}
                         </div>
                     </div>
                 )}
 
                 {selectedTask.error && (
-                    <div className="agent-workspace__footer p-3 px-4 bg-[#18181c] border-t border-border">
+                    <div className="agent-workspace__footer p-3 px-4 bg-card border-t border-border">
                         <div className="text-[11px] text-destructive uppercase tracking-wider mb-2 font-bold font-mono flex items-center gap-1.5">
                             <WorkbenchIcon name="codicon:error" size={12} /> SYSTEM_FAULT_DETECTED
                         </div>
 
-                        <div className="text-[12px] text-destructive bg-red-950/20 p-3 border border-destructive/20 rounded-none font-mono leading-relaxed">
+                        <div className="text-[12px] text-destructive bg-destructive/10 p-3 border border-destructive/20 rounded-md font-mono leading-relaxed">
                             {selectedTask.error}
                         </div>
                     </div>
@@ -303,12 +303,12 @@ function TaskCard({ task, onClick, onCancel }: { task: ActiveAgentTask; onClick:
         >
             <div className="agent-card__header flex items-center justify-between gap-2">
                 <div className="agent-card__identity flex items-center gap-2">
-                    <div className={`agent-card__icon w-7 h-7 flex items-center justify-center rounded-sm ${isRunning ? 'bg-[#00ff9f]/10 text-[#00ff9f]' : 'bg-muted/50 text-muted-foreground'}`}>
+                    <div className={`agent-card__icon w-7 h-7 flex items-center justify-center rounded-sm ${isRunning ? 'bg-primary/10 text-primary' : 'bg-muted/50 text-muted-foreground'}`}>
                         <WorkbenchIcon name={iconName} size={14} />
                     </div>
 
                     <div>
-                        <div className={`agent-card__name text-[11px] font-bold uppercase tracking-wider ${isRunning ? 'text-[#00ff9f]' : 'text-foreground'}`}>
+                        <div className={`agent-card__name text-[11px] font-bold uppercase tracking-wider ${isRunning ? 'text-primary' : 'text-foreground'}`}>
                             {task.agentName}
                         </div>
                         <div className="agent-card__id text-[11px] font-mono text-muted-foreground">
@@ -328,7 +328,7 @@ function TaskCard({ task, onClick, onCancel }: { task: ActiveAgentTask; onClick:
             {onCancel && (isRunning || isPending) && (
                 <WorkbenchButton 
                     onClick={(e) => { e.stopPropagation(); onCancel(); }}
-                    className="w-full py-0.5 text-[11px] font-bold tracking-wider border border-destructive/20 hover:bg-destructive/10 text-destructive hover:text-destructive rounded-none transition-all uppercase mb-1"
+                    className="w-full py-0.5 text-[11px] font-bold tracking-wider border border-destructive/20 hover:bg-destructive/10 text-destructive hover:text-destructive rounded-md transition-all uppercase mb-1"
                 >
                     DISMISS_TASK
                 </WorkbenchButton>
@@ -341,13 +341,13 @@ function TaskCard({ task, onClick, onCancel }: { task: ActiveAgentTask; onClick:
                 </div>
 
                 <div className="flex items-center gap-0.5 group">
-                    <span className="text-[11px] font-bold text-muted-foreground group-hover:text-[#00ff9f] transition-colors uppercase tracking-wider">Inspect</span>
-                    <WorkbenchIcon name="codicon:chevron-right" size={10} className="text-muted-foreground group-hover:text-[#00ff9f] transition-all" />
+                    <span className="text-[11px] font-bold text-muted-foreground group-hover:text-primary transition-colors uppercase tracking-wider">Inspect</span>
+                    <WorkbenchIcon name="codicon:chevron-right" size={10} className="text-muted-foreground group-hover:text-primary transition-all" />
                 </div>
             </div>
 
             {isRunning && (
-                <div className="agent-card__progress-bar absolute bottom-0 left-0 h-[1px] bg-[#00ff9f] motion-safe:animate-pulse" style={{ width: '100%' }} />
+                <div className="agent-card__progress-bar absolute bottom-0 left-0 h-[1px] bg-primary motion-safe:animate-pulse" style={{ width: '100%' }} />
             )}
         </div>
     );
@@ -357,23 +357,23 @@ function StatusIcon({ status }: { status: ActiveAgentTask['status'] }) {
     switch (status) {
         case 'completed': return <WorkbenchIcon name="codicon:check" size={14} className="text-green-500" />;
         case 'failed': return <WorkbenchIcon name="codicon:error" size={14} className="text-destructive" />;
-        case 'in_progress': return <WorkbenchIcon name="codicon:pulse" size={14} className="text-[#00ff9f] motion-safe:animate-pulse" />;
-        default: return <WorkbenchIcon name="codicon:clock" size={14} className="text-yellow-500 opacity-50" />;
+        case 'in_progress': return <WorkbenchIcon name="codicon:pulse" size={14} className="text-primary motion-safe:animate-pulse" />;
+        default: return <WorkbenchIcon name="codicon:clock" size={14} className="text-warning opacity-50" />;
     }
 }
 
 function StatusBadge({ task }: { task: ActiveAgentTask }) {
     const config = {
-        pending: { icon: 'codicon:clock', color: 'text-yellow-500', label: 'PENDING' },
-        in_progress: { icon: 'codicon:pulse', color: 'text-neon', label: 'ACTIVE' },
-        completed: { icon: 'codicon:check', color: 'text-green-500', label: 'SUCCESS' },
+        pending: { icon: 'codicon:clock', color: 'text-warning', label: 'PENDING' },
+        in_progress: { icon: 'codicon:pulse', color: 'text-primary', label: 'ACTIVE' },
+        completed: { icon: 'codicon:check', color: 'text-success', label: 'SUCCESS' },
         failed: { icon: 'codicon:error', color: 'text-destructive', label: 'FAULT' },
     }[task.status];
 
     return (
-        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-none bg-[#131316] border border-border">
-            <WorkbenchIcon name={config.icon} size={11} className={config.color === 'text-neon' ? 'text-[#00ff9f]' : config.color} />
-            <span className={`text-[11px] font-bold tracking-wider font-mono ${config.color === 'text-neon' ? 'text-[#00ff9f]' : config.color}`}>
+        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted border border-border">
+            <WorkbenchIcon name={config.icon} size={11} className={config.color} />
+            <span className={`text-[11px] font-bold tracking-wider font-mono ${config.color}`}>
                 {task.status === 'in_progress' ? (
                     <>RUNNING_<ElapsedTime start={task.startedAt} /></>
                 ) : config.label}
@@ -413,13 +413,13 @@ function LogEntry({ log, isLast }: { log: AgentActivity; isLast: boolean }) {
                 </div>
                 
                 {log.type === 'tool_call' && log.metadata && (
-                    <div className="log-entry__meta bg-background/20 p-2.5 rounded-none border-l border-[#00ff9f]/40 overflow-hidden font-mono transition-all">
+                    <div className="log-entry__meta bg-muted p-2.5 rounded-md border-l border-primary/40 overflow-hidden font-mono transition-all">
                         <div className="flex items-center gap-1.5 mb-1">
-                            <WorkbenchIcon name="codicon:zap" size={10} className="text-[#00ff9f]" />
-                            <span className="text-[11px] text-[#00ff9f] uppercase font-bold tracking-wider">[TOOL_DATA]</span>
+                            <WorkbenchIcon name="codicon:zap" size={10} className="text-primary" />
+                            <span className="text-[11px] text-primary uppercase font-bold tracking-wider">[TOOL_DATA]</span>
                         </div>
 
-                        <div className="text-[12px] text-green-400 leading-tight overflow-x-auto">
+                        <div className="text-[12px] text-success leading-tight overflow-x-auto">
                             <pre className="whitespace-pre-wrap break-all opacity-90">{JSON.stringify(log.metadata, null, 2)}</pre>
                         </div>
                     </div>
