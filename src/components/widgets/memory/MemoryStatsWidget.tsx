@@ -119,10 +119,10 @@ export function MemoryStatsWidget() {
 
           <div className="bg-[#0b0c10] border border-border p-3 rounded-lg flex flex-col justify-between">
             <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
-              <Cpu size={10} className="text-[#00ff9f]" /> Vector Size
+              <Cpu size={10} className="text-primary" /> Vector Size
             </span>
             <div className="mt-2 flex items-baseline gap-1">
-              <span className="text-xl font-bold font-mono text-[#00ff9f] tracking-tight">
+              <span className="text-xl font-bold font-mono text-primary tracking-tight">
                 {estimatedStorageSize}
               </span>
               <span className="text-[9px] text-muted-foreground/70 font-medium">disk</span>
@@ -244,7 +244,7 @@ export function MemoryStatsWidget() {
                       {score > 0 && (
                         <div className="text-[8.5px] font-mono text-muted-foreground flex items-center gap-1 select-none">
                           <span>SIMILARITY:</span>
-                          <span className="font-bold text-[#00ff9f]">{(1 - score).toFixed(3)}</span>
+                          <span className="font-bold text-primary">{(1 - score).toFixed(3)}</span>
                         </div>
                       )}
                     </div>
