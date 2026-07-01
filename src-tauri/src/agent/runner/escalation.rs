@@ -21,6 +21,41 @@ use tracing::error;
 
 use crate::agent::types::{ToolCall, ToolResult};
 
+// ─── Depth-gate helpers ─────────────────────────────────────────────────
+//
+// Subagent (depth > 0) events must NOT flood the live UI stream.
+// The subagent's final response is delivered as a tool result,
+// not as token deltas. These gates prevent subagent token floods
+// from competing with the parent's streaming pipe.
+
+/// Which category of live-stream event we are about to emit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum LiveEventKind {
+    AgentChunk,
+    ChatStatus,
+    /// The very first `chat:chunk:first` for a response.
+    ChatChunkFirst,
+    ChatChunk,
+}
+
+/// Decide whether a child runner (depth > 0) should still emit the
+/// given event category to the live UI stream.
+pub(super) fn should_emit_live_stream_event(depth: u32, kind: LiveEventKind) -> bool {
+    if depth == 0 {
+        return true;
+    }
+    match kind {
+        LiveEventKind::ChatChunkFirst | LiveEventKind::ChatChunk | LiveEventKind::AgentChunk | LiveEventKind::ChatStatus => false,
+    }
+}
+
+/// The 500ms `accumulated_text` saver task contends with the parent's
+/// SQLite write path. Skip it for child runners; they only persist on
+/// final completion.
+pub(super) fn should_run_partial_saver(depth: u32) -> bool {
+    depth == 0
+}
+
 #[derive(Clone)]
 pub(super) struct EarlyToolExecutionContext {
     pub chat_id: String,
@@ -506,6 +541,9 @@ impl Runner {
         let agent_stream_clone = agent_stream.clone();
         let early_runner = self.clone();
         let early_tools_clone = early_tools.clone();
+        // Depth-0 only the parent is allowed to emit to the live UI
+        // stream. Children emit through the tool-result path instead.
+        let runner_depth = self.depth;
         let early_token = token.child_token();
         let early_token_for_callback = early_token.clone();
 
@@ -590,6 +628,11 @@ impl Runner {
         let cancel_token = token.clone();
 
         tokio::spawn(async move {
+            // Subagent partial-saver competes with the parent's DB write
+            // path; children only persist on final completion.
+            if !should_run_partial_saver(runner_depth) {
+                return;
+            }
             if let Some(pool) = db_pool {
                 let mut last_saved_content = String::new();
                 let mut interval = tokio::time::interval(std::time::Duration::from_millis(500));
@@ -648,29 +691,34 @@ impl Runner {
                                 .as_deref()
                                 .filter(|value| !value.is_empty())
                                 .unwrap_or("tool call");
-                            AgentEvent::ChatStatus(ChatStatusPayload {
-                                chat_id: chat_id_clone.clone(),
-                                message: format!("Preparing {}", tool_label),
-                                iteration: None,
-                                phase: Some(ChatStatusPhase::TOOL_CALL_STREAMING.to_string()),
-                                metadata: Some(serde_json::json!({
-                                    "status": "running",
-                                    "toolCall": {
-                                        "toolName": tool_label,
-                                        "toolCallId": id,
-                                        "args": {},
-                                        "status": "running"
-                                    },
-                                    "toolCallPreview": {
-                                        "index": index,
-                                        "toolCallId": id,
-                                        "toolName": name,
-                                        "argumentsDelta": safe_arguments_delta,
-                                        "argumentsPreview": safe_arguments_snapshot,
-                                    }
-                                })),
-                            })
-                            .emit_via(&app_clone, &on_event_clone);
+                            if should_emit_live_stream_event(
+                                runner_depth,
+                                LiveEventKind::ChatStatus,
+                            ) {
+                                AgentEvent::ChatStatus(ChatStatusPayload {
+                                    chat_id: chat_id_clone.clone(),
+                                    message: format!("Preparing {}", tool_label),
+                                    iteration: None,
+                                    phase: Some(ChatStatusPhase::TOOL_CALL_STREAMING.to_string()),
+                                    metadata: Some(serde_json::json!({
+                                        "status": "running",
+                                        "toolCall": {
+                                            "toolName": tool_label,
+                                            "toolCallId": id,
+                                            "args": {},
+                                            "status": "running"
+                                        },
+                                        "toolCallPreview": {
+                                            "index": index,
+                                            "toolCallId": id,
+                                            "toolName": name,
+                                            "argumentsDelta": safe_arguments_delta,
+                                            "argumentsPreview": safe_arguments_snapshot,
+                                        }
+                                    })),
+                                })
+                                .emit_via(&app_clone, &on_event_clone);
+                            }
                             return;
                         }
                         LlmChunk::ToolCallReady {
@@ -680,29 +728,34 @@ impl Runner {
                             arguments,
                         } => {
                             let safe_arguments = redact_tool_preview_args(&arguments);
-                            AgentEvent::ChatStatus(ChatStatusPayload {
-                                chat_id: chat_id_clone.clone(),
-                                message: format!("{} is ready", name),
-                                iteration: None,
-                                phase: Some(ChatStatusPhase::TOOL_CALL_READY.to_string()),
-                                metadata: Some(serde_json::json!({
-                                    "status": "running",
-                                    "toolCall": {
-                                        "toolName": name,
-                                        "toolCallId": id,
-                                        "args": safe_arguments.clone(),
-                                        "status": "running"
-                                    },
-                                    "toolCallPreview": {
-                                        "index": index,
-                                        "toolCallId": id,
-                                        "toolName": name,
-                                        "argumentsPreview": safe_arguments,
-                                        "ready": true,
-                                    }
-                                })),
-                            })
-                            .emit_via(&app_clone, &on_event_clone);
+                            if should_emit_live_stream_event(
+                                runner_depth,
+                                LiveEventKind::ChatStatus,
+                            ) {
+                                AgentEvent::ChatStatus(ChatStatusPayload {
+                                    chat_id: chat_id_clone.clone(),
+                                    message: format!("{} is ready", name),
+                                    iteration: None,
+                                    phase: Some(ChatStatusPhase::TOOL_CALL_READY.to_string()),
+                                    metadata: Some(serde_json::json!({
+                                        "status": "running",
+                                        "toolCall": {
+                                            "toolName": name,
+                                            "toolCallId": id,
+                                            "args": safe_arguments.clone(),
+                                            "status": "running"
+                                        },
+                                        "toolCallPreview": {
+                                            "index": index,
+                                            "toolCallId": id,
+                                            "toolName": name,
+                                            "argumentsPreview": safe_arguments.clone(),
+                                            "ready": true,
+                                        }
+                                    })),
+                                })
+                                .emit_via(&app_clone, &on_event_clone);
+                            }
                             if let Some(ctx) = early_tools_clone.clone() {
                                 let key = EarlyToolExecutionState::key_for(
                                     &name,
@@ -749,15 +802,20 @@ impl Runner {
                         }
                     }
                     if !chunk_text.is_empty() {
-                        if let Some((agent_id, agent_name)) = agent_stream_clone.as_ref() {
-                            AgentEvent::AgentChunk(AgentChunkPayload {
-                                chat_id: chat_id_clone.clone(),
-                                agent_id: agent_id.clone(),
-                                agent_name: agent_name.clone(),
-                                delta: chunk_text.clone(),
-                                r#type: chunk_type.to_string(),
-                            })
-                            .emit_via(&app_clone, &on_event_clone);
+                        if should_emit_live_stream_event(
+                            runner_depth,
+                            LiveEventKind::AgentChunk,
+                        ) {
+                            if let Some((agent_id, agent_name)) = agent_stream_clone.as_ref() {
+                                AgentEvent::AgentChunk(AgentChunkPayload {
+                                    chat_id: chat_id_clone.clone(),
+                                    agent_id: agent_id.clone(),
+                                    agent_name: agent_name.clone(),
+                                    delta: chunk_text.clone(),
+                                    r#type: chunk_type.to_string(),
+                                })
+                                .emit_via(&app_clone, &on_event_clone);
+                            }
                         }
                     }
                     if chunk_type == "text" && !chunk_text.is_empty() {
@@ -767,6 +825,10 @@ impl Runner {
                     }
 
                     if !chunk_text.is_empty()
+                        && should_emit_live_stream_event(
+                            runner_depth,
+                            LiveEventKind::ChatChunkFirst,
+                        )
                         && !first_chunk_sent_clone.swap(true, std::sync::atomic::Ordering::SeqCst)
                     {
                         AgentEvent::ChatChunkFirst(ChatChunkFirstPayload {
@@ -794,14 +856,19 @@ impl Runner {
                     if data.1 != chunk_type && !data.0.is_empty() {
                         let old_text = std::mem::take(&mut data.0);
                         let old_type = data.1;
-                        AgentEvent::ChatChunk(ChatChunkPayload {
-                            chat_id: chat_id_clone.clone(),
-                            delta: old_text,
-                            r#type: old_type.to_string(),
-                            done: false,
-                            message_id: Some(msg_id_for_chunks.clone()),
-                        })
-                        .emit_via(&app_clone, &on_event_clone);
+                        if should_emit_live_stream_event(
+                            runner_depth,
+                            LiveEventKind::ChatChunk,
+                        ) {
+                            AgentEvent::ChatChunk(ChatChunkPayload {
+                                chat_id: chat_id_clone.clone(),
+                                delta: old_text,
+                                r#type: old_type.to_string(),
+                                done: false,
+                                message_id: Some(msg_id_for_chunks.clone()),
+                            })
+                            .emit_via(&app_clone, &on_event_clone);
+                        }
 
                         data.0.push_str(&chunk_text);
                         data.1 = chunk_type;
@@ -817,14 +884,19 @@ impl Runner {
                             data.2 = now;
                             drop(data);
 
-                            AgentEvent::ChatChunk(ChatChunkPayload {
-                                chat_id: chat_id_clone.clone(),
-                                delta: text,
-                                r#type: current_type.to_string(),
-                                done: false,
-                                message_id: Some(msg_id_for_chunks.clone()),
-                            })
-                            .emit_via(&app_clone, &on_event_clone);
+                            if should_emit_live_stream_event(
+                                runner_depth,
+                                LiveEventKind::ChatChunk,
+                            ) {
+                                AgentEvent::ChatChunk(ChatChunkPayload {
+                                    chat_id: chat_id_clone.clone(),
+                                    delta: text,
+                                    r#type: current_type.to_string(),
+                                    done: false,
+                                    message_id: Some(msg_id_for_chunks.clone()),
+                                })
+                                .emit_via(&app_clone, &on_event_clone);
+                            }
                         }
                     }
                 }),
