@@ -4,10 +4,9 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    background: #1e1e24;
+    background: hsl(var(--background));
     overflow: hidden;
     position: relative;
-    font-family: var(--font_mono), monospace;
 }
 
 /* ─── Birds Eye View ─── */
@@ -25,7 +24,7 @@
     align-items: center;
     padding: 8px 12px;
     height: 36px;
-    background: #18181c;
+    background: hsl(var(--card));
     border-bottom: 1px solid hsl(var(--foreground) / 0.08);
     font-size: 10px;
 }
@@ -46,7 +45,7 @@
 }
 
 .live-agent-panel {
-    background: #1b1b20;
+    background: hsl(var(--card));
 }
 
 .live-agent-panel__header {
@@ -56,7 +55,7 @@
     justify-content: space-between;
     gap: 10px;
     padding: 8px 12px;
-    background: #18181c;
+    background: hsl(var(--card));
     border-bottom: 1px solid hsl(var(--foreground) / 0.06);
 }
 
@@ -88,9 +87,9 @@
 }
 
 .live-agent-panel__state--running {
-    border-color: rgba(0, 255, 159, 0.25);
-    background: rgba(0, 255, 159, 0.08);
-    color: rgba(0, 255, 159, 0.8);
+    border-color: hsl(var(--primary) / 0.25);
+    background: hsl(var(--primary) / 0.08);
+    color: hsl(var(--primary) / 0.8);
 }
 
 .live-agent-panel__metrics {
@@ -128,11 +127,11 @@
 }
 
 .live-agent-panel__metric--active span:first-child {
-    color: rgba(0, 255, 159, 0.82);
+    color: hsl(var(--primary) / 0.82);
 }
 
 .live-agent-panel__metric--warn span:first-child {
-    color: rgba(245, 158, 11, 0.9);
+    color: hsl(var(--warning) / 0.9);
 }
 
 .live-agent-panel__section {
@@ -176,24 +175,24 @@
 }
 
 .live-agent-panel__tool-status--running {
-    background: #00ff9f;
+    background: hsl(var(--primary));
 }
 
 .live-agent-panel__tool-status--awaiting_approval {
-    background: #f59e0b;
+    background: hsl(var(--warning));
 }
 
 .live-agent-panel__tool-status--completed {
-    background: #34d399;
+    background: hsl(var(--success));
 }
 
 .live-agent-panel__tool-status--error {
-    background: #fb7185;
+    background: hsl(var(--destructive));
 }
 
 /* VS Code Flat List Card */
 .agent-card {
-    background: #1e1e24;
+    background: hsl(var(--background));
     border-bottom: 1px solid hsl(var(--foreground) / 0.06);
     padding: 10px 14px;
     cursor: pointer;
@@ -206,12 +205,12 @@
 }
 
 .agent-card:hover {
-    background: #2a2d2e;
+    background: hsl(var(--muted));
 }
 
 .agent-card--active {
-    background: #252526;
-    border-left: 3px solid #00ff9f;
+    background: hsl(var(--muted));
+    border-left: 3px solid hsl(var(--primary));
 }
 
 .agent-card__header {
@@ -233,13 +232,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #00ff9f;
+    color: hsl(var(--primary));
 }
 
 .agent-card__name {
     font-size: 11px;
     font-weight: 600;
-    color: #e1e1e1;
+    color: hsl(var(--foreground));
     text-transform: uppercase;
     letter-spacing: 0.02em;
 }
@@ -271,7 +270,7 @@
     bottom: 0;
     left: 0;
     height: 1px;
-    background: #00ff9f;
+    background: hsl(var(--primary));
 }
 
 /* ─── Detail View (Workspace) ─── */
@@ -280,14 +279,14 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    background: #1e1e24;
+    background: hsl(var(--background));
 }
 
 .agent-workspace__header {
     padding: 6px 12px;
     height: 36px;
     border-bottom: 1px solid hsl(var(--foreground) / 0.08);
-    background: #18181c;
+    background: hsl(var(--card));
     display: flex;
     align-items: center;
     gap: 10px;
@@ -309,7 +308,7 @@
 
 .back-button:hover {
     background: hsl(var(--foreground) / 0.08);
-    color: #e1e1e1;
+    color: hsl(var(--foreground));
 }
 
 .agent-workspace__content {
@@ -321,20 +320,20 @@
 
 .agent-workspace__task-info {
     padding: 10px 14px;
-    background: #1e1e24;
+    background: hsl(var(--background));
     border-bottom: 1px solid hsl(var(--foreground) / 0.06);
 }
 
 .agent-workspace__telemetry {
     flex-grow: 1;
     overflow-y: auto;
-    background: #1e1e1e; /* Pure terminal background */
+    background: hsl(var(--code-background)); /* Pure terminal background */
 }
 
 .telemetry-header {
     position: sticky;
     top: 0;
-    background: #18181c;
+    background: hsl(var(--card));
     z-index: 10;
     padding: 6px 14px;
     height: 28px;
@@ -351,7 +350,7 @@
 .agent-workspace__footer {
     padding: 12px 14px;
     border-top: 1px solid hsl(var(--foreground) / 0.08);
-    background: #18181c;
+    background: hsl(var(--card));
 }
 
 /* VS Code Flat Telemetry Outputs */
@@ -367,28 +366,28 @@
 }
 
 .log-entry__time { 
-    color: #858585; 
+    color: hsl(var(--muted-foreground)); 
     font-size: 10px;
 }
 
 .log-entry__type { 
-    color: #569cd6; /* VS Code light blue */
+    color: hsl(var(--primary) / 0.8); /* VS Code light blue */
     font-weight: 500; 
     width: 76px; 
     text-transform: uppercase; 
 }
 
 .log-entry__content { 
-    color: #cccccc; 
+    color: hsl(var(--foreground) / 0.85); 
     flex-grow: 1; 
 }
 
-.log-entry--error .log-entry__content { color: #f48771; } /* VS Code red-salmon error color */
-.log-entry--tool_call .log-entry__type { color: #c586c0; } /* VS Code purple */
+.log-entry--error .log-entry__content { color: hsl(var(--destructive)); } /* VS Code red-salmon error color */
+.log-entry--tool_call .log-entry__type { color: hsl(var(--primary) / 0.7); } /* VS Code purple */
 
 /* Flat Log bubble */
 .chat-bubble-style {
-    background: #1e1e1e;
+    background: hsl(var(--code-background));
     border: 1px solid hsl(var(--foreground) / 0.06);
     border-radius: 2px;
     padding: 8px 10px;
@@ -398,15 +397,15 @@
 }
 
 .log-entry--status .chat-bubble-style {
-    border-left: 2px solid #00ff9f;
+    border-left: 2px solid hsl(var(--primary));
 }
 
 .log-entry--commentary .chat-bubble-style {
-    border-left: 2px solid #a78bfa;
+    border-left: 2px solid hsl(var(--primary) / 0.6);
 }
 
 .log-entry--bubble .log-entry__content {
-    color: #d4d4d4;
+    color: hsl(var(--foreground) / 0.9);
 }
 
 .log-entry--bubble .md-content {
