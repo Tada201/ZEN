@@ -732,6 +732,9 @@ impl EventBus {
 
 impl Default for EventBus {
     fn default() -> Self {
-        Self::new(256)
+        // 4096 to absorb subagent burst floods (AgentChunk + chat:status
+        // events). Previous 256 caused RecvError::Lagged drops that
+        // manifested as parent-stream stutter.
+        Self::new(4096)
     }
 }
