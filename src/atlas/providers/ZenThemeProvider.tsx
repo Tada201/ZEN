@@ -86,6 +86,7 @@ function getInitialDensity(): Density {
 
 export function ZenThemeProvider({ children }: { children: ReactNode }) {
   const configuredThemeId = useSettingsStore((state) => state.themeId);
+  const configuredCompactMode = useSettingsStore((state) => state.compactMode);
   const configuredAccentHsl = useSettingsStore((state) => state.accentHsl);
   const configuredAccentGlow = useSettingsStore((state) => state.accentGlow);
   const configuredRadiusPreset = useSettingsStore((state) => state.radiusPreset);
@@ -100,6 +101,26 @@ export function ZenThemeProvider({ children }: { children: ReactNode }) {
   const [motionEnabled, setMotionEnabledState] = useState(getInitialMotion);
   const [pressEnabled, setPressEnabledState] = useState(getInitialPress);
   const [density, setDensityState] = useState<Density>(getInitialDensity);
+  const [systemMode, setSystemMode] = useState<"light" | "dark">("dark");
+
+  // Track OS prefers-color-scheme media matches
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e: MediaQueryListEvent) => {
+      setSystemMode(e.matches ? "dark" : "light");
+    };
+    setSystemMode(mediaQuery.matches ? "dark" : "light");
+    mediaQuery.addEventListener("change", handler);
+    return () => mediaQuery.removeEventListener("change", handler);
+  }, []);
+
+  // Synchronize compactMode setting to document density dataset
+  useEffect(() => {
+    if (configuredCompactMode !== undefined) {
+      setDensity(configuredCompactMode ? "compact" : "cozy");
+    }
+  }, [configuredCompactMode]);
 
   const setMotionEnabled = useCallback((b: boolean) => {
     setMotionEnabledState(b);
@@ -137,13 +158,15 @@ export function ZenThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const applyPreset = useCallback((id: string) => {
-    const resolvedId = normalizeThemeId(id);
+    const resolvedId = id === "system"
+      ? (systemMode === "dark" ? "default-dark" : "default-light")
+      : normalizeThemeId(id);
     const p = THEME_PRESETS.find((theme) => theme.id === resolvedId) ?? THEME_PRESETS[0];
-    setPreset(p.id);
+    setPreset(id);
     setMode(p.mode);
     const root = document.documentElement;
     applyThemeVariables(p.vars);
-    root.dataset.theme = p.id;
+    root.dataset.theme = id; // Store system in data-theme so CSS can inspect it
     root.dataset.vibe = p.vibe ?? "standard";
     root.dataset.themeFont = p.font ?? "sans";
 
@@ -172,7 +195,7 @@ export function ZenThemeProvider({ children }: { children: ReactNode }) {
     const nextStyleMode = configuredStyleMode || "subtle";
     setStyleModeState(nextStyleMode);
     root.dataset.style = nextStyleMode;
-  }, [configuredAccentGlow, configuredAccentHsl, configuredRadiusPreset, configuredStyleMode, setDensity, setMode]);
+  }, [configuredAccentGlow, configuredAccentHsl, configuredRadiusPreset, configuredStyleMode, setDensity, setMode, systemMode]);
 
   const setAccent = useCallback((hsl: string, glow: string) => {
     setAccentState(hsl);
@@ -201,6 +224,13 @@ export function ZenThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     applyPreset(configuredThemeId || "default-dark");
   }, [applyPreset, configuredThemeId]);
+
+  // Re-apply theme variables when system light/dark mode transitions
+  useEffect(() => {
+    if (preset === "system") {
+      applyPreset("system");
+    }
+  }, [systemMode, preset, applyPreset]);
 
   const exportCSS = useCallback(() => {
     const root = document.documentElement;

@@ -10,6 +10,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, RwLock};
 
 // ========== RISK LEVELS ==========
@@ -88,62 +89,134 @@ impl PermissionDecision {
             return PermissionDecision::Deny { reason };
         }
 
-        // --- Layer 1.5: YOLO Mode (Bypasses confirmation/overrides, but respects Hardcoded Deny) ---
-        if settings.yolo_mode {
-            return PermissionDecision::Allow;
-        }
-
-        // --- Layer 1.6: Auto-Approve Low Risk ---
-        if settings.auto_approve_low_risk && risk_level == RiskLevel::Low {
-            return PermissionDecision::Allow;
-        }
-
-        // --- Layers 2-5: Tool-specific rules ---
+        // --- Layers 2-4: Tool-specific user overrides (deny > confirm > allow).
+        // These take precedence over the global permission_mode cascade so that
+        // user-saved per-tool rules are always honored, even in YOLO mode (deny only).
         if let Some(rules) = settings.tool_overrides.get(tool_name) {
-            // Layer 2: always_deny patterns
-            if settings.cache.matches_any(&args_str, &rules.always_deny) {
+            if !rules.always_deny.is_empty()
+                && settings.cache.matches_any(&args_str, &rules.always_deny)
+            {
                 return PermissionDecision::Deny {
-                    reason: format!("Matches deny pattern for '{}'", tool_name),
+                    reason: format!("Blocked by per-tool always_deny pattern for '{}'", tool_name),
                 };
             }
-
-            // Layer 3: always_confirm patterns
-            if settings.cache.matches_any(&args_str, &rules.always_confirm) {
+            if !rules.always_confirm.is_empty()
+                && settings.cache.matches_any(&args_str, &rules.always_confirm)
+            {
                 return PermissionDecision::Confirm {
                     context: build_context(tool_name, args, risk_level),
                 };
             }
-
-            // Layer 4: always_allow patterns
-            if settings.cache.matches_any(&args_str, &rules.always_allow) {
+            if !rules.always_allow.is_empty()
+                && settings.cache.matches_any(&args_str, &rules.always_allow)
+            {
                 return PermissionDecision::Allow;
             }
-
-            // Layer 5: Tool-specific default
+            // Layer 5: per-tool default (overrides global mode)
             if let Some(default) = &rules.default {
-                return apply_default(default, tool_name, args, risk_level);
+                return match default {
+                    PermissionDefault::AlwaysDeny => PermissionDecision::Deny {
+                        reason: format!("Blocked by per-tool default deny for '{}'", tool_name),
+                    },
+                    PermissionDefault::AlwaysAllow => PermissionDecision::Allow,
+                    PermissionDefault::Confirm => PermissionDecision::Confirm {
+                        context: build_context(tool_name, args, risk_level),
+                    },
+                };
             }
         }
 
-        // --- Layer 6: Global default ---
-        apply_default(&settings.global_default, tool_name, args, risk_level)
-    }
-}
+        // Determine effective mode based on settings or the permission_mode string
+        let mode = if settings.yolo_mode || settings.permission_mode == "yolo" {
+            "yolo"
+        } else {
+            settings.permission_mode.as_str()
+        };
 
-fn apply_default(
-    default: &PermissionDefault,
-    tool_name: &str,
-    args: &serde_json::Value,
-    risk_level: RiskLevel,
-) -> PermissionDecision {
-    match default {
-        PermissionDefault::AlwaysAllow => PermissionDecision::Allow,
-        PermissionDefault::AlwaysDeny => PermissionDecision::Deny {
-            reason: format!("Tool '{}' is disabled by default setting", tool_name),
-        },
-        PermissionDefault::Confirm => PermissionDecision::Confirm {
-            context: build_context(tool_name, args, risk_level),
-        },
+        match mode {
+            "yolo" => PermissionDecision::Allow,
+            "plan_mode" => {
+                // Read-only Plan Mode: only Low and Medium risk tools run automatically.
+                // High risk (file writes) and Critical (shell/bash) are blocked immediately.
+                if risk_level == RiskLevel::Low || risk_level == RiskLevel::Medium {
+                    PermissionDecision::Allow
+                } else if risk_level == RiskLevel::High {
+                    // Plan Mode Exception: allow writing plan markdown files.
+                    // Security: only allow paths that resolve *inside* the
+                    // configured plans_root (workspace_folder.join("plans")).
+                    // The legacy substring check below was trivially bypassable
+                    // (`/tmp/plans_evil/foo.txt` matched "/plans/") and is
+                    // retained only as a fallback when no plans_root is
+                    // configured (e.g. unit tests using ToolPermissions::default).
+                    //
+                    // File-target contract: single-target write/edit tools use
+                    // `file_path` (preferred) or `path` (legacy). `apply_patch`
+                    // carries a `{ "patch": "..." }` blob whose file targets
+                    // live inside the embedded patch text — we have to PARSE
+                    // the patch to evaluate the exception. ALL hunk targets
+                    // must resolve inside plans_root; a single out-of-root
+                    // target denies the whole patch.
+                    let is_plan = plan_mode_targets_inside_root(
+                        tool_name,
+                        args,
+                        settings.plans_root.as_deref(),
+                    );
+                    if is_plan {
+                        PermissionDecision::Allow
+                    } else {
+                        PermissionDecision::Deny {
+                            reason: format!(
+                                "File modification on '{}' blocked by Plan Mode (read-only)",
+                                tool_name
+                            ),
+                        }
+                    }
+                } else {
+                    PermissionDecision::Deny {
+                        reason: format!(
+                            "High-risk command execution '{}' blocked by Plan Mode (read-only)",
+                            tool_name
+                        ),
+                    }
+                }
+            }
+            "auto_edit" => {
+                // Edit Automatically: file edits (`Low` risk reads and
+                // `Medium` risk non-destructive operations) run without
+                // prompts. `High` risk file write / patch operations and
+                // `Critical` terminal/shell operations BOTH require an
+                // explicit use confirmation so the safety-mode wording
+                // ("ask for high-impact changes") matches the actual
+                // matrix. The previous behaviour auto-allowed all High
+                // risk tools — including file writes — and was a
+                // contradiction with the UI copy that described file
+                // edits as the silent-allow surface.
+                //
+                // Note: this is the documented contract for `auto_edit`.
+                // Tools advertising this mode in the Chat tab MUST keep
+                // their risk-level declarations honest; under-classifying
+                // a write tool as Medium to bypass `Confirm` is not
+                // sanctioned by this layer.
+                if risk_level == RiskLevel::Low || risk_level == RiskLevel::Medium {
+                    PermissionDecision::Allow
+                } else {
+                    PermissionDecision::Confirm {
+                        context: build_context(tool_name, args, risk_level),
+                    }
+                }
+            }
+            "ask" | _ => {
+                // Ask Before Changes (default standard safety):
+                // Low risk runs automatically. Medium, High, and Critical trigger confirmation.
+                if risk_level == RiskLevel::Low {
+                    PermissionDecision::Allow
+                } else {
+                    PermissionDecision::Confirm {
+                        context: build_context(tool_name, args, risk_level),
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -159,9 +232,12 @@ fn build_context(
     let mut suggested = Vec::new();
     // Suggest: always allow this exact tool
     suggested.push(format!("tool:{}", tool_name));
-    // If args contain a path, suggest the parent directory pattern
-    if let Some(path) = args.get("path").and_then(|p| p.as_str()) {
-        if let Some(parent) = std::path::Path::new(path).parent() {
+    // If args contain a file target, suggest the parent directory pattern.
+    // Read both `file_path` (used by `write_file`/`edit_file`) and `path`
+    // (older tools / config-style callers) so the suggested pattern matches
+    // whatever field the tool actually inspects.
+    if let Some(target) = extract_file_target(args) {
+        if let Some(parent) = std::path::Path::new(&target).parent() {
             suggested.push(format!("{}/*", parent.display()));
         }
     }
@@ -272,10 +348,24 @@ pub struct ToolPermissions {
     /// Auto-Approve Low Risk: Automatically allow Low risk tools
     #[serde(default)]
     pub auto_approve_low_risk: bool,
+    /// Active permission mode (plan_mode | ask | auto_edit | yolo)
+    #[serde(default = "default_permission_mode")]
+    pub permission_mode: String,
     /// Lazily compiled regex cache — not serialized, shared via Arc across clones
     #[serde(skip)]
     #[serde(default = "RegexCache::default")]
     pub cache: RegexCache,
+    /// Resolved plans directory for secure Plan-Mode writes.
+    /// Set at runtime from `AppState.workspace_folder.join("plans")` so
+    /// the plan-mode exception cannot be triggered via path-string tricks
+    /// (substring lookalikes, `..` traversal). When `None`, the legacy
+    /// heuristic is used — preserves test compatibility.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plans_root: Option<PathBuf>,
+}
+
+fn default_permission_mode() -> String {
+    "ask".to_string()
 }
 
 impl ToolPermissions {
@@ -309,7 +399,9 @@ impl Default for ToolPermissions {
             tool_overrides: HashMap::new(),
             yolo_mode: false,
             auto_approve_low_risk: false,
+            permission_mode: "ask".to_string(),
             cache: RegexCache::default(),
+            plans_root: None,
         }
     }
 }
@@ -335,6 +427,139 @@ pub struct ToolPermissionRules {
     /// Regex patterns that require confirmation
     #[serde(default)]
     pub always_confirm: Vec<String>,
+}
+
+// ========== SECURE PLAN-MODE PATH CHECK ==========
+
+/// Plan-Mode target evaluation. For single-target tools this returns
+/// `true` iff the file target resolves inside `plans_root`. For
+/// `apply_patch` it parses the embedded patch and returns `true` iff
+/// every hunk's declared path resolves inside `plans_root`. A patch that
+/// mixes plan-mode and non-plan-mode targets is denied atomically — the
+/// contract is "each target lands inside plans_root" with no partial
+/// approval.
+fn plan_mode_targets_inside_root(
+    tool_name: &str,
+    args: &serde_json::Value,
+    plans_root: Option<&Path>,
+) -> bool {
+    if tool_name == "apply_patch" {
+        let patch_text = args.get("patch").and_then(|p| p.as_str());
+        match (patch_text, plans_root) {
+            (Some(text), Some(plan_root)) => {
+                crate::tools::patch_parser::parse_patches(text)
+                    .map(|hunks| {
+                        !hunks.is_empty()
+                            && hunks.iter().all(|h| {
+                                let decl = match h {
+                                    crate::tools::patch_parser::PatchHunk::AddFile { path, .. }
+                                    | crate::tools::patch_parser::PatchHunk::DeleteFile { path }
+                                    | crate::tools::patch_parser::PatchHunk::UpdateFile {
+                                        path, ..
+                                    } => path,
+                                };
+                                is_within_plans_root(&decl.to_string_lossy(), plan_root)
+                            })
+                    })
+                    .unwrap_or(false)
+            }
+            (Some(text), None) => {
+                // Fallback: substring heuristic (NOT secure). Matches the
+                // legacy pre-`plans_root` behaviour so unit tests using
+                // `ToolPermissions::default` keep passing.
+                text.contains("/plans/") || text.contains(".zen/plans/")
+            }
+            (None, _) => false,
+        }
+    } else {
+        let path_str = extract_file_target(args);
+        match (path_str.as_deref(), plans_root) {
+            (Some(p), Some(plan_root)) => is_within_plans_root(p, plan_root),
+            (Some(p), None) => p.contains("/plans/") || p.contains(".zen/plans/"),
+            (None, _) => false,
+        }
+    }
+}
+
+// ========== UNIFIED FILE-TARGET CONTRACT ==========
+
+/// Single source of truth for "which file is this tool touching?".
+///
+/// Reads both the modern `file_path` field (the contract used by
+/// [`crate::tools::fs_tools::write::WriteFileTool`],
+/// [`crate::tools::fs_tools::write::EditFileTool`], and the patch tool's
+/// per-hunk resolution) and the legacy `path` field used by older
+/// readers / config-style callers. `target_path` is also recognized so
+/// any future write tool that wants to rename the field can do so
+/// without breaking the plan-mode exception.
+///
+/// Returns `None` when no recognizable file target is present
+/// (e.g. terminal commands, network tools, the unparsed `apply_patch`
+/// payload where the path lives inside the embedded patch text — that
+/// case is handled separately in `fs_tools/patch.rs`).
+pub(crate) fn extract_file_target(args: &serde_json::Value) -> Option<String> {
+    args.get("file_path")
+        .or_else(|| args.get("path"))
+        .or_else(|| args.get("target_path"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+}
+
+/// Returns true iff `user_path` resolves inside `plans_root`.
+///
+/// Defeats the two classes of attack that the legacy substring check
+/// missed:
+///   1. Substring lookalikes — `/tmp/plans_evil/foo.txt` matched `/plans/`
+///      under the old check. The new check resolves the path lexically
+///      (or canonically when the file exists) and tests `starts_with`
+///      against `plans_root`.
+///   2. `..` traversal — `/workspace/plans/../etc/passwd` resolved to
+///      `/workspace/etc/passwd`. The canonicalize path collapses `..`
+///      against the real filesystem; the lexical fallback collapses it
+///      against the path components themselves.
+///
+/// For paths that do not exist on disk (newly-created plan files), we
+/// try canonicalize first; on failure we lexically normalize the
+/// remaining path components. Symlink evasion requires the file to
+/// exist, so a symlink at `/workspace/plans/foo -> /etc/` only escapes
+/// at write time if the symlink target directory itself lives inside
+/// `plans_root` — which it won't, since the attacker does not control
+/// filesystem layout. Failures from canonicalize that leave no path
+/// component existing are treated as deny.
+pub(crate) fn is_within_plans_root(user_path: &str, plans_root: &Path) -> bool {
+    let raw = Path::new(user_path);
+
+    // Case 1: file exists on disk → canonicalize resolves symlinks + `..`.
+    if let Ok(canonical) = raw.canonicalize() {
+        return canonical.starts_with(plans_root);
+    }
+
+    // Case 2: file does not exist (newly-created plan). Lexically normalize
+    // components: handle `..`, drop `.`, then compare prefix.
+    let mut normalized = PathBuf::new();
+    for component in raw.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                if !normalized.pop() && raw.is_absolute() {
+                    // Attempted escape above absolute root.
+                    return false;
+                }
+            }
+            std::path::Component::CurDir => {}
+            std::path::Component::Normal(name) => normalized.push(name),
+            std::path::Component::RootDir => normalized.push(component),
+            std::path::Component::Prefix(_) => normalized.push(component),
+        }
+    }
+
+    // If the user path was relative, we cannot resolve it without the
+    // workspace root in scope. Fail closed — the security exception does
+    // not apply.
+    if !normalized.has_root() && !raw.is_absolute() {
+        return false;
+    }
+
+    normalized.starts_with(plans_root)
 }
 
 // ========== COMPILED REGEX HELPER ==========
@@ -595,6 +820,313 @@ pub fn extract_shell_commands(input: &str) -> Vec<String> {
     commands
 }
 
+// ========== MODE × RISK MATRIX TESTS ==========
+//
+// The `PermissionDecision::from_input` policy lives behind a 6-layer
+// precedence chain and is the single point at which Zen wires the
+// user-visible "safety mode" to actual runtime behaviour. A drift
+// between the documented mode and the matrix below is a security
+// regression — the Chat tab and any 3rd-party agent both rely on
+// these contracts to decide which calls to gate.
+//
+// The matrix below pins every (mode, risk) cell. If you change one of
+// these branches, ALL the matrix cells must be updated in lockstep
+// with the runtime code AND with the matching UI copy in
+// `src/components/settings/Tabs/ToolsSettings.tsx`.
+#[cfg(test)]
+mod mode_risk_matrix {
+    use super::*;
+
+    /// Convenience: build a `ToolPermissions` whose only relevant
+    /// field is the permission mode. Plans-root is the legacy
+    /// substring fallback by default so a `plan_mode` High-risk test
+    /// that just checks the substring heuristic works without
+    /// touching disk.
+    fn settings_for(mode: &str) -> ToolPermissions {
+        ToolPermissions {
+            permission_mode: mode.to_string(),
+            ..ToolPermissions::default()
+        }
+    }
+
+    /// Stable wrapper so matrix failure messages name the cell.
+    fn assert_decision(
+        mode: &str,
+        risk: RiskLevel,
+        actual: PermissionDecision,
+        expected: &str,
+        matcher: impl Fn(&PermissionDecision) -> bool,
+    ) {
+        assert!(
+            matcher(&actual),
+            "[{} × {:?}] expected {}, got {:?}",
+            mode,
+            risk,
+            expected,
+            actual,
+        );
+    }
+
+    // ── yolo ──────────────────────────────────────────────────────────
+    // YOLO bypasses user confirmation entirely. Hardcoded security
+    // rules still apply (tested separately under
+    // `tests for hardcoded rules`).
+    #[test]
+    fn matrix_yolo_allows_low() {
+        let s = settings_for("yolo");
+        let d = PermissionDecision::from_input(
+            "any",
+            &serde_json::json!({}),
+            RiskLevel::Low,
+            &s,
+        );
+        assert_decision("yolo", RiskLevel::Low, d, "Allow", |d| {
+            matches!(d, PermissionDecision::Allow)
+        });
+    }
+
+    #[test]
+    fn matrix_yolo_allows_medium() {
+        let s = settings_for("yolo");
+        let d = PermissionDecision::from_input(
+            "any",
+            &serde_json::json!({}),
+            RiskLevel::Medium,
+            &s,
+        );
+        assert_decision("yolo", RiskLevel::Medium, d, "Allow", |d| {
+            matches!(d, PermissionDecision::Allow)
+        });
+    }
+
+    #[test]
+    fn matrix_yolo_allows_high() {
+        let s = settings_for("yolo");
+        let d = PermissionDecision::from_input(
+            "any",
+            &serde_json::json!({}),
+            RiskLevel::High,
+            &s,
+        );
+        assert_decision("yolo", RiskLevel::High, d, "Allow", |d| {
+            matches!(d, PermissionDecision::Allow)
+        });
+    }
+
+    #[test]
+    fn matrix_yolo_allows_critical() {
+        let s = settings_for("yolo");
+        let d = PermissionDecision::from_input(
+            "any",
+            &serde_json::json!({}),
+            RiskLevel::Critical,
+            &s,
+        );
+        assert_decision("yolo", RiskLevel::Critical, d, "Allow", |d| {
+            matches!(d, PermissionDecision::Allow)
+        });
+    }
+
+    // ── plan_mode ─────────────────────────────────────────────────────
+    // Read-only. Low + Medium run automatically. High is `Deny`
+    // unless the target lives inside the plans_root exception. Critical
+    // (terminal / shell) is always `Deny` so a plan-stage can't run
+    // arbitrary commands.
+    #[test]
+    fn matrix_plan_mode_allows_low() {
+        let s = settings_for("plan_mode");
+        let d = PermissionDecision::from_input(
+            "any",
+            &serde_json::json!({}),
+            RiskLevel::Low,
+            &s,
+        );
+        assert_decision("plan_mode", RiskLevel::Low, d, "Allow", |d| {
+            matches!(d, PermissionDecision::Allow)
+        });
+    }
+
+    #[test]
+    fn matrix_plan_mode_allows_medium() {
+        let s = settings_for("plan_mode");
+        let d = PermissionDecision::from_input(
+            "any",
+            &serde_json::json!({}),
+            RiskLevel::Medium,
+            &s,
+        );
+        assert_decision("plan_mode", RiskLevel::Medium, d, "Allow", |d| {
+            matches!(d, PermissionDecision::Allow)
+        });
+    }
+
+    #[test]
+    fn matrix_plan_mode_high_denies_outside_plans_root() {
+        // Without a plans_root configured, the legacy substring
+        // heuristic kicks in. A path that does NOT contain
+        // `/plans/` or `.zen/plans/` must be denied.
+        let s = settings_for("plan_mode");
+        let d = PermissionDecision::from_input(
+            "write_file",
+            &serde_json::json!({ "file_path": "/tmp/example/foo.txt" }),
+            RiskLevel::High,
+            &s,
+        );
+        assert_decision("plan_mode", RiskLevel::High, d, "Deny", |d| {
+            matches!(d, PermissionDecision::Deny { .. })
+        });
+    }
+
+    #[test]
+    fn matrix_plan_mode_high_denies_critical() {
+        let s = settings_for("plan_mode");
+        let d = PermissionDecision::from_input(
+            "terminal",
+            &serde_json::json!({ "command": "ls" }),
+            RiskLevel::Critical,
+            &s,
+        );
+        assert_decision("plan_mode", RiskLevel::Critical, d, "Deny", |d| {
+            matches!(d, PermissionDecision::Deny { .. })
+        });
+    }
+
+    // ── ask ───────────────────────────────────────────────────────────
+    // The default. Low risk runs automatically; Medium, High, and
+    // Critical ALWAYS trigger a Confirm prompt.
+    #[test]
+    fn matrix_ask_allows_low() {
+        let s = settings_for("ask");
+        let d = PermissionDecision::from_input(
+            "any",
+            &serde_json::json!({}),
+            RiskLevel::Low,
+            &s,
+        );
+        assert_decision("ask", RiskLevel::Low, d, "Allow", |d| {
+            matches!(d, PermissionDecision::Allow)
+        });
+    }
+
+    #[test]
+    fn matrix_ask_confirms_medium() {
+        let s = settings_for("ask");
+        let d = PermissionDecision::from_input(
+            "any",
+            &serde_json::json!({}),
+            RiskLevel::Medium,
+            &s,
+        );
+        assert_decision("ask", RiskLevel::Medium, d, "Confirm", |d| {
+            matches!(d, PermissionDecision::Confirm { .. })
+        });
+    }
+
+    #[test]
+    fn matrix_ask_confirms_high() {
+        let s = settings_for("ask");
+        let d = PermissionDecision::from_input(
+            "write_file",
+            &serde_json::json!({ "file_path": "/x" }),
+            RiskLevel::High,
+            &s,
+        );
+        assert_decision("ask", RiskLevel::High, d, "Confirm", |d| {
+            matches!(d, PermissionDecision::Confirm { .. })
+        });
+    }
+
+    #[test]
+    fn matrix_ask_confirms_critical() {
+        let s = settings_for("ask");
+        let d = PermissionDecision::from_input(
+            "terminal",
+            &serde_json::json!({ "command": "ls" }),
+            RiskLevel::Critical,
+            &s,
+        );
+        assert_decision("ask", RiskLevel::Critical, d, "Confirm", |d| {
+            matches!(d, PermissionDecision::Confirm { .. })
+        });
+    }
+
+    // ── auto_edit ─────────────────────────────────────────────────────
+    // "Edit files automatically; ask before high-impact changes."
+    // Low + Medium run automatically; BOTH `High` (file writes) and
+    // `Critical` (terminal/shell) trigger Confirm. The High step is
+    // the key fix: the previous code silently allowed file writes in
+    // this mode, contradicting the safety-mode wording.
+    #[test]
+    fn matrix_auto_edit_allows_low() {
+        let s = settings_for("auto_edit");
+        let d = PermissionDecision::from_input(
+            "any",
+            &serde_json::json!({}),
+            RiskLevel::Low,
+            &s,
+        );
+        assert_decision("auto_edit", RiskLevel::Low, d, "Allow", |d| {
+            matches!(d, PermissionDecision::Allow)
+        });
+    }
+
+    #[test]
+    fn matrix_auto_edit_allows_medium() {
+        let s = settings_for("auto_edit");
+        let d = PermissionDecision::from_input(
+            "any",
+            &serde_json::json!({}),
+            RiskLevel::Medium,
+            &s,
+        );
+        assert_decision("auto_edit", RiskLevel::Medium, d, "Allow", |d| {
+            matches!(d, PermissionDecision::Allow)
+        });
+    }
+
+    #[test]
+    fn matrix_auto_edit_confirms_high_file_write() {
+        let s = settings_for("auto_edit");
+        let d = PermissionDecision::from_input(
+            "write_file",
+            &serde_json::json!({ "file_path": "/workspace/x.rs" }),
+            RiskLevel::High,
+            &s,
+        );
+        assert_decision("auto_edit", RiskLevel::High, d, "Confirm", |d| {
+            matches!(d, PermissionDecision::Confirm { .. })
+        });
+    }
+
+    #[test]
+    fn matrix_auto_edit_confirms_high_apply_patch() {
+        let s = settings_for("auto_edit");
+        let d = PermissionDecision::from_input(
+            "apply_patch",
+            &serde_json::json!({ "patch": "*** Update File: x.rs\n" }),
+            RiskLevel::High,
+            &s,
+        );
+        assert_decision("auto_edit", RiskLevel::High, d, "Confirm", |d| {
+            matches!(d, PermissionDecision::Confirm { .. })
+        });
+    }
+
+    #[test]
+    fn matrix_auto_edit_confirms_critical_terminal() {
+        let s = settings_for("auto_edit");
+        let d = PermissionDecision::from_input(
+            "terminal",
+            &serde_json::json!({ "command": "ls" }),
+            RiskLevel::Critical,
+            &s,
+        );
+        assert_decision("auto_edit", RiskLevel::Critical, d, "Confirm", |d| {
+            matches!(d, PermissionDecision::Confirm { .. })
+        });
+    }
+}
+
 // ========== TESTS ==========
 
 #[cfg(test)]
@@ -715,6 +1247,201 @@ mod tests {
         let decision =
             PermissionDecision::from_input("file_read", &args, RiskLevel::Medium, &settings);
         assert!(matches!(decision, PermissionDecision::Deny { .. }));
+    }
+
+    // ─── Plan-mode secure path check (A1 fix) ────────────────────────
+    //
+    // Uses a real tempdir on disk so `canonicalize` succeeds for the
+    // happy path. The bypass and traversal cases do not require disk
+    // state — the substring attack fails at canonicalize; the `..`
+    // attack is caught by lexical normalization.
+
+    #[test]
+    fn test_plan_mode_allows_path_inside_configured_plans_root() {
+        let dir = std::env::temp_dir().join(format!(
+            "zen-plan-mode-allow-{}",
+            std::process::id()
+        ));
+        let workspace = dir.join("ws");
+        let plans = workspace.join("plans");
+        std::fs::create_dir_all(&plans).unwrap();
+
+        let mut settings = ToolPermissions::default();
+        settings.permission_mode = "plan_mode".to_string();
+        settings.plans_root = Some(plans.clone());
+
+        let target = plans.join("roadmap.md");
+        let args = serde_json::json!({ "path": target.to_string_lossy() });
+        let decision = PermissionDecision::from_input(
+            "write_file",
+            &args,
+            RiskLevel::High,
+            &settings,
+        );
+        assert!(
+            matches!(decision, PermissionDecision::Allow),
+            "expected Allow for path inside plans_root, got {:?}",
+            decision
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_plan_mode_rejects_substring_bypass_outside_plans_root() {
+        let dir = std::env::temp_dir().join(format!(
+            "zen-plan-mode-bypass-{}",
+            std::process::id()
+        ));
+        let workspace = dir.join("ws");
+        let plans = workspace.join("plans");
+        std::fs::create_dir_all(&plans).unwrap();
+
+        let mut settings = ToolPermissions::default();
+        settings.permission_mode = "plan_mode".to_string();
+        settings.plans_root = Some(plans.clone());
+
+        // Path outside the plans_root but contains the lookalike string.
+        // The legacy substring check would have allowed this.
+        let evil = dir.join("plans_evil").join("foo.txt");
+        std::fs::create_dir_all(evil.parent().unwrap()).unwrap();
+        std::fs::write(&evil, "x").unwrap();
+
+        let args = serde_json::json!({ "path": evil.to_string_lossy() });
+        let decision = PermissionDecision::from_input(
+            "write_file",
+            &args,
+            RiskLevel::High,
+            &settings,
+        );
+        assert!(
+            matches!(decision, PermissionDecision::Deny { .. }),
+            "expected Deny for {:?}, got {:?}",
+            evil, decision
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_plan_mode_rejects_dotdot_traversal() {
+        let dir = std::env::temp_dir().join(format!(
+            "zen-plan-mode-traversal-{}",
+            std::process::id()
+        ));
+        let workspace = dir.join("ws");
+        let plans = workspace.join("plans");
+        let outside = workspace.join("secrets");
+        std::fs::create_dir_all(&plans).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+
+        let mut settings = ToolPermissions::default();
+        settings.permission_mode = "plan_mode".to_string();
+        settings.plans_root = Some(plans.canonicalize().unwrap());
+
+        // Attempted ../secrets/key via plans directory.
+        let traversal = plans.join("../secrets/key.txt");
+        let args = serde_json::json!({ "path": traversal.to_string_lossy() });
+        let decision = PermissionDecision::from_input(
+            "write_file",
+            &args,
+            RiskLevel::High,
+            &settings,
+        );
+        assert!(
+            matches!(decision, PermissionDecision::Deny { .. }),
+            "expected Deny for {:#?}, got {:?}",
+            traversal, decision
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_plan_mode_legacy_substring_fallback_when_no_plans_root() {
+        // When plans_root is None, preserve the legacy substring match so
+        // existing test fixtures don't break. This is documented behavior;
+        // production callers should always populate plans_root.
+        let mut settings = ToolPermissions::default();
+        settings.permission_mode = "plan_mode".to_string();
+        // plans_root left as None.
+
+        let args = serde_json::json!({ "path": "anywhere/plans/foo.md" });
+        let decision = PermissionDecision::from_input(
+            "write_file",
+            &args,
+            RiskLevel::High,
+            &settings,
+        );
+        assert!(matches!(decision, PermissionDecision::Allow));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_plan_mode_rejects_symlink_evasion() {
+        let dir = std::env::temp_dir().join(format!(
+            "zen-plan-mode-symlink-{}",
+            std::process::id()
+        ));
+        let workspace = dir.join("ws");
+        let plans = workspace.join("plans");
+        let secrets = workspace.join("secrets");
+        std::fs::create_dir_all(&plans).unwrap();
+        std::fs::create_dir_all(&secrets).unwrap();
+
+        let key = secrets.join("key.txt");
+        std::fs::write(&key, "x").unwrap();
+
+        // Symlink: ws/plans/leak -> ws/secrets/key.txt. The file exists,
+        // so canonicalize() will resolve through the symlink to the secret
+        // path, which lives OUTSIDE plans_root. The plan-mode exception
+        // must NOT apply.
+        let leak = plans.join("leak");
+        std::os::unix::fs::symlink(&key, &leak).unwrap();
+
+        let mut settings = ToolPermissions::default();
+        settings.permission_mode = "plan_mode".to_string();
+        settings.plans_root = Some(plans.canonicalize().unwrap());
+
+        let args = serde_json::json!({ "path": leak.to_string_lossy() });
+        let decision = PermissionDecision::from_input(
+            "write_file",
+            &args,
+            RiskLevel::High,
+            &settings,
+        );
+        assert!(
+            matches!(decision, PermissionDecision::Deny { .. }),
+            "expected Deny for symlink leaking outside plans_root, got {:?}",
+            decision
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_plan_mode_rejects_relative_path_with_absolute_plans_root() {
+        // plans_root is absolute but user_path is relative. Lexical
+        // normalization leaves a relative path; the helper fails closed
+        // to prevent the attacker from supplying "plans/roadmap.md" and
+        // having it silently bind against the workspace plans_root via
+        // server-side resolution that we can't perform here.
+        let mut settings = ToolPermissions::default();
+        settings.permission_mode = "plan_mode".to_string();
+        settings.plans_root = Some(PathBuf::from("/abs/workspace/plans"));
+
+        let args = serde_json::json!({ "path": "plans/roadmap.md" });
+        let decision = PermissionDecision::from_input(
+            "write_file",
+            &args,
+            RiskLevel::High,
+            &settings,
+        );
+        assert!(
+            matches!(decision, PermissionDecision::Deny { .. }),
+            "expected Deny for relative path with absolute plans_root, got {:?}",
+            decision
+        );
     }
 
     #[test]

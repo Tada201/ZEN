@@ -1,3 +1,4 @@
+pub mod context_window_discovery;
 pub mod models;
 pub mod stream;
 #[cfg(test)]

@@ -34,7 +34,6 @@ export const VoiceSettings = memo(() => {
   const autoCompactEnabled = useSettingsStore((s) => s.voiceDisplayAgentAutoCompactEnabled);
   const compactThreshold = useSettingsStore((s) => s.voiceDisplayAgentCompactThreshold);
   const voicePrompt = useSettingsStore((s) => s.voiceDisplayAgentPrompt);
-  const boardMemoryLimit = useSettingsStore((s) => s.voiceDisplayAgentBoardMemoryLimit);
 
   const [testMessage, setTestMessage] = useState<string | null>(null);
 
@@ -200,11 +199,6 @@ export const VoiceSettings = memo(() => {
               label="Compact threshold"
               description="Percentage of context usage that triggers compaction."
               control={<div className="flex w-40 items-center gap-3"><WorkbenchSlider value={[compactThreshold]} min={50} max={95} step={5} disabled={!autoCompactEnabled} onValueChange={([value]) => setNumberSetting("voiceDisplayAgentCompactThreshold", value, 50, 95)} /><span className="w-8 text-right text-xs">{compactThreshold}%</span></div>}
-            />
-            <SettingsRow
-              label="Remembered boards"
-              description="Oldest retained board is removed when this limit is exceeded."
-              control={<div className="flex w-40 items-center gap-3"><WorkbenchSlider value={[boardMemoryLimit]} min={1} max={3} step={1} onValueChange={([value]) => setNumberSetting("voiceDisplayAgentBoardMemoryLimit", value, 1, 3)} /><span className="w-7 text-right text-xs">{boardMemoryLimit}</span></div>}
             />
             <div className="space-y-2 rounded-lg border border-border bg-background/20 p-3">
               <div className="flex items-center justify-between"><span className="text-xs font-medium text-foreground">Render prompt</span><WorkbenchButton size="sm" variant="outline" onClick={() => updateSetting("voiceDisplayAgentPrompt", VOICE_DISPLAY_AGENT_DEFAULT_PROMPT)}>Reset Default</WorkbenchButton></div>

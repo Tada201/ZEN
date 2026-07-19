@@ -65,6 +65,28 @@ impl AgentTool for WriteTodosTool {
         _allowed_tools: Option<Arc<Mutex<HashSet<String>>>>,
         _token: CancellationToken,
     ) -> Result<Value> {
+        let mut input = input;
+        // Normalize: if 'todos' is a stringified JSON, parse it
+        if let Some(todos_str) = input.get("todos").and_then(|v| v.as_str()) {
+            if let Ok(parsed) = serde_json::from_str::<Value>(todos_str) {
+                input["todos"] = parsed;
+            }
+        }
+
+        // Handle empty array as clearing mechanism
+        if let Some(todos) = input.get("todos").and_then(|v| v.as_array()) {
+            if todos.is_empty() {
+                 let _ = app.emit(
+                    "task:list_updated",
+                    json!({
+                        "chat_id": chat_id,
+                        "tasks": []
+                    }),
+                );
+                return Ok(json!({ "message": "Checklist cleared" }));
+            }
+        }
+
         let args: WriteTodosArgs = serde_json::from_value(input)?;
         let now = chrono::Utc::now().timestamp_millis();
         let tasks: Vec<Value> = args

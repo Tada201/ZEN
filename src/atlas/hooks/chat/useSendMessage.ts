@@ -38,6 +38,14 @@ export function useSendMessage(
     targetSessionId?: string;
   }) => {
     let targetSessionId = data.targetSessionId || currentSessionId;
+    // Capture fresh-session state BEFORE ensureSession potentially creates a
+    // new chat — the title-maker should only auto-title when this is the very
+    // first message of a brand new session (existing sessions keep their
+    // user-set titles).
+    const isFreshSession =
+      !data.targetSessionId &&
+      !currentSessionId &&
+      typeof ensureSession === "function";
     if (!targetSessionId && ensureSession) {
       targetSessionId = await ensureSession();
     }
@@ -56,6 +64,20 @@ export function useSendMessage(
 
     const temperature = Number(providerParams.temperature ?? store.temperature ?? 0.7);
     const maxTokens = Number(providerParams.maxTokens ?? store.maxTokens ?? 4096);
+
+    // Resolve the selected model's real context window so the backend can
+    // report context utilisation against the true model budget rather
+    // than Zen's compaction cap. Prefer a provider-scoped match, then any
+    // id match; null when the catalog has no window for this model.
+    const modelContextWindow = (() => {
+      const models = store.availableModels || [];
+      const match =
+        models.find(
+          (m) => m.id === data.model && m.provider === activeProvider,
+        ) || models.find((m) => m.id === data.model);
+      const window = match?.contextWindow;
+      return typeof window === "number" && window > 0 ? window : null;
+    })();
 
     const { userMessage, assistantMessage } = createOptimisticChatMessages({
       sessionId: targetSessionId,
@@ -129,7 +151,22 @@ export function useSendMessage(
         systemPrompt: systemPrompt,
         systemPromptMode,
         voiceDisplayContext: systemPromptMode === "replace" ? buildVoiceDisplayContext() : null,
+        modelContextWindow,
       });
+
+      // ── Title maker ─────────────────────────────────────────────────────
+      // Fire-and-forget auto-title for fresh sessions. The runner continues
+      // streaming the assistant reply regardless. The backend emits
+      // `chat:title-updated` when generation finishes so the session list
+      // updates without a refetch.
+      if (isFreshSession && targetSessionId && data.message.trim()) {
+        chatApi
+          .generateSessionTitle(targetSessionId, data.message.trim())
+          .catch((err) => {
+            // Auto-titling is best-effort; failure must not break the send flow.
+            console.warn(`[useSendMessage] title-maker failed for ${targetSessionId}:`, err);
+          });
+      }
     } catch (e: unknown) {
       const errorMessage = getIpcErrorMessage(e, "Failed to send message");
       console.error("[useChat] 'send_message' IPC command failed:", e);

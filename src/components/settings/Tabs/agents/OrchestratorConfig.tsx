@@ -3,11 +3,18 @@ import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { WorkbenchSettingRow } from '@/components/settings/ui/WorkbenchSettingRow';
 import { WorkbenchSwitch } from '@/components/settings/ui/WorkbenchSwitch';
 import { SettingsCard } from '@/components/settings/ui/SettingsCard';
+import { WorkbenchInput } from '@/components/ui/WorkbenchInput';
 
 export const OrchestratorConfig = memo(() => {
     const multiAgentEnabled = useSettingsStore(s => s.multiAgentEnabled ?? false);
     const agentTimeout = useSettingsStore(s => s.agentTimeout ?? 120);
+    const agentTokenBudget = useSettingsStore(s => s.agentTokenBudget ?? 0);
     const updateSetting = useSettingsStore(s => s.updateSetting);
+
+    const handleTokenBudgetChange = (value: string) => {
+        const parsed = parseInt(value, 10);
+        updateSetting({ agentTokenBudget: Number.isNaN(parsed) ? 0 : Math.max(0, parsed) });
+    };
 
     return (
         <SettingsCard
@@ -36,6 +43,21 @@ export const OrchestratorConfig = memo(() => {
                                 {agentTimeout}s
                             </span>
                         </div>
+                    }
+                />
+
+                <WorkbenchSettingRow
+                    label="Token Budget"
+                    description="Maximum total tokens (input + output) per agent run. 0 disables the limit."
+                    control={
+                        <WorkbenchInput
+                            type="number"
+                            min={0}
+                            max={10000000}
+                            value={String(agentTokenBudget)}
+                            onChange={(e) => handleTokenBudgetChange(e.target.value)}
+                            className="w-32 h-8 text-xs"
+                        />
                     }
                 />
             </div>

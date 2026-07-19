@@ -48,6 +48,7 @@ pub(super) async fn preprocess_tool_calls(
     tool_manager: &Arc<ToolManager>,
     tool_calls: &[ToolCall],
     authorized_tool_ids: &[String],
+    tools_enabled: bool,
 ) -> (Vec<Option<ToolResult>>, Vec<PipelineCall>) {
     let mut ordered_results: Vec<Option<ToolResult>> = vec![None; tool_calls.len()];
     let mut pipeline_calls: Vec<PipelineCall> = Vec::new();
@@ -136,6 +137,28 @@ pub(super) async fn preprocess_tool_calls(
                 ordered_results[index] = Some(result);
             }
             "tool_exec" => {
+                // Even though authorized_tools_for_agent returns an empty
+                // list when tools_enabled is false, that empty list still
+                // matches the "skip allowlist check" branch below and lets
+                // tool_exec({tool_id: ...}) run any registered tool. Gate
+                // the whole branch on tools_enabled so a JSON-only retry
+                // runner cannot smuggle in tool calls.
+                if !tools_enabled {
+                    ordered_results[index] = Some(normalize_tool_result(
+                        tc.id.clone(),
+                        "tool_exec",
+                        "Tool Exec",
+                        tc.args.clone(),
+                        json!({
+                            "error": "Tool execution is disabled for this run.",
+                            "hint": "Do not call tool_exec when the runner was started with tools disabled; emit raw JSON instead."
+                        }),
+                        true,
+                        0,
+                        chrono::Utc::now(),
+                    ));
+                    continue;
+                }
                 if let Some((real_id, real_args)) = tool_manager.resolve_tool_exec(&tc.args).await {
                     if !authorized_tool_ids.is_empty() {
                         if let AllowlistDecision::Deny { reason } =

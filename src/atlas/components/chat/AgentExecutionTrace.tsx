@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState, memo } from "react";
-import { CheckCircle2, ChevronRight, Loader2, XCircle } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ArtifactData, Step, ToolCall } from "./types";
-import { ToolCallCard } from "./ToolCallCard";
+import { ToolCallCard, humanizeToolAction } from "./ToolCallCard";
 import { resolveToolApproval } from "./AssistantMessageTrace";
-import { buildAgentExecutionTraceModel, type ToolExecutionBatchLane } from "./agentExecutionTraceModel";
+import { buildAgentExecutionTraceModel } from "./agentExecutionTraceModel";
 import { buildToolOutputPreview as buildToolOutputPreviewImported } from "./tool/toolOutputPreview";
 import { isToolVisibleInChat } from "./assistantMessageParts";
 
@@ -44,6 +44,21 @@ function compactToolDisplayName(tool: ToolCall): string {
 
 function isEmptyObject(value: unknown) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0);
+}
+
+function singleToolActionLine(tool: ToolCall): string {
+  const verb = humanizeToolAction(tool.name, tool.status);
+
+  const input = asInputRecord(tool.input);
+  const args = input.arguments && typeof input.arguments === "object" && !Array.isArray(input.arguments)
+    ? input.arguments as Record<string, unknown>
+    : {};
+  const rawTarget = input.file_path || input.filePath || input.path || input.command || input.query || input.url
+    || args.file_path || args.path || args.query || args.url;
+  const target = typeof rawTarget === "string" ? rawTarget : "";
+  const filename = target && /[/\\]/.test(target) ? target.replace(/\\/g, "/").split("/").pop() || target : target;
+  const label = filename ? `${verb} ${filename}` : `${verb} ${compactToolDisplayName(tool)}`;
+  return label.length > 80 ? `${label.slice(0, 80)}...` : label;
 }
 
 function mergeTraceToolCall(existing: ToolCall, incoming: ToolCall): ToolCall {
@@ -114,14 +129,18 @@ export function AgentExecutionTrace({
     : trace.active || trace.errorCount > 0 || trace.approvalCount > 0;
   const [isExpanded, setIsExpanded] = useState(shouldDefaultOpen);
   const userToggledRef = useRef(false);
-  const collapsedSummary = useMemo(() => [
-    trace.activeLaneSummary && `batch ${trace.activeLaneSummary}`,
-    trace.runningToolSummaries.length > 0 && `active ${trace.runningToolSummaries.join(", ")}`,
-    trace.approvalToolSummaries.length > 0 && `approval ${trace.approvalToolSummaries.join(", ")}`,
-    trace.resultSummary && `results ${trace.resultSummary}`,
-    trace.agentHierarchySummary && `delegation ${trace.agentHierarchySummary}`,
-    trace.ownerSummary && `agents ${trace.ownerSummary}`,
-  ].filter(Boolean).join(" · "), [trace]);
+  // Quiet Codex-style collapsed header: for a single tool show its action line;
+  // for many, just "Ran N tools" with running/failed counts only when relevant.
+  const headerLabel = useMemo(() => {
+    if (normalizedToolCalls.length === 1) {
+      return singleToolActionLine(normalizedToolCalls[0]);
+    }
+    const verb = trace.active ? "Running" : "Ran";
+    const parts = [`${verb} ${normalizedToolCalls.length} tools`];
+    if (trace.runningCount > 0) parts.push(`${trace.runningCount} running`);
+    if (trace.errorCount > 0) parts.push(`${trace.errorCount} failed`);
+    return parts.join(" · ");
+  }, [normalizedToolCalls, trace.active, trace.runningCount, trace.errorCount]);
 
   // Map tool call IDs to streaming argument previews from chat_status steps
   const streamingPreviews = useMemo(() => {
@@ -153,126 +172,56 @@ export function AgentExecutionTrace({
           setIsExpanded(!isExpanded);
         }}
         aria-expanded={isExpanded}
-        className="flex min-h-8 w-full items-center gap-2 rounded-md border border-border bg-background/35 px-2 py-1 text-left text-muted-foreground backdrop-blur-sm transition-all duration-200 hover:bg-background/45"
+        className="flex min-h-8 w-full items-center gap-2 rounded-md border border-border bg-muted/50 px-2 py-1 text-left text-muted-foreground transition-all duration-200 hover:bg-muted/70"
       >
         <span className="flex h-5 w-5 shrink-0 items-center justify-center">
           {trace.active ? (
-            <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" />
+            <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
           ) : trace.errorCount > 0 ? (
-            <XCircle className="h-3.5 w-3.5 text-destructive/80" />
+            <div className="h-1.5 w-1.5 rounded-full bg-red-500" />
           ) : (
-            <CheckCircle2 className="h-3.5 w-3.5 text-success/80" />
+            <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
           )}
         </span>
         <span className="flex min-w-0 flex-1 items-center gap-2">
-          <span className={cn("min-w-0 flex-1 truncate text-[12px] font-medium text-foreground", trace.active && "text-premium-shimmer")}>
-            {preferCompact
-              ? trace.compactLabel
-            : `${trace.executionLabel}: ${normalizedToolCalls.length} tool ${normalizedToolCalls.length === 1 ? "call" : "calls"}`}
+          <span className={cn("min-w-0 flex-1 truncate text-[12px] font-medium text-foreground", trace.active && "text-blue-500")}>
+            {headerLabel}
           </span>
-          {trace.runningCount > 0 && <span className="shrink-0 text-[11px] text-primary/80">{trace.runningCount} running</span>}
-          {trace.approvalCount > 0 && <span className="shrink-0 text-[11px] text-warning/80">{trace.approvalCount} waiting approval</span>}
-          {trace.errorCount > 0 && <span className="shrink-0 text-[11px] text-destructive/80">{trace.errorCount} failed</span>}
-          {!preferCompact && trace.completedCount > 0 && <span className="shrink-0 text-[11px] text-muted-foreground">{trace.completedCount} done</span>}
-          <span className="h-1 w-14 shrink-0 overflow-hidden rounded-full bg-muted">
-            <span className="flex h-full">
-              <span
-                className="h-full bg-success/70 transition-all duration-500"
-                style={{ width: `${trace.completedPercent}%` }}
-              />
-              <span
-                className="h-full bg-rose-400/70 transition-all duration-500"
-                style={{ width: `${trace.errorPercent}%` }}
-              />
+          {!isExpanded && normalizedToolCalls.length > 1 && (
+            <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
+              {trace.completedCount + trace.errorCount}/{normalizedToolCalls.length}
             </span>
-          </span>
+          )}
+          {trace.runningCount > 0 && <span className="shrink-0 text-[11px] text-primary/80">{trace.runningCount} running</span>}
+          {trace.approvalCount > 0 && <span className="shrink-0 text-[11px] text-warning/80">{trace.approvalCount} waiting</span>}
+          {trace.errorCount > 0 && (
+            <span className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-red-500">
+              {trace.errorCount} FAILED
+            </span>
+          )}
         </span>
         <ChevronRight className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200", isExpanded && "rotate-90")} />
       </button>
 
-      {!isExpanded && collapsedSummary && (
-        <div className="truncate px-9 pb-1 pt-1 text-[11px] text-muted-foreground" title={collapsedSummary}>
-          {collapsedSummary}
-        </div>
-      )}
-
       <div className={cn("tool-expand-grid", isExpanded && "open")}>
         <div className="tool-expand-inner">
           <div className="mt-1">
-            {normalizedToolCalls.length > 1 && (
-            <div className="mb-1.5 ml-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-              <span>{trace.startedTogether || trace.runningCount + trace.approvalCount > 1 ? "Batch started in parallel" : "Sequential tool calls"}</span>
-              {trace.batchSummary && <span>batch {trace.batchSummary}</span>}
-              {trace.finishedCount > 0 && <span>{trace.finishedCount}/{normalizedToolCalls.length} finished</span>}
-              {trace.latestFinishedTool && <span>latest {compactToolDisplayName(trace.latestFinishedTool)}</span>}
-              {trace.completionSummary && trace.completionOrder.length > 1 && <span>completed {trace.completionSummary}</span>}
-              {trace.resultSummary && <span>results {trace.resultSummary}</span>}
-              {trace.agentHierarchySummary && <span>delegation {trace.agentHierarchySummary}</span>}
-              {trace.agentSummary && <span>delegation {trace.agentSummary}</span>}
-              {trace.handoffSummary && <span>handoff {trace.handoffSummary}</span>}
-              {trace.ownerSummary && <span>agents {trace.ownerSummary}</span>}
-              {trace.activeLaneSummary && <span>active batch {trace.activeLaneSummary}</span>}
-              {trace.runningToolSummaries.length > 0 && <span>active {trace.runningToolSummaries.join(", ")}</span>}
-              {trace.approvalToolSummaries.length > 0 && <span>waiting approval {trace.approvalToolSummaries.join(", ")}</span>}
-            </div>
-          )}
-          {preferCompact && importantToolCalls.length === 0 ? (
-            <div className="grid gap-0.5">
-              {normalizedToolCalls.map((tc, idx) => (
-                <div key={`${tc.id}-${idx}`} className="flex min-w-0 items-center gap-2 rounded-md bg-background/30 px-2 py-1 text-[11px] leading-5">
-                  <span
-                    className={cn(
-                      "h-1.5 w-1.5 shrink-0 rounded-full",
-                      tc.status === "awaiting_approval" ? "bg-amber-400"
-                        : tc.status === "running" ? "bg-blue-400"
-                        : tc.status === "error" ? "bg-rose-400"
-                        : "bg-success",
-                    )}
-                  />
-                  <code className="shrink-0 rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground">
-                    {compactToolDisplayName(tc)}
-                  </code>
-                  <span className="min-w-0 flex-1 truncate text-muted-foreground">
-                    {tc.status === "completed" || tc.status === "error"
-                      ? (tc.output ? buildToolOutputPreviewImported(tc.output).summary : "") || (tc.status === "error" ? "failed" : "done")
-                      : tc.status === "running" ? "running..." : "awaiting approval"}
-                  </span>
-                  {tc.durationMs != null && tc.durationMs > 0 && (
-                    <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
-                      {tc.durationMs < 1000 ? `${tc.durationMs}ms` : `${(tc.durationMs / 1000).toFixed(1)}s`}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
             <div
               className={cn(
                 "relative pl-4 before:absolute before:left-[5px] before:top-1 before:h-[calc(100%-8px)] before:w-px before:bg-muted/80",
-                trace.shouldShowBatchLanes && !preferCompact ? "flex flex-col gap-2" : normalizedToolCalls.length > 1 ? "grid gap-1.5 md:grid-cols-2" : "flex flex-col gap-0.5",
+                "flex flex-col gap-2",
               )}
             >
-              {trace.shouldShowBatchLanes && !preferCompact
-                  ? trace.batchLanes.map((lane) => (
-                    <ToolBatchLane
-                      key={lane.id}
-                      lane={lane}
-                      sessionId={sessionId}
-                      onOpenArtifact={onOpenArtifact}
-                      streamingPreviews={streamingPreviews}
-                    />
-                  ))
-                  : (preferCompact ? importantToolCalls : normalizedToolCalls).map((tc, idx) => (
-                    <ToolTraceRow
-                      key={tc.id || tc.runId || idx}
-                      toolCall={tc}
-                      sessionId={sessionId}
-                      onOpenArtifact={onOpenArtifact}
-                      streamingPreview={streamingPreviews.get(tc.id) || undefined}
-                    />
-                  ))}
+              {normalizedToolCalls.map((tc, idx) => (
+                <ToolTraceRow
+                  key={tc.id || tc.runId || idx}
+                  toolCall={tc}
+                  sessionId={sessionId}
+                  onOpenArtifact={onOpenArtifact}
+                  streamingPreview={streamingPreviews.get(tc.id) || undefined}
+                />
+              ))}
             </div>
-          )}
           </div>
         </div>
       </div>
@@ -324,61 +273,3 @@ function ToolTraceRowInner({
   );
 }
 const ToolTraceRow = memo(ToolTraceRowInner);
-
-function ToolBatchLaneInner({
-  lane,
-  sessionId,
-  onOpenArtifact,
-  streamingPreviews,
-}: {
-  lane: ToolExecutionBatchLane;
-  sessionId?: string;
-  onOpenArtifact: (a: ArtifactData) => void;
-  streamingPreviews: Map<string, string>;
-}) {
-  const active = lane.runningCount > 0 || lane.approvalCount > 0;
-
-  return (
-    <div className="relative rounded-md border border-border bg-background/35 px-2 py-1.5 backdrop-blur-sm">
-      <span className="absolute -left-[15px] top-3 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-background">
-        <span className={cn("h-1.5 w-1.5 rounded-full", lane.approvalCount > 0 ? "bg-amber-400" : active ? "bg-blue-400" : lane.errorCount > 0 ? "bg-rose-400" : "bg-success")} />
-      </span>
-      <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-        <span className={cn("min-w-0 max-w-full truncate font-medium text-muted-foreground", active && "text-primary/80")}>
-          {lane.label}
-        </span>
-        <span>{lane.completedCount + lane.errorCount}/{lane.toolCount} finished</span>
-        {lane.runningCount > 0 && <span>{lane.runningCount} running</span>}
-        {lane.approvalCount > 0 && <span className="text-warning/80">{lane.approvalCount} waiting approval</span>}
-        {lane.ownerSummary && <span>agents {lane.ownerSummary}</span>}
-        {lane.runningToolSummaries.length > 0 && <span>active {lane.runningToolSummaries.join(", ")}</span>}
-        {lane.approvalToolSummaries.length > 0 && <span className="text-warning/80">waiting approval {lane.approvalToolSummaries.join(", ")}</span>}
-        {lane.resultSummary && <span>results {lane.resultSummary}</span>}
-        <span className="h-1 w-12 overflow-hidden rounded-full bg-muted">
-          <span className="flex h-full">
-            <span
-              className="h-full bg-success/70 transition-all duration-500"
-              style={{ width: `${lane.completedPercent}%` }}
-            />
-            <span
-              className="h-full bg-rose-400/70 transition-all duration-500"
-              style={{ width: `${lane.errorPercent}%` }}
-            />
-          </span>
-        </span>
-      </div>
-      <div className={cn("grid gap-1.5", lane.toolCount > 1 && "md:grid-cols-2")}>
-        {lane.toolCalls.map((toolCall, index) => (
-          <ToolTraceRow
-            key={toolCall.id || toolCall.runId || index}
-            toolCall={toolCall}
-            sessionId={sessionId}
-            onOpenArtifact={onOpenArtifact}
-            streamingPreview={streamingPreviews.get(toolCall.id) || undefined}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-const ToolBatchLane = memo(ToolBatchLaneInner);

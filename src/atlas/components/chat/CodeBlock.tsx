@@ -1,7 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
 import { Copy, Check, PanelRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ArtifactData } from "./types";
 import Prism from "prismjs";
 
@@ -83,17 +82,17 @@ export function CodeBlock({
   }, [code, normalizedLanguage]);
 
   return (
-    <div className="group/code relative my-3 overflow-hidden rounded-xl border border-border/40 bg-code-background shadow-sm transition-all duration-300">
-      <div className="flex items-center justify-between border-b border-border bg-muted/50 px-3 py-1.5">
-        <Badge variant="outline" className="font-mono text-[10px] text-muted-foreground border-code-border h-5 px-1.5">
+    <div className="group/code relative my-3 overflow-hidden rounded-xl border border-border/[0.08] bg-background/30 backdrop-blur-sm shadow-md transition-all duration-300">
+      <div className="flex items-center justify-between border-b border-border/[0.06] bg-card/[0.02] px-3 py-1.5">
+        <span className="font-mono text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
           {language ?? "plaintext"}
-        </Badge>
-        <div className="flex items-center gap-1">
+        </span>
+        <div className="flex items-center gap-1.5">
           {onOpenArtifact && language && language.toLowerCase() !== "openui" && (
             <Button
               size="sm"
               variant="ghost"
-              className="h-6 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted"
+              className="h-6 gap-1 px-2 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenArtifact({
@@ -111,7 +110,7 @@ export function CodeBlock({
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted"
+            className="h-6 gap-1 px-2 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
             onClick={(e) => {
               e.stopPropagation();
               copy(code);
@@ -122,9 +121,9 @@ export function CodeBlock({
           </Button>
         </div>
       </div>
-      <pre className="max-h-[400px] overflow-y-auto overflow-x-auto p-4 text-[13px] leading-6">
+      <pre className="max-h-[400px] overflow-y-auto overflow-x-auto p-4 text-[12px] leading-relaxed bg-background/10">
         <code
-          className={`font-mono text-[#e6edf3] language-${normalizedLanguage}`}
+          className={`font-mono text-foreground/90 language-${normalizedLanguage}`}
           dangerouslySetInnerHTML={{ __html: highlightedHtml }}
         />
       </pre>

@@ -13,6 +13,8 @@ interface UseToolEventsProps {
 }
 
 type ToolEventMetaPayload = {
+  trace_id?: string;
+  traceId?: string;
   run_id?: string;
   runId?: string;
   message_id?: string;
@@ -65,6 +67,7 @@ function normalizeApprovalContext(context?: Record<string, unknown>): ToolCall["
 function getToolEventMeta(payload: ToolEventMetaPayload) {
   const toolBatchId = payload.tool_batch_id || payload.toolBatchId;
   return {
+    traceId: payload.trace_id || payload.traceId,
     runId: payload.run_id || payload.runId,
     messageId: payload.message_id || payload.messageId,
     parentAgentId: payload.parent_agent_id || payload.parentAgentId || payload.parent_agent || payload.parentAgent,

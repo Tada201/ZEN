@@ -93,22 +93,42 @@ function normalizeResults(value: unknown): ToolPreviewResultItem[] {
   });
 }
 
+function normalizeFileRecord(value: unknown): FileChange | undefined {
+  const record = asRecord(value);
+  const rawPath = firstValue(record.path, record.file, record.name, record.file_path, record.filePath);
+  const path = compactText(rawPath, 180);
+  if (!path) return undefined;
+
+  const linesAdded = firstValue(record.linesAdded, record.lines_added, record.additions, record.added);
+  const linesRemoved = firstValue(record.linesRemoved, record.lines_removed, record.deletions, record.removed);
+  const rawChangeType = firstValue(record.changeType, record.change_type, record.action, record.operation);
+  const changeType = rawChangeType === "created" || rawChangeType === "create"
+    ? "created"
+    : rawChangeType === "deleted" || rawChangeType === "delete"
+      ? "deleted"
+      : "modified";
+
+  return {
+    path,
+    changeType,
+    linesAdded: typeof linesAdded === "number" ? linesAdded : undefined,
+    linesRemoved: typeof linesRemoved === "number" ? linesRemoved : undefined,
+    diff: typeof record.diff === "string" ? record.diff : undefined,
+  };
+}
+
 function normalizeFiles(value: unknown): FileChange[] {
-  if (!Array.isArray(value)) return [];
-  return value.slice(0, 5).map((item) => {
-    const record = asRecord(item);
-    const linesAdded = firstValue(record.linesAdded, record.lines_added, record.additions, record.added);
-    const linesRemoved = firstValue(record.linesRemoved, record.lines_removed, record.deletions, record.removed);
-    return {
-      path: compactText(record.path || record.file || record.name, 180) || "unknown",
-      changeType: record.changeType === "created" || record.changeType === "deleted" || record.changeType === "modified"
-        ? record.changeType
-        : "modified",
-      linesAdded: typeof linesAdded === "number" ? linesAdded : undefined,
-      linesRemoved: typeof linesRemoved === "number" ? linesRemoved : undefined,
-      diff: typeof record.diff === "string" ? record.diff : undefined,
-    };
-  });
+  if (Array.isArray(value)) {
+    return value.slice(0, 5).map(normalizeFileRecord).filter((file): file is FileChange => Boolean(file));
+  }
+  const singleFile = normalizeFileRecord(value);
+  return singleFile ? [singleFile] : [];
+}
+
+function fileChangeSummary(file: FileChange): string {
+  const filename = file.path.replace(/\\/g, "/").split("/").pop() || file.path;
+  const verb = file.changeType === "created" ? "Created" : file.changeType === "deleted" ? "Deleted" : "Updated";
+  return `${verb} ${filename}`;
 }
 
 function normalizeArtifact(value: unknown): ArtifactData | undefined {
@@ -185,7 +205,9 @@ export function buildToolOutputPreview(output: string): ToolOutputPreview {
   const resultSource = findFromCandidates(candidates, ["results", "items", "data"]);
   const results = normalizeResults(resultSource);
   const fileSource = findFromCandidates(candidates, ["files", "changed_files", "changedFiles"]);
-  const files = normalizeFiles(fileSource);
+  const files = normalizeFiles(fileSource).length > 0
+    ? normalizeFiles(fileSource)
+    : normalizeFiles(findFromCandidates(candidates, ["file", "changed_file", "changedFile"]) || unwrapOutputSource(record));
   const artifactSource = findFromCandidates(candidates, ["artifact", "generated_artifact", "generatedArtifact"]);
   const artifact = normalizeArtifact(artifactSource || unwrapOutputSource(record) || record);
   const stdout = compactText(findFromCandidates(candidates, ["stdout", "output_text", "outputText"]), 600);
@@ -213,7 +235,7 @@ export function buildToolOutputPreview(output: string): ToolOutputPreview {
   } else if (commandSummary) {
     summary = commandSummary;
   } else if (files.length > 0) {
-    summary = `${files.length} file${files.length === 1 ? "" : "s"} changed`;
+    summary = files.length === 1 ? fileChangeSummary(files[0]) : `${files.length} files changed`;
   } else {
     summary = compactText(
       firstValue(

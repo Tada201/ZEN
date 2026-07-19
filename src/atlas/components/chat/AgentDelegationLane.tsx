@@ -13,10 +13,10 @@ export function AgentDelegationLane({ lane }: { lane: AgentDelegationLaneModel }
   const isError = lane.status === "error";
   const durationLabel = formatDuration(lane.durationMs);
   const StatusIcon = isRunning ? Loader2 : isError ? XCircle : CheckCircle2;
-  const [isExpanded, setIsExpanded] = useState(isRunning);
+  const [isExpanded, setIsExpanded] = useState(isError);
   const canExpand = Boolean(lane.task || lane.resultSummary || lane.hasTranscript);
   const livePreview = lane.compactLivePreview;
-  const transcriptLabel = lane.liveContentType === "thought" ? "Thinking" : "Live output";
+  const conciseLivePreview = livePreview.length > 260 ? `${livePreview.slice(0, 260)}...` : livePreview;
 
   return (
     <div className="font-sans">
@@ -40,12 +40,6 @@ export function AgentDelegationLane({ lane }: { lane: AgentDelegationLaneModel }
             )}
             <span className="min-w-0 flex-1 truncate">Delegated to {lane.agentName}</span>
           </button>
-          {lane.batchId && (
-            <span className="max-w-24 shrink-0 truncate font-mono text-[11px] text-muted-foreground">{lane.batchId}</span>
-          )}
-          {lane.iteration !== undefined && (
-            <span className="shrink-0 font-mono text-[11px] text-muted-foreground">iter {lane.iteration}</span>
-          )}
           {durationLabel && <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{durationLabel}</span>}
           <span
             className={cn(
@@ -61,24 +55,19 @@ export function AgentDelegationLane({ lane }: { lane: AgentDelegationLaneModel }
           </span>
         </div>
 
-        {lane.task && !isExpanded && (
+        {(lane.resultSummary || lane.task) && !isExpanded && (
           <div className="mt-0.5 truncate text-[12px] leading-5 text-muted-foreground">
-            {lane.task}
+            {lane.resultSummary || lane.task}
           </div>
         )}
         {isExpanded && (lane.task || lane.resultSummary || livePreview) && (
           <div className="mt-1.5 rounded border border-border/60 bg-background/20 px-2 py-1.5">
-            {lane.task && <div className="mb-2 text-[12px] leading-relaxed text-muted-foreground">{lane.task}</div>}
-            {lane.resultSummary && <div className="mb-2 text-[12px] leading-relaxed text-foreground">{lane.resultSummary}</div>}
-            {livePreview && (
-              <>
-            <div className="mb-1 font-mono text-[11px] uppercase leading-none text-muted-foreground">
-              {transcriptLabel}
-            </div>
-            <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap break-words font-sans text-[12px] leading-relaxed text-foreground">
-              {lane.liveContent}
-            </pre>
-              </>
+            {lane.resultSummary && <div className="text-[12px] leading-relaxed text-foreground">{lane.resultSummary}</div>}
+            {!lane.resultSummary && lane.task && <div className="text-[12px] leading-relaxed text-muted-foreground">{lane.task}</div>}
+            {isError && conciseLivePreview && (
+              <div className="mt-2 rounded bg-muted/20 px-2 py-1 text-[12px] leading-relaxed text-muted-foreground">
+                {conciseLivePreview}
+              </div>
             )}
           </div>
         )}

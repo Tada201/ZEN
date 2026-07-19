@@ -302,10 +302,10 @@ export function WorkspaceApp() {
               </div>
 
               {/* Chat Content & Split Panel */}
-              <div className="flex-1 overflow-hidden relative w-full h-full">
+              <div className="flex-1 overflow-hidden relative w-full h-full flex flex-col">
                 {!activeArtifact ? (
-                  <div className="flex-1 flex flex-col items-center justify-between overflow-hidden h-full w-full bg-transparent">
-                    <div className="w-full flex flex-col flex-1 overflow-hidden bg-transparent">
+                  <div className="flex-1 flex flex-col h-full w-full bg-transparent overflow-hidden">
+                    <div className="flex-1 overflow-y-auto w-full">
                       <MessageList
                         messages={chatMessages}
                         onOpenArtifact={openArtifactInRightPanel}
@@ -317,7 +317,9 @@ export function WorkspaceApp() {
                         onAbort={abortStream}
                         isStreaming={isStreaming}
                       />
-                      <div className="max-w-3xl mx-auto w-full px-6 py-4 shrink-0">
+                    </div>
+                    <div className="w-full shrink-0">
+                      <div className="max-w-3xl mx-auto w-full px-6 py-4">
                           <PremiumChatInput
                             activeChatId={currentSessionId}
                             onSend={handleSendMessageInternal}
@@ -346,8 +348,8 @@ export function WorkspaceApp() {
                 ) : (
                   <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
                     <ResizablePanel defaultSize={60} minSize={30} className="flex flex-col h-full relative">
-                      <div className="flex-1 flex flex-col items-center justify-end overflow-hidden h-full w-full">
-                        <div className="w-full flex flex-col flex-1 overflow-hidden bg-transparent">
+                      <div className="flex-1 flex flex-col h-full w-full overflow-hidden">
+                        <div className="flex-1 overflow-y-auto w-full">
                           <MessageList
                             messages={chatMessages}
                             onOpenArtifact={openArtifactInRightPanel}
@@ -359,7 +361,9 @@ export function WorkspaceApp() {
                             onAbort={abortStream}
                             isStreaming={isStreaming}
                           />
-                          <div className="max-w-3xl mx-auto w-full px-6 py-4 shrink-0">
+                        </div>
+                        <div className="w-full bg-background/80 backdrop-blur-md border-t border-border p-4 shrink-0">
+                          <div className="max-w-3xl mx-auto w-full">
                               <PremiumChatInput
                                 activeChatId={currentSessionId}
                                 onSend={handleSendMessageInternal}

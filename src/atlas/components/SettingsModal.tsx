@@ -22,6 +22,7 @@ import {
   dotKeyToStoreField,
 } from "@/lib/stores/settings/settingsBridge";
 import { useZenTheme } from "../providers/ZenThemeProvider";
+import { normalizeThemeId, THEME_PRESETS } from "../theme";
 import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 import { SettingsSidebar } from "./SettingsSidebar";
 import { normalizeSettingsTab, type TabId } from "./settingsNavigation";
@@ -119,6 +120,17 @@ export function SettingsContent({
     return record;
   }, [settingsRecord, reducedMotion]);
 
+  const activeThemeValue = useMemo(() => {
+    const raw = settings["ui.theme"];
+    if (!raw || raw === "system") return "system";
+    const resolved = normalizeThemeId(raw);
+    const matched = THEME_PRESETS.find(p => p.id === resolved);
+    if (matched) {
+      return matched.mode; // "light" or "dark"
+    }
+    return "dark";
+  }, [settings]);
+
   // ── Theme context ────────────────────────────────────────────────
 
   const theme = useZenTheme();
@@ -195,6 +207,7 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
   const handleCancel = useCallback(() => {
     discardChanges();
     theme.applyPreset(useSettingsStore.getState().themeId);
+    theme.setDensity(useSettingsStore.getState().compactMode ? "compact" : "cozy");
     onClose();
   }, [discardChanges, onClose, theme]);
 
@@ -251,7 +264,7 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
                         <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30">
                           <Label className="text-[13px] font-medium text-foreground">Interface Theme</Label>
                           <Select
-                            value={settings["ui.theme"] || "dark"}
+                            value={activeThemeValue}
                             onValueChange={(v) => handleUpdate("ui.theme", v)}
                           >
                             <SelectTrigger className="w-[100px] h-8 text-xs bg-background">
@@ -281,7 +294,10 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
                            <Label className="text-[13px] font-medium text-foreground">Compact Mode</Label>
                            <Switch
                              checked={settings["ui.compact-mode"] === "true"}
-                             onCheckedChange={(v) => handleUpdate("ui.compact-mode", String(v))}
+                             onCheckedChange={(v) => {
+                               handleUpdate("ui.compact-mode", String(v));
+                               theme.setDensity(v ? "compact" : "cozy");
+                             }}
                              className="scale-90"
                            />
                          </div>

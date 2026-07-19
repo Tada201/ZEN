@@ -26,6 +26,13 @@ interface UIState {
   activeProvider: string;
   voiceModeOpen: boolean;
   aiSpeaking: boolean;
+  /**
+   * Identifier of the chat currently active in the workspace. Drives
+   * adapters that need chat context (e.g. the right-panel context
+   * tab) without taking a prop. Updated by chat-handling code on
+   * session switch.
+   */
+  activeChatId: string | null;
   toggleVoiceMode: () => void;
   theme: 'dark' | 'light' | 'tactical';
   styleMode: 'glass' | 'flat' | 'bordered';
@@ -57,6 +64,7 @@ interface UIState {
   setActiveProvider: (provider: string) => void;
   setVoiceModeOpen: (open: boolean) => void;
   setAiSpeaking: (speaking: boolean) => void;
+  setActiveChatId: (chatId: string | null) => void;
   setTheme: (theme: 'dark' | 'light' | 'tactical') => void;
   setStyleMode: (mode: 'glass' | 'flat' | 'bordered') => void;
   setDensity: (density: 'normal' | 'compact') => void;
@@ -90,6 +98,7 @@ export const useUIStore = create<UIState>()(
       activeProvider: 'openai',
       voiceModeOpen: false,
       aiSpeaking: false,
+      activeChatId: null,
       theme: 'dark',
       styleMode: 'glass',
       density: 'normal',
@@ -119,6 +128,7 @@ export const useUIStore = create<UIState>()(
       setActiveProvider: (activeProvider) => set({ activeProvider }),
       setVoiceModeOpen: (voiceModeOpen) => set({ voiceModeOpen }),
       setAiSpeaking: (aiSpeaking) => set({ aiSpeaking }),
+      setActiveChatId: (activeChatId) => set({ activeChatId }),
       toggleVoiceMode: () => set((state) => ({ voiceModeOpen: !state.voiceModeOpen })),
       setTheme: (theme) => set({ theme }),
       setStyleMode: (styleMode) => set({ styleMode }),
@@ -174,6 +184,7 @@ export const useUIStore = create<UIState>()(
           aiSpeaking,
           agentsPanelDismissed,
           rightTabBySession,
+          activeChatId,
           ...rest
         } = state;
         return rest;

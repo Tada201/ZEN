@@ -30,6 +30,26 @@ fn anthropic_reasoning_metadata(model_id: &str) -> (Option<bool>, Option<String>
     (Some(false), None)
 }
 
+/// Hardcoded context-length lookup for known Anthropic models, used when the
+/// API response does not include `max_input_tokens` (e.g. for retired models
+/// still present in the fallback list).
+fn anthropic_context_length_from_id(model_id: &str) -> Option<u64> {
+    let id = model_id.to_lowercase();
+    // 1M-context models (Claude 4.6+, Sonnet 5, Fable 5, Mythos 5)
+    if id.contains("opus-4-8")
+        || id.contains("opus-4-7")
+        || id.contains("opus-4-6")
+        || id.contains("sonnet-4-6")
+        || id.contains("sonnet-5")
+        || id.contains("fable-5")
+        || id.contains("mythos-5")
+    {
+        return Some(1_000_000);
+    }
+    // 200K-context models (Claude 4.5 Sonnet, 3.7 Sonnet, 3.5 Sonnet, Haiku 4.5, etc.)
+    Some(200_000)
+}
+
 fn supports_manual_thinking_budget(model_id: &str) -> bool {
     matches!(
         anthropic_reasoning_metadata(model_id).1.as_deref(),
@@ -272,6 +292,11 @@ impl LlmProvider for AnthropicProvider {
                 struct ModelItem {
                     id: String,
                     display_name: Option<String>,
+                    /// The Anthropic Models API returns `max_input_tokens` per
+                    /// model. Newer models (Opus 4.6+, Sonnet 4.6+, Sonnet 5)
+                    /// report 1_000_000 while older ones report 200_000.
+                    #[serde(default)]
+                    max_input_tokens: Option<u64>,
                 }
                 #[derive(Deserialize)]
                 struct ModelsResponse {
@@ -281,6 +306,14 @@ impl LlmProvider for AnthropicProvider {
                 if let Ok(models_resp) = resp.json::<ModelsResponse>().await {
                     let mut models = Vec::new();
                     for item in models_resp.data {
+                        // Prefer the per-model value from the API; fall back to
+                        // a hardcoded lookup for models the API might not include
+                        // (e.g. retired models still in the fallback list).
+                        let max_context_length = item
+                            .max_input_tokens
+                            .filter(|&v| v > 0)
+                            .or_else(|| anthropic_context_length_from_id(&item.id));
+
                         models.push(ModelInfo {
                             id: item.id.clone(),
                             name: item.id.clone(),
@@ -290,7 +323,7 @@ impl LlmProvider for AnthropicProvider {
                             model_type: None,
                             arch: None,
                             quantization: None,
-                            max_context_length: Some(200000), // Default for most models
+                            max_context_length,
                             display_name: item.display_name,
                             description: None,
                             state: None,
@@ -311,6 +344,8 @@ impl LlmProvider for AnthropicProvider {
         }
 
         // Fallback hardcoded list of current models (Updated April 2026).
+        // Context lengths use `anthropic_context_length_from_id` to match
+        // the actual per-model values from the Anthropic Models API.
         let models = vec![
             ModelInfo {
                 id: "claude-4-7-opus-20260416".to_string(),
@@ -321,7 +356,7 @@ impl LlmProvider for AnthropicProvider {
                 model_type: None,
                 arch: None,
                 quantization: None,
-                max_context_length: Some(200000),
+                max_context_length: anthropic_context_length_from_id("claude-opus-4-7"),
                 display_name: Some("Claude 4.7 Opus".to_string()),
                 description: Some("Anthropic flagship: Latest frontier intelligence".to_string()),
                 state: None,
@@ -339,7 +374,7 @@ impl LlmProvider for AnthropicProvider {
                 model_type: None,
                 arch: None,
                 quantization: None,
-                max_context_length: Some(200000),
+                max_context_length: anthropic_context_length_from_id("claude-opus-4-6"),
                 display_name: Some("Claude 4.6 Opus".to_string()),
                 description: Some("Previous flagship: Optimized for complex reasoning".to_string()),
                 state: None,
@@ -357,7 +392,7 @@ impl LlmProvider for AnthropicProvider {
                 model_type: None,
                 arch: None,
                 quantization: None,
-                max_context_length: Some(200000),
+                max_context_length: anthropic_context_length_from_id("claude-sonnet-4-6"),
                 display_name: Some("Claude 4.6 Sonnet".to_string()),
                 description: Some("Intelligence/Speed balanced champion".to_string()),
                 state: None,
@@ -375,7 +410,7 @@ impl LlmProvider for AnthropicProvider {
                 model_type: None,
                 arch: None,
                 quantization: None,
-                max_context_length: Some(200000),
+                max_context_length: anthropic_context_length_from_id("claude-sonnet-4-5"),
                 display_name: Some("Claude 4.5 Sonnet".to_string()),
                 description: Some("Highly capable, cost-efficient professional model".to_string()),
                 state: None,
@@ -393,7 +428,7 @@ impl LlmProvider for AnthropicProvider {
                 model_type: None,
                 arch: None,
                 quantization: None,
-                max_context_length: Some(200000),
+                max_context_length: anthropic_context_length_from_id("claude-3-7-sonnet"),
                 display_name: Some("Claude 3.7 Sonnet".to_string()),
                 description: Some("Advanced reasoning and coding specialist".to_string()),
                 state: None,
@@ -411,7 +446,7 @@ impl LlmProvider for AnthropicProvider {
                 model_type: None,
                 arch: None,
                 quantization: None,
-                max_context_length: Some(200000),
+                max_context_length: anthropic_context_length_from_id("claude-3-5-sonnet"),
                 display_name: Some("Claude 3.5 Sonnet".to_string()),
                 description: None,
                 state: None,
@@ -429,7 +464,7 @@ impl LlmProvider for AnthropicProvider {
                 model_type: None,
                 arch: None,
                 quantization: None,
-                max_context_length: None,
+                max_context_length: anthropic_context_length_from_id("claude-haiku-3-5"),
                 display_name: None,
                 description: None,
                 state: None,

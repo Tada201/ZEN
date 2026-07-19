@@ -119,6 +119,41 @@ struct OllamaModelEntry {
 }
 
 #[derive(Serialize)]
+struct OllamaShowRequest<'a> {
+    model: &'a str,
+}
+
+/// Partial `/api/show` response. `/api/tags` never reports a context window,
+/// but `/api/show` exposes it under `model_info` as an arch-prefixed key
+/// (e.g. `llama.context_length`, `qwen2.context_length`). We only need that
+/// map plus `capabilities` (to skip embedding-only models).
+#[derive(Deserialize)]
+struct OllamaShowResponse {
+    #[serde(default)]
+    model_info: std::collections::HashMap<String, serde_json::Value>,
+    #[serde(default)]
+    capabilities: Vec<String>,
+}
+
+/// Extract the context window from a parsed `/api/show` body.
+///
+/// Arch-agnostic: scans `model_info` for the first key ending in
+/// `.context_length` rather than hardcoding an architecture prefix, so new
+/// model families work without code changes. Embedding-only models (no chat
+/// window) return `None`. Any missing/non-numeric/zero value also yields
+/// `None` so callers fall back to Zen's compaction cap rather than a guess.
+fn context_length_from_show(show: &OllamaShowResponse) -> Option<u64> {
+    if show.capabilities.iter().any(|c| c == "embedding") {
+        return None;
+    }
+    show.model_info
+        .iter()
+        .find(|(key, _)| key.ends_with(".context_length"))
+        .and_then(|(_, value)| value.as_u64())
+        .filter(|&n| n > 0)
+}
+
+#[derive(Serialize)]
 struct OllamaEmbedRequest {
     model: String,
     input: String,
@@ -146,6 +181,30 @@ impl OllamaProvider {
             base_url: base_url.trim_end_matches('/').to_string(),
         }
     }
+
+    /// Query `/api/show` for one model and return its detected context window.
+    ///
+    /// Best-effort: any failure (network, non-200, missing key, embedding-only
+    /// model) resolves to `None` so the caller falls back to Zen's compaction
+    /// cap. Mirrors `list_models`' `localhost`→`127.0.0.1` retry.
+    async fn fetch_context_length(&self, model: &str) -> Option<u64> {
+        let body = OllamaShowRequest { model };
+        let url = format!("{}/api/show", self.base_url);
+        let resp = match self.client.post(&url).json(&body).send().await {
+            Ok(resp) => resp,
+            Err(_) if self.base_url.contains("localhost") => {
+                let alt_base = self.base_url.replace("localhost", "127.0.0.1");
+                let alt_url = format!("{}/api/show", alt_base);
+                self.client.post(&alt_url).json(&body).send().await.ok()?
+            }
+            Err(_) => return None,
+        };
+        if !resp.status().is_success() {
+            return None;
+        }
+        let show: OllamaShowResponse = resp.json().await.ok()?;
+        context_length_from_show(&show)
+    }
 }
 
 #[async_trait]
@@ -172,10 +231,23 @@ impl LlmProvider for OllamaProvider {
         }
 
         let body: OllamaModelsResponse = resp.json().await?;
+
+        // `/api/tags` carries no context window, so probe `/api/show` for each
+        // model to read its real `<arch>.context_length`. Run concurrently so N
+        // models cost one round-trip's worth of latency, not N. Failures resolve
+        // to `None` (fall back to Zen's compaction cap) rather than a guess.
+        let context_lengths = futures::future::join_all(
+            body.models
+                .iter()
+                .map(|m| self.fetch_context_length(&m.name)),
+        )
+        .await;
+
         let models = body
             .models
             .into_iter()
-            .map(|m| ModelInfo {
+            .zip(context_lengths)
+            .map(|(m, max_context_length)| ModelInfo {
                 id: m.name.clone(),
                 name: m.name,
                 size: m.size,
@@ -186,7 +258,7 @@ impl LlmProvider for OllamaProvider {
                 model_type: None,
                 arch: None,
                 quantization: None,
-                max_context_length: None,
+                max_context_length,
                 state: None,
                 supports_vision: None,
                 supports_tools: None,
@@ -517,6 +589,82 @@ mod tests {
         assert_eq!(models[3].id, "llama3.2-vision:11b");
         assert_eq!(models[3].size, Some(6953775847));
         assert!(models[3].modified_at.is_none());
+    }
+
+    #[test]
+    fn context_length_from_show_reads_arch_agnostic_key() {
+        // Key prefix varies by arch; extractor matches any `*.context_length`.
+        let show: OllamaShowResponse = serde_json::from_str(
+            r#"{"model_info":{"qwen2.context_length":32768,"qwen2.embedding_length":3584},"capabilities":["completion","tools"]}"#,
+        )
+        .unwrap();
+        assert_eq!(context_length_from_show(&show), Some(32768));
+    }
+
+    #[test]
+    fn context_length_from_show_skips_embedding_models() {
+        let show: OllamaShowResponse = serde_json::from_str(
+            r#"{"model_info":{"bert.context_length":512},"capabilities":["embedding"]}"#,
+        )
+        .unwrap();
+        assert_eq!(context_length_from_show(&show), None);
+    }
+
+    #[test]
+    fn context_length_from_show_none_when_missing_or_zero() {
+        let missing: OllamaShowResponse =
+            serde_json::from_str(r#"{"model_info":{},"capabilities":[]}"#).unwrap();
+        assert_eq!(context_length_from_show(&missing), None);
+
+        let zero: OllamaShowResponse = serde_json::from_str(
+            r#"{"model_info":{"llama.context_length":0},"capabilities":[]}"#,
+        )
+        .unwrap();
+        assert_eq!(context_length_from_show(&zero), None);
+    }
+
+    #[tokio::test]
+    async fn test_ollama_list_models_detects_context_window_via_show() {
+        let (provider, server) = mock_provider().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/tags"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "models": [{"name": "llama3.1:8b", "size": 1, "modified_at": "2025-01-15T10:30:00Z"}]
+            })))
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/api/show"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "model_info": {"llama.context_length": 131072},
+                "capabilities": ["completion", "tools"]
+            })))
+            .mount(&server)
+            .await;
+
+        let models = provider.list_models().await.unwrap();
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].max_context_length, Some(131072));
+    }
+
+    #[tokio::test]
+    async fn test_ollama_list_models_none_window_when_show_fails() {
+        let (provider, server) = mock_provider().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/tags"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "models": [{"name": "mystery:latest", "size": 1, "modified_at": null}]
+            })))
+            .mount(&server)
+            .await;
+
+        // No `/api/show` mount → 404 → detection falls back to None (not a guess).
+        let models = provider.list_models().await.unwrap();
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].max_context_length, None);
     }
 
     #[tokio::test]

@@ -3,14 +3,14 @@
    Sessions · Markdown · Code blocks · Tool calls · Artifact panel
    Image attachments · API key management · SQLite persistence
  ═══════════════════════════════════════════════════════════════ */
-import { lazy, Suspense, useState, useCallback, useEffect, useTransition, useMemo } from "react";
+import { useState, useCallback, useEffect, useTransition, useMemo } from "react";
 import { PanelLeftOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useChat } from "@/atlas/hooks/useChat";
 import { motion, AnimatePresence } from "framer-motion";
 
 // Modular Components
-import { 
+import {
   ArtifactData
 } from "../components/chat/types";
 import { SessionSidebar } from "../components/chat/SessionSidebar";
@@ -20,11 +20,6 @@ import { PremiumChatInput } from "../components/PremiumChatInput";
 import { SettingsModal, type TabId } from "../components/SettingsModal";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { useChatStore } from "@/lib/stores/useChatStore";
-import { VOICE_MODE_SYSTEM_PROMPT } from "../components/voice/voiceModePrompt";
-
-const VoiceModeOverlay = lazy(() =>
-  import("../components/voice/VoiceModeOverlay").then((module) => ({ default: module.VoiceModeOverlay })),
-);
 
 export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
   const [, startTransition] = useTransition();
@@ -41,20 +36,20 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
   } = useChat();
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  
+
   const handleOpenArtifact = useCallback((art: ArtifactData) => {
     const artId = art.id || `art_${Date.now()}`;
     const fullArt = { ...art, id: artId, chatId: art.chatId || currentSessionId || undefined };
-    
+
     // Add to chat store
     useChatStore.getState().addArtifact(fullArt);
     useChatStore.getState().setActiveArtifact(artId);
-    
+
     // Open right panel and set active tab
     useUIStore.getState().setRightPanelOpen(true);
     useUIStore.getState().setActiveRightTab('artifacts');
   }, [currentSessionId]);
-  
+
   // Settings UI State
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [settingsTab, setSettingsTab] = useState<TabId>("general");
@@ -62,8 +57,6 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
   // Options UI State
   const [webSearch] = useState(false);
   const [generativeUI, setGenerativeUI] = useState(false);
-  const voiceModeOpen = useUIStore(s => s.voiceModeOpen);
-  const toggleVoiceMode = useUIStore(s => s.toggleVoiceMode);
 
   const handleSendMessageInternal = useCallback(async (data: {
     message: string;
@@ -226,28 +219,12 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {voiceModeOpen && (
-          <Suspense fallback={null}>
-            <VoiceModeOverlay
-              isOpen={voiceModeOpen}
-              onClose={() => toggleVoiceMode()}
-              chatId={currentSessionId ?? undefined}
-              messages={messages}
-              activeModel={selectedModelId}
-              onTranscript={(text) => {
-                handleSendMessageInternal({
-                  message: text,
-                  model: selectedModelId,
-                  provider: selectedProvider,
-                  systemPrompt: VOICE_MODE_SYSTEM_PROMPT,
-                  systemPromptMode: "replace",
-                });
-              }}
-            />
-          </Suspense>
-        )}
-      </AnimatePresence>
+      {/* VoiceModeOverlay intentionally not mounted here. WorkspaceSection.tsx
+          owns the single VoiceModeOverlay mount (line ~438). Adding a second
+          mount site would double-subscribe to every Tauri voice event, double-
+          create AudioContexts, and double-write the stage board. If this
+          section is ever wired into a route that coexists with the workspace,
+          keep the overlay mount in exactly one place. */}
 
       {/* Resizable Layout Area */}
       <div className="flex-grow h-full w-full relative z-10">

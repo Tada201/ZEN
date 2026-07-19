@@ -39,6 +39,7 @@ pub struct ToolService {
     security: Arc<SecurityService>,
     pending_approvals: Arc<Mutex<HashMap<String, PendingToolApproval>>>,
     execution_limit: Arc<Semaphore>,
+    mcp_client: Arc<tokio::sync::RwLock<Option<Arc<crate::mcp::McpClient>>>>,
 }
 
 pub struct PendingToolApproval {
@@ -103,7 +104,16 @@ impl ToolService {
             security,
             pending_approvals,
             execution_limit: Arc::new(Semaphore::new(16)),
+            mcp_client: Arc::new(tokio::sync::RwLock::new(None)),
         }
+    }
+
+    /// Wire in the MCP client reference for external tool execution.
+    pub fn set_mcp_client(&self, client: Arc<crate::mcp::McpClient>) {
+        let mcp = self.mcp_client.clone();
+        tokio::spawn(async move {
+            *mcp.write().await = Some(client);
+        });
     }
 
     pub async fn execute_interactive(
@@ -678,6 +688,29 @@ impl ToolService {
                         duration_ms: 0,
                     },
                 }
+            } else if crate::mcp::McpClient::is_external_tool(&v2_tool_call.name) {
+                let start = std::time::Instant::now();
+                match self
+                    .execute_v2_authorized(app, chat_id, v2_tool_call, "agent_tool")
+                    .await
+                {
+                    Ok(content) => crate::agent::types::ToolResult {
+                        tool_call_id: tool_call.id,
+                        content,
+                        is_error: false,
+                        duration_ms: start.elapsed().as_millis() as u64,
+                    },
+                    Err(e) => crate::agent::types::ToolResult {
+                        tool_call_id: tool_call.id,
+                        content: serde_json::json!({
+                            "error": e,
+                            "tool": tool_call.name,
+                            "hint": "This external tool failed during execution. The server may be unreachable."
+                        }),
+                        is_error: true,
+                        duration_ms: start.elapsed().as_millis() as u64,
+                    },
+                }
             } else {
                 crate::agent::types::ToolResult {
                     tool_call_id: tool_call.id,
@@ -699,6 +732,21 @@ impl ToolService {
         tool_call: ToolCall,
         decision: &str,
     ) -> Result<serde_json::Value, String> {
+        // ── External tool routing ──────────────────────────────────────────
+        // If the tool name starts with `ext:`, dispatch to the external
+        // MCP server via HTTP POST instead of looking up in the local registry.
+        if crate::mcp::McpClient::is_external_tool(&tool_call.name) {
+            let client = self.mcp_client.read().await;
+            if let Some(client) = client.as_ref() {
+                return client
+                    .execute_external_tool(&tool_call.name, tool_call.arguments)
+                    .await;
+            } else {
+                return Err("MCP client not configured for external tool execution".to_string());
+            }
+        }
+
+        // ── Native tool execution ──────────────────────────────────────────
         let tool = {
             let registry = self.registry.read().await;
             registry.get(&tool_call.name)

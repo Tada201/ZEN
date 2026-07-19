@@ -800,9 +800,13 @@ impl OpenAiCompatProvider {
     fn provider_tool_policy(&self) -> bool {
         let p = self.provider_name.to_lowercase();
         match p.as_str() {
-            // Curated / official catalogs — all models support tools
+            // Curated / official catalogs — all models support tools.
+            // 9router is included: its catalog is mostly tool-capable cloud
+            // models, so it defaults to tools on even when the per-model
+            // capability cache is cold (e.g. after the 60s provider TTL).
             "openai" | "groq" | "mistral" | "gemini" | "google" | "deepseek" | "qwen" | "xai"
-            | "kilocode" | "opencode" | "opencode_free" | "aihubmix" | "nvidia" => true,
+            | "kilocode" | "opencode" | "opencode_free" | "aihubmix" | "nvidia" | "nine_router"
+            | "nine-router" | "n9router" | "9router" => true,
 
             // Mixed catalogs — many models lack tool support
             "openrouter" | "together" | "perplexity" => false,
@@ -1164,7 +1168,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_nine_router_without_metadata_stays_conservative() -> ZenResult<()> {
+    async fn test_nine_router_without_metadata_defaults_to_tools() -> ZenResult<()> {
+        // 9router is treated as a tool-capable cloud router: with no per-model
+        // `supported_parameters` metadata it defaults to tools-on, both at
+        // list time and via the cold-cache provider policy.
         let server = MockServer::start().await;
         let provider = OpenAiCompatProvider::new(&server.uri(), "", "nine_router");
 
@@ -1177,9 +1184,11 @@ mod tests {
             .await;
 
         let models = provider.list_models().await?;
-        assert_eq!(models[0].supports_tools, Some(false));
+        assert_eq!(models[0].supports_tools, Some(true));
         assert_eq!(models[0].supports_reasoning, None);
-        assert!(!provider.supports_tools("nvidia/parakeet-ctc-1.1b-asr"));
+        assert!(provider.supports_tools("nvidia/parakeet-ctc-1.1b-asr"));
+        // Cold-cache path (unknown model) still resolves to true for 9router.
+        assert!(provider.supports_tools("some/unlisted-model"));
         Ok(())
     }
 

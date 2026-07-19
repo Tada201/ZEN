@@ -33,6 +33,7 @@ export function VoiceModeOverlay({
 }) {
     const voiceModeOpen = isOpen;
     const toggleVoiceMode = onClose;
+
     const userSttEngine = useSettingsStore(s => s.sttEngine);
     const sttWhisperModel = useSettingsStore(s => s.sttWhisperModel ?? 'ggml-tiny.en.bin');
     const sttComputeDevice = useSettingsStore(s => s.sttComputeDevice ?? 'auto');
@@ -165,7 +166,7 @@ export function VoiceModeOverlay({
         setMoonshineFallback(active);
         return true;
     }, []);
-    const { moonshineFallbackRef, moonshineReadyRef, resetMoonshineFallback, startMoonshineRecognition, stopMoonshineRecognition } = useMoonshineStt({
+    const { moonshineFallbackRef, moonshineReadyRef, startMoonshineRecognition, stopMoonshineRecognition } = useMoonshineStt({
         appendLog,
         onTranscript,
         setSttStatus,
@@ -214,7 +215,6 @@ export function VoiceModeOverlay({
 
     const applyStageBlock = useCallback((block: VoiceStageInput, generation = stageGenerationRef.current) => {
         const state = useVoiceStageStore.getState();
-        if (state.lifecycle !== 'active') return;
         if (state.generation !== generation) return;
         upsertStageBlock(block);
     }, [upsertStageBlock]);
@@ -360,9 +360,12 @@ export function VoiceModeOverlay({
         workletNodeRef,
     });
 
+    // Open/close lifecycle: only re-runs when voiceModeOpen flips. Settings
+    // changes are handled by the dedicated audio-init effect below so a noise
+    // suppression toggle does not tear down the entire overlay state.
     useEffect(() => {
-        if (voiceModeOpen) { 
-            setLogLines([]); 
+        if (voiceModeOpen) {
+            setLogLines([]);
             setSttStatus('starting');
             setTtsStatus('idle');
             setAiSpeechText('');
@@ -382,12 +385,27 @@ export function VoiceModeOverlay({
             stageGenerationRef.current = useVoiceStageStore.getState().generation;
             resetCurrentStage();
             stageGenerationRef.current = useVoiceStageStore.getState().generation;
-            initMic();
-            if (sttEngine === 'web' && !voiceInputMode) startWebRecognition();
+            return;
         }
-        else { cleanupAudio(); }
-        return () => cleanupAudio();
-    }, [voiceModeOpen, initMic, cleanupAudio, resetCurrentStage, resetMoonshineFallback, saveCurrentBoard, startStage, applyStageBlock, startWebRecognition, sttEngine, voiceInputMode]);
+        cleanupAudio();
+        return cleanupAudio;
+    }, [voiceModeOpen, cleanupAudio]);
+
+    // Audio init: re-runs whenever the mic graph inputs change. No explicit
+    // cleanup — initMic uses micInitSeqRef internally to supersede any in-flight
+    // initialization, and cleanupAudio is owned by the lifecycle effect above.
+    useEffect(() => {
+        if (!voiceModeOpen) return;
+        initMic();
+    }, [voiceModeOpen, initMic]);
+
+    // Web speech recognition: separate from mic init so toggling between
+    // engines does not recreate the entire audio graph.
+    useEffect(() => {
+        if (!voiceModeOpen || sttEngine !== 'web' || voiceInputMode) return;
+        startWebRecognition();
+        return () => stopWebRecognition();
+    }, [voiceModeOpen, sttEngine, voiceInputMode, startWebRecognition, stopWebRecognition]);
 
     useEffect(() => {
         if (!voiceModeOpen || ttsEngine !== 'piper') return;

@@ -427,5 +427,183 @@
         "content": "The mock agentic execution finished successfully.\n\nThe UI should now preserve a Codebuff-style ledger: subagent spawn/completion, parallel tool execution, approval-gated command flow, and readable result previews remain visible after the final answer."
       }
     ]
+  },
+  "test_chat_timeline_collapse": {
+    "prompt": "test timeline collapse",
+    "description": "Regression fixture for the RULES.md chat-timeline update: a parallel multi-tool batch (3 simultaneous tool:start/tool:complete events) collapsed into one grouped execution row, then disappears once the assistant answer completes. Below the final 'done' content there must be no trailing tool card. The whole batch belongs to the same batch_id so the verifier can confirm the renderer collapses it into one row.",
+    "flow": [
+      {
+        "type": "research-step",
+        "text": "Planning 3 parallel reads for the chat-timeline audit...",
+        "status": "running"
+      },
+      {
+        "type": "research-step",
+        "text": "Plan ready. Three reads run concurrently and feed the final answer.",
+        "status": "completed"
+      },
+      {
+        "type": "chat:status",
+        "payload": {
+          "message": "Tool batch planned",
+          "phase": "tool_batch_planned",
+          "iteration": 1,
+          "metadata": {
+            "toolCount": 3,
+            "parallel": true,
+            "tools": ["grep_documents", "read_file", "list_documents"]
+          }
+        }
+      },
+      {
+        "type": "tool:start",
+        "tool_call_id": "tc-grep-repo",
+        "tool_name": "grep_documents",
+        "batch_id": "batch-collapse-audit-001",
+        "iteration": 1,
+        "arguments": { "query": "shouldShowToolGroupInTimeline" },
+        "delay_ms": 80
+      },
+      {
+        "type": "tool:start",
+        "tool_call_id": "tc-read-file",
+        "tool_name": "read_file",
+        "batch_id": "batch-collapse-audit-001",
+        "iteration": 1,
+        "arguments": { "path": "src/atlas/components/chat/assistantMessageParts.ts" },
+        "delay_ms": 90
+      },
+      {
+        "type": "tool:start",
+        "tool_call_id": "tc-list-docs",
+        "tool_name": "list_documents",
+        "batch_id": "batch-collapse-audit-001",
+        "iteration": 1,
+        "arguments": { "tag": "chat-timeline" },
+        "delay_ms": 90
+      },
+      {
+        "type": "tool:complete",
+        "tool_call_id": "tc-grep-repo",
+        "tool_name": "grep_documents",
+        "batch_id": "batch-collapse-audit-001",
+        "iteration": 1,
+        "status": "success",
+        "output": "{\"status\":\"success\",\"matches\":3}",
+        "duration_ms": 220
+      },
+      {
+        "type": "tool:complete",
+        "tool_call_id": "tc-read-file",
+        "tool_name": "read_file",
+        "batch_id": "batch-collapse-audit-001",
+        "iteration": 1,
+        "status": "success",
+        "output": "{\"status\":\"success\",\"lines\":420}",
+        "duration_ms": 180
+      },
+      {
+        "type": "tool:complete",
+        "tool_call_id": "tc-list-docs",
+        "tool_name": "list_documents",
+        "batch_id": "batch-collapse-audit-001",
+        "iteration": 1,
+        "status": "success",
+        "output": "{\"status\":\"success\",\"items\":12}",
+        "duration_ms": 150
+      },
+      {
+        "type": "chunk:first",
+        "delta": ""
+      },
+      {
+        "type": "chunk",
+        "delta": "The parallel read batch found 3 call sites for the visibility predicate, the helper file imported cleanly, and the document list shows 12 affected files. "
+      },
+      {
+        "type": "chunk",
+        "delta": "Below this final answer, no trailing tool card should remain — the chat timeline collapsed the grouped execution row once the answer completed (or, equivalently, on chat reload)."
+      },
+      {
+        "type": "done",
+        "content": "The parallel read batch found 3 call sites for the visibility predicate, the helper file imported cleanly, and the document list shows 12 affected files. Below this final answer, no trailing tool card should remain — the chat timeline collapsed the grouped execution row once the answer completed (or, equivalently, on chat reload)."
+      }
+    ]
+  },
+  "test_subagent_routing": {
+    "prompt": "test subagent routing",
+    "description": "Regression fixture for RULES.md chat-timeline Rule 6 (subagent output goes to the dedicated agents panel, not the parent chat). The parent chat_id is shared across agent:spawn / agent:chunk / agent:complete / chunk+done so the routing paths are exercisable; the chunk content never appears as user-facing transcript text in the parent chat summary.",
+    "flow": [
+      {
+        "type": "chat:status",
+        "payload": {
+          "message": "Subagent delegation started",
+          "phase": "workflow_started",
+          "iteration": 1,
+          "metadata": {
+            "agentName": "Coordinator",
+            "iteration": 1
+          }
+        }
+      },
+      {
+        "type": "agent:spawn",
+        "payload": {
+          "spawn_id": "mock-spawn-code-analyst-002",
+          "parent_agent": "Coordinator",
+          "child_agent_id": "code_analyst",
+          "child_agent_name": "CodeAnalyst",
+          "task": "Audit the chat timeline renderer for the new RULES contract.",
+          "chat_id": "mock-parent-chat-001"
+        }
+      },
+      {
+        "type": "agent:chunk",
+        "chat_id": "mock-parent-chat-001",
+        "agent_id": "code_analyst",
+        "agent_name": "CodeAnalyst",
+        "parent_agent": "Coordinator",
+        "spawn_id": "mock-spawn-code-analyst-002",
+        "delta": "(CodeAnalyst reading source — this raw token delta must not flood the parent chat; the agents panel owns in-flight transcript.)"
+      },
+      {
+        "type": "agent:chunk",
+        "chat_id": "mock-parent-chat-001",
+        "agent_id": "code_analyst",
+        "agent_name": "CodeAnalyst",
+        "parent_agent": "Coordinator",
+        "spawn_id": "mock-spawn-code-analyst-002",
+        "delta": "(CodeAnalyst summarizing findings — same isolation rule applies.)"
+      },
+      {
+        "type": "agent:complete",
+        "payload": {
+          "spawn_id": "mock-spawn-code-analyst-002",
+          "agent_id": "code_analyst",
+          "child_agent_name": "CodeAnalyst",
+          "parent_agent": "Coordinator",
+          "task": "Audit the chat timeline renderer for the new RULES contract.",
+          "status": "completed",
+          "duration_ms": 2840,
+          "result": {
+            "status": "success",
+            "summary": "shouldShowToolGroupInTimeline honors the chat-timeline hide rule for both completion and reload."
+          }
+        },
+        "chat_id": "mock-parent-chat-001"
+      },
+      {
+        "type": "chunk:first",
+        "delta": ""
+      },
+      {
+        "type": "chunk",
+        "delta": "The CodeAnalyst subagent completed the timeline audit. The parent chat only carries the spawn/complete summary row; the child transcript never streamed into this surface.\n\n"
+      },
+      {
+        "type": "done",
+        "content": "The CodeAnalyst subagent completed the timeline audit. The parent chat only carries the spawn/complete summary row; the child transcript never streamed into this surface."
+      }
+    ]
   }
 }

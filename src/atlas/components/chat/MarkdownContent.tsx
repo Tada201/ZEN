@@ -401,18 +401,18 @@ export function MarkdownContent({
     },
     blockquote: ({ children }) => {
       const text = flattenChildren(children).trim();
-      const match = text.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i);
+        const match = text.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i);
 
-      if (match) {
-        const type = match[1].toUpperCase();
-        let colorClass = "border-primary/40 bg-primary/10 text-blue-700 dark:text-primary";
-        let icon = "ℹ️";
-        let title = "Note";
+        if (match) {
+          const type = match[1].toUpperCase();
+          let colorClass = "border-primary/40 bg-primary/40 text-blue-950 dark:text-primary-foreground";
+          let icon = "ℹ️";
+          let title = "Note";
 
-        if (type === "TIP") { colorClass = "border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-400"; icon = "💡"; title = "Tip"; }
-        if (type === "IMPORTANT") { colorClass = "border-primary/40 bg-primary/10 text-purple-700 dark:text-primary"; icon = "✨"; title = "Important"; }
-        if (type === "WARNING") { colorClass = "border-warning/40 bg-warning/10 text-amber-700 dark:text-warning"; icon = "⚠️"; title = "Warning"; }
-        if (type === "CAUTION") { colorClass = "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-destructive"; icon = "🛑"; title = "Caution"; }
+          if (type === "TIP") { colorClass = "border-green-500/40 bg-green-500/40 text-green-950 dark:text-green-100"; icon = "💡"; title = "Tip"; }
+          if (type === "IMPORTANT") { colorClass = "border-primary/40 bg-primary/40 text-purple-950 dark:text-purple-100"; icon = "✨"; title = "Important"; }
+          if (type === "WARNING") { colorClass = "border-warning/40 bg-warning/40 text-amber-950 dark:text-amber-100"; icon = "⚠️"; title = "Warning"; }
+          if (type === "CAUTION") { colorClass = "border-rose-500/40 bg-rose-500/40 text-rose-950 dark:text-rose-100"; icon = "🛑"; title = "Caution"; }
 
         const cleanChildren = removeAlertTag(children);
 

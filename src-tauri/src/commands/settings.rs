@@ -324,7 +324,8 @@ pub async fn fetch_9router_image_models(
 #[tauri::command]
 pub async fn sync_tool_permissions(state: State<'_, AppState>) -> AppResult<()> {
     let all_settings = state.settings_manager.get_all().await?;
-    let permissions = ToolManager::build_permissions(&all_settings);
+    let workspace_root = state.workspace_folder.read().await.clone();
+    let permissions = ToolManager::build_permissions(&all_settings, Some(workspace_root));
     state
         .tool_manager
         .update_permissions(permissions)
@@ -336,6 +337,12 @@ pub async fn sync_tool_permissions(state: State<'_, AppState>) -> AppResult<()> 
 /// Returns true if `key` participates in the ToolManager permission policy.
 /// The backend auto-syncs after these keys change so the frontend never has
 /// to issue a separate sync command.
+///
+/// NOTE: The frontend formats `toolPermissionMode` under two equivalent
+/// string keys — `tool_permission_mode` (the legacy flat form written by
+/// the persistence mapper) and `tools.permission-mode` (the typed bridge
+/// form written by `SettingsModal`). Both must trigger an auto-sync so
+/// switching modes from either surface rebuilds `ToolPermissions` immediately.
 fn is_tool_permission_key(key: &str) -> bool {
     matches!(
         key,
@@ -346,6 +353,8 @@ fn is_tool_permission_key(key: &str) -> bool {
             | "tools.yolo-mode"
             | "tools.global-default"
             | "tools.auto-approve-low-risk"
+            | "tools.permission-mode"
+            | "tool_permission_mode"
     ) || key.starts_with("tools.permission.")
 }
 
@@ -370,7 +379,8 @@ async fn maybe_sync_tool_permissions<'a, I>(
             return;
         }
     };
-    let permissions = ToolManager::build_permissions(&all_settings);
+    let workspace_root = state.workspace_folder.read().await.clone();
+    let permissions = ToolManager::build_permissions(&all_settings, Some(workspace_root));
     if let Err(e) = state.tool_manager.update_permissions(permissions).await {
         tracing::warn!(error = %e, "Auto-sync of tool permissions: install failed");
     }

@@ -9,7 +9,7 @@ import { type ChatStatusPhase } from "@/api/chatStatus";
 import type { Message, ArtifactData, Step } from "./types";
 import type { SettingsTabId } from "@/lib/features/frontendFeatures";
 import type { ParsedCard } from "./assistantMessageParts";
-import { groupAssistantSteps, groupToolCalls, legacyMessageToActionStep, parseCardTags, shouldShowPostToolWorking } from "./assistantMessageParts";
+import { groupAssistantSteps, groupToolCalls, legacyMessageToActionStep, shouldShowPostToolWorking } from "./assistantMessageParts";
 import { MarkdownContent } from "./MarkdownContent";
 import { ReasoningBlock } from "./ReasoningBlock";
 import { useCopy } from "./CodeBlock";
@@ -27,8 +27,9 @@ const CardFallback = () => (
   <div className="h-24 w-64 rounded-xl border border-border/30 bg-card/20" aria-hidden="true" />
 );
 
-// ToolCallStreaming/ToolCallReady are rendered inline in the ToolCallCard header
-// via the streamingPreview prop — no need for separate AgentActionStep display.
+// Chat-status phases (agent_streaming, tool_call_ready, tool_call_streaming, ...)
+// duplicate the tool execution trace, so none render as their own timeline row.
+// Clarification/approval/error surface through their own step kinds, not here.
 const VISIBLE_CHAT_STATUS_PHASES: ReadonlySet<ChatStatusPhase> = new Set([]);
 
 
@@ -46,9 +47,21 @@ function isVisibleChatActionStep(step: Step) {
   }
 
   return (
-    step.kind === "approval_request" ||
     step.kind === "clarification_request"
   );
+}
+
+function shouldShowToolGroupInTimeline(
+  step: { type: "tool-group"; toolCalls: Array<{ status: string }> },
+  isStreaming: boolean,
+  hasAssistantAnswer: boolean,
+) {
+  if (step.toolCalls.length === 0) return false;
+  const hasActionableTool = step.toolCalls.some((tool) =>
+    tool.status === "running" || tool.status === "awaiting_approval" || tool.status === "error"
+  );
+  if (hasActionableTool) return true;
+  return isStreaming && !hasAssistantAnswer;
 }
 
 function RenderPremiumCard({ card }: { card: ParsedCard }) {
@@ -82,10 +95,6 @@ export function AssistantMessage({
     return groupAssistantSteps(message.steps?.length ? message.steps : legacyStep ? [legacyStep] : undefined);
   }, [message]);
 
-  const mainContentCards = useMemo(() => {
-    return parseCardTags(message.content || "");
-  }, [message.content]);
-
   const groupedToolCalls = useMemo(() => {
     return groupToolCalls(message.toolCalls);
   }, [message.toolCalls]);
@@ -96,9 +105,23 @@ export function AssistantMessage({
       .map((step) => step as Step);
   }, [groupedSteps]);
 
+  const hasAssistantAnswerText = useMemo(() => {
+    return Boolean(
+      message.content?.trim() ||
+      groupedSteps.some((step) =>
+        step.type === "text" && Boolean((step.cleanText || step.content || "").trim())
+      )
+    );
+  }, [groupedSteps, message.content]);
+
   const visibleGroupedSteps = useMemo(() => {
-    return groupedSteps.filter((step) => step.type !== "action" || isVisibleChatActionStep(step as Step));
-  }, [groupedSteps]);
+    return groupedSteps.filter((step) => {
+      if (step.type === "tool-group") {
+        return shouldShowToolGroupInTimeline(step, message.status === "sending", hasAssistantAnswerText);
+      }
+      return step.type !== "action" || isVisibleChatActionStep(step as Step);
+    });
+  }, [groupedSteps, hasAssistantAnswerText, message.status]);
 
   const showPostToolWorking = useMemo(() => {
     if (visibleGroupedSteps.length > 0) {
@@ -117,9 +140,10 @@ export function AssistantMessage({
     groupedSteps.some((step) =>
       step.type === "text"
         ? Boolean((step.cleanText || step.content || "").trim())
-        : step.type === "reasoning" || step.type === "tool-group"
+        : step.type === "reasoning" ||
+          (step.type === "tool-group" && shouldShowToolGroupInTimeline(step, message.status === "sending", hasAssistantAnswerText))
     ) ||
-    groupedToolCalls.length > 0
+    (message.status === "sending" && groupedToolCalls.length > 0)
   );
   const hasVisibleProgress = visibleGroupedSteps.some((step) => step.type === "action");
 
@@ -209,14 +233,16 @@ export function AssistantMessage({
                             isThinking={message.status === "sending" && idx === visibleGroupedSteps.length - 1}
                           />
                         ) : step.type === "tool-group" && step.toolCalls ? (
-                          <AgentExecutionTrace 
-                            toolCalls={step.toolCalls}
-                            executionSteps={executionActionSteps}
-                            sessionId={message.sessionId}
-                            onOpenArtifact={onOpenArtifact}
-                            isStreaming={message.status === "sending"}
-                            preferCompact
-                          />
+                          <div className="space-y-1.5">
+                            <AgentExecutionTrace
+                              toolCalls={step.toolCalls}
+                              executionSteps={executionActionSteps}
+                              sessionId={message.sessionId}
+                              onOpenArtifact={onOpenArtifact}
+                              isStreaming={message.status === "sending"}
+                              preferCompact
+                            />
+                          </div>
                         ) : step.type === "action" ? (
                           <AgentActionStep step={step} isStreaming={message.status === "sending"} />
                         ) : null}
@@ -225,39 +251,15 @@ export function AssistantMessage({
                     })}
                   </div>
                 ) : (
-                  <div className={cn("space-y-4", compact && "space-y-2")}>
-                    {groupedToolCalls.length > 0 && (
-                      <AgentExecutionTrace 
-                        toolCalls={groupedToolCalls}
-                        executionSteps={executionActionSteps}
-                        sessionId={message.sessionId}
-                        onOpenArtifact={onOpenArtifact}
-                        isStreaming={message.status === "sending"}
-                        preferCompact
-                      />
-                    )}
-
-                    <div className="prose-frontier">
-                      <div className="flex flex-col gap-4">
-                        {mainContentCards.cards.length > 0 && (
-                          <div className="flex flex-wrap gap-4 my-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                            {mainContentCards.cards.map((card, idx) => (
-                              <RenderPremiumCard key={idx} card={card} />
-                            ))}
-                          </div>
-                        )}
-                        {(mainContentCards.cleanText || message.reasoning || message.isThinking) && (
-                          <MarkdownContent
-                            content={mainContentCards.cleanText}
-                            reasoning={message.reasoning}
-                            isThinking={message.isThinking}
-                            isStreaming={message.status === "sending"}
-                            onOpenArtifact={onOpenArtifact}
-                            chatId={message.sessionId}
-                          />
-                        )}
-                      </div>
-                    </div>
+                  <div className="prose-frontier">
+                    {/* Fallback for messages with only raw content or legacy structure */}
+                    <MarkdownContent
+                      content={message.content || ""}
+                      isThinking={message.isThinking}
+                      isStreaming={message.status === "sending"}
+                      onOpenArtifact={onOpenArtifact}
+                      chatId={message.sessionId}
+                    />
                   </div>
                 )}
 

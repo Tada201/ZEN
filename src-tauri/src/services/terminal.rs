@@ -1,18 +1,15 @@
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
-use std::io::{Read, Write};
+use serde::Serialize;
 use std::collections::HashMap;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::{Mutex, RwLock};
-use serde::Serialize;
 
 use crate::error::{ZenError, ZenResult};
-use crate::services::{
-    AuditEvent, PermissionDecision, PrivilegedOperation,
-    SecurityService,
-};
+use crate::services::{AuditEvent, PermissionDecision, PrivilegedOperation, SecurityService};
 use crate::terminal::TerminalManager;
 
 pub struct TerminalSession {
@@ -36,6 +33,7 @@ const INTERACTIVE_APPROVAL_TTL: Duration = Duration::from_secs(60);
 
 struct InteractiveTerminalApproval {
     cwd: PathBuf,
+    decision: PermissionDecision,
     expires_at: Instant,
 }
 
@@ -81,7 +79,11 @@ impl TerminalService {
         approvals.retain(|_, approval| approval.expires_at > Instant::now());
         approvals.insert(
             approval_id.clone(),
-            InteractiveTerminalApproval { cwd, expires_at },
+            InteractiveTerminalApproval {
+                cwd,
+                decision: PermissionDecision::Allow,
+                expires_at,
+            },
         );
         drop(approvals);
 
@@ -89,13 +91,18 @@ impl TerminalService {
             .grant_interactive_terminal_approval(
                 "terminal_request_approval",
                 Some("interactive_shell".to_string()),
-                Some("user confirmed opening an interactive terminal shell via UI dialog".to_string()),
+                Some(
+                    "user confirmed opening an interactive terminal shell via UI dialog"
+                        .to_string(),
+                ),
             )
             .await;
 
         Ok(TerminalApprovalGrant {
             approval_id,
-            expires_at: (chrono::Utc::now() + chrono::Duration::seconds(INTERACTIVE_APPROVAL_TTL.as_secs() as i64)).to_rfc3339(),
+            expires_at: (chrono::Utc::now()
+                + chrono::Duration::seconds(INTERACTIVE_APPROVAL_TTL.as_secs() as i64))
+            .to_rfc3339(),
         })
     }
 
@@ -209,11 +216,30 @@ impl TerminalService {
                     decision: PermissionDecision::Deny,
                     caller: "terminal_spawn".to_string(),
                     target: Some("interactive_shell".to_string()),
-                    reason: Some("terminal approval did not match the requested session".to_string()),
+                    reason: Some(
+                        "terminal approval did not match the requested session".to_string(),
+                    ),
                 })
                 .await;
             return Err(ZenError::Custom(
                 "Terminal approval expired or does not match the requested directory".to_string(),
+            ));
+        }
+        let decision = approval.decision;
+        if decision != PermissionDecision::Allow {
+            security
+                .record_audit(AuditEvent {
+                    operation: PrivilegedOperation::ShellCommand,
+                    decision: PermissionDecision::Deny,
+                    caller: "terminal_spawn".to_string(),
+                    target: Some("interactive_shell".to_string()),
+                    reason: Some(
+                        "interactive terminal spawn requires explicit approval".to_string(),
+                    ),
+                })
+                .await;
+            return Err(ZenError::Custom(
+                "Interactive terminal spawn requires explicit approval".to_string(),
             ));
         }
 

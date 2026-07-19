@@ -34,6 +34,7 @@ impl Orchestrator {
             approval_rx,
             extra_tool_ids,
             extra_instructions,
+            model_context_window: _,
         } = params;
         info!("Starting orchestrator loop for goal: {}", goal);
 

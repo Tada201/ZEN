@@ -21,6 +21,11 @@ export function buildAgentDelegationLaneModel(step: Step): AgentDelegationLaneMo
   const spawn = step.metadata?.spawn;
   if (!spawn) return undefined;
 
+  // Filter out "self-delegation" where the main agent spawns itself
+  if (spawn.childAgent === "Zen" || spawn.childAgent === "main" || spawn.childAgent === "system") {
+    return undefined;
+  }
+
   const status =
     step.status === "error" || spawn.status === "failed"
       ? "error"

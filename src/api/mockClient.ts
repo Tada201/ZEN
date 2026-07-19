@@ -351,21 +351,7 @@ const mockCommands: Record<string, (args: any) => any> = {
   transcribe_audio: () => ({ text: "" }),
 
   // MCP
-  mcp_get_status: () => ({
-    name: "zen-mcp",
-    version: "1.0.0",
-    state: "stopped",
-    initialized: false,
-    stdio_enabled: false,
-    http_enabled: true,
-    http_bind_host: "127.0.0.1",
-    http_port: 8989,
-    http_auth_required: true,
-  }),
-  mcp_list_tools: () => [],
   mcp_get_config: () => ({ servers: {} }),
-  mcp_start_server: () => {},
-  mcp_stop_server: () => {},
   mcp_save_config: () => {},
 
   // Graph / Session Map

@@ -1,6 +1,20 @@
 import { convertFileSrc, isTauri } from "@tauri-apps/api/core";
 
 /**
+ * Loose sanity check for "looks like a real local path or URL". Filters out stale
+ * garbage in the settings store (e.g. legacy values like `"//"`) that would otherwise
+ * be fed to `convertFileSrc` and produce a 403 from the asset protocol on every boot.
+ */
+function looksLikeAssetablePath(rawUrl: string): boolean {
+  const v = rawUrl.trim();
+  if (!v) return false;
+  if (v === "/" || v === "\\" || v === "//" || v === "\\\\") return false;
+  // Must contain at least one path-like character.
+  if (!/[A-Za-z0-9_\-./\\:?]/.test(v)) return false;
+  return true;
+}
+
+/**
  * Detects whether a URL string is a local filesystem path and converts it
  * to a Tauri asset-protocol URL that the webview is allowed to load.
  *
@@ -10,6 +24,7 @@ import { convertFileSrc, isTauri } from "@tauri-apps/api/core";
  */
 export function toAssetUrl(rawUrl: string): string {
   if (!rawUrl) return rawUrl;
+  if (!looksLikeAssetablePath(rawUrl)) return "";
 
   let localPath = rawUrl;
   

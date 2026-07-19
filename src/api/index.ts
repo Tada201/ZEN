@@ -6,7 +6,7 @@ export {
   isIpcCommandError,
 } from "./tauriClient";
 export type { IpcErrorCode, IpcErrorPayload } from "./tauriClient";
-export type { McpConfig, McpStatus, McpTool } from "./mcpApi";
+export type { McpConfig } from "./mcpApi";
 export { chatApi } from "./chatApi";
 export type {
   BackendChat,
@@ -47,7 +47,7 @@ export { terminalApi } from "./terminalApi";
 export { workspaceApi } from "./workspaceApi";
 export type { BrowseFolderResult, FolderEntry } from "./workspaceApi";
 export { agentsApi } from "./agentsApi";
-export type { AgentConfig, AgentConfigFileData, AgentConfigFileInfo, AgentInfo, ToolMetadataItem } from "./agentsApi";
+export type { AgentInfo } from "./agentsApi";
 export { memoryApi } from "./memoryApi";
 export type { MemoryEntry, MemorySearchResult, MemoryStats, SessionMemoryItem } from "./memoryApi";
 export { gtsmApi } from "./gtsmApi";

@@ -105,6 +105,12 @@ src-tauri/**/user-data/
 .cursor/
 .kimchi/
 .specify/
+.codex/
+.claude/
+.freebuff/
+.specify/
+.vscode/
+.zcode/
 # Issue tracker
 ISSUE.md
 

@@ -8,6 +8,7 @@ use super::TaskBreakdown;
 use crate::agent::task::{Task, TaskPriority, TaskType};
 use crate::db::models::ChatMessage;
 use crate::llm::{ChatRequestConfig, LlmProvider};
+use crate::utils::prompt_loader;
 
 impl Orchestrator {
     /// Break a high-level goal into concrete subtasks
@@ -24,35 +25,8 @@ impl Orchestrator {
         info!("Breaking down goal into subtasks: {}", goal);
 
         // Build system prompt for task breakdown
-        let system_prompt = r#"You are an expert task planner. Your job is to break down complex goals into concrete, actionable tasks.
-
-For each goal, you will:
-1. Analyze the goal and identify all required steps
-2. Create 3-7 concrete tasks that, when completed, will achieve the goal
-3. Assign each task to the most appropriate specialist agent
-4. Identify task dependencies (which tasks must complete before others)
-5. Estimate complexity (1-10)
-
-Available specialist agents:
-- **generalist**: General-purpose tasks, simple queries, coordination
-- **operational_expert**: Operational analysis, mapping, geofencing, military/flight tracking
-- **researcher**: Research, document analysis, web search, knowledge retrieval
-- **researcher**: Research, document analysis, web search
-
-Output format (JSON):
-{
-  "tasks": [
-    {
-      "description": "Clear, actionable task description",
-      "agent": "agent_id",
-      "priority": "high|medium|low",
-      "dependencies": ["task_id_1", "task_id_2"] // optional
-    }
-  ],
-  "complexity": 5 // 1-10
-}
-
-Be specific in task descriptions. Include all necessary context for the assigned agent to execute without additional clarification."#;
+        let system_prompt = prompt_loader::load_prompt("orchestrator_planning")
+            .context("Failed to load orchestrator planning prompt")?;
 
         // Build user message with the goal
         let user_content = format!("Break down this goal into tasks:\n\n{}", goal);

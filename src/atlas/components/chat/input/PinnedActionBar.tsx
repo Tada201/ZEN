@@ -22,8 +22,6 @@ interface PinnedActionBarProps {
   setIsDeepResearch: (val: boolean) => void;
   generativeUI: boolean;
   setGenerativeUI: (val: boolean) => void;
-  isAuto: boolean;
-  isToolsDisabled: boolean;
   provider?: string;
   isCompact?: boolean;
 }
@@ -38,7 +36,6 @@ export const PinnedActionBar = memo(({
   isWebSearch, setIsWebSearch,
   isDeepResearch, setIsDeepResearch,
   generativeUI, setGenerativeUI,
-  isAuto, isToolsDisabled,
   provider,
   isCompact
 }: PinnedActionBarProps) => {
@@ -173,14 +170,6 @@ export const PinnedActionBar = memo(({
           })}
         </AnimatePresence>
       </div>
-
-      {!isCompactMode && (isAuto === false || isToolsDisabled === true) && (
-        <div className="flex items-center gap-2 ml-1">
-          <div className="h-3 w-px bg-muted dark:bg-muted mx-0.5" />
-          {isAuto === false && <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Manual</span>}
-          {isToolsDisabled === true && <span className="text-[10px] font-bold uppercase tracking-wider text-destructive">No Tools</span>}
-        </div>
-      )}
     </div>
   );
 });

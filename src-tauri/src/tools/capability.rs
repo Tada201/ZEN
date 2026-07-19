@@ -100,6 +100,7 @@ pub(crate) fn tool_aliases(id: &str) -> &'static [&'static str] {
         "grep_documents" => &["grep", "find text", "search files", "ripgrep"],
         "write_file" => &["create file", "save file"],
         "edit_file" => &["modify file", "patch file", "replace text"],
+        "apply_patch" => &["modify file", "patch file", "replace text", "edit files"],
         "manage_board" => &[
             "voice board",
             "blackboard",

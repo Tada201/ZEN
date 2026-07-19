@@ -57,6 +57,10 @@ pub struct OrchestratorRunParams<'a> {
     pub extra_tool_ids: Vec<String>,
     /// Per-turn instruction addendum to append to task agent instructions.
     pub extra_instructions: Option<String>,
+    /// The selected model's real context window (`max_context_length`),
+    /// when known. Surfaced in the context breakdown so the UI gauge
+    /// reflects the true model budget rather than the compaction cap.
+    pub model_context_window: Option<usize>,
 }
 
 impl Orchestrator {

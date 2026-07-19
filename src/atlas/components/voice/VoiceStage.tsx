@@ -257,6 +257,10 @@ export function VoiceStage({ voiceState }: VoiceStageProps) {
         borderStyles[voiceState] || "border-border/[0.06]"
       )}
     >
+      {blocks.length === 0 && (
+        <div className="flex h-full w-full items-center justify-center text-xs text-primary-foreground/30 italic">
+        </div>
+      )}
       {blocks.length > 0 && (
         <div className={cn(
           "grid h-full min-h-0 w-full grid-cols-4 grid-rows-4 gap-2 p-2",

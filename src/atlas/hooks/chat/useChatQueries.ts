@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { chatApi, providersApi, type BackendChat, type BackendFolder, type BackendMessage } from "@/api";
 import { useChatStore } from "@/lib/stores/useChatStore";
+import { IS_TAURI } from "@/api/tauriClient";
 import { useTaskStore } from "@/lib/stores/taskStore";
 import { useAgentActivityStore } from "@/lib/stores/agentActivityStore";
 import { useVoiceStageStore } from "@/atlas/components/voice/voiceStageStore";
@@ -283,6 +284,7 @@ function isRecentOptimisticAssistant(message: Message): boolean {
 }
 
 export function useChatQueries() {
+  const queryClient = useQueryClient();
   const {
     activeSessionId: currentSessionId,
     setActiveSession: setCurrentSessionId,
@@ -519,6 +521,50 @@ export function useChatQueries() {
       setCurrentSessionId(sessions[0].id);
     }
   }, [sessions, currentSessionId]);
+
+  // ── Listen for backend title-maker updates ───────────────────────────────
+  // `commands/chat/title.rs::generate_session_title` emits
+  // `chat:title-updated` after persisting an auto-generated title.
+  // Patch the session in place so the sidebar / list updates without
+  // refetching the full sessions query. Mirrors the rename mutation
+  // contract (UI updates title on the same Session row identified by id).
+  useEffect(() => {
+    if (!IS_TAURI) return;
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen<{ chat_id: string; title: string }>(
+          "chat:title-updated",
+          (event) => {
+            if (cancelled) return;
+            const { chat_id, title } = event.payload;
+            if (!chat_id || !title) return;
+
+            const patch = (key: readonly unknown[]) =>
+              queryClient.setQueryData<Session[]>(key, (prev) =>
+                prev?.map((s) => (s.id === chat_id ? { ...s, title } : s))
+              );
+            patch(["sessions"]);
+            patch(["archived-sessions"]);
+          }
+        )
+      )
+      .then((unsub) => {
+        if (cancelled) {
+          unsub();
+        } else {
+          unlisten = unsub;
+        }
+      })
+      .catch((err) => {
+        console.warn("[useChatQueries] failed to listen for chat:title-updated:", err);
+      });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [queryClient]);
   // On session switch, clear the previous session's non-streaming runtime
   // state (active artifact, task store, agent activity, voice board) so
   // stale data doesn't flash before the new fetch completes. Preserve
@@ -553,10 +599,15 @@ export function useChatQueries() {
       }
 
       // Voice board is session-bound — clear widgets, retained boards,
-      // and close lifecycle so stale visualizations don't leak.
-      const voiceStore = useVoiceStageStore.getState();
-      voiceStore.clear();
-      voiceStore.close();
+      // and close lifecycle so stale visualizations don't leak. Skip the
+      // wipe when the overlay is currently open: the user is actively
+      // working with it and an out-of-band clear would silently drop their
+      // in-flight board contents and reject subsequent updates.
+      if (!useUIStore.getState().voiceModeOpen) {
+        const voiceStore = useVoiceStageStore.getState();
+        voiceStore.clear();
+        voiceStore.close();
+      }
 
       // Track the active session for the UI store's per-session tab memory
       setUISessionId(currentSessionId);

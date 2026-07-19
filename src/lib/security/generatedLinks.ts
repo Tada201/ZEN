@@ -45,12 +45,20 @@ function isPrivateOrLoopbackHost(hostname: string): boolean {
 }
 
 /**
- * Shared check: does the URL path target the trusted `generated_images` directory?
- * Uses segment-level matching to prevent bypass via substring tricks.
+ * Path-segment predicate: returns true if the URL targets one of the trusted
+ * `$APPDATA` subdirectories. For `media`, only the `wallpapers` subdir is allowed
+ * (the folder is reserved for user wallpaper media). For `generated_images`, the
+ * directory itself and any subpath are allowed (matches historical behaviour).
+ *
+ * Keep this list in sync with `assetProtocol.scope` in `tauri.conf.json`.
  */
-function isInsideGeneratedImagesDir(url: URL): boolean {
+function isInsideTrustedAppDataDir(url: URL): boolean {
   const segments = url.pathname.split(/[/\\]/).filter(Boolean);
-  return segments.includes("generated_images");
+  if (segments.includes("generated_images")) return true;
+  // Allow `media/wallpapers` exactly — never any other media subfolder.
+  const mediaIdx = segments.indexOf("media");
+  if (mediaIdx !== -1 && segments[mediaIdx + 1] === "wallpapers") return true;
+  return false;
 }
 
 export function isSafeGeneratedHref(href?: string | null): href is string {
@@ -60,9 +68,9 @@ export function isSafeGeneratedHref(href?: string | null): href is string {
     const url = new URL(href, "https://zen.local");
 
     // ── Local asset server (http://asset.localhost/...) ──
-    // Must target the trusted generated_images directory — no blanket allow.
+    // Must target a trusted app-managed directory — no blanket allow.
     if (url.protocol === "http:" && url.host === "asset.localhost") {
-      return isInsideGeneratedImagesDir(url);
+      return isInsideTrustedAppDataDir(url);
     }
 
     // ── Local file protocols (file:, tauri:, asset:) ──
@@ -75,8 +83,8 @@ export function isSafeGeneratedHref(href?: string | null): href is string {
           return false;
         }
       }
-      // Must target the trusted generated_images directory to prevent directory traversal
-      return isInsideGeneratedImagesDir(url);
+      // Must target a trusted app-managed directory to prevent directory traversal
+      return isInsideTrustedAppDataDir(url);
     }
 
     // Prevent HTTP/HTTPS loading of private/loopback resources

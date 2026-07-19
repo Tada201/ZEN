@@ -30,11 +30,9 @@
 }
 
 .agent-birds-eye__title {
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.15em;
-    color: hsl(var(--foreground) / 0.7);
-    text-transform: uppercase;
+    color: hsl(var(--foreground) / 0.85);
 }
 
 .agent-birds-eye__grid {
@@ -60,30 +58,26 @@
 }
 
 .live-agent-panel__title {
-    color: hsl(var(--foreground) / 0.78);
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    color: hsl(var(--foreground) / 0.85);
+    font-size: 11px;
+    font-weight: 600;
 }
 
 .live-agent-panel__summary {
     max-width: 245px;
-    color: hsl(var(--foreground) / 0.34);
-    font-size: 9px;
-    line-height: 1.35;
+    color: hsl(var(--muted-foreground));
+    font-size: 11px;
+    line-height: 1.4;
 }
 
 .live-agent-panel__state {
     flex-shrink: 0;
-    border: 1px solid hsl(var(--foreground) / 0.08);
-    background: hsl(var(--foreground) / 0.03);
-    color: hsl(var(--foreground) / 0.38);
-    padding: 3px 6px;
-    font-size: 8px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--muted) / 0.6);
+    color: hsl(var(--muted-foreground));
+    padding: 3px 8px;
+    font-size: 11px;
+    border-radius: 4px;
 }
 
 .live-agent-panel__state--running {
@@ -141,11 +135,9 @@
 
 .live-agent-panel__section-title {
     margin-bottom: 6px;
-    color: hsl(var(--foreground) / 0.38);
-    font-size: 8px;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+    font-size: 11px;
+    font-weight: 500;
 }
 
 .live-agent-panel__tools {
@@ -236,11 +228,9 @@
 }
 
 .agent-card__name {
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 500;
     color: hsl(var(--foreground));
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
 }
 
 .agent-card__id {
@@ -377,9 +367,9 @@
     text-transform: uppercase; 
 }
 
-.log-entry__content { 
-    color: hsl(var(--foreground) / 0.85); 
-    flex-grow: 1; 
+.log-entry__content {
+    color: hsl(var(--foreground));
+    flex-grow: 1;
 }
 
 .log-entry--error .log-entry__content { color: hsl(var(--destructive)); } /* VS Code red-salmon error color */

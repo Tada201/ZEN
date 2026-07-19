@@ -4,9 +4,10 @@ import { strict as assert } from "node:assert";
 const mcpServer = readFileSync(new URL("../src-tauri/src/mcp/server.rs", import.meta.url), "utf8");
 const mcpHttp = readFileSync(new URL("../src-tauri/src/mcp/http.rs", import.meta.url), "utf8");
 const toolsMod = readFileSync(new URL("../src-tauri/src/tools/mod.rs", import.meta.url), "utf8");
-const fsTools = readFileSync(new URL("../src-tauri/src/tools/fs_tools.rs", import.meta.url), "utf8");
+const fsToolsMod = readFileSync(new URL("../src-tauri/src/tools/fs_tools/mod.rs", import.meta.url), "utf8");
+const fsToolsWrite = readFileSync(new URL("../src-tauri/src/tools/fs_tools/write.rs", import.meta.url), "utf8");
 const toolManager = readFileSync(new URL("../src-tauri/src/tools/manager.rs", import.meta.url), "utf8");
-const agentMiddleware = readFileSync(new URL("../src-tauri/src/agent/middleware.rs", import.meta.url), "utf8");
+const agentMiddleware = readFileSync(new URL("../src-tauri/src/agent/middleware/system_prompt.rs", import.meta.url), "utf8");
 const toolService = readFileSync(new URL("../src-tauri/src/services/tool.rs", import.meta.url), "utf8");
 const terminalService = readFileSync(new URL("../src-tauri/src/services/terminal.rs", import.meta.url), "utf8");
 const terminalTool = readFileSync(new URL("../src-tauri/src/tools/terminal_tools.rs", import.meta.url), "utf8");
@@ -19,13 +20,17 @@ const mcpCommands = readFileSync(new URL("../src-tauri/src/commands/mcp.rs", imp
 const tauriLib = readFileSync(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
 const commandsMod = readFileSync(new URL("../src-tauri/src/commands/mod.rs", import.meta.url), "utf8");
 const settingsCommands = readFileSync(new URL("../src-tauri/src/commands/settings.rs", import.meta.url), "utf8");
-const chatCommands = readFileSync(new URL("../src-tauri/src/commands/chat.rs", import.meta.url), "utf8");
+const chatCommands = [
+  "../src-tauri/src/commands/chat/mod.rs",
+  "../src-tauri/src/commands/chat/helpers.rs",
+  "../src-tauri/src/commands/chat/send.rs",
+].map((path) => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n");
 const agentCommands = readFileSync(new URL("../src-tauri/src/commands/agent.rs", import.meta.url), "utf8");
 const escalation = readFileSync(new URL("../src-tauri/src/agent/runner/escalation.rs", import.meta.url), "utf8");
 const mcpApi = readFileSync(new URL("../src/api/mcpApi.ts", import.meta.url), "utf8");
 const mcpSettings = readFileSync(new URL("../src/components/settings/Tabs/plugins/MCPSettings.tsx", import.meta.url), "utf8");
 const mockClient = readFileSync(new URL("../src/api/mockClient.ts", import.meta.url), "utf8");
-const chatInput = readFileSync(new URL("../src/atlas/components/PremiumChatInput.tsx", import.meta.url), "utf8");
+const permissionModeMenu = readFileSync(new URL("../src/atlas/components/PermissionModeMenu.tsx", import.meta.url), "utf8");
 const toolsSettings = readFileSync(new URL("../src/components/settings/Tabs/ToolsSettings.tsx", import.meta.url), "utf8");
 const workspaceSettings = readFileSync(new URL("../src/components/settings/Tabs/WorkspaceSettings.tsx", import.meta.url), "utf8");
 const folderBrowser = readFileSync(new URL("../src/atlas/components/FolderBrowser.tsx", import.meta.url), "utf8");
@@ -34,6 +39,7 @@ const workspaceApi = readFileSync(new URL("../src/api/workspaceApi.ts", import.m
 const events = readFileSync(new URL("../src/api/events.ts", import.meta.url), "utf8");
 const useToolEvents = readFileSync(new URL("../src/atlas/hooks/stream/useToolEvents.ts", import.meta.url), "utf8");
 const toolCallCard = readFileSync(new URL("../src/atlas/components/chat/ToolCallCard.tsx", import.meta.url), "utf8");
+const toolOutputPreview = readFileSync(new URL("../src/atlas/components/chat/tool/toolOutputPreview.ts", import.meta.url), "utf8");
 const generalistAgent = readFileSync(new URL("../src-tauri/resources/agents/generalist.json", import.meta.url), "utf8");
 const researcherAgent = readFileSync(new URL("../src-tauri/resources/agents/researcher.json", import.meta.url), "utf8");
 const operationalAgent = readFileSync(new URL("../src-tauri/resources/agents/operational_expert.json", import.meta.url), "utf8");
@@ -70,7 +76,7 @@ assert(toolService.includes("registry.get_legacy(&tool_call.name)") && !toolDisp
 assert(toolManager.includes("sync_legacy_tool_definitions") && commandsMod.includes("register_legacy_tool"), "startup/tool manager should sync legacy executors into the canonical registry");
 assert(toolPipeline.includes("enforce_tool_allowlist(&allowlist, &real_id, \"agent\")") && toolPipeline.includes("enforce_tool_allowlist(&allowlist, tool_id, \"agent\")"), "tool_exec and tool_info should use the shared allowlist helper");
 assert(toolManager.includes("sanitize_tool_info_schema") && toolManager.includes("TOOL_INFO_MAX_SCHEMA_BYTES"), "tool_info schemas should be capped before model exposure");
-assert(toolsMod.includes("list_direct_definitions") && mcpCommands.includes("list_direct_definitions") && mcpServer.includes("list_direct_definitions"), "MCP should only advertise directly executable v2 tools");
+assert(toolsMod.includes("mcp_exposable_definitions") && mcpCommands.includes("mcp_exposable_definitions") && mcpServer.includes("mcp_exposable_definitions"), "MCP should only advertise directly executable v2 tools");
 assert(
   toolsMod.includes("pub mod terminal_tools") &&
     toolsMod.includes("registry.register(Arc::new(RunCommandTool))") &&
@@ -82,10 +88,10 @@ assert(
 assert(
   toolsMod.includes("registry.register(Arc::new(fs_tools::WriteFileTool))") &&
     toolsMod.includes("registry.register(Arc::new(fs_tools::EditFileTool))") &&
-    fsTools.includes("impl Tool for WriteFileTool") &&
-    fsTools.includes("impl Tool for EditFileTool") &&
-    fsTools.includes("crate::workspace::resolve_workspace_path") &&
-    fsTools.includes("RiskLevel::High"),
+    fsToolsWrite.includes("impl Tool for WriteFileTool") &&
+    fsToolsWrite.includes("impl Tool for EditFileTool") &&
+    fsToolsWrite.includes("crate::workspace::resolve_workspace_path") &&
+    fsToolsWrite.includes("RiskLevel::High"),
   "write_file and edit_file should be direct high-risk v2 tools with workspace-contained paths"
 );
 assert(
@@ -105,10 +111,10 @@ assert(
   "workspace.root settings should validate, hydrate, default to the project root when available, and update the live workspace used by file tools"
 );
 assert(
-  fsTools.includes("workspace_max_file_bytes") &&
-    fsTools.includes('"workspace.max-file-size"') &&
-    fsTools.includes("enforce_existing_file_size") &&
-    fsTools.includes("enforce_content_size") &&
+  fsToolsMod.includes("workspace_max_file_bytes") &&
+    fsToolsMod.includes('"workspace.max-file-size"') &&
+    fsToolsMod.includes("enforce_existing_file_size") &&
+    fsToolsMod.includes("enforce_content_size") &&
     workspaceSettings.includes("FolderBrowser") &&
     folderBrowser.includes("entries?: FolderEntry[]") &&
     folderBrowser.includes("vscode-icons:file-type-typescript") &&
@@ -134,12 +140,21 @@ assert(mcpServer.includes("direct_tool_risk") && mcpServer.includes("Tool not av
 assert(agentCommands.includes("renderer_allowed") && agentCommands.includes("not available through renderer-initiated execution"), "renderer tool command IPC should enforce direct low/medium tool exposure");
 assert(escalation.includes("Sha256::digest(args.to_string())") && !escalation.includes("format!(\"sig:{name}:{}\", args)"), "early tool dedupe keys should hash args instead of storing full JSON");
 assert(escalation.includes("sig:{index}:{name}") && escalation.includes("Some(index)"), "early tool dedupe keys should not collide when providers omit tool-call ids");
-assert(terminalService.includes("decision != PermissionDecision::Allow") && terminalService.includes("requires explicit approval"), "terminal spawn must not treat Ask as an allow decision");
-assert(escalation.includes("redact_tool_preview_string") && escalation.includes("redact_tool_preview_args"), "streamed tool-call previews should be redacted before reaching the renderer");
-assert(chatInput.includes("Enable YOLO mode?") && chatInput.includes("YOLO mode is enabled") && chatInput.includes("YOLO"), "chat input should confirm and visibly indicate YOLO mode");
 assert(
-  toolsSettings.includes('nextMode === "autonomous"') &&
-    toolsSettings.includes("Enable Autonomous mode?") &&
+  terminalService.includes("INTERACTIVE_APPROVAL_TTL") &&
+    terminalService.includes("approvals.insert") &&
+    terminalService.includes("self.approvals.lock().await.remove(&approval_id)") &&
+    terminalService.includes("terminal spawn attempted without a valid approval") &&
+    terminalService.includes("terminal approval did not match the requested session") &&
+    terminalService.includes("decision: PermissionDecision::Deny") &&
+    terminalService.includes("decision: PermissionDecision::Allow"),
+  "terminal spawn must require a single-use explicit approval token and deny missing, expired, or mismatched approvals",
+);
+assert(escalation.includes("redact_tool_preview_string") && escalation.includes("redact_tool_preview_args"), "streamed tool-call previews should be redacted before reaching the renderer");
+assert(permissionModeMenu.includes("Enable YOLO mode?") && permissionModeMenu.includes("YOLO mode is enabled") && permissionModeMenu.includes("YOLO"), "chat input permission menu should confirm and visibly indicate YOLO mode");
+assert(
+  toolsSettings.includes('nextMode === "yolo"') &&
+    toolsSettings.includes("Enable Full Access (YOLO Mode)?") &&
     toolsSettings.includes("Hard security blocks still apply"),
   "settings should confirm autonomous activation and explain the non-bypassable security floor",
 );
@@ -156,7 +171,12 @@ assert(
   "approval and timeout events should expose display-safe arguments only"
 );
 assert(events.includes("arguments?: ToolCall[\"input\"]") && useToolEvents.includes("event.payload.arguments || {}"), "frontend timeout card should retain original timed-out input");
-assert(toolCallCard.includes("_previewError") && !toolCallCard.includes("exec(value)") && toolCallCard.includes("redactDisplayValue"), "tool cards should not regex-parse malformed args and should redact copied/displayed input");
+assert(
+  toolOutputPreview.includes("parseMaybeJson") &&
+    !toolCallCard.includes("exec(value)") &&
+    toolCallCard.includes("redactDisplayValue"),
+  "tool cards should not regex-parse malformed args and should redact copied/displayed input",
+);
 assert(
   agentMiddleware.includes("Required Tool Protocol") &&
     agentMiddleware.includes("tool_list") &&

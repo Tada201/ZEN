@@ -1,0 +1,77 @@
+//! `SkillsCatalogMiddleware` — injects the skills catalog (metadata
+//! only, budget-capped) into the system prompt. Runs between
+//! SystemPrompt (0) and Recall (10).
+//!
+//! `skills_catalog_budget` is the hard upper bound on the rendered
+//! catalog fragment that this middleware will inject. The fragment is
+//! rendered with an inner metadata budget (how many skills to include)
+//! and then truncated to the outer cap (the actual fragment size) before
+//! being appended. `usize::MAX` means unbounded.
+
+use super::core::{ContextMiddleware, ContextSectionId, EnrichmentContext, SectionStatus};
+use crate::error::ZenResult;
+use async_trait::async_trait;
+use tauri::AppHandle;
+use tauri::Manager;
+
+pub struct SkillsCatalogMiddleware {
+    pub app: AppHandle,
+    pub context_window: Option<i64>,
+    pub skills_catalog_budget: usize,
+}
+
+#[async_trait]
+impl ContextMiddleware for SkillsCatalogMiddleware {
+    fn priority(&self) -> i32 {
+        5
+    }
+    fn name(&self) -> &'static str {
+        "SkillsCatalog"
+    }
+
+    async fn enrich(&self, ctx: &mut EnrichmentContext) -> ZenResult<()> {
+        // Pull shared manager from AppState (registered once at startup).
+        let state = self.app.try_state::<crate::commands::AppState>();
+        let Some(state) = state else { return Ok(()) };
+        let mgr = state.skills_manager.clone();
+        let cwd = std::env::current_dir().unwrap_or_default();
+        let outcome = mgr.skills_for_cwd(&cwd, false).await;
+        if outcome.is_empty() {
+            return Ok(());
+        }
+        // Inner cap: how many skills to render (a *count* derived from
+        // context_window, not a token count). The outer cap below enforces
+        // the per-layer token budget; the two are in different units so
+        // we deliberately do not `.min` them.
+        let inner_budget =
+            crate::agent::skills::default_skill_metadata_budget(self.context_window);
+        let rendered = crate::agent::skills::render_available_skills(&outcome, inner_budget);
+        if rendered.lines.is_empty() {
+            return Ok(());
+        }
+        let fragment = crate::agent::skills::SkillsCatalogFragment {
+            skill_lines: rendered.lines,
+            skill_root_lines: rendered.root_lines,
+        };
+        let body = {
+            use crate::agent::skills::ContextualFragment;
+            fragment.body()
+        };
+        // Outer cap: enforce the per-layer token budget on the rendered
+        // fragment. truncate_to_budget is a no-op for `usize::MAX`.
+        let truncated =
+            crate::agent::runner::helpers::truncate_to_budget(&body, self.skills_catalog_budget);
+        let was_truncated = truncated != body;
+        ctx.system_content.push_str(&truncated);
+        ctx.record_section(
+            ContextSectionId::SkillsCatalog,
+            truncated,
+            if was_truncated {
+                SectionStatus::Truncated
+            } else {
+                SectionStatus::Active
+            },
+        );
+        Ok(())
+    }
+}

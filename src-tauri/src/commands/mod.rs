@@ -1,15 +1,17 @@
 pub mod agent;
-pub mod agent_config;
 pub mod artifacts;
 pub mod audio;
 pub mod canvas;
 pub mod chat;
+pub mod context_viewer;
 pub mod dependency;
 pub mod document;
 pub mod mcp;
+pub mod media;
 pub mod memory;
 pub mod pagination;
 pub mod settings;
+pub mod skills;
 pub mod spatial;
 pub mod system;
 pub mod terminal;
@@ -19,22 +21,26 @@ use serde::Serialize;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 use tauri::Emitter;
 
+use crate::db::models::ChatMessage;
+
 use crate::agent::event_bus::EventBus;
 use crate::agent::hooks::HookRegistry;
 use crate::agent::orchestrator::Orchestrator;
+use crate::agent::runner::ContextBreakdownPayload;
 use crate::agent::swarm::SwarmCoordinator;
 use crate::agent::types::AgentRegistry;
 use crate::error::{ZenError, ZenResult};
 use crate::llm::{LlmProvider, ProviderRegistry};
 use crate::services::{
-    process_manager::ProcessManager, DocumentService, HardwareService, SecretService,
-    SecurityService, SettingsService, SpeechService, TerminalService, ToolService, TtsService,
-    UsageService,
+    process_manager::ProcessManager, DocumentService, HardwareService, MediaService,
+    SecretService, SecurityService, SettingsService, SpeechService, TerminalService, ToolService,
+    TtsService, UsageService,
 };
 use crate::tools::manager::ToolManager;
 
@@ -267,6 +273,7 @@ pub struct AppState {
     pub llm: InitState<Arc<dyn LlmProvider>>,
     pub tools: crate::tools::GlobalToolRegistry,
     pub tool_registry_v1: Arc<RwLock<crate::agent::tools::ToolRegistry>>,
+    pub skills_manager: Arc<crate::agent::skills::SkillsManager>,
     pub agent_registry: Arc<AgentRegistry>,
     pub hook_registry: Arc<HookRegistry>,
     pub agent: AgentState,
@@ -277,6 +284,7 @@ pub struct AppState {
     pub speech: Arc<tokio::sync::RwLock<Option<SpeechService>>>,
     pub tts: Arc<tokio::sync::RwLock<Option<TtsService>>>,
     pub settings_manager: Arc<SettingsService>,
+    pub media: Arc<MediaService>,
     pub secret_manager: Arc<SecretService>,
     pub security: Arc<SecurityService>,
     pub chat_cancellation_tokens: Arc<tokio::sync::Mutex<HashMap<String, CancellationToken>>>,
@@ -286,13 +294,18 @@ pub struct AppState {
     pub graph_sessions:
         Arc<tokio::sync::Mutex<HashMap<String, crate::canvas::session::GraphSession>>>,
     pub session_memory: Arc<RwLock<Arc<crate::rag::session_memory::SessionMemoryManager>>>,
-    pub mcp_server: Arc<RwLock<crate::mcp::McpServer>>,
+    pub mcp_client: Arc<crate::mcp::McpClient>,
     pub mcp_config: Arc<crate::services::McpConfigService>,
     pub pending_tool_approvals:
         Arc<tokio::sync::Mutex<HashMap<String, crate::services::tool::PendingToolApproval>>>,
     pub pending_orchestrator_approvals:
         Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<bool>>>>,
     pub subagent_cancellation_tokens: Arc<tokio::sync::Mutex<HashMap<String, CancellationToken>>>,
+    /// Per-sub-agent message inbox for parent→child message injection.
+    /// Keyed by the sub-agent's `spawn_id`, the queue holds `ChatMessage`s
+    /// that the child runner drains into its conversation each iteration.
+    pub subagent_message_queues:
+        Arc<tokio::sync::Mutex<HashMap<String, Arc<tokio::sync::Mutex<std::collections::VecDeque<ChatMessage>>>>>>,
     pub session_permissions: Arc<tokio::sync::Mutex<HashMap<String, HashMap<String, bool>>>>,
     pub sys_metrics: SysInfoState,
     pub terminal_sessions: Arc<RwLock<crate::terminal::TerminalManager>>,
@@ -315,8 +328,28 @@ pub struct AppState {
     /// Rust closes the splash window and shows the main window. See
     /// `SetupFlags` for the contract.
     pub setup_flags: Arc<tokio::sync::Mutex<SetupFlags>>,
+    /// Per-chat context breakdown cache. The bridge_to_tauri task in
+    /// `event_bus.rs` clones the latest `ContextBreakdownPayload` keyed
+    /// by `chat_id` on every `context:breakdown` event so the
+    /// `get_context_breakdown` / `get_context_snapshot` Tauri commands
+    /// can hydrate the right-panel on cold start (before any live
+    /// event would have arrived). Keyed by chat_id; newest entry wins;
+    /// never evicted deliberately — bounded by chat history. The
+    /// payload carries a `run_id` so the frontend dedupes by
+    /// `(chat_id, run_id, iteration)` across runs and never loses a
+    /// later, shorter run to an earlier, longer one.
+    pub context_breakdown_cache:
+        Arc<tokio::sync::RwLock<HashMap<String, ContextBreakdownPayload>>>,
+    /// Monotonic per-run counter. Mints a fresh `run_id` for every
+    /// invocation of `Runner::run()`; the value is carried on every
+    /// `ContextBreakdownPayload` emitted during that run so the
+    /// frontend `useContextStore` can dedupe emissions by
+    /// `(chat_id, run_id, iteration)` instead of `iteration` alone.
+    /// Starts at 0 so the first run is observable in the UI.
+    pub next_run_id: Arc<AtomicU64>,
     pub usage: Arc<UsageService>,
 }
+
 
 impl Default for AppState {
     fn default() -> Self {
@@ -332,6 +365,10 @@ impl AppState {
         let tool_registry_v1 = Arc::new(RwLock::new(
             crate::agent::tools::ToolRegistry::with_progressive(progressive.clone()),
         ));
+        // SkillsManager uses the OS home dir for ~/.zen/skills/ discovery.
+        let skills_manager = Arc::new(
+            crate::agent::skills::SkillsManager::new(dirs::home_dir().unwrap_or_default()),
+        );
         let tool_registry_v2 = Arc::new(RwLock::new(crate::tools::init_tool_registry(
             crate::tools::permission::ToolPermissions::default(),
         )));
@@ -370,6 +407,7 @@ impl AppState {
                 agent_registry.clone(),
                 hook_registry.clone(),
                 tool_registry_v2.clone(),
+                skills_manager.clone(),
             );
         }
         {
@@ -396,6 +434,7 @@ impl AppState {
         let process_manager = Arc::new(ProcessManager::new());
         let event_bus = Arc::new(EventBus::default());
         let settings_manager = Arc::new(SettingsService::new());
+        let media = Arc::new(MediaService::new());
         let security = Arc::new(SecurityService::new());
         let secret_manager = Arc::new(SecretService::new(
             settings_manager.clone(),
@@ -408,16 +447,18 @@ impl AppState {
             pending_tool_approvals.clone(),
         ));
 
-        // Pre-clone the security Arc for McpConfigService. The `security`
-        // local is moved into AppState below; the service needs its own
-        // independent Arc to keep working after that move.
         let security_for_mcp_config = security.clone();
+        let mcp_config = Arc::new(crate::services::McpConfigService::new(
+            workspace_folder_arc.clone(),
+            security_for_mcp_config,
+        ));
 
         Self {
             db: InitState::new(),
             llm: InitState::new(),
             tools: tool_registry_v2.clone(),
             tool_registry_v1: tool_registry_v1.clone(),
+            skills_manager: skills_manager.clone(),
             agent_registry: agent_registry.clone(),
             hook_registry: hook_registry.clone(),
             agent: AgentState {
@@ -430,6 +471,7 @@ impl AppState {
             speech: Arc::new(tokio::sync::RwLock::new(None)),
             tts: Arc::new(tokio::sync::RwLock::new(None)),
             settings_manager: settings_manager.clone(),
+            media,
             secret_manager: secret_manager.clone(),
             security,
             chat_cancellation_tokens: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
@@ -438,18 +480,15 @@ impl AppState {
             workspace_folder: workspace_folder_arc.clone(),
             graph_sessions: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             session_memory: Arc::new(RwLock::new(shared_session_memory)),
-            mcp_config: Arc::new(crate::services::McpConfigService::new(
-                workspace_folder_arc.clone(),
-                security_for_mcp_config,
-            )),
-            mcp_server: Arc::new(RwLock::new(crate::mcp::McpServer::new(
-                crate::mcp::McpServerConfig::default(),
+            mcp_config: mcp_config.clone(),
+            mcp_client: Arc::new(crate::mcp::McpClient::new(
                 tool_registry_v2.clone(),
-                None,
-            ))),
+                mcp_config,
+            )),
             pending_tool_approvals,
             pending_orchestrator_approvals: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             subagent_cancellation_tokens: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            subagent_message_queues: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             session_permissions: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             sys_metrics: SysInfoState::new(),
             terminal_sessions: Arc::new(RwLock::new(
@@ -481,6 +520,8 @@ impl AppState {
                 InitPhase::new("bg.orchestrator", "Orchestrator"),
             ])),
             setup_flags: Arc::new(tokio::sync::Mutex::new(SetupFlags::new())),
+            context_breakdown_cache: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            next_run_id: Arc::new(AtomicU64::new(0)),
             usage: Arc::new(UsageService),
         }
     }

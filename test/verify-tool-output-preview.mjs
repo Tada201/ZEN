@@ -85,6 +85,19 @@ assert(normalizedCommand.stdout.includes("npm run build"), "nested stdout should
 assert.equal(normalizedCommand.files.length, 1, "nested changedFiles should be extracted");
 assert.equal(normalizedCommand.summary, "Build passed", "successful build output should produce a scannable collapsed summary");
 
+const singleFileChange = buildToolOutputPreview(JSON.stringify({
+  change_type: "created",
+  file_path: "E:\\WORKSPACE_ARK\\ws_1\\cat.html",
+  lines_added: 11,
+  lines_removed: 0,
+  duration_ms: 17,
+}));
+assert.equal(singleFileChange.files.length, 1, "single file-change objects should be normalized as file previews");
+assert.equal(singleFileChange.files[0].changeType, "created", "snake_case change_type should normalize to changeType");
+assert.equal(singleFileChange.files[0].linesAdded, 11, "snake_case line counts should normalize");
+assert.equal(singleFileChange.summary, "Created cat.html", "single file-change summary should be user-readable, not raw JSON");
+assert(!singleFileChange.summary.includes("change_type"), "single file-change summary should not leak raw JSON keys");
+
 const passedTests = buildToolOutputPreview(JSON.stringify({
   output: {
     stdout: "Test Suites: 3 passed, 3 total\nTests: 42 passed, 42 total",

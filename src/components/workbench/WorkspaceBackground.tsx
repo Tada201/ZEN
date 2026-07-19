@@ -1,6 +1,7 @@
 import { useMemo, type CSSProperties } from 'react';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { toAssetUrl } from '@/lib/utils/assetUrl';
+import { callCommand } from '@/api/tauriClient';
 
 function quoteCssUrl(url: string): string {
   return url.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
@@ -60,6 +61,20 @@ export function WorkspaceBackground() {
   const backgroundBlur = useSettingsStore(s => s.backgroundBlur ?? 0);
   const backgroundFit = useSettingsStore(s => s.backgroundFit ?? "cover");
   const backgroundMediaType = useSettingsStore(s => s.backgroundMediaType ?? "auto");
+  const optimizedVideos = useSettingsStore(s => s.optimizedVideos ?? []);
+  const updateSetting = useSettingsStore(s => s.updateSetting);
+
+  const isOptimized = useMemo(() => optimizedVideos.includes(backgroundImageUrl), [optimizedVideos, backgroundImageUrl]);
+
+  const reprocess = async () => {
+    const outputPath = backgroundImageUrl.replace(/\.[^/.]+$/, "_opt.mp4");
+    try {
+      await callCommand("reprocess_video", { inputPath: backgroundImageUrl, outputPath });
+      updateSetting("optimizedVideos", [...optimizedVideos, backgroundImageUrl]);
+    } catch (e) {
+      console.error("Failed to reprocess video:", e);
+    }
+  };
 
   // Convert local file paths to Tauri asset-protocol URLs the webview can load
   const resolvedUrl = useMemo(() => toAssetUrl(backgroundImageUrl), [backgroundImageUrl]);
@@ -78,6 +93,12 @@ export function WorkspaceBackground() {
 
       {/* Grid Pattern Overlay */}
       <div className="absolute inset-0 bg-vignette-grid opacity-[0.25] mix-blend-overlay" />
+
+      {resolvedUrl && videoBackground && !isOptimized && (
+        <div className="absolute bottom-4 right-4 z-10 bg-yellow-900/80 p-3 rounded text-xs text-yellow-100 border border-yellow-700 pointer-events-auto cursor-pointer" onClick={reprocess}>
+          Video not optimized. Click to reprocess for better performance.
+        </div>
+      )}
 
       {/* User Custom Wallpaper */}
       {resolvedUrl && videoBackground && (

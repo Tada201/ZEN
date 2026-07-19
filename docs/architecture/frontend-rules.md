@@ -79,6 +79,37 @@ These rules apply to all code under `src/`.
    hardcoded, or product-inconsistent palettes in widgets.
 8. Use icon buttons for common actions, with tooltips for unclear icons.
 
+## Chat Timeline Rules
+
+The main chat timeline is a user-facing progress surface, not an execution log.
+
+1. Tool calls, agent actions, and subagent work must render summary-first:
+   short verb, target or result, status, and only the next useful action.
+2. Do not display raw internal JSON, full tool arguments, provider payloads,
+   prompt bodies, event metadata, stack traces, stdout/stderr dumps, or full
+   subagent transcripts in the normal chat timeline.
+3. Technical details may be available only behind an explicit disclosure such
+   as "Technical details", and only when they help diagnose a failure or audit a
+   user-approved operation.
+4. Approval and error states are exceptions to the quiet default: they must be
+   visible, actionable, and written in user language. Show risk, reason, and
+   approve/deny controls without dumping raw arguments.
+5. Completed successful tool calls must disappear from the main chat timeline
+   after the assistant answer is done or when the chat reloads. Preserve their
+   data for audit/replay surfaces, but do not append a leftover execution card
+   below the final answer.
+6. Subagent rows should show delegation status and final summary. They must not
+   stream child-agent token deltas, prompt text, or full transcripts into the
+   parent chat unless the user explicitly opens a diagnostic disclosure.
+7. Parallel or multi-tool execution should collapse into one grouped execution
+   row by default. Expand only to reveal meaningful lanes, failures, approvals,
+   artifacts, or concise result previews.
+8. Chat labels must use product language, not implementation names. Prefer
+   "Reading files", "Running tests", "Approval needed", or "Delegated to
+   reviewer" over raw tool ids, event kinds, or JSON keys.
+9. Any verifier for chat execution UI must assert the user-facing contract
+   above, not brittle snapshots of old internal component structure.
+
 ## Code Quality Rules
 
 1. No raw `invoke` outside typed API wrappers.

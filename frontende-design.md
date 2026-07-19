@@ -53,3 +53,22 @@ Use active voice as default. A control should say exactly what happens when it's
 Treat failure and emptiness as moments for direction, not mood. Explain what went wrong and how to fix it, in the interface's voice rather than a person's. Errors don't apologize, and they are never vague about what happened. An empty screen is an invitation to act.
 
 Keep the register conversational and tuned: plain verbs, sentence case, no filler, with tone matched to the brand and the audience. Let each element do exactly one job. A label labels, an example demonstrates, and nothing quietly does double duty.
+
+## Zen chat execution UI
+
+Zen's chat is a workbench conversation, not a terminal transcript. Execution UI
+should feel like a calm progress ledger:
+
+- Show what matters now: action, target, status, result, and required user
+  decision.
+- Hide implementation material by default: raw JSON, tool arguments, stdout,
+  stderr, event metadata, prompt bodies, stack traces, and full subagent
+  transcripts.
+- Use disclosures intentionally. "Technical details" is for debugging failures
+  or auditing a specific approved action, not for routine successful work.
+- Subagents should read as delegated work: who received it, whether it is
+  running/completed/failed, and the final summary. Avoid spawn cards, token
+  streams, and lifecycle chatter unless the user opens details.
+- For successful work, collapse detail aggressively. Surface artifacts, changed
+  files, search result summaries, and test/build outcomes only when they help
+  the user decide what to do next.

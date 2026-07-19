@@ -16,6 +16,7 @@ export const createInterfaceSlice: StateCreator<SettingsState, [], [], Interface
   bootDurationMs: 2500,
   widgetSettings: DEFAULT_WIDGET_SETTINGS,
   reducedMotion: false,
+  compactMode: false,
   customCssPath: "",
   customCssEnabled: false,
   sidebarPosition: "left",
@@ -25,6 +26,7 @@ export const createInterfaceSlice: StateCreator<SettingsState, [], [], Interface
   backgroundBlur: 0,
   backgroundFit: "cover",
   backgroundMediaType: "auto",
+  optimizedVideos: [],
 
   setAnimationsEnabled: (enabled: boolean) => {
     get().updateSetting("animationsEnabled", enabled);

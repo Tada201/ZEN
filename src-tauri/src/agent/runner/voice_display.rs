@@ -210,6 +210,14 @@ impl Runner {
                 )
                 .await;
 
+            // Tauri's emit/listen bus is fire-and-forget; the listener may not
+            // have observed the board:update event yet even though the tool
+            // call returned Ok. Give it a brief grace period to drain before
+            // deciding whether the agent actually wrote to the board.
+            if !board_updated.load(Ordering::Acquire) {
+                tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            }
+
             if !board_updated.load(Ordering::Acquire) && !token.is_cancelled() {
                 if let Err(error) = &result {
                     tracing::warn!(chat_id = %source_chat_id, error = %error, "Voice display native tool call failed; requesting a structured board operation");

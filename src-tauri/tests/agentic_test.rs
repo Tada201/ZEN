@@ -78,6 +78,7 @@ async fn test_agentic_loop_execution() {
         model_override: None,
         max_iterations: Some(3),
         context_window: None,
+        max_messages_in_memory: None,
         description: None,
         model_tier: ModelTier::Local,
     };

@@ -9,8 +9,14 @@ pub struct RunConfig {
     pub compaction_threshold: usize,
     /// Token-based compaction trigger (approximate tokens)
     pub compaction_token_threshold: usize,
-    /// Maximum context window size (tokens) - proactive compaction before overflow
+    /// Maximum context window size (tokens) - proactive compaction before overflow.
+    /// This is Zen's soft compaction cap, NOT the model's hardware window.
     pub max_context_tokens: usize,
+    /// The selected model's real context window (`max_context_length`),
+    /// when known. Surfaced in the context breakdown so the UI gauge
+    /// reflects the true model budget rather than the compaction cap.
+    /// `None` when the provider does not report a window.
+    pub model_context_window: Option<usize>,
     /// Whether to execute multiple tools in parallel (fan-out) or sequentially
     pub parallel_tools: bool,
     /// Whether tools are enabled for this run. When false, no tools are passed to the LLM.
@@ -31,6 +37,10 @@ pub struct RunConfig {
     pub voice_display_context: Option<String>,
     /// Maximum messages to keep in the agent's working conversation (None = unlimited)
     pub max_messages_in_memory: Option<usize>,
+    /// Optional total token budget for this run. When set, the runner will stop
+    /// before the cumulative input+output tokens exceed this limit. None means
+    /// no explicit budget (the existing context/compaction limits still apply).
+    pub token_budget: Option<usize>,
 }
 
 impl Default for RunConfig {
@@ -41,6 +51,7 @@ impl Default for RunConfig {
             compaction_threshold: 40,
             compaction_token_threshold: 50000, // Start compaction at ~50K tokens
             max_context_tokens: 100000,        // Hard limit at ~100K tokens (safe for 128K models)
+            model_context_window: None,
             parallel_tools: true,
             tools_enabled: true,
             summarization_model: None,
@@ -51,6 +62,7 @@ impl Default for RunConfig {
             display_agent_provider: None,
             voice_display_context: None,
             max_messages_in_memory: None,
+            token_budget: None,
         }
     }
 }

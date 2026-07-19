@@ -1,4 +1,4 @@
-import type { AgentConfig, IntelligenceConfig } from "../../../components/settings/types";
+import type { IntelligenceConfig } from "../../../components/settings/types";
 
 // ─── Performance ─────────────────────────────────────────────────────────
 
@@ -96,6 +96,7 @@ export interface InterfaceSlice {
   bootDurationMs: number;
   widgetSettings: WidgetSettings;
   reducedMotion: boolean;
+  compactMode: boolean;
   customCssPath: string;
   customCssEnabled: boolean;
   sidebarPosition: "left" | "right";
@@ -105,6 +106,7 @@ export interface InterfaceSlice {
   backgroundBlur: number;
   backgroundFit: BackgroundFit;
   backgroundMediaType: BackgroundMediaType;
+  optimizedVideos: string[]; // List of paths to optimized video files
 
   setAnimationsEnabled: (enabled: boolean) => void;
   setLowResourceMode: (enabled: boolean) => void;
@@ -158,7 +160,6 @@ export interface AudioSlice {
   voiceDisplayAgentAutoCompactEnabled: boolean;
   voiceDisplayAgentCompactThreshold: number;
   voiceDisplayAgentPrompt: string;
-  voiceDisplayAgentBoardMemoryLimit: number;
 
   setForceSttWeb: (val: boolean) => void;
   setForceTtsWeb: (val: boolean) => void;
@@ -263,8 +264,6 @@ export interface ProviderSlice {
   // settings tabs that hold local selection state so they can drop the stale
   // selection and return to the gallery instead of dereferencing missing data.
   lastRemovedProviderId: string | null;
-  // Agent configs
-  agentConfigs: AgentConfig[];
   // Per-tool auto-approve IDs (transient runtime list, not persisted)
   toolAutoApprove: string[];
   
@@ -321,6 +320,7 @@ export interface SystemSlice {
   agentMemoryLimit: number;
   multiAgentEnabled: boolean;
   agentTimeout: number;
+  agentTokenBudget: number;
   powerStatus: PowerStatus;
   availableNetworkInterfaces: string[];
   backgroundTasksEnabled: boolean;
@@ -349,6 +349,7 @@ export interface SystemSlice {
   toolYoloMode: boolean;
   toolAutoApproveLowRisk: boolean;
   toolGlobalDefault: "confirm" | "always_allow" | "always_deny";
+  toolPermissionMode: "plan_mode" | "ask" | "auto_edit" | "yolo";
   toolSettings: Record<string, any>;
 
   setPerformanceProfile: (profile: PerformanceProfile) => void;

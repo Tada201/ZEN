@@ -158,6 +158,18 @@ pub async fn list_dependency_status(app: AppHandle) -> Vec<DependencyStatus> {
         .await,
     );
 
+    items.push(
+        external_dependency(
+            "ffmpeg",
+            "FFmpeg",
+            "Background video re-encoding",
+            check_command("ffmpeg", &["-version"]).await,
+            None,
+            Some("https://ffmpeg.org/download.html"),
+            "Required to optimize background videos for GPU efficiency.",
+        ),
+    );
+
     items
 }
 

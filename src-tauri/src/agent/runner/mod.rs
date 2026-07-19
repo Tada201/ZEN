@@ -12,6 +12,7 @@
 pub mod actions;
 mod background;
 pub mod config;
+pub mod context_breakdown;
 mod escalation;
 pub mod helpers;
 mod lifecycle;
@@ -28,6 +29,10 @@ mod voice_display;
 
 pub use actions::{emit_action_only, persist_and_emit_action};
 pub use config::{ContextTracker, RunConfig};
+pub use context_breakdown::{
+    compute_context_breakdown, CompactionEvent, CompactionKind, ContextBreakdownPayload,
+    ContextSection, LayerTotals, SectionCategory as ContextSectionCategory, layer_totals,
+};
 pub use helpers::{estimate_conversation_tokens, estimate_tokens};
 pub use lifecycle::Runner;
 pub use r#loop::MAX_SPAWN_DEPTH;

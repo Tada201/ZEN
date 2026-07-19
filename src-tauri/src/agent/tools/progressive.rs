@@ -385,6 +385,15 @@ impl ProgressiveToolRegistry {
         ));
 
         self.register_metadata(ToolMetadata::new(
+            "apply_patch",
+            "Apply Patch",
+            "Apply a structured patch with multiple file additions, deletions, or updates.",
+            "file",
+            vec!["file", "patch", "edit", "update", "diff", "search", "replace"],
+            DetailLevel::Full,
+        ));
+
+        self.register_metadata(ToolMetadata::new(
             "create_geofence",
             "Create Geofence",
             "Create a geofence around a location.",
@@ -492,6 +501,12 @@ impl ProgressiveToolRegistry {
             }),
         );
         self.tool_factory.insert(
+            "apply_patch".to_string(),
+            Box::new(|| {
+                Arc::new(crate::tools::fs_tools::ApplyPatchTool) as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
             "create_geofence".to_string(),
             Box::new(|| {
                 Arc::new(crate::agent::tools::geofence_tools::CreateGeofenceTool)
@@ -586,6 +601,7 @@ impl ProgressiveToolRegistry {
         agent_registry: Arc<crate::agent::types::AgentRegistry>,
         hook_registry: Arc<crate::agent::hooks::HookRegistry>,
         permissions: crate::tools::GlobalToolRegistry,
+        skills_manager: Arc<crate::agent::skills::SkillsManager>,
     ) {
         // Board management — lightweight UI scratch pad
         self.tool_factory.insert(
@@ -609,6 +625,15 @@ impl ProgressiveToolRegistry {
                     hr.clone(),
                     p.clone(),
                 )) as Arc<dyn AgentTool>
+            }),
+        );
+
+        let sm = skills_manager.clone();
+        self.tool_factory.insert(
+            "skill".to_string(),
+            Box::new(move || {
+                Arc::new(crate::agent::tools::skill_tool::SkillTool::new(sm.clone()))
+                    as Arc<dyn AgentTool>
             }),
         );
     }

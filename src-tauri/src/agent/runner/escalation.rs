@@ -1,6 +1,7 @@
 //! Auto-escalation from local to cloud models, and the LLM streaming callback wrapper.
 
 use super::helpers::is_tool_capability_error;
+use crate::llm::openai_compat::context_window_discovery;
 use super::turn_persistence::persist_chat_failure;
 use super::Runner;
 use crate::agent::chat_status::ChatStatusPhase;
@@ -349,6 +350,17 @@ impl Runner {
                                 text_err
                             );
                         }
+                    }
+                }
+
+                // Phase 3.5a+: Context-length overflow → record discovery
+                if context_window_discovery::is_context_length_error(&err_str) {
+                    if let Some(discovered) = context_window_discovery::record_discovery(model, &err_str) {
+                        tracing::info!(
+                            model = %model,
+                            discovered_tokens = discovered,
+                            "Context window discovered from overflow error — cached for future use"
+                        );
                     }
                 }
 

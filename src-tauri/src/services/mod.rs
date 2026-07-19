@@ -3,6 +3,7 @@ pub mod gtsm;
 pub mod hardware;
 pub mod logging;
 pub mod mcp_config;
+pub mod media;
 pub mod permissions;
 pub mod process_manager;
 pub mod runtime_resource;
@@ -17,6 +18,7 @@ pub mod tts_service;
 pub mod usage;
 
 pub use document::DocumentService;
+pub use media::MediaService;
 pub use hardware::{HardwareInfo, HardwareService};
 pub use logging::init_backend_logging;
 pub use mcp_config::{McpConfigError, McpConfigService};

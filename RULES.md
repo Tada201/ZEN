@@ -232,6 +232,26 @@ All frontend API wrappers must define request and response types.
 - Use a sanitizer or sandbox for HTML/SVG.
 - `dangerouslySetInnerHTML` requires a comment naming the sanitizer or sandbox.
 
+### Chat Timeline Rendering
+
+The chat timeline must not become a raw execution log.
+
+- Render tool calls, agent actions, and subagent work as concise summaries by
+  default.
+- Do not display raw internal JSON, full tool arguments, provider payloads,
+  prompt bodies, stdout/stderr dumps, stack traces, event metadata, or full
+  subagent transcripts in the normal timeline.
+- Put technical payloads behind an explicit diagnostic disclosure only when
+  useful for failures, approvals, or audits.
+- Keep approvals and errors visible and actionable in user language.
+- Hide successful completed tool cards from the main timeline after chat
+  completion and on reload; persisted tool data is for audit/details surfaces,
+  not a trailing chat card.
+- Group parallel/multi-tool execution into one compact execution row unless the
+  user expands details.
+- Subagent output belongs in a delegation summary or dedicated agents panel; it
+  must not flood the parent chat.
+
 ## Database Rules
 
 - SQL lives only in `src-tauri/src/db/queries/*`.

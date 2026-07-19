@@ -1,7 +1,10 @@
 export const VOICE_DISPLAY_AGENT_DEFAULT_CONTEXT_TOKENS = 131072;
 export const VOICE_DISPLAY_AGENT_DEFAULT_MAX_TURNS = 20;
 export const VOICE_DISPLAY_AGENT_DEFAULT_COMPACT_THRESHOLD = 75;
-export const VOICE_DISPLAY_AGENT_DEFAULT_BOARD_MEMORY_LIMIT = 3;
+// Cap on how many previous boards the voice stage store keeps in
+// retainedBoards (for the "back to last board" affordance). Hardcoded
+// because the previous user-facing setting gave no backend value.
+export const VOICE_DISPLAY_AGENT_BOARD_SNAPSHOT_LIMIT = 3;
 
 export const VOICE_DISPLAY_AGENT_DEFAULT_PROMPT = [
   "You are the Voice Display Agent for Zen.",

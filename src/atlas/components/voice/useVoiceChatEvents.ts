@@ -105,21 +105,19 @@ export function useVoiceChatEvents({
     let subtitleFrameId: number | null = null;
     let disposed = false;
     const setup = async () => {
-      try {
-        const nextUnlistens = [
-          // Reset spoken tracking when a new user message is sent
-          await listenAppEvent("chat:status", (event) => {
+      // All listeners are gathered via Promise.allSettled so a single failed
+      // listenAppEvent call cannot strand the others as live listeners.
+      const registrations = [
+        listenAppEvent("chat:status", (event) => {
             if (event.payload.chat_id && event.payload.chat_id !== chatId) return;
             const message = event.payload.message;
             if (message?.startsWith("Executing:")) {
               setToolAction(message.replace("Executing: ", "").toUpperCase());
-              // Pause TTS during tool execution
               stopSpeech();
               speakingBackRef.current = false;
             }
           }),
-          // Stream text chunks: speak sentences as they arrive
-          await listenAppEvent("chat:chunk", (event) => {
+          listenAppEvent("chat:chunk", (event) => {
             const eventChatId = event.payload?.chat_id;
             const delta = event.payload?.delta;
             const chunkType = event.payload?.type;
@@ -131,7 +129,6 @@ export function useVoiceChatEvents({
 
             fullAiResponseRef.current = stripped;
 
-            // Check if we have a complete sentence to speak
             const extracted = extractNewSentences(fullAiResponseRef.current, spokenLengthRef.current);
             if (extracted.sentences.length > 0) {
               spokenLengthRef.current = extracted.newLength;
@@ -143,8 +140,7 @@ export function useVoiceChatEvents({
               });
             }
           }),
-          // On done: speak any remaining unspoken text
-          await listenAppEvent("chat:done", (event) => {
+          listenAppEvent("chat:done", (event) => {
             if (event.payload?.chat_id && event.payload.chat_id !== chatId) return;
             setToolAction(null);
             const lastMessage = messagesRef.current.at(-1);
@@ -171,11 +167,10 @@ export function useVoiceChatEvents({
               fullAiResponseRef.current = stripped;
               setSubtitleSpeaker("agent");
               setUserSpeechText("");
-              // Speak any remaining unspoken sentences
               void speakAssistantResponse();
             }
           }),
-          await listenAppEvent("tts:start", (event) => {
+          listenAppEvent("tts:start", (event) => {
             setTtsStatus("speaking");
             setAiSpeaking(true);
             setPlaybackEnergy(0.45);
@@ -194,12 +189,12 @@ export function useVoiceChatEvents({
                 const elapsed = performance.now() - startTime;
                 const activeCue = cues.find(c => elapsed >= c.start_ms && elapsed <= c.end_ms);
                 const textToSet = activeCue ? activeCue.text : (elapsed > cues[cues.length - 1].end_ms ? cues[cues.length - 1].text : "");
-                
+
                 if (textToSet && textToSet !== lastText) {
                   lastText = textToSet;
                   setAiSpeechText(textToSet);
                 }
-                
+
                 if (!disposed) {
                   subtitleFrameId = requestAnimationFrame(checkSubtitles);
                 }
@@ -209,24 +204,24 @@ export function useVoiceChatEvents({
               setAiSpeechText(payload?.text || fullAiResponseRef.current);
             }
           }),
-          await listenAppEvent("tts:level", (event) => {
+          listenAppEvent("tts:level", (event) => {
             if (event.payload && typeof event.payload.level === 'number') {
               setPlaybackEnergy(event.payload.level);
             }
           }),
-          await listenAppEvent("tts:caption", (event) => {
+          listenAppEvent("tts:caption", (event) => {
             if (event.payload?.text) {
               setAiSpeechText(event.payload.text);
             }
           }),
-          await listenAppEvent("tts:stop", () => {
+          listenAppEvent("tts:stop", () => {
             if (subtitleFrameId !== null) cancelAnimationFrame(subtitleFrameId);
             setTtsStatus("ready");
             setAiSpeaking(false);
             setPlaybackEnergy(0);
             speakingBackRef.current = false;
           }),
-          await listenAppEvent("tts:error", (event) => {
+          listenAppEvent("tts:error", (event) => {
             if (subtitleFrameId !== null) cancelAnimationFrame(subtitleFrameId);
             setTtsStatus("failed");
             setAiSpeaking(false);
@@ -234,7 +229,22 @@ export function useVoiceChatEvents({
             speakingBackRef.current = false;
             appendLog(`TTS error: ${event.payload?.error ?? "TTS playback failed"}`, "ERR");
           }),
-        ];
+      ];
+      try {
+        const settled = await Promise.allSettled(registrations);
+        const nextUnlistens: UnlistenFn[] = [];
+        let firstError: unknown = null;
+        for (const result of settled) {
+          if (result.status === "fulfilled") {
+            nextUnlistens.push(result.value);
+          } else if (firstError === null) {
+            firstError = result.reason;
+          }
+        }
+        if (firstError !== null) {
+          nextUnlistens.forEach((unlisten) => unlisten());
+          throw firstError;
+        }
         if (disposed) nextUnlistens.forEach((unlisten) => unlisten());
         else unlistens = nextUnlistens;
       } catch (error) {

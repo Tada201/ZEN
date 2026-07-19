@@ -9,7 +9,12 @@ interface Option {
 
 interface WorkbenchSelectProps {
     value: string;
-    onValueChange: (value: string) => void;
+    /**
+     * Optional onValueChange so a read-only / disabled picker can omit
+     * the handler at the call site (e.g. the Embedding Model row,
+     * which is gated until models are selectable).
+     */
+    onValueChange?: (value: string) => void;
     options: Option[];
     placeholder?: string;
     className?: string;
@@ -21,7 +26,7 @@ export const WorkbenchSelect = memo(({ value, onValueChange, options, placeholde
     const sentinelValue = value === "" ? "__none__" : value;
 
     const handleValueChange = useCallback((val: string) => {
-        onValueChange(val === "__none__" ? "" : val);
+        onValueChange?.(val === "__none__" ? "" : val);
     }, [onValueChange]);
 
     return (

@@ -4,12 +4,11 @@ use super::actions::{
 use super::escalation::{EarlyToolExecutionContext, EarlyToolExecutionState, EscalationParams};
 use super::helpers::{
     generate_handoff_summary, parse_file_changes, parse_text_tool_calls,
-    strip_text_tool_call_blocks,
+    strip_text_tool_call_blocks, FileReadTracker,
 };
 use super::lifecycle::Runner;
 use super::memory_bootstrap::{
-    cached_recall_context, compact_context_if_needed, load_initial_conversation,
-    load_memory_run_settings, truncate_conversation_by_message_count,
+    cached_recall_context, load_initial_conversation, load_memory_run_settings,
 };
 use super::turn_persistence::{persist_chat_failure, save_assistant_message, AssistantMessageSave};
 use crate::agent::chat_status::ChatStatusPhase;
@@ -17,14 +16,19 @@ use crate::agent::event_bus::{
     AgentEvent, ChatChunkPayload, ChatDonePayload, ChatErrorPayload, ChatStatusPayload,
 };
 use crate::agent::middleware::{EnrichmentContext, MiddlewareChain};
+use crate::agent::skills as skills_mod;
 use crate::agent::types::*;
+use crate::commands::AppState;
 use crate::db::models::ChatMessage;
-use crate::db::queries;
 use crate::llm::LlmProvider;
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::sync::Arc;
+use tauri::Manager;
+
 use tokio_util::sync::CancellationToken;
+
+use crate::agent::context_breakdown::compute_context_breakdown;
 
 /// Maximum recursion depth for sub-agent spawning (prevents infinite loops)
 pub const MAX_SPAWN_DEPTH: u32 = 3;
@@ -102,7 +106,8 @@ impl Runner {
         let summarization_enabled = memory_settings.summarization_enabled;
         let semantic_recall_enabled = memory_settings.semantic_recall_enabled;
         let max_recalled_messages = memory_settings.max_recalled_messages;
-        let drift_detection_enabled = memory_settings.drift_detection_enabled;
+        let persist_to_parent_chat = self.should_persist_to_parent_chat();
+        let use_semantic_recall = semantic_recall_enabled && persist_to_parent_chat;
 
         // ── Fix #3: Skip duplicate DB fetch – chat.rs already loaded fresh messages ──
         // The runner trusts the passed-in `messages` slice; only falls back to a DB
@@ -120,13 +125,33 @@ impl Runner {
         // The heavy embedding work runs in a background task AFTER the LLM responds.
         // On the first message of a new chat the cache is empty – the recall block is simply absent.
         let cached_recall_context =
-            cached_recall_context(&self.app, &chat_id, semantic_recall_enabled).await;
-        // Suppress the old per-loop cache variables – recall is now injected once at iteration start
-        // context_tracker still needs its first-msg vector for drift; but we no longer block on it.
-        // We'll skip the blocker and just initialise to None (drift check is best-effort).
-        let _ = drift_detection_enabled; // consumed below when checking
+            cached_recall_context(&self.app, &chat_id, use_semantic_recall).await;
 
-        let mut iteration = 0;
+        // ── C4: mint a fresh per-run monotonic id from AppState.next_run_id ──
+        // The same id is carried on every ContextBreakdownPayload emitted
+        // during this run and on the cold-start cache entry, so the
+        // frontend dedupes by (chat_id, run_id, iteration) instead of
+        // iteration alone. Without this, a later, shorter run on the
+        // same chat gets silently overwritten by a stale, longer
+        // earlier run because dedupe only compared iteration numbers.
+        let run_id: u64 = self
+            .app
+            .try_state::<crate::commands::AppState>()
+            .map(|s| {
+                s.next_run_id
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            })
+            .unwrap_or(0);
+
+        // Mint a per-run correlation id (UUID). Unlike `run_id`/`chat_id` —
+        // which are stable across every turn on a chat — the trace_id is
+        // unique to this single `run()` invocation, so every event stamped
+        // with it (tool start/complete, authorization, chat done/error)
+        // can be reassembled into one reasoning trace for debugging/replay.
+        let trace_id = self.begin_trace();
+        tracing::info!(chat_id = %chat_id, trace_id = %trace_id, run_id, depth = self.depth, "run: trace begin");
+
+        let mut iteration: usize = 0;
         let mut current_agent = agent;
         let mut call_counts: HashMap<String, usize> = HashMap::new();
         let mut consecutive_errors = 0;
@@ -138,7 +163,63 @@ impl Runner {
         let mut accumulated_commentary = String::new();
         let mut current_run_gen_image_ids: std::collections::HashSet<String> =
             std::collections::HashSet::new();
+        // Tracks the mtime of every file the agent read/wrote this run so the
+        // loop can warn the model when a file it is reasoning about changes on
+        // disk between iterations (stale-read detection).
+        let mut file_read_tracker = FileReadTracker::new();
         let early_tool_state = Arc::new(EarlyToolExecutionState::new());
+
+        // ── C6: preload skill bodies ONCE before the loop ──
+        // The skill mention resolver needs to load SKILL.md bodies from
+        // disk. Doing this on every iteration is the dominant per-iter
+        // cost for chats that mention skills (it's a tokio::fs round
+        // trip + serde metadata lookup per mention per iter). The
+        // latest user message is stable across iterations in the common
+        // case, so we resolve mentions once and replay the fragments
+        // from a Vec. A Vec (insertion-ordered) is chosen over a
+        // HashMap so the prompt sees the SAME skill order across
+        // iterations — HashMap iteration order is unspecified and
+        // would otherwise flip the fragments between iterations of
+        // the same run, producing non-deterministic context the model
+        // sees. The skill name lives inside `SkillInstructionsFragment`
+        // already, so a tuple `(String, …)` would double-store it;
+        // dedupe is owned by `seen`.
+        let mut preloaded_skill_fragments: Vec<
+            crate::agent::skills::SkillInstructionsFragment,
+        > = Vec::new();
+        if let Some(latest) = conversation.iter().rev().find(|m| m.role == "user") {
+            if !latest.content.is_empty() {
+                if let Some(state) = self.app.try_state::<crate::commands::AppState>() {
+                    let mgr = state.skills_manager.clone();
+                    let cwd = std::env::current_dir().unwrap_or_default();
+                    let outcome = mgr.skills_for_cwd(&cwd, false).await;
+                    let mentions = skills_mod::extract_skill_mentions(
+                        &latest.content,
+                        &outcome.skills,
+                    );
+                    let mut seen: std::collections::HashSet<String> =
+                        std::collections::HashSet::new();
+                    for m in mentions {
+                        if !seen.insert(m.name.clone()) {
+                            continue;
+                        }
+                        if let Some(skill) = outcome.find_by_name(&m.name) {
+                            if let Ok(body) =
+                                tokio::fs::read_to_string(&skill.path).await
+                            {
+                                preloaded_skill_fragments.push(
+                                    skills_mod::SkillInstructionsFragment {
+                                        name: skill.name.clone(),
+                                        path: skill.path.display().to_string(),
+                                        contents: body,
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         // ── P1: Check if provider supports structured tool calling ──
         let tools_supported = provider.supports_tools(&model);
@@ -201,6 +282,18 @@ impl Runner {
                 });
             }
             iteration += 1;
+
+            // ── Drain any parent→child injected messages into the conversation ──
+            // A parent agent/orchestrator can push messages into this runner's
+            // inbox while it is running; they are merged here so the next LLM
+            // call sees them as part of the conversation.
+            if let Some(inbox) = &self.message_inbox {
+                let mut queued = inbox.lock().await;
+                while let Some(msg) = queued.pop_front() {
+                    conversation.push(msg);
+                }
+            }
+
             if iteration > run_config.max_iterations {
                 tracing::warn!(
                     "Agent loop reached max iterations ({})",
@@ -308,16 +401,18 @@ impl Runner {
                         "depth": self.depth,
                     })),
                 }));
+            } else if self.depth > 0 {
+                // Sub-agent progress: emit a lightweight agent:chunk so the
+                // parent and UI can observe mid-execution progress without
+                // mixing it into the main chat stream.
+                self.emit(AgentEvent::AgentChunk(crate::agent::event_bus::AgentChunkPayload {
+                    chat_id: chat_id.clone(),
+                    agent_id: current_agent.id.clone(),
+                    agent_name: current_agent.name.clone(),
+                    delta: format!("step {}", iteration),
+                    r#type: "progress".to_string(),
+                }));
             }
-
-            // ── Context compaction (token-aware, fixes #23) ──
-            compact_context_if_needed(&mut conversation, &run_config, summarization_enabled);
-
-            // ── Message-count truncation (per-agent config override) ──
-            truncate_conversation_by_message_count(
-                &mut conversation,
-                run_config.max_messages_in_memory,
-            );
 
             // ── Build authorized tools for current agent ──
             let (authorized_tool_ids, meta_tools) = self
@@ -325,21 +420,96 @@ impl Runner {
                 .await;
 
             // ── Build system prompt via middleware chain (D3.2) ──
+            //
+            // Compaction + summary injection now live inside the chain
+            // (see `CompactionMiddleware` priority 30 and
+            // `SummaryMiddleware` priority 20). The middleware mutates
+            // `enrich_ctx.conversation` in place and pushes summary
+            // blocks into `enrich_ctx.extra_system_messages`. After the
+            // chain runs we MUST re-sync the outer `conversation` back
+            // from the enriched copy, or compaction is lost across
+            // iterations and the context grows unbounded.
             let app_inner = self.app.clone();
 
+            // ── C6: hot-path buffer reuse via mem::take ──
+            // The previous code did `conversation.clone()` into
+            // enrich_ctx, then `conversation = enrich_ctx.conversation.clone()`
+            // back. Each clone is a full deep copy of the conversation
+            // (every ChatMessage has heap-owned String/Option/Vec).
+            // mem::take swaps the buffer OUT of conversation into
+            // enrich_ctx, the chain mutates in place, and we take the
+            // (possibly compacted) buffer back. No allocations, no deep
+            // copies; the canonical buffer stays in `conversation`.
             let mut enrich_ctx = EnrichmentContext {
                 system_content: current_agent.instructions.clone(),
-                conversation: conversation.clone(),
+                conversation: std::mem::take(&mut conversation),
                 extra_system_messages: Vec::new(),
                 chat_id: chat_id.clone(),
                 recall_block: cached_recall_context.clone(),
                 authorized_tool_ids: authorized_tool_ids.clone(),
                 tools_supported,
                 tools_enabled: run_config.tools_enabled,
+                iteration,
+                summarization_enabled,
+                compaction_token_threshold: run_config.compaction_token_threshold,
+                compaction_threshold: run_config.compaction_threshold,
+                max_messages_in_memory: run_config.max_messages_in_memory,
+                section_log: Vec::new(),
+                compaction_event: None,
+                run_id,
             };
 
-            let chain = MiddlewareChain::default_chain(app_inner.clone(), self.db_pool.clone());
+            let chain = MiddlewareChain::default_chain(
+                app_inner.clone(),
+                self.db_pool.clone(),
+                true,
+                Some(self.config.max_context_tokens as i64),
+            );
             chain.enrich_all(&mut enrich_ctx).await?;
+
+            // B1 fix: persist in-place compaction across iterations.
+            // `enrich_ctx.conversation` may have been pruned,
+            // stale-read-elided, or message-count-capped by
+            // `CompactionMiddleware`. Pipeline the buffer back via
+            // mem::take so the chain's compacted result becomes the
+            // owner and the loop keeps the canonical buffer without
+            // re-cloning.
+            conversation = std::mem::take(&mut enrich_ctx.conversation);
+
+            // Emit the per-iteration context breakdown so the frontend
+            // visualiser can render the Codex-style sections + gauge.
+            // We only emit on the final iteration of each turn (when the
+            // runner is about to either exit the loop or recurse into
+            // tool execution) so we don't flood the event bus on busy
+            // multi-step runs.
+            if should_emit_iteration_status(self.depth) {
+                // The truth comes from `CompactionMiddleware` via
+                // `EnrichmentContext::compaction_event`. The middleware
+                // is the only place that knows which branch fired and
+                // whether the conversation actually shrank; the loop
+                // no longer infers `CompactionKind` from a brittle
+                // token-threshold heuristic.
+                let compaction_event = enrich_ctx.compaction_event.clone();
+
+                let breakdown = compute_context_breakdown(
+                    &enrich_ctx,
+                    &run_config,
+                    compaction_event,
+                    &meta_tools,
+                    run_config.model_context_window,
+                );
+                // Mirror the latest per-chat breakdown into the
+                // AppState cache so `get_context_breakdown` /
+                // `get_context_snapshot` can hydrate the right-panel
+                // on cold start. The cache write is best-effort: if
+                // AppState is missing (rare during early tests) we
+                // still emit on the event bus and continue.
+                if let Some(state) = self.app.try_state::<AppState>() {
+                    let mut cache = state.context_breakdown_cache.write().await;
+                    cache.insert(breakdown.chat_id.clone(), breakdown.clone());
+                }
+                let _ = self.emit(crate::agent::event_bus::AgentEvent::ContextBreakdown(breakdown));
+            }
 
             let system_content = enrich_ctx.system_content;
 
@@ -352,7 +522,7 @@ impl Runner {
                 tool_call_id: None,
             }];
 
-            // Inject extra system messages from middleware (e.g. summaries)
+            // Inject extra system messages from middleware (summaries).
             for msg in enrich_ctx.extra_system_messages {
                 full_context.push(ChatMessage {
                     role: "system".to_string(),
@@ -364,49 +534,26 @@ impl Runner {
                 });
             }
 
-            let needs_summary_context = summarization_enabled
-                && (iteration > 1 || conversation.len() > run_config.compaction_threshold);
-
-            if needs_summary_context {
-                if let Some(ref db) = self.db_pool {
-                    // Cold: previous session summaries
-                    if let Ok(prev_summaries) = queries::get_previous_summaries(db, &chat_id).await
-                    {
-                        for summary in prev_summaries {
-                            full_context.push(ChatMessage {
-                                role: "system".to_string(),
-                                content: format!(
-                                    "[Previous conversation summary]: {}",
-                                    summary.summary
-                                ),
-                                reasoning_details: None,
-                                images: None,
-                                tool_calls: None,
-                                tool_call_id: None,
-                            });
-                        }
-                    }
-
-                    // Warm: current session summary (if compacted)
-                    if let Ok(Some(current_summary)) =
-                        queries::get_current_summary(db, &chat_id).await
-                    {
-                        full_context.push(ChatMessage {
-                            role: "system".to_string(),
-                            content: format!(
-                                "[Current conversation summary]: {}",
-                                current_summary.summary
-                            ),
-                            reasoning_details: None,
-                            images: None,
-                            tool_calls: None,
-                            tool_call_id: None,
-                        });
-                    }
-                }
-            }
-
             full_context.extend(conversation.clone());
+
+            // ── Skill mention injection (cache-only) ──
+            // Bodies were preloaded once before the loop (see the
+            // C6 block above), so this no longer hits the filesystem
+            // per iteration. We emit the fragments in name-insertion
+            // order matching the original resolver's deterministic
+            // path. The cache hit cost is O(N) over the small set of
+            // mentioned skills instead of O(mentions × disk I/O).
+            use crate::agent::skills::ContextualFragment;
+            for frag in &preloaded_skill_fragments {
+                full_context.push(ChatMessage {
+                    role: "user".to_string(),
+                    content: frag.body(),
+                    reasoning_details: None,
+                    images: None,
+                    tool_calls: None,
+                    tool_call_id: None,
+                });
+            }
 
             // ── Call LLM with auto-escalation (Phase 3.5) ──
             let chat_id_inner = chat_id.clone();
@@ -485,6 +632,79 @@ impl Runner {
             // Accumulate token counts (fixes #21)
             total_tokens_in += response.tokens_in.unwrap_or(0) as i64;
             total_tokens_out += response.tokens_out.unwrap_or(0) as i64;
+
+            // ── Token budget enforcement (#5) ──
+            if let Some(budget) = run_config.token_budget {
+                let total = total_tokens_in + total_tokens_out;
+                if total > budget as i64 {
+                    tracing::warn!(
+                        "Agent loop exceeded token budget ({} > {})",
+                        total,
+                        budget
+                    );
+                    let final_msg = format!(
+                        "Token budget exceeded ({} tokens used > {} budget). Stopping with the information gathered so far.",
+                        total, budget
+                    );
+
+                    self.emit(AgentEvent::ChatChunk(ChatChunkPayload {
+                        chat_id: chat_id.clone(),
+                        delta: final_msg.clone(),
+                        r#type: "text".to_string(),
+                        done: false,
+                        message_id: None,
+                    }));
+
+                    if !accumulated_commentary.is_empty() {
+                        accumulated_commentary.push('\n');
+                    }
+                    accumulated_commentary.push_str(&final_msg);
+
+                    if let Some(ref db) = self.db_pool {
+                        message_persisted |= save_assistant_message(AssistantMessageSave {
+                            db,
+                            chat_id: &chat_id,
+                            model: &model,
+                            message_id: &mut assistant_message_id,
+                            content: &accumulated_commentary,
+                            is_complete: true,
+                            tokens_in: Some(total_tokens_in),
+                            tokens_out: Some(total_tokens_out),
+                            tool_calls: None,
+                            reasoning_details: None,
+                            metadata: None,
+                            error_context: "Failed to save token-budget assistant message to SQLite",
+                        })
+                        .await;
+                    }
+
+                    self.emit(AgentEvent::ChatDone(ChatDonePayload {
+                        chat_id: chat_id.clone(),
+                        content: Some(accumulated_commentary.clone()),
+                        tokens_in: total_tokens_in,
+                        tokens_out: total_tokens_out,
+                        reason: "token_budget_exceeded".to_string(),
+                        done: true,
+                    }));
+                    if summarization_enabled {
+                        self.trigger_background_compaction(
+                            &chat_id,
+                            &model,
+                            run_config.summarization_model.clone(),
+                        );
+                    }
+                    self.trigger_background_embedding(&chat_id);
+                    return Ok(AgentResponse {
+                        content: Some(accumulated_commentary),
+                        tool_calls: vec![],
+                        reasoning: None,
+                        handoff: None,
+                        tokens_in: Some(total_tokens_in),
+                        tokens_out: Some(total_tokens_out),
+                        message_persisted,
+                    });
+                }
+            }
 
             // ── Parse tool calls ──
             let mut tool_calls = Vec::new();
@@ -982,14 +1202,31 @@ impl Runner {
                     }
                     _ => result.content.to_string(),
                 };
+                // P0 IPI defence: wrap every tool result in a bounded
+                // `<tool_result source="...">` envelope with a system
+                // reminder. The wrapper makes the provenance explicit
+                // and caps the per-call payload so a hostile tool source
+                // cannot flood the context. `content_str` is still used
+                // below for the audit metadata summary.
+                let safe_content = crate::agent::prompt_safety::wrap_tool_result(
+                    &tool_call.name,
+                    &content_str,
+                );
                 conversation.push(ChatMessage {
                     role: "tool".to_string(),
-                    content: content_str.clone(),
+                    content: safe_content,
                     reasoning_details: None,
                     images: None,
                     tool_calls: None,
                     tool_call_id: Some(result.tool_call_id.clone()),
                 });
+
+                // Record file mtime for stale-read detection. Reads seed the
+                // baseline; writes/edits refresh it so the agent's own
+                // mutations never self-trigger a staleness warning next turn.
+                if !result.is_error {
+                    file_read_tracker.record_file_result(&result.content);
+                }
 
                 // Emit structured tool_result action (Phase 1.4)
                 // Check if this is a file operation with diff data
@@ -1066,6 +1303,38 @@ impl Runner {
                         channel: &self.on_event,
                     });
                 }
+            }
+
+            // ── Stale-read detection ──
+            // A file the agent read earlier this run may have changed on disk
+            // (external editor, terminal command, or a sibling sub-agent).
+            // Warn the model so it re-reads before acting on stale content.
+            // `edit_file` already fails safe (exact old_text match), so this
+            // guards reasoning/summaries built on the outdated body. A single
+            // overwritable slot avoids accumulation across iterations.
+            let stale_files = file_read_tracker.detect_stale_reads().await;
+            conversation.retain(|m| {
+                !(m.role == "system" && m.content.contains("[Stale file warning]"))
+            });
+            if !stale_files.is_empty() {
+                tracing::info!(
+                    chat_id = %chat_id,
+                    files = ?stale_files,
+                    "Detected files changed on disk after being read; nudging re-read"
+                );
+                conversation.push(ChatMessage {
+                    role: "system".to_string(),
+                    content: format!(
+                        "[Stale file warning] These files changed on disk after you last read them: {}. \
+                         Any earlier content you have for them may be outdated. Re-read them with \
+                         read_document_content before relying on, editing, or summarizing their contents.",
+                        stale_files.join(", ")
+                    ),
+                    reasoning_details: None,
+                    images: None,
+                    tool_calls: None,
+                    tool_call_id: None,
+                });
             }
 
             // Track that we just received tool results so we can nudge if the model ignores them

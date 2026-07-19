@@ -39,7 +39,9 @@
         "enable": true,
         "scope": [
           "$APPDATA/generated_images",
-          "$APPDATA/generated_images/**"
+          "$APPDATA/generated_images/**",
+          "$APPDATA/media/wallpapers",
+          "$APPDATA/media/wallpapers/**"
         ]
       }
     }

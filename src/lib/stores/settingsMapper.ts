@@ -30,12 +30,21 @@ const SNAKE_OVERRIDES: Record<string, string> = {
   backgroundMediaType: "ui.background-media-type",
   memoryEnabled: "memory.enabled",
   memoryMaxTurns: "memory.max-turns",
+  // Tool permission mode is double-keyed for backwards compatibility with
+  // both the typed store (camelCase) and the legacy flat backend key.
+  toolPermissionMode: "tools.permission-mode",
+  // Title-maker options persisted under the tab dot-notation namespace.
+  titleMakerEnabled: "chat.title-maker-enabled",
+  titleMakerModel: "chat.title-maker-model",
+  titleMakerProvider: "chat.title-maker-provider",
+  titleMakerPrompt: "chat.title-maker-prompt",
   memorySummarizationEnabled: "memory.summarization_enabled",
   memorySummarizationModel: "memory.summarization_model",
   memorySemanticRecallEnabled: "memory.semantic_recall_enabled",
   memoryMaxRecalledMessages: "memory.max_recalled_messages",
   memoryDriftDetectionEnabled: "memory.drift_detection_enabled",
   memoryDriftThreshold: "memory.drift_threshold",
+  agentTokenBudget: "agent.token-budget",
 };
 
 const FIELD_TYPES: Record<string, "string" | "boolean" | "number" | "json"> = {};

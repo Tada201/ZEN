@@ -464,3 +464,69 @@ impl AgentTool for EditFileTool {
 }
 
 pub struct EditFileTool;
+
+/// `AgentTool` impl for the canonical `apply_patch` Tool implementation
+/// living in `crate::tools::fs_tools::patch`. Subagents use the
+/// `AgentTool` trait; the canonical exposes only the `Tool` trait, so this
+/// bridge translates between the two. The canonical struct is the single
+/// source of truth — this wrapper does no patching logic of its own.
+///
+/// Rust's orphan rule allows this because both `AgentTool` (defined here)
+/// and `ApplyPatchTool` (defined in `crate::tools::fs_tools::patch`) are
+/// local to this crate.
+#[async_trait]
+impl AgentTool for crate::tools::fs_tools::ApplyPatchTool {
+    fn id(&self) -> &str {
+        "apply_patch"
+    }
+
+    fn description(&self) -> &str {
+        "Applies a structured multi-file patch (Add, Delete, or Search/Replace Update) to the workspace. \
+         Format updates like this:\n\
+         *** Update File: <path>\n\
+         <<<<<<< SEARCH\n\
+         <lines to find>\n\
+         =======\n\
+         <replacement lines>\n\
+         >>>>>>> REPLACE"
+    }
+
+    fn input_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "patch": {
+                    "type": "string",
+                    "description": "Structured patch text specifying file updates."
+                }
+            },
+            "required": ["patch"],
+            "additionalProperties": false
+        })
+    }
+
+    async fn run(
+        &self,
+        app: AppHandle,
+        chat_id: String,
+        input: Value,
+        _depth: u32,
+        _allowed_tools: Option<Arc<Mutex<HashSet<String>>>>,
+        _token: tokio_util::sync::CancellationToken,
+    ) -> Result<Value> {
+        let patch = input
+            .get("patch")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("apply_patch requires a 'patch' field"))?
+            .to_string();
+        let output = crate::tools::Tool::execute(
+            &crate::tools::fs_tools::ApplyPatchTool,
+            app,
+            chat_id,
+            json!({ "patch": patch }),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+        Ok(output.content)
+    }
+}

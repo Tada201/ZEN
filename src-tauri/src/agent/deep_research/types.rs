@@ -29,6 +29,10 @@ pub struct DeepResearchParams<'a> {
     pub max_rounds: usize,
     pub max_urls_per_round: usize,
     pub sub_agent_count: usize,
+    /// The selected model's real context window (`max_context_length`),
+    /// when known. Surfaced in the context breakdown so the UI gauge
+    /// reflects the true model budget rather than the compaction cap.
+    pub model_context_window: Option<usize>,
 }
 
 /// Scope resolved before the research worker is allowed to search. The brief

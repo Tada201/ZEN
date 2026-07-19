@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use serde_json::{json, Value};
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -14,6 +15,116 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 const MAX_PARALLEL_SUBAGENTS: usize = 8;
+
+/// A single agent request inside a parallel spawn batch, with optional
+/// dependency declarations.
+#[derive(Debug, Clone)]
+struct AgentRequest {
+    /// Optional user-supplied identifier. If omitted, a synthetic id is
+    /// generated from the array index.
+    id: String,
+    /// IDs of other agents in the same batch that must complete first.
+    depends_on: Vec<String>,
+    /// The raw JSON request as received from the tool call.
+    request: Value,
+}
+
+/// Parsed and validated dependency graph for a parallel spawn batch.
+#[derive(Debug)]
+struct DependencyGraph {
+    nodes: Vec<AgentRequest>,
+    /// Execution waves: each inner vector holds indices of agents whose
+    /// dependencies are all satisfied at that wave.
+    waves: Vec<Vec<usize>>,
+}
+
+impl DependencyGraph {
+    fn new(nodes: Vec<AgentRequest>) -> Result<Self> {
+        let index_by_id: HashMap<String, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(idx, node)| (node.id.clone(), idx))
+            .collect();
+
+        // Validate that every id is unique.
+        if index_by_id.len() != nodes.len() {
+            return Err(anyhow::anyhow!(
+                "Duplicate agent ids in parallel spawn batch"
+            ));
+        }
+
+        // Validate that every dependency refers to an existing node.
+        for node in &nodes {
+            for dep in &node.depends_on {
+                if !index_by_id.contains_key(dep) {
+                    return Err(anyhow::anyhow!(
+                        "Agent '{}' depends on unknown agent '{}'",
+                        node.id, dep
+                    ));
+                }
+            }
+        }
+
+        // Detect cycles using Kahn's algorithm.
+        let mut in_degree = vec![0usize; nodes.len()];
+        let mut adjacency: Vec<Vec<usize>> = vec![vec![]; nodes.len()];
+        for (idx, node) in nodes.iter().enumerate() {
+            for dep in &node.depends_on {
+                let dep_idx = index_by_id[dep];
+                adjacency[dep_idx].push(idx);
+                in_degree[idx] += 1;
+            }
+        }
+
+        let mut queue: VecDeque<usize> = in_degree
+            .iter()
+            .enumerate()
+            .filter(|(_, d)| **d == 0)
+            .map(|(idx, _)| idx)
+            .collect();
+        let mut topo_order = Vec::new();
+        while let Some(idx) = queue.pop_front() {
+            topo_order.push(idx);
+            for next in &adjacency[idx] {
+                in_degree[*next] -= 1;
+                if in_degree[*next] == 0 {
+                    queue.push_back(*next);
+                }
+            }
+        }
+
+        if topo_order.len() != nodes.len() {
+            return Err(anyhow::anyhow!(
+                "Circular dependency detected in parallel spawn agents"
+            ));
+        }
+
+        // Build waves: group agents by the longest dependency chain length.
+        let mut wave_by_idx = vec![0usize; nodes.len()];
+        for idx in topo_order {
+            let max_dep_wave = nodes[idx]
+                .depends_on
+                .iter()
+                .map(|dep| wave_by_idx[index_by_id[dep]])
+                .max()
+                .unwrap_or(0);
+            wave_by_idx[idx] = max_dep_wave + 1;
+        }
+
+        let wave_count = wave_by_idx.iter().max().copied().unwrap_or(0);
+        let mut waves: Vec<Vec<usize>> = vec![vec![]; wave_count];
+        for (idx, wave) in wave_by_idx.into_iter().enumerate() {
+            if wave > 0 {
+                waves[wave - 1].push(idx);
+            }
+        }
+
+        Ok(Self {
+            nodes,
+            waves,
+        })
+    }
+}
 
 /// Skip emitting a `chat:message` event for the spawn announcement.
 /// The dedicated `agent:spawn` lifecycle event is the source of
@@ -43,6 +154,14 @@ pub(crate) struct SpawnParams<'a> {
     pub allowed_tools: Option<Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
     pub token: CancellationToken,
     pub label: &'a str,
+    /// When set, spawn an LLM-defined ad-hoc agent with these instructions
+    /// instead of looking up `agent_id` in the registry.
+    pub adhoc_instructions: Option<&'a str>,
+    /// Optional tool subset for an ad-hoc agent (intersected with the ceiling).
+    pub adhoc_tools: Vec<String>,
+    pub success_criteria: Option<&'a str>,
+    pub constraints: Vec<String>,
+    pub relevant_files: Vec<String>,
 }
 
 /// Parameters for emitting spawn completion events.
@@ -60,12 +179,257 @@ struct CompletionParams<'a> {
     duration_ms: u64,
 }
 
-fn result_summary(value: &Value) -> Option<String> {
+/// Classification for sub-agent execution outcomes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SubagentStatus {
+    Completed,
+    Failed,
+    Incomplete,
+    Uncertain,
+}
+
+impl SubagentStatus {
+    fn as_str(&self) -> &'static str {
+        match self {
+            SubagentStatus::Completed => "completed",
+            SubagentStatus::Failed => "failed",
+            SubagentStatus::Incomplete => "incomplete",
+            SubagentStatus::Uncertain => "uncertain",
+        }
+    }
+}
+
+/// Validation result for a sub-agent's output.
+#[derive(Debug, Clone)]
+struct ValidatedOutput {
+    status: SubagentStatus,
+    summary: String,
+    full_content: String,
+    notes: Vec<String>,
+}
+
+/// Validate and normalize the raw output from a child agent.
+///
+/// - Empty/whitespace-only output is marked as `Incomplete`.
+/// - Output containing explicit error/failure markers is marked as `Failed`.
+/// - Otherwise the output is treated as `Completed`.
+fn validate_subagent_output(content: &str) -> ValidatedOutput {
+    let trimmed = content.trim();
+    if trimmed.is_empty() {
+        return ValidatedOutput {
+            status: SubagentStatus::Incomplete,
+            summary: "Sub-agent completed with no output.".to_string(),
+            full_content: content.to_string(),
+            notes: vec!["Output was empty or whitespace-only.".to_string()],
+        };
+    }
+
+    let lower = trimmed.to_lowercase();
+    let failure_markers = [
+        "error:",
+        "failed to",
+        "unable to",
+        "could not",
+        "cannot complete",
+        "task failed",
+        "i failed",
+        "execution failed",
+        "exception occurred",
+    ];
+
+    let mut notes = Vec::new();
+    let mut failed = false;
+    for marker in failure_markers {
+        if lower.contains(marker) {
+            notes.push(format!("Output contains failure marker: '{}'", marker));
+            failed = true;
+        }
+    }
+
+    if failed {
+        return ValidatedOutput {
+            status: SubagentStatus::Failed,
+            summary: trimmed.chars().take(500).collect::<String>(),
+            full_content: content.to_string(),
+            notes,
+        };
+    }
+
+    // Heuristic: very short outputs are uncertain.
+    if trimmed.len() < 30 {
+        notes.push("Output was very short; verify it satisfies the success criteria.".to_string());
+        return ValidatedOutput {
+            status: SubagentStatus::Uncertain,
+            summary: trimmed.to_string(),
+            full_content: content.to_string(),
+            notes,
+        };
+    }
+
+    ValidatedOutput {
+        status: SubagentStatus::Completed,
+        summary: trimmed.chars().take(500).collect::<String>(),
+        full_content: content.to_string(),
+        notes: Vec::new(),
+    }
+}
+
+/// Classification for errors returned by a sub-agent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ErrorClass {
+    Transient,
+    Permanent,
+    Retryable,
+}
+
+impl ErrorClass {
+    fn as_str(&self) -> &'static str {
+        match self {
+            ErrorClass::Transient => "transient",
+            ErrorClass::Permanent => "permanent",
+            ErrorClass::Retryable => "retryable",
+        }
+    }
+}
+
+/// Classify an error message into a structured error class.
+fn classify_spawn_error(error: &str) -> ErrorClass {
+    let lower = error.to_lowercase();
+    if lower.contains("cancelled")
+        || lower.contains("timeout")
+        || lower.contains("timed out")
+        || lower.contains("connection")
+        || lower.contains("rate limit")
+        || lower.contains("503")
+        || lower.contains("502")
+        || lower.contains("504")
+    {
+        ErrorClass::Transient
+    } else if lower.contains("permission")
+        || lower.contains("not authorized")
+        || lower.contains("forbidden")
+        || lower.contains("invalid")
+        || lower.contains("not found")
+    {
+        ErrorClass::Permanent
+    } else {
+        ErrorClass::Retryable
+    }
+}
+
+fn optional_string(value: Option<&Value>) -> Option<&str> {
+    value.and_then(Value::as_str).filter(|text| !text.trim().is_empty())
+}
+
+fn optional_string_list(value: Option<&Value>) -> Vec<String> {
     value
-        .get("summary")
-        .or_else(|| value.get("result").and_then(|result| result.get("summary")))
-        .and_then(Value::as_str)
-        .map(|summary| summary.chars().take(500).collect())
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Compiled regex for dependency placeholders of the form `{{agent_id}}`,
+/// `{{results.agent_id}}`, `{{agent_id.full_content}}`, or
+/// `{{results.agent_id.result}}`.
+fn dependency_placeholder_regex() -> &'static regex::Regex {
+    use std::sync::OnceLock;
+    static RE: OnceLock<regex::Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        regex::Regex::new(r"\{\{\s*([a-zA-Z0-9_\-]+)(?:\.([a-zA-Z0-9_\-]+))?(?:\.([a-zA-Z0-9_\-]+))?\s*\}\}")
+            .expect("valid dependency placeholder regex")
+    })
+}
+
+/// Resolve a dependency placeholder into an agent id and a field selector.
+/// Supports `{{id}}`, `{{results.id}}`, `{{id.field}}`, and
+/// `{{results.id.field}}`. The default field is `summary`.
+fn parse_dependency_placeholder<'a>(caps: &'a regex::Captures<'a>) -> (&'a str, &'a str) {
+    let first = caps.get(1).map(|m| m.as_str()).unwrap_or("");
+    let second = caps.get(2).map(|m| m.as_str());
+    let third = caps.get(3).map(|m| m.as_str());
+
+    if first == "results" {
+        // {{results.id}} or {{results.id.field}}
+        let id = second.unwrap_or("");
+        let field = third.unwrap_or("summary");
+        (id, field)
+    } else {
+        // {{id}} or {{id.field}}
+        let id = first;
+        let field = second.unwrap_or("summary");
+        (id, field)
+    }
+}
+
+/// Substitute placeholders of the form `{{agent_id}}` or `{{results.agent_id}}`
+/// inside a task/context string with the referenced agent's result.
+/// Supported fields: `summary` (default), `full_content`, `result` (full JSON).
+fn substitute_dependency_placeholders(template: &str, results: &HashMap<String, Value>) -> String {
+    let re = dependency_placeholder_regex();
+    re.replace_all(template, |caps: &regex::Captures<'_>| {
+        let (id, field) = parse_dependency_placeholder(caps);
+        match results.get(id) {
+            Some(result) => match field {
+                "summary" => result
+                    .get("summary")
+                    .and_then(Value::as_str)
+                    .or_else(|| result.get("result").and_then(|r| r.get("summary")).and_then(Value::as_str))
+                    .unwrap_or("")
+                    .to_string(),
+                "full_content" => result
+                    .get("full_content")
+                    .and_then(Value::as_str)
+                    .or_else(|| result.get("result").and_then(|r| r.get("full_content")).and_then(Value::as_str))
+                    .unwrap_or("")
+                    .to_string(),
+                "result" => result.to_string(),
+                _ => result
+                    .get("summary")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string(),
+            },
+            None => format!("{{{{{}.{}}}}}", id, field),
+        }
+    })
+    .into_owned()
+}
+
+/// Send a message to a running sub-agent identified by its `spawn_id`.
+/// The message is appended to the sub-agent's inbox and will be drained
+/// into its conversation at the start of the next iteration.
+/// Returns an error if no sub-agent with that `spawn_id` is running.
+pub async fn send_message_to_subagent(
+    app: &tauri::AppHandle,
+    spawn_id: &str,
+    message: crate::db::models::ChatMessage,
+) -> Result<()> {
+    let state = app.state::<AppState>();
+    let queues = state.subagent_message_queues.lock().await;
+    if let Some(queue) = queues.get(spawn_id) {
+        let mut q = queue.lock().await;
+        q.push_back(message);
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "No running sub-agent with spawn_id {}",
+            spawn_id
+        ))
+    }
+}
+
+fn handoff_fields_from_input(input: &Value) -> (Option<String>, Vec<String>, Vec<String>) {
+    (
+        optional_string(input.get("success_criteria")).map(str::to_string),
+        optional_string_list(input.get("constraints")),
+        optional_string_list(input.get("relevant_files")),
+    )
 }
 
 /// Tool that spawns a child agent runner for parallel sub-tasks.
@@ -108,6 +472,11 @@ impl SpawnAgentTool {
             allowed_tools,
             token,
             label,
+            adhoc_instructions,
+            adhoc_tools,
+            success_criteria,
+            constraints,
+            relevant_files,
         } = params;
         child_runner::check_depth(depth)?;
 
@@ -117,17 +486,58 @@ impl SpawnAgentTool {
             );
         }
 
-        let resolved = child_runner::resolve_agent(
-            &self.agent_registry,
-            agent_id,
-            explicit_model,
-            explicit_max_steps,
-        )?;
+        // Determine the caller's tool ceiling so ad-hoc agents inherit the
+        // same authority (minus delegation tools) instead of the hardcoded
+        // generalist set.
+        let caller_tool_ids: Vec<String> = if let Some(ref allowed) = allowed_tools {
+            let guard = allowed.lock().await;
+            guard.iter().cloned().collect()
+        } else {
+            Vec::new()
+        };
 
-        let delegation_prompt = child_runner::build_delegation_prompt(&resolved, task, context);
+        let resolved = if let Some(instructions) = adhoc_instructions {
+            child_runner::resolve_adhoc_agent(
+                &self.agent_registry,
+                if agent_id.is_empty() { None } else { Some(agent_id) },
+                instructions,
+                &adhoc_tools,
+                &caller_tool_ids,
+                explicit_model,
+                explicit_max_steps,
+            )?
+        } else {
+            child_runner::resolve_agent(
+                &self.agent_registry,
+                agent_id,
+                explicit_model,
+                explicit_max_steps,
+            )?
+        };
+
+        let handoff = child_runner::build_subagent_handoff(
+            &resolved,
+            task,
+            context,
+            success_criteria.as_deref(),
+            &constraints,
+            &relevant_files,
+            depth,
+        );
+        let child_messages = child_runner::build_child_messages_from_handoff(&handoff);
         let memory_scope = child_runner::subagent_memory_scope(agent_id, task);
-        let child_messages =
-            child_runner::build_child_messages(&app, &chat_id, &delegation_prompt).await;
+
+        let spawn_id = Uuid::new_v4().to_string();
+
+        // Create a shared inbox so the parent/orchestrator can inject messages
+        // into this sub-agent while it is running.
+        let message_inbox: Arc<tokio::sync::Mutex<VecDeque<crate::db::models::ChatMessage>>> =
+            Arc::new(tokio::sync::Mutex::new(VecDeque::new()));
+        {
+            let state = app.state::<AppState>();
+            let mut queues = state.subagent_message_queues.lock().await;
+            queues.insert(spawn_id.clone(), message_inbox.clone());
+        }
 
         let mut child_runner_instance =
             child_runner::build_child_runner(child_runner::ChildRunnerParams {
@@ -140,11 +550,28 @@ impl SpawnAgentTool {
                 resolved: &resolved,
                 allowed_tools,
             })?;
-        child_runner_instance = child_runner_instance.with_memory_scope(memory_scope);
+        child_runner_instance = child_runner_instance
+            .with_memory_scope(memory_scope)
+            .with_message_inbox(message_inbox);
 
         let state = app.state::<AppState>();
         let provider = state.provider().await?;
-        let spawn_id = Uuid::new_v4().to_string();
+
+        // Register this sub-agent instance with the SwarmCoordinator so the
+        // swarm view stays consistent with actual running sub-agents.
+        let swarm_agent = crate::agent::types::Agent {
+            id: spawn_id.clone(),
+            name: resolved.agent.name.clone(),
+            instructions: resolved.agent.instructions.clone(),
+            tool_ids: resolved.agent.tool_ids.clone(),
+            model_override: resolved.model.clone().into(),
+            max_iterations: Some(resolved.effective_max_steps),
+            context_window: resolved.effective_context_window,
+            max_messages_in_memory: resolved.effective_max_messages,
+            description: resolved.agent.description.clone(),
+            model_tier: resolved.agent.model_tier,
+        };
+        let _ = state.swarm.spawn_agent(swarm_agent).await;
 
         // Emit spawn start
         let spawn_meta = ActionMeta {
@@ -227,10 +654,14 @@ impl SpawnAgentTool {
             ) => res
         };
 
-        // Cleanup token
+        // Cleanup token and message inbox
         {
             let mut tokens = state.subagent_cancellation_tokens.lock().await;
             tokens.remove(&spawn_id);
+        }
+        {
+            let mut queues = state.subagent_message_queues.lock().await;
+            queues.remove(&spawn_id);
         }
         let spawn_duration_ms = spawn_start.elapsed().as_millis() as u64;
 
@@ -240,18 +671,32 @@ impl SpawnAgentTool {
                     .content
                     .unwrap_or_else(|| "Sub-agent completed with no output.".to_string());
 
+                let validated = validate_subagent_output(&content);
+                let status_str = validated.status.as_str();
+                let summary = validated.summary.clone();
+
+                // Try to preserve any structured JSON the child returned, but wrap it
+                // with validation metadata so callers can tell whether the result is
+                // trustworthy.
                 let parsed: Result<serde_json::Value, _> = serde_json::from_str(&content);
                 let structured_result = match parsed {
-                    Ok(json) => json,
+                    Ok(json) => {
+                        let mut wrapper = json;
+                        if let Some(obj) = wrapper.as_object_mut() {
+                            obj.insert("__validated_status".to_string(), json!(status_str));
+                            obj.insert("__validation_notes".to_string(), json!(validated.notes));
+                        }
+                        wrapper
+                    }
                     Err(_) => {
                         json!({
-                            "status": "success",
-                            "summary": content.chars().take(500).collect::<String>(),
-                            "full_content": content,
+                            "status": status_str,
+                            "summary": summary,
+                            "full_content": validated.full_content,
+                            "validation_notes": validated.notes,
                         })
                     }
                 };
-                let summary = result_summary(&structured_result);
 
                 let _ = emit_completion_events(CompletionParams {
                     app: &app,
@@ -261,23 +706,34 @@ impl SpawnAgentTool {
                     task,
                     spawn_id: &spawn_id,
                     label,
-                    status: "completed",
+                    status: status_str,
                     error: None,
-                    result_summary: summary.as_deref(),
+                    result_summary: Some(&summary),
                     duration_ms: spawn_duration_ms,
                 });
+
+                let _ = state.swarm.terminate_agent(&spawn_id).await;
 
                 Ok(json!({
                     "spawn_id": spawn_id,
                     "agent_id": agent_id,
                     "agent_name": resolved.agent.name,
-                    "status": "completed",
+                    "status": status_str,
                     "result": structured_result,
                     "summary": summary,
+                    "validation_notes": validated.notes,
                     "duration_ms": spawn_duration_ms,
                 }))
             }
             Err(e) => {
+                let error_text = e.to_string();
+                let error_class = classify_spawn_error(&error_text);
+                let retry_hint = match error_class {
+                    ErrorClass::Transient => "This looks like a transient error (network, timeout, rate limit). You may retry the same task.",
+                    ErrorClass::Permanent => "This looks like a permanent error (permission, invalid input, not found). Review the task before retrying.",
+                    ErrorClass::Retryable => "This error may be retryable with a different approach or smaller task.",
+                };
+
                 let _ = emit_completion_events(CompletionParams {
                     app: &app,
                     chat_id: &chat_id,
@@ -287,17 +743,21 @@ impl SpawnAgentTool {
                     spawn_id: &spawn_id,
                     label,
                     status: "failed",
-                    error: Some(&e.to_string()),
+                    error: Some(&error_text),
                     result_summary: None,
                     duration_ms: spawn_duration_ms,
                 });
+
+                let _ = state.swarm.terminate_agent(&spawn_id).await;
 
                 Ok(json!({
                     "spawn_id": spawn_id,
                     "agent_id": agent_id,
                     "agent_name": resolved.agent.name,
                     "status": "error",
-                    "error": e.to_string(),
+                    "error": error_text,
+                    "error_class": error_class.as_str(),
+                    "retry_hint": retry_hint,
                     "duration_ms": spawn_duration_ms,
                 }))
             }
@@ -312,9 +772,13 @@ impl AgentTool for SpawnAgentTool {
     }
 
     fn description(&self) -> &str {
-        "Spawn one or more sub-agents for independent specialized tasks. A batch runs in \
-         parallel and returns all results, including failures, without discarding successful \
-         siblings. Use separate calls when tasks depend on earlier results."
+        "Spawn one or more sub-agents for specialized tasks. Either name a built-in specialist \
+         via 'agent_id' (e.g. 'researcher', 'operational_expert') or define an ad-hoc agent inline \
+         with 'instructions' (and optionally a 'tools' subset). A batch runs in dependency-aware \
+         waves: agents without dependencies run in parallel, and agents that declare 'depends_on' \
+         wait for their prerequisites. Use '{{agent_id}}' placeholders in task/context to inject \
+         a previous agent's summary. Results include all sub-agent outputs, including failures, \
+         so successful siblings are not discarded."
     }
 
     fn input_schema(&self) -> Value {
@@ -323,11 +787,38 @@ impl AgentTool for SpawnAgentTool {
             "properties": {
                 "agent_id": {
                     "type": "string",
-                    "description": "ID of the agent to spawn (e.g. 'generalist', 'researcher', 'operational_expert')."
+                    "description": "ID of a built-in specialist (e.g. 'researcher', 'operational_expert'). Omit to define an ad-hoc agent via 'instructions'."
+                },
+                "instructions": {
+                    "type": "string",
+                    "description": "Ad-hoc agent role/system prompt. When set, an LLM-defined agent is spawned instead of a built-in one; it inherits the coordinator's tools unless narrowed by 'tools'."
+                },
+                "tools": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Optional tool_id subset for an ad-hoc agent. Intersected with the coordinator's tools — can narrow, never widen."
                 },
                 "task": {
                     "type": "string",
                     "description": "The task/question to give the sub-agent as a user message."
+                },
+                "context": {
+                    "type": "string",
+                    "description": "Optional additional context from the parent for the sub-agent handoff summary."
+                },
+                "success_criteria": {
+                    "type": "string",
+                    "description": "Optional explicit success criteria for the delegated task."
+                },
+                "constraints": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Optional constraints the sub-agent must respect."
+                },
+                "relevant_files": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Optional file paths the sub-agent should focus on."
                 },
                 "max_steps": {
                     "type": "integer",
@@ -342,22 +833,43 @@ impl AgentTool for SpawnAgentTool {
                     "type": "array",
                     "minItems": 1,
                     "maxItems": MAX_PARALLEL_SUBAGENTS,
-                    "description": "Independent sub-agents to run concurrently. Use agent_id/task for one child.",
+                    "description": "Sub-agents to run in dependency-aware waves. Each needs 'task' plus either 'agent_id' or 'instructions'. Use 'depends_on' to wait for other agents and '{{agent_id}}' placeholders to reference their results.",
                     "items": {
                         "type": "object",
                         "properties": {
                             "agent_id": { "type": "string" },
+                            "instructions": { "type": "string" },
+                            "tools": { "type": "array", "items": { "type": "string" } },
                             "task": { "type": "string" },
                             "context": { "type": "string" },
+                            "success_criteria": { "type": "string" },
+                            "constraints": {
+                                "type": "array",
+                                "items": { "type": "string" }
+                            },
+                            "relevant_files": {
+                                "type": "array",
+                                "items": { "type": "string" }
+                            },
+                            "id": {
+                                "type": "string",
+                                "description": "Optional identifier for this agent within the batch. Used by other agents' depends_on. Defaults to agent_<index>."
+                            },
+                            "depends_on": {
+                                "type": "array",
+                                "items": { "type": "string" },
+                                "description": "IDs of agents that must complete before this agent runs."
+                            },
                             "max_steps": { "type": "integer", "minimum": 1 },
                             "model": { "type": "string" }
                         },
-                        "required": ["agent_id", "task"]
+                        "required": ["task"]
                     }
                 }
             },
             "oneOf": [
                 { "required": ["agent_id", "task"] },
+                { "required": ["instructions", "task"] },
                 { "required": ["agents"] }
             ]
         })
@@ -380,69 +892,219 @@ impl AgentTool for SpawnAgentTool {
                 ));
             }
 
-            let futures = agents.iter().map(|request| {
-                let app = app.clone();
-                let chat_id = chat_id.clone();
-                let allowed_tools = allowed_tools.clone();
-                let token = token.clone();
-                async move {
-                    let agent_id =
-                        request
-                            .get("agent_id")
-                            .and_then(Value::as_str)
-                            .ok_or_else(|| {
-                                anyhow::anyhow!("Missing required field: agents[].agent_id")
-                            })?;
-                    let task = request
-                        .get("task")
-                        .and_then(Value::as_str)
-                        .ok_or_else(|| anyhow::anyhow!("Missing required field: agents[].task"))?;
-                    let context = request.get("context").and_then(Value::as_str).unwrap_or("");
-                    let max_steps = request.get("max_steps").and_then(Value::as_u64);
-                    let model = request.get("model").and_then(Value::as_str);
-                    self.do_spawn(SpawnParams {
-                        app,
-                        chat_id,
-                        agent_id,
-                        task,
-                        context,
-                        explicit_model: model,
-                        explicit_max_steps: max_steps,
-                        depth,
-                        allowed_tools,
-                        token,
-                        label: "Spawning",
+            // Parse each agent request, assigning synthetic ids when needed.
+            let mut parsed_nodes = Vec::with_capacity(agents.len());
+            for (idx, request) in agents.iter().enumerate() {
+                let id = request
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+                    .unwrap_or_else(|| format!("agent_{}", idx));
+                let depends_on: Vec<String> = request
+                    .get("depends_on")
+                    .and_then(Value::as_array)
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(Value::as_str)
+                            .map(str::to_string)
+                            .collect()
                     })
-                    .await
-                }
-            });
+                    .unwrap_or_default();
+                parsed_nodes.push(AgentRequest {
+                    id,
+                    depends_on,
+                    request: request.clone(),
+                });
+            }
 
-            let settled = futures::future::join_all(futures).await;
-            let results = settled
-                .into_iter()
-                .map(|result| match result {
-                    Ok(value) => value,
-                    Err(error) => json!({ "status": "error", "error": error.to_string() }),
-                })
-                .collect::<Vec<_>>();
-            let completed = results
+            let graph = DependencyGraph::new(parsed_nodes)?;
+
+            // Execute waves sequentially. Agents within a wave run in parallel,
+            // and their results become available to subsequent waves.
+            let mut results: HashMap<String, Value> = HashMap::new();
+            let mut indexed_results: Vec<(usize, Value)> = Vec::with_capacity(graph.nodes.len());
+            let mut wave_summaries: Vec<Vec<Value>> = Vec::new();
+
+            for wave in &graph.waves {
+                let mut wave_futures: Vec<(usize, String, _)> = Vec::new();
+
+                for &idx in wave {
+                    let node = &graph.nodes[idx];
+                    let mut request = node.request.clone();
+
+                    // Substitute dependency results into task and context.
+                    if let Some(task) = request.get("task").and_then(Value::as_str) {
+                        let substituted = substitute_dependency_placeholders(task, &results);
+                        request["task"] = json!(substituted);
+                    }
+                    if let Some(context) = request.get("context").and_then(Value::as_str) {
+                        let substituted = substitute_dependency_placeholders(context, &results);
+                        request["context"] = json!(substituted);
+                    }
+
+                    let app = app.clone();
+                    let chat_id = chat_id.clone();
+                    let allowed_tools = allowed_tools.clone();
+                    let token = token.clone();
+                    let id = node.id.clone();
+                    let original_idx = idx;
+                    let fut = async move {
+                        let instructions = request.get("instructions").and_then(Value::as_str);
+                        let agent_id = match request.get("agent_id").and_then(Value::as_str) {
+                            Some(id_val) => id_val,
+                            None if instructions.is_some() => "",
+                            None => {
+                                return Err(anyhow::anyhow!(
+                                    "Each agent needs either 'agent_id' (named specialist) or 'instructions' (ad-hoc agent)"
+                                ))
+                            }
+                        };
+                        let task = request
+                            .get("task")
+                            .and_then(Value::as_str)
+                            .ok_or_else(|| anyhow::anyhow!("Missing required field: agents[].task"))?;
+                        let context = request.get("context").and_then(Value::as_str).unwrap_or("");
+                        let (success_criteria, constraints, relevant_files) =
+                            handoff_fields_from_input(&request);
+                        let max_steps = request.get("max_steps").and_then(Value::as_u64);
+                        let model = request.get("model").and_then(Value::as_str);
+                        let tools = request
+                            .get("tools")
+                            .and_then(Value::as_array)
+                            .map(|a| {
+                                a.iter()
+                                    .filter_map(Value::as_str)
+                                    .map(str::to_string)
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        let result = self
+                            .do_spawn(SpawnParams {
+                                app,
+                                chat_id,
+                                agent_id,
+                                task,
+                                context,
+                                explicit_model: model,
+                                explicit_max_steps: max_steps,
+                                depth,
+                                allowed_tools,
+                                token,
+                                label: "Spawning",
+                                adhoc_instructions: instructions,
+                                adhoc_tools: tools,
+                                success_criteria: success_criteria.as_deref(),
+                                constraints,
+                                relevant_files,
+                            })
+                            .await?;
+                        Ok::<(usize, String, Value), anyhow::Error>((original_idx, id, result))
+                    };
+
+                    wave_futures.push((original_idx, node.id.clone(), fut));
+                }
+
+                // Run each sub-agent with its own timeout so one slow agent does
+                // not block the whole batch indefinitely.
+                const SUBAGENT_TIMEOUT_SECONDS: u64 = 600;
+                let timeout = std::time::Duration::from_secs(SUBAGENT_TIMEOUT_SECONDS);
+                let wave_results: Vec<(usize, String, Value)> =
+                    futures::future::join_all(wave_futures.into_iter().map(|(idx, id, fut)| async move {
+                        match tokio::time::timeout(timeout, fut).await {
+                            Ok(Ok((original_idx, id, result))) => (original_idx, id, result),
+                            Ok(Err(error)) => {
+                                let text = error.to_string();
+                                let class = classify_spawn_error(&text);
+                                (
+                                    idx,
+                                    id,
+                                    json!({
+                                        "status": "error",
+                                        "error": text,
+                                        "error_class": class.as_str(),
+                                        "retry_hint": "This sub-agent failed. Consider retrying with a narrower task.",
+                                    }),
+                                )
+                            }
+                            Err(_) => {
+                                let text = format!("Sub-agent timed out after {} seconds", SUBAGENT_TIMEOUT_SECONDS);
+                                let class = classify_spawn_error(&text);
+                                (
+                                    idx,
+                                    id,
+                                    json!({
+                                        "status": "error",
+                                        "error": text,
+                                        "error_class": class.as_str(),
+                                        "retry_hint": "This sub-agent timed out. Consider retrying with a narrower task.",
+                                    }),
+                                )
+                            }
+                        }
+                    }))
+                    .await;
+
+                let mut wave_summary: Vec<Value> = Vec::new();
+                for (idx, id, result) in wave_results {
+                    wave_summary.push(json!({
+                        "id": id,
+                        "status": result.get("status").and_then(Value::as_str).unwrap_or("unknown")
+                    }));
+                    results.insert(id.clone(), result.clone());
+                    indexed_results.push((idx, result));
+                }
+                wave_summaries.push(wave_summary);
+            }
+
+            // Preserve original array ordering in the final results list.
+            indexed_results.sort_by_key(|(idx, _)| *idx);
+            let results_in_order: Vec<Value> = indexed_results.into_iter().map(|(_, r)| r).collect();
+
+            let completed = results_in_order
                 .iter()
                 .filter(|result| result.get("status").and_then(Value::as_str) == Some("completed"))
                 .count();
+            let failed = results_in_order.len() - completed;
+
+            // Build a merged summary of all sub-agent results for easy consumption
+            // by the parent LLM.
+            let merged_summary: Vec<String> = results_in_order
+                .iter()
+                .enumerate()
+                .map(|(index, result)| {
+                    let status = result.get("status").and_then(Value::as_str).unwrap_or("unknown");
+                    let summary = result
+                        .get("summary")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .chars()
+                        .take(200)
+                        .collect::<String>();
+                    format!("[{}] {}: {}", index + 1, status, summary)
+                })
+                .collect();
 
             return Ok(json!({
-                "status": if completed == results.len() { "completed" } else if completed == 0 { "error" } else { "partial" },
+                "status": if completed == results_in_order.len() { "completed" } else if completed == 0 { "error" } else { "partial" },
                 "parallel": true,
                 "completed": completed,
-                "failed": results.len() - completed,
-                "results": results,
+                "failed": failed,
+                "results": results_in_order,
+                "merged_summary": merged_summary,
+                "waves": wave_summaries,
             }));
         }
 
-        let agent_id = input
-            .get("agent_id")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!("Missing required field: agent_id"))?;
+        let instructions = input.get("instructions").and_then(|v| v.as_str());
+        let agent_id = match input.get("agent_id").and_then(|v| v.as_str()) {
+            Some(id) => id,
+            None if instructions.is_some() => "",
+            None => {
+                return Err(anyhow::anyhow!(
+                    "Provide either 'agent_id' (named specialist) or 'instructions' (ad-hoc agent)"
+                ))
+            }
+        };
 
         let task = input
             .get("task")
@@ -451,19 +1113,37 @@ impl AgentTool for SpawnAgentTool {
 
         let max_steps = input.get("max_steps").and_then(|v| v.as_u64());
         let model = input.get("model").and_then(|v| v.as_str());
+        let tools = input
+            .get("tools")
+            .and_then(|v| v.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let (success_criteria, constraints, relevant_files) = handoff_fields_from_input(&input);
+        let context = input.get("context").and_then(Value::as_str).unwrap_or("");
 
         self.do_spawn(SpawnParams {
             app,
             chat_id,
             agent_id,
             task,
-            context: "",
+            context,
             explicit_model: model,
             explicit_max_steps: max_steps,
             depth,
             allowed_tools,
             token,
             label: "Spawning",
+            adhoc_instructions: instructions,
+            adhoc_tools: tools,
+            success_criteria: success_criteria.as_deref(),
+            constraints,
+            relevant_files,
         })
         .await
     }
@@ -565,5 +1245,129 @@ mod tests {
     fn spawn_completion_skips_chat_message_kind() {
         assert!(!should_emit_inline_chat_message_for_spawn());
         assert!(!should_emit_inline_chat_message_for_complete());
+    }
+
+    fn make_agent_request(id: &str, depends_on: &[&str]) -> AgentRequest {
+        AgentRequest {
+            id: id.to_string(),
+            depends_on: depends_on.iter().map(|s| s.to_string()).collect(),
+            request: json!({"task": "test"}),
+        }
+    }
+
+    #[test]
+    fn dependency_graph_no_dependencies_single_wave() {
+        let nodes = vec![
+            make_agent_request("a", &[]),
+            make_agent_request("b", &[]),
+            make_agent_request("c", &[]),
+        ];
+        let graph = DependencyGraph::new(nodes).unwrap();
+        assert_eq!(graph.waves.len(), 1);
+        assert_eq!(graph.waves[0].len(), 3);
+    }
+
+    #[test]
+    fn dependency_graph_linear_chain_waves() {
+        let nodes = vec![
+            make_agent_request("a", &[]),
+            make_agent_request("b", &["a"]),
+            make_agent_request("c", &["b"]),
+        ];
+        let graph = DependencyGraph::new(nodes).unwrap();
+        assert_eq!(graph.waves.len(), 3);
+        assert!(graph.waves[0].contains(&0));
+        assert!(graph.waves[1].contains(&1));
+        assert!(graph.waves[2].contains(&2));
+    }
+
+    #[test]
+    fn dependency_graph_diamond_shape() {
+        let nodes = vec![
+            make_agent_request("a", &[]),
+            make_agent_request("b", &["a"]),
+            make_agent_request("c", &["a"]),
+            make_agent_request("d", &["b", "c"]),
+        ];
+        let graph = DependencyGraph::new(nodes).unwrap();
+        assert_eq!(graph.waves.len(), 3);
+        assert!(graph.waves[0].contains(&0));
+        assert!(graph.waves[1].contains(&1));
+        assert!(graph.waves[1].contains(&2));
+        assert!(graph.waves[2].contains(&3));
+    }
+
+    #[test]
+    fn dependency_graph_detects_cycle() {
+        let nodes = vec![
+            make_agent_request("a", &["c"]),
+            make_agent_request("b", &["a"]),
+            make_agent_request("c", &["b"]),
+        ];
+        let err = DependencyGraph::new(nodes).unwrap_err();
+        assert!(err.to_string().contains("Circular dependency"));
+    }
+
+    #[test]
+    fn dependency_graph_detects_missing_dependency() {
+        let nodes = vec![
+            make_agent_request("a", &[]),
+            make_agent_request("b", &["z"]),
+        ];
+        let err = DependencyGraph::new(nodes).unwrap_err();
+        assert!(err.to_string().contains("unknown agent"));
+    }
+
+    #[test]
+    fn dependency_graph_detects_duplicate_ids() {
+        let nodes = vec![
+            make_agent_request("a", &[]),
+            make_agent_request("a", &[]),
+        ];
+        let err = DependencyGraph::new(nodes).unwrap_err();
+        assert!(err.to_string().contains("Duplicate"));
+    }
+
+    #[test]
+    fn substitute_dependency_placeholders_default_summary() {
+        let mut results = HashMap::new();
+        results.insert(
+            "agent_1".to_string(),
+            json!({"summary": "the summary", "full_content": "the full content"}),
+        );
+        assert_eq!(
+            substitute_dependency_placeholders("{{agent_1}}", &results),
+            "the summary"
+        );
+        assert_eq!(
+            substitute_dependency_placeholders("{{results.agent_1}}", &results),
+            "the summary"
+        );
+    }
+
+    #[test]
+    fn substitute_dependency_placeholders_full_content() {
+        let mut results = HashMap::new();
+        results.insert(
+            "agent_1".to_string(),
+            json!({"summary": "the summary", "full_content": "the full content"}),
+        );
+        assert_eq!(
+            substitute_dependency_placeholders("{{agent_1.full_content}}", &results),
+            "the full content"
+        );
+        assert_eq!(
+            substitute_dependency_placeholders("{{results.agent_1.full_content}}", &results),
+            "the full content"
+        );
+    }
+
+    #[test]
+    fn substitute_dependency_placeholders_unknown_id_preserved() {
+        let results = HashMap::new();
+        assert_eq!(
+            substitute_dependency_placeholders("{{missing.summary}}", &results),
+            "{{missing.summary}}"
+        );
     }
 }

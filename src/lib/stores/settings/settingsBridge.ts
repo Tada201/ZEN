@@ -33,7 +33,7 @@ const DOT_TO_FIELD: Record<string, BridgeEntry> = {
   "ui.background-blur":    { field: "backgroundBlur",    type: "number" },
   "ui.background-fit":     { field: "backgroundFit",     type: "string" },
   "ui.background-media-type": { field: "backgroundMediaType", type: "string" },
-  "ui.compact-mode":       { field: "lowResourceMode",  type: "boolean" },
+  "ui.compact-mode":       { field: "compactMode",      type: "boolean" },
 
   // Workspace
   "workspace.root":              { field: "workspacePath",            type: "string" },
@@ -57,6 +57,20 @@ const DOT_TO_FIELD: Record<string, BridgeEntry> = {
   "chat.reasoning-effort":  { field: "reasoningEffort",      type: "string" },
   "chat.prompt-caching":    { field: "promptCaching",        type: "boolean" },
   "chat.hardware-accel":    { field: "gpuAcceleration",      type: "boolean" },
+  // Title-maker: chat session auto-titling settings.
+  //
+  // TODO: The four title-maker bridge entries (`titleMakerEnabled`,
+  // `titleMakerModel`, `titleMakerProvider`, `titleMakerPrompt`)
+  // were removed in the tsc-cleanup pass because `SettingsState`
+  // does not yet expose these fields. The Rust title-maker command
+  // reads the underlying SQLite via `queries::get_setting`, so the
+  // typed store and the bridge MUST eventually agree on these names.
+  // When the runtime gains title-maker persistence (post-`unified-ui`
+  // milestone), add the four fields to a new `AiSlice`/chat slice
+  // and re-introduce the four entries below.
+
+  // Agent / Orchestrator
+  "agent.token-budget":          { field: "agentTokenBudget",      type: "number" },
 
   // Terminal
   "terminal.shell":              { field: "defaultShell",          type: "string" },
@@ -79,6 +93,7 @@ const DOT_TO_FIELD: Record<string, BridgeEntry> = {
   "tools.yolo-mode":              { field: "toolYoloMode",          type: "boolean" },
   "tools.auto-approve-low-risk":  { field: "toolAutoApproveLowRisk", type: "boolean" },
   "tools.global-default":         { field: "toolGlobalDefault",     type: "string" },
+  "tools.permission-mode":        { field: "toolPermissionMode",    type: "string" },
 
 
   // Audio

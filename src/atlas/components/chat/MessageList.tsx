@@ -42,7 +42,11 @@ export const MessageList = memo(function MessageList({
   );
 
   const filteredMessages = useMemo(
-    () => messages.filter((message) => message.kind !== "tool_call" && message.kind !== "tool_result"),
+    () => messages.filter((message) =>
+      message.kind !== "tool_call" &&
+      message.kind !== "tool_result" &&
+      message.kind !== "system"
+    ),
     [messages],
   );
 

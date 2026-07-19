@@ -28,6 +28,7 @@ export interface SystemSlice {
   agentMemoryLimit: number;
   multiAgentEnabled: boolean;
   agentTimeout: number;
+  agentTokenBudget: number;
   autoCheckEnabled: boolean;
   checkBeta: boolean;
   powerStatus: PowerStatus;
@@ -58,6 +59,7 @@ export interface SystemSlice {
   toolYoloMode: boolean;
   toolAutoApproveLowRisk: boolean;
   toolGlobalDefault: "confirm" | "always_allow" | "always_deny";
+  toolPermissionMode: "plan_mode" | "ask" | "auto_edit" | "yolo";
   toolSettings: Record<string, any>;
 
   setPerformanceProfile: (profile: PerformanceProfile) => void;
@@ -91,6 +93,7 @@ export const createSystemSlice: StateCreator<SettingsState, [], [], SystemSlice>
   agentMemoryLimit: 512,
   multiAgentEnabled: false,
   agentTimeout: 120,
+  agentTokenBudget: 0,
   autoCheckEnabled: true,
   checkBeta: false,
   powerStatus: {
@@ -117,6 +120,7 @@ export const createSystemSlice: StateCreator<SettingsState, [], [], SystemSlice>
   toolYoloMode: false,
   toolAutoApproveLowRisk: false,
   toolGlobalDefault: "confirm",
+  toolPermissionMode: "ask" as const,
   toolSettings: {},
 
   setPerformanceProfile: (profile: PerformanceProfile) => {

@@ -10,7 +10,7 @@ interface ToolsSettingsProps {
   onUpdate: (key: string, value: string) => void;
 }
 
-type SafetyMode = "locked" | "balanced" | "autonomous";
+type SafetyMode = "plan_mode" | "ask" | "auto_edit" | "yolo";
 
 const MODES: Array<{
   id: SafetyMode;
@@ -21,27 +21,35 @@ const MODES: Array<{
   tone: string;
 }> = [
   {
-    id: "locked",
-    title: "Ask every time",
-    description: "Confirm every tool action before it runs.",
-    detail: "Best for unfamiliar workspaces or sensitive data.",
-    icon: "lucide:lock-keyhole",
+    id: "plan_mode",
+    title: "Plan mode",
+    description: "Plan before editing. Disallows file modifications and terminal commands.",
+    detail: "Read-only access, safest mode for analyzing code.",
+    icon: "lucide:file-text",
+    tone: "text-muted-foreground",
+  },
+  {
+    id: "ask",
+    title: "Ask before changes",
+    description: "Confirm file changes and commands before execution.",
+    detail: "Ask before file edits or terminal writes.",
+    icon: "lucide:hand",
     tone: "text-primary",
   },
   {
-    id: "balanced",
-    title: "Balanced",
-    description: "Run safe read-only actions and ask before changes.",
-    detail: "Recommended for everyday use.",
+    id: "auto_edit",
+    title: "Edit automatically",
+    description: "Edit files when low/medium risk. Ask before high-impact changes (file writes and terminal commands).",
+    detail: "Edit run automatically; writes and shell prompt.",
     icon: "lucide:shield-check",
     tone: "text-success",
   },
   {
-    id: "autonomous",
-    title: "Autonomous",
-    description: "Run permitted tools without confirmation.",
-    detail: "Use only in a trusted, isolated workspace.",
-    icon: "lucide:zap",
+    id: "yolo",
+    title: "Full access",
+    description: "Run permitted tools and scripts without confirmation.",
+    detail: "Run with fewer confirmations. Use in trusted env.",
+    icon: "lucide:shield-alert",
     tone: "text-warning",
   },
 ];
@@ -77,26 +85,33 @@ const OVERRIDE_OPTIONS = [
 ];
 
 function currentMode(settings: Record<string, string>): SafetyMode {
-  if (settings["tools.yolo-mode"] === "true") return "autonomous";
-  return settings["tools.auto-approve-low-risk"] === "true" ? "balanced" : "locked";
+  return (settings["tools.permission-mode"] as SafetyMode) || "ask";
 }
 
 function applyMode(mode: SafetyMode, onUpdate: ToolsSettingsProps["onUpdate"]) {
-  if (mode === "locked") {
-    onUpdate("tools.global-default", "confirm");
-    onUpdate("tools.auto-approve-low-risk", "false");
-    onUpdate("tools.yolo-mode", "false");
-    return;
-  }
-  if (mode === "balanced") {
-    onUpdate("tools.global-default", "confirm");
+  onUpdate("tools.permission-mode", mode);
+  if (mode === "yolo") {
+    onUpdate("tools.yolo-mode", "true");
     onUpdate("tools.auto-approve-low-risk", "true");
+    onUpdate("tools.global-default", "always_allow");
+  } else if (mode === "auto_edit") {
     onUpdate("tools.yolo-mode", "false");
-    return;
+    onUpdate("tools.auto-approve-low-risk", "true");
+    onUpdate("tools.global-default", "confirm");
+  } else if (mode === "plan_mode") {
+    onUpdate("tools.yolo-mode", "false");
+    onUpdate("tools.auto-approve-low-risk", "true");
+    onUpdate("tools.global-default", "confirm");
+  } else {
+    // "ask"
+    onUpdate("tools.yolo-mode", "false");
+    onUpdate("tools.auto-approve-low-risk", "false");
+    onUpdate("tools.global-default", "confirm");
   }
-  onUpdate("tools.global-default", "always_allow");
-  onUpdate("tools.auto-approve-low-risk", "true");
-  onUpdate("tools.yolo-mode", "true");
+}
+
+function requiresAutonomousConfirmation(nextMode: SafetyMode | "autonomous") {
+  return nextMode === "autonomous" || nextMode === "yolo";
 }
 
 function categoryFor(tool: ToolMeta): string {
@@ -138,8 +153,8 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
   }, [query, tools]);
 
   const chooseMode = (nextMode: SafetyMode) => {
-    if (nextMode === "autonomous" && !window.confirm(
-      "Enable Autonomous mode? Permitted tools will run without confirmation. Hard security blocks still apply."
+    if (requiresAutonomousConfirmation(nextMode) && !window.confirm(
+      "Enable Full Access (YOLO Mode)? All permitted tools will execute automatically without confirmation. Hard security blocks still apply."
     )) return;
     applyMode(nextMode, onUpdate);
   };

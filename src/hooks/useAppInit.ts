@@ -3,6 +3,7 @@ import { chatApi, providersApi, systemApi } from '@/api';
 import type { ModelInfo } from '@/lib/types/provider';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { IS_TAURI } from '@/api/tauriClient';
+import { useContextBridge } from './useContextBridge';
 
 export interface InitStep {
     id: string;
@@ -44,6 +45,10 @@ export function useAppInit(onStepsUpdate?: (steps: InitStep[]) => void) {
     const stepsRef = useRef<InitStep[]>(INIT_STEPS.map(s => ({ ...s })));
     const startedRef = useRef(false);
     const isHydrated = useSettingsStore(s => s.isHydrated);
+
+    // Mount the global context:breakdown → useContextStore bridge once.
+    // The listener subscribes on first render and tears down on unmount.
+    useContextBridge();
 
     const setStep = useCallback((id: string, status: InitStep['status'], detail?: string) => {
         const step = stepsRef.current.find(s => s.id === id);

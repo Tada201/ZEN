@@ -44,19 +44,27 @@ export function mergeLiveToolState(fetched: Message, existing?: Message): Messag
   };
 
   const fetchedTools = new Map((fetched.toolCalls || []).map((tool) => [tool.id, tool]));
-  const toolCalls: ToolCall[] = [];
   const seenToolIds = new Set<string>();
+  const toolCalls: ToolCall[] = [];
+
   (existing.toolCalls || []).forEach((tool) => {
-    toolCalls.push(mergeTool(fetchedTools.get(tool.id) || tool));
+    const fetchedT = fetchedTools.get(tool.id);
+    toolCalls.push(fetchedT ? mergeTool(fetchedT) : tool);
     seenToolIds.add(tool.id);
   });
+
   (existing.steps || []).forEach((step) => {
     if (step.type !== "tool-call" || !step.toolCall || seenToolIds.has(step.toolCall.id)) return;
-    toolCalls.push(mergeTool(fetchedTools.get(step.toolCall.id) || step.toolCall));
+    const fetchedT = fetchedTools.get(step.toolCall.id);
+    toolCalls.push(fetchedT ? mergeTool(fetchedT) : step.toolCall);
     seenToolIds.add(step.toolCall.id);
   });
+
   (fetched.toolCalls || []).forEach((tool) => {
-    if (!seenToolIds.has(tool.id)) toolCalls.push(mergeTool(tool));
+    if (!seenToolIds.has(tool.id)) {
+      toolCalls.push(tool);
+      seenToolIds.add(tool.id);
+    }
   });
 
   const fetchedSteps = fetched.steps || [];

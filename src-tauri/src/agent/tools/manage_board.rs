@@ -166,7 +166,27 @@ fn validate_text(label: &str, value: Option<&str>, max_chars: usize) -> Result<(
     Ok(())
 }
 
+fn validate_finite(label: &str, value: Option<f64>) -> Result<()> {
+    if let Some(value) = value {
+        if !value.is_finite() {
+            anyhow::bail!("Board {} must be a finite number", label);
+        }
+    }
+    Ok(())
+}
+
 fn validate_block(block: &BoardBlock) -> Result<()> {
+    validate_finite("latitude", block.latitude)?;
+    validate_finite("longitude", block.longitude)?;
+    validate_finite("zoom", block.zoom)?;
+    validate_finite("max", block.max)?;
+    if let Some(points) = block.points.as_ref() {
+        for point in points {
+            if !point.value.is_finite() {
+                anyhow::bail!("Board chart points must be finite numbers");
+            }
+        }
+    }
     validate_text("block id", Some(&block.id), 128)?;
     validate_text("title", block.title.as_deref(), 512)?;
     validate_text("body", block.body.as_deref(), MAX_TEXT_CHARS)?;
@@ -607,6 +627,36 @@ mod tests {
         block.kind = BoardBlockKind::Table;
         block.columns = Some(vec!["Value".to_string()]);
         block.rows = Some(vec![vec!["row".to_string()]; 101]);
+        assert!(validate_block(&block).is_err());
+    }
+
+    #[test]
+    fn rejects_nan_coordinates() {
+        let mut block = note_block("map");
+        block.kind = BoardBlockKind::Map;
+        block.latitude = Some(f64::NAN);
+        block.longitude = Some(0.0);
+        assert!(validate_block(&block).is_err());
+    }
+
+    #[test]
+    fn rejects_infinite_progress_max() {
+        let mut block = note_block("progress");
+        block.kind = BoardBlockKind::Progress;
+        block.value = Some("50".to_string());
+        block.max = Some(f64::INFINITY);
+        assert!(validate_block(&block).is_err());
+    }
+
+    #[test]
+    fn rejects_nan_chart_points() {
+        use super::BoardChartPoint;
+        let mut block = note_block("chart");
+        block.kind = BoardBlockKind::Chart;
+        block.points = Some(vec![BoardChartPoint {
+            label: "a".to_string(),
+            value: f64::NAN,
+        }]);
         assert!(validate_block(&block).is_err());
     }
 }

@@ -156,7 +156,6 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
   lmstudioBaseUrl: "http://localhost:1234",
   customProviders: [],
   lastRemovedProviderId: null,
-  agentConfigs: [],
   toolAutoApprove: [],
   
   nineRouterImageModels: readCachedImageModels(),

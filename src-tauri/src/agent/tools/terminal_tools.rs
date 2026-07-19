@@ -59,7 +59,7 @@ impl AgentTool for RunCommandTool {
         _allowed_tools: Option<
             std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>,
         >,
-        _token: tokio_util::sync::CancellationToken,
+        token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         use crate::workspace::resolve_workspace_path;
 
@@ -123,12 +123,14 @@ impl AgentTool for RunCommandTool {
         // Execute the command through the terminal manager
         let state = app.state::<AppState>();
         let result: Result<crate::terminal::CommandResult, anyhow::Error> = {
-            let mut sessions = state.terminal_sessions.write().await;
+            let sessions = state.terminal_sessions.read().await;
             sessions
                 .execute_command(
                     &command,
                     resolved_cwd.map(|p| p.to_string_lossy().to_string()),
                     timeout_ms,
+                    Some(state.process_manager.clone()),
+                    token,
                 )
                 .await
         };

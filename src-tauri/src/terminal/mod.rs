@@ -253,10 +253,12 @@ impl TerminalManager {
 
     /// Execute a one-shot command and return output. Used by the agent tool.
     pub async fn execute_command(
-        &mut self,
+        &self,
         command: &str,
         cwd: Option<String>,
         timeout_ms: u64,
+        process_manager: Option<Arc<crate::services::process_manager::ProcessManager>>,
+        token: tokio_util::sync::CancellationToken,
     ) -> Result<CommandResult> {
         let mut child = if cfg!(target_os = "windows") {
             let mut c = tokio::process::Command::new("powershell.exe");
@@ -285,6 +287,12 @@ impl TerminalManager {
         child.stdin(std::process::Stdio::null());
 
         let mut spawned = child.spawn().context("Failed to spawn command process")?;
+        let pid = spawned.id().unwrap_or(0);
+        let reg_id = uuid::Uuid::new_v4().to_string();
+
+        if let Some(ref pm) = process_manager {
+            pm.register(&reg_id, "run_command", pid).await;
+        }
 
         let mut stdout = spawned.stdout.take().context("Failed to take stdout")?;
         let mut stderr = spawned.stderr.take().context("Failed to take stderr")?;
@@ -300,12 +308,25 @@ impl TerminalManager {
             out
         });
 
-        // Wait with timeout
-        let result = tokio::time::timeout(
-            tokio::time::Duration::from_millis(timeout_ms),
-            spawned.wait(),
-        )
-        .await;
+        // Wait with timeout OR cancellation token
+        let result = tokio::select! {
+            res = tokio::time::timeout(
+                tokio::time::Duration::from_millis(timeout_ms),
+                spawned.wait(),
+            ) => {
+                match res {
+                    Ok(wait_res) => Ok(wait_res),
+                    Err(_) => Err(true), // timed out
+                }
+            }
+            _ = token.cancelled() => {
+                Err(false) // cancelled
+            }
+        };
+
+        if let Some(ref pm) = process_manager {
+            pm.unregister(&reg_id).await;
+        }
 
         match result {
             Ok(Ok(status)) => {
@@ -327,9 +348,13 @@ impl TerminalManager {
                 })
             }
             Ok(Err(e)) => Err(anyhow::anyhow!("Command execution failed: {}", e)),
-            Err(_) => {
-                // Timeout occurred — kill process but capture any partial output
-                let _ = spawned.kill().await;
+            Err(is_timeout) => {
+                // Timeout or Cancellation occurred — kill process tree but capture any partial output
+                if let Some(ref pm) = process_manager {
+                    pm.kill_process(&reg_id).await;
+                } else {
+                    let _ = spawned.kill().await;
+                }
                 let stdout_out = stdout_handle.await.unwrap_or_default();
                 let stderr_out = stderr_handle.await.unwrap_or_default();
                 let stdout_str = String::from_utf8_lossy(&stdout_out).to_string();
@@ -342,7 +367,7 @@ impl TerminalManager {
                 Ok(CommandResult {
                     output: combined,
                     exit_code: None,
-                    timed_out: true,
+                    timed_out: is_timeout,
                     was_truncated: false,
                 })
             }

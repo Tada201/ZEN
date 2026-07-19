@@ -7,10 +7,18 @@ import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 import { cn } from "@/lib/utils";
 import { normalizeThemeId, THEME_PRESETS } from "@/atlas/theme";
 import { open } from "@tauri-apps/plugin-dialog";
+import { useState } from "react";
+import { mediaApi } from "@/api/mediaApi";
+import { getIpcErrorMessage } from "@/api/tauriClient";
 
 interface GUISettingsProps {
   settings: Record<string, string>;
   onUpdate: (key: string, value: string) => void;
+}
+
+/** True for URLs the webview can fetch directly (https/data/blob). Local paths get copied via mediaApi. */
+function isRemoteUrl(value: string): boolean {
+  return /^(https?|data|blob):/i.test(value.trim());
 }
 
 export function GUISettings({ settings, onUpdate }: GUISettingsProps) {
@@ -72,38 +80,9 @@ export function GUISettings({ settings, onUpdate }: GUISettingsProps) {
       </SettingsSection>
 
       <SettingsSection title="Workspace Wallpaper" icon="lucide:palette" description="Custom wallpaper aesthetics settings">
-        <SettingsRow
-          label="Background Media"
-          description="Remote URL or browse a local image/video file"
-          control={
-            <div className="flex w-full items-center gap-2 sm:w-[300px]">
-              <WorkbenchInput
-                type="text"
-                placeholder="e.g., https://example.com/wallpaper.mp4"
-                value={settings["ui.background-image"] || ""}
-                onChange={e => onUpdate("ui.background-image", e.target.value)}
-                className="h-9 w-full min-w-0 px-3 text-xs flex-1"
-              />
-              <button
-                type="button"
-                className="h-9 shrink-0 rounded-md border border-border bg-card px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                onClick={async () => {
-                  const selected = await open({
-                    multiple: false,
-                    title: "Select Background Media",
-                    filters: [{
-                      name: "Images and Videos",
-                      extensions: ["png", "jpg", "jpeg", "gif", "webp", "bmp", "avif", "mp4", "webm", "mov", "m4v", "ogv"],
-                    }],
-                  });
-                  if (selected) onUpdate("ui.background-image", selected);
-                }}
-              >
-                <WorkbenchIcon name="lucide:folder-open" size={14} />
-              </button>
-            </div>
-          }
-          icon="lucide:palette"
+        <BackgroundMediaControl
+          currentValue={settings["ui.background-image"] || ""}
+          onUpdate={onUpdate}
         />
 
         <SettingsRow
@@ -188,5 +167,120 @@ export function GUISettings({ settings, onUpdate }: GUISettingsProps) {
       </SettingsSection>
 
     </div>
+  );
+}
+
+/**
+ * Wallpaper input row. Routes through `mediaApi` so the webview never holds
+ * a raw external path:
+ *   * File picker → copies the picked file into the app's wallpapers folder,
+ *     evicts any prior wallpaper, persists the in-scope path.
+ *   * URL typed in the textbox → stored as-is (no copy needed).
+ *   * Local path pasted in the textbox → also copied via mediaApi on commit.
+ *   * Clear button → deletes the active file and resets the setting.
+ */
+function BackgroundMediaControl({
+  currentValue,
+  onUpdate,
+}: {
+  currentValue: string;
+  onUpdate: (key: string, value: string) => void;
+}) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const commit = async (rawValue: string) => {
+    const trimmed = rawValue.trim();
+    setError(null);
+
+    // Empty value: delete the active wallpaper file (if any) and reset the setting
+    // through the same `onUpdate` channel so the React store stays in sync.
+    if (trimmed === "") {
+      setPending(true);
+      try {
+        await mediaApi.clearWallpaper();
+        onUpdate("ui.background-image", "");
+      } catch (err) {
+        setError(getIpcErrorMessage(err, "Failed to clear wallpaper"));
+      } finally {
+        setPending(false);
+      }
+      return;
+    }
+
+    // Remote URL: stored verbatim, no copy needed.
+    if (isRemoteUrl(trimmed)) {
+      onUpdate("ui.background-image", trimmed);
+      return;
+    }
+
+    // Local path: copy into the app's wallpapers folder, then persist the new
+    // in-scope path through `onUpdate` so the React store reflects the change.
+    setPending(true);
+    try {
+      const stored = await mediaApi.setWallpaperFromPath(trimmed);
+      onUpdate("ui.background-image", stored);
+    } catch (err) {
+      setError(getIpcErrorMessage(err, "Failed to copy wallpaper"));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <SettingsRow
+      label="Background Media"
+      description={
+        error
+          ? error
+          : "Pick a local image/video file (copied into the app) or paste a remote URL"
+      }
+      control={
+        <div className="flex w-full items-center gap-2 sm:w-[300px]">
+          <WorkbenchInput
+            type="text"
+            placeholder="https://example.com/wallpaper.mp4"
+            value={currentValue}
+            disabled={pending}
+            onKeyDown={e => {
+              if (e.key === "Enter") commit((e.target as HTMLInputElement).value);
+            }}
+            onBlur={e => commit(e.target.value)}
+            className="h-9 w-full min-w-0 px-3 text-xs flex-1"
+          />
+          <button
+            type="button"
+            disabled={pending}
+            title="Pick a local file (copied into the app's wallpapers folder)"
+            className="h-9 shrink-0 rounded-md border border-border bg-card px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+            onClick={async () => {
+              const selected = await open({
+                multiple: false,
+                title: "Select Background Media",
+                filters: [{
+                  name: "Images and Videos",
+                  extensions: ["png", "jpg", "jpeg", "gif", "webp", "bmp", "avif", "mp4", "webm", "mov", "m4v", "ogv"],
+                }],
+              });
+              if (selected) await commit(selected);
+            }}
+          >
+            <WorkbenchIcon name="lucide:folder-open" size={14} />
+          </button>
+          {currentValue && (
+            <button
+              type="button"
+              disabled={pending}
+              title="Clear wallpaper and reset to default"
+              className="h-9 shrink-0 rounded-md border border-border bg-card px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+              onClick={() => commit("")}
+            >
+              <WorkbenchIcon name="lucide:x" size={14} />
+            </button>
+          )}
+        </div>
+      }
+      icon="lucide:palette"
+    />
   );
 }

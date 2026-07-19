@@ -112,6 +112,11 @@ impl AgentTool for DelegateToAgentTool {
                 allowed_tools,
                 token,
                 label: "Delegating",
+                adhoc_instructions: None,
+                adhoc_tools: Vec::new(),
+                success_criteria: None,
+                constraints: Vec::new(),
+                relevant_files: Vec::new(),
             })
             .await
     }

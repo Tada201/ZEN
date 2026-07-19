@@ -12,7 +12,7 @@ const SystemDiagnostics = React.lazy(() => import("@/components/shared/SystemDia
 const XTermPanel = React.lazy(() => import("@/components/Zen/XTermPanel").then(m => ({ default: m.XTermPanel })));
 const CesiumCanvas = React.lazy(() => import("@/components/workbench/MapContainer").then(m => ({ default: m.CesiumCanvas })));
 const ArtifactPanel = React.lazy(() => import("@/components/shared/ArtifactPanel").then(m => ({ default: m.ArtifactPanel })));
-const AgentOrchestratorPanel = React.lazy(() => import("@/components/widgets/orchestrator/AgentOrchestratorPanel").then(m => ({ default: m.AgentOrchestratorPanel })));
+const OrchestratorPanel = React.lazy(() => import("./right-panel/OrchestratorPanel").then(m => ({ default: m.OrchestratorPanel })));
 const InteractiveDrawingCanvas = React.lazy(() => import("@/components/widgets/workbench/InteractiveDrawingCanvas"));
 
 const LoadingFallback = () => (
@@ -88,7 +88,7 @@ export function RightPanel() {
       case 'terminal':
         return <XTermPanel />;
       case 'agents':
-        return <AgentOrchestratorPanel />;
+        return <OrchestratorPanel />;
       case 'drawing':
         return (
           <div className="flex-grow flex flex-col relative w-full h-full overflow-hidden">

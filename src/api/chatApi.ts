@@ -90,6 +90,12 @@ export interface SendMessageRequest extends Record<string, unknown> {
   systemPrompt?: string | null;
   systemPromptMode?: "append" | "replace" | null;
   voiceDisplayContext?: string | null;
+  /**
+   * The selected model's real context window (`max_context_length`),
+   * forwarded so the context-usage gauge divides against the true model
+   * budget instead of Zen's compaction cap. Omit/null when unknown.
+   */
+  modelContextWindow?: number | null;
 }
 export const chatApi = {
   listChats: () => callCommand<BackendChat[]>("get_chats"),
@@ -116,6 +122,8 @@ export const chatApi = {
   deleteChat: (chatId: string) => callCommand<void>("delete_chat", { chatId }),
   updateChatTitle: (chatId: string, title: string) =>
     callCommand<void>("update_chat_title", { chatId, title }),
+  generateSessionTitle: (chatId: string, firstUserMessage: string) =>
+    callCommand<string>("generate_session_title", { chatId, firstUserMessage }),
   togglePinChat: (chatId: string) => callCommand<void>("toggle_pin_chat", { chatId }),
   archiveChat: (chatId: string) => callCommand<void>("archive_chat", { chatId }),
   unarchiveChat: (chatId: string) => callCommand<void>("unarchive_chat", { chatId }),

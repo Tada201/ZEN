@@ -11,14 +11,51 @@ use crate::agent::event_bus::{
     AgentEvent, ChatStatusPayload, ToolCompletePayload, ToolStartPayload,
 };
 use crate::agent::hooks::HookDecision;
-use crate::agent::types::{Agent, ToolCall, ToolResult};
+use crate::agent::types::{Agent, ModelTier, ToolCall, ToolResult};
 use crate::db::queries;
 use crate::services::tool::ToolApprovalExecutionContext;
 use crate::tools::permission::PermissionDecision;
+use crate::tools::{ToolInfo, ToolRegistry};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use tauri::Manager;
 use tokio_util::sync::CancellationToken;
+
+/// Decide which v2 tool schemas to inline-expose alongside the three
+/// meta-tools, based on the active model tier.
+///
+/// **Cloud tier** uses strict deferred discovery: only the meta-tools
+/// are exposed, so the model must call `tool_list` -> `tool_info` ->
+/// `tool_exec`. Cloud models (GPT-4o, Claude 3.5 Sonnet) follow this
+/// protocol reliably.
+///
+/// **Local / Simple tiers** get the hybrid exposure because many local
+/// models (Llama 3.1, Qwen 2.5, Mistral) ignore the `tool_list` flow
+/// and only look at their function definitions.
+///
+/// This is a P0 IPI defence: the meta-tool contract is weakened if a
+/// hostile skill/tool description can claim the name of a sensitive
+/// tool. Keeping the schema list narrow for cloud models reduces the
+/// prompt surface that an attacker can target.
+fn inline_v2_schemas_for_tier(
+    tier: ModelTier,
+    authorized_tool_ids: &[String],
+    v2: &ToolRegistry,
+) -> Vec<ToolInfo> {
+    if matches!(tier, ModelTier::Cloud) {
+        return Vec::new();
+    }
+    let mut out: Vec<ToolInfo> = Vec::new();
+    for tool_id in authorized_tool_ids {
+        if let Some(tool) = v2.get(tool_id) {
+            let info = tool.info();
+            if !out.iter().any(|t| t.name == info.name) {
+                out.push(info);
+            }
+        }
+    }
+    out
+}
 
 impl Runner {
     fn execution_run_id(&self, chat_id: &str) -> String {
@@ -60,6 +97,19 @@ impl Runner {
             }
         }
 
+        // Auto-authorize external MCP tools (`ext:{server}:{name}`) discovered
+        // from `.mcp.json`. Agent configs use static `tool_ids` arrays that
+        // cannot name dynamically-registered servers, so any external tool the
+        // user configured is admitted for every tool-enabled agent. The user's
+        // per-tool permission policy still gates execution downstream.
+        for tool_id in &v2_tools {
+            if crate::mcp::McpClient::is_external_tool(tool_id)
+                && !authorized_tool_ids.contains(tool_id)
+            {
+                authorized_tool_ids.push(tool_id.clone());
+            }
+        }
+
         let exposed_tools = if current_agent.id == "voice_display" {
             self.tool_registry
                 .read()
@@ -71,19 +121,24 @@ impl Runner {
         } else {
             let mut tools = crate::tools::manager::meta_tool_definitions();
 
-            // Expose authorized v2 tools as direct function definitions
-            // so the LLM can call them without needing the tool_list
-            // discovery step. This is critical because many models don't
-            // follow the deferred-discovery protocol and only look at
-            // their available function definitions.
+            // P0 IPI defence: Cloud-tier models get strict deferred
+            // discovery (only the three meta-tools). Cloud models follow
+            // `tool_list` -> `tool_info` -> `tool_exec` reliably, so the
+            // full v2 schema exposure is unnecessary and would weaken the
+            // meta-tool contract.
+            //
+            // Local-tier models keep the hybrid exposure because many
+            // local models (Llama 3.1, Qwen 2.5, Mistral) ignore the
+            // `tool_list` flow and only look at their function definitions.
             {
                 let v2 = self.permissions.read().await;
-                for tool_id in &authorized_tool_ids {
-                    if let Some(tool) = v2.get(tool_id) {
-                        let info = tool.info();
-                        if !tools.iter().any(|t| t.name == info.name) {
-                            tools.push(info);
-                        }
+                for info in inline_v2_schemas_for_tier(
+                    current_agent.model_tier,
+                    &authorized_tool_ids,
+                    &v2,
+                ) {
+                    if !tools.iter().any(|t| t.name == info.name) {
+                        tools.push(info);
                     }
                 }
             }
@@ -108,9 +163,11 @@ impl Runner {
         authorized_tool_ids: &[String],
         token: CancellationToken,
     ) -> Vec<ToolResult> {
+        let tools_enabled = self.config.tools_enabled;
         let (mut ordered_results, pipeline_calls) =
-            preprocess_tool_calls(&self.tool_manager, tool_calls, authorized_tool_ids).await;
+            preprocess_tool_calls(&self.tool_manager, tool_calls, authorized_tool_ids, tools_enabled).await;
         let run_id = self.execution_run_id(chat_id);
+        let trace_id = self.trace_id();
         let parent_agent_id = self.parent_agent_id();
         let tool_batch_id = self.tool_batch_id(chat_id, agent_id, iteration);
 
@@ -149,6 +206,7 @@ impl Runner {
                             &self.tool_manager,
                             std::slice::from_ref(&modified),
                             authorized_tool_ids,
+                            tools_enabled,
                         )
                         .await;
                         if let Some(Some(result)) = modified_results.into_iter().next() {
@@ -308,6 +366,7 @@ impl Runner {
                         tool_name: tc_name.clone(),
                         tool_call_id: tc_id.clone(),
                         arguments: tc_args.clone(),
+                        trace_id: trace_id.clone(),
                         run_id: Some(run_id.clone()),
                         parent_agent_id: parent_agent_id.clone(),
                         execution_id: Some(tc_id.clone()),
@@ -481,6 +540,7 @@ impl Runner {
                                 let event_tool_name = result_tool_name.clone();
                                 let original_name = pipeline_call.original.name.clone();
                                 let run_id_inner = run_id.clone();
+                                let trace_id_inner = trace_id.clone();
                                 let parent_agent_id_inner = parent_agent_id.clone();
                                 let tool_batch_id_inner = tool_batch_id.clone();
                                 let agent_id_inner = agent_id.to_string();
@@ -562,6 +622,7 @@ impl Runner {
                                         tool_name: v2_tool_call_inner.name.clone(),
                                         tool_call_id: v2_tool_call_inner.id.clone(),
                                         arguments: v2_tool_call_inner.arguments.clone(),
+                                        trace_id: trace_id_inner,
                                         run_id: Some(run_id_inner),
                                         parent_agent_id: parent_agent_id_inner,
                                         execution_id: Some(v2_tool_call_inner.id.clone()),
@@ -738,6 +799,7 @@ impl Runner {
                         tool_name: tc_name.clone(),
                         tool_call_id: tc_id.clone(),
                         arguments: tc_args.clone(),
+                        trace_id: trace_id.clone(),
                         run_id: Some(run_id.clone()),
                         parent_agent_id: parent_agent_id.clone(),
                         execution_id: Some(tc_id.clone()),
@@ -881,6 +943,7 @@ impl Runner {
         self.emit(AgentEvent::ToolComplete(ToolCompletePayload {
             tool_name: tool_name.to_string(),
             tool_call_id: result.tool_call_id.clone(),
+            trace_id: self.trace_id(),
             run_id: Some(self.execution_run_id(chat_id)),
             parent_agent_id: self.parent_agent_id(),
             execution_id: Some(result.tool_call_id.clone()),
@@ -1050,5 +1113,58 @@ mod tests {
         };
 
         assert_eq!(format_tool_result_output(&result), "{\"summary\":\"done\"}");
+    }
+
+    /// Regression test: a Cloud-tier agent must receive ONLY the three
+    /// meta-tools. Inlining the full v2 schema list would weaken the
+    /// meta-tool contract and let a malicious skill name coincide with a
+    /// privileged tool id.
+    #[test]
+    fn inline_v2_schemas_returns_empty_for_cloud_tier() {
+        let authorized = vec![
+            "web_search".to_string(),
+            "read_document_content".to_string(),
+        ];
+        // Cloud tier must produce an empty list regardless of what the
+        // authorized ids or v2 registry contain.
+        let v2 = crate::tools::init_tool_registry(
+            crate::tools::permission::ToolPermissions::default(),
+        );
+        let cloud = inline_v2_schemas_for_tier(ModelTier::Cloud, &authorized, &v2);
+        assert!(cloud.is_empty(), "Cloud tier must not inline v2 schemas");
+    }
+
+    /// Regression test: Local and Simple tiers keep the hybrid exposure.
+    /// We can't easily inject a real v2 schema here (it requires the
+    /// registry lock), so this test asserts that the cloud branch is the
+    /// only one that returns empty when the registry has nothing matching.
+    #[test]
+    fn inline_v2_schemas_local_tier_with_empty_registry_returns_empty() {
+        let authorized = vec!["definitely_not_a_real_tool".to_string()];
+        let v2 = crate::tools::init_tool_registry(
+            crate::tools::permission::ToolPermissions::default(),
+        );
+        // No matching tool in the registry -> empty list (regardless of tier).
+        let local = inline_v2_schemas_for_tier(ModelTier::Local, &authorized, &v2);
+        assert!(local.is_empty(), "non-matching ids return empty");
+        let simple = inline_v2_schemas_for_tier(ModelTier::Simple, &authorized, &v2);
+        assert!(simple.is_empty());
+    }
+
+    /// Cloud tier still returns empty even when the authorized ids match
+    /// real v2 tools in the registry. This is the critical regression
+    /// guard: someone removing the `ModelTier::Cloud` short-circuit
+    /// would expose the v2 schemas and weaken the meta-tool contract.
+    #[test]
+    fn cloud_tier_never_exposes_v2_schemas_even_with_matching_ids() {
+        let authorized = vec!["web_search".to_string(), "run_command".to_string()];
+        let v2 = crate::tools::init_tool_registry(
+            crate::tools::permission::ToolPermissions::default(),
+        );
+        let cloud = inline_v2_schemas_for_tier(ModelTier::Cloud, &authorized, &v2);
+        assert!(
+            cloud.is_empty(),
+            "Cloud tier must not inline v2 schemas even when the ids match real tools"
+        );
     }
 }

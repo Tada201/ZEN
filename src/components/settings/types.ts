@@ -49,17 +49,6 @@ export type NavItem = {
 };
 
 
-export interface AgentConfig {
-  agent_id: string;
-  agent_name: string;
-  model_name: string;
-  context_window: number;
-  max_messages_in_memory: number;
-  max_iterations: number;
-  enabled_tools: string[];
-  system_prompt_override?: string;
-}
-
 export interface IntelligenceConfig {
   ragEnabled: boolean;
   citationsEnabled: boolean;

@@ -60,7 +60,7 @@ impl ProcessManager {
     }
 
     /// Kill a process by PID
-    async fn kill_by_pid(pid: u32, name: &str) {
+    pub async fn kill_by_pid(pid: u32, name: &str) {
         #[cfg(target_os = "windows")]
         {
             let mut cmd = std::process::Command::new("taskkill");

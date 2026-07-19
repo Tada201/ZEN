@@ -30,6 +30,7 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
         max_rounds,
         max_urls_per_round,
         sub_agent_count,
+        model_context_window: _,
     } = params;
     info!(chat_id = %chat_id, query = %query, "Starting Iterative Deep Research");
 

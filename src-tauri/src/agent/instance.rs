@@ -78,6 +78,7 @@ mod tests {
             model_override: None,
             max_iterations: None,
             context_window: None,
+            max_messages_in_memory: None,
             description: Some("Test".to_string()),
             model_tier: crate::agent::types::ModelTier::Local,
         }

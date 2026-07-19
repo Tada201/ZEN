@@ -11,6 +11,9 @@ use tauri::{AppHandle, Manager};
 
 use crate::agent::hooks::HookRegistry;
 use crate::agent::runner::{Runner, MAX_SPAWN_DEPTH};
+use crate::agent::tools::handoff_context::{
+    build_handoff_context, handoff_to_messages, HandoffContext, HandoffContextInput,
+};
 use crate::agent::tools::ToolRegistry;
 use crate::agent::types::{Agent, AgentRegistry};
 use crate::commands::AppState;
@@ -24,12 +27,11 @@ pub(crate) struct ResolvedAgent {
     pub effective_max_steps: usize,
     pub effective_context_window: Option<usize>,
     pub effective_max_messages: Option<usize>,
-    pub config_file: Option<crate::agent::config_file::AgentConfigFile>,
 }
 
 /// Resolve which model and iteration limit to use for a given agent.
 ///
-/// Priority: explicit override > config file > agent JSON > active DB setting.
+/// Priority: explicit override > agent JSON > active DB setting.
 pub(crate) fn resolve_agent(
     agent_registry: &AgentRegistry,
     agent_id: &str,
@@ -48,39 +50,20 @@ pub(crate) fn resolve_agent(
         )
     })?;
 
-    let config_file = crate::agent::config_file::load_agent_config(agent_id).ok();
-
     let model = if let Some(m) = explicit_model {
         m.to_string()
     } else {
-        let cfg_model = config_file
-            .as_ref()
-            .filter(|c| !c.model_name.is_empty())
-            .map(|c| c.model_name.clone());
-
-        cfg_model
-            .or_else(|| agent.model_override.clone())
-            .unwrap_or_default()
+        agent.model_override.clone().unwrap_or_default()
     };
 
     let effective_max_steps = if let Some(s) = explicit_max_steps {
         s as usize
-    } else if let Some(ref cfg) = config_file {
-        cfg.max_iterations.max(1) as usize
     } else {
-        10
+        agent.max_iterations.unwrap_or(10).max(1)
     };
 
-    let effective_context_window = config_file
-        .as_ref()
-        .filter(|c| c.context_window > 0)
-        .map(|c| c.context_window as usize)
-        .or(agent.context_window);
-
-    let effective_max_messages = config_file
-        .as_ref()
-        .filter(|c| c.max_messages_in_memory > 0)
-        .map(|c| c.max_messages_in_memory as usize);
+    let effective_context_window = agent.context_window;
+    let effective_max_messages = agent.max_messages_in_memory;
 
     Ok(ResolvedAgent {
         agent,
@@ -88,86 +71,108 @@ pub(crate) fn resolve_agent(
         effective_max_steps,
         effective_context_window,
         effective_max_messages,
-        config_file,
     })
 }
 
-/// Build the delegation prompt injected as the final user message.
-pub(crate) fn build_delegation_prompt(
-    resolved: &ResolvedAgent,
-    task: &str,
-    context: &str,
-) -> String {
-    let mut prompt = String::new();
-
-    if !context.is_empty() {
-        prompt.push_str(&format!("## Context\n{}\n\n", context));
+/// Resolve an ad-hoc, LLM-defined agent that is not in the registry.
+///
+/// The caller supplies the ceiling of usable tools; the ad-hoc agent inherits
+/// that set minus delegation tools (to avoid runaway spawning). If
+/// `requested_tools` is non-empty, the result is the intersection with the
+/// ceiling — the model can narrow, never widen, its own authority.
+/// Execution-time permission checks still gate risky tools.
+///
+/// If `caller_tool_ids` is empty, the function falls back to the registry's
+/// "generalist" agent tool set for backward compatibility.
+pub(crate) fn resolve_adhoc_agent(
+    agent_registry: &AgentRegistry,
+    name: Option<&str>,
+    instructions: &str,
+    requested_tools: &[String],
+    caller_tool_ids: &[String],
+    explicit_model: Option<&str>,
+    explicit_max_steps: Option<u64>,
+) -> Result<ResolvedAgent> {
+    if instructions.trim().is_empty() {
+        anyhow::bail!("Ad-hoc agent requires non-empty 'instructions'");
     }
 
-    prompt.push_str(&format!(
-        r#"## Task Delegation
+    // Ceiling: the caller's tools, minus delegation tools. Fall back to the
+    // generalist agent's tools only when no caller ceiling is provided.
+    let ceiling: Vec<String> = if caller_tool_ids.is_empty() {
+        agent_registry
+            .get("generalist")
+            .map(|a| a.tool_ids.clone())
+            .unwrap_or_default()
+    } else {
+        caller_tool_ids.to_vec()
+    }
+    .into_iter()
+    .filter(|t| t != "spawn_agent" && t != "handoff_to_agent")
+    .collect();
 
-### Your Role
-You are {}, a specialized AI agent.
-{}
+    let tool_ids = if requested_tools.is_empty() {
+        ceiling
+    } else {
+        requested_tools
+            .iter()
+            .filter(|t| ceiling.contains(t))
+            .cloned()
+            .collect()
+    };
 
-### Task
-{}
+    let agent = Agent {
+        id: format!("adhoc-{}", &uuid::Uuid::new_v4().to_string()[..8]),
+        name: name.unwrap_or("Ad-hoc Agent").to_string(),
+        instructions: instructions.to_string(),
+        tool_ids,
+        model_override: None,
+        max_iterations: explicit_max_steps.map(|s| s as usize),
+        context_window: None,
+        max_messages_in_memory: None,
+        description: Some("LLM-defined ad-hoc sub-agent".to_string()),
+        model_tier: crate::agent::types::ModelTier::default(),
+    };
 
-### Instructions
-1. Focus on completing this specific task efficiently
-2. Use all your available tools
-3. Provide a comprehensive, well-structured result
-4. If you need to hand off to another specialist, use handoff_to_agent
-"#,
-        resolved.agent.name,
-        resolved
-            .agent
-            .instructions
-            .lines()
-            .take(50)
-            .collect::<Vec<_>>()
-            .join("\n"),
-        task
-    ));
+    let model = explicit_model
+        .map(str::to_string)
+        .unwrap_or_default();
+    let effective_max_steps = explicit_max_steps.map(|s| s as usize).unwrap_or(10).max(1);
 
-    prompt
+    Ok(ResolvedAgent {
+        agent,
+        model,
+        effective_max_steps,
+        effective_context_window: None,
+        effective_max_messages: None,
+    })
 }
 
-/// Fetch the last N messages from the parent chat for context injection.
-pub(crate) async fn fetch_parent_context(
-    app: &AppHandle,
-    chat_id: &str,
-    max_messages: usize,
-) -> Vec<ChatMessage> {
-    let state = app.state::<AppState>();
-    let Ok(db) = state.db().await else {
-        return Vec::new();
-    };
-    let Ok(parent_msgs) = crate::db::queries::get_messages(&db, chat_id).await else {
-        return Vec::new();
-    };
+/// Build structured handoff context for a child agent.
+pub(crate) fn build_subagent_handoff(
+    resolved: &ResolvedAgent,
+    task: &str,
+    caller_context: &str,
+    success_criteria: Option<&str>,
+    constraints: &[String],
+    relevant_files: &[String],
+    spawn_depth: u32,
+) -> HandoffContext {
+    build_handoff_context(HandoffContextInput {
+        agent_name: &resolved.agent.name,
+        agent_instructions: &resolved.agent.instructions,
+        task,
+        caller_context,
+        success_criteria,
+        constraints,
+        relevant_files,
+        spawn_depth,
+    })
+}
 
-    parent_msgs
-        .into_iter()
-        .filter(|m| m.role != "system")
-        .rev()
-        .take(max_messages)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .map(|m| ChatMessage {
-            role: m.role,
-            content: m.content,
-            reasoning_details: None,
-            images: m.images.as_ref().and_then(|s| serde_json::from_str(s).ok()),
-            tool_calls: m
-                .tool_calls
-                .as_ref()
-                .and_then(|s| serde_json::from_str(s).ok()),
-            tool_call_id: m.tool_call_id,
-        })
-        .collect()
+/// Build the initial child message list from structured handoff context.
+pub(crate) fn build_child_messages_from_handoff(handoff: &HandoffContext) -> Vec<ChatMessage> {
+    handoff_to_messages(handoff)
 }
 
 /// Build a fully configured child `Runner` with depth limits, tool
@@ -222,12 +227,10 @@ pub(crate) fn build_child_runner(params: ChildRunnerParams<'_>) -> Result<Runner
 
     if let Some(allowed) = allowed_tools {
         runner = runner.with_allowed_tools(allowed);
-    } else if let Some(ref cfg) = resolved.config_file {
-        if !cfg.enabled_tools.is_empty() {
-            runner = runner.with_allowed_tools(Arc::new(tokio::sync::Mutex::new(
-                cfg.enabled_tools.iter().cloned().collect(),
-            )));
-        }
+    } else if !resolved.agent.tool_ids.is_empty() {
+        runner = runner.with_allowed_tools(Arc::new(tokio::sync::Mutex::new(
+            resolved.agent.tool_ids.iter().cloned().collect(),
+        )));
     }
 
     Ok(runner)
@@ -248,24 +251,6 @@ pub(crate) fn subagent_memory_scope(agent_id: &str, task: &str) -> String {
     format!("subagent:{}:{}:{}", agent_id, timestamp, task_hash)
 }
 
-/// Build the full child message list: parent context + delegation prompt.
-pub(crate) async fn build_child_messages(
-    app: &AppHandle,
-    chat_id: &str,
-    delegation_prompt: &str,
-) -> Vec<ChatMessage> {
-    let mut messages = fetch_parent_context(app, chat_id, 10).await;
-    messages.push(ChatMessage {
-        role: "user".to_string(),
-        content: delegation_prompt.to_string(),
-        reasoning_details: None,
-        images: None,
-        tool_calls: None,
-        tool_call_id: None,
-    });
-    messages
-}
-
 /// Check depth limit and return error JSON if exceeded.
 pub(crate) fn check_depth(depth: u32) -> Result<()> {
     if depth >= MAX_SPAWN_DEPTH {
@@ -275,4 +260,83 @@ pub(crate) fn check_depth(depth: u32) -> Result<()> {
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn registry_with_generalist() -> AgentRegistry {
+        let mut reg = AgentRegistry::new();
+        reg.register(Agent {
+            id: "generalist".to_string(),
+            name: "ZEN".to_string(),
+            instructions: "coordinator".to_string(),
+            tool_ids: vec![
+                "web_search".to_string(),
+                "write_file".to_string(),
+                "run_command".to_string(),
+                "spawn_agent".to_string(),
+                "handoff_to_agent".to_string(),
+            ],
+            model_override: None,
+            max_iterations: None,
+            context_window: None,
+            max_messages_in_memory: None,
+            description: None,
+            model_tier: crate::agent::types::ModelTier::default(),
+        });
+        reg
+    }
+
+    #[test]
+    fn adhoc_inherits_ceiling_minus_delegation_tools() {
+        let reg = registry_with_generalist();
+        let caller_tools: Vec<String> = reg
+            .get("generalist")
+            .map(|a| a.tool_ids.clone())
+            .unwrap_or_default();
+        let resolved =
+            resolve_adhoc_agent(&reg, None, "do a thing", &[], &caller_tools, None, None).unwrap();
+
+        // Inherits coordinator tools but never delegation tools.
+        assert!(resolved.agent.tool_ids.contains(&"web_search".to_string()));
+        assert!(resolved.agent.tool_ids.contains(&"write_file".to_string()));
+        assert!(!resolved.agent.tool_ids.contains(&"spawn_agent".to_string()));
+        assert!(!resolved
+            .agent
+            .tool_ids
+            .contains(&"handoff_to_agent".to_string()));
+    }
+
+    #[test]
+    fn adhoc_requested_tools_are_intersected_with_ceiling() {
+        let reg = registry_with_generalist();
+        let caller_tools: Vec<String> = reg
+            .get("generalist")
+            .map(|a| a.tool_ids.clone())
+            .unwrap_or_default();
+        let requested = vec![
+            "web_search".to_string(),
+            // Not in the ceiling — must be dropped, not granted.
+            "delete_database".to_string(),
+            // Delegation tool — never grantable even if requested.
+            "spawn_agent".to_string(),
+        ];
+        let resolved =
+            resolve_adhoc_agent(&reg, Some("Scout"), "scout", &requested, &caller_tools, None, None).unwrap();
+
+        assert_eq!(resolved.agent.tool_ids, vec!["web_search".to_string()]);
+        assert_eq!(resolved.agent.name, "Scout");
+    }
+
+    #[test]
+    fn adhoc_requires_instructions() {
+        let reg = registry_with_generalist();
+        let caller_tools: Vec<String> = reg
+            .get("generalist")
+            .map(|a| a.tool_ids.clone())
+            .unwrap_or_default();
+        assert!(resolve_adhoc_agent(&reg, None, "   ", &[], &caller_tools, None, None).is_err());
+    }
 }

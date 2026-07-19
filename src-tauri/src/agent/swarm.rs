@@ -106,6 +106,7 @@ mod tests {
             model_override: None,
             max_iterations: None,
             context_window: None,
+            max_messages_in_memory: None,
             model_tier: ModelTier::Local,
         }
     }

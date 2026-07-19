@@ -113,6 +113,14 @@ pub enum AgentEvent {
     },
     #[serde(rename = "agent:terminated")]
     AgentTerminated { agent_id: String },
+
+    // ─── Context Viewer Events ──────────────────────────────────────
+    // Per-iteration breakdown of the LLM context window: which sections
+    // landed, their token costs, and which compaction path fired. Drives
+    // the Codex-style context visualiser in PremiumChatInput and the
+    // right-panel "Context" tab.
+    #[serde(rename = "context:breakdown")]
+    ContextBreakdown(crate::agent::context_breakdown::ContextBreakdownPayload),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -234,6 +242,11 @@ pub struct ToolStartPayload {
     pub tool_name: String,
     pub tool_call_id: String,
     pub arguments: serde_json::Value,
+    /// Per-run correlation id (UUID) minted once per `Runner::run()`. Unlike
+    /// `run_id` (currently the chat_id, stable across turns), this isolates a
+    /// single run so all its events can be reassembled into one trace.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trace_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub run_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -254,6 +267,9 @@ pub struct ToolStartPayload {
 pub struct ToolCompletePayload {
     pub tool_name: String,
     pub tool_call_id: String,
+    /// Per-run correlation id (UUID). See `ToolStartPayload::trace_id`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trace_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub run_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -279,6 +295,9 @@ pub struct ToolAuthorizationPayload {
     pub tool_call_id: String,
     pub tool_name: String,
     pub arguments: serde_json::Value,
+    /// Per-run correlation id (UUID). See `ToolStartPayload::trace_id`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trace_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub run_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -624,6 +643,7 @@ impl AgentEvent {
             AgentEvent::ArtifactStart(_) => "artifact:start",
             AgentEvent::ArtifactDelta(_) => "artifact:delta",
             AgentEvent::ArtifactComplete(_) => "artifact:complete",
+            AgentEvent::ContextBreakdown(_) => "context:breakdown",
         }
     }
 
@@ -705,6 +725,7 @@ impl EventBus {
                             AgentEvent::ArtifactStart(p) => serde_json::to_value(p),
                             AgentEvent::ArtifactDelta(p) => serde_json::to_value(p),
                             AgentEvent::ArtifactComplete(p) => serde_json::to_value(p),
+                            AgentEvent::ContextBreakdown(p) => serde_json::to_value(p),
                             _ => serde_json::to_value(&event),
                         }
                         .unwrap_or(serde_json::Value::Null);

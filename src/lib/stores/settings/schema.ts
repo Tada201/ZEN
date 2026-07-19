@@ -1,6 +1,5 @@
 import { z } from "zod";
 import {
-  VOICE_DISPLAY_AGENT_DEFAULT_BOARD_MEMORY_LIMIT,
   VOICE_DISPLAY_AGENT_DEFAULT_COMPACT_THRESHOLD,
   VOICE_DISPLAY_AGENT_DEFAULT_CONTEXT_TOKENS,
   VOICE_DISPLAY_AGENT_DEFAULT_MAX_TURNS,
@@ -65,7 +64,6 @@ export const SettingsSchema = z.object({
   voiceDisplayAgentAutoCompactEnabled: z.boolean().default(true),
   voiceDisplayAgentCompactThreshold: z.number().min(50).max(95).default(VOICE_DISPLAY_AGENT_DEFAULT_COMPACT_THRESHOLD),
   voiceDisplayAgentPrompt: z.string().default(VOICE_DISPLAY_AGENT_DEFAULT_PROMPT),
-  voiceDisplayAgentBoardMemoryLimit: z.number().min(1).max(3).default(VOICE_DISPLAY_AGENT_DEFAULT_BOARD_MEMORY_LIMIT),
 
   // ─── Chat & AI ───────────────────────────────────────────────────────────
   activeProvider: z.string().default("ollama"),
@@ -113,7 +111,35 @@ export const SettingsSchema = z.object({
   toolYoloMode: z.boolean().default(false),
   toolAutoApproveLowRisk: z.boolean().default(true),
   toolGlobalDefault: z.enum(["confirm", "always_allow", "always_deny"]).default("confirm"),
+  /**
+   * Single source of truth for the runtime permission mode the runner reads.
+   * Mirrors the typed `SafetyMode` union in
+   * `src/components/settings/Tabs/ToolsSettings.tsx`. Persisted as the
+   * backend key `tools.permission-mode` (and the flat form
+   * `tool_permission_mode` for older mappers); see SNAKE_OVERRIDES in
+   * settingsMapper.ts. Adding a new variant here will propagate through the
+   * settings bridge, the typed store, and the backend auto-sync trigger.
+   */
+  toolPermissionMode: z.enum(["plan_mode", "ask", "auto_edit", "yolo"]).default("ask"),
   toolSettings: z.record(z.string(), z.any()).default({}),
+
+  // ─── Title Maker ─────────────────────────────────────────────────────────
+  /**
+   * Auto-generated session title settings. The Chat tab UI exposes these via
+   * the `chat.title-maker-*` dot-notation keys; the typed store and backend
+   * mapper must agree on the snake-case form so the keys round-trip through
+   * get_all_settings / set_settings without losing values.
+   *
+   * `titleMakerProvider` carries the explicit provider identity for the model
+   * chosen via the picker — a model id alone is ambiguous across the
+   * provider fleet (e.g. `llama3.2:3b` can resolve under ollama OR
+   * nine_router). The Rust title-maker command reads this first and falls
+   * back to `active_provider` only when it is empty.
+   */
+  titleMakerEnabled: z.boolean().default(true),
+  titleMakerModel: z.string().default(""),
+  titleMakerProvider: z.string().default(""),
+  titleMakerPrompt: z.string().default(""),
 
   // ─── Map & Geospatial ────────────────────────────────────────────────────
   mapProvider: z.string().default("cesium"),
@@ -200,6 +226,7 @@ export const SettingsSchema = z.object({
   agentMemoryLimit: z.number().default(512),
   multiAgentEnabled: z.boolean().default(false),
   agentTimeout: z.number().default(120),
+  agentTokenBudget: z.number().min(0).max(10000000).default(0),
   maxExecutionTime: z.number().default(30),
   dataDirectory: z.string().default(""),
   autoBackup: z.boolean().default(false),

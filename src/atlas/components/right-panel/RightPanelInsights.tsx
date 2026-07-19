@@ -1,8 +1,12 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useAgentActivityStore } from "@/lib/stores/agentActivityStore";
+import { useAgentActivityStore, type ActiveAgentTask } from "@/lib/stores/agentActivityStore";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { useTaskStore } from "@/lib/stores/taskStore";
-import type { Message } from "@/atlas/components/chat/types";
+import { useUIStore } from "@/lib/stores/useUIStore";
+import type { Message, ToolCall, ArtifactData } from "@/atlas/components/chat/types";
+import { AgentExecutionTrace } from "@/atlas/components/chat/AgentExecutionTrace";
+import { ChevronLeft, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const EMPTY_MESSAGES: Message[] = [];
 
@@ -76,13 +80,27 @@ export function ChatAnalyticsPanel() {
   );
 }
 
+function useSessionToolCalls(sessionId: string | null): ToolCall[] {
+  const messages = useChatStore(s => (sessionId ? s.sessionMessages[sessionId] ?? [] : []));
+  return messages.flatMap(message => message.toolCalls ?? []);
+}
+
+function formatDuration(durationMs?: number): string | null {
+  if (!durationMs || durationMs <= 0) return null;
+  return durationMs < 1000 ? `${durationMs}ms` : `${(durationMs / 1000).toFixed(durationMs < 10_000 ? 1 : 0)}s`;
+}
+
 export function WorkflowPanel() {
   const activeSessionId = useChatStore(s => s.activeSessionId);
   const taskMap = useTaskStore(s => s.tasks);
   const activeTasks = useAgentActivityStore(s => s.activeTasks);
   const pendingPlan = useAgentActivityStore(s => s.pendingPlan);
+  const selectedTaskId = useAgentActivityStore(s => s.selectedTaskId);
+  const setSelectedTaskId = useAgentActivityStore(s => s.setSelectedTaskId);
   const tasks = Array.from(taskMap.values()).filter(task => !activeSessionId || task.chatId === activeSessionId);
   const agentTasks = activeTasks.filter(task => !activeSessionId || task.chatId === activeSessionId);
+  const allToolCalls = useSessionToolCalls(activeSessionId);
+  const selectedTask = agentTasks.find(task => task.id === selectedTaskId);
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">
@@ -134,16 +152,125 @@ export function WorkflowPanel() {
               <div className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">Agent tasks</div>
               <div className="space-y-1.5">
                 {agentTasks.slice(0, 10).map(task => (
-                  <div key={task.id} className="flex min-w-0 items-center justify-between gap-2 text-[12px]">
+                  <button
+                    key={task.id}
+                    type="button"
+                    onClick={() => setSelectedTaskId(task.id)}
+                    className={cn(
+                      "flex w-full min-w-0 items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-[12px] transition-colors",
+                      "hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50",
+                      selectedTaskId === task.id && "bg-muted/30"
+                    )}
+                  >
                     <span className="min-w-0 truncate text-muted-foreground">{task.task}</span>
                     <span className="shrink-0 text-[11px] uppercase text-muted-foreground">{task.status.replace("_", " ")}</span>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
           )}
+
+          {selectedTask && (
+            <SubAgentInspector
+              task={selectedTask}
+              toolCalls={allToolCalls}
+              onClose={() => setSelectedTaskId(null)}
+            />
+          )}
         </div>
       </ScrollArea>
+    </div>
+  );
+}
+
+function SubAgentInspector({
+  task,
+  toolCalls,
+  onClose,
+}: {
+  task: ActiveAgentTask;
+  toolCalls: ToolCall[];
+  onClose: () => void;
+}) {
+  const setActiveArtifact = useChatStore(s => s.setActiveArtifact);
+  const setArtifactPanelOpen = useUIStore(s => s.setArtifactPanelOpen);
+
+  const filteredToolCalls = toolCalls.filter(
+    tc => tc.agentId === task.agentId || tc.agentName === task.agentName || tc.parentAgentId === task.agentId
+  );
+
+  const handleOpenArtifact = (artifact: ArtifactData) => {
+    setActiveArtifact(artifact.id ?? null);
+    setArtifactPanelOpen(true);
+  };
+
+  const statusTone =
+    task.status === "completed" ? "text-success" :
+    task.status === "failed" ? "text-destructive" :
+    task.status === "in_progress" ? "text-primary" :
+    "text-muted-foreground";
+
+  return (
+    <div className="rounded-lg border border-border/10 bg-card/[0.035] p-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
+      <div className="mb-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+          aria-label="Back to agent tasks"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[13px] font-semibold text-foreground">{task.agentName || task.agentId || "Sub-agent"}</div>
+          <div className="text-[11px] text-muted-foreground">{task.id}</div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+          aria-label="Close inspector"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        <div className="rounded-md bg-muted/20 p-2.5">
+          <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">Task / Prompt</div>
+          <div className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words text-[12px] leading-relaxed text-foreground">
+            {task.task}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={cn("text-[11px] font-medium uppercase tracking-wider", statusTone)}>
+            {task.status.replace("_", " ")}
+          </span>
+          {task.durationMs && (
+            <span className="text-[11px] text-muted-foreground">{formatDuration(task.durationMs)}</span>
+          )}
+          {task.error && (
+            <span className="text-[11px] text-destructive">{task.error}</span>
+          )}
+        </div>
+
+        {filteredToolCalls.length > 0 ? (
+          <div>
+            <div className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+              Execution trace ({filteredToolCalls.length} tool{filteredToolCalls.length === 1 ? "" : "s"})
+            </div>
+            <AgentExecutionTrace
+              toolCalls={filteredToolCalls}
+              sessionId={task.chatId}
+              onOpenArtifact={handleOpenArtifact}
+              preferCompact
+            />
+          </div>
+        ) : (
+          <div className="text-[12px] text-muted-foreground">No tool calls recorded for this sub-agent yet.</div>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import React, { memo, useRef } from 'react';
-import { Plus, Paperclip, Camera, ImageIcon, Lightbulb, Compass, Globe, Layout, Zap, ShieldOff } from 'lucide-react';
+import { Plus, Paperclip, Camera, ImageIcon, Lightbulb, Compass, Globe, Layout } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { MenuItem } from './MenuItem';
@@ -19,10 +19,6 @@ interface PlusActionMenuProps {
   setIsWebSearch: (val: boolean) => void;
   generativeUI: boolean;
   setGenerativeUI: (val: boolean) => void;
-  isAuto: boolean;
-  setIsAuto: (val: boolean) => void;
-  isToolsDisabled: boolean;
-  setIsToolsDisabled: (val: boolean) => void;
   onOpenSkills?: () => void;
   supportsImageGen?: boolean;
   isImageGenEnabled?: boolean;
@@ -37,8 +33,6 @@ export const PlusActionMenu = memo(({
   isDeepResearch, setIsDeepResearch,
   isWebSearch, setIsWebSearch,
   generativeUI, setGenerativeUI,
-  isAuto, setIsAuto,
-  isToolsDisabled, setIsToolsDisabled,
   onOpenSkills,
   isImageGenEnabled,
   setIsImageGenEnabled
@@ -147,26 +141,6 @@ export const PlusActionMenu = memo(({
                 />
 
                 <div className="h-px bg-muted dark:bg-muted my-1 mx-2" />
-                
-                <div className="px-3 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Settings</div>
-                <div className="px-3 py-2 flex items-center justify-between group hover:bg-muted dark:hover:bg-muted rounded-md transition-colors cursor-pointer" onClick={() => setIsAuto(!isAuto)}>
-                  <div className="flex items-center gap-3">
-                    <Zap className={cn("w-4 h-4", isAuto ? "text-warning" : "text-muted-foreground")} />
-                    <span className="text-sm text-muted-foreground/70 dark:text-muted-foreground">Auto Mode</span>
-                  </div>
-                  <div className={cn("w-7 h-4 rounded-full transition-all relative", isAuto ? "bg-muted dark:bg-muted" : "bg-muted dark:bg-muted")}>
-                    <div className={cn("absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform", isAuto ? "translate-x-3 bg-card dark:bg-muted" : "translate-x-0 bg-muted")} />
-                  </div>
-                </div>
-                <div className="px-3 py-2 flex items-center justify-between group hover:bg-muted dark:hover:bg-muted rounded-md transition-colors cursor-pointer" onClick={() => setIsToolsDisabled(!isToolsDisabled)}>
-                  <div className="flex items-center gap-3">
-                    <ShieldOff className={cn("w-4 h-4", isToolsDisabled ? "text-destructive" : "text-muted-foreground")} />
-                    <span className="text-sm text-muted-foreground/70 dark:text-muted-foreground">Disable Tools</span>
-                  </div>
-                  <div className={cn("w-7 h-4 rounded-full transition-all relative", isToolsDisabled ? "bg-destructive" : "bg-muted dark:bg-muted")}>
-                    <div className={cn("absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform", isToolsDisabled ? "translate-x-3 bg-card" : "translate-x-0 bg-muted")} />
-                  </div>
-                </div>
               </div>
             </motion.div>
           </>

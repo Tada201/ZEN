@@ -7,9 +7,11 @@ use crate::agent::types::AgentRegistry;
 use crate::tools::manager::ToolManager;
 use crate::tools::GlobalToolRegistry;
 use sqlx::SqlitePool;
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 use tauri::AppHandle;
+
+use crate::db::models::ChatMessage;
 
 pub struct Runner {
     pub(super) app: AppHandle,
@@ -24,6 +26,22 @@ pub struct Runner {
     pub(super) cache: Arc<tokio::sync::Mutex<ToolCache>>,
     pub(super) allowed_tools: Arc<tokio::sync::Mutex<HashSet<String>>>,
     pub(super) on_event: Option<tauri::ipc::Channel<serde_json::Value>>,
+    /// Isolated memory scope for sub-agents. When set, the runner must not
+    /// persist intermediate or final assistant messages into the parent chat.
+    pub(super) memory_scope: Option<String>,
+    /// Per-run correlation id (UUID) minted at the top of `run()` and stamped
+    /// on every event this runner emits (tool start/complete, authorization,
+    /// chat done/error). Lets the frontend and logs reconstruct one full
+    /// reasoning trace — distinct from `run_id`/`chat_id`, which are stable
+    /// across every turn on a chat. `None` until `run()` sets it. Interior
+    /// mutability because `run()` borrows `&self`; child runners get a fresh
+    /// slot so each sub-agent run traces independently.
+    pub(super) trace_id: Arc<std::sync::RwLock<Option<String>>>,
+    /// Optional shared inbox for parent→child message injection. When set,
+    /// the runner drains any queued `ChatMessage`s into its conversation at
+    /// the start of each iteration, allowing a parent agent/orchestrator to
+    /// send instructions or context updates to a running sub-agent.
+    pub(super) message_inbox: Option<Arc<tokio::sync::Mutex<VecDeque<ChatMessage>>>>,
 }
 
 impl Clone for Runner {
@@ -41,6 +59,12 @@ impl Clone for Runner {
             cache: self.cache.clone(),
             allowed_tools: self.allowed_tools.clone(),
             on_event: self.on_event.clone(),
+            memory_scope: self.memory_scope.clone(),
+            // Share the trace slot with the clone: clones are the same logical
+            // run (see `send.rs`, which clones for the spawned task), so they
+            // must observe the same trace_id `run()` sets.
+            trace_id: self.trace_id.clone(),
+            message_inbox: self.message_inbox.clone(),
         }
     }
 }
@@ -70,6 +94,9 @@ impl Runner {
             cache: Arc::new(tokio::sync::Mutex::new(ToolCache::new(60))),
             allowed_tools: Arc::new(tokio::sync::Mutex::new(HashSet::new())),
             on_event: None,
+            memory_scope: None,
+            trace_id: Arc::new(std::sync::RwLock::new(None)),
+            message_inbox: None,
         }
     }
 
@@ -108,8 +135,24 @@ impl Runner {
         self
     }
 
-    pub fn with_memory_scope(self, _scope: String) -> Self {
+    pub fn with_memory_scope(mut self, scope: String) -> Self {
+        self.memory_scope = Some(scope);
         self
+    }
+
+    /// Set a shared inbox that a parent can use to inject messages into this
+    /// runner's conversation while it is running.
+    pub fn with_message_inbox(
+        mut self,
+        inbox: Arc<tokio::sync::Mutex<VecDeque<ChatMessage>>>,
+    ) -> Self {
+        self.message_inbox = Some(inbox);
+        self
+    }
+
+    /// Sub-agents with an isolated memory scope must not write into the parent chat.
+    pub(super) fn should_persist_to_parent_chat(&self) -> bool {
+        self.memory_scope.is_none()
     }
 
     pub fn with_depth(mut self, depth: u32) -> Self {
@@ -122,8 +165,21 @@ impl Runner {
         self
     }
 
+    pub fn with_token_budget(mut self, token_budget: Option<usize>) -> Self {
+        self.config.token_budget = token_budget;
+        self
+    }
+
     pub fn with_max_context_tokens(mut self, max_tokens: usize) -> Self {
         self.config.max_context_tokens = max_tokens;
+        self
+    }
+
+    /// Set the selected model's real context window (`max_context_length`).
+    /// Surfaced in the context breakdown as the gauge denominator; does
+    /// not affect the compaction cap (`max_context_tokens`).
+    pub fn with_model_context_window(mut self, window: Option<usize>) -> Self {
+        self.config.model_context_window = window;
         self
     }
 
@@ -142,6 +198,23 @@ impl Runner {
 
     pub(super) fn emit(&self, event: AgentEvent) {
         event.emit_via(&self.app, &self.on_event);
+    }
+
+    /// Mint a fresh per-run correlation id and store it on the runner.
+    /// Called once at the top of `run()`. The returned value is also used
+    /// to seed the run's tracing span / logs.
+    pub(super) fn begin_trace(&self) -> String {
+        let id = uuid::Uuid::new_v4().to_string();
+        if let Ok(mut slot) = self.trace_id.write() {
+            *slot = Some(id.clone());
+        }
+        id
+    }
+
+    /// Current per-run correlation id, or `None` before `run()` set it.
+    /// Stamped on every emitted event so a full run can be reconstructed.
+    pub(super) fn trace_id(&self) -> Option<String> {
+        self.trace_id.read().ok().and_then(|slot| slot.clone())
     }
 
     /// Create a child runner with bounded iterations for sub-agent spawning.
@@ -167,6 +240,12 @@ impl Runner {
             cache: self.cache.clone(),
             allowed_tools: self.allowed_tools.clone(),
             on_event: None,
-        }
-    }
+            memory_scope: self.memory_scope.clone(),
+            // Fresh slot: a child sub-agent run gets its own trace_id when its
+            // `run()` fires, so its events don't inherit the parent's trace.
+            trace_id: Arc::new(std::sync::RwLock::new(None)),
+            // Children get their own inbox (if any) via with_message_inbox;
+            // do not inherit the parent's inbox.
+            message_inbox: None,
+        }    }
 }

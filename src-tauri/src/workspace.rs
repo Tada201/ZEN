@@ -64,20 +64,26 @@ pub fn validate_workspace_path(workspace_root: &Path, requested_path: &Path) -> 
             ));
         }
 
-        // Return the original path (will be created by caller)
-        requested_path.to_path_buf()
+        // Reconstruct the full path using the canonicalized ancestor to inherit the same UNC prefix/format
+        let relative = requested_path
+            .strip_prefix(&ancestor)
+            .unwrap_or(requested_path);
+        canonical_ancestor.join(relative)
     };
 
     // Critical security check: ensure the canonical path starts with workspace root
-    if !canonical_path.starts_with(&canonical_root) {
+    let clean_path = strip_unc_prefix(&canonical_path);
+    let clean_root = strip_unc_prefix(&canonical_root);
+
+    if !clean_path.starts_with(&clean_root) {
         return Err(anyhow::anyhow!(
             "SECURITY VIOLATION: Path {} is outside workspace boundary {}",
-            canonical_path.display(),
-            canonical_root.display()
+            clean_path.display(),
+            clean_root.display()
         ));
     }
 
-    Ok(canonical_path)
+    Ok(clean_path)
 }
 
 pub fn canonicalize_workspace_root(path: &Path) -> Result<PathBuf> {
@@ -181,6 +187,21 @@ pub fn get_default_workspace() -> PathBuf {
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
+#[cfg(target_os = "windows")]
+fn strip_unc_prefix(path: &Path) -> PathBuf {
+    let path_str = path.to_string_lossy();
+    if path_str.starts_with(r"\\?\") {
+        PathBuf::from(&path_str[4..])
+    } else {
+        path.to_path_buf()
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn strip_unc_prefix(path: &Path) -> PathBuf {
+    path.to_path_buf()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,5 +261,15 @@ mod tests {
         // Try to access /etc/passwd or similar
         let result = validate_workspace_path(workspace, Path::new("/etc/passwd"));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_nonexistent_file_inside_workspace() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace = temp_dir.path();
+        let test_file = workspace.join("nested_folder").join("new_file.txt");
+
+        let result = validate_workspace_path(workspace, &test_file);
+        assert!(result.is_ok());
     }
 }

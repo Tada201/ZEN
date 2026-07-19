@@ -10,14 +10,17 @@ export const BackgroundVideo = React.memo(({ reducedMotion }: { reducedMotion?: 
   }
 
   return (
-    <div className="absolute inset-0 z-0 overflow-hidden">
+    <div
+      className="absolute inset-0 z-0 overflow-hidden"
+      style={{ willChange: "transform", contain: "strict" }}
+    >
       <video
         autoPlay
         muted
         loop
         playsInline
         className="absolute inset-0 w-full h-full object-cover"
-        style={{ opacity: 0.55, filter: 'brightness(0.6) saturate(0.5)' }}
+        style={{ opacity: 0.55 }} /* Removed heavy runtime CSS filters: brightness and saturate. Bake into source MP4 if needed. */
       >
         <source src="/video/boot.mp4" type="video/mp4" />
       </video>

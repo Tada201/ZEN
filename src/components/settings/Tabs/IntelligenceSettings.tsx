@@ -176,18 +176,13 @@ export function IntelligenceSettings({ settings, onUpdate }: IntelligenceSetting
       <SettingsSection title="Embeddings" icon="lucide:brain" description="Document vectorization settings">
         <SettingsRow
           label="Embedding Model"
-          description="Model used to generate document vectors"
+          description="Coming soon — vector embedding models are not yet selectable. Default is configured internally."
           control={
             <WorkbenchSelect
-              value={settings["embeddings.model"] || "nomic"}
-              onValueChange={v => onUpdate("embeddings.model", v)}
-              options={[
-                { value: "nomic", label: "Nomic Embed Text" },
-                { value: "openai", label: "OpenAI Ada 002" },
-                { value: "cohere", label: "Cohere Embed" },
-                { value: "nine_router", label: "9Router Embedding" },
-              ]}
+              value="nomic"
+              options={[{ value: "nomic", label: "No model available", disabled: true }]}
               width={140}
+              className="opacity-50 pointer-events-none"
             />
           }
           icon="lucide:database"

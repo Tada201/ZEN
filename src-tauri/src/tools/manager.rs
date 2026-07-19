@@ -1,5 +1,6 @@
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -193,7 +194,18 @@ impl ToolManager {
     ///   1. Flat keys: `tools.permission.{id}.default` etc. (legacy dot-notation)
     ///   2. JSON payload: `tool_settings` key containing an object whose entries
     ///      are `"tools.permission.{id}.default"` etc. (current canonical shape)
-    pub fn build_permissions(settings: &HashMap<String, String>) -> ToolPermissions {
+    ///
+    /// `workspace_root` is the authoritative workspace folder for Plan-Mode:
+    /// when supplied, `plans_root = workspace_root.join("plans")` (after
+    /// a re-canonicalization that tolerates failures) is threaded into the
+    /// returned `ToolPermissions` so `PermissionDecision::from_input` can
+    /// replace the legacy `/plans/` substring check with a real path-prefix
+    /// check. When `None`, `plans_root` stays `None` and the substring
+    /// fallback is used (preserves test compatibility).
+    pub fn build_permissions(
+        settings: &HashMap<String, String>,
+        workspace_root: Option<PathBuf>,
+    ) -> ToolPermissions {
         // ── Global defaults ──────────────────────────────────────────────
         let global_default = match settings
             .get("tool_global_default")
@@ -245,12 +257,22 @@ impl ToolManager {
             }
         }
 
+        let permission_mode = settings
+            .get("tool_permission_mode")
+            .or_else(|| settings.get("tools.permission-mode"))
+            .cloned()
+            .unwrap_or_else(|| "ask".to_string());
+
+        let plans_root = workspace_root.map(|ws| ws.canonicalize().unwrap_or(ws).join("plans"));
+
         ToolPermissions {
             global_default,
             tool_overrides,
             yolo_mode,
             auto_approve_low_risk,
+            permission_mode,
             cache: Default::default(),
+            plans_root,
         }
     }
 
@@ -540,7 +562,10 @@ impl ToolManager {
             }
         }
         let v2_guard = self.v2.read().await;
-        v2_guard.get(id).is_some()
+        // Directly-executable tools live in `tools`; external MCP tools are
+        // registered as definitions only (`known_tool_definitions`) and are
+        // dispatched by name, so accept either.
+        v2_guard.get(id).is_some() || v2_guard.has_known_definition(id)
     }
 
     /// Resolve a `tool_exec` call: extract the real tool ID and arguments,
@@ -864,5 +889,52 @@ mod tests {
         assert_eq!(info.status, "external");
         assert!(info.agent_visible);
         assert!(info.user_configurable);
+    }
+
+    async fn register_ext_tool(manager: &ToolManager, server: &str, name: &str) -> String {
+        let def = crate::tools::ToolDefinition {
+            name: name.to_string(),
+            description: format!("External {} tool", name),
+            parameters: serde_json::json!({ "type": "object", "properties": {} }),
+            risk_level: None,
+            output_schema: None,
+            annotations: None,
+        };
+        manager.v2.write().await.register_external(server, def);
+        format!("ext:{}:{}", server, name)
+    }
+
+    #[tokio::test]
+    async fn external_mcp_tool_is_discoverable_when_authorized() {
+        let manager = manager_for_tests();
+        let ext_id = register_ext_tool(&manager, "github", "create_issue").await;
+        let allowed = vec![ext_id.clone()];
+
+        let tools = manager.list_allowed_matching(&allowed, None).await;
+        assert!(
+            tools.iter().any(|t| t.id == ext_id),
+            "external MCP tool should surface in tool_list for an agent authorized for it",
+        );
+    }
+
+    #[tokio::test]
+    async fn external_mcp_tool_resolves_for_exec() {
+        let manager = manager_for_tests();
+        let ext_id = register_ext_tool(&manager, "github", "create_issue").await;
+
+        // tool_info must find the definition.
+        assert!(
+            manager.get_info(&ext_id).await.is_some(),
+            "tool_info should return a schema for a registered external tool",
+        );
+
+        // tool_exec resolution must accept the external tool by name.
+        let resolved = manager
+            .resolve_tool_exec(&serde_json::json!({
+                "tool_id": ext_id,
+                "arguments": { "title": "hi" }
+            }))
+            .await;
+        assert_eq!(resolved.map(|(id, _)| id), Some(ext_id));
     }
 }

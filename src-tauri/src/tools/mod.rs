@@ -4,6 +4,7 @@ pub mod fs_tools;
 pub mod image_tool;
 pub mod manager;
 pub mod operational_map;
+pub mod patch_parser;
 pub mod permission;
 pub mod sys_metrics;
 pub mod terminal_tools;
@@ -67,6 +68,27 @@ impl std::error::Error for ToolError {}
 
 // ========== TOOL DEFINITION (sent to LLM) ==========
 
+/// MCP 2025-06-18 tool annotations. Hints only — clients use them for UI,
+/// not for authorization decisions.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ToolAnnotations {
+    /// Human-readable display name for the tool.
+    #[serde(skip_serializing_if = "Option::is_none", rename = "title")]
+    pub title: Option<String>,
+    /// If true, the tool does not modify its environment.
+    #[serde(skip_serializing_if = "Option::is_none", rename = "readOnlyHint")]
+    pub read_only_hint: Option<bool>,
+    /// If true, the tool may perform destructive updates (only meaningful when readOnlyHint is false).
+    #[serde(skip_serializing_if = "Option::is_none", rename = "destructiveHint")]
+    pub destructive_hint: Option<bool>,
+    /// If true, calling with the same arguments yields the same observable result.
+    #[serde(skip_serializing_if = "Option::is_none", rename = "idempotentHint")]
+    pub idempotent_hint: Option<bool>,
+    /// If true, the tool interacts with an open-world domain (web, filesystem).
+    #[serde(skip_serializing_if = "Option::is_none", rename = "openWorldHint")]
+    pub open_world_hint: Option<bool>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolDefinition {
     pub name: String,
@@ -74,6 +96,13 @@ pub struct ToolDefinition {
     pub parameters: serde_json::Value,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub risk_level: Option<RiskLevel>,
+    /// JSON Schema describing the structured `structuredContent` returned by the tool.
+    /// None means the tool returns only unstructured content blocks.
+    #[serde(skip_serializing_if = "Option::is_none", rename = "outputSchema")]
+    pub output_schema: Option<serde_json::Value>,
+    /// Optional MCP tool annotations. Skipped when empty to keep payloads small.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<ToolAnnotations>,
 }
 
 // ========== TOOL INFO (backward compat with LLM providers) ==========
@@ -97,6 +126,18 @@ pub trait Tool: Send + Sync {
 
     /// JSON Schema for parameters (sent to LLM)
     fn parameters_schema(&self) -> serde_json::Value;
+
+    /// Optional JSON Schema describing the tool's structured return value.
+    /// Defaults to None (unstructured content blocks only).
+    fn output_schema(&self) -> Option<serde_json::Value> {
+        None
+    }
+
+    /// Optional MCP tool annotations (readOnly/destructive/idempotent/open-world hints).
+    /// Defaults to None — clients fall back to conservative behavior.
+    fn annotations(&self) -> Option<ToolAnnotations> {
+        None
+    }
 
     /// Risk classification for permission decisions
     fn risk_level(&self) -> RiskLevel {
@@ -123,13 +164,15 @@ pub trait Tool: Send + Sync {
         }
     }
 
-    /// Build ToolDefinition with risk level metadata
+    /// Build ToolDefinition with risk level metadata and MCP-spec fields.
     fn definition(&self) -> ToolDefinition {
         ToolDefinition {
             name: self.name().to_string(),
             description: self.description().to_string(),
             parameters: self.parameters_schema(),
             risk_level: Some(self.risk_level()),
+            output_schema: self.output_schema(),
+            annotations: self.annotations(),
         }
     }
 }
@@ -194,7 +237,22 @@ impl ToolRegistry {
 
     pub fn register(&mut self, tool: Arc<dyn Tool>) {
         let name = tool.name().to_string();
-        self.tools.insert(name, tool);
+        let risk_level = tool.risk_level();
+        let def = tool.definition();
+        self.tools.insert(name.clone(), tool);
+        self.known_tool_risks.insert(name.clone(), risk_level);
+        self.known_tool_definitions.insert(name.clone(), def);
+    }
+
+    /// Register a tool from an external MCP server. Uses a `{server}:{name}`
+    /// prefix so the dispatcher can route calls back to the correct server.
+    pub fn register_external(&mut self, server: &str, def: ToolDefinition) {
+        let prefixed = format!("ext:{}:{}", server, def.name);
+        self.known_tool_risks.insert(
+            prefixed.clone(),
+            def.risk_level.unwrap_or(RiskLevel::Medium),
+        );
+        self.known_tool_definitions.insert(prefixed.clone(), def);
     }
 
     pub fn register_legacy_tool(&mut self, tool: Arc<dyn crate::agent::tools::AgentTool>) {
@@ -206,7 +264,7 @@ impl ToolRegistry {
             tool.input_schema(),
             risk,
         );
-        self.legacy_tools.insert(name, tool);
+        self.legacy_tools.insert(name.clone(), tool);
     }
 
     /// Register a known tool name with its risk level.
@@ -231,6 +289,8 @@ impl ToolRegistry {
                 description,
                 parameters,
                 risk_level: Some(risk),
+                output_schema: None,
+                annotations: None,
             },
         );
     }
@@ -247,6 +307,12 @@ impl ToolRegistry {
             .collect()
     }
 
+    /// True if a definition is registered for `name` (external MCP tools and
+    /// AgentTool-only compatibility definitions live here, not in `tools`).
+    pub fn has_known_definition(&self, name: &str) -> bool {
+        self.known_tool_definitions.contains_key(name)
+    }
+
     pub fn get(&self, name: &str) -> Option<Arc<dyn Tool>> {
         self.tools.get(name).cloned()
     }
@@ -261,31 +327,6 @@ impl ToolRegistry {
 
     pub fn direct_tool_risk(&self, name: &str) -> Option<RiskLevel> {
         self.tools.get(name).map(|tool| tool.risk_level())
-    }
-
-    /// Canonical policy for the non-interactive MCP exposure surface.
-    ///
-    /// Only Low-risk tools are exposed. `SecurityService::evaluate` auto-allows
-    /// Low tools under the default policy and routes everything else through
-    /// `default_decision` (default: Ask), which `execute_non_interactive`
-    /// then rejects. Exposing Medium / High / Critical in the catalog would
-    /// advertise tools that the non-interactive path silently turns away.
-    /// This is the single source of truth shared by:
-    ///   * `mcp/server.rs` `handle_tools_list` (catalog)
-    ///   * `mcp/server.rs` `handle_tools_call` (call-time gate)
-    ///   * `commands/mcp.rs` `mcp_list_tools` (renderer-facing catalog)
-    pub fn is_mcp_exposable(&self, name: &str) -> bool {
-        matches!(self.direct_tool_risk(name), Some(RiskLevel::Low))
-    }
-
-    /// Returns the catalog of tool definitions the non-interactive MCP server
-    /// will actually honor. Use this for both `tools/list` and any renderer
-    /// catalog that mirrors what the server exposes.
-    pub fn mcp_exposable_definitions(&self) -> Vec<ToolDefinition> {
-        self.list_direct_definitions()
-            .into_iter()
-            .filter(|def| matches!(def.risk_level, Some(RiskLevel::Low)))
-            .collect()
     }
 
     /// List tool definitions (for sending to LLM as available tools)
@@ -459,8 +500,8 @@ pub type GlobalToolRegistry = Arc<RwLock<ToolRegistry>>;
 pub fn default_tool_risk(id: &str) -> RiskLevel {
     match id {
         "run_command" | "terminal" => RiskLevel::Critical,
-        "web_fetch" | "write_file" | "edit_file" | "spawn_agent" | "delegate_to_agent"
-        | "file_write" => RiskLevel::High,
+        "web_fetch" | "write_file" | "edit_file" | "apply_patch" | "spawn_agent"
+        | "delegate_to_agent" | "file_write" => RiskLevel::High,
         "web_search"
         | "read_document_content"
         | "geocode_search"
@@ -494,6 +535,7 @@ pub fn init_tool_registry(permissions: ToolPermissions) -> ToolRegistry {
     registry.register(Arc::new(fs_tools::GrepDocumentsTool));
     registry.register(Arc::new(fs_tools::WriteFileTool));
     registry.register(Arc::new(fs_tools::EditFileTool));
+    registry.register(Arc::new(fs_tools::ApplyPatchTool));
 
     for tool_id in [
         "tools_search",
@@ -518,6 +560,7 @@ pub fn init_tool_registry(permissions: ToolPermissions) -> ToolRegistry {
         "grep_documents",
         "write_file",
         "edit_file",
+        "apply_patch",
         "activate_2d_operational_map",
         "graph_session",
         "write_to_memory",
@@ -530,6 +573,5 @@ pub fn init_tool_registry(permissions: ToolPermissions) -> ToolRegistry {
         registry.register_known_tool(tool_id, default_tool_risk(tool_id));
     }
 
-    // In the future, this is where we'd also wire up MCP tools.
     registry
 }

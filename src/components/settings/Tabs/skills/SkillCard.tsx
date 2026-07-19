@@ -4,20 +4,18 @@ import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
 import { WorkbenchSwitch } from '@/components/settings/ui/WorkbenchSwitch';
 import { cn } from '@/lib/utils';
+import type { SkillMetadata } from '@/api/skillsApi';
 
 interface SkillCardProps {
-  skill: {
-    id: string;
-    name: string;
-    description: string;
-    invocation_syntax: string;
-    enabled: boolean;
-    capabilities: string[];
-  };
-  onToggle: (id: string) => void;
+  skill: SkillMetadata;
+  onToggle: (name: string) => void;
 }
 
 export const SkillCard = memo(({ skill, onToggle }: SkillCardProps) => {
+  // `enabled` is the runtime toggle (persisted via `set_skill_enabled`).
+  // `allow_implicit_invocation` is a separate SKILL.md frontmatter
+  // capability. Bind the switch and card styling to the runtime state so
+  // toggling persists across reloads and update the local store immediately.
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.98 }}
@@ -33,26 +31,42 @@ export const SkillCard = memo(({ skill, onToggle }: SkillCardProps) => {
       <div className="p-5 flex flex-col gap-4">
         <div className="flex items-start justify-between">
           <div className="flex flex-col gap-1">
-            <h3 className="text-[14px] font-bold text-foreground">{skill.name}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-[14px] font-bold text-foreground">{skill.name}</h3>
+              <span
+                className={cn(
+                  "text-[9px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider",
+                  skill.scope === "repo"
+                    ? "bg-emerald-500/15 text-emerald-400"
+                    : skill.scope === "user"
+                      ? "bg-sky-500/15 text-sky-400"
+                      : "bg-amber-500/15 text-amber-400",
+                )}
+              >
+                {skill.scope}
+              </span>
+            </div>
             <span className="text-[11px] font-mono text-brand-purple">{skill.invocation_syntax}</span>
           </div>
           <WorkbenchSwitch
             checked={skill.enabled}
-            onCheckedChange={() => onToggle(skill.id)}
+            onCheckedChange={() => onToggle(skill.name)}
           />
         </div>
 
-        <p className="text-[11px] text-muted-foreground leading-relaxed">{skill.description}</p>
+        <p className="text-[11px] text-muted-foreground leading-relaxed">
+          {skill.short_description ?? skill.description}
+        </p>
 
-        {skill.capabilities.length > 0 && (
+        {skill.tools_required.length > 0 && (
           <div className="flex flex-wrap gap-2 py-3 border-t border-border/50">
-            {skill.capabilities.map(cap => (
+            {skill.tools_required.map(tool => (
               <div
-                key={cap}
+                key={tool}
                 className="px-2 py-0.5 rounded bg-card border border-border"
               >
                 <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">
-                  {cap}
+                  {tool}
                 </span>
               </div>
             ))}
@@ -66,16 +80,6 @@ export const SkillCard = memo(({ skill, onToggle }: SkillCardProps) => {
           </WorkbenchButton>
           <WorkbenchButton variant="outline" className="h-8 w-10 border-border hover:border-border">
             <WorkbenchIcon name="codicon:edit" size={12} className="text-muted-foreground" />
-          </WorkbenchButton>
-          <WorkbenchButton
-            variant="outline"
-            className="h-8 w-10 border-border hover:border-destructive/30 group/trash"
-          >
-            <WorkbenchIcon
-              name="codicon:trash"
-              size={12}
-              className="text-muted-foreground group-hover:text-destructive transition-colors"
-            />
           </WorkbenchButton>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { useSettingsStore } from "@/lib/stores/useSettingsStore";
+import { VOICE_DISPLAY_AGENT_BOARD_SNAPSHOT_LIMIT } from "@/lib/stores/settings/voiceDefaults";
 import type { BoardDocumentV1, BoardLayoutMode, BoardWidget, BoardWidgetKind } from "./board/types";
 import { canPlace, placeInFirstFreeSlot } from "./board/gridLayout";
 
@@ -213,15 +213,17 @@ interface VoiceStageState {
 }
 
 const now = () => Date.now();
-const MAX_BOARD_MEMORY_LIMIT = 3;
 
 function boardMemoryLimit() {
-  const configured = useSettingsStore.getState().voiceDisplayAgentBoardMemoryLimit;
-  return Math.min(MAX_BOARD_MEMORY_LIMIT, Math.max(1, configured || MAX_BOARD_MEMORY_LIMIT));
+  return VOICE_DISPLAY_AGENT_BOARD_SNAPSHOT_LIMIT;
 }
 
 function normalizeBlock(block: VoiceStageInput): VoiceStageBlock {
   return { ...block, updatedAt: block.updatedAt ?? now() } as VoiceStageBlock;
+}
+
+function isWritable(lifecycle: VoiceStageLifecycle): boolean {
+  return lifecycle === "active";
 }
 
 function createBoardSnapshot(blocks: VoiceStageBlock[], title?: string): VoiceStageBoardSnapshot | null {
@@ -266,6 +268,7 @@ export const useVoiceStageStore = create<VoiceStageState>((set) => ({
   replace: (blocks, options = {}) => {
     const normalized = blocks.map(normalizeBlock);
     set((state) => {
+      if (!isWritable(state.lifecycle)) return state;
       const requestType = options.requestType ?? "replace";
       const retainedBoards =
         requestType === "new"
@@ -278,12 +281,14 @@ export const useVoiceStageStore = create<VoiceStageState>((set) => ({
         document: { ...state.document, widgets: normalized, updatedAt: now() },
         retainedBoards,
         focusedBlockId: normalized[0]?.id ?? null,
+        generation: state.generation + 1,
       };
     });
   },
   append: (block) => {
     const normalized = normalizeBlock(block);
     set((state) => {
+      if (!isWritable(state.lifecycle)) return state;
       const existing = state.document.widgets.filter((item) => item.id !== normalized.id);
       const placed = placeInFirstFreeSlot(normalized, existing);
       if (!placed) return state;
@@ -291,31 +296,34 @@ export const useVoiceStageStore = create<VoiceStageState>((set) => ({
         ...existing,
         placed,
       ].slice(-12);
-      return { document: { ...state.document, widgets, updatedAt: now() }, focusedBlockId: placed.id };
+      return { document: { ...state.document, widgets, updatedAt: now() }, focusedBlockId: placed.id, generation: state.generation + 1 };
     });
   },
   upsert: (block) => {
     const normalized = normalizeBlock(block);
     set((state) => {
+      if (!isWritable(state.lifecycle)) return state;
       const widgets = state.document.widgets;
       const index = widgets.findIndex((item) => item.id === normalized.id);
       if (index === -1) {
         const placed = placeInFirstFreeSlot(normalized, widgets);
         if (!placed) return state;
         const next = [...widgets, placed].slice(-12);
-        return { document: { ...state.document, widgets: next, updatedAt: now() }, focusedBlockId: normalized.id };
+        return { document: { ...state.document, widgets: next, updatedAt: now() }, focusedBlockId: normalized.id, generation: state.generation + 1 };
       }
       const next = widgets.slice();
       const merged = { ...widgets[index], ...normalized } as VoiceStageBlock;
       next[index] = placeInFirstFreeSlot(merged, widgets) ?? widgets[index];
-      return { document: { ...state.document, widgets: next, updatedAt: now() }, focusedBlockId: normalized.id };
+      return { document: { ...state.document, widgets: next, updatedAt: now() }, focusedBlockId: normalized.id, generation: state.generation + 1 };
     });
   },
   remove: (id) => set((state) => {
+    if (!isWritable(state.lifecycle)) return state;
     const widgets = state.document.widgets.filter((block) => block.id !== id);
     return {
       document: { ...state.document, widgets, updatedAt: now() },
       focusedBlockId: state.focusedBlockId === id ? null : state.focusedBlockId,
+      generation: state.generation + 1,
     };
   }),
   saveCurrentBoard: (title) =>

@@ -22,6 +22,7 @@ import { Step } from "./types";
 import { AssistantTaskPlanPreview } from "./AssistantTaskPlanPreview";
 import { AgentDelegationLane } from "./AgentDelegationLane";
 import { buildAgentDelegationLaneModel } from "./agentDelegationLaneModel";
+import { humanizeToolName } from "./ToolCallCard";
 export { ResearchTimeline } from "./ResearchTimeline";
 
 export function resolveToolApproval(toolCallId: string | undefined, approved: boolean, rememberExact = false) {
@@ -146,7 +147,7 @@ function getActionPresentation(step: Step) {
       const detail = args ? redactTracePreview(args, 180) : step.content || step.metadata?.message;
       return {
         Icon: Wrench,
-        label: `${preview?.toolName || "Tool call"} ready`,
+        label: `${preview?.toolName ? humanizeToolName(preview.toolName) : "Tool call"} ready`,
         detail,
         iconClass: "text-success/80",
       };
@@ -156,7 +157,7 @@ function getActionPresentation(step: Step) {
       const args = redactTracePreview(preview?.argumentsPreview, 180);
       return {
         Icon: Wrench,
-        label: `Preparing ${preview?.toolName || "tool call"}`,
+        label: `Preparing ${preview?.toolName ? humanizeToolName(preview.toolName) : "tool call"}`,
         detail: args || step.content || step.metadata?.message,
         iconClass: "text-primary/80",
       };
@@ -212,7 +213,7 @@ function getActionPresentation(step: Step) {
 }
 
 function hasActionDetails(step: Step) {
-  return Boolean(step.metadata || step.timestamp || step.eventId);
+  return step.status === "error" && Boolean(step.metadata?.error || step.content);
 }
 
 function formatActionTime(timestamp?: number) {
@@ -223,21 +224,6 @@ function formatActionTime(timestamp?: number) {
 function formatDuration(durationMs?: number) {
   if (!durationMs || durationMs <= 0) return null;
   return durationMs < 1000 ? `${durationMs}ms` : `${(durationMs / 1000).toFixed(durationMs < 10_000 ? 1 : 0)}s`;
-}
-
-function serializeActionDetails(step: Step) {
-  return JSON.stringify(
-    {
-      eventId: step.eventId,
-      kind: step.kind,
-      status: step.status,
-      timestamp: step.timestamp,
-      content: step.content,
-      metadata: step.metadata,
-    },
-    null,
-    2,
-  );
 }
 
 function getActionChips(step: Step): Array<{ label: string; tone?: "default" | "warning" | "danger" }> {
@@ -258,10 +244,6 @@ function getActionChips(step: Step): Array<{ label: string; tone?: "default" | "
       label: `${risk} risk`,
       tone: risk === "critical" || risk === "high" ? "danger" : risk === "medium" ? "warning" : "default",
     });
-  }
-  const argsPreview = redactTracePreview(approval?.context?.arguments_preview || approval?.arguments, 120);
-  if (argsPreview) {
-    chips.push({ label: argsPreview });
   }
   if (step.metadata?.taskId) {
     chips.push({ label: String(step.metadata.taskId) });
@@ -378,10 +360,10 @@ export function AgentActionStepInner({ step, isStreaming }: { step: Step; isStre
           {approval && <InlineApprovalControls approval={approval} metadata={step.metadata} />}
           {isExpanded && (
             <div className="mt-1.5 rounded-md bg-muted/20 px-2 py-1.5">
-              <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">Event details</div>
-              <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-muted-foreground">
-                {serializeActionDetails(step)}
-              </pre>
+              <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">Issue</div>
+              <div className="text-[12px] leading-relaxed text-muted-foreground">
+                {redactTracePreview(step.metadata?.error || step.content || "This action failed.", 420)}
+              </div>
             </div>
           )}
         </div>
@@ -432,9 +414,14 @@ function InlineApprovalControls({ approval, metadata }: { approval: ApprovalRequ
         <div className="mt-1 font-mono text-[11px] leading-5 text-muted-foreground">{agentLabel}</div>
       )}
       {argsPreview && (
-        <pre className="mt-1 max-h-20 overflow-y-auto whitespace-pre-wrap break-words rounded bg-background/20 px-2 py-1 font-mono text-[12px] leading-relaxed text-muted-foreground">
-          {argsPreview}
-        </pre>
+        <details className="mt-1 rounded bg-background/20 px-2 py-1">
+          <summary className="cursor-pointer select-none text-[11px] uppercase tracking-wide text-muted-foreground">
+            Technical details
+          </summary>
+          <pre className="mt-1 max-h-20 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-muted-foreground">
+            {argsPreview}
+          </pre>
+        </details>
       )}
       <div className="mt-2 flex flex-wrap justify-end gap-2">
         <Button

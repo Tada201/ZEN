@@ -1,4 +1,5 @@
 pub mod child_runner;
+pub mod handoff_context;
 pub mod delegate_to_agent;
 pub mod drawing_tools;
 pub mod fs_tools;
@@ -11,6 +12,7 @@ pub mod osint_tools;
 pub mod progressive;
 pub mod routing_tools;
 pub mod session_memory_tools;
+pub mod skill_tool;
 pub mod spawn_tools;
 pub mod system_tools;
 pub mod task_tools;

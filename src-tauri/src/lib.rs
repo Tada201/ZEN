@@ -32,6 +32,11 @@ pub fn run() {
             let app_handle = app.handle().clone();
             let _start_total = std::time::Instant::now();
 
+            // Initialize MediaService with the resolved app data dir before any command runs.
+            if let Err(e) = app.state::<AppState>().media.setup(&app_handle) {
+                tracing::warn!(error = %e, "MediaService setup failed. Wallpaper features will be unavailable until restart.");
+            }
+
             // ═══════════════════════════════════════════════════════════════
             // CRITICAL INIT — spawned so the window loads immediately.
             // The BootScreen polls get_init_status() and waits for
@@ -39,7 +44,7 @@ pub fn run() {
             // ═══════════════════════════════════════════════════════════════
             let critical_handle = app_handle.clone();
 
-            // Prevent early transparency flash: Show the splashscreen window 
+            // Prevent early transparency flash: Show the splashscreen window
             // only once it has fully loaded its content and is ready to paint.
             if let Some(splash) = app_handle.get_webview_window("splashscreen") {
                 let splash_clone = splash.clone();
@@ -90,7 +95,8 @@ pub fn run() {
                 // Path isolation is handled by the per-channel `identifier` in
                 // tauri.conf.json (prod) vs tauri.dev.conf.json (dev), so the
                 // same `novus.db` filename lives in separate `app_data_dir`s.
-                let db_path = app_dir.join("novus.db");
+                let db_name = if cfg!(debug_assertions) { "novus-dev.db" } else { "novus.db" };
+                let db_path = app_dir.join(db_name);
                 let pool = match crate::db::init_pool(&db_path).await {
                     Ok(p) => p,
                     Err(e) => {
@@ -116,6 +122,25 @@ pub fn run() {
                 if let Err(e) = state.settings_manager.load_all().await {
                     tracing::warn!(error = %e, "Failed to load settings from database");
                     eprintln!("Warning: Failed to load settings from database: {}", e);
+                }
+
+                // Load skill disabled names from persisted settings
+                {
+                    let all_settings = state.settings_manager.get_all().await.unwrap_or_default();
+                    let disabled: Vec<String> = all_settings
+                        .iter()
+                        .filter(|(k, v)| {
+                            k.starts_with("skill:") && k.ends_with(":enabled") && v.as_str() == "false"
+                        })
+                        .filter_map(|(k, _)| {
+                            k.strip_prefix("skill:")
+                                .and_then(|s| s.strip_suffix(":enabled"))
+                        })
+                        .map(|s| s.to_string())
+                        .collect();
+                    if !disabled.is_empty() {
+                        state.skills_manager.set_disabled_names(disabled).await;
+                    }
                 }
 
                 // Persisted workspace root
@@ -175,7 +200,9 @@ pub fn run() {
                             std::collections::HashMap::new()
                         }
                     };
-                    let permissions = ToolManager::build_permissions(&all_settings);
+                    let workspace_root = state.workspace_folder.read().await.clone();
+                    let permissions =
+                        ToolManager::build_permissions(&all_settings, Some(workspace_root));
                     if let Err(e) = state.tool_manager.update_permissions(permissions).await {
                         tracing::warn!(error = %e, "Initial tool permission install failed");
                     }
@@ -184,12 +211,13 @@ pub fn run() {
                 // Document service DB pool (instant)
                 state.documents.set_db_pool(pool.clone()).await;
 
-                // MCP server initial wiring (instant)
-                {
-                    let mut mcp_guard = state.mcp_server.write().await;
-                    mcp_guard.set_app_handle(critical_handle.clone());
-                    mcp_guard.set_tool_service(state.tool_service.clone());
-                }
+                // Wire MCP client into ToolService for external tool execution.
+                state.tool_service.set_mcp_client(state.mcp_client.clone());
+                // Sync external MCP servers from .mcp.json (best-effort).
+                let client = state.mcp_client.clone();
+                tokio::spawn(async move {
+                    client.sync_external_servers().await;
+                });
 
                 state.init_progress.set_status(&critical_handle, "critical.finalize", "done", Some(_start_phase.elapsed().as_millis() as u64)).await;
                 tracing::info!(
@@ -277,7 +305,8 @@ pub fn run() {
                 state.init_progress.set_status(&bg_app_handle, "bg.lancedb", "running", None).await;
                 let _p = std::time::Instant::now();
                 // Same identifier-based isolation as the SQLite DB above.
-                let rag_dir = app_dir.join("lancedb");
+                let lancedb_name = if cfg!(debug_assertions) { "lancedb-dev" } else { "lancedb" };
+                let rag_dir = app_dir.join(lancedb_name);
                 let rag_uri = rag_dir.to_string_lossy().to_string();
                 let dimension: usize = 768;
 
@@ -425,6 +454,15 @@ pub fn run() {
             commands::settings::fetch_9router_image_models,
             commands::settings::sync_tool_permissions,
             commands::settings::list_tool_metadata,
+            commands::skills::list_skills,
+            commands::skills::load_skill,
+            commands::skills::set_skill_enabled,
+            commands::skills::suggest_slash,
+            commands::skills::parse_slash,
+            commands::media::set_wallpaper_from_path,
+            commands::media::clear_wallpaper,
+            commands::media::get_current_wallpaper,
+            commands::media::reprocess_video,
             commands::artifacts::list_artifacts_page,
             commands::artifacts::list_chat_artifacts_page,
             commands::chat::create_chat,
@@ -435,6 +473,7 @@ pub fn run() {
             commands::chat::send_message,
             commands::chat::delete_chat,
             commands::chat::update_chat_title,
+            commands::chat::generate_session_title,
             commands::chat::toggle_pin_chat,
             commands::chat::archive_chat,
             commands::chat::unarchive_chat,
@@ -462,13 +501,6 @@ pub fn run() {
             commands::agent::orchestrator_get_status,
             commands::agent::run_tool_command,
             commands::agent::resolve_tool_approval,
-            commands::agent_config::get_agent_config_file,
-            commands::agent_config::save_agent_config_file,
-            commands::agent_config::delete_agent_config_file,
-            commands::agent_config::list_agent_config_files,
-            commands::agent_config::export_agent_config_file,
-            commands::agent_config::import_agent_config_file,
-            commands::agent_config::list_tools_for_config,
             commands::voice::get_whisper_model_status,
             commands::voice::get_whisper_runtime_status,
             commands::voice::download_whisper_model,
@@ -548,10 +580,8 @@ pub fn run() {
             commands::memory::get_memory_stats,
             commands::mcp::mcp_get_config,
             commands::mcp::mcp_save_config,
-            commands::mcp::mcp_get_status,
-            commands::mcp::mcp_start_server,
-            commands::mcp::mcp_stop_server,
-            commands::mcp::mcp_list_tools,
+            commands::context_viewer::get_context_breakdown,
+            commands::context_viewer::get_context_snapshot,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

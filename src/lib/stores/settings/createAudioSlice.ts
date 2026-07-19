@@ -1,7 +1,6 @@
 import type { StateCreator } from "zustand";
 import type { SettingsState } from "./types";
 import {
-  VOICE_DISPLAY_AGENT_DEFAULT_BOARD_MEMORY_LIMIT,
   VOICE_DISPLAY_AGENT_DEFAULT_COMPACT_THRESHOLD,
   VOICE_DISPLAY_AGENT_DEFAULT_CONTEXT_TOKENS,
   VOICE_DISPLAY_AGENT_DEFAULT_MAX_TURNS,
@@ -47,7 +46,6 @@ export interface AudioSlice {
   voiceDisplayAgentAutoCompactEnabled: boolean;
   voiceDisplayAgentCompactThreshold: number;
   voiceDisplayAgentPrompt: string;
-  voiceDisplayAgentBoardMemoryLimit: number;
 
   setForceSttWeb: (val: boolean) => void;
   setForceTtsWeb: (val: boolean) => void;
@@ -92,7 +90,6 @@ export const createAudioSlice: StateCreator<SettingsState, [], [], AudioSlice> =
   voiceDisplayAgentAutoCompactEnabled: true,
   voiceDisplayAgentCompactThreshold: VOICE_DISPLAY_AGENT_DEFAULT_COMPACT_THRESHOLD,
   voiceDisplayAgentPrompt: VOICE_DISPLAY_AGENT_DEFAULT_PROMPT,
-  voiceDisplayAgentBoardMemoryLimit: VOICE_DISPLAY_AGENT_DEFAULT_BOARD_MEMORY_LIMIT,
 
   // Direct set() — immediate state update, not staged
   setForceSttWeb: (val: boolean) => {

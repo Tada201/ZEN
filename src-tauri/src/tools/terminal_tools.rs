@@ -108,12 +108,14 @@ impl Tool for RunCommandTool {
         );
 
         let result = {
-            let mut sessions = state.terminal_sessions.write().await;
+            let sessions = state.terminal_sessions.read().await;
             sessions
                 .execute_command(
                     &args.command,
                     Some(resolved_cwd.to_string_lossy().to_string()),
                     timeout_ms,
+                    Some(state.process_manager.clone()),
+                    tokio_util::sync::CancellationToken::new(),
                 )
                 .await
         }

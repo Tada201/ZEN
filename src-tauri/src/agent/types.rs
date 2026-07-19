@@ -18,6 +18,9 @@ pub struct Agent {
     /// Optional context window in tokens (overrides RunConfig default of 100K).
     #[serde(default)]
     pub context_window: Option<usize>,
+    /// Maximum messages to keep in agent memory (None = use RunConfig default).
+    #[serde(default)]
+    pub max_messages_in_memory: Option<usize>,
     /// Short description for display in agent lists.
     #[serde(default)]
     pub description: Option<String>,
