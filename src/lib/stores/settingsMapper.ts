@@ -28,6 +28,7 @@ const SNAKE_OVERRIDES: Record<string, string> = {
   backgroundBlur: "ui.background-blur",
   backgroundFit: "ui.background-fit",
   backgroundMediaType: "ui.background-media-type",
+  revealCompletedToolHistory: "ui.reveal-completed-tool-history",
   memoryEnabled: "memory.enabled",
   memoryMaxTurns: "memory.max-turns",
   // Tool permission mode is double-keyed for backwards compatibility with
@@ -42,7 +43,6 @@ const SNAKE_OVERRIDES: Record<string, string> = {
   memorySummarizationModel: "memory.summarization_model",
   memorySemanticRecallEnabled: "memory.semantic_recall_enabled",
   memoryMaxRecalledMessages: "memory.max_recalled_messages",
-  memoryDriftDetectionEnabled: "memory.drift_detection_enabled",
   memoryDriftThreshold: "memory.drift_threshold",
   agentTokenBudget: "agent.token-budget",
 };

@@ -14,11 +14,11 @@ const css = fs.readFileSync(cssPath, 'utf8');
 
 const requiredPanelSnippets = [
   'EMPTY_MESSAGES',
-  'useChatStore(s => activeSessionId ? s.sessionMessages[activeSessionId] ?? EMPTY_MESSAGES : EMPTY_MESSAGES)',
-  'useChatStore(s => activeSessionId ? s.streamingChats[activeSessionId] ?? false : false)',
+  'const sessionMessages = useChatStore(s =>',
+  'const isSessionStreaming = useChatStore(s =>',
   'useAgentActivityStore(s => s.activeTasks)',
   'useAgentActivityStore(s => s.activities)',
-  '<LiveSessionExecution model={liveModel} isStreaming={isSessionStreaming} />',
+  'buildLiveAgentPanelModel(sessionMessages)',
 ];
 
 const requiredModelSnippets = [

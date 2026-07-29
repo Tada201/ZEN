@@ -19,7 +19,7 @@ export function renderFormattedTerminalLine(line: string): ReactNode {
         const cmd = line.slice(2);
         return (
             <span className="font-mono">
-                <span className="text-primary/70 font-semibold">$</span>{' '}
+                <span className="text-primary font-semibold">$</span>{' '}
                 <span className="text-foreground font-bold">{cmd}</span>
             </span>
         );
@@ -38,11 +38,11 @@ export function renderFormattedTerminalLine(line: string): ReactNode {
             return <span key={idx} className="text-warning font-semibold">{word}</span>;
         }
         if (lword.includes('info') || lword.includes('debug')) {
-            return <span key={idx} className="text-muted-foreground/80">{word}</span>;
+            return <span key={idx} className="text-muted-foreground">{word}</span>;
         }
         if (lword.startsWith('http://') || lword.startsWith('https://')) {
             return <span key={idx} className="text-primary underline cursor-pointer hover:opacity-85">{word}</span>;
         }
-        return <span key={idx} className="text-foreground/80">{word}</span>;
+        return <span key={idx} className="text-foreground">{word}</span>;
     });
 }

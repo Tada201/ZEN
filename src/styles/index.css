@@ -174,21 +174,7 @@
   animation: premium-shimmer 1.8s ease-in-out infinite;
 }
 
-/* Animated expand/collapse via grid-template-rows (works in all modern browsers) */
-.tool-expand-grid {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 200ms ease-out, opacity 200ms ease-out;
-  opacity: 0;
-}
-.tool-expand-grid.open {
-  grid-template-rows: 1fr;
-  opacity: 1;
-}
-.tool-expand-grid > .tool-expand-inner {
-  overflow: hidden;
-  min-height: 0;
-}
+
 
 @keyframes shimmer-slide {
   from { transform: translateX(-100%); }

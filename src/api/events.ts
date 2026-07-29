@@ -22,6 +22,8 @@ export interface ToolStartEventPayload {
   batchId?: string;
   tool_batch_id?: string;
   toolBatchId?: string;
+  trace_id?: string;
+  traceId?: string;
   tool_call_id: string;
   tool_name: string;
   arguments: ToolCall["input"];
@@ -47,6 +49,8 @@ export interface ToolCompleteEventPayload {
   batchId?: string;
   tool_batch_id?: string;
   toolBatchId?: string;
+  trace_id?: string;
+  traceId?: string;
   tool_call_id: string;
   tool_name: string;
   status: string;
@@ -74,6 +78,8 @@ export interface ToolAuthorizationRequestEventPayload {
   batchId?: string;
   tool_batch_id?: string;
   toolBatchId?: string;
+  trace_id?: string;
+  traceId?: string;
   tool_call_id: string;
   tool_name: string;
   arguments: ToolCall["input"];
@@ -97,6 +103,8 @@ export interface ToolAuthorizationTimeoutEventPayload {
   batchId?: string;
   tool_batch_id?: string;
   toolBatchId?: string;
+  trace_id?: string;
+  traceId?: string;
   tool_call_id: string;
   tool_name: string;
   arguments?: ToolCall["input"];
@@ -131,6 +139,8 @@ export interface ChatDoneEventPayload {
   chat_id?: string | null;
   content?: string;
   reason?: string;
+  /** Backend-persisted assistant message ID; used to target the correct DB row for post-stream updates like `steps_json`. */
+  message_id?: string;
 }
 
 export interface ChatErrorEventPayload {
@@ -141,6 +151,30 @@ export interface ChatErrorEventPayload {
 
 export interface ChatStreamResetEventPayload {
   chat_id?: string | null;
+}
+
+/** Emitted when a sub-agent run starts, progresses, or finishes. */
+export interface SubagentStepEventPayload {
+  chat_id?: string | null;
+  chatId?: string | null;
+  spawn_id: string;
+  spawnId?: string;
+  parent_tool_call_id?: string;
+  parentToolCallId?: string;
+  agent_id: string;
+  agentId?: string;
+  agent_name: string;
+  agentName?: string;
+  task: string;
+  status: "running" | "completed" | "failed" | "cancelled";
+  result_summary?: string;
+  resultSummary?: string;
+  error?: string;
+  duration_ms: number;
+  durationMs?: number;
+  timestamp: string;
+  child_tool_call_ids?: string[];
+  childToolCallIds?: string[];
 }
 
 export interface ChatResearchStepEventPayload {
@@ -395,6 +429,7 @@ export interface AppEventPayloadMap {
   "chat:error": ChatErrorEventPayload;
   "chat:stream-reset": ChatStreamResetEventPayload;
   "chat:research-step": ChatResearchStepEventPayload;
+  "chat:subagent-step": SubagentStepEventPayload;
   "chat:message": ChatMessageEventPayload;
   "chat:context-drift": ChatContextDriftEventPayload;
   "chat:status": ChatStatusEventPayload;

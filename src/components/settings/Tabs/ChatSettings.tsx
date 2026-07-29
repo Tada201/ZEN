@@ -20,6 +20,8 @@ export function ChatSettings({ settings, onUpdate }: ChatSettingsProps) {
   const activeProvider = useSettingsStore((s) => s.activeProvider);
   const activeModel = useSettingsStore((s) => s.activeModel);
   const availableModelsByProvider = useSettingsStore((s) => s.availableModelsByProvider);
+  const revealCompletedToolHistory = useSettingsStore((s) => s.revealCompletedToolHistory);
+  const setRevealCompletedToolHistory = useSettingsStore((s) => s.setRevealCompletedToolHistory);
 
   // Build the cross-provider picker AND a parallel model-to-provider lookup.
   // When the user picks a model we must persist BOTH identifiers: a model
@@ -160,6 +162,20 @@ export function ChatSettings({ settings, onUpdate }: ChatSettingsProps) {
             </div>
           </>
         )}
+      </SettingsSection>
+
+      <SettingsSection title="Timeline" icon="lucide:list-tree" description="How past tool execution appears in the chat transcript">
+        <SettingsRow
+          label="Show completed tool history"
+          description="Keep completed successful tool groups visible after the answer arrives. Off by default so the transcript stays focused on the conversation; turn on to audit past turns."
+          control={
+            <WorkbenchSwitch
+              checked={revealCompletedToolHistory}
+              onCheckedChange={setRevealCompletedToolHistory}
+            />
+          }
+          icon="lucide:history"
+        />
       </SettingsSection>
 
       <SettingsSection title="Generation" icon="lucide:sparkles" description="Response generation parameters">

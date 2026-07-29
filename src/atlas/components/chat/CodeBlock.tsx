@@ -82,8 +82,8 @@ export function CodeBlock({
   }, [code, normalizedLanguage]);
 
   return (
-    <div className="group/code relative my-3 overflow-hidden rounded-xl border border-border/[0.08] bg-background/30 backdrop-blur-sm shadow-md transition-all duration-300">
-      <div className="flex items-center justify-between border-b border-border/[0.06] bg-card/[0.02] px-3 py-1.5">
+    <div className="group/code relative my-3 overflow-hidden rounded-xl border border-border bg-card shadow-md transition-all duration-200">
+      <div className="flex items-center justify-between border-b border-border bg-muted px-3 py-1.5">
         <span className="font-mono text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
           {language ?? "plaintext"}
         </span>
@@ -92,7 +92,7 @@ export function CodeBlock({
             <Button
               size="sm"
               variant="ghost"
-              className="h-6 gap-1 px-2 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+              className="h-6 gap-1 px-2 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenArtifact({
@@ -110,7 +110,7 @@ export function CodeBlock({
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 gap-1 px-2 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+            className="h-6 gap-1 px-2 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             onClick={(e) => {
               e.stopPropagation();
               copy(code);
@@ -121,9 +121,9 @@ export function CodeBlock({
           </Button>
         </div>
       </div>
-      <pre className="max-h-[400px] overflow-y-auto overflow-x-auto p-4 text-[12px] leading-relaxed bg-background/10">
+      <pre className="max-h-[400px] overflow-y-auto overflow-x-auto p-4 text-[12px] leading-relaxed bg-muted">
         <code
-          className={`font-mono text-foreground/90 language-${normalizedLanguage}`}
+          className={`font-mono text-foreground language-${normalizedLanguage}`}
           dangerouslySetInnerHTML={{ __html: highlightedHtml }}
         />
       </pre>

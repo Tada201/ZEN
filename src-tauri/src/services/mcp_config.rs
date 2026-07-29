@@ -9,6 +9,7 @@
 
 use crate::services::{AuditEvent, PermissionDecision, PrivilegedOperation, SecurityService};
 use crate::workspace;
+use serde::Serialize;
 use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -198,6 +199,153 @@ impl McpConfigService {
             }
         }
     }
+
+    /// Enumerate every server in `.mcp.json`'s `mcpServers` map. Both
+    /// HTTP (`url` field) and stdio (`command`+`args` fields) entries
+    /// are surfaced so the typed settings UI can display every row
+    /// regardless of transport. Entries with neither field are
+    /// filtered out as best-effort rather than aborting the read — a
+    /// partially hand-authored file should still surface its valid
+    /// rows in the UI.
+    pub async fn list_servers(&self) -> Result<Vec<McpServerEntry>, McpConfigError> {
+        let config = self.read_config().await?;
+        let mut entries = Vec::new();
+        if let Some(servers) = config.get("mcpServers").and_then(|v| v.as_object()) {
+            for (name, body) in servers {
+                if let Some(url) = body.get("url").and_then(|v| v.as_str()) {
+                    entries.push(McpServerEntry {
+                        name: name.clone(),
+                        transport: McpTransport::Http,
+                        url: Some(url.to_string()),
+                        command: None,
+                        args: None,
+                    });
+                } else if let Some(command) = body.get("command").and_then(|v| v.as_str()) {
+                    let args: Vec<String> = body
+                        .get("args")
+                        .and_then(|v| v.as_array())
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|v| v.as_str().map(str::to_string))
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    entries.push(McpServerEntry {
+                        name: name.clone(),
+                        transport: McpTransport::Stdio,
+                        url: None,
+                        command: Some(command.to_string()),
+                        args: Some(args),
+                    });
+                }
+            }
+        }
+        Ok(entries)
+    }
+
+    /// Upsert `mcpServers[name].url = url` while preserving any
+    /// unrelated fields on the same entry object (e.g. `headers`,
+    /// `env`, `timeout`). Empty name or url is rejected so we never
+    /// write a malformed `.mcp.json`. The typed shape is intentionally
+    /// additive — the entry body remains a `serde_json::Value` map so
+    /// hand-authored extensions round-trip cleanly.
+    pub async fn add_server(&self, name: &str, url: &str) -> Result<(), McpConfigError> {
+        if name.trim().is_empty() {
+            return Err(McpConfigError::Parse(
+                "<empty name>".to_string(),
+                "MCP server name must not be empty".to_string(),
+            ));
+        }
+        if url.trim().is_empty() {
+            return Err(McpConfigError::Parse(
+                format!("<server '{}'>", name),
+                "MCP server url must not be empty".to_string(),
+            ));
+        }
+        let mut config = self.read_config().await?;
+        let servers = config
+            .as_object_mut()
+            .and_then(|o| o.get_mut("mcpServers"))
+            .and_then(|v| v.as_object_mut())
+            .ok_or_else(|| {
+                McpConfigError::Parse(
+                    "<root>".to_string(),
+                    "mcpServers missing or not an object".to_string(),
+                )
+            })?;
+        let entry = servers
+            .entry(name.to_string())
+            .or_insert_with(|| serde_json::json!({}));
+        match entry.as_object_mut() {
+            Some(obj) => {
+                obj.insert("url".to_string(), serde_json::Value::String(url.to_string()));
+            }
+            None => {
+                // Existing entry was a scalar (legacy users may have
+                // written `"my_server": "http://..."`). Replace it with
+                // a fresh object so future round-trips through the
+                // typed UI keep their structure intact.
+                *entry = serde_json::json!({ "url": url });
+            }
+        }
+        self.save_config(config).await
+    }
+
+    /// Remove `mcpServers[name]` if present. Returns whether removal
+    /// actually happened so the caller can decide whether to trigger
+    /// a follow-up sync — no-op deletes should not churn the registry.
+    pub async fn remove_server(&self, name: &str) -> Result<bool, McpConfigError> {
+        let mut config = self.read_config().await?;
+        let removed = if let Some(servers) = config
+            .as_object_mut()
+            .and_then(|o| o.get_mut("mcpServers"))
+            .and_then(|v| v.as_object_mut())
+        {
+            servers.remove(name).is_some()
+        } else {
+            false
+        };
+        if !removed {
+            // Don't rewrite `.mcp.json` if nothing actually changed.
+            return Ok(false);
+        }
+        self.save_config(config).await?;
+        Ok(true)
+    }
+}
+
+/// Transport type an external MCP server uses. Determined at read
+/// time from the presence of `url` (HTTP) vs `command` (stdio) in
+/// the `.mcp.json` entry.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum McpTransport {
+    /// Streamable HTTP transport (`url` field in `.mcp.json`).
+    Http,
+    /// stdio transport (`command`+`args` fields in `.mcp.json`).
+    Stdio,
+}
+
+/// Typed view of a single `mcpServers[name]` entry. The wire shape
+/// exposes the transport and the relevant fields for that transport;
+/// `url` is `Some` for HTTP entries, `command`/`args` are `Some` for
+/// stdio entries. Arbitrary hand-authored sibling fields (e.g.
+/// `headers`, `env`, `timeout`) stay on disk because the typed
+/// helpers operate on `serde_json::Value` rather than a strict struct
+/// that would silently drop them.
+#[derive(Debug, Clone, Serialize)]
+pub struct McpServerEntry {
+    pub name: String,
+    pub transport: McpTransport,
+    /// Set for HTTP-transport entries.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    /// Set for stdio-transport entries.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    /// Set for stdio-transport entries.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub args: Option<Vec<String>>,
 }
 
 /// Errors raised by `McpConfigService`. The variants are designed so the

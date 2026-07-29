@@ -196,6 +196,17 @@ impl Runner {
         self
     }
 
+    /// Pre-seed the per-run correlation id. When set, `run()` will reuse it
+    /// instead of minting a fresh UUID. This lets a parent correlate every
+    /// event emitted by a child runner (e.g. sub-agent tool calls) with the
+    /// parent's stable id (e.g. spawn_id) instead of a random trace.
+    pub fn with_trace_id(self, trace_id: String) -> Self {
+        if let Ok(mut slot) = self.trace_id.write() {
+            *slot = Some(trace_id);
+        }
+        self
+    }
+
     pub(super) fn emit(&self, event: AgentEvent) {
         event.emit_via(&self.app, &self.on_event);
     }
@@ -204,7 +215,10 @@ impl Runner {
     /// Called once at the top of `run()`. The returned value is also used
     /// to seed the run's tracing span / logs.
     pub(super) fn begin_trace(&self) -> String {
-        let id = uuid::Uuid::new_v4().to_string();
+        // Re-use a pre-seeded trace id so sub-agent runs can be correlated
+        // with their parent's stable spawn_id. If none was provided, mint a
+        // fresh UUID.
+        let id = self.trace_id.read().ok().and_then(|slot| slot.clone()).unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         if let Ok(mut slot) = self.trace_id.write() {
             *slot = Some(id.clone());
         }

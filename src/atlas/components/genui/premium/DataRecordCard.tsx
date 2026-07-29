@@ -7,25 +7,25 @@ export function DataRecordCard({ data }: { data: any }) {
   const fields = data.fields || data.rows || {};
 
   return (
-    <div className="rounded-2xl border border-border/[0.08] bg-background/40 backdrop-blur-md p-5 shadow-lg w-full max-w-md">
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-lg w-full max-w-md">
       <div className="flex items-center gap-3 mb-4">
         {avatar ? (
-          <img src={avatar} alt="" className="w-10 h-10 rounded-full object-cover border border-border/10" />
+          <img src={avatar} alt="" className="w-10 h-10 rounded-full object-cover border border-border" />
         ) : (
-          <div className="w-10 h-10 rounded-full bg-card/[0.04] border border-border/[0.06] flex items-center justify-center">
-            <User size={16} className="text-primary-foreground/30" />
+          <div className="w-10 h-10 rounded-full bg-muted border border-border flex items-center justify-center">
+            <User size={16} className="text-muted-foreground" />
           </div>
         )}
         <div className="min-w-0">
           <h4 className="font-semibold text-primary-foreground text-sm truncate">{title}</h4>
-          {subtitle && <p className="text-[11px] text-primary-foreground/40 truncate">{subtitle}</p>}
+          {subtitle && <p className="text-[11px] text-muted-foreground truncate">{subtitle}</p>}
         </div>
       </div>
-      <div className="space-y-2 border-t border-border/[0.06] pt-3">
+      <div className="space-y-2 border-t border-border pt-3">
         {Object.entries(fields).map(([key, value]) => (
           <div key={key} className="flex justify-between items-baseline gap-3">
-            <span className="text-[10px] text-primary-foreground/40 uppercase tracking-wider shrink-0">{key}</span>
-            <span className="text-[11px] text-primary-foreground/80 text-right truncate font-medium">
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider shrink-0">{key}</span>
+            <span className="text-[11px] text-primary-foreground text-right truncate font-medium">
               {String(value ?? '—')}
             </span>
           </div>

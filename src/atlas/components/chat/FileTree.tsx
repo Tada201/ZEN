@@ -71,28 +71,28 @@ const TreeItem = ({ node }: TreeItemProps) => {
     <div className="select-none">
       <div 
         className={cn(
-          "flex items-center gap-2 py-1 px-2 rounded-md hover:bg-primary/5 transition-colors cursor-pointer group",
+          "flex items-center gap-2 py-1 px-2 rounded-md hover:bg-muted transition-colors cursor-pointer group",
           node.type === "dir" ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground"
         )}
         onClick={() => node.type === "dir" && setIsOpen(!isOpen)}
       >
         <div className="w-4 h-4 flex items-center justify-center">
           {node.type === "dir" && (
-            isOpen ? <ChevronDown className="h-3 w-3 text-muted-foreground/50" /> : <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
+            isOpen ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />
           )}
         </div>
         
         {node.type === "dir" ? (
-          isOpen ? <FolderOpen className="h-4 w-4 text-primary/70" /> : <Folder className="h-4 w-4 text-primary/70" />
+          isOpen ? <FolderOpen className="h-4 w-4 text-primary" /> : <Folder className="h-4 w-4 text-primary" />
         ) : (
-          <File className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary/40 transition-colors" />
+          <File className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
         )}
         
         <span className="text-[13px]">{node.name}</span>
       </div>
 
       {node.type === "dir" && isOpen && node.children && (
-        <div className="ml-4 border-l border-border/20 pl-2 mt-0.5">
+        <div className="ml-4 border-l border-border pl-2 mt-0.5">
           {node.children.map((child, i) => (
             <TreeItem key={i} node={child} />
           ))}
@@ -106,11 +106,11 @@ export const FileTree = ({ content }: { content: string }) => {
   const nodes = React.useMemo(() => parseTree(content), [content]);
 
   return (
-    <div className="my-6 rounded-xl border border-border/40 bg-card/90 shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border/20 bg-muted/80">
+    <div className="my-6 rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted">
         <div className="flex items-center gap-2">
-          <div className="h-2 w-2 rounded-full bg-primary/40 animate-pulse" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Workspace Tree</span>
+          <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Workspace Tree</span>
         </div>
       </div>
       <div className="p-3 font-mono">

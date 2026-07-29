@@ -107,9 +107,15 @@ export interface InterfaceSlice {
   backgroundFit: BackgroundFit;
   backgroundMediaType: BackgroundMediaType;
   optimizedVideos: string[]; // List of paths to optimized video files
+  /** When true, completed successful tool groups remain visible in the chat
+   *  timeline even after the assistant answer arrives (useful for auditing
+   *  past turns). Defaults to false so the transcript stays focused on the
+   *  conversation. Persisted across reloads via the settings storage adapter. */
+  revealCompletedToolHistory: boolean;
 
   setAnimationsEnabled: (enabled: boolean) => void;
   setLowResourceMode: (enabled: boolean) => void;
+  setRevealCompletedToolHistory: (enabled: boolean) => void;
 
   handleWidgetToggle: (widgetId: string) => void;
   handleWidgetReorder: (widgetId: string, direction: "up" | "down") => void;
@@ -371,7 +377,6 @@ export interface IntelligenceSlice {
   memorySummarizationModel: string;
   memorySemanticRecallEnabled: boolean;
   memoryMaxRecalledMessages: number;
-  memoryDriftDetectionEnabled: boolean;
   memoryDriftThreshold: number;
 }
 

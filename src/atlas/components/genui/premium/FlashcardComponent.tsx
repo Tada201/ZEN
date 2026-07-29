@@ -25,21 +25,21 @@ export function FlashcardComponent({ data }: { data: FlashcardData }) {
   const getDifficultyColor = (d: string) => {
     switch (d) {
       case "easy":
-        return "text-emerald-400 border-emerald-500/20 bg-emerald-500/10";
+        return "text-emerald-400 border-emerald-500 bg-emerald-500/10";
       case "hard":
-        return "text-rose-400 border-rose-500/20 bg-rose-500/10";
+        return "text-rose-400 border-rose-500 bg-rose-500/10";
       default:
-        return "text-amber-400 border-amber-500/20 bg-amber-500/10";
+        return "text-amber-400 border-amber-500 bg-amber-500/10";
     }
   };
 
   return (
-    <div className="w-full max-w-sm rounded-2xl border border-border/[0.08] bg-background/40 backdrop-blur-md p-5 shadow-lg flex flex-col min-h-[220px] justify-between relative overflow-hidden group">
+    <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-lg flex flex-col min-h-[220px] justify-between relative overflow-hidden group">
       {/* Card Header metadata */}
       <div className="flex items-center justify-between gap-4 mb-3">
         <div className="flex items-center gap-1.5 min-w-0">
-          <Layers className="w-3.5 h-3.5 text-primary-foreground/30 shrink-0" />
-          <span className="text-[9px] font-mono text-primary-foreground/40 uppercase tracking-widest truncate">
+          <Layers className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-widest truncate">
             {deck ? `${deck} · ` : ""}{topic}
           </span>
         </div>
@@ -53,7 +53,7 @@ export function FlashcardComponent({ data }: { data: FlashcardData }) {
       <div className="flex-1 flex flex-col justify-center py-4 text-center">
         {!flipped ? (
           <div className="flex flex-col gap-2">
-            <h4 className="text-[10px] font-mono uppercase tracking-widest text-primary/70 mb-1 flex items-center justify-center gap-1">
+            <h4 className="text-[10px] font-mono uppercase tracking-widest text-primary mb-1 flex items-center justify-center gap-1">
               <HelpCircle className="w-3 h-3" /> Question
             </h4>
             <p className="text-sm font-semibold text-primary-foreground leading-relaxed font-sans">
@@ -62,14 +62,14 @@ export function FlashcardComponent({ data }: { data: FlashcardData }) {
             {hint && (
               <div className="mt-2.5">
                 {showHint ? (
-                  <p className="text-[10px] text-primary-foreground/40 italic leading-normal">
+                  <p className="text-[10px] text-muted-foreground italic leading-normal">
                     Hint: {hint}
                   </p>
                 ) : (
                   <button
                     type="button"
                     onClick={() => setShowHint(true)}
-                    className="text-[9px] text-primary/60 hover:text-primary hover:underline font-mono"
+                    className="text-[9px] text-primary hover:text-primary hover:underline font-mono"
                   >
                     Reveal Hint
                   </button>
@@ -90,7 +90,7 @@ export function FlashcardComponent({ data }: { data: FlashcardData }) {
       </div>
 
       {/* Flip controls */}
-      <div className="flex justify-center mt-3 pt-3.5 border-t border-border/[0.06]">
+      <div className="flex justify-center mt-3 pt-3.5 border-t border-border">
         <Button
           size="sm"
           type="button"

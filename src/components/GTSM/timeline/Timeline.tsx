@@ -79,7 +79,7 @@ export const Timeline: React.FC = () => {
     };
 
     return (
-        <div className={`border border-border bg-background/45 backdrop-blur-md transition-all duration-200 ${isCollapsed ? "h-8 overflow-hidden" : ""}`}>
+        <div className={`border border-border bg-card transition-all duration-200 ${isCollapsed ? "h-8 overflow-hidden" : ""}`}>
             {/* Header */}
             <div
                 className="flex h-8 min-h-8 items-center justify-between px-2 border-b border-border cursor-pointer select-none"
@@ -93,7 +93,7 @@ export const Timeline: React.FC = () => {
                     />
                     <span className="text-[10px] font-medium">Timeline</span>
                     {historyMode && (
-                        <span className={`text-[9px] px-1.5 py-0.5 border ${isPlaying ? "text-success border-emerald-400/30 bg-success/10" : "text-primary border-primary/30 bg-primary/10"}`}>
+                        <span className={`text-[9px] px-1.5 py-0.5 border ${isPlaying ? "text-success border-success bg-success/10" : "text-primary border-primary bg-primary/10"}`}>
                             {isPlaying ? "Playing" : "Replay"}
                         </span>
                     )}
@@ -121,8 +121,8 @@ export const Timeline: React.FC = () => {
                             }}
                             className={`px-2 py-1 text-[8px] font-bold font-mono tracking-widest border transition-all cursor-pointer ${
                                 historyMode
-                                    ? "bg-primary/10 border-primary/60 text-primary"
-                                    : "bg-muted/50 border-border text-foreground"
+                                    ? "bg-primary/10 border-primary text-primary"
+                                    : "bg-muted border-border text-foreground"
                             }`}
                         >
                             {historyMode ? "Replay" : "Live"}
@@ -136,9 +136,9 @@ export const Timeline: React.FC = () => {
                             className={`w-7 h-7 flex items-center justify-center border transition-all cursor-pointer ${
                                 historyMode
                                     ? isPlaying
-                                        ? "bg-primary/10 border-primary/60 text-primary hover:bg-primary/15"
-                                        : "bg-muted/50 border-border text-muted-foreground hover:border-border hover:text-foreground"
-                                    : "bg-card/60 border-border text-foreground/80 cursor-not-allowed"
+                                        ? "bg-primary/10 border-primary text-primary hover:bg-primary/10"
+                                        : "bg-muted border-border text-muted-foreground hover:border-border hover:text-foreground"
+                                    : "bg-card border-border text-foreground cursor-not-allowed"
                             }`}
                             title={isPlaying ? "Pause" : "Play"}
                         >
@@ -157,7 +157,7 @@ export const Timeline: React.FC = () => {
                                     disabled={!historyMode}
                                     className={`px-1.5 py-0.5 text-[8px] font-bold font-mono border transition-all cursor-pointer ${
                                         playbackSpeed === speed
-                                            ? "bg-primary/10 border-primary/60 text-primary"
+                                            ? "bg-primary/10 border-primary text-primary"
                                             : "bg-transparent border-border text-muted-foreground hover:border-border hover:text-foreground"
                                     } ${!historyMode ? "opacity-40 cursor-not-allowed" : ""}`}
                                 >
@@ -197,7 +197,7 @@ export const Timeline: React.FC = () => {
                                     onClick={() => setTimeWindow(tw)}
                                     className={`px-1.5 py-0.5 text-[7px] font-bold font-mono tracking-wider border transition-all cursor-pointer ${
                                         timeWindow === tw
-                                            ? "bg-primary/10 border-primary/60 text-primary"
+                                            ? "bg-primary/10 border-primary text-primary"
                                             : "bg-transparent border-border text-muted-foreground hover:border-border hover:text-foreground"
                                     }`}
                                 >
@@ -208,7 +208,7 @@ export const Timeline: React.FC = () => {
 
                         {/* Current timestamp */}
                         <div className="flex items-center gap-1.5">
-                            <span className="text-[7px] text-muted-foreground/70 font-bold uppercase tracking-wider">
+                            <span className="text-[7px] text-muted-foreground font-bold uppercase tracking-wider">
                                 {formatDate(currentTime)}
                             </span>
                             <span className="text-[10px] font-medium text-foreground tracking-wide">

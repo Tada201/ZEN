@@ -67,6 +67,7 @@ pub(super) async fn save_assistant_message(params: AssistantMessageSave<'_>) -> 
                 tool_calls: params.tool_calls,
                 reasoning_details: params.reasoning_details,
                 metadata: params.metadata,
+                steps_json: None,
             },
         )
         .await

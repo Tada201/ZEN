@@ -1,0 +1,317 @@
+import type { Step, ToolCall, ActionMeta, SubagentStepData } from "../../components/chat/types";
+
+/**
+ * Projects the live `assistant.steps` timeline down to a small UI-only
+ * summary before persisting it as `steps_json`.
+ *
+ * The full live timeline can carry raw tool arguments, full tool output,
+ * base64 blobs, and subagent transcripts. Persisting those verbatim bloats
+ * the DB row and can exceed the 2 MB backend cap. After reload the UI only
+ * needs enough data to render the progress ledger — completed groups are
+ * hidden once answer text exists, and expanded traces show summaries, not
+ * full replays.
+ *
+ * What is kept:
+ *  - `text` step content (the answer itself)
+ *  - `reasoning` content (capped at REASONING_CAP chars)
+ *  - `tool-call`: tool id, name, status, durationMs, agentName, and a
+ *    compact input containing only target-like fields (file_path, command,
+ *    query, url) so the card can still show "Read file.ts" without
+ *    persisting full arguments. Output is dropped.
+ *  - `action`: kind, status, content, timestamp, and lightweight metadata
+ *    (phase, agentName, iteration, resultSummary, error). Heavy metadata
+ *    (toolResult.rawResult, toolResult.args, toolCall.args) is dropped.
+ *  - `subagent`: spawnId, agentName, task, status, resultSummary, error,
+ *    durationMs. Child transcripts are dropped.
+ *
+ * What is excluded:
+ *  - Raw tool arguments (full input objects)
+ *  - Full tool output (stdout/stderr/diffs/base64)
+ *  - Subagent child transcripts
+ *  - Oversized reasoning blocks
+ */
+const REASONING_CAP = 4000;
+const INPUT_TARGET_KEYS = new Set([
+  "file_path",
+  "filePath",
+  "path",
+  "targetPath",
+  "command",
+  "query",
+  "url",
+  "tool_id",
+  "tool",
+  "name",
+]);
+
+function compactToolCallInput(input: ToolCall["input"]): Record<string, unknown> {
+  if (!input) return {};
+  let record: Record<string, unknown>;
+  if (typeof input === "string") {
+    try {
+      const parsed: unknown = JSON.parse(input);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        record = parsed as Record<string, unknown>;
+      } else {
+        return {};
+      }
+    } catch {
+      return {};
+    }
+  } else if (input && typeof input === "object" && !Array.isArray(input)) {
+    record = input as Record<string, unknown>;
+  } else {
+    return {};
+  }
+  const compacted: Record<string, unknown> = {};
+  for (const key of Object.keys(record)) {
+    if (INPUT_TARGET_KEYS.has(key)) {
+      compacted[key] = record[key];
+    }
+  }
+  // Also check nested arguments for tool_exec-style wrapping.
+  const args = record.arguments;
+  if (args && typeof args === "object" && !Array.isArray(args)) {
+    const argsRecord = args as Record<string, unknown>;
+    for (const key of Object.keys(argsRecord)) {
+      if (INPUT_TARGET_KEYS.has(key)) {
+        compacted[key] = argsRecord[key];
+      }
+    }
+  }
+  return compacted;
+}
+
+/**
+ * Concise, redacted error summary persisted for error-state tools so the
+ * Technical details disclosure still shows what went wrong after reload.
+ *
+ * Why not the raw 1,500-char prefix: the raw output can carry stack traces,
+ * environment variables, request bodies, and credentials echoed back by a
+ * failing tool. Persisting that verbatim bloats the DB row and risks storing
+ * sensitive payloads the UI contract says should not live in normal timeline
+ * data. Instead we keep a small, sanitized summary: secrets are redacted,
+ * whitespace is collapsed, and the result is capped to ~280 chars so the
+ * disclosure stays scannable without retaining full technical payloads.
+ */
+const ERROR_SUMMARY_CAP = 280;
+const SECRET_PATTERN = /(api[_-]?key|authorization|bearer|credential|password|secret|token)[\s:=]+\S+/gi;
+// Also scrub JSON-quoted secrets ("api_key": "sk-...") that a failing tool
+// may echo back in an error body. Handles both the quoted-key form and the
+// trailing comma/brace variants that appear in pretty-printed JSON.
+const JSON_SECRET_PATTERN = /"(api[_-]?key|authorization|bearer|credential|password|secret|token)"\s*:\s*"[^"]*"/gi;
+
+function redactErrorSummary(raw: string): string {
+  if (!raw) return "";
+  const stripped = raw
+    .replace(JSON_SECRET_PATTERN, '"$1":"[redacted]"')
+    .replace(SECRET_PATTERN, (_m, label: string) => `${label}=[redacted]`)
+    .replace(/\s+/g, " ")
+    .trim();
+  if (stripped.length <= ERROR_SUMMARY_CAP) return stripped;
+  return `${stripped.slice(0, ERROR_SUMMARY_CAP - 1)}…`;
+}
+
+function compactToolCall(toolCall: ToolCall): ToolCall {
+  // Error-state tools stay visible after reload (per the hide rule), so keep
+  // a small redacted summary of their output so the Technical details
+  // disclosure still shows what went wrong. Completed/running tools drop
+  // output entirely — completed groups are hidden after the answer arrives,
+  // and running tools are not persisted until they reach a terminal state.
+  const persistedOutput =
+    toolCall.status === "error" && typeof toolCall.output === "string"
+      ? redactErrorSummary(toolCall.output)
+      : "";
+  return {
+    id: toolCall.id,
+    name: toolCall.name,
+    status: toolCall.status,
+    input: compactToolCallInput(toolCall.input),
+    output: persistedOutput,
+    durationMs: toolCall.durationMs,
+    runId: toolCall.runId,
+    messageId: toolCall.messageId,
+    parentAgentId: toolCall.parentAgentId,
+    executionId: toolCall.executionId,
+    toolBatchId: toolCall.toolBatchId,
+    agentId: toolCall.agentId,
+    agentName: toolCall.agentName,
+    iteration: toolCall.iteration,
+    traceId: toolCall.traceId,
+    batchId: toolCall.batchId,
+    startTime: toolCall.startTime,
+    completedAt: toolCall.completedAt,
+    // approvalContext is kept without argumentsPreview (which can be large).
+    approvalContext: toolCall.approvalContext
+      ? {
+          riskLevel: toolCall.approvalContext.riskLevel,
+          description: toolCall.approvalContext.description,
+          suggestedPatterns: toolCall.approvalContext.suggestedPatterns,
+        }
+      : undefined,
+  };
+}
+
+function compactMetadata(metadata: ActionMeta | undefined): ActionMeta | undefined {
+  if (!metadata) return undefined;
+  const compacted: ActionMeta = {};
+  // Keep lightweight identity/progress fields.
+  const keepKeys: Array<keyof ActionMeta> = [
+    "runId",
+    "messageId",
+    "parentAgentId",
+    "executionId",
+    "batchId",
+    "toolBatchId",
+    "agentId",
+    "agentName",
+    "iteration",
+    "depth",
+    "phase",
+    "message",
+    "provider",
+    "model",
+    "toolCount",
+    "parallel",
+    "tools",
+    "workflowId",
+    "totalTasks",
+    "tasksCompleted",
+    "durationMs",
+    "taskId",
+    "assignedTo",
+    "tier",
+    "resultSummary",
+    "error",
+    "recoverable",
+    "progressPercent",
+    "status",
+  ];
+  for (const key of keepKeys) {
+    const value = metadata[key];
+    if (value !== undefined) {
+      (compacted as Record<string, unknown>)[key] = value;
+    }
+  }
+  // Redact/cap the action error so secrets and oversized payloads don't
+  // land in steps_json. The raw error can carry stack traces, environment
+  // variables, or echoed credentials from a failing tool/agent — the same
+  // risk as tool-call output, so it gets the same redactErrorSummary pass.
+  if (typeof compacted.error === "string" && compacted.error.trim()) {
+    compacted.error = redactErrorSummary(compacted.error);
+  }
+  // Keep toolCallPreview but drop argumentsDelta/argumentsPreview (can be large).
+  if (metadata.toolCallPreview) {
+    compacted.toolCallPreview = {
+      index: metadata.toolCallPreview.index,
+      toolCallId: metadata.toolCallPreview.toolCallId,
+      toolName: metadata.toolCallPreview.toolName,
+      ready: metadata.toolCallPreview.ready,
+    };
+  }
+  // Keep toolResult summary but drop rawResult and args. Redact/cap the
+  // summary for error/timeout results so secrets and oversized payloads
+  // don't land in steps_json — a failing tool can echo credentials, env
+  // vars, or stack traces back in its summary, the same risk as the
+  // tool-call output and metadata.error paths. Successful ('ok') summaries
+  // (e.g. "Edited 3 files (+12 −4)") stay verbatim so the card's scannable
+  // outcome line survives reload.
+  if (metadata.toolResult) {
+    const resultStatus = metadata.toolResult.status || "ok";
+    const rawSummary = metadata.toolResult.contentSummary;
+    compacted.toolResult = {
+      toolName: metadata.toolResult.toolName,
+      status: resultStatus,
+      durationMs: metadata.toolResult.durationMs,
+      contentSummary:
+        (resultStatus === "error" || resultStatus === "timeout") &&
+        typeof rawSummary === "string" &&
+        rawSummary.trim()
+          ? redactErrorSummary(rawSummary)
+          : rawSummary,
+      files: metadata.toolResult.files,
+    };
+  }
+  // Keep spawn summary but drop nothing extra (SpawnMeta is already lightweight).
+  if (metadata.spawn) {
+    compacted.spawn = metadata.spawn;
+  }
+  // Keep approval/clarification context (needed for display) but drop arguments.
+  if (metadata.approvalRequest) {
+    compacted.approvalRequest = {
+      tool_call_id: metadata.approvalRequest.tool_call_id,
+      tool_name: metadata.approvalRequest.tool_name,
+      arguments: {},
+      chat_id: metadata.approvalRequest.chat_id,
+      model: metadata.approvalRequest.model,
+      context: metadata.approvalRequest.context,
+    };
+  }
+  if (metadata.clarificationRequest) {
+    compacted.clarificationRequest = metadata.clarificationRequest;
+  }
+  // Keep research progress summaries.
+  if (metadata.researchSteps) {
+    compacted.researchSteps = metadata.researchSteps;
+  }
+  if (metadata.researchProgress) {
+    compacted.researchProgress = metadata.researchProgress;
+  }
+  return compacted;
+}
+
+function compactSubagent(subagent: SubagentStepData | undefined): SubagentStepData | undefined {
+  if (!subagent) return undefined;
+  return {
+    spawnId: subagent.spawnId,
+    parentToolCallId: subagent.parentToolCallId,
+    agentId: subagent.agentId,
+    agentName: subagent.agentName,
+    task: subagent.task,
+    status: subagent.status,
+    resultSummary: subagent.resultSummary,
+    // Redact/cap the subagent error for the same reason as action/tool
+    // errors: the raw message can carry stack traces, env vars, or
+    // credentials echoed back by a failing child agent.
+    error: subagent.error ? redactErrorSummary(subagent.error) : subagent.error,
+    durationMs: subagent.durationMs,
+    timestamp: subagent.timestamp,
+    // childToolCallIds dropped — child work is not persisted in the parent.
+  };
+}
+
+export function projectStepsForPersistence(steps: Step[] | undefined): Step[] {
+  if (!steps || steps.length === 0) return [];
+
+  return steps.map((step): Step => {
+    switch (step.type) {
+      case "text":
+        return { ...step };
+      case "reasoning":
+        return {
+          ...step,
+          content:
+            typeof step.content === "string" && step.content.length > REASONING_CAP
+              ? `${step.content.slice(0, REASONING_CAP)}…`
+              : step.content,
+        };
+      case "tool-call":
+        return {
+          ...step,
+          toolCall: step.toolCall ? compactToolCall(step.toolCall) : undefined,
+        };
+      case "action":
+        return {
+          ...step,
+          metadata: compactMetadata(step.metadata),
+        };
+      case "subagent":
+        return {
+          ...step,
+          subagent: compactSubagent(step.subagent),
+        };
+      default:
+        return step;
+    }
+  });
+}

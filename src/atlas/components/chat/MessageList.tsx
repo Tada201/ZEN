@@ -96,7 +96,7 @@ export const MessageList = memo(function MessageList({
     <ScrollArea ref={scrollRef} className="flex-1 bg-transparent">
       {filteredMessages.length === 0 ? (
         <div className="flex flex-col items-center justify-center px-6 pt-32 text-center">
-          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/5 text-primary">
+          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted text-primary">
             <Bot className="h-8 w-8" />
           </div>
         </div>

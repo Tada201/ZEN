@@ -13,7 +13,7 @@ export const ViewportHUD: React.FC = () => {
     const altKM = (center.alt / 1000).toFixed(2);
 
     return (
-        <div className={`border border-border bg-background/45 backdrop-blur-md transition-all duration-200 ${isCollapsed ? 'h-8 overflow-hidden' : ''}`}>
+        <div className={`border border-border bg-card transition-all duration-200 ${isCollapsed ? 'h-8 overflow-hidden' : ''}`}>
             {/* Header */}
             <div 
                 className="flex h-8 min-h-8 items-center justify-between px-2 border-b border-border cursor-pointer select-none"
@@ -29,7 +29,7 @@ export const ViewportHUD: React.FC = () => {
                             e.stopPropagation();
                             setTargetLocked(!targetLocked);
                         }}
-                        className={`p-1 bg-transparent hover:bg-muted/40 border-0 transition-colors cursor-pointer ${targetLocked ? 'text-cyan-400' : 'text-muted-foreground'}`}
+                        className={`p-1 bg-transparent hover:bg-muted border-0 transition-colors cursor-pointer ${targetLocked ? 'text-cyan-400' : 'text-muted-foreground'}`}
                         title={targetLocked ? "Unlock Camera" : "Lock to Target"}
                     >
                         {targetLocked ? <WorkbenchIcon name="solar:lock-bold" size={11} /> : <WorkbenchIcon name="solar:lock-open-bold" size={11} />}
@@ -51,11 +51,11 @@ export const ViewportHUD: React.FC = () => {
                         <span className="text-[8px] text-muted-foreground">Longitude</span>
                         <span className="text-[10px] font-medium text-foreground">{lonStr}</span>
                     </div>
-                    <div className="flex flex-col gap-0.5 border-t border-border/60 pt-1.5 mt-0.5">
+                    <div className="flex flex-col gap-0.5 border-t border-border pt-1.5 mt-0.5">
                         <span className="text-[8px] text-muted-foreground">Altitude</span>
                         <span className="text-[10px] font-medium text-foreground">{altKM} km</span>
                     </div>
-                    <div className="flex flex-col gap-0.5 border-t border-border/60 pt-1.5 mt-0.5">
+                    <div className="flex flex-col gap-0.5 border-t border-border pt-1.5 mt-0.5">
                         <span className="text-[8px] text-muted-foreground">Resolution</span>
                         <span className="text-[10px] font-medium text-foreground">30 m/px</span>
                     </div>

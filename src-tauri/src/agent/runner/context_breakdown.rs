@@ -206,7 +206,7 @@ pub fn tool_catalog_totals(exposed_tools: &[crate::tools::ToolInfo]) -> ToolCata
         let tokens = estimate_tokens(&tool.name)
             + estimate_tokens(&tool.description)
             + estimate_tokens(&schema);
-        if crate::mcp::McpClient::is_external_tool(&tool.name) {
+        if crate::mcp::client::is_external_tool_name(&tool.name) {
             totals.mcp_tools += tokens;
         } else {
             totals.system_tools += tokens;
@@ -334,7 +334,7 @@ fn synthetic_tool_sections(
     exposed_tools: &[crate::tools::ToolInfo],
 ) -> Vec<ContextSection> {
     let mut rows = Vec::new();
-    let is_ext = |t: &&crate::tools::ToolInfo| crate::mcp::McpClient::is_external_tool(&t.name);
+    let is_ext = |t: &&crate::tools::ToolInfo| crate::mcp::client::is_external_tool_name(&t.name);
 
     if totals.system_tools > 0 {
         let names: Vec<&str> = exposed_tools

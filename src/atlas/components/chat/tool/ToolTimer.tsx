@@ -13,7 +13,7 @@ export function ToolTimer({ startTime, durationMs }: ToolTimerProps) {
   const mins = Math.floor(elapsed / 60);
   const secs = elapsed % 60;
   return (
-    <span className="tabular-nums text-muted-foreground/70 font-mono text-[10px] ml-2">
+    <span className="tabular-nums text-muted-foreground font-mono text-[10px] ml-2">
       [{mins.toString().padStart(2, '0')}:{secs.toString().padStart(2, '0')}s]
     </span>
   );

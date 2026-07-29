@@ -60,6 +60,5 @@ export interface IntelligenceConfig {
   summarizationModel: string;
   semanticRecallEnabled: boolean;
   maxRecalledMessages: number;
-  driftDetectionEnabled: boolean;
   driftThreshold: number;
 }

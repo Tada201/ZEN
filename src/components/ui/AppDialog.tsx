@@ -32,8 +32,8 @@ export function AppDialog({
 }: AppDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn('max-h-[min(86vh,760px)] w-[min(92vw,680px)] gap-0 overflow-hidden border-border/15 bg-background/95 p-0 text-foreground shadow-2xl shadow-black/70 backdrop-blur-xl sm:rounded-none', className)}>
-        <DialogHeader className="border-b border-border/10 px-4 py-3 text-left">
+      <DialogContent className={cn('max-h-[min(86vh,760px)] w-[min(92vw,680px)] gap-0 overflow-hidden border-border bg-background p-0 text-foreground shadow-2xl sm:rounded-none', className)}>
+        <DialogHeader className="border-b border-border px-4 py-3 text-left">
           <DialogTitle className="text-sm font-semibold tracking-normal text-foreground">{title}</DialogTitle>
           {description ? <DialogDescription className="mt-1 text-xs leading-5 text-muted-foreground">{description}</DialogDescription> : null}
         </DialogHeader>
@@ -41,7 +41,7 @@ export function AppDialog({
           <X size={16} />
         </DialogClose>
         <div className="min-h-0 overflow-y-auto p-4">{children}</div>
-        {footer ? <footer className="flex items-center justify-end gap-2 border-t border-border/10 px-4 py-3">{footer}</footer> : null}
+        {footer ? <footer className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">{footer}</footer> : null}
       </DialogContent>
     </Dialog>
   );

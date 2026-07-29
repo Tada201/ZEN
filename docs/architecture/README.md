@@ -18,6 +18,8 @@ Start here:
    `docs/architecture/privileged-operations.md`.
 10. For frontend product, security, performance, and state rules, read
    `docs/architecture/frontend-rules.md`.
+11. For the chat execution timeline persistence flow, read
+   `docs/architecture/execution-timeline-persistence.md`.
 
 This directory should hold architecture decisions, not loose notes. If a new
 pattern is introduced, document the owner, the allowed path, and what not to do.

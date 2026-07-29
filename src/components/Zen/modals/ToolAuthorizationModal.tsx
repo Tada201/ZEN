@@ -39,10 +39,10 @@ export function ToolAuthorizationModal({ pendingRequests, onApprove, onDeny }: T
     if (!currentRequest) return null;
 
     const riskColors: Record<string, string> = {
-        low: 'text-success border-success/30 bg-success/5',
-        medium: 'text-warning border-warning/30 bg-warning/5',
-        high: 'text-orange-500 border-orange-500/30 bg-orange-500/5',
-        critical: 'text-destructive border-destructive/30 bg-destructive/5',
+        low: 'text-success border-success bg-success/10',
+        medium: 'text-warning border-warning bg-warning/10',
+        high: 'text-orange-500 border-orange-500 bg-orange-500/10',
+        critical: 'text-destructive border-destructive bg-destructive/10',
     };
 
     const riskLevel = currentRequest.context?.risk_level ?? 'medium';
@@ -67,12 +67,12 @@ export function ToolAuthorizationModal({ pendingRequests, onApprove, onDeny }: T
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-8">
             {/* Backdrop */}
-            <div className="absolute inset-0 bg-background/90 backdrop-blur-sm" />
+            <div className="absolute inset-0 bg-card" />
 
             {/* Modal */}
             <div className="relative w-full max-w-lg bg-card border border-border rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/30">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted">
                     <div className="flex items-center gap-3">
                         <Shield size={16} className="text-warning" />
                         <span className="text-[11px] font-black uppercase tracking-[0.2em] text-foreground">Tool Authorization</span>
@@ -110,7 +110,7 @@ export function ToolAuthorizationModal({ pendingRequests, onApprove, onDeny }: T
 
                         <div className="flex flex-col gap-1.5">
                             <label className="text-[8px] font-mono text-muted-foreground uppercase tracking-widest">Payload Arguments</label>
-                            <pre className="mt-1 p-4 bg-background/50 rounded-lg border border-border text-[10px] font-mono text-muted-foreground overflow-x-auto max-h-48 scrollbar-thin">
+                            <pre className="mt-1 p-4 bg-card rounded-lg border border-border text-[10px] font-mono text-muted-foreground overflow-x-auto max-h-48 scrollbar-thin">
                                 {currentRequest.context?.arguments_preview ??
                                     JSON.stringify(currentRequest.arguments, null, 2)}
                             </pre>
@@ -119,7 +119,7 @@ export function ToolAuthorizationModal({ pendingRequests, onApprove, onDeny }: T
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-3 px-6 py-4 border-t border-border bg-muted/20">
+                <div className="flex items-center gap-3 px-6 py-4 border-t border-border bg-muted">
                     {pendingRequests.length > 1 && (
                         <div className="flex items-center gap-1">
                             <Button
@@ -149,7 +149,7 @@ export function ToolAuthorizationModal({ pendingRequests, onApprove, onDeny }: T
                             size="sm"
                             onClick={handleDeny}
                             disabled={isProcessing}
-                            className="h-9 gap-2 px-4 border-destructive/20 text-destructive hover:bg-destructive/10 hover:border-destructive/30 text-[10px] font-bold uppercase tracking-widest"
+                            className="h-9 gap-2 px-4 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground hover:border-destructive text-[10px] font-bold uppercase tracking-widest"
                         >
                             <XCircle size={12} />
                             Deny
@@ -178,7 +178,7 @@ export function ToolAuthorizationModal({ pendingRequests, onApprove, onDeny }: T
                                         key={i}
                                         onClick={() => handleApprove(pattern)}
                                         disabled={isProcessing}
-                                        className="px-3 py-1.5 rounded bg-muted border border-border text-[9px] font-mono text-muted-foreground hover:text-primary hover:border-primary/30 hover:bg-primary/5 transition-all"
+                                        className="px-3 py-1.5 rounded bg-muted border border-border text-[9px] font-mono text-muted-foreground hover:text-primary hover:border-primary hover:bg-primary/10 transition-all"
                                     >
                                         {pattern}
                                     </button>

@@ -4,7 +4,7 @@ import { useChatStore } from "@/lib/stores/useChatStore";
 import { useTaskStore } from "@/lib/stores/taskStore";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import type { Message, ToolCall, ArtifactData } from "@/atlas/components/chat/types";
-import { AgentExecutionTrace } from "@/atlas/components/chat/AgentExecutionTrace";
+import { ExecutionGroup } from "@/atlas/components/chat/ExecutionGroup";
 import { ChevronLeft, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -223,7 +223,7 @@ function SubAgentInspector({
         </button>
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px] font-semibold text-foreground">{task.agentName || task.agentId || "Sub-agent"}</div>
-          <div className="text-[11px] text-muted-foreground">{task.id}</div>
+          <div className="text-[11px] text-muted-foreground">Delegated work</div>
         </div>
         <button
           type="button"
@@ -260,11 +260,12 @@ function SubAgentInspector({
             <div className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">
               Execution trace ({filteredToolCalls.length} tool{filteredToolCalls.length === 1 ? "" : "s"})
             </div>
-            <AgentExecutionTrace
+            <ExecutionGroup
               toolCalls={filteredToolCalls}
+              executionSteps={[]}
               sessionId={task.chatId}
               onOpenArtifact={handleOpenArtifact}
-              preferCompact
+              isStreaming={task.status === "in_progress"}
             />
           </div>
         ) : (

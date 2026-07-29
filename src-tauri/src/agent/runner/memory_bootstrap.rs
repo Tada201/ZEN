@@ -9,7 +9,6 @@ pub(super) struct MemoryRunSettings {
     pub summarization_enabled: bool,
     pub semantic_recall_enabled: bool,
     pub max_recalled_messages: usize,
-    pub drift_detection_enabled: bool,
 }
 
 pub(super) async fn load_memory_run_settings(
@@ -20,7 +19,6 @@ pub(super) async fn load_memory_run_settings(
     let mut summarization_enabled = true;
     let mut semantic_recall_enabled = true;
     let mut max_recalled_messages = 5;
-    let mut drift_detection_enabled = true;
 
     if let Some(db) = db_pool {
         let (
@@ -28,14 +26,12 @@ pub(super) async fn load_memory_run_settings(
             r_summ_model,
             r_recall_enabled,
             r_recall_max,
-            r_drift_enabled,
             r_drift_threshold,
         ) = tokio::join!(
             queries::get_setting(db, "memory.summarization_enabled"),
             queries::get_setting(db, "memory.summarization_model"),
             queries::get_setting(db, "memory.semantic_recall_enabled"),
             queries::get_setting(db, "memory.max_recalled_messages"),
-            queries::get_setting(db, "memory.drift_detection_enabled"),
             queries::get_setting(db, "memory.drift_threshold"),
         );
 
@@ -53,9 +49,6 @@ pub(super) async fn load_memory_run_settings(
                 max_recalled_messages = p;
             }
         }
-        if let Ok(Some(val)) = r_drift_enabled {
-            drift_detection_enabled = val != "false";
-        }
         if let Ok(Some(val)) = r_drift_threshold {
             if let Ok(p) = val.parse::<f32>() {
                 run_config.drift_threshold = p;
@@ -68,7 +61,6 @@ pub(super) async fn load_memory_run_settings(
         summarization_enabled,
         semantic_recall_enabled,
         max_recalled_messages,
-        drift_detection_enabled,
     }
 }
 

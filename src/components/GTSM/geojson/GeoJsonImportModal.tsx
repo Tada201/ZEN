@@ -53,14 +53,14 @@ export const GeoJsonImportModal: React.FC<GeoJsonImportModalProps> = ({
       description="Review the local data before adding it to the map workspace."
       footer={(
         <>
-          <button type="button" onClick={onCancel} className="border border-border bg-muted/40 px-3 py-2 text-[11px] text-foreground hover:bg-muted">Cancel</button>
-          <button type="button" onClick={handleConfirm} className="border border-primary/40 bg-primary/15 px-3 py-2 text-[11px] font-medium text-primary hover:bg-primary/25">Import layer</button>
+          <button type="button" onClick={onCancel} className="border border-border bg-muted px-3 py-2 text-[11px] text-foreground hover:bg-muted">Cancel</button>
+          <button type="button" onClick={handleConfirm} className="border border-primary bg-primary/10 px-3 py-2 text-[11px] font-medium text-primary hover:bg-primary/10">Import layer</button>
         </>
       )}
       className="font-mono"
     >
       <div className="flex flex-col gap-4 text-xs">
-        <div className="bg-muted/30 border border-border p-2.5 flex flex-col gap-1 text-[10px] text-muted-foreground">
+        <div className="bg-muted border border-border p-2.5 flex flex-col gap-1 text-[10px] text-muted-foreground">
           <div className="flex justify-between">
             <span>FILE:</span>
             <span className="text-foreground truncate max-w-[240px]">{fileName}</span>
@@ -82,7 +82,7 @@ export const GeoJsonImportModal: React.FC<GeoJsonImportModalProps> = ({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full h-8 px-2.5 bg-muted/30 border border-border text-foreground focus:outline-none focus:border-primary/60 transition-colors"
+              className="w-full h-8 px-2.5 bg-muted border border-border text-foreground focus:outline-none focus:border-primary transition-colors"
             />
           </div>
 
@@ -91,7 +91,7 @@ export const GeoJsonImportModal: React.FC<GeoJsonImportModalProps> = ({
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full h-16 p-2 bg-muted/30 border border-border text-foreground focus:outline-none focus:border-primary/60 resize-none transition-colors"
+              className="w-full h-16 p-2 bg-muted border border-border text-foreground focus:outline-none focus:border-primary resize-none transition-colors"
             />
           </div>
 

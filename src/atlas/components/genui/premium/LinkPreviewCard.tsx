@@ -24,7 +24,7 @@ export function LinkPreviewCard({ data }: { data: LinkPreviewData }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex flex-col sm:flex-row items-stretch w-full max-w-lg rounded-xl border border-border/[0.08] bg-background/40 hover:bg-card/[0.02] active:bg-card/[0.04] transition-all overflow-hidden group shadow-lg"
+      className="flex flex-col sm:flex-row items-stretch w-full max-w-lg rounded-xl border border-border bg-card hover:bg-muted active:bg-muted transition-all overflow-hidden group shadow-lg"
     >
       <div className="flex flex-col flex-1 p-4 min-w-0 justify-between">
         <div>
@@ -39,9 +39,9 @@ export function LinkPreviewCard({ data }: { data: LinkPreviewData }) {
                 }}
               />
             ) : (
-              <Globe className="w-3.5 h-3.5 text-primary-foreground/30" />
+              <Globe className="w-3.5 h-3.5 text-muted-foreground" />
             )}
-            <span className="text-[10px] font-mono tracking-wider text-primary-foreground/40 truncate">{domain}</span>
+            <span className="text-[10px] font-mono tracking-wider text-muted-foreground truncate">{domain}</span>
           </div>
 
           <h3 className="text-sm font-semibold text-primary-foreground group-hover:text-primary transition-colors line-clamp-2 leading-snug">
@@ -49,22 +49,22 @@ export function LinkPreviewCard({ data }: { data: LinkPreviewData }) {
           </h3>
 
           {description && (
-            <p className="text-[11px] text-primary-foreground/50 mt-1.5 line-clamp-3 leading-relaxed">
+            <p className="text-[11px] text-primary-foreground mt-1.5 line-clamp-3 leading-relaxed">
               {description}
             </p>
           )}
         </div>
 
-        <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-border/[0.04] text-[10px] text-primary-foreground/30 font-mono">
+        <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-border text-[10px] text-muted-foreground font-mono">
           {publishedAt && <span>{publishedAt}</span>}
-          <span className="flex items-center gap-1 ml-auto text-primary/60 group-hover:text-primary transition-colors">
+          <span className="flex items-center gap-1 ml-auto text-primary group-hover:text-primary transition-colors">
             Visit link <ExternalLink className="w-3 h-3" />
           </span>
         </div>
       </div>
 
       {image && (
-        <div className="relative w-full sm:w-36 h-36 sm:h-auto shrink-0 overflow-hidden bg-card/5 border-t sm:border-t-0 sm:border-l border-border/[0.08]">
+        <div className="relative w-full sm:w-36 h-36 sm:h-auto shrink-0 overflow-hidden bg-muted border-t sm:border-t-0 sm:border-l border-border">
           <img
             src={image}
             alt=""

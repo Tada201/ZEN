@@ -328,39 +328,25 @@ export function IntelligenceSettings({ settings, onUpdate }: IntelligenceSetting
         )}
 
         <SettingsRow
-          label="Drift Detection"
-          description="Detect and notify when conversation shifts from the original topic"
+          label="Drift Threshold"
+          description="Similarity score lower bound before triggering drift alert"
           control={
-            <WorkbenchSwitch
-              checked={settings["memory.drift_detection_enabled"] !== "false"}
-              onCheckedChange={v => onUpdate("memory.drift_detection_enabled", String(v))}
-            />
+            <div className="flex items-center gap-2 w-[140px]">
+              <WorkbenchSlider
+                value={[parseFloat(settings["memory.drift_threshold"] || "0.3")]}
+                onValueChange={([v]) => onUpdate("memory.drift_threshold", String(v))}
+                min={0.1}
+                max={0.8}
+                step={0.05}
+                className="flex-1"
+              />
+              <span className="text-[11px] font-mono text-muted-foreground w-8 text-right">
+                {parseFloat(settings["memory.drift_threshold"] || "0.3").toFixed(2)}
+              </span>
+            </div>
           }
-          icon="lucide:compass"
+          icon="lucide:alert-circle"
         />
-
-        {settings["memory.drift_detection_enabled"] !== "false" && (
-          <SettingsRow
-            label="Drift Threshold"
-            description="Similarity score lower bound before triggering drift alert"
-            control={
-              <div className="flex items-center gap-2 w-[140px]">
-                <WorkbenchSlider
-                  value={[parseFloat(settings["memory.drift_threshold"] || "0.3")]}
-                  onValueChange={([v]) => onUpdate("memory.drift_threshold", String(v))}
-                  min={0.1}
-                  max={0.8}
-                  step={0.05}
-                  className="flex-1"
-                />
-                <span className="text-[11px] font-mono text-muted-foreground w-8 text-right">
-                  {parseFloat(settings["memory.drift_threshold"] || "0.3").toFixed(2)}
-                </span>
-              </div>
-            }
-            icon="lucide:alert-circle"
-          />
-        )}
       </SettingsSection>
     </div>
   );

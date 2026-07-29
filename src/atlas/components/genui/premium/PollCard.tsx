@@ -41,13 +41,13 @@ export function PollCard({ data }: { data: PollData }) {
   const hasSelection = Object.values(selected).some(Boolean);
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-border/[0.08] bg-background/40 backdrop-blur-md p-5 shadow-lg">
+    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-lg">
       <div className="flex items-start gap-2.5 mb-3.5">
-        <div className="p-1.5 rounded-lg border border-primary/20 bg-primary/10 text-primary shrink-0 mt-0.5">
+        <div className="p-1.5 rounded-lg border border-primary bg-primary/10 text-primary shrink-0 mt-0.5">
           <HelpCircle className="w-3.5 h-3.5" />
         </div>
         <div className="min-w-0 flex-1">
-          <span className="text-[9px] uppercase font-mono tracking-widest text-primary/70">
+          <span className="text-[9px] uppercase font-mono tracking-widest text-primary">
             {allowMultiple ? "Multiple Choice Poll" : "Single Choice Poll"}
           </span>
           <h3 className="text-sm font-semibold text-primary-foreground mt-0.5 leading-snug">{question}</h3>
@@ -66,14 +66,14 @@ export function PollCard({ data }: { data: PollData }) {
               className={`flex items-start gap-3 w-full text-left p-3 rounded-xl border transition-all ${
                 isSelected
                   ? "bg-primary/10 border-primary text-primary-foreground"
-                  : "bg-card/[0.02] border-border/[0.06] hover:bg-card/[0.04] text-primary-foreground/70 hover:text-primary-foreground"
+                  : "bg-muted border-border hover:bg-muted text-primary-foreground hover:text-primary-foreground"
               } ${submitted ? "opacity-60 cursor-not-allowed" : ""}`}
             >
               <div className="shrink-0 mt-0.5 text-primary">
                 {allowMultiple ? (
                   isSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4 opacity-50" />
                 ) : (
-                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${isSelected ? "border-primary bg-primary" : "border-border/30"}`}>
+                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${isSelected ? "border-primary bg-primary" : "border-border"}`}>
                     {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-background" />}
                   </div>
                 )}
@@ -81,7 +81,7 @@ export function PollCard({ data }: { data: PollData }) {
               <div className="min-w-0 flex-1">
                 <span className="text-[12px] font-semibold block">{opt.label}</span>
                 {opt.description && (
-                  <span className="text-[10px] text-primary-foreground/40 block mt-0.5 leading-relaxed">{opt.description}</span>
+                  <span className="text-[10px] text-muted-foreground block mt-0.5 leading-relaxed">{opt.description}</span>
                 )}
               </div>
             </button>
@@ -91,7 +91,7 @@ export function PollCard({ data }: { data: PollData }) {
 
       <div className="flex items-center justify-between gap-4 mt-2">
         {context ? (
-          <span className="text-[10px] text-primary-foreground/30 leading-normal">{context}</span>
+          <span className="text-[10px] text-muted-foreground leading-normal">{context}</span>
         ) : (
           <div />
         )}
@@ -103,7 +103,7 @@ export function PollCard({ data }: { data: PollData }) {
               variant="ghost"
               type="button"
               onClick={handleClear}
-              className="h-8 text-xs font-semibold text-primary-foreground/60 hover:text-primary-foreground hover:bg-card/5 px-3"
+              className="h-8 text-xs font-semibold text-primary-foreground hover:text-primary-foreground hover:bg-muted px-3"
             >
               Clear
             </Button>

@@ -329,6 +329,27 @@ impl ToolRegistry {
         self.tools.get(name).map(|tool| tool.risk_level())
     }
 
+    /// Remove every direct-tool registration whose `name` starts with
+    /// `prefix`. Returns the number of tools actually removed. Used to
+    /// wipe `ext:*` adapters before a fresh `sync_external_servers`
+    /// so a re-sync can't leave stale entries behind when servers are
+    /// removed from `.mcp.json`. Safe to call on an empty registry.
+    pub fn remove_by_prefix(&mut self, prefix: &str) -> usize {
+        let to_remove: Vec<String> = self
+            .tools
+            .keys()
+            .filter(|k| k.starts_with(prefix))
+            .cloned()
+            .collect();
+        let count = to_remove.len();
+        for name in &to_remove {
+            self.tools.remove(name);
+            self.known_tool_risks.remove(name);
+            self.known_tool_definitions.remove(name);
+        }
+        count
+    }
+
     /// List tool definitions (for sending to LLM as available tools)
     pub fn list(&self) -> Vec<ToolInfo> {
         let mut infos: Vec<ToolInfo> = self.tools.values().map(|t| t.info()).collect();
@@ -374,21 +395,51 @@ impl ToolRegistry {
     ) -> Result<PermissionDecision, ToolError> {
         self.validate_arguments(tool_call)?;
 
+        // Resolve the adapter here so the post-process below can read
+        // its MCP `annotations()`; the layered decision logic in
+        // `PermissionDecision::from_input` doesn't know about hints.
+        let tool_opt = self.get(&tool_call.name);
+
         // If the tool exists in our local registry, use its specific risk level.
         // Then check known_tool_risks for AgentTool-only tools.
         // Otherwise, assume Critical risk for truly unknown tools.
-        let risk_level = self
-            .get(&tool_call.name)
-            .map(|t| t.risk_level())
+        let risk_level = tool_opt
+            .as_ref()
+            .map(|tool| tool.risk_level())
             .or_else(|| self.known_tool_risks.get(&tool_call.name).copied())
             .unwrap_or(RiskLevel::Critical);
 
-        let decision = PermissionDecision::from_input(
+        let mut decision = PermissionDecision::from_input(
             &tool_call.name,
             &tool_call.arguments,
             risk_level,
             overrides.unwrap_or(&self.permissions),
         );
+
+        // MCP destructive-annotation override. Per the 2025-06-18 spec,
+        // `destructiveHint = true` is a server-supplied hint that the
+        // tool "may perform destructive updates". We honour that hint
+        // as a hard confirmation gate even if surrounding policy would
+        // otherwise Allow (Yolo mode, global default Allow,
+        // `always_allow` pattern). We ONLY rewrite an existing `Allow`:
+        // hardcoded denies and explicit user denies stay in effect so
+        // the post-process can't accidentally soften a Deny.
+        if matches!(decision, PermissionDecision::Allow) {
+            let is_destructive = tool_opt
+                .as_ref()
+                .and_then(|t| t.annotations())
+                .and_then(|a| a.destructive_hint)
+                .unwrap_or(false);
+            if is_destructive {
+                decision = PermissionDecision::Confirm {
+                    context: permission::build_context(
+                        &tool_call.name,
+                        &tool_call.arguments,
+                        risk_level,
+                    ),
+                };
+            }
+        }
 
         Ok(decision)
     }

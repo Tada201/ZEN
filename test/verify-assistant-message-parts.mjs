@@ -7,9 +7,15 @@ const parserSourcePath = new URL("../src/atlas/components/chat/assistantCardPars
 const parserSource = readFileSync(parserSourcePath, "utf8")
   .replace(/export interface ParsedCard \{[\s\S]*?\n\}/, "")
   .replace(/export function parseCardTags/, "export function parseCardTags");
+// Multi-line-aware strippers: assistantMessageParts.ts re-exports several names
+// (parseCardTags + types + helper regexes + splitOnCardTokens) across multiple
+// lines, so the prior single-line regex wouldn't match and the verifier
+// crashed with "Identifier 'parseCardTags' has already been declared".
+const stripImport = /import\s*\{[^}]*?\bparseCardTags\b[^}]*?\}\s*from\s*["'][^"']+["'];?/g;
+const stripExport = /export\s*\{[^}]*?\bparseCardTags\b[^}]*?\}\s*from\s*["'][^"']+["'];?/g;
 const source = `${parserSource}\n${readFileSync(sourcePath, "utf8")
-  .replace(/import\s+\{\s*parseCardTags,\s*type\s+ParsedCard\s*\}\s+from\s+"[^"]+";\r?\n/, "")
-  .replace(/export\s+\{\s*parseCardTags,\s*type\s+ParsedCard\s*\}\s+from\s+"[^"]+";\r?\n/, "")}`.replace(
+  .replace(stripImport, "")
+  .replace(stripExport, "")}`.replace(
   'import { CHAT_STATUS_PHASES } from "@/api/chatStatus";',
   'const CHAT_STATUS_PHASES = { AgentStreaming: "agent_streaming", ToolCallStreaming: "tool_call_streaming", ToolCallReady: "tool_call_ready" };',
 );
@@ -49,13 +55,19 @@ const { extractInlineThoughtBlocks } = await import(typesModuleUrl);
 const parsed = parseCardTags('Before <card>{"type":"metric","data":{"value":42}}</card> After');
 assert.equal(parsed.cards.length, 1, "card tags should be extracted");
 assert.equal(parsed.cards[0].type, "metric", "card type should be preserved");
-assert.equal(parsed.cleanText, "Before  After", "card markup should be removed from text");
+assert.equal(parsed.cleanText, "Before %%CARD_0%% After", "card markup should be replaced with a position marker so the renderer can interleave inline");
+assert.equal(parsed.orderedCards.length, 1, "orderedCards should mirror the cards array length");
+assert.equal(parsed.orderedCards[0].index, 0, "orderedCards index should be 0-based");
+assert.equal(parsed.orderedCards[0].position, 7, "orderedCards position should point to the marker offset in cleanText");
+assert.deepEqual(parsed.orderedCards[0].card, parsed.cards[0], "orderedCards entry should reference the same payload as cards[i]");
 
 const partial = parseCardTags('Start <card>{"type":"metric"');
 assert(partial.cleanText.includes("Generating card"), "partial card JSON should show a generation placeholder");
+assert.equal(partial.cards.length, 0, "partial card JSON should not emit a card");
 
 const malformedCompleteCard = parseCardTags('Before <card>{"type":</card> After');
 assert.equal(malformedCompleteCard.cards.length, 0, "malformed complete card JSON should not create a card");
+assert.equal(malformedCompleteCard.orderedCards.length, 0, "malformed complete card JSON should not create an orderedCards entry");
 assert(!malformedCompleteCard.cleanText.includes("<card>"), "malformed complete card JSON should not leak raw opening tags");
 assert(!malformedCompleteCard.cleanText.includes("</card>"), "malformed complete card JSON should not leak raw closing tags");
 assert(malformedCompleteCard.cleanText.includes("Unable to render generated card"), "malformed complete card JSON should show a bounded fallback");
@@ -67,7 +79,66 @@ assert.equal(cardWithAttributes.cards[0].type, "metric", "card attribute form sh
 const cardWithClosingTagInJsonString = parseCardTags('Before <card>{"type":"metric","data":{"text":"literal </card> marker","value":9}}</card> After');
 assert.equal(cardWithClosingTagInJsonString.cards.length, 1, "card parser should ignore closing tags inside JSON strings");
 assert.equal(cardWithClosingTagInJsonString.cards[0].data.text, "literal </card> marker", "card parser should preserve JSON string content");
-assert.equal(cardWithClosingTagInJsonString.cleanText, "Before  After", "card parser should remove the full card wrapper");
+assert.equal(cardWithClosingTagInJsonString.cleanText, "Before %%CARD_0%% After", "card parser should replace the card wrapper with a position marker");
+assert.equal(cardWithClosingTagInJsonString.orderedCards[0].position, 7, "orderedCards position should be the marker offset, not the original tag start");
+
+const interleavedCards = parseCardTags('Intro <card>{"type":"stock","data":{"ticker":"AAPL"}}</card> middle <card>{"type":"weather","data":{"city":"Paris"}}</card> outro');
+assert.equal(interleavedCards.cards.length, 2, "two card tags should produce two cards");
+assert.equal(interleavedCards.orderedCards.length, 2, "two card tags should produce two orderedCards entries");
+assert.equal(interleavedCards.orderedCards[0].index, 0, "first orderedCards entry should reference index 0");
+assert.equal(interleavedCards.orderedCards[1].index, 1, "second orderedCards entry should reference index 1");
+assert(interleavedCards.orderedCards[0].position < interleavedCards.orderedCards[1].position, "orderedCards positions should preserve source order");
+assert(interleavedCards.cleanText.indexOf("%%CARD_0%%") < interleavedCards.cleanText.indexOf("%%CARD_1%%"), "card markers should appear in source order in cleanText");
+assert(interleavedCards.orderedCards[0].position === interleavedCards.cleanText.indexOf("%%CARD_0%%"), "first orderedCards position should match first marker");
+assert(interleavedCards.orderedCards[1].position === interleavedCards.cleanText.indexOf("%%CARD_1%%"), "second orderedCards position should match second marker");
+
+// Regression: code-fence (```openui```) cards + <card> tag cards interleaved
+// in non-source order. The parser pushes code-fence cards before tag cards,
+// so the i-th push is NOT guaranteed to be the i-th token in cleanText —
+// the token name (captured %%CARD_N%%) has to drive the position lookup.
+// Without this test, an earlier off-by-one in the token-resolution loop
+// passed the two-card-tag case but silently misaligned positions whenever an
+// openui fence shared the source with a tag card.
+const crossTypeCards = parseCardTags('```openui\n{"type":"fenceA","data":{}}\n``` middle <card>{"type":"tagB","data":{}}</card> end');
+assert.equal(crossTypeCards.cards.length, 2, "code-fence + tag card should yield two cards in cards array");
+assert.equal(crossTypeCards.orderedCards.length, 2, "code-fence + tag card should yield two orderedCards entries");
+assert.equal(crossTypeCards.orderedCards[0].card.type, "fenceA", "orderedCards[0] should reference the first code-fence card (pushed first)");
+assert.equal(crossTypeCards.orderedCards[1].card.type, "tagB", "orderedCards[1] should reference the <card> tag card (pushed second)");
+assert(crossTypeCards.cleanText.indexOf("%%CARD_0%%") < crossTypeCards.cleanText.indexOf("%%CARD_1%%"), "tokens should still appear in source order in cleanText");
+assert.equal(crossTypeCards.orderedCards[0].position, crossTypeCards.cleanText.indexOf("%%CARD_0%%"), "orderedCards[0].position must point at %%CARD_0%% in cleanText");
+assert.equal(crossTypeCards.orderedCards[1].position, crossTypeCards.cleanText.indexOf("%%CARD_1%%"), "orderedCards[1].position must point at %%CARD_1%% in cleanText");
+
+// Tighter regression for the same bug: REVERSED source order so push order and
+// token-source order diverge. Push order is [fenceB @ idx 0, tagA @ idx 1]
+// (code-fence regex runs before the <card>-tag regex), but the tokens appear
+// in cleanText IN SOURCE ORDER as [%%CARD_1%% (tagA, source-first), %%CARD_0%%
+// (fenceB, source-second)]. The OLD sequential `orderedCards[tokenIdx++]`
+// resolution would map orderedCards[0].position to the %%CARD_1%% slot and
+// orderedCards[1].position to the %%CARD_0%% slot — both wrong. The NEW
+// token-name lookup reads %%CARD_N%% from the captured regex group to point
+// each orderedCards entry at its own marker, regardless of source/push order.
+const crossTypeCardsReversed = parseCardTags('<card>{"type":"tagA","data":{}}</card> ```openui\n{"type":"fenceB","data":{}}\n```');
+assert.equal(crossTypeCardsReversed.cards.length, 2, "reversed code-fence + tag card should yield two cards");
+assert.equal(crossTypeCardsReversed.orderedCards.length, 2, "reversed code-fence + tag card should yield two orderedCards entries");
+assert.equal(crossTypeCardsReversed.orderedCards[0].card.type, "fenceB", "orderedCards[0] should reference the code-fence card even though it appears later in source");
+assert.equal(crossTypeCardsReversed.orderedCards[1].card.type, "tagA", "orderedCards[1] should reference the tag card even though it appears earlier in source");
+assert(crossTypeCardsReversed.cleanText.indexOf("%%CARD_1%%") < crossTypeCardsReversed.cleanText.indexOf("%%CARD_0%%"), "tokens should appear in source order in cleanText (%%CARD_1%% before %%CARD_0%%)");
+assert.equal(crossTypeCardsReversed.orderedCards[0].position, crossTypeCardsReversed.cleanText.indexOf("%%CARD_0%%"), "orderedCards[0].position must match %%CARD_0%% slot in cleanText (fenceB's slot, NOT %%CARD_1%%'s slot)");
+assert.equal(crossTypeCardsReversed.orderedCards[1].position, crossTypeCardsReversed.cleanText.indexOf("%%CARD_1%%"), "orderedCards[1].position must match %%CARD_1%% slot in cleanText (tagA's slot, NOT %%CARD_0%%'s slot)");
+
+// Streaming partial-card: when a <card> opening tag splits across two
+// text-fragment chunks that get merged in pushGroupedStep, the SINGLE
+// parseCardTags call on the joined content must produce exactly one
+// orderedCards entry whose position is the marker offset in cleanText.
+const partiallyOpenCardAcrossFragments = groupAssistantSteps([
+  { type: "text", content: 'A <card>{"type":"X","data":{"a":' },
+  { type: "text", content: '1}}</card> B' },
+]);
+assert.equal(partiallyOpenCardAcrossFragments.length, 1, "split-open card fragments should merge into one text step");
+assert.equal(partiallyOpenCardAcrossFragments[0].cleanText, "A %%CARD_0%% B", "merged split-card cleanText should contain exactly one marker between A and B");
+assert.equal(partiallyOpenCardAcrossFragments[0].orderedCards.length, 1, "split-card across fragments should resolve to a single orderedCards entry");
+assert.equal(partiallyOpenCardAcrossFragments[0].orderedCards[0].card.type, "X", "split-card type should be the parsed JSON card type");
+assert.equal(partiallyOpenCardAcrossFragments[0].orderedCards[0].position, 2, "split-card orderedCards position should be the marker offset (2 = position of %%CARD_0%% in 'A %%CARD_0%% B')");
 
 const multiThought = extractInlineThoughtBlocks("A <think>first</think> B <thought>second</thought> C");
 assert.equal(multiThought.reasoning, "first\n\nsecond", "all closed think/thought blocks should be preserved");
@@ -91,6 +162,17 @@ assert.equal(steps[0].type, "action", "status action should remain first");
 assert.equal(steps[1].type, "tool-group", "parallel tool calls should become one tool group");
 assert.equal(steps[1].toolCalls.length, 2, "tool group should contain both parallel tools");
 assert.equal(steps[2].cleanText, "Answer stream", "adjacent text chunks should merge");
+assert(Array.isArray(steps[2].orderedCards), "merged text step should expose an orderedCards array");
+assert.equal(steps[2].orderedCards.length, 0, "text with no cards should have zero orderedCards");
+
+const interleavedTextSteps = groupAssistantSteps([
+  { type: "text", content: 'Hello <card>{"type":"metric","data":{"value":1}}</card> world ' },
+  { type: "text", content: 'continues here' },
+]);
+assert.equal(interleavedTextSteps.length, 1, "two adjacent text chunks should still merge into one step");
+assert.equal(interleavedTextSteps[0].orderedCards.length, 1, "merged text step should carry the single card extracted");
+assert.equal(interleavedTextSteps[0].cleanText, "Hello %%CARD_0%% world continues here", "merged text should keep the card marker at the original position");
+assert.equal(interleavedTextSteps[0].orderedCards[0].position, 6, "merged text step's orderedCards position should point to the marker in cleanText");
 
 assert.equal(isToolVisibleInChat({ id: "list", name: "tool_list", status: "completed", input: {}, output: "[]" }), false, "tool_list should stay out of the chat transcript");
 assert.equal(isToolVisibleInChat({ id: "info", name: "tool_info", status: "completed", input: {}, output: "{}" }), false, "tool_info should stay out of the chat transcript");

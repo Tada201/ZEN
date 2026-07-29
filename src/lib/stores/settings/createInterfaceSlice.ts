@@ -27,6 +27,10 @@ export const createInterfaceSlice: StateCreator<SettingsState, [], [], Interface
   backgroundFit: "cover",
   backgroundMediaType: "auto",
   optimizedVideos: [],
+  // Default off — completed tool groups hide once the assistant answer
+  // arrives so the transcript reads like a conversation. Users who want to
+  // audit past turns can flip this in the Appearance settings tab.
+  revealCompletedToolHistory: false,
 
   setAnimationsEnabled: (enabled: boolean) => {
     get().updateSetting("animationsEnabled", enabled);
@@ -34,6 +38,10 @@ export const createInterfaceSlice: StateCreator<SettingsState, [], [], Interface
 
   setLowResourceMode: (enabled: boolean) => {
     get().updateSetting("lowResourceMode", enabled);
+  },
+
+  setRevealCompletedToolHistory: (enabled: boolean) => {
+    get().updateSetting("revealCompletedToolHistory", enabled);
   },
 
   handleWidgetToggle: (widgetId: string) => {

@@ -39,7 +39,6 @@ pub struct ToolService {
     security: Arc<SecurityService>,
     pending_approvals: Arc<Mutex<HashMap<String, PendingToolApproval>>>,
     execution_limit: Arc<Semaphore>,
-    mcp_client: Arc<tokio::sync::RwLock<Option<Arc<crate::mcp::McpClient>>>>,
 }
 
 pub struct PendingToolApproval {
@@ -104,16 +103,7 @@ impl ToolService {
             security,
             pending_approvals,
             execution_limit: Arc::new(Semaphore::new(16)),
-            mcp_client: Arc::new(tokio::sync::RwLock::new(None)),
         }
-    }
-
-    /// Wire in the MCP client reference for external tool execution.
-    pub fn set_mcp_client(&self, client: Arc<crate::mcp::McpClient>) {
-        let mcp = self.mcp_client.clone();
-        tokio::spawn(async move {
-            *mcp.write().await = Some(client);
-        });
     }
 
     pub async fn execute_interactive(
@@ -688,35 +678,38 @@ impl ToolService {
                         duration_ms: 0,
                     },
                 }
-            } else if crate::mcp::McpClient::is_external_tool(&v2_tool_call.name) {
-                let start = std::time::Instant::now();
-                match self
-                    .execute_v2_authorized(app, chat_id, v2_tool_call, "agent_tool")
-                    .await
-                {
-                    Ok(content) => crate::agent::types::ToolResult {
-                        tool_call_id: tool_call.id,
-                        content,
-                        is_error: false,
-                        duration_ms: start.elapsed().as_millis() as u64,
-                    },
-                    Err(e) => crate::agent::types::ToolResult {
-                        tool_call_id: tool_call.id,
-                        content: serde_json::json!({
-                            "error": e,
-                            "tool": tool_call.name,
-                            "hint": "This external tool failed during execution. The server may be unreachable."
-                        }),
-                        is_error: true,
-                        duration_ms: start.elapsed().as_millis() as u64,
-                    },
-                }
             } else {
+                // External MCP tools live in the same `ToolRegistry` as
+                // built-in tools via `McpToolAdapter`, so once
+                // `sync_external_servers` populates the registry the
+                // `v2_exists` branch above handles them uniformly.
+                // The brief pre-sync window when the agent names an
+                // `ext:*` tool before the registry knows about it lands
+                // here (no `v2_exists` yet) and surfaces a clean "tool
+                // not found" instead of a misleading network error.
+                let hint = if crate::mcp::client::is_external_tool_name(&tool_call.name) {
+                    // External tools aren't reachable via handoff_to_agent
+                    // (that dispatches to a registered agent, not a
+                    // discovered MCP server). The LLM has no way to call
+                    // or observe the discovery step, so point it at a
+                    // concrete next action: confirm the server wiring.
+                    // Interpolate `tool_call.name` so the LLM sees which
+                    // tool is actually missing (the registry may hold
+                    // many external tools and the model needs to know
+                    // which entry was unrecognised).
+                    format!(
+                        "External MCP tool '{}' is not known to any registered server. Verify the server name in .mcp.json and that the server is reachable, then retry.",
+                        tool_call.name
+                    )
+                } else {
+                    "Use handoff_to_agent if you need a specialized expert."
+                        .to_string()
+                };
                 crate::agent::types::ToolResult {
                     tool_call_id: tool_call.id,
                     content: serde_json::json!({
                         "error": format!("Tool '{}' not found", tool_call.name),
-                        "available_tools": "Use handoff_to_agent if you need a specialized expert."
+                        "available_tools": hint,
                     }),
                     is_error: true,
                     duration_ms: 0,
@@ -732,21 +725,11 @@ impl ToolService {
         tool_call: ToolCall,
         decision: &str,
     ) -> Result<serde_json::Value, String> {
-        // ── External tool routing ──────────────────────────────────────────
-        // If the tool name starts with `ext:`, dispatch to the external
-        // MCP server via HTTP POST instead of looking up in the local registry.
-        if crate::mcp::McpClient::is_external_tool(&tool_call.name) {
-            let client = self.mcp_client.read().await;
-            if let Some(client) = client.as_ref() {
-                return client
-                    .execute_external_tool(&tool_call.name, tool_call.arguments)
-                    .await;
-            } else {
-                return Err("MCP client not configured for external tool execution".to_string());
-            }
-        }
-
-        // ── Native tool execution ──────────────────────────────────────────
+        // ── Uniform tool dispatch ──────────────────────────────────────────
+        // External MCP tools are registered in the same v2 `ToolRegistry`
+        // as built-in tools via `McpToolAdapter`, so a single
+        // `registry.get(name)` resolves both. No special-cased branch for
+        // `ext:*` here — the adapter's `Tool::execute` owns the routing.
         let tool = {
             let registry = self.registry.read().await;
             registry.get(&tool_call.name)

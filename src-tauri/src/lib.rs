@@ -211,12 +211,13 @@ pub fn run() {
                 // Document service DB pool (instant)
                 state.documents.set_db_pool(pool.clone()).await;
 
-                // Wire MCP client into ToolService for external tool execution.
-                state.tool_service.set_mcp_client(state.mcp_client.clone());
                 // Sync external MCP servers from .mcp.json (best-effort).
+                // Pass `None` so the boot path stays event-free; the
+                // typed settings UI re-triggers with `Some(&app_handle)`
+                // when the user adds/removes/edits a row.
                 let client = state.mcp_client.clone();
                 tokio::spawn(async move {
-                    client.sync_external_servers().await;
+                    client.sync_external_servers(None).await;
                 });
 
                 state.init_progress.set_status(&critical_handle, "critical.finalize", "done", Some(_start_phase.elapsed().as_millis() as u64)).await;
@@ -470,6 +471,7 @@ pub fn run() {
             commands::chat::get_chats_page,
             commands::chat::get_messages,
             commands::chat::get_messages_page,
+            commands::chat::update_message_steps,
             commands::chat::send_message,
             commands::chat::delete_chat,
             commands::chat::update_chat_title,
@@ -580,6 +582,10 @@ pub fn run() {
             commands::memory::get_memory_stats,
             commands::mcp::mcp_get_config,
             commands::mcp::mcp_save_config,
+            commands::mcp::mcp_list_servers,
+            commands::mcp::mcp_add_server,
+            commands::mcp::mcp_remove_server,
+            commands::mcp::mcp_reconnect,
             commands::context_viewer::get_context_breakdown,
             commands::context_viewer::get_context_snapshot,
         ])

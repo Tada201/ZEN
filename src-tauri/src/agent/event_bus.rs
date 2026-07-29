@@ -53,6 +53,12 @@ pub enum AgentEvent {
     #[serde(rename = "chat:stream-reset")]
     ChatStreamReset(ChatStreamResetPayload),
 
+    /// Emitted when a sub-agent run starts, progresses, or finishes.  Carried
+    /// on the event bus and bridged to `chat:subagent-step` so the frontend
+    /// timeline can render sub-agent execution as a first-class step.
+    #[serde(rename = "chat:subagent-step")]
+    SubagentStep(SubagentStepPayload),
+
     #[serde(rename = "tool:start")]
     ToolStart(ToolStartPayload),
 
@@ -230,11 +236,43 @@ pub struct ChatDonePayload {
     pub tokens_out: i64,
     pub reason: String,
     pub done: bool,
+    /// Backend-persisted assistant message ID so the frontend can target
+    /// the correct DB row for post-stream updates (e.g. steps_json).
+    pub message_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatStreamResetPayload {
     pub chat_id: String,
+}
+
+/// Lifecycle payload for a sub-agent execution step shown inline in the chat.
+///
+/// `spawn_id` is the stable correlation id shared with the child runner's
+/// `trace_id`, so every child tool event (`tool:start`/`tool:complete`) can be
+/// associated with this sub-agent step.  `parent_tool_call_id` is the id of
+/// the parent agent's `spawn_agent` tool call, used by the frontend to place
+/// the step in the right timeline position.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubagentStepPayload {
+    pub chat_id: String,
+    pub spawn_id: String,
+    pub parent_tool_call_id: Option<String>,
+    pub agent_id: String,
+    pub agent_name: String,
+    pub task: String,
+    /// One of: running, completed, failed, cancelled.
+    pub status: String,
+    /// Short result summary when the sub-agent completes successfully.
+    pub result_summary: Option<String>,
+    /// Error message when the sub-agent fails.
+    pub error: Option<String>,
+    pub duration_ms: u64,
+    /// ISO-8601 UTC timestamp.
+    pub timestamp: String,
+    /// Tool-call ids executed by the child runner (optional, may be populated
+    /// incrementally as the child runs).
+    pub child_tool_call_ids: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -257,6 +295,10 @@ pub struct ToolStartPayload {
     pub batch_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_batch_id: Option<String>,
+    /// Backend-persisted assistant message ID so tool events can be routed
+    /// to the same timeline entry after reload.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<String>,
     pub agent_id: String,
     pub agent_name: String,
     pub chat_id: String,
@@ -280,6 +322,10 @@ pub struct ToolCompletePayload {
     pub batch_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_batch_id: Option<String>,
+    /// Backend-persisted assistant message ID so tool events can be routed
+    /// to the same timeline entry after reload.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<String>,
     pub agent_id: String,
     pub agent_name: String,
     pub chat_id: String,
@@ -631,6 +677,7 @@ impl AgentEvent {
             AgentEvent::ChatError(_) => "chat:error",
             AgentEvent::ChatDone(_) => "chat:done",
             AgentEvent::ChatStreamReset(_) => "chat:stream-reset",
+            AgentEvent::SubagentStep(_) => "chat:subagent-step",
             AgentEvent::ToolStart(_) => "tool:start",
             AgentEvent::ToolComplete(_) => "tool:complete",
             AgentEvent::WorkflowStarted { .. } => "workflow:started",
@@ -719,6 +766,7 @@ impl EventBus {
                             AgentEvent::ChatError(p) => serde_json::to_value(p),
                             AgentEvent::ChatDone(p) => serde_json::to_value(p),
                             AgentEvent::ChatStreamReset(p) => serde_json::to_value(p),
+                            AgentEvent::SubagentStep(p) => serde_json::to_value(p),
                             AgentEvent::ToolStart(p) => serde_json::to_value(p),
                             AgentEvent::ToolComplete(p) => serde_json::to_value(p),
                             AgentEvent::ToolAuthorizationRequest(p) => serde_json::to_value(p),

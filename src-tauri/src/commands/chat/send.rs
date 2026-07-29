@@ -320,7 +320,7 @@ Always use these specialized code blocks for visual scenarios:
 1. 📊 CHARTS: Use ```chart with JSON schema: {\"type\":\"bar|line|area|pie\",\"title\":\"...\",\"xAxis\":\"x_key\",\"keys\":[\"y_key\"],\"data\":[{\"x_key\":\"val\",\"y_key\":num}]}.
 2. 📐 ARCHITECTURE: Use ```mermaid code blocks for flowcharts, sequences, or component relationships.
 3. 📁 STRUCTURE: Use ```tree with indentations to describe folder trees or directory structures.
-4. 🃏 RICH CARDS: Use <card> block with JSON data to display rich visual cards. Available types: weather, stock, sports, flight, product, event, movie, book, person, nutrition, package, job. Format: <card>{\"type\":\"weather\",\"data\":{\"location\":\"Tokyo\",\"temperature\":22}}</card>.
+4. 🃏 RICH CARDS: Use <card> block with JSON data to display rich visual cards. Available types: weather, stock, sports, flight, product, event, movie, book, person, nutrition, package, job, world_time. Format: <card>{\"type\":\"weather\",\"data\":{\"location\":\"Tokyo\",\"temperature\":22}}</card> or <card>{\"type\":\"world_time\",\"data\":{\"title\":\"Clocks\",\"clocks\":[{\"country\":\"Japan\",\"city\":\"Tokyo\",\"time\":\"8:30 PM\",\"timezone\":\"JST\",\"latitude\":35.67,\"longitude\":139.65}]}}</card>.
 5. 🧪 CANVAS (openui): Use ```openui containing layout primitive tags to render live interactive canvas widgets (when Gen UI is enabled).
 6. 📢 ALERTS: Wrap callouts in standard blockquotes with headers (> [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION]).
 

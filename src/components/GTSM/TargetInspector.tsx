@@ -40,23 +40,23 @@ function SignalSparkline({ target, snapshots }: { target: SpatialEntity, snapsho
     }
 
     return (
-        <div className="flex flex-col bg-card/80 border border-border/60 p-3 relative overflow-hidden group shrink-0 mt-2 font-mono">
+        <div className="flex flex-col bg-card border border-border p-3 relative overflow-hidden group shrink-0 mt-2 font-mono">
             <div className="flex justify-between items-center mb-2 relative z-10">
                 <span className="text-[8px] text-muted-foreground font-bold uppercase tracking-wider flex items-center gap-1">
                     <WorkbenchIcon name="solar:chart-square-bold-duotone" size={10} className="text-cyan-400" />
                     DATALINK TREND
                 </span>
                 <div className="flex gap-1">
-                    <button type="button" className="text-[7px] border border-border bg-transparent px-1.5 py-0.5 text-muted-foreground hover:text-cyan-400 hover:border-cyan-400/30 transition-colors uppercase cursor-pointer">RAW</button>
-                    <button type="button" className="text-[7px] border border-border bg-transparent px-1.5 py-0.5 text-muted-foreground hover:text-cyan-400 hover:border-cyan-400/30 transition-colors uppercase cursor-pointer">EXP</button>
+                    <button type="button" className="text-[7px] border border-border bg-transparent px-1.5 py-0.5 text-muted-foreground hover:text-cyan-400 hover:border-cyan-400 transition-colors uppercase cursor-pointer">RAW</button>
+                    <button type="button" className="text-[7px] border border-border bg-transparent px-1.5 py-0.5 text-muted-foreground hover:text-cyan-400 hover:border-cyan-400 transition-colors uppercase cursor-pointer">EXP</button>
                 </div>
             </div>
 
             <div className="h-10 w-full relative z-10">
                 <div className="absolute inset-0 flex flex-col justify-between px-0.5 py-1 pointer-events-none">
-                    <div className="w-full h-[1px] bg-muted/20" />
-                    <div className="w-full h-[1px] bg-muted/20" />
-                    <div className="w-full h-[1px] bg-muted/20" />
+                    <div className="w-full h-[1px] bg-muted" />
+                    <div className="w-full h-[1px] bg-muted" />
+                    <div className="w-full h-[1px] bg-muted" />
                 </div>
 
                 <svg viewBox="0 0 100 30" width="100%" height="100%" className="overflow-visible opacity-80 group-hover:opacity-100 transition-opacity" preserveAspectRatio="none">
@@ -144,7 +144,7 @@ export const TargetInspector: React.FC = () => {
         const timeVal = target.metadata?.time;
         if (!timeVal) {
             return (
-                <div className="flex items-center gap-1.5 mt-2 bg-cyan-500/10 px-4 py-1.5 border border-cyan-500/20 rounded-sm">
+                <div className="flex items-center gap-1.5 mt-2 bg-cyan-500/10 px-4 py-1.5 border border-cyan-500 rounded-sm">
                     <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse shadow-[0_0_5px_rgba(0,255,255,0.8)]" />
                     <span className="text-[8px] text-cyan-400 font-bold tracking-wider uppercase">LIVE DATALINK ACTIVE</span>
                 </div>
@@ -158,7 +158,7 @@ export const TargetInspector: React.FC = () => {
             const colorClass = mins > 60 ? 'text-destructive' : 'text-cyan-400';
 
             return (
-                <div className="flex items-center gap-1.5 mt-2 bg-background/60 px-4 py-1.5 border border-border rounded-sm">
+                <div className="flex items-center gap-1.5 mt-2 bg-card px-4 py-1.5 border border-border rounded-sm">
                     <WorkbenchIcon name="solar:clock-circle-bold" size={10} className={`${colorClass} opacity-80`} />
                     <span className="text-[8px] text-muted-foreground font-bold tracking-wider uppercase">
                         LAST UPDATE: <span className={colorClass}>{mins} MINS AGO</span>
@@ -168,7 +168,7 @@ export const TargetInspector: React.FC = () => {
         }
 
         return (
-            <div className="flex items-center gap-1.5 mt-2 bg-background/60 px-4 py-1.5 border border-border rounded-sm">
+            <div className="flex items-center gap-1.5 mt-2 bg-card px-4 py-1.5 border border-border rounded-sm">
                 <WorkbenchIcon name="solar:clock-circle-bold" size={10} className="text-muted-foreground" />
                 <span className="text-[8px] text-muted-foreground font-bold tracking-wider uppercase">
                     DATA TIMESTAMP: <span className="text-foreground">{String(timeVal).substring(0, 15)}</span>
@@ -188,7 +188,7 @@ export const TargetInspector: React.FC = () => {
 
             return (
                 <div className="flex flex-col gap-2 mt-2 shrink-0 font-mono text-[9px]">
-                    <div className="bg-card/80 border border-border/60 p-3 relative overflow-hidden rounded-sm">
+                    <div className="bg-card border border-border p-3 relative overflow-hidden rounded-sm">
                         <div className="flex justify-between items-center z-10 mb-1.5">
                             <span className="text-[8px] text-muted-foreground font-bold uppercase tracking-wider flex items-center gap-1">
                                 {isSevere ? <WorkbenchIcon name="solar:danger-bold" size={10} className="text-destructive animate-pulse" /> : <WorkbenchIcon name="solar:pulse-bold" size={10} className="text-muted-foreground" />}
@@ -200,7 +200,7 @@ export const TargetInspector: React.FC = () => {
                             <div className={`h-full transition-all duration-1000 ${bgClass}`} style={{ width: `${magPercentage}%` }} />
                         </div>
                     </div>
-                    <div className="bg-card/80 border border-border/60 p-3 flex justify-between items-center rounded-sm">
+                    <div className="bg-card border border-border p-3 flex justify-between items-center rounded-sm">
                         <span className="text-[8px] text-muted-foreground font-bold uppercase tracking-wider flex items-center gap-1 z-10">
                             <WorkbenchIcon name="solar:shield-bold" size={10} className="text-muted-foreground" /> DEPTH TO HYPOCENTER
                         </span>
@@ -217,7 +217,7 @@ export const TargetInspector: React.FC = () => {
 
             return (
                 <div className="grid grid-cols-2 gap-2 mt-2 shrink-0 font-mono text-[9px]">
-                    <div className="bg-card/80 border border-border/60 flex flex-col items-center justify-center p-2 relative overflow-hidden rounded-sm">
+                    <div className="bg-card border border-border flex flex-col items-center justify-center p-2 relative overflow-hidden rounded-sm">
                         <span className="text-[8px] text-muted-foreground uppercase tracking-wider font-bold mb-1 w-full text-center border-b border-border pb-1">HEADING</span>
                         <div className="relative w-10 h-10 my-1">
                             <svg viewBox="0 0 50 50" className="w-full h-full">
@@ -232,13 +232,13 @@ export const TargetInspector: React.FC = () => {
                     </div>
 
                     <div className="flex flex-col gap-2">
-                        <div className="bg-card/80 p-2.5 border border-border/60 flex justify-between items-center flex-1 rounded-sm">
+                        <div className="bg-card p-2.5 border border-border flex justify-between items-center flex-1 rounded-sm">
                             <div className="flex flex-col">
                                 <span className="text-[7.5px] text-muted-foreground uppercase tracking-wider font-bold">ALTITUDE</span>
                                 <div className="text-[10px] text-foreground font-mono font-bold">{(altitude / 1000).toFixed(1)} <span className="text-[8px] text-muted-foreground">KM</span></div>
                             </div>
                         </div>
-                        <div className="bg-card/80 p-2.5 border border-border/60 flex justify-between items-center flex-1 rounded-sm">
+                        <div className="bg-card p-2.5 border border-border flex justify-between items-center flex-1 rounded-sm">
                             <div className="flex flex-col">
                                 <span className="text-[7.5px] text-muted-foreground uppercase tracking-wider font-bold">VELOCITY</span>
                                 <div className="text-[10px] text-cyan-400 font-mono font-bold">{velocity.toFixed(2)} <span className="text-[8px] text-muted-foreground">KM/S</span></div>
@@ -255,7 +255,7 @@ export const TargetInspector: React.FC = () => {
 
             return (
                 <div className="flex flex-col gap-2 mt-2 shrink-0 font-mono text-[9px]">
-                    <div className="bg-card/80 p-3 border border-border/60 flex justify-between relative overflow-hidden rounded-sm">
+                    <div className="bg-card p-3 border border-border flex justify-between relative overflow-hidden rounded-sm">
                         <div className="absolute top-0 bottom-0 left-0 w-0.5 bg-cyan-400" />
                         <div className="flex flex-col ml-1">
                             <span className="text-[8px] text-muted-foreground uppercase tracking-wider font-bold mb-0.5">ORBITAL VELOCITY</span>
@@ -265,9 +265,9 @@ export const TargetInspector: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="bg-card/80 p-3 border border-border/60 flex justify-between items-center rounded-sm">
+                    <div className="bg-card p-3 border border-border flex justify-between items-center rounded-sm">
                         <div className="flex items-center gap-1.5">
-                            <WorkbenchIcon name="solar:shield-bold-duotone" size={11} className="text-cyan-400/80" />
+                            <WorkbenchIcon name="solar:shield-bold-duotone" size={11} className="text-cyan-400" />
                             <span className="text-[8px] text-muted-foreground uppercase tracking-wider font-bold">ORBITAL ALTITUDE</span>
                         </div>
                         <div className="text-[10px] text-foreground font-mono font-bold">
@@ -282,7 +282,7 @@ export const TargetInspector: React.FC = () => {
     }
 
     return (
-        <aside className={`flex flex-col border-l border-border bg-background/55 backdrop-blur-md transition-all duration-200 w-[260px] ${isCollapsed ? 'h-8 shrink-0 overflow-hidden' : 'h-full overflow-hidden'}`}>
+        <aside className={`flex flex-col border-l border-border bg-card transition-all duration-200 w-[260px] ${isCollapsed ? 'h-8 shrink-0 overflow-hidden' : 'h-full overflow-hidden'}`}>
             {/* Header */}
             <div 
                 className="flex h-8 min-h-8 items-center justify-between px-2.5 border-b border-border cursor-pointer select-none"
@@ -325,12 +325,12 @@ export const TargetInspector: React.FC = () => {
                                             addFavorite(selectedTarget, layerLabel);
                                         }
                                     }}
-                                    className={`p-1 transition-colors cursor-pointer ${isFavorited ? 'text-yellow-400 hover:text-yellow-300' : 'text-muted-foreground/70 hover:text-yellow-400'}`}
+                                    className={`p-1 transition-colors cursor-pointer ${isFavorited ? 'text-yellow-400 hover:text-yellow-300' : 'text-muted-foreground hover:text-yellow-400'}`}
                                     title={isFavorited ? 'Remove bookmark' : 'Bookmark target'}
                                 >
                                     <WorkbenchIcon name={isFavorited ? 'solar:star-bold' : 'solar:star-outline'} size={14} />
                                 </button>
-                                <div className="px-1.5 py-0.5 border border-border bg-muted/40">
+                                <div className="px-1.5 py-0.5 border border-border bg-muted">
                                     <span className="text-[9px] text-foreground font-medium">{selectedTarget.type}</span>
                                 </div>
                             </div>
@@ -354,7 +354,7 @@ export const TargetInspector: React.FC = () => {
 
                     {/* AI Analysis Action */}
                     <WorkbenchButton
-                        className={`w-full flex items-center justify-center gap-2 py-2 border transition-colors ${isAnalyzing ? 'border-primary/20 bg-primary/5 text-primary/40 cursor-not-allowed' : 'border-border bg-muted/40 text-foreground hover:border-primary/35 hover:bg-primary/10 hover:text-primary'}`}
+                        className={`w-full flex items-center justify-center gap-2 py-2 border transition-colors ${isAnalyzing ? 'border-primary bg-primary/10 text-primary cursor-not-allowed' : 'border-border bg-muted text-foreground hover:border-primary hover:bg-primary/10 hover:text-primary'}`}
                         onClick={handleAnalyze}
                         disabled={isAnalyzing}
                     >
@@ -376,7 +376,7 @@ export const TargetInspector: React.FC = () => {
                                 if (displayValue.length > 40) displayValue = displayValue.substring(0, 37) + "...";
 
                                 return (
-                                    <div key={key} className="flex justify-between items-center px-2 py-1.5 bg-card hover:bg-muted/40 transition-colors">
+                                    <div key={key} className="flex justify-between items-center px-2 py-1.5 bg-card hover:bg-muted transition-colors">
                                         <span className="text-[8px] text-muted-foreground font-mono tracking-tight uppercase truncate mr-2" title={key}>{key}</span>
                                         <span className="text-[9px] text-foreground font-mono font-bold truncate text-right hover:text-cyan-400 transition-colors" title={String(value)}>
                                             {displayValue}

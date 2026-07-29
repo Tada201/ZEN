@@ -31,12 +31,12 @@ export function StatusBar() {
       {/* Right Section: Clock and Date */}
       <div className="flex items-center gap-4 text-muted-foreground font-medium text-[11px]">
         <div className="flex items-center gap-1.5">
-          <Calendar size={12} className="text-muted-foreground/80" />
+          <Calendar size={12} className="text-muted-foreground" />
           <span>{formattedDate}</span>
         </div>
         <div className="h-3 w-px bg-border" />
         <div className="flex items-center gap-1.5">
-          <Clock size={12} className="text-muted-foreground/80" />
+          <Clock size={12} className="text-muted-foreground" />
           <span>{formattedTime}</span>
         </div>
       </div>

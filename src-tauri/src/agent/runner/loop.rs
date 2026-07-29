@@ -270,6 +270,7 @@ impl Runner {
                     tokens_out: total_tokens_out,
                     reason: "cancelled".to_string(),
                     done: true,
+                    message_id: assistant_message_id.clone(),
                 }));
                 return Ok(AgentResponse {
                     content: Some("Agent run cancelled.".to_string()),
@@ -362,6 +363,7 @@ impl Runner {
                     tokens_out: total_tokens_out,
                     reason: "max_iterations".to_string(),
                     done: true,
+                    message_id: assistant_message_id.clone(),
                 }));
                 if summarization_enabled {
                     self.trigger_background_compaction(
@@ -685,6 +687,7 @@ impl Runner {
                         tokens_out: total_tokens_out,
                         reason: "token_budget_exceeded".to_string(),
                         done: true,
+                        message_id: assistant_message_id.clone(),
                     }));
                     if summarization_enabled {
                         self.trigger_background_compaction(
@@ -866,6 +869,7 @@ impl Runner {
                     tokens_out: total_tokens_out,
                     reason: "complete".to_string(),
                     done: true,
+                    message_id: assistant_message_id.clone(),
                 }));
                 if summarization_enabled {
                     self.trigger_background_compaction(
@@ -1027,6 +1031,7 @@ impl Runner {
                     &current_agent.name,
                     &authorized_tool_ids,
                     token.clone(),
+                    assistant_message_id.clone(),
                 )
                 .await
             };

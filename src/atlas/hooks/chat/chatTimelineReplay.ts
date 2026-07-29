@@ -80,6 +80,11 @@ function getActionEventId(message: Message): string {
   return `${message.kind || "action"}:${stable || message.id}`;
 }
 
+function getSyntheticTimelineId(sessionId: string | undefined, firstStep?: Step, firstTool?: ToolCall) {
+  const stablePart = firstStep?.eventId || firstTool?.id || "empty";
+  return `timeline:${sessionId || "unknown"}:${stablePart}`;
+}
+
 function isTimelineActionMessage(message: Message): boolean {
   return !!message.kind && ACTION_MESSAGE_KINDS.has(message.kind);
 }
@@ -256,13 +261,17 @@ export function coalesceTimelineMessages(messages: Message[]): Message[] {
 
   const flushPendingIntoMessage = (message: Message): Message => {
     const toolCalls = Array.from(pendingTools.values());
+    const assistantToolIds = new Set((message.toolCalls || []).map((tc) => tc.id));
+    const dedupedPendingSteps = pendingSteps.filter(
+      (step) => !(step.type === "tool-call" && step.toolCall?.id && assistantToolIds.has(step.toolCall.id))
+    );
     const next = {
       ...message,
       toolCalls: [...toolCalls, ...(message.toolCalls || [])],
-      steps: [...pendingSteps, ...(message.steps || [])],
+      steps: [...dedupedPendingSteps, ...(message.steps || [])],
       metadata: {
         ...(message.metadata || {}),
-        ...(pendingSteps.length > 0 ? { timelineActionCount: pendingSteps.length } : {}),
+        ...(dedupedPendingSteps.length > 0 ? { timelineActionCount: dedupedPendingSteps.length } : {}),
       } as any,
     };
     pendingSteps = [];
@@ -291,7 +300,7 @@ export function coalesceTimelineMessages(messages: Message[]): Message[] {
     if (message.role === "user" && (pendingSteps.length > 0 || pendingTools.size > 0)) {
       const toolCalls = Array.from(pendingTools.values());
       output.push({
-        id: `timeline-${pendingSteps[0]?.eventId || toolCalls[0]?.id || Date.now()}`,
+        id: getSyntheticTimelineId(message.sessionId, pendingSteps[0], toolCalls[0]),
         sessionId: message.sessionId,
         role: "system",
         content: "",
@@ -315,13 +324,13 @@ export function coalesceTimelineMessages(messages: Message[]): Message[] {
     } else {
       const toolCalls = Array.from(pendingTools.values());
       output.push({
-        id: `timeline-${pendingSteps[0]?.eventId || toolCalls[0]?.id || Date.now()}`,
+        id: getSyntheticTimelineId(last?.sessionId, pendingSteps[0], toolCalls[0]),
         sessionId: last?.sessionId,
         role: "system",
         content: "",
         kind: "system",
         status: "sent",
-        createdAt: pendingSteps[0]?.timestamp || Date.now(),
+        createdAt: pendingSteps[0]?.timestamp || last?.createdAt || 0,
         toolCalls,
         steps: pendingSteps,
       });

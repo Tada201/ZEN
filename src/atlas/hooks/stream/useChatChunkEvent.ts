@@ -6,6 +6,7 @@ import { listenAppEvent } from "@/api/events";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { Message } from "../../components/chat/types";
 import { ttftMark, ttftReport } from "@/lib/ttft";
+import { chatApi } from "@/api/chatApi";
 import { findWritableAssistantIndex, markMessageAsFailed, markMessageAsFinished } from "./messageTarget";
 import {
   applyBufferedDeltaToChat,
@@ -16,6 +17,8 @@ import {
   replaceTextStepsWithContent,
   type ChunkBuffer,
 } from "./chatChunkBuffer";
+import { reconcileStrayToolLedgers } from "./strayToolLedger";
+import { projectStepsForPersistence } from "./projectStepsForPersistence";
 
 interface UseChatChunkEventProps {
   resetHeartbeatTimeout: (chatId: string) => void;
@@ -194,6 +197,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
 
         const reason: string = event.payload.reason || "complete";
         const isCancelled = reason === "cancelled";
+        const assistantIdBeforeFinalize = useChatStore.getState().getActiveAssistantForChat(chatId);
 
         // Track whether streaming should stop after message finalization.
         // For deep_research handoff (no content yet), keep streaming alive
@@ -266,6 +270,38 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
           next[assistantIdx] = markMessageAsFinished(finalized, isCancelled, reason);
           return next;
         });
+
+        // Persist the final execution timeline so the chat UI is identical
+        // before and after reload. Only persist when the backend emitted a
+        // real message_id — never with the optimistic in-memory ID, which
+        // would attach steps to the wrong DB row and violate the backend-ID
+        // contract. Branches that cannot yet emit a real message_id (deep
+        // research handoff, orchestrator, etc.) must wait until the backend
+        // can provide the true persisted row ID before calling this.
+        //
+        // The persisted payload is a UI-only projection: raw tool arguments,
+        // full output, base64 blobs, and subagent transcripts are excluded so
+        // the DB row stays small and well under the 2 MB backend cap.
+        const backendAssistantId = event.payload.message_id;
+        if (backendAssistantId && assistantIdBeforeFinalize && backendAssistantId !== assistantIdBeforeFinalize) {
+          useChatStore.getState().setSessionMessages(chatId, (prev) =>
+            reconcileStrayToolLedgers(prev, assistantIdBeforeFinalize, backendAssistantId),
+          );
+        }
+        // NOTE: The runner loop, deep_research, and orchestrator branches all
+        // emit a real backend message_id in chat:done, so all three timelines
+        // now persist. If a future branch cannot emit a real message_id, it
+        // MUST skip persistence here rather than fabricating an optimistic ID
+        // (persisting with a fake ID would attach steps to the wrong DB row).
+        if (backendAssistantId) {
+          const assistant = useChatStore.getState().sessionMessages[chatId]?.find((m) => m.id === backendAssistantId);
+          if (assistant?.steps && assistant.steps.length > 0) {
+            const projected = projectStepsForPersistence(assistant.steps);
+            chatApi.updateMessageSteps(chatId, backendAssistantId, JSON.stringify(projected)).catch((err) => {
+              console.error("[chat:done] Failed to persist message steps:", err);
+            });
+          }
+        }
 
         // Stop streaming after setSessionMessages unless we're in a
         // deep_research handoff (shouldStopStreaming === false).

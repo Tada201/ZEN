@@ -220,7 +220,13 @@ impl PermissionDecision {
     }
 }
 
-fn build_context(
+/// Build a `PermissionContext` for a Confirm decision. Crate-visible
+/// (not public API) because the destructive-tool post-process gate in
+/// `crate::tools::ToolRegistry::check_permission` needs to construct
+/// one when upgrading a destructive `Allow` to `Confirm` without
+/// going through `PermissionDecision::from_input` (which would
+/// re-evaluate layers 1-5 and short-circuit on its own logic).
+pub(crate) fn build_context(
     tool_name: &str,
     args: &serde_json::Value,
     risk_level: RiskLevel,

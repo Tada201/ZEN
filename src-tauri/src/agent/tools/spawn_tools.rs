@@ -550,7 +550,10 @@ impl SpawnAgentTool {
                 resolved: &resolved,
                 allowed_tools,
             })?;
+        // Use the stable spawn_id as the child runner's trace_id so every tool
+        // event emitted by the sub-agent is correlated with this subagent step.
         child_runner_instance = child_runner_instance
+            .with_trace_id(spawn_id.clone())
             .with_memory_scope(memory_scope)
             .with_message_inbox(message_inbox);
 
@@ -633,6 +636,28 @@ impl SpawnAgentTool {
                 agent_type: resolved.agent.name.clone(),
             });
 
+        // Emit a chat-visible sub-agent step so the inline timeline can render
+        // the delegated task from start through completion.
+        state
+            .agent
+            .event_bus
+            .emit(crate::agent::event_bus::AgentEvent::SubagentStep(
+                crate::agent::event_bus::SubagentStepPayload {
+                    chat_id: chat_id.clone(),
+                    spawn_id: spawn_id.clone(),
+                    parent_tool_call_id: None,
+                    agent_id: agent_id.to_string(),
+                    agent_name: resolved.agent.name.clone(),
+                    task: task.to_string(),
+                    status: "running".to_string(),
+                    result_summary: None,
+                    error: None,
+                    duration_ms: 0,
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    child_tool_call_ids: None,
+                },
+            ));
+
         // Run child agent with cancellation support
         let spawn_start = std::time::Instant::now();
         let result = tokio::select! {
@@ -712,6 +737,27 @@ impl SpawnAgentTool {
                     duration_ms: spawn_duration_ms,
                 });
 
+                // Update the chat-visible sub-agent step with the final result.
+                state
+                    .agent
+                    .event_bus
+                    .emit(crate::agent::event_bus::AgentEvent::SubagentStep(
+                        crate::agent::event_bus::SubagentStepPayload {
+                            chat_id: chat_id.clone(),
+                            spawn_id: spawn_id.clone(),
+                            parent_tool_call_id: None,
+                            agent_id: agent_id.to_string(),
+                            agent_name: resolved.agent.name.clone(),
+                            task: task.to_string(),
+                            status: status_str.to_string(),
+                            result_summary: Some(summary.clone()),
+                            error: None,
+                            duration_ms: spawn_duration_ms,
+                            timestamp: chrono::Utc::now().to_rfc3339(),
+                            child_tool_call_ids: None,
+                        },
+                    ));
+
                 let _ = state.swarm.terminate_agent(&spawn_id).await;
 
                 Ok(json!({
@@ -747,6 +793,27 @@ impl SpawnAgentTool {
                     result_summary: None,
                     duration_ms: spawn_duration_ms,
                 });
+
+                // Mark the chat-visible sub-agent step as failed.
+                state
+                    .agent
+                    .event_bus
+                    .emit(crate::agent::event_bus::AgentEvent::SubagentStep(
+                        crate::agent::event_bus::SubagentStepPayload {
+                            chat_id: chat_id.clone(),
+                            spawn_id: spawn_id.clone(),
+                            parent_tool_call_id: None,
+                            agent_id: agent_id.to_string(),
+                            agent_name: resolved.agent.name.clone(),
+                            task: task.to_string(),
+                            status: "failed".to_string(),
+                            result_summary: None,
+                            error: Some(error_text.clone()),
+                            duration_ms: spawn_duration_ms,
+                            timestamp: chrono::Utc::now().to_rfc3339(),
+                            child_tool_call_ids: None,
+                        },
+                    ));
 
                 let _ = state.swarm.terminate_agent(&spawn_id).await;
 

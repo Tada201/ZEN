@@ -8,23 +8,23 @@ export function PackageCard({ data }: { data: any }) {
     : 2;
 
   return (
-    <div className="rounded-2xl border border-border/[0.08] bg-background/40 backdrop-blur-md p-5 shadow-lg max-w-md">
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-lg max-w-md">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Package className="text-primary h-4 w-4" />
-          <span className="text-xs font-bold text-primary-foreground/80 tracking-wider font-mono uppercase">{data.carrier || 'Carrier'}</span>
+          <span className="text-xs font-bold text-primary-foreground tracking-wider font-mono uppercase">{data.carrier || 'Carrier'}</span>
         </div>
-        <span className="text-[10px] text-primary-foreground/40 font-mono">{data.trackingNumber || 'TRK000000'}</span>
+        <span className="text-[10px] text-muted-foreground font-mono">{data.trackingNumber || 'TRK000000'}</span>
       </div>
 
       <div className="mb-4">
-        <span className="text-[10px] text-primary-foreground/30 block uppercase tracking-wider">Estimated Delivery</span>
+        <span className="text-[10px] text-muted-foreground block uppercase tracking-wider">Estimated Delivery</span>
         <span className="text-lg font-bold text-primary-foreground">{data.estimatedDelivery || 'Soon'}</span>
       </div>
 
       {/* Horizontal Timeline Steps */}
       <div className="flex items-center justify-between my-5 relative">
-        <div className="absolute left-1 right-1 h-[2px] bg-card/10 top-2 -z-10" />
+        <div className="absolute left-1 right-1 h-[2px] bg-muted top-2 -z-10" />
         <div className="absolute left-1 h-[2px] bg-primary top-2 -z-10 transition-all duration-500" style={{ width: `${(activeIndex / (steps.length - 1)) * 100}%` }} />
         
         {steps.map((step, idx) => {
@@ -36,13 +36,13 @@ export function PackageCard({ data }: { data: any }) {
                 "w-5 h-5 rounded-full border flex items-center justify-center transition-all duration-300",
                 isCompleted 
                   ? "bg-primary border-primary text-foreground" 
-                  : "bg-background/60 border-border/20 text-primary-foreground/30"
+                  : "bg-card border-border text-muted-foreground"
               )}>
                 {isCompleted && <CheckCircle2 size={10} className="stroke-[3]" />}
               </div>
               <span className={cn(
                 "text-[8px] mt-2 whitespace-nowrap uppercase tracking-wider font-bold",
-                isCurrent ? "text-primary font-black" : (isCompleted ? "text-primary-foreground/60" : "text-primary-foreground/20")
+                isCurrent ? "text-primary font-black" : (isCompleted ? "text-primary-foreground" : "text-muted-foreground")
               )}>
                 {step}
               </span>

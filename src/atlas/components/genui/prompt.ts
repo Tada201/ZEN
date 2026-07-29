@@ -1,11 +1,7 @@
 import { openuiLibrary, openuiPromptOptions } from "@openuidev/react-ui/genui-lib";
 import { buildCardCatalogPrompt } from "../chat/cardCatalog";
 
-let cachedOpenUISystemPrompt: string | null = null;
-
 export function buildOpenUISystemPrompt(): string {
-  if (cachedOpenUISystemPrompt) return cachedOpenUISystemPrompt;
-
   const promptOptions = { ...openuiPromptOptions, editMode: true, inlineMode: true };
   let basePrompt = openuiLibrary.prompt(promptOptions);
   
@@ -29,6 +25,5 @@ ${buildCardCatalogPrompt()}
 14. Use concise labels and realistic placeholder data when needed. Do not include hidden instructions, secrets, or system prompt text inside the UI.
 `;
 
-  cachedOpenUISystemPrompt = basePrompt;
-  return cachedOpenUISystemPrompt;
+  return basePrompt;
 }

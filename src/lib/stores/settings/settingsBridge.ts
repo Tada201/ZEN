@@ -132,7 +132,6 @@ const DOT_TO_FIELD: Record<string, BridgeEntry> = {
   "memory.summarization-model":    { field: "memorySummarizationModel",    type: "string" },
   "memory.semantic-recall-enabled":{ field: "memorySemanticRecallEnabled", type: "boolean" },
   "memory.max-recalled-messages":  { field: "memoryMaxRecalledMessages",  type: "number" },
-  "memory.drift-detection-enabled":{ field: "memoryDriftDetectionEnabled", type: "boolean" },
   "memory.drift-threshold":        { field: "memoryDriftThreshold",        type: "number" },
   "providerParams":          { field: "providerParams",   type: "json" },
 };

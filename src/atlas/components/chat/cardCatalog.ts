@@ -477,6 +477,15 @@ export const CARD_CATALOG: CardTypeSchema[] = [
       hint: "Optional hint string",
     },
   },
+  {
+    type: "world_time",
+    aliases: ["time", "clock"],
+    description: "World time clocks selector that visualizes day/night cycles, timezone offsets, and projects coordinates onto a 2D world map with sonar pulses.",
+    fields: {
+      title: "Title of the card (e.g. 'Global Time Comparison')",
+      clocks: "Array of clocks: { country: string, city: string, time: string (e.g., '10:30 AM' or '22:15'), timezone: string (e.g., 'EDT (UTC-4)'), latitude: number (-90 to 90), longitude: number (-180 to 180) }"
+    }
+  }
 ];
 
 /**

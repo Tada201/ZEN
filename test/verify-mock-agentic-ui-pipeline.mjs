@@ -1,22 +1,10 @@
 import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
 import ts from "typescript";
+import { loadSourceModule, closeSourceModuleLoader } from "./test-loader.mjs";
 
 function loadTsModule(relativePath, replacements = []) {
-  const sourcePath = new URL(relativePath, import.meta.url);
-  let source = readFileSync(sourcePath, "utf8");
-  for (const [from, to] of replacements) {
-    source = source.replace(from, to);
-  }
-  const transpiled = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.ES2022,
-      target: ts.ScriptTarget.ES2022,
-      importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
-    },
-    fileName: relativePath,
-  });
-  return import(`data:text/javascript;base64,${Buffer.from(transpiled.outputText).toString("base64")}`);
+  return loadSourceModule(relativePath);
 }
 
 async function loadMockClient() {
@@ -294,3 +282,4 @@ assert.equal(buildToolCompactPreview({ name: approvalTool.name, input: approvalT
 assert.equal(buildToolOutputPreview(searchTool.output).results.length, 1, "search tool should produce structured result preview");
 
 console.log("mock agentic UI pipeline verifier passed");
+await closeSourceModuleLoader();

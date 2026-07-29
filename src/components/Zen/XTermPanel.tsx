@@ -79,17 +79,17 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
           <SquareTerminal size={15} className="mr-2 shrink-0 text-success" />
           {tabs.map((tab) => (
-            <div key={tab.id} className={cn('flex shrink-0 items-center border-l border-code-border text-xs', tab.id === activeId ? 'bg-code-foreground/10 text-code-foreground' : 'text-code-foreground/60 hover:bg-code-foreground/5')}>
+            <div key={tab.id} className={cn('flex shrink-0 items-center border-l border-code-border text-xs', tab.id === activeId ? 'bg-muted text-code-foreground' : 'text-muted-foreground hover:bg-muted')}>
               <button type="button" className="px-3 py-3 font-mono" onClick={() => setActiveId(tab.id)}>{tab.name}</button>
-              <button type="button" className="px-2 py-3 text-code-foreground/50 hover:text-code-foreground" onClick={() => void closeTerminal(tab.id)} aria-label={`Close ${tab.name}`}><X size={13} /></button>
+              <button type="button" className="px-2 py-3 text-muted-foreground hover:text-code-foreground" onClick={() => void closeTerminal(tab.id)} aria-label={`Close ${tab.name}`}><X size={13} /></button>
             </div>
           ))}
-          <button type="button" className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center border border-code-border text-code-foreground/75 hover:bg-code-foreground/10 hover:text-code-foreground" onClick={() => setConfirmOpen(true)} title="Open terminal"><Plus size={15} /></button>
+          <button type="button" className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center border border-code-border text-muted-foreground hover:bg-muted hover:text-code-foreground" onClick={() => setConfirmOpen(true)} title="Open terminal"><Plus size={15} /></button>
         </div>
-        <span className="hidden font-mono text-[10px] uppercase tracking-[0.12em] text-code-foreground/50 sm:inline">interactive workspace shell</span>
+        <span className="hidden font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground sm:inline">interactive workspace shell</span>
       </header>
 
-      {error ? <div role="alert" className="border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
+      {error ? <div role="alert" className="border-b border-destructive bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
 
       <div className="relative min-h-0 flex-1">
         {tabs.map((tab) => (
@@ -99,10 +99,10 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
         ))}
         {!activeTab ? (
           <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-            <SquareTerminal size={22} className="mb-4 text-code-foreground/50" />
+            <SquareTerminal size={22} className="mb-4 text-muted-foreground" />
             <h2 className="text-sm font-medium text-code-foreground">Open a workspace terminal</h2>
-            <p className="mt-2 max-w-sm text-xs leading-5 text-code-foreground/65">Commands run in the active workspace under your account. Agent commands remain separate and cannot write into this shell.</p>
-            <button type="button" className="mt-5 border border-success/40 px-3 py-2 text-xs font-medium text-success hover:bg-success/10" onClick={() => setConfirmOpen(true)}>Open terminal</button>
+            <p className="mt-2 max-w-sm text-xs leading-5 text-muted-foreground">Commands run in the active workspace under your account. Agent commands remain separate and cannot write into this shell.</p>
+            <button type="button" className="mt-5 border border-success px-3 py-2 text-xs font-medium text-success hover:bg-success hover:text-success-foreground" onClick={() => setConfirmOpen(true)}>Open terminal</button>
           </div>
         ) : null}
       </div>
@@ -112,7 +112,7 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
         onOpenChange={setConfirmOpen}
         title="Open workspace terminal?"
         description="This starts an interactive shell in the configured workspace with your user permissions. Agent command execution remains isolated."
-        footer={<><button type="button" className="border border-border px-3 py-2 text-xs text-muted-foreground hover:bg-muted" onClick={() => setConfirmOpen(false)} disabled={opening}>Cancel</button><button type="button" className="border border-success/50 bg-success/10 px-3 py-2 text-xs font-medium text-success hover:bg-success/20 disabled:opacity-50" onClick={() => void openTerminal()} disabled={opening}>{opening ? 'Opening...' : 'Open terminal'}</button></>}
+        footer={<><button type="button" className="border border-border px-3 py-2 text-xs text-muted-foreground hover:bg-muted" onClick={() => setConfirmOpen(false)} disabled={opening}>Cancel</button><button type="button" className="border border-success px-3 py-2 text-xs font-medium text-success hover:bg-success hover:text-success-foreground disabled:opacity-50" onClick={() => void openTerminal()} disabled={opening}>{opening ? 'Opening...' : 'Open terminal'}</button></>}
       >
         <p className="text-xs leading-5 text-muted-foreground">The shell opens only after you confirm this action. It has your normal account permissions.</p>
       </AppDialog>

@@ -1,24 +1,8 @@
 import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
-import ts from "typescript";
+import { loadSourceModule } from "./test-loader.mjs";
 
-const sourcePath = new URL("../src/atlas/hooks/stream/messageTarget.ts", import.meta.url);
-const source = readFileSync(sourcePath, "utf8");
-const testableSource = source.replace(
-  'import { useChatStore } from "@/lib/stores/useChatStore";',
-  'const useChatStore = { getState: () => ({ getActiveAssistantForChat: () => null }) };',
-);
-const transpiled = ts.transpileModule(testableSource, {
-  compilerOptions: {
-    module: ts.ModuleKind.ES2022,
-    target: ts.ScriptTarget.ES2022,
-    importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
-  },
-  fileName: "messageTarget.ts",
-});
-
-const moduleUrl = `data:text/javascript;base64,${Buffer.from(transpiled.outputText).toString("base64")}`;
-const { findWritableAssistantIndex } = await import(moduleUrl);
+const { findWritableAssistantIndex } = await loadSourceModule("../src/atlas/hooks/stream/messageTarget.ts");
 
 const activeBehindLedger = [
   { id: "user-1", role: "user", content: "test", status: "sent" },

@@ -31,6 +31,11 @@ export function MessageItem({
   compact?: boolean;
 }) {
   const message = useMemo(() => normalizeVercelMessage(rawMessage), [rawMessage]);
+
+  if (message.id.startsWith("tool-ledger-")) {
+    return null;
+  }
+
   const isAssistant = message.role === "assistant";
   const hasExecutionLedger = message.steps?.some((step) => step.type === "action" || step.type === "tool-call" || step.type === "reasoning");
 

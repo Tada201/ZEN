@@ -17,23 +17,23 @@ export function TimelineCard({ data }: { data: TimelineData }) {
   const events = data.events || [];
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-border/[0.08] bg-background/40 backdrop-blur-md p-5 shadow-lg">
+    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-lg">
       <h3 className="text-sm font-semibold text-primary-foreground mb-4 tracking-tight">{title}</h3>
 
-      <div className="relative pl-6 space-y-5 before:absolute before:left-2 before:top-1.5 before:h-[calc(100%-14px)] before:w-px before:bg-card/[0.08]">
+      <div className="relative pl-6 space-y-5 before:absolute before:left-2 before:top-1.5 before:h-[calc(100%-14px)] before:w-px before:bg-muted">
         {events.map((event, idx) => {
           const status = (event.status || "upcoming").toLowerCase();
           
-          let statusColor = "text-primary-foreground/20 border-border/10 bg-card/5";
-          let statusTextClass = "text-primary-foreground/60";
+          let statusColor = "text-muted-foreground border-border bg-muted";
+          let statusTextClass = "text-primary-foreground";
           let Indicator = Circle;
 
           if (status === "done" || status === "complete" || status === "completed") {
-            statusColor = "text-emerald-400 border-emerald-500/20 bg-emerald-500/10";
-            statusTextClass = "text-primary-foreground/80";
+            statusColor = "text-emerald-400 border-emerald-500 bg-emerald-500/10";
+            statusTextClass = "text-primary-foreground";
             Indicator = CheckCircle2;
           } else if (status === "active" || status === "running" || status === "in-progress") {
-            statusColor = "text-primary border-primary/20 bg-primary/10 animate-pulse";
+            statusColor = "text-primary border-primary bg-primary/10 animate-pulse";
             statusTextClass = "text-primary-foreground font-semibold";
           }
 
@@ -47,13 +47,13 @@ export function TimelineCard({ data }: { data: TimelineData }) {
                 <span className={`text-[12px] leading-snug ${statusTextClass}`}>
                   {event.label}
                 </span>
-                <span className="text-[9px] font-mono text-primary-foreground/30 tracking-wider">
+                <span className="text-[9px] font-mono text-muted-foreground tracking-wider">
                   {event.date}
                 </span>
               </div>
 
               {event.description && (
-                <p className="text-[11px] text-primary-foreground/40 leading-relaxed mt-0.5">
+                <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">
                   {event.description}
                 </p>
               )}

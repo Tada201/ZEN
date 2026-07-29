@@ -24,26 +24,26 @@ export function DocumentSummaryCard({ data }: { data: DocumentSummaryData }) {
   const getSentimentColor = (s: string) => {
     switch (s.toLowerCase()) {
       case "positive":
-        return "text-emerald-400 border-emerald-500/20 bg-emerald-500/10";
+        return "text-emerald-400 border-emerald-500 bg-emerald-500/10";
       case "negative":
-        return "text-rose-400 border-rose-500/20 bg-rose-500/10";
+        return "text-rose-400 border-rose-500 bg-rose-500/10";
       default:
-        return "text-muted-foreground border-border/20 bg-muted/10";
+        return "text-muted-foreground border-border bg-muted";
     }
   };
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-border/[0.08] bg-background/40 backdrop-blur-md p-5 shadow-lg flex flex-col">
+    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-lg flex flex-col">
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center gap-2.5">
-          <div className="p-1.5 rounded-lg border border-border/10 bg-card/5 text-primary">
+          <div className="p-1.5 rounded-lg border border-border bg-muted text-primary">
             <FileText className="w-4 h-4" />
           </div>
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-primary-foreground truncate max-w-[200px] leading-tight" title={filename}>
               {filename}
             </h3>
-            <span className="text-[9px] font-mono text-primary-foreground/40 uppercase tracking-widest">
+            <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-widest">
               {fileType} · {fileSize}
             </span>
           </div>
@@ -57,22 +57,22 @@ export function DocumentSummaryCard({ data }: { data: DocumentSummaryData }) {
       </div>
 
       <div className="mb-4">
-        <span className="text-[9px] uppercase font-mono tracking-widest text-primary-foreground/20 block mb-1">
+        <span className="text-[9px] uppercase font-mono tracking-widest text-muted-foreground block mb-1">
           Executive Summary
         </span>
-        <p className="text-[12px] text-primary-foreground/80 leading-relaxed font-sans">
+        <p className="text-[12px] text-primary-foreground leading-relaxed font-sans">
           {summary}
         </p>
       </div>
 
       {keyPoints.length > 0 && (
         <div className="mb-4">
-          <span className="text-[9px] uppercase font-mono tracking-widest text-primary-foreground/20 block mb-2">
+          <span className="text-[9px] uppercase font-mono tracking-widest text-muted-foreground block mb-2">
             Key Insights
           </span>
           <ul className="space-y-1.5 pl-0 list-none">
             {keyPoints.map((point, idx) => (
-              <li key={idx} className="flex items-start gap-2 text-[11px] text-primary-foreground/70 leading-relaxed">
+              <li key={idx} className="flex items-start gap-2 text-[11px] text-primary-foreground leading-relaxed">
                 <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-primary mt-1.5" />
                 <span>{point}</span>
               </li>
@@ -82,16 +82,16 @@ export function DocumentSummaryCard({ data }: { data: DocumentSummaryData }) {
       )}
 
       {(wordCount !== undefined || language) && (
-        <div className="flex gap-4 pt-3.5 border-t border-border/[0.06] text-[10px] font-mono text-primary-foreground/30">
+        <div className="flex gap-4 pt-3.5 border-t border-border text-[10px] font-mono text-muted-foreground">
           {wordCount !== undefined && (
             <div className="flex items-center gap-1.5">
-              <Hash className="w-3 h-3 text-primary-foreground/20" />
+              <Hash className="w-3 h-3 text-muted-foreground" />
               <span>{wordCount.toLocaleString()} Words</span>
             </div>
           )}
           {language && (
             <div className="flex items-center gap-1.5 ml-auto">
-              <span>Language: <strong className="text-primary-foreground/50">{language}</strong></span>
+              <span>Language: <strong className="text-primary-foreground">{language}</strong></span>
             </div>
           )}
         </div>

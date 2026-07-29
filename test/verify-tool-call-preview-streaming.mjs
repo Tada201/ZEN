@@ -19,13 +19,26 @@ for (const path of [
 }
 
 const runner = readFileSync(new URL("../src-tauri/src/agent/runner/escalation.rs", import.meta.url), "utf8");
-assert.match(runner, /phase:\s*Some\("tool_call_streaming"\.to_string\(\)\)/);
-assert.match(runner, /phase:\s*Some\("tool_call_ready"\.to_string\(\)\)/);
+// The runner emits phases via the ChatStatusPhase named constants (not inline
+// string literals), so we match the constant form and separately pin the
+// constant→value mapping in chat_status.rs below.
+assert.match(runner, /ChatStatusPhase::TOOL_CALL_STREAMING\.to_string\(\)/);
+assert.match(runner, /ChatStatusPhase::TOOL_CALL_READY\.to_string\(\)/);
 assert.match(runner, /"toolCallPreview"/);
 
+// Pin the string→constant mapping so a backend rename of the phase value can't
+// silently desync what the frontend expects (CHAT_STATUS_PHASES.ToolCallStreaming
+// === "tool_call_streaming").
+const chatStatus = readFileSync(new URL("../src-tauri/src/agent/chat_status.rs", import.meta.url), "utf8");
+assert.match(chatStatus, /TOOL_CALL_STREAMING:\s*&?'static str\s*=\s*"tool_call_streaming"/);
+assert.match(chatStatus, /TOOL_CALL_READY:\s*&?'static str\s*=\s*"tool_call_ready"/);
+
+// The frontend consumes phases via the CHAT_STATUS_PHASES camelCase constants
+// (defined in src/api/chatStatus.ts), not the snake_case literals — so we match
+// the constant form here, mirroring the backend ChatStatusPhase pinning above.
 const assistant = readFileSync(new URL("../src/atlas/components/chat/AssistantMessage.tsx", import.meta.url), "utf8");
-assert.match(assistant, /tool_call_streaming/);
-assert.match(assistant, /tool_call_ready/);
+assert.match(assistant, /CHAT_STATUS_PHASES\.ToolCallStreaming/);
+assert.match(assistant, /CHAT_STATUS_PHASES\.ToolCallReady/);
 
 const trace = readFileSync(new URL("../src/atlas/components/chat/AssistantMessageTrace.tsx", import.meta.url), "utf8");
 assert.match(trace, /Preparing \$\{preview\?\.toolName/);
@@ -34,7 +47,7 @@ assert.match(trace, /argumentsPreview/);
 
 const ledger = readFileSync(new URL("../src/atlas/hooks/stream/agentActionLedger.ts", import.meta.url), "utf8");
 assert.match(ledger, /tool-preview:/);
-assert.match(ledger, /tool_call_streaming/);
-assert.match(ledger, /tool_call_ready/);
+assert.match(ledger, /CHAT_STATUS_PHASES\.ToolCallStreaming/);
+assert.match(ledger, /CHAT_STATUS_PHASES\.ToolCallReady/);
 
 console.log("tool-call preview streaming verifier passed");

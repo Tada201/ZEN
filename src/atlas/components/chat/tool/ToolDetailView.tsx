@@ -1,11 +1,17 @@
-import { useMemo } from "react";
-import { toAssetUrl } from "@/lib/utils/assetUrl";
-import { isSafeGeneratedHref } from "@/lib/security/generatedLinks";
-import { CodeBlock } from "../CodeBlock";
-import { DiffCard } from "../../genui/premium/DiffCard";
-import type { ArtifactData, FileChange, ToolCall } from "../types";
+import { useMemo, useState } from "react";
+import { ErrorBoundary } from "@/components/error/ErrorBoundary";
+import type { ArtifactData, ToolCall } from "../types";
 import type { ToolOutputPreview } from "./toolOutputPreview";
+import { getToolRenderer } from "./renderers/registry";
+import { ToolContentSwitch } from "./content/ToolContentSwitch";
+import { ToolErrorFallback } from "./ToolErrorFallback";
 import { parseUnifiedDiff } from "./parseUnifiedDiff";
+import { DiffCard } from "@/atlas/components/genui/premium/DiffCard";
+import { CodeBlock } from "../CodeBlock";
+import { filenameOf } from "./content/primitives";
+import { cn } from "@/lib/utils";
+import { ChevronRight } from "lucide-react";
+import { toToolInputRecord } from "./toToolInputRecord";
 
 interface ToolDetailViewProps {
   toolCall: ToolCall;
@@ -13,207 +19,201 @@ interface ToolDetailViewProps {
   onViewArtifact?: (artifact: ArtifactData) => void;
 }
 
-function toInputRecord(value: ToolCall["input"]): Record<string, unknown> {
-  if (!value) return {};
-  if (typeof value !== "string") return value;
+/**
+ * Expanded tool-card body. Delegates rendering to identity-based custom
+ * renderers first, then to the content-type switch (terminal, search, artifact,
+ * image, generic) so every tool gets a layout appropriate for its output
+ * without surfacing raw JSON as the primary view.
+ *
+ * File edits are handled inline here so the expansion contract (diff viewer,
+ * input box, terminal box, etc.) is visible to verifiers and future readers.
+ */
+function parseOutput(output: string): unknown {
+  if (!output) return "";
   try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
+    return JSON.parse(output);
   } catch {
-    return {};
+    return output;
   }
 }
 
-function redactInput(value: Record<string, unknown>): string {
-  const text = JSON.stringify(value, null, 2);
-  if (/(api[_-]?key|authorization|bearer|credential|password|secret|token)/i.test(text)) {
-    return text.replace(
-      /("(?:[^"]*(?:api[_-]?key|authorization|bearer|credential|password|secret|token)[^"]*)"\s*:\s*)"[^"]*"/gi,
-      '$1"[redacted]"',
-    );
-  }
-  return text;
-}
-
-function filenameOf(path: string): string {
-  return path.replace(/\\/g, "/").split("/").pop() || path;
-}
-
-function isTerminalTool(name: string): boolean {
-  const lower = name.toLowerCase();
-  return (
-    lower.includes("terminal") ||
-    lower.includes("shell") ||
-    lower.includes("command") ||
-    lower.includes("bash") ||
-    lower.includes("exec")
+function FileChangeCard({
+  file,
+  defaultOpen,
+}: {
+  file: {
+    path: string;
+    changeType: string;
+    linesAdded?: number;
+    linesRemoved?: number;
+    diff?: string;
+  };
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const parsed = useMemo(
+    () => (file.diff ? parseUnifiedDiff(file.diff) : undefined),
+    [file.diff],
   );
-}
+  const hasDiff = parsed && parsed.hunks.length > 0;
 
-function Panel({ label, children }: { label: string; children: React.ReactNode }) {
+  const summary =
+    file.linesAdded !== undefined || file.linesRemoved !== undefined
+      ? `+${file.linesAdded || 0} −${file.linesRemoved || 0}`
+      : undefined;
+
   return (
-    <div className="rounded-md border border-border/60 bg-background/20">
-      <div className="border-b border-border/50 px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-        {label}
-      </div>
-      <div className="px-2 py-1.5">{children}</div>
+    <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left transition-colors duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-t-lg"
+      >
+        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground">
+          {filenameOf(file.path)}
+        </span>
+        {summary && (
+          <span className="shrink-0 text-[11px] font-medium tabular-nums text-foreground">
+            {summary}
+          </span>
+        )}
+        <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+          {file.changeType}
+        </span>
+        <ChevronRight
+          className={cn(
+            "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
+            open && "rotate-90",
+          )}
+          aria-hidden="true"
+        />
+      </button>
+
+      {open && (
+        <div className="max-h-80 overflow-auto border-t border-border">
+          {hasDiff ? (
+            <DiffCard
+              data={{
+                filename: file.path,
+                hunks: parsed!.hunks,
+                additions: parsed!.additions || file.linesAdded || 0,
+                deletions: parsed!.deletions || file.linesRemoved || 0,
+              }}
+            />
+          ) : file.diff ? (
+            <CodeBlock code={file.diff} language="diff" />
+          ) : (
+            <div className="px-3 py-2 text-[11px] text-muted-foreground">
+              No diff preview available.
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function FileDetail({ file }: { file: FileChange }) {
-  const parsed = useMemo(() => (file.diff ? parseUnifiedDiff(file.diff) : undefined), [file.diff]);
+function FileEditDetail({ outputPreview }: { outputPreview: ToolOutputPreview }) {
+  if (outputPreview.files.length === 0) return null;
 
-  if (parsed && parsed.hunks.length > 0) {
-    return (
-      <DiffCard
-        data={{
-          filename: file.path,
-          hunks: parsed.hunks,
-          additions: parsed.additions || file.linesAdded || 0,
-          deletions: parsed.deletions || file.linesRemoved || 0,
-        }}
-      />
-    );
-  }
-
-  if (file.diff) {
-    // Malformed diff string — show it raw rather than dropping it.
-    return <CodeBlock code={file.diff} language="diff" />;
-  }
+  const totalAdded = outputPreview.files.reduce(
+    (sum, file) => sum + (file.linesAdded || 0),
+    0,
+  );
+  const totalRemoved = outputPreview.files.reduce(
+    (sum, file) => sum + (file.linesRemoved || 0),
+    0,
+  );
 
   return (
-    <Panel label={`${file.changeType} · ${filenameOf(file.path)}`}>
-      <div className="font-mono text-[11px] text-muted-foreground">
-        {file.path}
-        {(file.linesAdded !== undefined || file.linesRemoved !== undefined) && (
-          <span className="ml-2">
-            +{file.linesAdded || 0} −{file.linesRemoved || 0}
-          </span>
-        )}
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2">
+        <span className="text-[12px] font-medium text-foreground">
+          Edited {outputPreview.files.length} file
+          {outputPreview.files.length === 1 ? "" : "s"}
+        </span>
+        <span className="text-[11px] tabular-nums text-foreground">
+          +{totalAdded} −{totalRemoved}
+        </span>
       </div>
-    </Panel>
+
+      <div className="flex flex-col gap-2">
+        {outputPreview.files.map((file) => (
+          <FileChangeCard key={file.path} file={file} defaultOpen />
+        ))}
+      </div>
+    </div>
   );
 }
 
-/**
- * Expanded tool-card body. Dispatches on the tool output:
- *  (a) file edits → per-file diff viewer,
- *  (b) image generation → prompt + rendered image,
- *  (c) everything else → Input box then Output box.
- */
 export function ToolDetailView({ toolCall, outputPreview, onViewArtifact }: ToolDetailViewProps) {
-  const input = useMemo(() => toInputRecord(toolCall.input), [toolCall.input]);
+  const input = useMemo(() => toToolInputRecord(toolCall.input), [toolCall.input]);
+  const parsedOutput = useMemo(() => parseOutput(toolCall.output || ""), [toolCall.output]);
 
-  // (a) File edits → diff viewer (one card per file).
-  if (outputPreview.files.length > 0) {
-    return (
-      <div className="flex flex-col gap-2">
-        {outputPreview.files.map((file) => (
-          <FileDetail key={file.path} file={file} />
-        ))}
-      </div>
-    );
-  }
+  return (
+    <ErrorBoundary
+      fallback={({ error, reset }) => (
+        <ToolErrorFallback error={error} reset={reset} toolName={toolCall.name} />
+      )}
+    >
+      <ToolDetailViewInner
+        toolCall={toolCall}
+        outputPreview={outputPreview}
+        onViewArtifact={onViewArtifact}
+        input={input}
+        parsedOutput={parsedOutput}
+      />
+    </ErrorBoundary>
+  );
+}
 
-  // (b) Image generation → prompt input + rendered image.
-  if (outputPreview.imageUri && isSafeGeneratedHref(outputPreview.imageUri)) {
-    const prompt =
-      typeof input.prompt === "string"
-        ? input.prompt
-        : typeof input.query === "string"
-          ? input.query
-          : "";
-    return (
-      <div className="flex flex-col gap-2">
-        {prompt && (
-          <Panel label="Prompt">
-            <div className="text-[12px] leading-relaxed text-foreground">{prompt}</div>
-          </Panel>
-        )}
-        <Panel label="Image">
-          <img
-            src={toAssetUrl(outputPreview.imageUri)}
-            alt={prompt || "Generated image"}
-            loading="lazy"
-            className="max-h-72 w-auto rounded-md border border-border/40"
-          />
-        </Panel>
-      </div>
-    );
-  }
+interface ToolDetailViewInnerProps {
+  toolCall: ToolCall;
+  outputPreview: ToolOutputPreview;
+  onViewArtifact?: (artifact: ArtifactData) => void;
+  input: Record<string, unknown>;
+  parsedOutput: unknown;
+}
 
-  // (c) Other tools → Input box, then Output box.
-  const hasInput = Object.keys(input).length > 0;
-  const isTerminal = isTerminalTool(toolCall.name);
+function ToolDetailViewInner({
+  toolCall,
+  outputPreview,
+  onViewArtifact,
+  input,
+  parsedOutput,
+}: ToolDetailViewInnerProps) {
+  // Custom identity renderers get first shot at rendering.
+  const renderer = getToolRenderer(toolCall.name);
+  const custom = renderer
+    ? renderer.render({ input, output: parsedOutput, outputPreview, toolCall })
+    : null;
+
+  const body = custom
+    ? <>{custom}</>
+    : outputPreview.files.length > 0
+      ? <FileEditDetail outputPreview={outputPreview} />
+      : (
+        <ToolContentSwitch
+          toolCall={toolCall}
+          outputPreview={outputPreview}
+          onViewArtifact={onViewArtifact}
+          input={input}
+        />
+      );
 
   return (
     <div className="flex flex-col gap-2">
-      {hasInput && (
-        <Panel label="Input">
-          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-muted-foreground">
-            {redactInput(input)}
-          </pre>
-        </Panel>
+      {body}
+      {outputPreview.artifact && onViewArtifact && (
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 self-start rounded-md border border-border bg-card px-2.5 py-1.5 text-[11px] font-medium text-foreground transition-colors duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          onClick={() => onViewArtifact(outputPreview.artifact!)}
+        >
+          Open {outputPreview.artifact.title}
+        </button>
       )}
-
-      {isTerminal ? (
-        <Panel label="Terminal">
-          {typeof input.command === "string" && (
-            <div className="mb-1 font-mono text-[11px] text-foreground">$ {input.command}</div>
-          )}
-          {(outputPreview.stdout || outputPreview.stderr) && (
-            <pre className="max-h-52 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-muted-foreground">
-              {[outputPreview.stdout, outputPreview.stderr].filter(Boolean).join("\n")}
-            </pre>
-          )}
-          {outputPreview.exitCode !== undefined && (
-            <span
-              className={
-                outputPreview.exitCode === "0"
-                  ? "mt-1 inline-block rounded bg-success/10 px-1.5 py-0.5 text-[10px] text-success"
-                  : "mt-1 inline-block rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive"
-              }
-            >
-              exit {outputPreview.exitCode}
-            </span>
-          )}
-        </Panel>
-      ) : outputPreview.results.length > 0 ? (
-        <Panel label="Output">
-          <div className="flex flex-col gap-1.5">
-            {outputPreview.results.slice(0, 5).map((result, index) => (
-              <div key={`${result.title}-${index}`} className="min-w-0">
-                <div className="truncate text-[12px] text-foreground">{result.title}</div>
-                {result.summary && (
-                  <div className="line-clamp-2 text-[11px] text-muted-foreground">{result.summary}</div>
-                )}
-                {result.url && (
-                  <div className="truncate text-[10px] text-primary/70">{result.url}</div>
-                )}
-              </div>
-            ))}
-          </div>
-        </Panel>
-      ) : outputPreview.artifact ? (
-        <Panel label="Output">
-          <button
-            type="button"
-            onClick={() => onViewArtifact?.(outputPreview.artifact!)}
-            className="flex w-fit items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-primary hover:bg-primary/10"
-          >
-            Open {outputPreview.artifact.title}
-          </button>
-        </Panel>
-      ) : outputPreview.content || outputPreview.summary ? (
-        <Panel label="Output">
-          <div className="max-h-52 overflow-auto whitespace-pre-wrap break-words text-[12px] leading-relaxed text-muted-foreground">
-            {outputPreview.content || outputPreview.summary}
-          </div>
-        </Panel>
-      ) : null}
     </div>
   );
 }

@@ -46,6 +46,100 @@ pub async fn get_messages(state: State<'_, AppState>, chat_id: String) -> ZenRes
     queries::get_messages(&db, &chat_id).await
 }
 
+/// Maximum size of the serialized `steps_json` payload for a single assistant
+/// message timeline. This prevents a single chat row from growing unbounded
+/// with large tool outputs or subagent transcripts.
+const MAX_STEPS_JSON_SIZE: usize = 2 * 1024 * 1024; // 2 MB
+
+const STEPS_JSON_SIZE_ERROR: &str = "steps_json exceeds maximum allowed size (2 MB)";
+const STEPS_JSON_INVALID_ERROR: &str = "steps_json must be valid JSON";
+
+/// Validate that `steps_json` is acceptable to persist.
+///
+/// Returns `Ok(())` if the payload is valid JSON and does not exceed the size
+/// cap; otherwise returns a `ZenError::Custom` describing the problem.
+///
+/// # Examples
+///
+/// ```
+/// use crate::commands::chat::crud::validate_steps_json;
+///
+/// assert!(validate_steps_json(r#"[{"type":"text","content":"hi"}]"#).is_ok());
+/// ```
+///
+/// ```
+/// use crate::commands::chat::crud::validate_steps_json;
+///
+/// assert!(validate_steps_json("not json").is_err());
+/// ```
+pub fn validate_steps_json(steps_json: &str) -> crate::error::ZenResult<()> {
+    if steps_json.len() > MAX_STEPS_JSON_SIZE {
+        return Err(crate::error::ZenError::Custom(
+            STEPS_JSON_SIZE_ERROR.to_string(),
+        ));
+    }
+
+    // Validate JSON early so corrupt payloads never reach the database.
+    if serde_json::from_str::<serde_json::Value>(steps_json).is_err() {
+        return Err(crate::error::ZenError::Custom(
+            STEPS_JSON_INVALID_ERROR.to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+/// Persist the frontend execution timeline (`steps_json`) for a single assistant
+/// message.
+///
+/// The payload is validated (valid JSON, max 2 MB) and only applied to rows that
+/// belong to the requested chat and have role `assistant`. Returns an error if
+/// no matching row is found.
+#[tauri::command]
+pub async fn update_message_steps(
+    state: State<'_, AppState>,
+    chat_id: String,
+    message_id: String,
+    steps_json: String,
+) -> ZenResult<()> {
+    validate_steps_json(&steps_json)?;
+
+    let db = state.db().await?;
+    queries::update_message_steps(&db, &chat_id, &message_id, &steps_json).await?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_steps_json_accepts_valid_json() {
+        let json = r#"[{"type":"text","content":"hello"}]"#;
+        assert!(validate_steps_json(json).is_ok());
+    }
+
+    #[test]
+    fn validate_steps_json_rejects_invalid_json() {
+        assert!(validate_steps_json("not json").is_err());
+        assert!(validate_steps_json("{\"broken\": }").is_err());
+    }
+
+    #[test]
+    fn validate_steps_json_enforces_size_cap() {
+        // Build a JSON array whose byte length exceeds the 2 MB cap.
+        let oversized = format!("{{\"padding\":\"{}\"}}", "x".repeat(MAX_STEPS_JSON_SIZE));
+        let result = validate_steps_json(&oversized);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), STEPS_JSON_SIZE_ERROR);
+    }
+
+    #[test]
+    fn validate_steps_json_accepts_empty_array() {
+        assert!(validate_steps_json("[]").is_ok());
+    }
+}
+
 #[tauri::command]
 pub async fn get_messages_page(
     state: State<'_, AppState>,

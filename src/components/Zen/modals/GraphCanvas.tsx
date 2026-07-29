@@ -201,7 +201,7 @@ export function GraphCanvas({ className = '' }: GraphCanvasProps) {
     return (
         <div className={cn("flex flex-col h-full bg-card border border-border rounded-lg overflow-hidden shadow-2xl", className)}>
             {/* Header */}
-            <div className="h-9 flex items-center justify-between px-4 bg-muted/30 border-b border-border shrink-0">
+            <div className="h-9 flex items-center justify-between px-4 bg-muted border-b border-border shrink-0">
                 <div className="flex items-center gap-2.5">
                     <div className={cn(
                         "w-1.5 h-1.5 rounded-full animate-pulse",
@@ -210,16 +210,16 @@ export function GraphCanvas({ className = '' }: GraphCanvasProps) {
                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground">FUNCTION_PLOTTER</span>
                 </div>
                 <div className="flex items-center gap-1">
-                    <button onClick={handleReset} className="p-1.5 rounded text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all" title="Reset View">
+                    <button onClick={handleReset} className="p-1.5 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all" title="Reset View">
                         <RotateCcw size={11} />
                     </button>
-                    <button className="p-1.5 rounded text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all" title="Zoom Out">
+                    <button className="p-1.5 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all" title="Zoom Out">
                         <ZoomOut size={11} />
                     </button>
-                    <button className="p-1.5 rounded text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all" title="Zoom In">
+                    <button className="p-1.5 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all" title="Zoom In">
                         <ZoomIn size={11} />
                     </button>
-                    <button className="p-1.5 rounded text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all" title="Fullscreen">
+                    <button className="p-1.5 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all" title="Fullscreen">
                         <Maximize2 size={11} />
                     </button>
                 </div>
@@ -242,7 +242,7 @@ export function GraphCanvas({ className = '' }: GraphCanvasProps) {
 
                 {/* Coordinates HUD */}
                 {hoverCoord && (
-                    <div className="absolute top-3 right-3 flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-card/90 border border-border backdrop-blur-sm shadow-sm">
+                    <div className="absolute top-3 right-3 flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-card border border-border shadow-sm">
                         <Crosshair size={10} className="text-primary" />
                         <span className="font-mono text-[10px] text-foreground">
                             <span className="text-muted-foreground">x</span> {hoverCoord.x.toFixed(2)}{' '}
@@ -252,7 +252,7 @@ export function GraphCanvas({ className = '' }: GraphCanvasProps) {
                 )}
 
                 {/* Range Info */}
-                <div className="absolute bottom-3 left-3 font-mono text-[9px] text-muted-foreground/40 uppercase tracking-widest">
+                <div className="absolute bottom-3 left-3 font-mono text-[9px] text-muted-foreground uppercase tracking-widest">
                     x: [{viewport.xMin.toFixed(1)}, {viewport.xMax.toFixed(1)}] y: [{viewport.yMin.toFixed(1)}, {viewport.yMax.toFixed(1)}]
                 </div>
             </div>

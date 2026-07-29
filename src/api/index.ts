@@ -6,7 +6,13 @@ export {
   isIpcCommandError,
 } from "./tauriClient";
 export type { IpcErrorCode, IpcErrorPayload } from "./tauriClient";
-export type { McpConfig } from "./mcpApi";
+export type {
+  McpConfig,
+  McpServerEntry,
+  McpServerStatus,
+  McpServerStatusEvent,
+  McpTransport,
+} from "./mcpApi";
 export { chatApi } from "./chatApi";
 export type {
   BackendChat,

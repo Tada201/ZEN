@@ -103,7 +103,7 @@ impl Runner {
         // user configured is admitted for every tool-enabled agent. The user's
         // per-tool permission policy still gates execution downstream.
         for tool_id in &v2_tools {
-            if crate::mcp::McpClient::is_external_tool(tool_id)
+            if crate::mcp::client::is_external_tool_name(tool_id)
                 && !authorized_tool_ids.contains(tool_id)
             {
                 authorized_tool_ids.push(tool_id.clone());
@@ -162,6 +162,7 @@ impl Runner {
         agent_name: &str,
         authorized_tool_ids: &[String],
         token: CancellationToken,
+        assistant_message_id: Option<String>,
     ) -> Vec<ToolResult> {
         let tools_enabled = self.config.tools_enabled;
         let (mut ordered_results, pipeline_calls) =
@@ -284,6 +285,23 @@ impl Runner {
                 })
                 .await;
 
+                self.emit(AgentEvent::ToolStart(ToolStartPayload {
+                    tool_name: tool_call.name.clone(),
+                    tool_call_id: tc_id.clone(),
+                    arguments: tool_call.args.clone(),
+                    trace_id: trace_id.clone(),
+                    run_id: Some(run_id.clone()),
+                    parent_agent_id: parent_agent_id.clone(),
+                    execution_id: Some(tc_id.clone()),
+                    batch_id: Some(tool_batch_id.clone()),
+                    tool_batch_id: Some(tool_batch_id.clone()),
+                    message_id: assistant_message_id.clone(),
+                    agent_id: agent_id.to_string(),
+                    agent_name: agent_name.to_string(),
+                    chat_id: chat_id.to_string(),
+                    iteration,
+                }));
+
                 let tc_id_inner = tc_id.clone();
                 let result_tool_name = tool_call.name.clone();
                 let result_args = tool_call.args.clone();
@@ -372,6 +390,7 @@ impl Runner {
                         execution_id: Some(tc_id.clone()),
                         batch_id: Some(tool_batch_id.clone()),
                         tool_batch_id: Some(tool_batch_id.clone()),
+                        message_id: assistant_message_id.clone(),
                         agent_id: agent_id.to_string(),
                         agent_name: agent_name.to_string(),
                         chat_id: chat_id.to_string(),
@@ -548,6 +567,7 @@ impl Runner {
                                 let token_inner = token.clone();
                                 let depth = self.depth;
                                 let v2_tool_call_inner = v2_tool_call.clone();
+                                let assistant_message_id_for_approval = assistant_message_id.clone();
 
                                 let handle = tokio::spawn(async move {
                                     let started_at = chrono::Utc::now();
@@ -628,6 +648,7 @@ impl Runner {
                                         execution_id: Some(v2_tool_call_inner.id.clone()),
                                         batch_id: Some(tool_batch_id_inner.clone()),
                                         tool_batch_id: Some(tool_batch_id_inner),
+                                        message_id: assistant_message_id_for_approval.clone(),
                                         agent_id: agent_id_inner,
                                         agent_name: agent_name_inner,
                                         chat_id: chat_id_inner.clone(),
@@ -805,6 +826,7 @@ impl Runner {
                         execution_id: Some(tc_id.clone()),
                         batch_id: Some(tool_batch_id.clone()),
                         tool_batch_id: Some(tool_batch_id.clone()),
+                        message_id: assistant_message_id.clone(),
                         agent_id: agent_id.to_string(),
                         agent_name: agent_name.to_string(),
                         chat_id: chat_id.to_string(),
@@ -893,12 +915,14 @@ impl Runner {
         // tools stay in the exact order the model emitted them. Completion events
         // are emitted as each task resolves so the UI can reveal fast tool output
         // without waiting for the slowest parallel call.
+        let assistant_message_id_for_complete = assistant_message_id.clone();
         collect_tool_results_as_completed(
             handles,
             &mut ordered_results,
             |tool_name, result| {
                 self.emit_tool_complete_for_result(
                     chat_id, iteration, agent_id, agent_name, tool_name, result,
+                    assistant_message_id_for_complete.clone(),
                 );
             },
             token.clone(),
@@ -937,6 +961,7 @@ impl Runner {
         agent_name: &str,
         tool_name: &str,
         result: &ToolResult,
+        assistant_message_id: Option<String>,
     ) {
         let output = format_tool_result_output(result);
 
@@ -949,6 +974,7 @@ impl Runner {
             execution_id: Some(result.tool_call_id.clone()),
             batch_id: Some(self.tool_batch_id(chat_id, agent_id, iteration)),
             tool_batch_id: Some(self.tool_batch_id(chat_id, agent_id, iteration)),
+            message_id: assistant_message_id.clone(),
             agent_id: agent_id.to_string(),
             agent_name: agent_name.to_string(),
             chat_id: chat_id.to_string(),
@@ -1167,4 +1193,5 @@ mod tests {
             "Cloud tier must not inline v2 schemas even when the ids match real tools"
         );
     }
+
 }

@@ -5,9 +5,9 @@ export function ComparisonCard({ data }: { data: any }) {
   const items = data.items || data.options || [];
 
   return (
-    <div className="rounded-2xl border border-border/[0.08] bg-background/40 backdrop-blur-md p-5 shadow-lg w-full">
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-lg w-full">
       {title && (
-        <h4 className="text-xs font-bold text-primary-foreground/50 uppercase tracking-widest mb-4">{title}</h4>
+        <h4 className="text-xs font-bold text-primary-foreground uppercase tracking-widest mb-4">{title}</h4>
       )}
       <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(items.length, 3)}, 1fr)` }}>
         {items.slice(0, 3).map((item: any, i: number) => {
@@ -17,8 +17,8 @@ export function ComparisonCard({ data }: { data: any }) {
               key={i}
               className={`rounded-xl border p-4 flex flex-col gap-3 relative ${
                 isRecommended
-                  ? 'border-primary/30 bg-primary/[0.03] ring-1 ring-primary/20'
-                  : 'border-border/[0.06] bg-card/[0.01]'
+                  ? 'border-primary bg-primary/10 ring-1 ring-primary'
+                  : 'border-border bg-card'
               }`}
             >
               {isRecommended && (
@@ -35,7 +35,7 @@ export function ComparisonCard({ data }: { data: any }) {
                   {item.features.map((feat: string, j: number) => (
                     <div key={j} className="flex items-start gap-1.5">
                       <Check size={12} className="text-emerald-400 mt-0.5 shrink-0" />
-                      <span className="text-[10px] text-primary-foreground/50 leading-relaxed">{feat}</span>
+                      <span className="text-[10px] text-primary-foreground leading-relaxed">{feat}</span>
                     </div>
                   ))}
                 </div>

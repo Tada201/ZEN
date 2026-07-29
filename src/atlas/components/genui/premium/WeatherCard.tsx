@@ -12,11 +12,11 @@ export function WeatherCard({ data }: { data: any }) {
   const low = data.low ?? data.temp_min;
 
   return (
-    <div className="rounded-2xl border border-border/[0.08] bg-background/40 backdrop-blur-md p-5 shadow-lg w-full max-w-md">
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-lg w-full max-w-md">
       <div className="flex items-center justify-between mb-3">
         <div>
           <h4 className="font-bold text-primary-foreground text-sm">{location}</h4>
-          <p className="text-xs text-primary-foreground/40 mt-0.5">{condition}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{condition}</p>
         </div>
         <span className="text-3xl">{icon}</span>
       </div>
@@ -25,38 +25,38 @@ export function WeatherCard({ data }: { data: any }) {
           {temp != null ? `${temp}°` : '--'}
         </span>
         {high != null && low != null && (
-          <span className="text-xs text-primary-foreground/40 ml-2">
+          <span className="text-xs text-muted-foreground ml-2">
             H:{high}° L:{low}°
           </span>
         )}
       </div>
-      <div className="grid grid-cols-3 gap-2 border-t border-border/[0.06] pt-3">
+      <div className="grid grid-cols-3 gap-2 border-t border-border pt-3">
         {feelsLike != null && (
           <div className="flex items-center gap-1.5">
-            <Thermometer size={12} className="text-primary-foreground/30 shrink-0" />
-            <span className="text-[10px] text-primary-foreground/50">Feels {feelsLike}°</span>
+            <Thermometer size={12} className="text-muted-foreground shrink-0" />
+            <span className="text-[10px] text-primary-foreground">Feels {feelsLike}°</span>
           </div>
         )}
         {humidity != null && (
           <div className="flex items-center gap-1.5">
-            <Droplets size={12} className="text-primary-foreground/30 shrink-0" />
-            <span className="text-[10px] text-primary-foreground/50">{humidity}%</span>
+            <Droplets size={12} className="text-muted-foreground shrink-0" />
+            <span className="text-[10px] text-primary-foreground">{humidity}%</span>
           </div>
         )}
         {windSpeed != null && (
           <div className="flex items-center gap-1.5">
-            <Wind size={12} className="text-primary-foreground/30 shrink-0" />
-            <span className="text-[10px] text-primary-foreground/50">{windSpeed}</span>
+            <Wind size={12} className="text-muted-foreground shrink-0" />
+            <span className="text-[10px] text-primary-foreground">{windSpeed}</span>
           </div>
         )}
       </div>
       {(data.forecast && Array.isArray(data.forecast)) && (
-        <div className="flex gap-2 mt-3 pt-3 border-t border-border/[0.06] overflow-x-auto">
+        <div className="flex gap-2 mt-3 pt-3 border-t border-border overflow-x-auto">
           {data.forecast.slice(0, 5).map((day: any, i: number) => (
             <div key={i} className="flex flex-col items-center shrink-0 px-2">
-              <span className="text-[9px] text-primary-foreground/30 uppercase">{day.day || day.date || ''}</span>
+              <span className="text-[9px] text-muted-foreground uppercase">{day.day || day.date || ''}</span>
               <span className="text-sm mt-0.5">{day.icon || '☀️'}</span>
-              <span className="text-[10px] text-primary-foreground/60 mt-0.5">
+              <span className="text-[10px] text-primary-foreground mt-0.5">
                 {day.high ?? day.temp}{day.low ? `/${day.low}` : ''}°
               </span>
             </div>

@@ -200,15 +200,15 @@ export function CommandPalette() {
       onClick={() => setOpen(false)}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-background/50 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-background/80" />
 
       {/* Palette Card */}
       <div
-        className="relative w-full max-w-xl overflow-hidden rounded-xl border border-border/[0.06] bg-card shadow-2xl"
+        className="relative w-full max-w-xl overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Input */}
-        <div className="flex items-center gap-2 border-b border-border/[0.06] px-4">
+        <div className="flex items-center gap-2 border-b border-border px-4">
           <Search className="h-4 w-4 text-muted-foreground" />
           <input
             autoFocus
@@ -218,7 +218,7 @@ export function CommandPalette() {
             placeholder="Search actions, settings…"
             className="h-12 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
           />
-          <kbd className="hidden items-center gap-1 rounded border border-border/[0.06] bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline-flex">
+          <kbd className="hidden items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline-flex">
             ESC
           </kbd>
         </div>
@@ -238,14 +238,13 @@ export function CommandPalette() {
                   <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                     {item.group}
                   </div>
-                )}
-                <li
+                )}                  <li
                   onMouseEnter={() => setActive(idx)}
                   onClick={() => runItem(item)}
                   className={`mx-1.5 flex cursor-pointer items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors ${
                     idx === active
                       ? "bg-muted text-foreground"
-                      : "text-muted-foreground hover:bg-muted/50 hover:text-muted-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-muted-foreground"
                   }`}
                 >
                   <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -258,7 +257,7 @@ export function CommandPalette() {
         </ul>
 
         {/* Footer */}
-        <footer className="flex items-center justify-between border-t border-border/[0.06] px-3 py-2 text-[10px] text-muted-foreground">
+        <footer className="flex items-center justify-between border-t border-border px-3 py-2 text-[10px] text-muted-foreground">
           <div className="flex items-center gap-1">
             <Command className="h-3 w-3" />
             {" "}Press ↑↓ to navigate, ↵ to select

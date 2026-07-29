@@ -22,31 +22,31 @@ export function StreamingSkeleton({
       {/* Shimmer lines */}
       <div className="flex flex-col gap-2 animate-pulse">
         <div className={cn(
-          "h-3 rounded bg-muted/40 w-[90%]",
+          "h-3 rounded bg-muted w-[90%]",
           compact && "h-2"
         )} />
         <div className={cn(
-          "h-3 rounded bg-muted/40 w-[75%]",
+          "h-3 rounded bg-muted w-[75%]",
           compact && "h-2"
         )} />
         <div className={cn(
-          "h-3 rounded bg-muted/40 w-[85%]",
+          "h-3 rounded bg-muted w-[85%]",
           compact && "h-2"
         )} />
         <div className={cn(
-          "h-3 rounded bg-muted/40 w-[40%]",
+          "h-3 rounded bg-muted w-[40%]",
           compact && "h-2"
         )} />
       </div>
 
       {/* Animated dots indicator */}
-      <div className="mt-3 flex items-center gap-2 opacity-40">
+      <div className="mt-3 flex items-center gap-2">
         <div className="flex gap-1">
-          <div className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:-0.3s]" />
-          <div className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:-0.15s]" />
-          <div className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce" />
+          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]" />
+          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]" />
+          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" />
         </div>
-        <span className="text-[10px] font-mono tracking-widest text-muted-foreground/50 uppercase">
+        <span className="text-[10px] font-mono tracking-widest text-muted-foreground uppercase">
           {label}
         </span>
       </div>

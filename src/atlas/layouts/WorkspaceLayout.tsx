@@ -117,7 +117,7 @@ export function WorkspaceLayout({
               onClick={() => setSidebarOpen(false)}
             />
             <aside
-              className="fixed inset-y-0 left-0 z-[60] w-[min(82vw,260px)] glass-panel overflow-hidden md:hidden"
+              className="fixed inset-y-0 left-0 z-[60] w-[min(82vw,260px)] border-r border-border bg-card overflow-hidden md:hidden"
             >
               {React.cloneElement(sidebar as React.ReactElement<any>, {
                 isCollapsed: false,
@@ -129,7 +129,7 @@ export function WorkspaceLayout({
 
         {sidebar && (
           <aside 
-            className="hidden h-full glass-panel shrink-0 overflow-hidden z-50 md:block"
+            className="hidden h-full border-r border-border bg-card shrink-0 overflow-hidden z-50 md:block"
             style={{ width: sidebarOpen ? `${SIDEBAR_EXPANDED_WIDTH}px` : `${SIDEBAR_COLLAPSED_WIDTH}px` }}
           >
             {React.cloneElement(sidebar as React.ReactElement<any>, { isCollapsed: !sidebarOpen })}
@@ -145,10 +145,10 @@ export function WorkspaceLayout({
         {!isMobile && rightPanelOpen && rightPanel && (
           <div 
             onMouseDown={handleMouseDown}
-            className={`w-1 cursor-col-resize bg-transparent hover:bg-card/10 transition-colors duration-200 z-50 relative flex items-center justify-center select-none group ${isResizing ? "bg-card/15" : ""}`}
+            className={`w-1 cursor-col-resize bg-transparent hover:bg-muted transition-colors duration-200 z-50 relative flex items-center justify-center select-none group ${isResizing ? "bg-muted" : ""}`}
             style={{ touchAction: "none" }}
           >
-            <div className="z-10 flex h-4 w-3 items-center justify-center rounded-sm border border-border/10 bg-[#0d0d11]/85 backdrop-blur-sm text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <div className="z-10 flex h-4 w-3 items-center justify-center rounded-sm border border-border bg-muted text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-200">
               <GripVertical className="h-2.5 w-2.5" />
             </div>
           </div>
@@ -165,14 +165,14 @@ export function WorkspaceLayout({
         </div>
 
         {/* Secondary Activity Bar Rail (Far Right) */}
-        <aside className="hidden w-[var(--activity-bar-width)] glass-panel-activity flex-col py-4 z-50 shrink-0 md:flex">
+        <aside className="hidden w-[var(--activity-bar-width)] border-l border-border bg-card flex-col py-4 z-50 shrink-0 md:flex">
           <SecondaryActivityBar />
         </aside>
       </div>
 
       {/* Status Bar Footer */}
       {showStatusBar && (
-        <footer className="hidden h-7 glass-panel-strong shrink-0 z-50 sm:block">
+        <footer className="hidden h-7 border-t border-border bg-card shrink-0 z-50 sm:block">
           <StatusBar />
         </footer>
       )}

@@ -777,6 +777,7 @@ impl Runner {
                                 );
                                 let runner = early_runner.clone();
                                 let token = early_token_for_callback.clone();
+                                let msg_id_for_early = msg_id_for_chunks.clone();
                                 tokio::spawn(async move {
                                     if !ctx.state.mark_started(&key).await {
                                         return;
@@ -797,6 +798,7 @@ impl Runner {
                                             &ctx.agent_name,
                                             &ctx.authorized_tool_ids,
                                             token,
+                                            Some(msg_id_for_early),
                                         )
                                         .await;
                                     if let Some(result) = results.pop() {
@@ -926,7 +928,7 @@ impl Runner {
                     delta: text,
                     r#type: current_type.to_string(),
                     done: false,
-                    message_id: Some(msg_id.to_string()),
+                    message_id: Some(msg_id.clone()),
                 })
                 .emit_via(app, &self.on_event);
             }

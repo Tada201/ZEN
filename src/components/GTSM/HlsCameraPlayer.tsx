@@ -74,7 +74,7 @@ export function HlsCameraPlayer({ playback, onPlaybackError }: HlsCameraPlayerPr
 
   return (
     <div className="relative h-full w-full bg-background">
-      {isLoading ? <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70 text-[11px] text-foreground">Loading stream...</div> : null}
+      {isLoading ? <div className="absolute inset-0 z-10 flex items-center justify-center bg-card text-[11px] text-foreground">Loading stream...</div> : null}
       <video
         ref={videoRef}
         controls

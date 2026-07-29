@@ -34,6 +34,7 @@ export interface BackendMessage {
   kind?: string;
   metadata?: string;
   reasoningDetails?: string;
+  stepsJson?: string;
   attachments?: string;
 }
 
@@ -114,6 +115,8 @@ export const chatApi = {
   listMessages: (chatId: string | null) => callCommand<BackendMessage[]>("get_messages", { chatId }),
   listMessagesPage: (chatId: string, limit?: number, offset?: number) =>
     callCommand<PaginatedResponse<BackendMessage>>("get_messages_page", { chatId, limit, offset }),
+  updateMessageSteps: (chatId: string, messageId: string, stepsJson: string) =>
+    callCommand<void>("update_message_steps", { chatId, messageId, stepsJson }),
   searchChats: (query: string) => callCommand<SearchResult[]>("search_chats", { query }),
   exportChat: (chatId: string) => callCommand<unknown>("export_chat", { chatId }),
   importChat: (sourcePath: string) => callCommand<unknown>("import_chat", { sourcePath }),

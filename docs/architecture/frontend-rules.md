@@ -79,6 +79,50 @@ These rules apply to all code under `src/`.
    hardcoded, or product-inconsistent palettes in widgets.
 8. Use icon buttons for common actions, with tooltips for unclear icons.
 
+### Surface & Readability Rules
+
+The chat timeline and other primary surfaces must feel solid, readable, and
+free of decorative transparency. These rules are enforced to prevent the UI
+from looking broken, busy, or low-contrast across themes.
+
+1. **Do not use glassmorphism on primary content surfaces.** Avoid combining
+   `backdrop-blur` with low-opacity backgrounds such as `bg-background/40` or
+   `bg-card/60`. Use solid semantic surfaces (`bg-card`, `bg-muted`,
+   `bg-background`) instead.
+2. **Do not use semi-transparent surface backgrounds on primary content.**
+   Classes like `bg-card/20`, `bg-muted/30`, `bg-background/35`, or
+   `bg-primary/5` on large surfaces make the UI look washed out and inconsistent.
+   Use the full-opacity token on cards, panels, and blocks.
+3. **Do not use low-opacity borders on primary surfaces.** Prefer `border-border`
+   over `border-border/30`, `border-border/40`, or `border-border/60`.
+4. **Do not use low-opacity text for readable content.** Avoid
+   `text-muted-foreground/25`, `text-muted-foreground/55`, `text-foreground/80`,
+   or `opacity-40` on labels, body text, or status text. Use
+   `text-muted-foreground` or `text-foreground` instead.
+5. **Use solid hover states.** Prefer `hover:bg-muted` over faint tints such as
+   `hover:bg-muted/10`.
+6. **Reserve accent tints for small indicators.** `bg-primary/10`,
+   `text-primary/70`, and similar tints are acceptable only for tiny badges,
+   dots, or subtle status chips—not for cards, panels, or large surfaces.
+
+**Examples from the chat timeline:**
+
+| ❌ Don't | ✅ Do |
+|---|---|
+| `bg-background/40 backdrop-blur-md` | `bg-card` |
+| `bg-card/60` | `bg-card` |
+| `bg-card/20` | `bg-card` or `bg-muted` |
+| `bg-muted/30` / `bg-muted/40` | `bg-muted` |
+| `border-border/30` / `border-border/40` | `border-border` |
+| `text-muted-foreground/25` / `/55` / `/60` | `text-muted-foreground` |
+| `text-foreground/80` / `/90` | `text-foreground` |
+| `hover:bg-muted/10` | `hover:bg-muted` |
+
+**Exceptions:** Disabled controls, loading skeletons, and explicitly decorative
+accents (e.g., a subtle glow behind a single hero element) may still use opacity,
+because the opacity itself communicates state rather than content readability.
+Do not use these exceptions to justify low-contrast body text or washed-out cards.
+
 ## Chat Timeline Rules
 
 The main chat timeline is a user-facing progress surface, not an execution log.
@@ -109,6 +153,117 @@ The main chat timeline is a user-facing progress surface, not an execution log.
    reviewer" over raw tool ids, event kinds, or JSON keys.
 9. Any verifier for chat execution UI must assert the user-facing contract
    above, not brittle snapshots of old internal component structure.
+
+### Execution Timeline Persistence
+
+Assistant messages carry a `steps` array that represents the live execution
+timeline (text, reasoning, tool-call, and action steps). This timeline must
+behave identically before and after an app reload.
+
+1. `steps` must contain only serializable JSON. Do not store functions, DOM
+   nodes, circular references, or non-serializable metadata in a step.
+2. The backend persists the timeline in `messages.steps_json`. The frontend
+   reads it back via `BackendMessage.stepsJson` and `normalizeVercelMessage`.
+3. On rehydration, `normalizeVercelMessage` uses `stepsJson` first; the legacy
+   `toolInvocations` / `toolCalls` reconstruction is a fallback only.
+4. `chat:done` carries the real backend `message_id` in
+   `ChatDoneEventPayload.message_id`. Always use this backend ID—not the
+   optimistic in-memory ID—for post-stream updates such as
+   `updateMessageSteps`.
+5. When the user reloads the app, the final persisted `steps_json` must
+   reproduce the same grouped timeline that was visible at the end of the
+   stream. Do not leave stray or orphan tool cards that vanish after reload.
+6. If a branch (deep research, orchestrator, etc.) cannot yet emit a real
+   `message_id`, do not call `updateMessageSteps` with a fake/optimistic ID;
+   wait until the backend can provide the true persisted row ID.
+7. Keep the persisted timeline small. Embed only what the UI needs to render
+   the progress ledger; avoid duplicating full tool outputs, large base64 blobs,
+   or subagent transcripts inside `steps`.
+
+### Tool-Card UX Rules
+
+Tool-call cards in the chat timeline must render the *user-facing* transaction,
+not the implementation detail.
+
+1. **Summary-first layout.** Every card must show: verb, target, status, and
+   (when complete) a one-line outcome. Example: "Edited `src/lib.rs` (+12 / −3)"
+   or "Ran `cargo test` (exit 0)".
+2. **No raw JSON, tool arguments, stdout/stderr dumps, or event metadata as the
+   primary view.** Raw input and output belong inside an explicit
+   "Technical details" or "Raw output" disclosure.
+3. **Content-type-aware renderers.** Use the appropriate card treatment for the
+   tool output:
+   - **File edits:** unified or side-by-side diff with `+`/`-` indicators and
+     semantic color tokens. Show "+N / −M" summary when collapsed.
+   - **Terminal / shell:** monospaced output block, truncated to ~5–10 lines by
+     default, with a "Show full output" toggle and a copy button.
+   - **Search:** numbered result snippets with clickable source links or chips.
+   - **Artifacts:** preview card that links to the existing artifact viewer.
+   - **Subagent / delegation:** `SubagentExecutionCard` with agent name, task,
+     status, elapsed time, and child tool-call trace when expanded.
+   - **Generic:** summary line + raw output disclosure.
+4. **Collapsed / expanded defaults:**
+   - **Running / pending:** expanded (or visually active) so the user sees work
+     in progress.
+   - **Waiting for approval:** expanded with risk, reason, and approve/deny
+     controls.
+   - **Error / failed:** expanded with a concise message and retry action.
+   - **Completed background work:** collapsed by default, unless the result is
+     immediately relevant (e.g., a generated artifact).
+5. **Animations are subtle and consistent.** Use `duration-200` fades or height
+   transitions. Do not bounce, shake, or pulse for decoration. Respect
+   `prefers-reduced-motion`.
+6. **Status icons and colors:** use semantic tokens only. Green for success,
+   red for error, amber for pending/approval, and neutral for running. Do not
+   rely on color alone for diffs; include `+`/`-` prefixes.
+7. **Keyboard and screen-reader support:** expand/collapse is a focusable button
+   with an `aria-expanded` state. Running and error cards live in a polite
+   `aria-live` region if they are not auto-focused.
+8. **Reload safety:** collapsed/expanded state and output previews are derived
+   from the persisted `steps_json` and backend IDs. Do not depend on
+   optimistic in-memory IDs or ephemeral React state for card survival across
+   reloads.
+
+#### Enforcement Checklist
+
+A new or updated tool-card implementation should pass the following review
+before being merged:
+
+- [ ] The card renders a one-line summary (verb + target + status + optional count).
+- [ ] Raw JSON, full tool arguments, stdout/stderr dumps, and event metadata
+      are hidden behind a "Technical details" or "Raw output" disclosure.
+- [ ] File edits show a diff or "+N / −M" badge; terminal output uses a
+      monospaced block with a copy button; search results show numbered snippets.
+- [ ] Running/approval/error cards are expanded by default; completed background
+      cards are collapsed by default.
+- [ ] Animations are limited to `duration-200` fades or height transitions and
+      respect `prefers-reduced-motion`.
+- [ ] Expand/collapse is keyboard-focusable and announces `aria-expanded`.
+- [ ] The card derives its persisted state from `steps_json` and backend IDs,
+      not optimistic IDs.
+- [ ] A verifier or manual test confirms the card looks identical after an app
+      reload.
+
+### Backend Message ID Contract for Chat Events
+
+The backend is the source of truth for persisted message IDs. Optimistic IDs
+created by the frontend must be treated as temporary and replaced as soon as the
+backend exposes the real row ID. Every event that targets a specific persisted
+message should include the backend message ID; events that target the chat stream
+as a whole should not pretend to target a message.
+
+1. `chat:done` carries `message_id` — the backend-assistant row ID for the turn.
+   Use this ID for every post-stream update such as `updateMessageSteps`. Do not   use the optimistic in-memory assistant ID for persisted updates.
+2. `chat:message` carries `id` — the backend row ID for the message it describes.
+   The frontend must upsert by that `id` and replace any optimistic message   placeholder. If the same `id` already exists in the store, merge updates rather
+   than creating a duplicate.
+3. `chat:error` does not carry a `message_id`; it targets the chat stream. The   frontend should route the error to the currently active streaming assistant   for that chat (if any) and mark it as failed. Do not fabricate or trust an   optimistic ID for persisted state after an error.
+4. `chat:stream-reset` does not carry a `message_id`; it resets the per-chat   streaming state. Do not use it to mutate a specific message.
+5. When the backend message ID arrives, update the store's id mapping immediately.
+   Subsequent events (tool cards, chunk deltas, status updates) may still refer to   the optimistic ID in older code; any new code must resolve them through the   backend ID.
+6. If a backend branch (deep research, orchestrator, etc.) cannot yet emit a real
+   `message_id` or `id`, treat that branch as not-yet-persisted. Do not call
+   persistence commands with fake or optimistic IDs for those branches.
 
 ## Code Quality Rules
 

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { CheckCircle2 } from 'lucide-react';
 import { StockCard } from './premium/StockCard';
 import { FlightCard } from './premium/FlightCard';
@@ -28,14 +29,46 @@ import { AgentStepCard } from './premium/AgentStepCard';
 import { TranslationCard } from './premium/TranslationCard';
 import { DocumentSummaryCard } from './premium/DocumentSummaryCard';
 import { DiffCard } from './premium/DiffCard';
-import { ChartCard } from './premium/ChartCard';
 import { MemoryRecallCard } from './premium/MemoryRecallCard';
 import { MathCard } from './premium/MathCard';
 import { CitationCard } from './premium/CitationCard';
 import { TerminalCard } from './premium/TerminalCard';
 import { FlashcardComponent } from './premium/FlashcardComponent';
+import { WorldTimeCard } from './premium/WorldTimeCard';
 import { MapComponent } from './Map';
 import { MessageComposer } from './MessageComposer';
+
+// ChartCard pulls in the entire Recharts library (~110 KB gzipped). Lazy-
+// load it so the vendor-recharts chunk defined in vite.config.ts is only
+// fetched when a chat message actually contains a chart — every other
+// premium card type stays on the fast path with zero Recharts bytes.
+//
+// The Suspense fallback mirrors the empty-state the ChartCard itself
+// renders when no data is supplied, so the layout doesn't pop on load.
+const ChartCard = lazy(() =>
+  import("./premium/ChartCard").then((m) => ({ default: m.ChartCard })),
+);
+
+const ChartCardFallback = () => (
+  <div className="w-full rounded-2xl border border-border bg-card p-5">
+    {/* Header skeleton — mirrors the ChartCard's CardHeader + title + icon row */}
+    <div className="flex items-center justify-between mb-4">
+      <div className="h-3 w-32 rounded bg-primary-foreground/10 animate-pulse" />
+      <div className="h-4 w-4 rounded bg-primary-foreground/10 animate-pulse" />
+    </div>
+    {/* Chart container skeleton — h-48 matches the real ChartCard chart area */}
+    <div className="h-48 w-full rounded-xl border border-border/[0.04] flex items-center justify-center">
+      <span className="text-[10px] font-mono text-primary-foreground/30">
+        Loading chart…
+      </span>
+    </div>
+    {/* Foot legend skeleton — matches the ChartCard's legend strip height */}
+    <div className="flex items-center justify-center gap-4 mt-3 pt-2.5 border-t border-border/[0.04]">
+      <div className="h-2 w-16 rounded bg-primary-foreground/10 animate-pulse" />
+      <div className="h-2 w-16 rounded bg-primary-foreground/10 animate-pulse" />
+    </div>
+  </div>
+);
 
 interface CardProps {
   type: string;
@@ -48,7 +81,7 @@ export function PremiumCard({ type, data }: CardProps) {
   // Specialized inline layouts
   if (t === 'map') {
     return (
-      <div className="w-full max-w-sm p-1 rounded-2xl border border-border/[0.08] bg-background/40 backdrop-blur-md overflow-hidden shadow-lg">
+      <div className="w-full p-1 rounded-2xl border border-border bg-card overflow-hidden shadow-lg">
         <MapComponent
           latitude={data.latitude ?? data.lat ?? 0}
           longitude={data.longitude ?? data.lng ?? data.long ?? 0}
@@ -62,7 +95,7 @@ export function PremiumCard({ type, data }: CardProps) {
 
   if (t === 'composer' || t === 'message_composer') {
     return (
-      <div className="w-full max-w-md">
+      <div className="w-full">
         <MessageComposer
           topic={data.topic ?? "Draft"}
           variants={data.variants || []}
@@ -176,7 +209,11 @@ export function PremiumCard({ type, data }: CardProps) {
 
   // New visualizer cards (Pass 3)
   if (t === 'chart' || t === 'graph' || t === 'data_visualization') {
-    return <ChartCard data={data} />;
+    return (
+      <Suspense fallback={<ChartCardFallback />}>
+        <ChartCard data={data} />
+      </Suspense>
+    );
   }
 
   if (t === 'memory_recall' || t === 'semantic_search' || t === 'past_chunks') {
@@ -199,6 +236,10 @@ export function PremiumCard({ type, data }: CardProps) {
     return <FlashcardComponent data={data} />;
   }
 
+  if (t === 'time' || t === 'clock' || t === 'world_time') {
+    return <WorldTimeCard data={data} />;
+  }
+
   // Claude-style structural cards
   if (t === 'metric' || t === 'stat' || t === 'kpi') {
     return <MetricCard data={data} />;
@@ -216,16 +257,19 @@ export function PremiumCard({ type, data }: CardProps) {
     return <StatusCard data={data} />;
   }
 
-  // Fallback visual display for raw custom cards
+  // Unknown model-generated cards stay summary-first. Raw payloads are
+  // diagnostic material and must not become the default user-facing UI.
   return (
-    <div className="rounded-xl border border-border/[0.08] bg-background/40 backdrop-blur-md p-4 max-w-sm">
+    <div className="w-full rounded-xl border border-border bg-card p-4">
       <div className="flex items-center gap-2 mb-2 text-primary">
         <CheckCircle2 size={16} />
-        <span className="text-xs font-black uppercase tracking-wider font-mono">{t} Visualizer</span>
+        <span className="text-xs font-semibold tracking-wide">{t || "Generated result"}</span>
       </div>
-      <pre className="text-[10px] font-mono text-primary-foreground/60 bg-card/5 p-2.5 rounded border border-border/[0.04] overflow-x-auto">
-        {JSON.stringify(data, null, 2)}
-      </pre>
+      <p className="text-[12px] leading-relaxed text-muted-foreground">This result is available, but does not have a dedicated preview yet.</p>
+      <details className="mt-3 rounded-md bg-muted px-2 py-1.5">
+        <summary className="cursor-pointer select-none text-[11px] uppercase tracking-wide text-muted-foreground">Technical details</summary>
+        <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-muted-foreground">{JSON.stringify(data, null, 2)}</pre>
+      </details>
     </div>
   );
 }

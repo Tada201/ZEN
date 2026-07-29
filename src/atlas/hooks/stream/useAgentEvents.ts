@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
 import { type UnlistenFn } from "@tauri-apps/api/event";
-import { listenAppEvent, type AgentActionEventPayload } from "@/api/events";
+import { listenAppEvent, type AgentActionEventPayload, type SubagentStepEventPayload } from "@/api/events";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { ttftMark, type TtftMarker } from "@/lib/ttft";
-import { ActionMeta, Message, MessageKind } from "../../components/chat/types";
+import { ActionMeta, Message, MessageKind, Step } from "../../components/chat/types";
 import { toast } from "@/lib/hooks/use-toast";
 import { findWritableAssistantIndex } from "./messageTarget";
 import { appendActionStepToMessages } from "./agentActionLedger";
@@ -155,6 +155,13 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
       const unlistenChatMessage = await listenAppEvent("chat:message", (event) => {
         const payload = event.payload;
         const kind = payload.kind || "system";
+        // tool_call / tool_result live events are redundant with the tool card
+        // that useToolEvents already builds from tool:start / tool:complete
+        // (keyed by tool_call_id). Rendering them here as standalone messages
+        // produced duplicate cards live, while coalesceTimelineMessages folds
+        // the persisted rows into one group on reload — the source of the
+        // live-vs-history inconsistency. Drop them; the DB rows still replay.
+        if (kind === "tool_call" || kind === "tool_result") return;
         const chatId = INLINE_ACTION_KINDS.has(kind)
           ? getDirectOrActiveStreamingChatId(useChatStore.getState(), payload)
           : payload.chat_id;
@@ -506,6 +513,76 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
         });
       });
 
+      const unlistenSubagentStep = await listenAppEvent("chat:subagent-step", (event) => {
+        const payload = event.payload as SubagentStepEventPayload;
+        const chatId = payload.chat_id || payload.chatId || getDirectOrActiveStreamingChatId(useChatStore.getState(), payload);
+        if (!chatId) return;
+
+        // Keep the stream heartbeat alive while a sub-agent is working.
+        resetHeartbeatTimeout?.(chatId);
+
+        useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
+          const targetIdx = getActiveAssistantIndex(prev, payload.parent_tool_call_id || payload.parentToolCallId);
+          if (targetIdx === -1) return prev;
+
+          const next = [...prev];
+          const msg = next[targetIdx];
+          const steps = msg.steps ? [...msg.steps] : [];
+          const spawnId = payload.spawn_id || payload.spawnId || "";
+          const eventId = spawnId;
+          const timestamp = payload.timestamp ? new Date(payload.timestamp).getTime() : Date.now();
+
+          // Step.status uses ExecutionEventStatus, which uses "error" instead
+          // of the backend's "failed" for terminal failures. Keep the raw
+          // subagent.status for rendering while storing a normalized value.
+          const normalizedStatus: Step["status"] = payload.status === "failed" ? "error" : payload.status;
+
+          const subagentStep: Step = {
+            type: "subagent",
+            eventId,
+            status: normalizedStatus,
+            timestamp,
+            subagent: {
+              spawnId,
+              parentToolCallId: payload.parent_tool_call_id || payload.parentToolCallId,
+              agentId: payload.agent_id || "",
+              agentName: payload.agent_name || "",
+              task: payload.task || "",
+              status: payload.status,
+              resultSummary: payload.result_summary || payload.resultSummary,
+              error: payload.error,
+              durationMs: typeof payload.duration_ms === "number" ? payload.duration_ms : payload.durationMs,
+              timestamp,
+              childToolCallIds: payload.child_tool_call_ids || payload.childToolCallIds,
+            },
+          };
+
+          const existingIdx = steps.findIndex((s) => s.eventId === eventId && s.type === "subagent");
+          if (existingIdx !== -1) {
+            const existing = steps[existingIdx];
+            steps[existingIdx] = {
+              ...existing,
+              status: normalizedStatus,
+              subagent: {
+                ...existing.subagent,
+                ...subagentStep.subagent,
+                // Prefer newer terminal fields; keep existing task/agent.
+                status: subagentStep.subagent!.status,
+                spawnId: subagentStep.subagent?.spawnId || existing.subagent?.spawnId || spawnId,
+                agentId: subagentStep.subagent?.agentId || existing.subagent?.agentId || "",
+                task: subagentStep.subagent?.task || existing.subagent?.task || "",
+                agentName: subagentStep.subagent?.agentName || existing.subagent?.agentName || "",
+              },
+            };
+          } else {
+            steps.push({ ...subagentStep, status: normalizedStatus });
+          }
+
+          next[targetIdx] = { ...msg, steps };
+          return next;
+        });
+      });
+
       unlistenRefs.current.push(
         unlistenChatMessage,
         unlistenOrchestratorProgress,
@@ -525,7 +602,8 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
         unlistenTaskListUpdated,
         unlistenTaskComplexityAnalyzed,
         unlistenContextDrift,
-        unlistenResearchStep
+        unlistenResearchStep,
+        unlistenSubagentStep
       );
     };
 

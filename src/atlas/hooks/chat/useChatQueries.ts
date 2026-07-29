@@ -109,7 +109,13 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
   }
 
   let parsedSteps: Step[] = [];
-  const rawSteps = (msg as any).steps ?? parsedMetadata?.executionSteps;
+  // Prefer the persisted execution timeline (stepsJson) kept in the DB.
+  // The backend writes this via chat:done → updateMessageSteps.
+  // On reload, msg.stepsJson is a JSON string; the legacy msg.steps
+  // property does not exist on BackendMessage and should not be used.
+  // Fall back to metadata.executionSteps only for old messages that
+  // predate the steps_json column.
+  const rawSteps = msg.stepsJson ?? parsedMetadata?.executionSteps;
   if (rawSteps) {
     if (Array.isArray(rawSteps)) {
       parsedSteps = rawSteps;
@@ -148,6 +154,23 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
 
   const isPendingDeepResearch = msg.kind === "deep_research" && msg.isComplete !== 1;
 
+  // Backend-reported error must win over "looks in-flight" heuristics:
+  // a row with metadata.error is a terminal failure, and the inline error
+  // block only renders when status === "failed". Suppressing it via
+  // "sending" would silently hide real failures from the user.
+  const hasError = Boolean(
+    typeof parsedMetadata?.error === "string" && parsedMetadata.error.trim()
+  );
+
+  // Only treat the row as a failure when there's nothing to show for it.
+  // Rows that still have content or tool calls but haven't been marked
+  // complete (e.g. a page refresh that lands between the stream ending and
+  // the `isComplete=1` write) should keep rendering as in-flight so the
+  // optimistic stream state survives the refetch.
+  const hasMeaningfulContent = Boolean(
+    !hasError && (finalContent?.trim?.() || (parsedToolCalls?.length ?? 0) > 0)
+  );
+
   return {
     id: msg.id,
     sessionId: msg.chatId,
@@ -157,13 +180,20 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
     attachments: parsedAttachments,
     toolCalls: parsedToolCalls,
     steps,
+    stepsJson: msg.stepsJson,
     createdAt: new Date(msg.createdAt).getTime(),
     model: msg.model,
     // A deep-research run persists an assistant placeholder before its report
     // exists. Treat that row as live while the runner owns it; mapping it as a
     // failure lets a refetch overwrite the optimistic research card and makes
     // the chat appear to reset.
-    status: isPendingDeepResearch ? "sending" : msg.isComplete === 1 ? "sent" : "failed",
+    status: isPendingDeepResearch
+      ? "sending"
+      : msg.isComplete === 1
+        ? "sent"
+        : hasMeaningfulContent
+          ? "sending"
+          : "failed",
     kind: msg.kind as any,
     metadata: parsedMetadata,
     error: typeof parsedMetadata?.error === "string" && parsedMetadata.error.trim()

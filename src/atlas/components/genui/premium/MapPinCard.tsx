@@ -23,8 +23,8 @@ export function MapPinCard({ data }: { data: MapPinData }) {
   const phone = data.phone;
 
   return (
-    <div className="w-full max-w-sm rounded-2xl border border-border/[0.08] bg-background/40 backdrop-blur-md overflow-hidden shadow-lg">
-      <div className="w-full h-36 relative border-b border-border/[0.08]">
+    <div className="w-full max-w-sm rounded-2xl border border-border bg-card overflow-hidden shadow-lg">
+      <div className="w-full h-36 relative border-b border-border">
         <MapComponent
           latitude={lat}
           longitude={lng}
@@ -36,34 +36,34 @@ export function MapPinCard({ data }: { data: MapPinData }) {
       <div className="p-4">
         <div className="flex justify-between items-start gap-2 mb-2">
           <div>
-            <span className="text-[9px] uppercase font-mono tracking-widest text-primary/70">{category}</span>
+            <span className="text-[9px] uppercase font-mono tracking-widest text-primary">{category}</span>
             <h3 className="text-sm font-semibold text-primary-foreground mt-0.5">{name}</h3>
           </div>
           {rating && (
-            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold shrink-0">
+            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500 text-amber-400 text-[10px] font-bold shrink-0">
               <Star className="w-2.5 h-2.5 fill-current" />
               <span>{rating}</span>
             </div>
           )}
         </div>
 
-        <div className="flex items-start gap-2 text-[11px] text-primary-foreground/60 mb-3.5 leading-relaxed">
-          <MapPin className="w-3.5 h-3.5 text-primary-foreground/30 shrink-0 mt-0.5" />
+        <div className="flex items-start gap-2 text-[11px] text-primary-foreground mb-3.5 leading-relaxed">
+          <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
           <span>{address}</span>
         </div>
 
         {(hours || phone) && (
-          <div className="space-y-1.5 pt-3 border-t border-border/[0.06] text-[10px] text-primary-foreground/40 font-mono">
+          <div className="space-y-1.5 pt-3 border-t border-border text-[10px] text-muted-foreground font-mono">
             {hours && (
               <div className="flex items-center gap-2">
-                <Clock className="w-3 h-3 text-primary-foreground/30" />
+                <Clock className="w-3 h-3 text-muted-foreground" />
                 <span>{hours}</span>
               </div>
             )}
             {phone && (
               <div className="flex items-center gap-2">
-                <Phone className="w-3 h-3 text-primary-foreground/30" />
-                <span className="text-primary-foreground/60">{phone}</span>
+                <Phone className="w-3 h-3 text-muted-foreground" />
+                <span className="text-primary-foreground">{phone}</span>
               </div>
             )}
           </div>

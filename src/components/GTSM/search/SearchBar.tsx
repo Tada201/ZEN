@@ -109,7 +109,7 @@ export const SearchBar: React.FC = () => {
     return (
         <div ref={containerRef} className="relative w-full">
             {/* Input */}
-            <div className="flex items-center border border-border bg-background/45 focus-within:border-primary/60 transition-colors backdrop-blur-md">
+            <div className="flex items-center border border-border bg-card focus-within:border-primary transition-colors">
                 <div className="pl-2.5 pr-1.5 text-muted-foreground">
                     <WorkbenchIcon name="solar:magnifer-linear" size={12} />
                 </div>
@@ -128,8 +128,8 @@ export const SearchBar: React.FC = () => {
                     autoComplete="off"
                 />
                 {isSearching && (
-                    <div className="pr-2.5 text-primary/70">
-                        <div className="h-2.5 w-2.5 border border-primary/40 border-t-primary animate-spin rounded-full" />
+                    <div className="pr-2.5 text-primary">
+                        <div className="h-2.5 w-2.5 border border-primary border-t-primary animate-spin rounded-full" />
                     </div>
                 )}
             </div>
@@ -138,10 +138,10 @@ export const SearchBar: React.FC = () => {
             {isOpen && sections.length > 0 && (
                 <div
                     ref={dropdownRef}
-                    className="absolute top-full left-0 right-0 mt-1 max-h-[380px] overflow-y-auto z-50 border border-border bg-background/95 backdrop-blur-md shadow-2xl shadow-black/60"
+                    className="absolute top-full left-0 right-0 mt-1 max-h-[380px] overflow-y-auto z-50 border border-border bg-background shadow-2xl"
                 >
                     {sections.map((section) => (
-                        <div key={section.title} className="p-2 border-b border-border/60 last:border-b-0">
+                        <div key={section.title} className="p-2 border-b border-border last:border-b-0">
                             {/* Section header */}
                             <div className="flex items-center gap-1.5 px-1.5 mb-1.5">
                                 <WorkbenchIcon
@@ -152,7 +152,7 @@ export const SearchBar: React.FC = () => {
                                 <span className="text-[8px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
                                     {section.title}
                                 </span>
-                                <span className="text-[7px] font-mono text-muted-foreground/70 ml-auto">
+                                <span className="text-[7px] font-mono text-muted-foreground ml-auto">
                                     {section.results.length}
                                 </span>
                             </div>
@@ -203,7 +203,7 @@ export const SearchBar: React.FC = () => {
 
             {/* No results */}
             {isOpen && query.trim() && sections.length === 0 && !isSearching && (
-                <div className="absolute top-full left-0 right-0 mt-1 p-3 z-50 border border-border bg-background/95 backdrop-blur-md text-center">
+                <div className="absolute top-full left-0 right-0 mt-1 p-3 z-50 border border-border bg-background text-center">
                     <span className="text-[9px] font-mono text-muted-foreground tracking-wider">
                         NO_MATCH_FOUND
                     </span>

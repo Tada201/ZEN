@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, ChevronRight, Loader2, ShieldAlert, XCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Copy, RefreshCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ToolCall } from "./types";
 import { buildToolOutputPreview } from "./tool/toolOutputPreview";
 import { ToolDetailView } from "./tool/ToolDetailView";
+import { FoldOutCard, FoldOutCardContent } from "@/components/ui/fold-out-card";
+import { ExecutionRow } from "./tool/ExecutionRow";
+import { classifyToolCategory } from "./tool/toolCategory";
+import { formatDuration } from "./tool/formatDuration";
+import { toToolInputRecord } from "./tool/toToolInputRecord";
 
 interface ToolCallCardProps {
   toolCall: ToolCall;
@@ -15,17 +19,6 @@ interface ToolCallCardProps {
   defaultExpanded?: boolean;
   streamingPreview?: string;
   chatId?: string;
-}
-
-function toRecord(value: ToolCall["input"]): Record<string, unknown> {
-  if (!value) return {};
-  if (typeof value !== "string") return value;
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
-  } catch {
-    return {};
-  }
 }
 
 export function humanizeToolName(name: string) {
@@ -59,7 +52,7 @@ function splitPath(filePath: string) {
 }
 
 function getInputTarget(input: Record<string, unknown>) {
-  const args = toRecord(input.arguments as ToolCall["input"]);
+  const args = toToolInputRecord(input.arguments as ToolCall["input"]);
   return compactText(
     input.file_path ||
       input.filePath ||
@@ -112,11 +105,6 @@ function getStatusLabel(status: ToolCall["status"]) {
   return "Running";
 }
 
-function formatDuration(durationMs?: number) {
-  if (!durationMs || durationMs <= 0) return "";
-  return durationMs < 1000 ? `${durationMs}ms` : `${(durationMs / 1000).toFixed(durationMs < 10_000 ? 1 : 0)}s`;
-}
-
 export function ToolCallCard({
   toolCall,
   className,
@@ -127,16 +115,25 @@ export function ToolCallCard({
   onRetry,
 }: ToolCallCardProps) {
   const { id, name, status, input, output, approvalContext, durationMs } = toolCall;
-  const inputRecord = useMemo(() => toRecord(input), [input]);
+  const inputRecord = useMemo(() => toToolInputRecord(input), [input]);
   const outputPreview = useMemo(() => buildToolOutputPreview(output || ""), [output]);
   const userToggledRef = useRef(false);
-  const hasAction = status === "awaiting_approval" || status === "error";
   const hasPreview = Boolean(outputPreview.summary || outputPreview.results.length || outputPreview.files.length || outputPreview.artifact);
+  // Running, approval, and error tool cards open by default so the user
+  // sees work in progress and actionable states; completed background cards
+  // collapse. `defaultExpanded` is an explicit override — when set (true or
+  // false) it wins; otherwise `hasAction` decides.
+  const hasAction = status === "running" || status === "awaiting_approval" || status === "error";
   const [isExpanded, setIsExpanded] = useState(() => defaultExpanded ?? hasAction);
+  const category = useMemo(() => {
+    if (status === "awaiting_approval") return "approval";
+    if (status === "error") return "error";
+    return classifyToolCategory(name);
+  }, [status, name]);
 
   useEffect(() => {
-    if (!userToggledRef.current && (defaultExpanded || hasAction)) {
-      setIsExpanded(true);
+    if (!userToggledRef.current) {
+      setIsExpanded(defaultExpanded ?? hasAction);
     }
   }, [defaultExpanded, hasAction]);
 
@@ -157,43 +154,24 @@ export function ToolCallCard({
     ? compactText(streamingPreview || target || "Working...")
     : outputPreview.summary || target || humanizeToolName(name);
   const durationLabel = formatDuration(durationMs);
-  const StatusIcon = status === "running" ? Loader2 : status === "error" ? XCircle : status === "awaiting_approval" ? ShieldAlert : CheckCircle2;
 
   return (
-    <div className={cn("min-w-0 rounded-md border border-border/70 bg-background/35", className)}>
-      <button
-        type="button"
-        onClick={() => {
-          userToggledRef.current = true;
-          setIsExpanded((value) => !value);
-        }}
-        aria-expanded={isExpanded}
-        className="flex min-h-8 w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted/35"
-      >
-        <StatusIcon
-          aria-label={getStatusLabel(status)}
-          className={cn(
-            "h-3.5 w-3.5 shrink-0",
-            status === "running" && "text-primary/80 motion-safe:animate-spin",
-            status === "completed" && "text-success/80",
-            status === "awaiting_approval" && "text-warning/80",
-            status === "error" && "text-destructive/80",
-          )}
-        />
-        <span className="min-w-0 flex-1">
-          <span className="block min-w-0 truncate text-[12px] font-medium leading-5 text-foreground">{actionText}</span>
-          {summary && (
-            <span className="block min-w-0 truncate text-[11px] leading-4 text-muted-foreground">{summary}</span>
-          )}
-        </span>
-        {durationLabel && <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">{durationLabel}</span>}
-        <ChevronRight className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform", isExpanded && "rotate-90")} />
-      </button>
+    <FoldOutCard open={isExpanded} onOpenChange={(value) => { userToggledRef.current = true; setIsExpanded(value); }} className={cn("min-w-0 rounded-md border border-border bg-card", className)}>
+      <ExecutionRow
+        status={status}
+        category={category}
+        title={actionText}
+        subtitle={summary}
+        duration={durationLabel}
+        expanded={isExpanded}
+        statusLabel={getStatusLabel(status)}
+        onClick={() => { userToggledRef.current = true; setIsExpanded((prev) => !prev); }}
+      />
 
-      {isExpanded && (
-        <div className="space-y-2 border-t border-border/60 px-2 py-2">
+      <FoldOutCardContent>
+        <div className="space-y-2 px-2 py-2">
           {approvalContext && (
-            <div className="rounded-md border border-warning/20 bg-warning/[0.04] px-2 py-1.5">
+            <div className="rounded-md border border-warning bg-muted px-2 py-1.5">
               <div className="text-[11px] font-medium leading-5 text-warning">Approval context</div>
               {approvalContext.description && (
                 <div className="text-[12px] leading-relaxed text-foreground">{approvalContext.description}</div>
@@ -214,27 +192,50 @@ export function ToolCallCard({
 
           {status === "awaiting_approval" && (
             <div className="flex justify-end gap-2">
-              <Button size="sm" variant="outline" type="button" className="h-7 px-3 text-[11px]" onClick={() => onCancel?.(id)}>
+              <button type="button" className="inline-flex h-7 items-center justify-center rounded-md border border-border bg-transparent px-3 text-[11px] font-medium text-foreground transition-colors duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" onClick={() => onCancel?.(id)}>
                 Deny
-              </Button>
-              <Button size="sm" type="button" className="h-7 px-3 text-[11px]" onClick={() => onRetry?.(id)}>
+              </button>
+              <button type="button" className="inline-flex h-7 items-center justify-center rounded-md bg-primary px-3 text-[11px] font-medium text-primary-foreground transition-colors duration-200 hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" onClick={() => onRetry?.(id)}>
                 Approve
-              </Button>
+              </button>
             </div>
           )}
 
-          {(status === "error" || (!hasPreview && outputPreview.raw)) && (
-            <details className="rounded-md bg-muted/20 px-2 py-1.5">
+          {status === "error" && onRetry && (
+            <div className="flex justify-end gap-2">
+              <button type="button" className="inline-flex h-7 items-center gap-1.5 justify-center rounded-md border border-border bg-transparent px-3 text-[11px] font-medium text-foreground transition-colors duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" onClick={() => onRetry?.(id)}>
+                <RefreshCcw className="h-3 w-3" />
+                Retry
+              </button>
+            </div>
+          )}
+
+          {isExpanded && (status === "error" || (!hasPreview && outputPreview.raw)) && (
+            <details className="rounded-md bg-muted px-2 py-1.5">
               <summary className="cursor-pointer select-none text-[11px] uppercase tracking-wide text-muted-foreground">
                 Technical details
               </summary>
-              <pre className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-muted-foreground">
-                {redactDisplayValue(outputPreview.raw).slice(0, 1800)}
-              </pre>
+              <div className="relative mt-1">
+                <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words pr-7 font-mono text-[11px] leading-relaxed text-muted-foreground">
+                  {redactDisplayValue(outputPreview.raw).slice(0, 1800)}
+                </pre>
+                {outputPreview.raw && (
+                  <button
+                    type="button"
+                    className="absolute right-1 top-1 h-6 w-6 text-muted-foreground hover:text-foreground transition-colors duration-200"
+                    aria-label="Copy details"
+                    onClick={async () => {
+                      try { await navigator.clipboard.writeText(redactDisplayValue(outputPreview.raw)); } catch { /* ignore */ }
+                    }}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </details>
           )}
         </div>
-      )}
-    </div>
+      </FoldOutCardContent>
+    </FoldOutCard>
   );
 }

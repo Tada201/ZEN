@@ -1,23 +1,9 @@
 import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
-import ts from "typescript";
+import { loadSourceModule } from "./test-loader.mjs";
 
 function loadTsModule(relativePath, replacements = []) {
-  const sourcePath = new URL(relativePath, import.meta.url);
-  let source = readFileSync(sourcePath, "utf8");
-  for (const [from, to] of replacements) {
-    source = source.replace(from, to);
-  }
-  const transpiled = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.ES2022,
-      target: ts.ScriptTarget.ES2022,
-      importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
-    },
-    fileName: relativePath,
-  });
-  const moduleUrl = `data:text/javascript;base64,${Buffer.from(transpiled.outputText).toString("base64")}`;
-  return import(moduleUrl);
+  return loadSourceModule(relativePath);
 }
 
 const ledgerModule = await loadTsModule("../src/atlas/hooks/stream/agentActionLedger.ts", [
@@ -51,12 +37,12 @@ const partsModule = await loadTsModule("../src/atlas/components/chat/assistantMe
     };`,
   ],
   [
-    'import { parseCardTags, type ParsedCard } from "./assistantCardParser";',
+    'import {\n  parseCardTags,\n  type OrderedCard,\n  type ParsedCard,\n} from "./assistantCardParser";',
     `function parseCardTags(text) {
       return { cards: [], cleanText: text || "" };
     }`,
   ],
-  ['export { parseCardTags, type ParsedCard } from "./assistantCardParser";', 'export { parseCardTags };'],
+  ['export {\n  parseCardTags,\n  CARD_TOKEN_PREFIX,\n  CARD_TOKEN_REGEX,\n  CARD_TOKEN_SUFFIX,\n  splitOnCardTokens,\n  type OrderedCard,\n  type ParsedCard,\n} from "./assistantCardParser";', 'export { parseCardTags };'],
 ]);
 const inputPreviewModule = await loadTsModule("../src/atlas/components/chat/tool/toolInputPreview.ts");
 

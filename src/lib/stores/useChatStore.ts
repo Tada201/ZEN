@@ -10,6 +10,41 @@ const EMPTY_ARRAY: Message[] = [];
 const LRU_SESSION_CAP = 10;
 const sessionAccessOrder: string[] = [];
 
+// Session-scoped persistence for `activeAssistantByChat`. The Zustand `persist`
+// middleware strips this field during merge (see `merge` below), so we keep a
+// parallel sessionStorage snapshot so a page refresh mid-stream can still
+// route incoming `chat:*` events to the right optimistic assistant id.
+const ACTIVE_ASSISTANTS_STORAGE_KEY = "zen-active-assistants";
+
+function readActiveAssistantsFromSession(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.sessionStorage.getItem(ACTIVE_ASSISTANTS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const result: Record<string, string> = {};
+    for (const [chatId, assistantId] of Object.entries(parsed)) {
+      if (typeof chatId === "string" && typeof assistantId === "string" && assistantId.length > 0) {
+        result[chatId] = assistantId;
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+function writeActiveAssistantsToSession(map: Record<string, string>): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(ACTIVE_ASSISTANTS_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // Storage unavailable (quota, private mode, SSR) — degrade silently; the
+    // in-memory map remains the source of truth for the current session.
+  }
+}
+
 function touchSessionLru(chatId: string) {
   const idx = sessionAccessOrder.indexOf(chatId);
   if (idx !== -1) sessionAccessOrder.splice(idx, 1);
@@ -91,7 +126,7 @@ export const useChatStore = create<ChatState>()(
 
       streamingChats: {},
       sessionMessages: {},
-      activeAssistantByChat: {},
+      activeAssistantByChat: readActiveAssistantsFromSession(),
 
       get isStreaming() {
         const state = get();
@@ -113,6 +148,7 @@ export const useChatStore = create<ChatState>()(
         if (!streaming) {
           delete nextActiveAssistantByChat[chatId];
         }
+        writeActiveAssistantsToSession(nextActiveAssistantByChat);
         return {
           streamingChats: nextStreamingChats,
           activeAssistantByChat: nextActiveAssistantByChat,
@@ -126,6 +162,7 @@ export const useChatStore = create<ChatState>()(
         } else {
           delete nextActiveAssistantByChat[chatId];
         }
+        writeActiveAssistantsToSession(nextActiveAssistantByChat);
         return { activeAssistantByChat: nextActiveAssistantByChat };
       }),
 
@@ -161,6 +198,7 @@ export const useChatStore = create<ChatState>()(
         delete sessionMessages[chatId];
         delete streamingChats[chatId];
         delete activeAssistantByChat[chatId];
+        writeActiveAssistantsToSession(activeAssistantByChat);
         return {
           sessionMessages,
           streamingChats,

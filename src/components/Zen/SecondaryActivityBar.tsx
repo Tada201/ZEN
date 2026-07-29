@@ -50,7 +50,7 @@ export function SecondaryActivityBar() {
               "relative group p-2 rounded-xl transition-all duration-200",
               (activeRightTab === item.id && rightPanelOpen)
                 ? "bg-primary/10 text-primary shadow-sm" 
-                : "text-muted-foreground/40 hover:text-foreground hover:bg-muted",
+                : "text-muted-foreground hover:text-foreground hover:bg-muted",
               isPending && activeRightTab === item.id && "animate-pulse opacity-60"
             )}
             title={item.label}

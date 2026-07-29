@@ -15,7 +15,6 @@ const DEFAULT_INTELLIGENCE_CONFIG: IntelligenceConfig = {
   summarizationModel: "llama3.2:1b",
   semanticRecallEnabled: true,
   maxRecalledMessages: 5,
-  driftDetectionEnabled: true,
   driftThreshold: 0.3,
 };
 
@@ -44,7 +43,6 @@ export interface IntelligenceSlice {
   memorySummarizationModel: string;
   memorySemanticRecallEnabled: boolean;
   memoryMaxRecalledMessages: number;
-  memoryDriftDetectionEnabled: boolean;
   memoryDriftThreshold: number;
 
   updateIntelligenceConfig: (config: Partial<IntelligenceConfig>) => void;
@@ -74,7 +72,6 @@ export const createIntelligenceSlice: StateCreator<
   memorySummarizationModel: DEFAULT_INTELLIGENCE_CONFIG.summarizationModel,
   memorySemanticRecallEnabled: DEFAULT_INTELLIGENCE_CONFIG.semanticRecallEnabled,
   memoryMaxRecalledMessages: DEFAULT_INTELLIGENCE_CONFIG.maxRecalledMessages,
-  memoryDriftDetectionEnabled: DEFAULT_INTELLIGENCE_CONFIG.driftDetectionEnabled,
   memoryDriftThreshold: DEFAULT_INTELLIGENCE_CONFIG.driftThreshold,
 
   // ─── Actions ──────────────────────────────────────────────────────────
@@ -88,7 +85,6 @@ export const createIntelligenceSlice: StateCreator<
         summarizationModel: "memorySummarizationModel",
         semanticRecallEnabled: "memorySemanticRecallEnabled",
         maxRecalledMessages: "memoryMaxRecalledMessages",
-        driftDetectionEnabled: "memoryDriftDetectionEnabled",
         driftThreshold: "memoryDriftThreshold",
       };
 

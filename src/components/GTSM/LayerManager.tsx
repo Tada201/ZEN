@@ -60,7 +60,7 @@ export const LayerManager: React.FC = () => {
               key={basemap.id}
               type="button"
               onClick={() => setImageryProvider(basemap.id)}
-              className={`border-r border-border px-2 py-2 text-[10px] font-medium last:border-r-0 ${imageryProvider === basemap.id ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}
+              className={`border-r border-border px-2 py-2 text-[10px] font-medium last:border-r-0 ${imageryProvider === basemap.id ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
             >
               {basemap.label}
             </button>
@@ -81,7 +81,7 @@ export const LayerManager: React.FC = () => {
                 key={layer.id}
                 type="button"
                 onClick={() => toggleLayer(layer.id)}
-                className="flex w-full items-center gap-3 border-b border-border px-3 py-2 text-left last:border-b-0 hover:bg-muted/40"
+                className="flex w-full items-center gap-3 border-b border-border px-3 py-2 text-left last:border-b-0 hover:bg-muted"
               >
                 <span aria-hidden="true" className={`flex h-3.5 w-3.5 items-center justify-center border ${active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-transparent'}`}>
                   {active && <WorkbenchIcon name="solar:check-read-linear" size={10} />}

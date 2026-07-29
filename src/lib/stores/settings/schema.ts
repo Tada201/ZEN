@@ -29,6 +29,11 @@ export const SettingsSchema = z.object({
   backgroundBlur: z.number().min(0).max(100).default(0),
   backgroundFit: z.enum(["cover", "contain", "stretch", "original", "tile"]).default("cover"),
   backgroundMediaType: z.enum(["auto", "image", "video"]).default("auto"),
+  /** When true, completed successful tool groups remain visible in the chat
+   *  timeline even after the assistant answer arrives. Defaults to false so
+   *  the transcript stays focused on the conversation. Persisted as the
+   *  backend key `ui.reveal-completed-tool-history`. */
+  revealCompletedToolHistory: z.boolean().default(false),
 
   // ─── Audio ───────────────────────────────────────────────────────────────
   ttsEnabled: z.boolean().default(false),
@@ -92,7 +97,6 @@ export const SettingsSchema = z.object({
   memorySummarizationModel: z.string().default("llama3.2:1b"),
   memorySemanticRecallEnabled: z.boolean().default(true),
   memoryMaxRecalledMessages: z.number().default(5),
-  memoryDriftDetectionEnabled: z.boolean().default(true),
   memoryDriftThreshold: z.number().default(0.3),
 
   // ─── Performance ─────────────────────────────────────────────────────────

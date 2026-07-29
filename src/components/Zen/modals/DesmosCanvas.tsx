@@ -205,7 +205,7 @@ export function DesmosCanvas({ config = {}, className = '' }: DesmosCanvasProps)
     if (error) {
         return (
             <div className={cn(
-                "flex flex-col items-center justify-center h-full bg-card border border-destructive/20 rounded-lg p-6 gap-5",
+                "flex flex-col items-center justify-center h-full bg-card border border-destructive rounded-lg p-6 gap-5",
                 className
             )}>
                 <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
@@ -215,18 +215,18 @@ export function DesmosCanvas({ config = {}, className = '' }: DesmosCanvasProps)
                     <h3 className="text-[12px] font-black uppercase tracking-[0.15em] text-foreground">Engine Failure</h3>
                     <p className="text-[10px] text-muted-foreground">{error}</p>
                     {retryCount.current > 0 && (
-                        <p className="text-[9px] text-muted-foreground/50 font-mono">Retry {retryCount.current}/{MAX_RETRIES}</p>
+                        <p className="text-[9px] text-muted-foreground font-mono">Retry {retryCount.current}/{MAX_RETRIES}</p>
                     )}
                 </div>
                 <div className="flex gap-2">
                     {retryCount.current < MAX_RETRIES ? (
                         <Button variant="outline" size="sm" onClick={handleRetry}
-                            className="h-8 gap-1.5 px-4 text-[9px] font-bold uppercase tracking-widest border-destructive/20 hover:bg-destructive/5">
+                            className="h-8 gap-1.5 px-4 text-[9px] font-bold uppercase tracking-widest border-destructive hover:bg-destructive/10">
                             <RefreshCcw size={10} /> Retry
                         </Button>
                     ) : (
                         <Button variant="outline" size="sm" onClick={() => window.location.reload()}
-                            className="h-8 gap-1.5 px-4 text-[9px] font-bold uppercase tracking-widest border-primary/20 hover:bg-primary/5">
+                            className="h-8 gap-1.5 px-4 text-[9px] font-bold uppercase tracking-widest border-primary hover:bg-primary/10">
                             <Power size={10} /> Reload
                         </Button>
                     )}
@@ -241,7 +241,7 @@ export function DesmosCanvas({ config = {}, className = '' }: DesmosCanvasProps)
             className
         )}>
             {/* Header */}
-            <div className="h-9 flex items-center justify-between px-4 bg-muted/30 border-b border-border shrink-0">
+            <div className="h-9 flex items-center justify-between px-4 bg-muted border-b border-border shrink-0">
                 <div className="flex items-center gap-2.5">
                     <div className={cn(
                         "w-1.5 h-1.5 rounded-full",
@@ -251,8 +251,8 @@ export function DesmosCanvas({ config = {}, className = '' }: DesmosCanvasProps)
                 </div>
                 <div className="flex items-center gap-1">
                     {isDark && (
-                        <div className="px-2 py-0.5 rounded bg-primary/5 border border-primary/20">
-                            <span className="text-[8px] font-mono text-primary/70 uppercase tracking-widest">Dark</span>
+                        <div className="px-2 py-0.5 rounded bg-primary/10 border border-primary">
+                            <span className="text-[8px] font-mono text-primary uppercase tracking-widest">Dark</span>
                         </div>
                     )}
                 </div>
@@ -264,10 +264,10 @@ export function DesmosCanvas({ config = {}, className = '' }: DesmosCanvasProps)
 
                 {/* Loading Overlay */}
                 {loadState !== 'loaded' && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-background/90 backdrop-blur-sm z-10">
+                    <div className="absolute inset-0 flex items-center justify-center bg-card z-10">
                         <div className="flex flex-col items-center gap-4">
                             <div className="relative">
-                                <div className="w-9 h-9 border-2 border-primary/10 rounded-full" />
+                                <div className="w-9 h-9 border-2 border-primary rounded-full" />
                                 <div className="absolute inset-0 w-9 h-9 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                             </div>
                             <span className="text-[9px] font-black text-primary uppercase tracking-[0.25em] animate-pulse">
@@ -279,13 +279,13 @@ export function DesmosCanvas({ config = {}, className = '' }: DesmosCanvasProps)
             </div>
 
             {/* Footer */}
-            <div className="h-7 flex items-center justify-between px-4 bg-muted/20 border-t border-border shrink-0">
+            <div className="h-7 flex items-center justify-between px-4 bg-muted border-t border-border shrink-0">
                 <div className="flex items-center gap-3">
-                    <span className="text-[8px] font-mono text-muted-foreground/50 uppercase tracking-widest">API v1.9</span>
+                    <span className="text-[8px] font-mono text-muted-foreground uppercase tracking-widest">API v1.9</span>
                     <div className="w-[1px] h-2.5 bg-border" />
-                    <span className="text-[8px] font-mono text-muted-foreground/50 uppercase tracking-widest">Secure_Stream</span>
+                    <span className="text-[8px] font-mono text-muted-foreground uppercase tracking-widest">Secure_Stream</span>
                 </div>
-                <span className="text-[8px] font-mono text-muted-foreground/30 uppercase tracking-widest">
+                <span className="text-[8px] font-mono text-muted-foreground uppercase tracking-widest">
                     dcb31709b452b1cf9dcba9e7c254d7e6
                 </span>
             </div>

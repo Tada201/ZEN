@@ -27,7 +27,7 @@ const LayerManager: React.FC = () => {
 
     return (
         <div className={cn(
-            "bg-background/60 border border-primary/20 p-4 backdrop-blur-md rounded-lg w-72 transition-all duration-300",
+            "bg-card border border-primary p-4 rounded-lg w-72 transition-all duration-200",
             isCollapsed && "h-12 overflow-hidden"
         )}>
             <div className="flex justify-between items-center mb-4 cursor-pointer" onClick={() => togglePanel('layers')}>
@@ -40,7 +40,7 @@ const LayerManager: React.FC = () => {
                     <input
                         type="text"
                         placeholder="Search layers..."
-                        className="w-full bg-background/40 border border-primary/20 text-xs p-2 text-primary-foreground outline-none focus:border-primary/50"
+                        className="w-full bg-card border border-primary text-xs p-2 text-primary-foreground outline-none focus:border-primary"
                         onChange={(e) => setSearch(e.target.value)}
                     />
                     <div className="space-y-2">
@@ -49,7 +49,7 @@ const LayerManager: React.FC = () => {
                                 key={layer.id}
                                 className={cn(
                                     "flex items-center justify-between p-2 cursor-pointer border-l-2 text-xs",
-                                    selectedLayers.includes(layer.id) ? "bg-primary/10 border-primary" : "bg-transparent border-transparent opacity-60"
+                                    selectedLayers.includes(layer.id) ? "bg-primary/10 border-primary text-foreground" : "bg-transparent border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
                                 )}
                                 onClick={() => toggleLayer(layer.id)}
                             >

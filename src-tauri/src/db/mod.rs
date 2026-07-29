@@ -321,6 +321,19 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
             .execute(pool)
             .await;
 
+    // Cleanup: remove the orphaned `memory.drift_detection_enabled` setting.
+    // The field was removed from both the Rust MemoryRunSettings struct and the
+    // frontend settings UI/schema/mapper — drift detection is always on now,
+    // gated only by `drift_threshold`. Any row left from a prior version is
+    // dead config that no code path reads. The DELETE is idempotent: if the
+    // row doesn't exist (fresh install or already cleaned), it's a no-op.
+    // Best-effort (`let _ =`): a transient failure must not abort the rest of
+    // run_migrations, since the orphaned row is harmless and the remaining
+    // table creations are required for the app to function.
+    let _ = sqlx::query("DELETE FROM settings WHERE key = 'memory.drift_detection_enabled';")
+        .execute(pool)
+        .await;
+
     // ── Telemetry snapshots for historical data ──
     sqlx::query(
         r#"
@@ -817,6 +830,11 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
 
     // Reasoning persistence: store Vec<ReasoningBlock> as JSON
     let _ = sqlx::query("ALTER TABLE messages ADD COLUMN reasoning_details TEXT;")
+        .execute(pool)
+        .await;
+
+    // Execution timeline persistence: store frontend Step[] as JSON
+    let _ = sqlx::query("ALTER TABLE messages ADD COLUMN steps_json TEXT;")
         .execute(pool)
         .await;
 

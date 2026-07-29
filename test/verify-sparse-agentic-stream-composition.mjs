@@ -54,7 +54,16 @@ const ledgerModule = await loadTsModule("../src/atlas/hooks/stream/agentActionLe
     }`,
   ],
 ]);
-const toolReducerModule = await loadTsModule("../src/atlas/hooks/stream/toolEventReducer.ts");
+const toolReducerModule = await loadTsModule("../src/atlas/hooks/stream/toolEventReducer.ts", [
+  [
+    'import { useChatStore } from "@/lib/stores/useChatStore";',
+    `const useChatStore = {
+      getState() {
+        return { getActiveAssistantForChat() { return undefined; } };
+      },
+    };`,
+  ],
+]);
 const partsModule = await loadTsModule("../src/atlas/components/chat/assistantMessageParts.ts", [
   [
     'import { CHAT_STATUS_PHASES } from "@/api/chatStatus";',
@@ -65,12 +74,15 @@ const partsModule = await loadTsModule("../src/atlas/components/chat/assistantMe
     };`,
   ],
   [
-    'import { parseCardTags, type ParsedCard } from "./assistantCardParser";',
+    'import {\n  parseCardTags,\n  type OrderedCard,\n  type ParsedCard,\n} from "./assistantCardParser";',
     `function parseCardTags(text) {
       return { cards: [], cleanText: text || "" };
     }`,
   ],
-  ['export { parseCardTags, type ParsedCard } from "./assistantCardParser";', 'export { parseCardTags };'],
+  [
+    'export {\n  parseCardTags,\n  CARD_TOKEN_PREFIX,\n  CARD_TOKEN_REGEX,\n  CARD_TOKEN_SUFFIX,\n  splitOnCardTokens,\n  type OrderedCard,\n  type ParsedCard,\n} from "./assistantCardParser";',
+    'export { parseCardTags };',
+  ],
 ]);
 const traceModelModule = await loadTsModule("../src/atlas/components/chat/agentExecutionTraceModel.ts", [
   [

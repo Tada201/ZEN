@@ -58,8 +58,8 @@ export const NavigationPanel: React.FC = () => {
     const is2D = viewMode === 'navigation';
     const containerPadding = is2D ? "p-2 flex flex-col gap-2" : "p-3 flex flex-col gap-3";
     const inputClass = is2D 
-        ? "w-full h-6 px-2 bg-background/45 border border-border rounded text-foreground focus:outline-none focus:border-cyan-400/40 focus:ring-1 focus:ring-cyan-400/30 transition-all font-mono text-[8px]" 
-        : "w-full h-7 px-2.5 bg-background/40 border border-border rounded text-foreground focus:outline-none focus:border-cyan-400/40 focus:ring-1 focus:ring-cyan-400/30 transition-all font-mono text-[9px]";
+        ? "w-full h-6 px-2 bg-card border border-border rounded text-foreground focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all font-mono text-[8px]" 
+        : "w-full h-7 px-2.5 bg-card border border-border rounded text-foreground focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all font-mono text-[9px]";
     const labelSizeClass = is2D ? "text-[7.5px]" : "text-[8px]";
     const headingSizeClass = is2D ? "text-[8px]" : "text-[8.5px]";
     const profileBtnClass = (pId: string) => {
@@ -67,18 +67,18 @@ export const NavigationPanel: React.FC = () => {
         const base = `flex flex-col items-center justify-center rounded border text-center transition-all cursor-pointer`;
         const size = is2D ? 'py-1' : 'py-1.5';
         const color = active 
-            ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-400' 
-            : 'border-border bg-muted/20 hover:bg-muted/40 text-muted-foreground hover:text-foreground';
+            ? 'border-cyan-400 bg-cyan-400/10 text-cyan-400' 
+            : 'border-border bg-muted hover:bg-muted text-muted-foreground hover:text-foreground';
         return `${base} ${size} ${color}`;
     };
     const calcBtnClass = is2D
-        ? "w-full h-7 bg-cyan-500/10 hover:bg-cyan-500/20 active:bg-cyan-500/30 border border-cyan-400/30 hover:border-cyan-400/60 text-cyan-400 hover:text-foreground transition-all text-[8px] font-bold uppercase tracking-wider cursor-pointer rounded flex items-center justify-center gap-1 font-mono"
-        : "w-full h-8 bg-cyan-500/10 hover:bg-cyan-500/20 active:bg-cyan-500/30 border border-cyan-400/30 hover:border-cyan-400/60 text-cyan-400 hover:text-foreground transition-all text-[8.5px] font-bold uppercase tracking-wider cursor-pointer rounded flex items-center justify-center gap-1.5 font-mono";
+        ? "w-full h-7 bg-cyan-500/10 hover:bg-cyan-500/10 active:bg-cyan-500/30 border border-cyan-400 hover:border-cyan-400 text-cyan-400 hover:text-foreground transition-all text-[8px] font-bold uppercase tracking-wider cursor-pointer rounded flex items-center justify-center gap-1 font-mono"
+        : "w-full h-8 bg-cyan-500/10 hover:bg-cyan-500/10 active:bg-cyan-500/30 border border-cyan-400 hover:border-cyan-400 text-cyan-400 hover:text-foreground transition-all text-[8.5px] font-bold uppercase tracking-wider cursor-pointer rounded flex items-center justify-center gap-1.5 font-mono";
 
     return (
-        <div className="border border-border bg-background/60 backdrop-blur-md transition-all duration-300 font-mono flex flex-col font-sans">
+        <div className="border border-border bg-card transition-all duration-200 font-mono flex flex-col font-sans">
             {/* Header */}
-            <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/50 bg-card/60">
+            <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-card">
                 <div className="flex items-center gap-2 text-cyan-400">
                     <WorkbenchIcon name="solar:map-arrow-up-bold-duotone" size={13} />
                     <span className="text-[9px] font-bold tracking-[0.2em] font-mono">A{'>'}B_ROUTING</span>
@@ -210,7 +210,7 @@ export const NavigationPanel: React.FC = () => {
                     <>
                         {/* Active Route Summary */}
                         {navigationRoute && (
-                            <div className={`flex flex-col ${is2D ? 'gap-1.5 p-2' : 'gap-2 p-3'} border border-cyan-400/30 bg-cyan-400/5 relative rounded-sm font-mono`}>
+                            <div className={`flex flex-col ${is2D ? 'gap-1.5 p-2' : 'gap-2 p-3'} border border-cyan-400 bg-muted relative rounded-sm font-mono`}>
                                 <div className="absolute top-2 right-2">
                                     <div className={`w-1.5 h-1.5 rounded-full ${isRouting ? 'bg-amber-400 animate-pulse' : 'bg-cyan-400 shadow-[0_0_5px_#00ffff]'}`} />
                                 </div>

@@ -63,6 +63,18 @@ const detailSource = readFileSync(
   new URL("../src/atlas/components/chat/tool/ToolDetailView.tsx", import.meta.url),
   "utf8",
 );
+const genericContentSource = readFileSync(
+  new URL("../src/atlas/components/chat/tool/content/GenericContent.tsx", import.meta.url),
+  "utf8",
+);
+const terminalContentSource = readFileSync(
+  new URL("../src/atlas/components/chat/tool/content/TerminalContent.tsx", import.meta.url),
+  "utf8",
+);
+const imageContentSource = readFileSync(
+  new URL("../src/atlas/components/chat/tool/content/ImageContent.tsx", import.meta.url),
+  "utf8",
+);
 
 // Cross-cutting legacy name absence — applied to every chat-timeline owner
 // file so the old SSOT name cannot be re-introduced anywhere downstream.
@@ -250,7 +262,9 @@ checkAll(assert, [
     context: "AssistantMessage.tsx",
     source: assistantMessageSource,
     pins: [
-      pinActiveImport("AgentExecutionTrace", "AgentExecutionTrace", "AssistantMessage must import AgentExecutionTrace from './AgentExecutionTrace' so the verb SSOT stays in the delegation chain"),
+      // AgentExecutionTrace is reached via ExecutionGroup (the grouped
+      // execution row owner), not imported directly by AssistantMessage.
+      pinActiveImport("ExecutionGroup", "ExecutionGroup", "AssistantMessage must import ExecutionGroup (which owns the AgentExecutionTrace delegation) so the verb SSOT stays in the chain without an artificial direct import"),
       pinActiveImport("AgentActionStep", "AssistantMessageTrace", "AssistantMessage must import AgentActionStep from './AssistantMessageTrace' so the noun SSOT stays in the delegation chain"),
       pinActiveImport("ResearchTimeline", "AssistantMessageTrace", "AssistantMessage must import ResearchTimeline from './AssistantMessageTrace' so the deep-research surface is not duplicated in AssistantMessage.tsx"),
       legacyNameAbsent,
@@ -275,8 +289,11 @@ checkAll(assert, [
         "shouldShowToolGroupInTimeline must return isStreaming && !hasAssistantAnswer on the fall-through branch (reload-completion equivalence)",
       ),
       pinContains("groupedSteps.filter(", "visibleGroupedSteps must filter through shouldShowToolGroupInTimeline per step"),
-      pinContains('shouldShowToolGroupInTimeline(step, message.status === "sending", hasAssistantAnswerText)', "the filter call site must wire `message.status === 'sending'` so reload triggers the same hide path"),
-      pinContains("<AgentExecutionTrace", "assistant messages must render the grouped execution trace"),
+      pinRegexPresent(
+        /shouldShowToolGroupInTimeline\(\s*step,\s*message\.status\s*===\s*"sending",\s*hasAssistantAnswerText(?:\s*,\s*revealCompletedToolHistory)?\s*\)/,
+        "the filter call site must wire `message.status === 'sending'` (and may pass the optional revealCompletedToolHistory override) so reload triggers the same hide path",
+      ),
+      pinContains("<ExecutionGroup", "assistant messages must render the grouped execution row via ExecutionGroup (which owns the AgentExecutionTrace delegation)"),
       pinAbsent(
         /\.toolCalls\.(map|forEach|flatMap)\(\(tool\b/,
         "AssistantMessage must not re-iterate step.toolCalls at the parent-message level (defeats the grouped execution row)",
@@ -296,22 +313,43 @@ checkAll(assert, [
     ],
   },
 
-  // ── TOOLDETAILVIEW ────────────────────────────────────────────────────────
+  // ── TOOLDETAILVIEW / CONTENT EXPANSION CONTRACT ────────────────────────────
   // Expansion contract: file edits render as a diff viewer, non-file tools
   // render input-box-then-output-box, terminal tools render a command header
   // + output + exit-code chip, image generation renders from a safe asset
   // URL with the safelist gate.
   {
-    context: "ToolDetailView.tsx",
+    context: "ToolDetailView.tsx (file edits)",
     source: detailSource,
     pins: [
       pinContains("parseUnifiedDiff", "file edits must expand into a diff viewer"),
       pinContains("DiffCard", "file edits must render via the DiffCard component"),
-      pinContains('label="Input"', "non-file tools must expand into an input box"),
+    ],
+  },
+  {
+    context: "GenericContent.tsx",
+    source: genericContentSource,
+    pins: [
+      // Raw tool input belongs behind an explicit disclosure, not a
+      // top-level Panel label="Input" that leads the primary view.
+      pinContains("<details", "non-file tools must hide raw input behind a native disclosure element"),
+      pinContains("Technical details", "non-file tools must label the raw input disclosure 'Technical details'"),
       pinContains('label="Output"', "non-file tools must expand into an output box"),
+    ],
+  },
+  {
+    context: "TerminalContent.tsx",
+    source: terminalContentSource,
+    pins: [
       pinContains('label="Terminal"', "terminal tools must render a terminal header"),
       pinContains("$ ", "terminal tools must render a command-prompt glyph"),
       pinContains("exit ", "terminal tools must render an exit-code chip"),
+    ],
+  },
+  {
+    context: "ImageContent.tsx",
+    source: imageContentSource,
+    pins: [
       pinContains("toAssetUrl", "image generation must derive an asset URL through the safe resolver"),
       pinContains("isSafeGeneratedHref", "image generation must gate asset URLs through the safelist"),
       pinContains("<img", "image generation must render a native <img> tag"),

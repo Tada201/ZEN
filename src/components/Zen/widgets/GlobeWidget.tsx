@@ -55,8 +55,8 @@ export function GlobeWidget({ className = '' }: GlobeWidgetProps) {
           <>
             {/* Wireframe globe effect */}
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-40 h-40 rounded-full border-2 border-primary/20 animate-spin" style={{ animationDuration: '20s' }} />
-              <div className="absolute w-32 h-32 rounded-full border border-primary/10 animate-spin" style={{ animationDuration: '15s', animationDirection: 'reverse' }} />
+              <div className="w-40 h-40 rounded-full border-2 border-primary animate-spin" style={{ animationDuration: '20s' }} />
+              <div className="absolute w-32 h-32 rounded-full border border-primary animate-spin" style={{ animationDuration: '15s', animationDirection: 'reverse' }} />
             </div>
 
             {/* Node markers */}
@@ -73,15 +73,15 @@ export function GlobeWidget({ className = '' }: GlobeWidgetProps) {
 
             {/* Overlay stats */}
             <div className="absolute top-3 left-3 z-10">
-              <div className="bg-card/60 backdrop-blur-md border border-border px-2 py-1.5 rounded-sm">
-                <div className="text-[8px] text-primary/60 font-bold tracking-widest uppercase mb-0.5">CORE_LOC</div>
+              <div className="bg-card border border-border px-2 py-1.5 rounded-sm">
+                <div className="text-[8px] text-primary font-bold tracking-widest uppercase mb-0.5">CORE_LOC</div>
                 <div className="text-[10px] font-mono font-bold text-[hsl(160_84%_39%)]">35.6762, 139.6503</div>
               </div>
             </div>
 
             {/* Radar info */}
             <div className="absolute bottom-3 right-3 z-10 text-right">
-              <div className="text-[9px] font-mono text-primary/60 uppercase tracking-widest">RADAR: ACTIVE</div>
+              <div className="text-[9px] font-mono text-primary uppercase tracking-widest">RADAR: ACTIVE</div>
               <div className="text-[8px] font-mono text-muted-foreground uppercase tracking-tighter">WIREFRAME_LINK: SECURE</div>
             </div>
           </>

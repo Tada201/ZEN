@@ -22,6 +22,7 @@ pub struct NewMessage<'a> {
     pub kind: Option<&'a str>,
     pub metadata: Option<&'a str>,
     pub reasoning_details: Option<&'a str>,
+    pub steps_json: Option<&'a str>,
 }
 
 impl<'a> Default for NewMessage<'a> {
@@ -42,6 +43,7 @@ impl<'a> Default for NewMessage<'a> {
             kind: None,
             metadata: None,
             reasoning_details: None,
+            steps_json: None,
         }
     }
 }
@@ -59,9 +61,9 @@ pub async fn add_message(pool: &SqlitePool, msg: &NewMessage<'_>) -> ZenResult<M
         INSERT INTO messages (
             id, chat_id, role, content, model, is_complete, tool_calls,
             tool_call_id, images, attachments, tokens_in, tokens_out, kind,
-            metadata, reasoning_details, created_at
+            metadata, reasoning_details, steps_json, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
         "#,
     )
     .bind(&id)
@@ -79,6 +81,7 @@ pub async fn add_message(pool: &SqlitePool, msg: &NewMessage<'_>) -> ZenResult<M
     .bind(msg.kind)
     .bind(msg.metadata)
     .bind(msg.reasoning_details)
+    .bind(msg.steps_json)
     .execute(&mut *tx)
     .await?;
 
@@ -105,6 +108,36 @@ pub async fn add_message(pool: &SqlitePool, msg: &NewMessage<'_>) -> ZenResult<M
         .fetch_one(pool)
         .await?;
     Ok(msg)
+}
+
+pub(crate) const UPDATE_MESSAGE_STEPS_NOT_FOUND: &str =
+    "No assistant message found for the provided message_id";
+
+/// Persists the frontend execution timeline (`steps_json`) for a single assistant
+/// message. Only rows with role `assistant` are updated, and only if they belong
+/// to the requested chat. Returns an error if no matching row is found.
+pub async fn update_message_steps(
+    pool: &SqlitePool,
+    chat_id: &str,
+    message_id: &str,
+    steps_json: &str,
+) -> ZenResult<()> {
+    let result = sqlx::query(
+        "UPDATE messages SET steps_json = ? WHERE id = ? AND chat_id = ? AND role = 'assistant'"
+    )
+    .bind(steps_json)
+    .bind(message_id)
+    .bind(chat_id)
+    .execute(pool)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(crate::error::ZenError::Custom(
+            UPDATE_MESSAGE_STEPS_NOT_FOUND.to_string(),
+        ));
+    }
+
+    Ok(())
 }
 
 /// Updates only the content and metadata of a message.

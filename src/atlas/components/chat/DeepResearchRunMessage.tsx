@@ -21,7 +21,7 @@ function formatElapsed(seconds: number): string {
 function ProcessStepItem({ step }: { step: ResearchStep }) {
     const status = step.status;
     return (
-        <div className="flex min-w-0 items-start gap-2 text-[11px] py-1.5 px-2 rounded-md bg-background/20 hover:bg-background/30 transition-colors">
+        <div className="flex min-w-0 items-start gap-2 text-[11px] py-1.5 px-2 rounded-md bg-muted hover:bg-muted transition-colors">
             {status === "completed" && <CheckCircle2 className="h-3.5 w-3.5 text-success mt-0.5 shrink-0" />}
             {status === "running" && <Loader2 className="h-3.5 w-3.5 text-primary animate-spin mt-0.5 shrink-0" />}
             {status === "error" && <XCircle className="h-3.5 w-3.5 text-destructive mt-0.5 shrink-0" />}
@@ -65,7 +65,7 @@ function StaleRetryButton({
         <button
             type="button"
             onClick={handleRetry}
-            className="inline-flex items-center gap-1.5 rounded-md border border-rose-500/25 bg-rose-500/10 px-3 py-1.5 text-[11px] font-medium text-destructive hover:bg-rose-500/20 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-md border border-destructive bg-card px-3 py-1.5 text-[11px] font-medium text-destructive hover:bg-destructive/10 transition-colors"
         >
             <XCircle className="h-3 w-3" />
             Retry research
@@ -192,7 +192,7 @@ export function DeepResearchRunMessage({
             className={cn(
                 "group flex w-full flex-col px-4 transition-all duration-200",
                 compact ? "bg-transparent py-2" : "bg-transparent py-4",
-                "hover:bg-muted/20",
+                "hover:bg-muted",
             )}
         >
             <div
@@ -201,9 +201,9 @@ export function DeepResearchRunMessage({
                     compact ? "max-w-full" : "max-w-[800px]",
                 )}
             >
-                <div className="flex min-h-[360px] w-full flex-col rounded-xl border border-primary/20 bg-gradient-to-b from-indigo-500/10 to-transparent p-5 shadow-sm backdrop-blur-sm">
+                <div className="flex min-h-[360px] w-full flex-col rounded-xl border border-primary bg-card p-5 shadow-sm">
                     <div className="flex items-center gap-3 mb-4">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/20">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
                             {isComplete ? <Search className="h-4 w-4 text-primary" /> : <ResearchMatrix />}
                         </div>
                         <div className="flex flex-col">
@@ -211,7 +211,7 @@ export function DeepResearchRunMessage({
                             <span
                                 className={cn(
                                     "text-xs transition-all duration-300",
-                                    isComplete ? "text-primary/60" : "text-primary animate-text-shimmer font-medium",
+                                    isComplete ? "text-muted-foreground" : "text-primary animate-text-shimmer font-medium",
                                 )}
                             >
                                 {isStaleEmpty
@@ -240,14 +240,14 @@ export function DeepResearchRunMessage({
                                     <button
                                         type="button"
                                         onClick={onAbort}
-                                        className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-2.5 py-0.5 text-[10px] font-medium text-destructive hover:bg-destructive/20 transition-colors cursor-pointer"
+                                        className="inline-flex items-center gap-1 rounded-full border border-destructive bg-card px-2.5 py-0.5 text-[10px] font-medium text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
                                         title="Stop research"
                                     >
                                         <Square className="h-2.5 w-2.5" />
                                         Stop
                                     </button>
                                 )}
-                                <div className="flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 border border-primary/20 text-[10px] font-mono text-primary shadow-[0_0_10px_hsl(var(--primary) / 0.1)]">
+                                <div className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 border border-border text-[10px] font-mono text-primary">
                                     <span className="relative flex h-1.5 w-1.5">
                                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
                                         <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
@@ -259,7 +259,7 @@ export function DeepResearchRunMessage({
                     </div>
 
                     <Collapsible defaultOpen={!isComplete || isStaleEmpty} className="flex min-h-0 w-full flex-1 flex-col">
-                        <CollapsibleTrigger className="flex w-full flex-col gap-2 rounded-lg p-2 hover:bg-muted/50 text-xs text-muted-foreground transition-all">
+                        <CollapsibleTrigger className="flex w-full flex-col gap-2 rounded-lg p-2 hover:bg-muted text-xs text-muted-foreground transition-all">
                             <div className="flex w-full items-center justify-between">
                                 <div className="flex items-center gap-2 flex-wrap">
                                     <span className="font-medium text-foreground">
@@ -268,17 +268,17 @@ export function DeepResearchRunMessage({
                                     {steps.length > 0 && (
                                         <div className="flex items-center gap-1.5">
                                             {processCompleted > 0 && (
-                                                <span className="inline-flex items-center rounded bg-success/10 px-1.5 py-0.5 text-[11px] font-medium text-success border border-emerald-500/20">
+                                                <span className="inline-flex items-center rounded bg-success/10 px-1.5 py-0.5 text-[11px] font-medium text-success border border-success">
                                                     {processCompleted} done
                                                 </span>
                                             )}
                                             {processRunning > 0 && (
-                                                <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary border border-primary/20 text-premium-shimmer">
+                                                <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary border border-primary text-premium-shimmer">
                                                     {processRunning} active
                                                 </span>
                                             )}
                                             {processPending > 0 && (
-                                                <span className="inline-flex items-center rounded bg-muted/10 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground border border-border/20">
+                                                <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground border border-border">
                                                     {processPending} pending
                                                 </span>
                                             )}
@@ -286,9 +286,9 @@ export function DeepResearchRunMessage({
                                     )}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-[11px] font-mono text-primary/80">{progressPercent}%</span>
+                                    <span className="text-[11px] font-mono text-primary">{progressPercent}%</span>
                                     {!isComplete && activeProcessText && (
-                                        <span className="hidden md:inline text-[11px] text-primary/70 max-w-[200px] truncate animate-pulse">
+                                        <span className="hidden md:inline text-[11px] text-primary max-w-[200px] truncate animate-pulse">
                                             {activeProcessText}
                                         </span>
                                     )}
@@ -297,14 +297,14 @@ export function DeepResearchRunMessage({
                             </div>
 
                             {steps.length > 0 && (
-                                <div className="w-full h-1 bg-background/30 rounded-full overflow-hidden mt-1">
+                                <div className="w-full h-1 bg-muted rounded-full overflow-hidden mt-1">
                                     <div
                                         className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-500 ease-out relative"
                                         style={{ width: `${progressPercent}%` }}
                                     >
                                         {!isComplete && (
                                             <div
-                                                className="absolute inset-0 bg-gradient-to-r from-transparent via-card/30 to-transparent animate-shimmer-slide"
+                                                className="absolute inset-0 bg-gradient-to-r from-transparent via-card to-transparent animate-shimmer-slide"
                                                 style={{ backgroundSize: "200% 100%" }}
                                             />
                                         )}
@@ -322,7 +322,7 @@ export function DeepResearchRunMessage({
                             )}
                             {isStaleEmpty && (
                                 <div className="flex flex-col gap-2 py-2 px-2">
-                                    <div className="flex items-center gap-2 text-xs text-destructive/80">
+                                    <div className="flex items-center gap-2 text-xs text-destructive">
                                         <XCircle className="h-3 w-3 shrink-0" />
                                         <span>The research process ended before collecting any data.</span>
                                     </div>
@@ -336,7 +336,7 @@ export function DeepResearchRunMessage({
                                 </div>
                             )}
                             {isStaleSending && !isStaleEmpty && message.content && (
-                                <div className="flex items-center gap-2 text-xs text-warning/80 py-2 px-2">
+                                <div className="flex items-center gap-2 text-xs text-warning py-2 px-2">
                                     <XCircle className="h-3 w-3 shrink-0" />
                                     <span>Connection was lost. Partial results are shown above. Re-run the research to get the complete report.</span>
                                 </div>

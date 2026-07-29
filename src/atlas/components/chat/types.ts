@@ -252,6 +252,7 @@ export type ToolCall = {
   agentId?: string;
   agentName?: string;
   iteration?: number;
+  traceId?: string;
   batchId?: string;
   retries?: number;
   startTime?: number;
@@ -288,10 +289,25 @@ export interface ToolInvocation {
 
 export type ExecutionEventStatus = "pending" | "running" | "completed" | "error" | "cancelled";
 
+export interface SubagentStepData {
+  spawnId: string;
+  parentToolCallId?: string;
+  agentId: string;
+  agentName: string;
+  task: string;
+  status: "running" | "completed" | "failed" | "cancelled";
+  resultSummary?: string;
+  error?: string;
+  durationMs?: number;
+  timestamp?: number;
+  childToolCallIds?: string[];
+}
+
 export type Step = { 
-  type: "text" | "tool-call" | "reasoning" | "action"; 
+  type: "text" | "tool-call" | "reasoning" | "action" | "subagent"; 
   content?: string; 
   toolCall?: ToolCall;
+  subagent?: SubagentStepData;
   kind?: MessageKind | string;
   status?: ExecutionEventStatus;
   metadata?: ActionMeta;
@@ -328,6 +344,7 @@ export type Message = {
   kind?: MessageKind;
   metadata?: ActionMeta;
   toolInvocations?: ToolInvocation[];
+  stepsJson?: string;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -391,11 +408,30 @@ export function normalizeVercelMessage(msg: unknown): Message {
     ? msg.role
     : "assistant";
   const rawContent = typeof msg.content === "string" ? msg.content : "";
-  const normalizedSteps = Array.isArray(msg.steps)
-    ? (msg.steps as Step[]).map((step) => role === "assistant" && step.type === "text"
-      ? { ...step, content: stripToolProtocolText(step.content || "") }
-      : step)
-    : undefined;
+
+  // Prefer the persisted execution timeline if the backend saved one.
+  // This keeps tool-call ordering, chat-status steps, subagent lanes and
+  // other transient UI state identical before and after reload.
+  let normalizedSteps: Step[] | undefined;
+  if (typeof msg.stepsJson === "string" && msg.stepsJson.trim()) {
+    try {
+      const parsed = JSON.parse(msg.stepsJson) as unknown;
+      if (Array.isArray(parsed)) {
+        normalizedSteps = parsed.map((step) => role === "assistant" && step?.type === "text"
+          ? { ...step, content: stripToolProtocolText(step.content || "") }
+          : step) as Step[];
+      }
+    } catch {
+      // Fall through to legacy reconstruction if the JSON is corrupt.
+    }
+  }
+  if (!normalizedSteps) {
+    normalizedSteps = Array.isArray(msg.steps)
+      ? (msg.steps as Step[]).map((step) => role === "assistant" && step.type === "text"
+        ? { ...step, content: stripToolProtocolText(step.content || "") }
+        : step)
+      : undefined;
+  }
 
   const normalized: Message = {
     id: typeof msg.id === "string" ? msg.id : `message-${Date.now()}`,
@@ -419,8 +455,33 @@ export function normalizeVercelMessage(msg: unknown): Message {
     kind: typeof msg.kind === "string" ? msg.kind as MessageKind : undefined,
     metadata: isRecord(msg.metadata) ? msg.metadata as ActionMeta : undefined,
     toolInvocations: toToolInvocationArray(msg.toolInvocations),
+    stepsJson: typeof msg.stepsJson === "string" ? msg.stepsJson : undefined,
     steps: normalizedSteps,
   };
+
+  // Restore toolCalls from persisted steps so subagent child tools (which
+  // live only inside steps after reload) stay reachable. SubagentExecutionCard
+  // finds its children by filtering message.toolCalls against the subagent's
+  // spawnId via traceId. Without this restoration, a reloaded subagent loses
+  // its child tool trace because the backend persists child tools inside
+  // steps_json, not as top-level message.toolCalls. We merge by id to avoid
+  // duplicating tools that are already present on the message.
+  if (Array.isArray(normalized.steps)) {
+    const stepsToolCalls = normalized.steps
+      .filter((s): s is Step & { type: "tool-call" } => s?.type === "tool-call" && Boolean(s.toolCall))
+      .map((s) => s.toolCall) as ToolCall[];
+    if (stepsToolCalls.length > 0) {
+      const existingIds = new Set((normalized.toolCalls || []).map((tc) => tc.id));
+      const merged = [...(normalized.toolCalls || [])];
+      for (const tc of stepsToolCalls) {
+        if (tc.id && !existingIds.has(tc.id)) {
+          merged.push(tc);
+          existingIds.add(tc.id);
+        }
+      }
+      normalized.toolCalls = merged;
+    }
+  }
 
   // If toolInvocations is present, populate toolCalls and steps
   const toolInvocations = toToolInvocationArray(msg.toolInvocations);
@@ -436,7 +497,24 @@ export function normalizeVercelMessage(msg: unknown): Message {
       };
     });
 
-    normalized.toolCalls = [...(normalized.toolCalls || []), ...toolCalls];
+    // Merge legacy toolInvocations into toolCalls, deduping by id against
+    // any tools already restored from stepsJson (Path A above). A message
+    // can carry BOTH a persisted steps timeline AND legacy toolInvocations
+    // pointing at the same toolCallId — a blind concatenate would duplicate
+    // the tool cards and break SubagentExecutionCard's child-tool re-attachment
+    // (which keys on id). Mirror Path A's merge: keep the existing (steps-derived)
+    // entry and skip the legacy duplicate by id. Legacy tools without an id are
+    // always kept — Path A cannot restore id-less tools, so they are unique to
+    // this path and must not be dropped.
+    const legacyExistingIds = new Set((normalized.toolCalls || []).map((tc) => tc.id).filter((id): id is string => Boolean(id)));
+    const mergedLegacy = [...(normalized.toolCalls || [])];
+    for (const tc of toolCalls) {
+      if (!tc.id || !legacyExistingIds.has(tc.id)) {
+        mergedLegacy.push(tc);
+        if (tc.id) legacyExistingIds.add(tc.id);
+      }
+    }
+    normalized.toolCalls = mergedLegacy;
 
     // If steps is empty, reconstruct steps from content and toolCalls
     if (!Array.isArray(normalized.steps) || normalized.steps.length === 0) {

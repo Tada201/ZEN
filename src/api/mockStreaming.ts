@@ -230,7 +230,7 @@ export function triggerMockStream(chatId: string, userContent: string, deps: Moc
         }
 
         saveAssistantMessage(assistantMsg);
-        emit("chat:done", { chat_id: chatId, content: step.content || "" });
+        emit("chat:done", { chat_id: chatId, content: step.content || "", message_id: assistantMsg.id });
         return;
       }
 
@@ -260,8 +260,9 @@ export function triggerMockStream(chatId: string, userContent: string, deps: Moc
       return;
     }
 
+    const mockAssistantId = `msg-${Date.now()}-assistant`;
     saveAssistantMessage({
-      id: `msg-${Date.now()}-assistant`,
+      id: mockAssistantId,
       chatId,
       role: "assistant",
       content: responseText,
@@ -269,7 +270,7 @@ export function triggerMockStream(chatId: string, userContent: string, deps: Moc
       isComplete: 1,
       kind: "text",
     });
-    emit("chat:done", { chat_id: chatId, content: responseText });
+    emit("chat:done", { chat_id: chatId, content: responseText, message_id: mockAssistantId });
   }
 
   setTimeout(emitNextChunk, 1500);

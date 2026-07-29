@@ -1,4 +1,5 @@
 import type { Message, ToolCall } from "../../components/chat/types";
+import { useChatStore } from "@/lib/stores/useChatStore";
 
 function messageOwnsTool(message: Message, toolCallId: string) {
   return Boolean(
@@ -28,7 +29,7 @@ function messageMatchesToolMeta(message: Message, incoming: ToolCall) {
   );
 }
 
-function findTargetMessageIndex(messages: Message[], incoming: ToolCall): number {
+function findTargetMessageIndex(messages: Message[], incoming: ToolCall, chatId?: string): number {
   let activeAssistantIdx = -1;
   let latestAssistantIdx = -1;
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -42,7 +43,19 @@ function findTargetMessageIndex(messages: Message[], incoming: ToolCall): number
     }
     if (latestAssistantIdx === -1 && message.role === "assistant") latestAssistantIdx = i;
   }
-  return activeAssistantIdx !== -1 ? activeAssistantIdx : latestAssistantIdx;
+  if (activeAssistantIdx !== -1) return activeAssistantIdx;
+
+  if (chatId) {
+    const activeAssistantId = useChatStore.getState().getActiveAssistantForChat(chatId);
+    if (activeAssistantId) {
+      const activeAssistantIdx = messages.findIndex(
+        (message) => message.id === activeAssistantId && message.role === "assistant",
+      );
+      if (activeAssistantIdx !== -1) return activeAssistantIdx;
+    }
+  }
+
+  return latestAssistantIdx;
 }
 
 function isTerminalToolStatus(status?: ToolCall["status"]) {
@@ -67,6 +80,7 @@ export function mergeToolCall(existing: ToolCall | undefined, incoming: ToolCall
     messageId: incoming.messageId || existing.messageId,
     parentAgentId: incoming.parentAgentId || existing.parentAgentId,
     executionId: incoming.executionId || existing.executionId,
+    traceId: incoming.traceId || existing.traceId,
     agentId: incoming.agentId || existing.agentId,
     agentName: incoming.agentName || existing.agentName,
     iteration: incoming.iteration ?? existing.iteration,
@@ -79,7 +93,7 @@ export function mergeToolCall(existing: ToolCall | undefined, incoming: ToolCall
 }
 
 export function upsertTool(prev: Message[], chatId: string, incoming: ToolCall, now = Date.now()): Message[] {
-  const targetIdx = findTargetMessageIndex(prev, incoming);
+  const targetIdx = findTargetMessageIndex(prev, incoming, chatId);
   if (targetIdx === -1) {
     return [
       ...prev,
@@ -142,6 +156,7 @@ export function makeToolCall(
     | "iteration"
     | "batchId"
     | "toolBatchId"
+    | "traceId"
   > = {},
 ): ToolCall {
   return {

@@ -21,32 +21,32 @@ export function MathCard({ data }: { data: MathData }) {
   const domain = data.domain || "Mathematics";
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-border/[0.08] bg-background/40 backdrop-blur-md p-5 shadow-lg flex flex-col">
+    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-lg flex flex-col">
       <div className="flex justify-between items-start mb-4">
         <div>
-          <span className="text-[9px] uppercase font-mono tracking-widest text-primary/70">
+          <span className="text-[9px] uppercase font-mono tracking-widest text-primary">
             {domain} Solver
           </span>
           <h3 className="text-sm font-semibold text-primary-foreground mt-0.5 leading-snug">
             {expression}
           </h3>
         </div>
-        <Sigma className="w-5 h-5 text-primary-foreground/20" />
+        <Sigma className="w-5 h-5 text-muted-foreground" />
       </div>
 
       {steps.length > 0 && (
         <div className="mb-4 space-y-3.5">
-          <span className="text-[9px] uppercase font-mono tracking-widest text-primary-foreground/20 block">
+          <span className="text-[9px] uppercase font-mono tracking-widest text-muted-foreground block">
             Step-by-step Working
           </span>
-          <div className="space-y-3 pl-4 relative before:absolute before:left-2 before:top-2.5 before:h-[calc(100%-16px)] before:w-px before:bg-card/[0.06]">
+          <div className="space-y-3 pl-4 relative before:absolute before:left-2 before:top-2.5 before:h-[calc(100%-16px)] before:w-px before:bg-muted">
             {steps.map((step, idx) => (
               <div key={idx} className="relative flex flex-col gap-0.5">
-                <span className="absolute -left-[20px] top-1 w-2.5 h-2.5 rounded-full border border-border/20 bg-background shrink-0" />
-                <span className="text-[11px] text-primary-foreground/40 leading-normal font-sans">
+                <span className="absolute -left-[20px] top-1 w-2.5 h-2.5 rounded-full border border-border bg-background shrink-0" />
+                <span className="text-[11px] text-muted-foreground leading-normal font-sans">
                   {step.description}
                 </span>
-                <span className="text-xs font-semibold font-mono text-primary-foreground/80 mt-0.5 leading-snug">
+                <span className="text-xs font-semibold font-mono text-primary-foreground mt-0.5 leading-snug">
                   {step.expression}
                 </span>
               </div>
@@ -55,10 +55,10 @@ export function MathCard({ data }: { data: MathData }) {
         </div>
       )}
 
-      <div className="mt-4 pt-3.5 border-t border-border/[0.06] flex items-center justify-between">
+      <div className="mt-4 pt-3.5 border-t border-border flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Award className="w-4 h-4 text-emerald-400" />
-          <span className="text-[11px] font-bold text-primary-foreground/50">Final Answer</span>
+          <span className="text-[11px] font-bold text-primary-foreground">Final Answer</span>
         </div>
         <span className="text-sm font-bold text-emerald-400 font-mono">
           {result}

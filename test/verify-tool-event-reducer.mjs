@@ -4,7 +4,19 @@ import ts from "typescript";
 
 const sourcePath = new URL("../src/atlas/hooks/stream/toolEventReducer.ts", import.meta.url);
 const source = readFileSync(sourcePath, "utf8");
-const transpiled = ts.transpileModule(source, {
+
+// The reducer now depends on the Zustand chat store. Strip the alias import and
+// inject a runtime mock so the isolated data-URL module can still be exercised.
+const preparedSource = source
+  .replace(/import\s+\{\s*useChatStore\s*\}\s+from\s+["']@\/lib\/stores\/useChatStore["'];?\s*\n?/, "")
+  .trim() +
+  `\nconst useChatStore = {\n` +
+  `  getState: () => ({\n` +
+  `    getActiveAssistantForChat: (chatId) => (globalThis.__activeAssistantByChat ?? {})[chatId] ?? null,\n` +
+  `  }),\n` +
+  `};\n`;
+
+const transpiled = ts.transpileModule(preparedSource, {
   compilerOptions: {
     module: ts.ModuleKind.ES2022,
     target: ts.ScriptTarget.ES2022,
@@ -125,5 +137,25 @@ messages = upsertTool(
 
 assert.equal(messages[1].role, "system", "orphan tool events should create a fallback ledger row");
 assert.equal(messages[1].toolCalls[0].status, "awaiting_approval", "fallback ledger should preserve approval state");
+
+// P0 stray-tool fallback: when no assistant is sending and metadata does not
+// match, the activeAssistantByChat registry should route the tool to the
+// registered assistant instead of creating an orphan ledger message.
+globalThis.__activeAssistantByChat = { [chatId]: "assistant-registered" };
+messages = [
+  { id: "user-1", sessionId: chatId, role: "user", content: "test", status: "sent" },
+  { id: "assistant-registered", sessionId: chatId, role: "assistant", content: "", status: "sent", steps: [], toolCalls: [] },
+];
+messages = upsertTool(
+  messages,
+  chatId,
+  makeToolCall("tool-registered", "read_file", "running", { path: "README.md" }, "", undefined, 600),
+  600,
+);
+const registeredAssistant = messages.find((message) => message.id === "assistant-registered");
+assert.equal(registeredAssistant.toolCalls.length, 1, "activeAssistantByChat fallback should attach stray tool to registered assistant");
+assert.equal(messages.findIndex((message) => message.id.startsWith("tool-ledger-")), -1, "activeAssistantByChat fallback should prevent orphan ledger creation");
+
+globalThis.__activeAssistantByChat = {};
 
 console.log("tool event reducer ok");

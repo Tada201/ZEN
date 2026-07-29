@@ -2,14 +2,14 @@ import { ShoppingCart, Star } from 'lucide-react';
 
 export function ProductCard({ data }: { data: any }) {
   return (
-    <div className="rounded-2xl border border-border/[0.08] bg-background/40 backdrop-blur-md overflow-hidden shadow-lg max-w-[260px] flex flex-col group hover:scale-[1.01] transition-transform duration-300">
-      <div className="h-44 w-full bg-card/[0.03] flex items-center justify-center relative overflow-hidden">
+    <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-lg max-w-[260px] flex flex-col group hover:scale-[1.01] transition-transform duration-200">
+      <div className="h-44 w-full bg-card flex items-center justify-center relative overflow-hidden">
         {data.image ? (
           <img src={data.image} alt={data.name} className="h-full w-full object-cover" />
         ) : (
-          <ShoppingCart className="h-12 w-12 text-primary-foreground/15" />
+          <ShoppingCart className="h-12 w-12 text-muted-foreground" />
         )}
-        <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-background/60 backdrop-blur-sm border border-border/10 text-[9px] font-bold text-primary-foreground uppercase font-mono">
+        <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-card border border-border text-[9px] font-bold text-primary-foreground uppercase font-mono">
           {data.inStock ? 'In Stock' : 'Out of Stock'}
         </span>
       </div>
@@ -19,13 +19,13 @@ export function ProductCard({ data }: { data: any }) {
           <div className="flex items-center gap-1.5 mt-1">
             <div className="flex items-center text-amber-400">
               <Star size={10} fill="currentColor" />
-              <span className="text-[10px] font-bold text-primary-foreground/80 ml-0.5">{data.rating || '5.0'}</span>
+              <span className="text-[10px] font-bold text-primary-foreground ml-0.5">{data.rating || '5.0'}</span>
             </div>
-            <span className="text-[9px] text-primary-foreground/30">({data.reviews || '0'} reviews)</span>
+            <span className="text-[9px] text-muted-foreground">({data.reviews || '0'} reviews)</span>
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-t border-border/[0.06] pt-3 mt-1">
+        <div className="flex items-center justify-between border-t border-border pt-3 mt-1">
           <span className="text-lg font-black text-primary-foreground">
             ${(() => {
               const priceVal = typeof data.price === 'number' ? data.price : parseFloat(data.price);

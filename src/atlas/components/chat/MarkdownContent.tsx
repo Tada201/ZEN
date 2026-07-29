@@ -54,7 +54,7 @@ function InteractiveImage({ src, alt }: { src: string; alt: string }) {
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="block my-4 shrink-0 relative overflow-hidden rounded-lg border border-border/30 hover:border-primary/40 transition-all duration-200 group"
+        className="block my-4 shrink-0 relative overflow-hidden rounded-lg border border-border hover:border-primary transition-all duration-200 group"
       >
         <img
           src={resolvedSrc}
@@ -122,16 +122,16 @@ function ReferencesGrid({ items }: { items: ReferenceItem[] }) {
             href={ref.url}
             target="_blank"
             rel="noreferrer"
-            className="flex items-start gap-2.5 rounded-lg border border-border/30 bg-card/60 px-3 py-2 text-[13px] leading-snug transition-all hover:border-border/60 hover:bg-card hover:shadow-sm"
+            className="flex items-start gap-2.5 rounded-lg border border-border bg-card px-3 py-2 text-[13px] leading-snug transition-all hover:border-border hover:bg-muted hover:shadow-sm"
           >
             <span className="mt-[1px] flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
               {ref.number}
             </span>
             <span className="flex-1 min-w-0">
-              <span className="block truncate text-foreground/90">{ref.title}</span>
-              <span className="block truncate text-[11px] text-muted-foreground/60">{ref.url}</span>
+              <span className="block truncate text-foreground">{ref.title}</span>
+              <span className="block truncate text-[11px] text-muted-foreground">{ref.url}</span>
             </span>
-            <ExternalLink className="mt-1 h-3 w-3 shrink-0 text-muted-foreground/40" />
+            <ExternalLink className="mt-1 h-3 w-3 shrink-0 text-muted-foreground" />
           </a>
         ))}
       </div>
@@ -183,13 +183,12 @@ const ChartBlock = React.lazy(() => import("./ChartBlock").then(m => ({ default:
 const OpenUIRenderer = React.lazy(() => import("../OpenUIRenderer").then(m => ({ default: m.OpenUIRenderer })));
 const SmoothMarkdown = React.lazy(() => import("./SmoothMarkdown").then(m => ({ default: m.SmoothMarkdown })));
 
-const RichBlockFallback = () => (
-  <div
-    className="my-6 h-24 animate-pulse rounded-xl border border-border/30 bg-card/90"
+const RichBlockFallback = () => (    <div
+    className="my-6 h-24 animate-pulse rounded-xl border border-border bg-card"
     aria-hidden="true"
   >
-    <div className="m-6 h-3 w-2/3 rounded-full bg-muted/40" />
-    <div className="mx-6 mt-3 h-3 w-1/2 rounded-full bg-muted/30" />
+    <div className="m-6 h-3 w-2/3 rounded-full bg-muted" />
+    <div className="mx-6 mt-3 h-3 w-1/2 rounded-full bg-muted" />
   </div>
 );
 const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
@@ -346,7 +345,7 @@ export function MarkdownContent({
         );
       }
       return (
-        <code className="rounded bg-muted/50 px-1.5 py-0.5 font-mono text-[0.9em] text-foreground/80">
+        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.9em] text-foreground">
           {children}
         </code>
       );
@@ -376,11 +375,11 @@ export function MarkdownContent({
       );
     },
     h1: ({ children }) => <h1 className="mb-4 mt-8 text-2xl font-bold tracking-tight text-foreground">{children}</h1>,
-    h2: ({ children }) => <h2 className="mb-3 mt-6 text-xl font-semibold tracking-tight text-foreground/90">{children}</h2>,
-    h3: ({ children }) => <h3 className="mb-2 mt-5 text-lg font-semibold text-foreground/80">{children}</h3>,
-    h4: ({ children }) => <h4 className="mb-2 mt-4 text-base font-semibold text-foreground/70">{children}</h4>,
-    h5: ({ children }) => <h5 className="mb-2 mt-3 text-sm font-semibold text-foreground/60">{children}</h5>,
-    h6: ({ children }) => <h6 className="mb-2 mt-2 text-xs font-semibold text-foreground/50">{children}</h6>,
+    h2: ({ children }) => <h2 className="mb-3 mt-6 text-xl font-semibold tracking-tight text-foreground">{children}</h2>,
+    h3: ({ children }) => <h3 className="mb-2 mt-5 text-lg font-semibold text-foreground">{children}</h3>,
+    h4: ({ children }) => <h4 className="mb-2 mt-4 text-base font-semibold text-foreground">{children}</h4>,
+    h5: ({ children }) => <h5 className="mb-2 mt-3 text-sm font-semibold text-muted-foreground">{children}</h5>,
+    h6: ({ children }) => <h6 className="mb-2 mt-2 text-xs font-semibold text-muted-foreground">{children}</h6>,
     p: ({ children }) => {
       const galleryImages = extractImagesFromChildren(children);
       if (galleryImages) return <ImageGallery images={galleryImages} />;
@@ -430,13 +429,13 @@ export function MarkdownContent({
       }
 
       return (
-        <blockquote className="my-6 border-l-2 border-primary/20 pl-4 italic text-muted-foreground/80 bg-primary/5 py-2 rounded-r-lg">
+        <blockquote className="my-6 border-l-2 border-primary pl-4 italic text-muted-foreground bg-muted py-2 rounded-r-lg">
           {children}
         </blockquote>
       );
     },
     table: ({ children }) => (
-      <div className="my-6 overflow-hidden rounded-xl border border-border/40 bg-card/90 shadow-sm">
+      <div className="my-6 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
         <ScrollArea className="w-full">
           <Table className="w-full text-[13px] border-collapse">{children}</Table>
         </ScrollArea>
@@ -448,7 +447,7 @@ export function MarkdownContent({
     th: ({ children }) => <TableHead>{children}</TableHead>,
     td: ({ children }) => <TableCell>{children}</TableCell>,
     strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-    hr: () => <hr className="my-8 border-border/20" />,
+    hr: () => <hr className="my-8 border-border" />,
   }), [onOpenArtifact, chatId, isStreaming]);
 
   return (
@@ -477,13 +476,13 @@ export function MarkdownContent({
         <ReferencesGrid items={refItems} />
       )}
       {!mainContent && isStreaming && (
-        <div className="flex items-center gap-2 opacity-50 py-4" aria-live="polite">
+        <div className="flex items-center gap-2 py-4" aria-live="polite">
           <div className="flex gap-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:-0.3s]" />
-            <div className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:-0.15s]" />
-            <div className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce" />
+            <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]" />
+            <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]" />
+            <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" />
           </div>
-          <span className="text-[10px] font-mono tracking-widest text-muted-foreground/50 uppercase">
+          <span className="text-[10px] font-mono tracking-widest text-muted-foreground uppercase">
             Generating response
           </span>
         </div>

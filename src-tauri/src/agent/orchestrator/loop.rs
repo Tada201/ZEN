@@ -38,6 +38,32 @@ impl Orchestrator {
         } = params;
         info!("Starting orchestrator loop for goal: {}", goal);
 
+        // Create a placeholder assistant message so the backend owns the row
+        // ID that `chat:done` will reference. This lets the frontend persist
+        // the execution timeline (`steps_json`) against the real DB row —
+        // matching the runner loop and deep-research contracts.
+        let mut orchestrator_message_id: Option<String> = None;
+        if let Some(ref pool) = self.db_pool {
+            match queries::add_message(
+                pool,
+                &queries::NewMessage {
+                    chat_id,
+                    role: "assistant",
+                    model: Some(model),
+                    is_complete: false,
+                    kind: Some("orchestrator"),
+                    ..Default::default()
+                },
+            )
+            .await
+            {
+                Ok(msg) => orchestrator_message_id = Some(msg.id),
+                Err(e) => {
+                    warn!(chat_id = %chat_id, error = %e, "Failed to create orchestrator assistant message");
+                }
+            }
+        }
+
         // Phase 1: Analyze
         self.emit_progress(
             chat_id,
@@ -60,9 +86,32 @@ impl Orchestrator {
         {
             Ok(b) => b,
             Err(e) => {
+                let error_msg = format!("Failed to break goal into tasks: {}", e);
+                if let (Some(ref pool), Some(ref msg_id)) =
+                    (self.db_pool.as_ref(), orchestrator_message_id.as_ref())
+                {
+                    let failure_metadata = serde_json::json!({
+                        "error": &error_msg,
+                        "status": "failed",
+                        "recoverable": false,
+                    })
+                    .to_string();
+                    let _ = queries::update_message(
+                        pool,
+                        &queries::UpdateMessage {
+                            id: msg_id,
+                            chat_id,
+                            content: &error_msg,
+                            is_complete: true,
+                            metadata: Some(&failure_metadata),
+                            ..Default::default()
+                        },
+                    )
+                    .await;
+                }
                 let _ = self.emit(AgentEvent::ChatError(ChatErrorPayload {
                     chat_id: chat_id.to_string(),
-                    error: format!("Failed to break goal into tasks: {}", e),
+                    error: error_msg,
                     recoverable: false,
                 }));
                 return Err(e);
@@ -153,17 +202,33 @@ impl Orchestrator {
                         "Orchestration rejected by user.",
                     )?;
 
+                    let cancelled_content =
+                        "Orchestration was cancelled by the user after reviewing the plan.";
+                    if let (Some(ref pool), Some(ref msg_id)) =
+                        (self.db_pool.as_ref(), orchestrator_message_id.as_ref())
+                    {
+                        let _ = queries::update_message(
+                            pool,
+                            &queries::UpdateMessage {
+                                id: msg_id,
+                                chat_id,
+                                content: cancelled_content,
+                                is_complete: true,
+                                ..Default::default()
+                            },
+                        )
+                        .await;
+                    }
+
                     // Emit ChatDone to signal frontend that streaming is complete
                     let _ = self.emit(AgentEvent::ChatDone(ChatDonePayload {
                         chat_id: chat_id.to_string(),
-                        content: Some(
-                            "Orchestration was cancelled by the user after reviewing the plan."
-                                .to_string(),
-                        ),
+                        content: Some(cancelled_content.to_string()),
                         tokens_in: 0,
                         tokens_out: 0,
                         reason: "cancelled".to_string(),
                         done: true,
+                        message_id: orchestrator_message_id.clone(),
                     }));
 
                     return Ok(AgentResponse {
@@ -350,15 +415,31 @@ impl Orchestrator {
             info!(
                 "Orchestrator task execution cancelled — no tasks completed, no synthesis needed"
             );
+            let cancelled_early_content =
+                "Orchestration cancelled before any tasks could complete.";
+            if let (Some(ref pool), Some(ref msg_id)) =
+                (self.db_pool.as_ref(), orchestrator_message_id.as_ref())
+            {
+                let _ = queries::update_message(
+                    pool,
+                    &queries::UpdateMessage {
+                        id: msg_id,
+                        chat_id,
+                        content: cancelled_early_content,
+                        is_complete: true,
+                        ..Default::default()
+                    },
+                )
+                .await;
+            }
             let _ = self.emit(AgentEvent::ChatDone(ChatDonePayload {
                 chat_id: chat_id.to_string(),
-                content: Some(
-                    "Orchestration cancelled before any tasks could complete.".to_string(),
-                ),
+                content: Some(cancelled_early_content.to_string()),
                 tokens_in: 0,
                 tokens_out: 0,
                 reason: "cancelled".to_string(),
                 done: true,
+                message_id: orchestrator_message_id.clone(),
             }));
             self.emit_progress(
                 chat_id,
@@ -406,11 +487,37 @@ impl Orchestrator {
         {
             Ok(response) => response,
             Err(e) => {
+                let error_msg = format!("Orchestration synthesis failed: {}", e);
+                // Persist the failure to the orchestrator assistant message so
+                // a reload shows a coherent failed row instead of an
+                // incomplete placeholder.
+                if let (Some(ref pool), Some(ref msg_id)) =
+                    (self.db_pool.as_ref(), orchestrator_message_id.as_ref())
+                {
+                    let failure_metadata = serde_json::json!({
+                        "error": &error_msg,
+                        "status": "failed",
+                        "recoverable": false,
+                    })
+                    .to_string();
+                    let _ = queries::update_message(
+                        pool,
+                        &queries::UpdateMessage {
+                            id: msg_id,
+                            chat_id,
+                            content: &error_msg,
+                            is_complete: true,
+                            metadata: Some(&failure_metadata),
+                            ..Default::default()
+                        },
+                    )
+                    .await;
+                }
                 // Emit ChatError — frontend handler sets isStreaming(false), status="failed", and displays error
                 let _ = self.emit(AgentEvent::ChatError(
                     crate::agent::event_bus::ChatErrorPayload {
                         chat_id: chat_id.to_string(),
-                        error: format!("Orchestration synthesis failed: {}", e),
+                        error: error_msg,
                         recoverable: false,
                     },
                 ));
@@ -430,14 +537,38 @@ impl Orchestrator {
             let _ = queries::update_orchestration_plan_status(pool, &plan_id, "completed").await;
         }
 
+        // Persist the synthesized assistant response and emit chat:done
+        // with the real backend row ID so the frontend can persist steps_json.
+        let final_content = final_response.content.clone().unwrap_or_default();
+        let tokens_in = final_response.tokens_in.unwrap_or(0) as i64;
+        let tokens_out = final_response.tokens_out.unwrap_or(0) as i64;
+        if let (Some(ref pool), Some(ref msg_id)) =
+            (self.db_pool.as_ref(), orchestrator_message_id.as_ref())
+        {
+            let _ = queries::update_message(
+                pool,
+                &queries::UpdateMessage {
+                    id: msg_id,
+                    chat_id,
+                    content: &final_content,
+                    is_complete: true,
+                    tokens_in: Some(tokens_in),
+                    tokens_out: Some(tokens_out),
+                    ..Default::default()
+                },
+            )
+            .await;
+        }
+
         // Emit chat:done to signal frontend that streaming is complete
         let _ = self.emit(AgentEvent::ChatDone(ChatDonePayload {
             chat_id: chat_id.to_string(),
             content: final_response.content.clone(),
-            tokens_in: final_response.tokens_in.unwrap_or(0) as i64,
-            tokens_out: final_response.tokens_out.unwrap_or(0) as i64,
+            tokens_in,
+            tokens_out,
             reason: "complete".to_string(),
             done: true,
+            message_id: orchestrator_message_id.clone(),
         }));
 
         info!("Orchestrator loop completed");

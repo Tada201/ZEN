@@ -36,7 +36,7 @@ export const FavoritesPanel: React.FC = () => {
     };
 
     return (
-        <div className={`w-full border border-border bg-background/45 backdrop-blur-md transition-all duration-200 ${isCollapsed ? "h-8 overflow-hidden" : ""}`}>
+        <div className={`w-full border border-border bg-card transition-all duration-200 ${isCollapsed ? "h-8 overflow-hidden" : ""}`}>
             {/* Header */}
             <div
                 className="flex h-8 min-h-8 items-center justify-between px-2 border-b border-border cursor-pointer select-none"
@@ -46,7 +46,7 @@ export const FavoritesPanel: React.FC = () => {
                     <WorkbenchIcon name="solar:star-bold" size={13} />
                     <span className="text-[10px] font-medium">Saved places</span>
                     {favorites.length > 0 && (
-                        <span className="text-[7px] font-mono text-muted-foreground/70 bg-muted px-1 py-0.5 border border-border">
+                        <span className="text-[7px] font-mono text-muted-foreground bg-muted px-1 py-0.5 border border-border">
                             {favorites.length}
                         </span>
                     )}
@@ -60,8 +60,8 @@ export const FavoritesPanel: React.FC = () => {
                 <div className="p-2 flex flex-col gap-1.5">
                     {/* Search */}
                     {favorites.length > 3 && (
-                        <div className="relative flex items-center bg-background/50 border border-border focus-within:border-cyan-400/70 transition-colors">
-                            <div className="pl-2 pr-1 text-cyan-400/65">
+                        <div className="relative flex items-center bg-card border border-border focus-within:border-cyan-400 transition-colors">
+                            <div className="pl-2 pr-1 text-cyan-400">
                                 <span className="text-[10px] font-mono font-bold">{">_"}</span>
                             </div>
                             <input
@@ -69,7 +69,7 @@ export const FavoritesPanel: React.FC = () => {
                                 placeholder="FILTER..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                className="w-full bg-transparent py-1 text-[10px] font-mono text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
+                                className="w-full bg-transparent py-1 text-[10px] font-mono text-foreground placeholder:text-muted-foreground focus:outline-none"
                                 spellCheck={false}
                             />
                         </div>
@@ -78,11 +78,11 @@ export const FavoritesPanel: React.FC = () => {
                     {/* Empty state */}
                     {favorites.length === 0 && (
                         <div className="py-4 text-center">
-                            <WorkbenchIcon name="solar:star-outline" size={20} className="text-foreground/80 mx-auto mb-2" />
-                            <span className="text-[9px] font-mono text-muted-foreground/70 tracking-wider">
+                            <WorkbenchIcon name="solar:star-outline" size={20} className="text-foreground mx-auto mb-2" />
+                            <span className="text-[9px] font-mono text-muted-foreground tracking-wider">
                                 NO_BOOKMARKS
                             </span>
-                            <div className="text-[8px] font-mono text-foreground/80 mt-1">
+                            <div className="text-[8px] font-mono text-foreground mt-1">
                                 Click ★ on a target to bookmark
                             </div>
                         </div>
@@ -96,7 +96,7 @@ export const FavoritesPanel: React.FC = () => {
                                 return (
                                     <div
                                         key={fav.id}
-                                        className="flex items-center justify-between p-1.5 cursor-pointer transition-all border-l-2 hover:bg-muted/40"
+                                        className="flex items-center justify-between p-1.5 cursor-pointer transition-all border-l-2 hover:bg-muted"
                                         style={{ borderLeftColor: layerColor }}
                                         onClick={() => handleSelect(fav)}
                                     >
@@ -109,7 +109,7 @@ export const FavoritesPanel: React.FC = () => {
                                                 <div className="text-[9px] font-bold text-foreground truncate tracking-wider">
                                                     {fav.label}
                                                 </div>
-                                                <div className="text-[7px] text-muted-foreground/70 truncate">
+                                                <div className="text-[7px] text-muted-foreground truncate">
                                                     {fav.layerLabel}
                                                 </div>
                                             </div>
@@ -120,7 +120,7 @@ export const FavoritesPanel: React.FC = () => {
                                                 e.stopPropagation();
                                                 removeFavorite(fav.id);
                                             }}
-                                            className="shrink-0 p-1 text-muted-foreground/70 hover:text-destructive transition-colors cursor-pointer"
+                                            className="shrink-0 p-1 text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
                                             title="Remove bookmark"
                                         >
                                             <WorkbenchIcon name="solar:trash-bin-minimalistic-bold" size={10} />
@@ -133,7 +133,7 @@ export const FavoritesPanel: React.FC = () => {
 
                     {favorites.length > 0 && filtered.length === 0 && (
                         <div className="py-2 text-center">
-                            <span className="text-[9px] font-mono text-muted-foreground/70 tracking-wider">
+                            <span className="text-[9px] font-mono text-muted-foreground tracking-wider">
                                 NO_MATCH
                             </span>
                         </div>

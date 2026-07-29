@@ -1,12 +1,35 @@
 import { CHAT_STATUS_PHASES } from "@/api/chatStatus";
-import { parseCardTags, type ParsedCard } from "./assistantCardParser";
+import {
+  parseCardTags,
+  type OrderedCard,
+  type ParsedCard,
+} from "./assistantCardParser";
 import type { Message, SpawnMeta, Step, ToolCall } from "./types";
+// NOTE: This module keeps a local `inputRecord` helper instead of importing
+// the shared `toToolInputRecord` from `./tool/toToolInputRecord` because the
+// test loader (test/test-loader.mjs) loads this file via Vite's ssrLoadModule,// which transforms it to a data: URL — and Node.js cannot resolve relative
+// subdirectory imports from a data: URL context. The other 5 tool-input
+// consumers (ToolCallCard, AgentExecutionTrace, ToolDetailView,
+// TerminalContent, ImageContent) all use the shared helper.
 
-export { parseCardTags, type ParsedCard } from "./assistantCardParser";
+export {
+  parseCardTags,
+  CARD_TOKEN_PREFIX,
+  CARD_TOKEN_REGEX,
+  CARD_TOKEN_SUFFIX,
+  splitOnCardTokens,
+  type OrderedCard,
+  type ParsedCard,
+} from "./assistantCardParser";
 
 export type GroupedAssistantStep =
-  | (Step & { type: "text"; cards: ParsedCard[]; cleanText: string })
-  | (Step & { type: "reasoning" | "action" })
+  | (Step & {
+      type: "text";
+      cards: ParsedCard[];
+      cleanText: string;
+      orderedCards: OrderedCard[];
+    })
+  | (Step & { type: "reasoning" | "action" | "subagent" })
   | { type: "tool-group"; toolCalls: ToolCall[] };
 
 export function shouldShowPostToolWorking(
@@ -323,10 +346,26 @@ function mergeChatStatus(grouped: MutableGroupedStep[], incoming: Step) {
   return false;
 }
 
+function mergeOpenSubagentStep(grouped: MutableGroupedStep[], incoming: Step) {
+  if (incoming.type !== "subagent" || !incoming.eventId) return false;
+  for (let i = grouped.length - 1; i >= 0; i -= 1) {
+    const item = grouped[i];
+    if (item.type === "subagent" && item.eventId === incoming.eventId) {
+      grouped[i] = { ...item, ...incoming };
+      return true;
+    }
+  }
+  return false;
+}
+
 function pushGroupedStep(grouped: MutableGroupedStep[], step: Step) {
   const last = grouped[grouped.length - 1];
   if (last && last.type === "text" && step.type === "text") {
     last.content = (last.content || "") + (step.content || "");
+  } else if (step.type === "subagent") {
+    if (!mergeOpenSubagentStep(grouped, step)) {
+      grouped.push({ ...step });
+    }
   } else if (step.type === "reasoning") {
     // Providers can interleave status bookkeeping between reasoning deltas.
     // Only merge with an existing reasoning block if we don't cross any text or tool-group boundaries.
@@ -380,8 +419,22 @@ export function groupAssistantSteps(steps: Step[] | undefined): GroupedAssistant
       .filter((id): id is string => Boolean(id)),
   );
 
+  // Child tools that belong to a subagent are rendered inside the
+  // SubagentExecutionCard (filtered by traceId) rather than the generic
+  // tool group. Identify them by matching toolCall.traceId against any
+  // subagent step's spawnId so they don't appear twice in the timeline.
+  const subagentSpawnIds = new Set(
+    steps
+      .filter((step) => step.type === "subagent" && step.subagent?.spawnId)
+      .map((step) => step.subagent!.spawnId),
+  );
+
   steps.filter(Boolean).forEach((step) => {
     if (shouldHideToolActionStep(step, visibleToolIds)) return;
+
+    if (step.type === "tool-call" && step.toolCall?.traceId && subagentSpawnIds.has(step.toolCall.traceId)) {
+      return;
+    }
 
     const syntheticTool = toolActionToCall(step);
     if (syntheticTool) {
@@ -395,8 +448,11 @@ export function groupAssistantSteps(steps: Step[] | undefined): GroupedAssistant
 
   return grouped.map((step) => {
     if (step.type === "text") {
-      const { cards, cleanText } = parseCardTags(step.content || "");
-      return { ...step, cards, cleanText };
+      // parseCardTags now produces orderedCards with the original positions of
+      // each card inside `cleanText`. The flat `cards` array is kept for
+      // backwards-compat consumers (persisted message history, debug tooling).
+      const { cards, cleanText, orderedCards } = parseCardTags(step.content || "");
+      return { ...step, cards, cleanText, orderedCards };
     }
     return step;
   }) as GroupedAssistantStep[];
