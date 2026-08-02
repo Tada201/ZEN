@@ -33,7 +33,7 @@ export const MessageList = memo(function MessageList({
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const isAutoScrolling = useRef(true);
-  const lastScrollTime = useRef(0);
+  const scrollFrameRef = useRef<number | null>(null);
   const previousMessageCount = useRef(0);
 
   const getViewport = useCallback(
@@ -80,17 +80,24 @@ export const MessageList = memo(function MessageList({
   useEffect(() => {
     if (!isAutoScrolling.current || filteredMessages.length === 0) return;
     const viewport = getViewport();
-    if (!viewport) return;
+    if (!viewport || scrollFrameRef.current !== null) return;
 
-    const now = performance.now();
-    if (now - lastScrollTime.current < 50) return;
-    lastScrollTime.current = now;
-
-    const frame = window.requestAnimationFrame(() => {
+    // One pending frame is shared across rapid stream-signature updates. The
+    // callback reads the current viewport at paint time, so token bursts do
+    // not schedule a layout write for every delta.
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      if (!isAutoScrolling.current) return;
       viewport.scrollTop = viewport.scrollHeight;
     });
-    return () => window.cancelAnimationFrame(frame);
   }, [activeMessageSignature, filteredMessages.length, getViewport]);
+
+  useEffect(() => () => {
+    if (scrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(scrollFrameRef.current);
+      scrollFrameRef.current = null;
+    }
+  }, []);
 
   return (
     <ScrollArea ref={scrollRef} className="flex-1 bg-transparent">

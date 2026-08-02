@@ -37,8 +37,10 @@ chat:done ------------------> Frontend useChatChunkEvent
                          Reload / listMessages
                                     |
                                     v
-                         normalizeVercelMessage(msg)
-                         msg.steps = JSON.parse(msg.stepsJson)
+                         mapDbMessageToMessage(msg)
+                         steps = JSON.parse(msg.stepsJson)
+                         merge step-only tools into tool index
+                         normalizeVercelMessage(msg) at render boundary
 ```
 
 ## Key Code Snippets
@@ -67,16 +69,18 @@ self.emit(AgentEvent::ChatDone(ChatDonePayload {
 const unlistenDone = await listenAppEvent("chat:done", (event) => {
   // ... flush chunks and finalize the in-memory message ...
 
-  const finalAssistantId = event.payload.message_id || assistantIdBeforeFinalize;
-  if (finalAssistantId) {
+  const backendAssistantId = event.payload.message_id;
+  // Persist only against the backend-owned assistant row. Optimistic IDs are
+  // not durable identifiers and must never be used for this update.
+  if (backendAssistantId) {
     const assistant = useChatStore.getState().sessionMessages[chatId]
-      ?.find((m) => m.id === finalAssistantId);
+      ?.find((m) => m.id === backendAssistantId);
 
     if (assistant?.steps && assistant.steps.length > 0) {
       chatApi.updateMessageSteps(
         chatId,
-        finalAssistantId,
-        JSON.stringify(assistant.steps)
+        backendAssistantId,
+        JSON.stringify(projectStepsForPersistence(assistant.steps))
       ).catch((err) => {
         console.error("[chat:done] Failed to persist message steps:", err);
       });
@@ -180,6 +184,12 @@ export function normalizeVercelMessage(msg: unknown): Message {
       : undefined;
   }
 
+  // The production SQLite mapper performs the same merge before this render
+  // boundary: steps remain the chronological source of truth, while the
+  // message-level tool index lets subagent cards reattach child tools by
+  // stable traceId after reload.
+  normalized.toolCalls = mergeToolCallsFromSteps(normalized.toolCalls, normalizedSteps);
+
   // ...
 }
 ```
@@ -196,5 +206,5 @@ export function normalizeVercelMessage(msg: unknown): Message {
 
 * Reloading the app reproduces the exact same grouped tool-call / action timeline that was visible at the end of the stream.
 * Legacy reconstruction from `toolInvocations` / `toolCalls` remains as a fallback for older messages.
-* Branches that cannot emit a real backend `message_id` (deep research, orchestrator) currently do not persist their timeline. They should be updated to emit the persisted ID before calling `updateMessageSteps`.
+* Any branch that cannot emit a real backend `message_id` must skip timeline persistence rather than fabricate an optimistic ID. Current chat completion handling persists when the event supplies the backend ID; branch-specific behavior remains covered by the event contract and should not be inferred from the UI.
 * `steps` must contain only serializable JSON; storing non-serializable data will break reload.

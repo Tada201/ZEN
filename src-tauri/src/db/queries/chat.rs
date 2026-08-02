@@ -13,12 +13,18 @@ const MAX_SEARCH_RESULTS: i64 = 100;
 
 // --- Chats ---
 
-pub async fn create_chat(pool: &SqlitePool, title: &str, model: Option<&str>) -> ZenResult<Chat> {
+pub async fn create_chat(
+    pool: &SqlitePool,
+    title: &str,
+    model: Option<&str>,
+    workspace_root: Option<&str>,
+) -> ZenResult<Chat> {
     let id = Uuid::new_v4().to_string();
-    sqlx::query("INSERT INTO chats (id, title, model) VALUES (?, ?, ?)")
+    sqlx::query("INSERT INTO chats (id, title, model, workspace_root) VALUES (?, ?, ?, ?)")
         .bind(&id)
         .bind(title)
         .bind(model)
+        .bind(workspace_root)
         .execute(pool)
         .await?;
 
@@ -27,7 +33,7 @@ pub async fn create_chat(pool: &SqlitePool, title: &str, model: Option<&str>) ->
 
 pub async fn get_chat(pool: &SqlitePool, id: &str) -> ZenResult<Chat> {
     let chat = sqlx::query_as::<_, Chat>(
-        "SELECT c.id, c.title, c.model, c.created_at, c.updated_at, c.pinned, c.is_archived, c.archived_at, c.message_count, c.total_tokens_in, c.total_tokens_out, c.last_activity, COALESCE(c.folder_id, cfm.folder_id) as folder_id FROM chats c LEFT JOIN chat_folder_members cfm ON c.id = cfm.chat_id WHERE c.id = ?"
+        "SELECT c.id, c.title, c.model, c.created_at, c.updated_at, c.pinned, c.is_archived, c.archived_at, c.message_count, c.total_tokens_in, c.total_tokens_out, c.last_activity, COALESCE(c.folder_id, cfm.folder_id) as folder_id, c.workspace_root FROM chats c LEFT JOIN chat_folder_members cfm ON c.id = cfm.chat_id WHERE c.id = ?"
     )
     .bind(id)
     .fetch_one(pool)
@@ -128,6 +134,19 @@ pub async fn remove_chat_from_folder(pool: &SqlitePool, chat_id: &str) -> ZenRes
     Ok(())
 }
 
+pub async fn set_chat_workspace(
+    pool: &SqlitePool,
+    chat_id: &str,
+    workspace_root: Option<&str>,
+) -> ZenResult<()> {
+    sqlx::query("UPDATE chats SET workspace_root = ?, updated_at = datetime('now') WHERE id = ?")
+        .bind(workspace_root)
+        .bind(chat_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 pub async fn archive_chat(pool: &SqlitePool, chat_id: &str) -> ZenResult<()> {
     sqlx::query("UPDATE chats SET is_archived = 1, archived_at = datetime('now'), updated_at = datetime('now') WHERE id = ?")
         .bind(chat_id)
@@ -154,7 +173,7 @@ pub async fn list_archived_chats_page(
     offset: i64,
 ) -> ZenResult<Vec<Chat>> {
     let chats = sqlx::query_as::<_, Chat>(
-        "SELECT * FROM chats WHERE is_archived = 1 ORDER BY archived_at DESC LIMIT ? OFFSET ?",
+        "SELECT c.id, c.title, c.model, c.created_at, c.updated_at, c.pinned, c.is_archived, c.archived_at, c.message_count, c.total_tokens_in, c.total_tokens_out, c.last_activity, COALESCE(c.folder_id, cfm.folder_id) as folder_id, c.workspace_root FROM chats c LEFT JOIN chat_folder_members cfm ON c.id = cfm.chat_id WHERE c.is_archived = 1 ORDER BY c.archived_at DESC LIMIT ? OFFSET ?",
     )
     .bind(limit.clamp(1, MAX_ARCHIVED_CHAT_ITEMS + 1))
     .bind(offset.max(0))
@@ -291,10 +310,11 @@ pub async fn fork_chat(
     let new_title = format!("{} (Fork)", old_chat.title);
 
     // Create new chat
-    sqlx::query("INSERT INTO chats (id, title, model, pinned) VALUES (?, ?, ?, 0)")
+    sqlx::query("INSERT INTO chats (id, title, model, pinned, workspace_root) VALUES (?, ?, ?, 0, ?)")
         .bind(&new_id)
         .bind(&new_title)
         .bind(&old_chat.model)
+        .bind(&old_chat.workspace_root)
         .execute(pool)
         .await?;
 

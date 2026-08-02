@@ -2,7 +2,8 @@ import { BookOpen, ExternalLink } from "lucide-react";
 
 interface CitationData {
   title: string;
-  authors: string[];
+  /** Generated UI payloads may emit a string, array, or structured author list. */
+  authors: unknown;
   year: number;
   journal: string;
   doi: string;
@@ -11,9 +12,32 @@ interface CitationData {
   citationKey?: string;
 }
 
+function normalizeAuthors(value: unknown): string[] {
+  if (typeof value === "string") return value.trim() ? [value.trim()] : [];
+  if (Array.isArray(value)) {
+    return value.flatMap((author) => {
+      if (typeof author === "string") return author.trim() ? [author.trim()] : [];
+      if (author && typeof author === "object") {
+        const record = author as Record<string, unknown>;
+        const name = record.name ?? record.fullName ?? record.author;
+        return typeof name === "string" && name.trim() ? [name.trim()] : [];
+      }
+      return [];
+    });
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const nested = record.authors ?? record.items ?? record.list;
+    if (nested !== undefined) return normalizeAuthors(nested);
+    const name = record.name ?? record.fullName ?? record.author;
+    if (typeof name === "string" && name.trim()) return [name.trim()];
+  }
+  return [];
+}
+
 export function CitationCard({ data }: { data: CitationData }) {
   const title = data.title || "Academic Paper";
-  const authors = data.authors || [];
+  const authors = normalizeAuthors(data.authors);
   const year = data.year || "--";
   const journal = data.journal || "Publication";
   const doi = data.doi || "";

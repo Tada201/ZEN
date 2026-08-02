@@ -60,7 +60,8 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
             model       TEXT,
             created_at  TEXT DEFAULT (datetime('now')),
             updated_at  TEXT DEFAULT (datetime('now')),
-            pinned      INTEGER DEFAULT 0
+            pinned      INTEGER DEFAULT 0,
+            workspace_root TEXT
         );
         "#,
     )
@@ -69,6 +70,9 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
 
     // Attempt to add columns if the DB already exists from an older version
     let _ = sqlx::query("ALTER TABLE chats ADD COLUMN pinned INTEGER DEFAULT 0;")
+        .execute(pool)
+        .await;
+    let _ = sqlx::query("ALTER TABLE chats ADD COLUMN workspace_root TEXT;")
         .execute(pool)
         .await;
 
@@ -138,6 +142,26 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         .await;
 
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id, created_at);")
+        .execute(pool)
+        .await?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS workbench_tabs (
+            id          TEXT PRIMARY KEY,
+            chat_id     TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+            view_id     TEXT NOT NULL,
+            label       TEXT NOT NULL,
+            position    INTEGER NOT NULL DEFAULT 0,
+            state_json  TEXT,
+            created_at  TEXT DEFAULT (datetime('now')),
+            updated_at  TEXT DEFAULT (datetime('now'))
+        );
+        "#,
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_workbench_tabs_chat ON workbench_tabs(chat_id, position);")
         .execute(pool)
         .await?;
 

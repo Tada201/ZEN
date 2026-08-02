@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef, useMemo, memo, useCallback, useDeferredValue } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
+import {
+  createDisclosureState,
+  toggleDisclosure,
+  transitionDisclosure,
+} from "./executionDisclosure";
 import { ChevronDown } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -38,12 +43,33 @@ function formatThoughtDuration(ms: number): string {
   return remainingSeconds === 0 ? `${minutes}m` : `${minutes}m ${remainingSeconds}s`;
 }
 
-const MemoReasoningContent = memo(function MemoReasoningContent({ content }: { content: string }) {
-  const normalizedContent = useMemo(() => normalizeMathMarkdown(content.trim()), [content]);
+const MemoReasoningContent = memo(function MemoReasoningContent({
+  content,
+  isThinking,
+}: {
+  content: string;
+  isThinking: boolean;
+}) {
+  // Streaming reasoning is intentionally rendered as text. Markdown/math
+  // parsing is deferred until the block is stable, avoiding a full growing
+  // document parse on every token while preserving rich rendering on
+  // completion.
+  const normalizedContent = useMemo(
+    () => (isThinking ? "" : normalizeMathMarkdown(content.trim())),
+    [content, isThinking],
+  );
   const remarkPlugins = useMemo(() => [remarkGfm, remarkMath], []);
   const rehypePlugins = useMemo(() => [rehypeKatex] as any, []);
 
   if (!content) return null;
+
+  if (isThinking) {
+    return (
+      <div className="whitespace-pre-wrap break-words font-mono text-[12px] leading-[1.65] text-muted-foreground">
+        {content}
+      </div>
+    );
+  }
 
   return (
     <div className="font-mono text-[12px] leading-[1.65] text-muted-foreground prose prose-invert max-w-none prose-p:my-2 prose-p:first:mt-0 prose-p:last:mb-0 prose-pre:my-2 prose-pre:bg-muted prose-pre:p-2 prose-code:px-1 prose-code:bg-muted prose-code:rounded-sm prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-a:text-muted-foreground prose-a:underline">
@@ -65,61 +91,65 @@ const MemoReasoningContent = memo(function MemoReasoningContent({ content }: { c
 });
 
 export const ReasoningBlock = memo(function ReasoningBlock({ content, isThinking = false, className, defaultOpen = false }: ReasoningBlockProps) {
-  const [expanded, setExpanded] = useState(defaultOpen || isThinking);
-  const [userToggled, setUserToggled] = useState(false);
+  const disclosureStatus = isThinking ? "running" : "completed";
+  const disclosureStateRef = useRef(createDisclosureState(disclosureStatus, defaultOpen || isThinking));
+  const [expanded, setExpanded] = useState(disclosureStateRef.current.open);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [completedDuration, setCompletedDuration] = useState<number | null>(null);
-  const collapseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startTimeRef = useRef<number | null>(null);
 
   // Use deferred content during streaming so ReactMarkdown re-parses at idle time
   const deferredContent = useDeferredValue(content);
   const displayContent = isThinking ? deferredContent : content;
 
-  const thoughts = content.split('\n').filter(t => t.trim().length > 0);
-  const stepsCount = thoughts.length;
+  const stepsCount = useMemo(() => {
+    let count = 0;
+    let lineStart = 0;
+    for (let index = 0; index <= content.length; index += 1) {
+      if (index !== content.length && content[index] !== "\n") continue;
+      if (content.slice(lineStart, index).trim()) count += 1;
+      lineStart = index + 1;
+    }
+    return count;
+  }, [content]);
   const charCount = content.trim().length;
 
-  const clearCollapseTimeout = useCallback(() => {
-    if (collapseTimeoutRef.current) {
-      clearTimeout(collapseTimeoutRef.current);
-      collapseTimeoutRef.current = null;
-    }
-  }, []);
+  // Keep the disclosure open while thinking without coupling that behavior to
+  // the timer lifecycle. Toggling the panel must never restart elapsed time.
+  useEffect(() => {
+    const nextState = transitionDisclosure(disclosureStateRef.current, disclosureStatus);
+    disclosureStateRef.current = nextState;
+    setExpanded((previous) => previous === nextState.open ? previous : nextState.open);
+  }, [disclosureStatus]);
 
-  // Track elapsed time while thinking; auto-collapse 1s after thinking stops.
+  // Track elapsed time while thinking. The displayed duration is rounded to
+  // seconds, so a one-second cadence avoids unnecessary render churn while
+  // keeping the live status responsive. This effect intentionally depends only
+  // on the lifecycle phase so disclosure toggles cannot reset the clock.
   useEffect(() => {
     if (isThinking) {
-      clearCollapseTimeout();
-      setExpanded(true);
-      startTimeRef.current = Date.now();
+      startTimeRef.current ??= Date.now();
       const interval = setInterval(() => {
         if (startTimeRef.current) {
           setElapsedMs(Date.now() - startTimeRef.current);
         }
-      }, 100);
+      }, 1000);
       return () => clearInterval(interval);
     }
 
-    // When thinking stops, capture final duration and schedule collapse.
+    // When thinking stops, capture the final duration but leave the disclosure
+    // state alone. A user may be reading the reasoning that just completed;
+    // summary-first behavior still applies to initially loaded history.
     if (startTimeRef.current) {
       const finalMs = Date.now() - startTimeRef.current;
       setElapsedMs(finalMs);
       setCompletedDuration(finalMs);
       startTimeRef.current = null;
     }
-
-    if (!isThinking && !defaultOpen && !userToggled) {
-      collapseTimeoutRef.current = setTimeout(() => {
-        setExpanded(false);
-      }, 1000);
-    }
-
-    return clearCollapseTimeout;
-  }, [isThinking, userToggled, defaultOpen, clearCollapseTimeout]);
+  }, [isThinking]);
 
   const handleToggle = useCallback((next: boolean) => {
-    setUserToggled(true);
+    disclosureStateRef.current = toggleDisclosure(disclosureStateRef.current, next);
     setExpanded(next);
   }, []);
 
@@ -138,16 +168,16 @@ export const ReasoningBlock = memo(function ReasoningBlock({ content, isThinking
   if (!content) return null;
 
   return (
-    <div className={cn("thought-block my-2 max-w-full", className)}>
+    <div className={cn("execution-reasoning my-2 max-w-full", className)}>
       <Collapsible
         open={expanded}
         onOpenChange={handleToggle}
-        className="border border-border bg-card rounded-lg overflow-hidden shadow-sm"
+        className="execution-reasoning-card overflow-hidden rounded-md border border-border bg-card shadow-sm"
       >
         <CollapsibleTrigger
           aria-label={expanded ? "Collapse reasoning details" : "Expand reasoning details"}
           className={cn(
-            "group/reasoning flex min-h-8 w-full items-center justify-between px-2.5 py-1.5 text-left outline-none transition-colors hover:bg-muted",
+            "group/reasoning flex min-h-8 w-full items-center justify-between px-2.5 py-1.5 text-left outline-none transition-colors motion-reduce:transition-none hover:bg-muted",
             expanded && "border-b border-border bg-muted"
           )}
         >
@@ -163,7 +193,7 @@ export const ReasoningBlock = memo(function ReasoningBlock({ content, isThinking
               <div className="flex min-w-0 items-center gap-2">
                 <span className={cn(
                   "truncate text-[12.5px] font-medium tracking-tight",
-                  isThinking ? "animate-text-shimmer font-semibold" : "text-muted-foreground"
+                  isThinking ? "font-semibold text-foreground" : "text-muted-foreground"
                 )}>
                   {displayLabel}
                 </span>
@@ -180,7 +210,7 @@ export const ReasoningBlock = memo(function ReasoningBlock({ content, isThinking
           </div>
 
           <ChevronDown className={cn(
-            "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
+            "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
             !expanded && "-rotate-90"
           )} />
         </CollapsibleTrigger>
@@ -190,7 +220,7 @@ export const ReasoningBlock = memo(function ReasoningBlock({ content, isThinking
             <div className="flex items-center justify-between border-b border-border px-3.5 py-2 bg-muted">
               <span className={cn(
                 "text-[10px] font-bold uppercase tracking-[0.18em]",
-                isThinking ? "animate-text-shimmer" : "text-muted-foreground"
+                isThinking ? "text-foreground" : "text-muted-foreground"
               )}>
                 Reasoning
               </span>
@@ -199,7 +229,7 @@ export const ReasoningBlock = memo(function ReasoningBlock({ content, isThinking
               </span>
             </div>
             <div className="max-h-[260px] overflow-y-auto px-3.5 pt-2 pb-4">
-              <MemoReasoningContent content={displayContent} />
+              <MemoReasoningContent content={displayContent} isThinking={isThinking} />
             </div>
           </div>
         </CollapsibleContent>

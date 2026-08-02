@@ -6,8 +6,15 @@ export type ToolPreviewResultItem = {
   url?: string;
 };
 
+export type ToolCheckpointPreview = {
+  available: boolean;
+  toolCallId: string;
+  fileCount: number;
+};
+
 export type ToolOutputPreview = {
   summary: string;
+  checkpoint?: ToolCheckpointPreview;
   stdout?: string;
   stderr?: string;
   exitCode?: string;
@@ -131,6 +138,16 @@ function fileChangeSummary(file: FileChange): string {
   return `${verb} ${filename}`;
 }
 
+function normalizeCheckpoint(value: unknown): ToolCheckpointPreview | undefined {
+  const record = asRecord(value);
+  if (record.available !== true || typeof record.tool_call_id !== "string") return undefined;
+  return {
+    available: true,
+    toolCallId: record.tool_call_id,
+    fileCount: typeof record.file_count === "number" ? record.file_count : 0,
+  };
+}
+
 function normalizeArtifact(value: unknown): ArtifactData | undefined {
   const record = asRecord(value);
   const type = record.type;
@@ -208,6 +225,8 @@ export function buildToolOutputPreview(output: string): ToolOutputPreview {
   const files = normalizeFiles(fileSource).length > 0
     ? normalizeFiles(fileSource)
     : normalizeFiles(findFromCandidates(candidates, ["file", "changed_file", "changedFile"]) || unwrapOutputSource(record));
+  const checkpointSource = findFromCandidates(candidates, ["checkpoint"]);
+  const checkpoint = normalizeCheckpoint(checkpointSource);
   const artifactSource = findFromCandidates(candidates, ["artifact", "generated_artifact", "generatedArtifact"]);
   const artifact = normalizeArtifact(artifactSource || unwrapOutputSource(record) || record);
   const stdout = compactText(findFromCandidates(candidates, ["stdout", "output_text", "outputText"]), 600);
@@ -248,6 +267,7 @@ export function buildToolOutputPreview(output: string): ToolOutputPreview {
 
   return {
     summary,
+    checkpoint,
     stdout,
     stderr,
     exitCode: exitCode === undefined ? undefined : String(exitCode),

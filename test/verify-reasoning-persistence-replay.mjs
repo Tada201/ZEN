@@ -10,7 +10,7 @@ const queriesSource = readFileSync(
   "utf8",
 );
 const chatCommandSource = readFileSync(
-  new URL("../src-tauri/src/commands/chat.rs", import.meta.url),
+  new URL("../src-tauri/src/commands/chat/send.rs", import.meta.url),
   "utf8",
 );
 

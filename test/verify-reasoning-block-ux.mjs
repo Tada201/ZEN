@@ -36,9 +36,14 @@ assert(
 );
 
 assert(
-  source.includes("!isThinking && !defaultOpen && !userToggled") &&
-    source.includes("setExpanded(false)"),
-  "reasoning block should auto-collapse after completion unless the user manually opened it",
+  source.includes("setInterval") &&
+    source.includes("}, 1000);"),
+  "reasoning duration should update at a one-second cadence",
+);
+assert(
+  !source.includes("collapseTimeoutRef") &&
+    !source.includes("setExpanded(false)"),
+  "reasoning should not force-close content when live thinking completes",
 );
 
 assert(

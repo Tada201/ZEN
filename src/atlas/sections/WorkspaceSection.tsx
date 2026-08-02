@@ -6,7 +6,8 @@ import { PremiumChatInput } from "../components/PremiumChatInput";
 import type { TabId } from "../components/SettingsModal";
 import type { ArtifactData } from "../components/chat/types";
 import { SessionSidebar } from "../components/chat/SessionSidebar";
-import { Settings, Hammer, PanelLeftOpen } from "lucide-react";
+import { WorkspaceContextHeader } from "../components/chat/WorkspaceContextHeader";
+import { Hammer } from "lucide-react";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { getVisibleWorkspaceModeFeatures, isWorkspaceModeVisible } from "@/lib/features/frontendFeatures";
@@ -65,6 +66,8 @@ export function WorkspaceApp() {
     activeTab,
     setActiveTab,
     isCommandPaletteOpen,
+    setActiveRightTab,
+    setRightPanelOpen,
   } = useUIStore(
     useShallow((s) => ({
       settingsOpen: s.settingsOpen,
@@ -76,10 +79,52 @@ export function WorkspaceApp() {
       activeTab: s.activeTab,
       setActiveTab: s.setActiveTab,
       isCommandPaletteOpen: s.isCommandPaletteOpen,
+      setActiveRightTab: s.setActiveRightTab,
+      setRightPanelOpen: s.setRightPanelOpen,
     }))
   );
   const visibleWorkspaceModes = getVisibleWorkspaceModeFeatures();
   const currentWorkspaceTab = isWorkspaceModeVisible(activeTab) ? activeTab : "chat";
+  const activeSession = sessions.find((session) => session.id === currentSessionId) ?? null;
+  const sessionNavigation = useRef<{ current: string | null; past: string[]; future: string[]; replaying: boolean }>({
+    current: null,
+    past: [],
+    future: [],
+    replaying: false,
+  });
+  const [navigationState, setNavigationState] = useState({ canBack: false, canForward: false });
+
+  useEffect(() => {
+    const navigation = sessionNavigation.current;
+    if (navigation.current === currentSessionId) return;
+    if (!navigation.replaying && navigation.current) {
+      navigation.past.push(navigation.current);
+      navigation.future = [];
+    }
+    navigation.current = currentSessionId;
+    navigation.replaying = false;
+    setNavigationState({ canBack: navigation.past.length > 0, canForward: navigation.future.length > 0 });
+  }, [currentSessionId]);
+
+  const navigateSessionBack = useCallback(() => {
+    const navigation = sessionNavigation.current;
+    const target = navigation.past.pop();
+    if (!target) return;
+    if (navigation.current) navigation.future.unshift(navigation.current);
+    navigation.replaying = true;
+    setCurrentSessionId(target);
+    setNavigationState({ canBack: navigation.past.length > 0, canForward: navigation.future.length > 0 });
+  }, [setCurrentSessionId]);
+
+  const navigateSessionForward = useCallback(() => {
+    const navigation = sessionNavigation.current;
+    const target = navigation.future.shift();
+    if (!target) return;
+    if (navigation.current) navigation.past.push(navigation.current);
+    navigation.replaying = true;
+    setCurrentSessionId(target);
+    setNavigationState({ canBack: navigation.past.length > 0, canForward: navigation.future.length > 0 });
+  }, [setCurrentSessionId]);
 
   const openArtifactInRightPanel = useCallback((artifact: ArtifactData) => {
     const artifactId = artifact.id || `art_${Date.now()}`;
@@ -216,9 +261,40 @@ export function WorkspaceApp() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  const windowHeader = (
+    <WorkspaceContextHeader
+      session={activeSession}
+      messages={chatMessages}
+      isStreaming={isStreaming}
+      onNewChat={() => void handleCreateSession("New Chat")}
+      onNavigateBack={navigateSessionBack}
+      onNavigateForward={navigateSessionForward}
+      canNavigateBack={navigationState.canBack}
+      canNavigateForward={navigationState.canForward}
+      onRenameSession={handleRenameSession}
+      onPinSession={handlePinSession}
+      onArchiveSession={handleArchiveSession}
+      onExportSession={handleExportSession}
+      onOpenApprovals={() => {
+        setActiveRightTab("approvals");
+        setRightPanelOpen(true);
+      }}
+      onOpenAgents={() => {
+        setActiveRightTab("agents");
+        setRightPanelOpen(true);
+      }}
+      onOpenCapabilities={() => {
+        setActiveSettingsTab("capabilities");
+        setSettingsOpen(true);
+      }}
+      onToggleWorkbench={() => useUIStore.getState().toggleRightPanel()}
+    />
+  );
+
   return (
     <div className="h-screen w-screen bg-background overflow-hidden">
       <WorkspaceLayout
+        windowHeader={windowHeader}
         sidebar={
           <SessionSidebar
             sessions={sessions}
@@ -244,7 +320,6 @@ export function WorkspaceApp() {
             setSettingsTab={setActiveSettingsTab}
             setShowSettingsModal={setSettingsOpen}
             onPreloadSettings={preloadSettingsModal}
-            onToggleSidebar={() => useUIStore.getState().setSidebarOpen(!useUIStore.getState().sidebarOpen)} 
             activeTab={currentWorkspaceTab}
             onTabChange={(tab) => startTransition(() => setActiveTab(tab))}
             workspaceModes={visibleWorkspaceModes.map((feature) => ({
@@ -268,38 +343,8 @@ export function WorkspaceApp() {
             </div>
           ) : (
             <MainArea className="flex flex-col h-full relative">
-              {/* Floating Chat Header */}
-              <div className="absolute top-0 left-0 w-full h-14 px-4 sm:px-6 flex items-center justify-between z-20 pointer-events-none">
-                <div className="flex items-center gap-3 pointer-events-auto">
-                  <button
-                    type="button"
-                    onClick={() => useUIStore.getState().setSidebarOpen(true)}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-muted md:hidden backdrop-blur-md"
-                    title="Open sidebar"
-                    aria-label="Open sidebar"
-                  >
-                    <PanelLeftOpen className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                  <span className="text-sm font-semibold tracking-tight text-foreground/90 font-sans drop-shadow-md truncate max-w-[300px]">
-                    {sessions.find(s => s.id === currentSessionId)?.title || "New Chat"}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 pointer-events-auto">
-                  <button
-                    onClick={() => {
-                      setActiveSettingsTab("providers");
-                      setSettingsOpen(true);
-                    }}
-                    className="h-8 w-8 rounded-lg hover:bg-muted backdrop-blur-md flex items-center justify-center transition-colors"
-                    title="Settings"
-                    aria-label="Settings"
-                    onPointerEnter={preloadSettingsModal}
-                    onFocus={preloadSettingsModal}
-                  >
-                    <Settings className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                </div>
-              </div>
+              {/* The chat context lives in the window title bar. Do not render a
+                  second copy of it here. */}
 
               {/* Chat Content & Split Panel */}
               <div className="flex-1 overflow-hidden relative w-full h-full flex flex-col">
@@ -362,7 +407,7 @@ export function WorkspaceApp() {
                             isStreaming={isStreaming}
                           />
                         </div>
-                        <div className="w-full bg-background/80 backdrop-blur-md border-t border-border p-4 shrink-0">
+                        <div className="w-full bg-background border-t border-border p-4 shrink-0">
                           <div className="max-w-3xl mx-auto w-full">
                               <PremiumChatInput
                                 activeChatId={currentSessionId}

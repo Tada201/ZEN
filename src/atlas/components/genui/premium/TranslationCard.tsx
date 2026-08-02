@@ -7,7 +7,40 @@ interface TranslationData {
   targetLang: string;
   romanization?: string;
   alternatives?: string[];
-  confidence?: "high" | "medium" | "low" | string;
+  /** Generated UI payloads are runtime data; providers may emit a label, score, or `{ score }`. */
+  confidence?: unknown;
+}
+
+type ConfidenceLabel = "high" | "medium" | "low";
+
+function confidenceFromScore(score: number): ConfidenceLabel | undefined {
+  if (!Number.isFinite(score)) return undefined;
+  const normalized = score > 1 ? score / 100 : score;
+  if (normalized >= 0.8) return "high";
+  if (normalized >= 0.5) return "medium";
+  if (normalized >= 0) return "low";
+  return undefined;
+}
+
+function normalizeConfidence(value: unknown): ConfidenceLabel | string | undefined {
+  if (typeof value === "string") {
+    const label = value.trim();
+    return label || undefined;
+  }
+  if (typeof value === "number") return confidenceFromScore(value);
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>;
+    const nestedLabel = record.label ?? record.level ?? record.band ?? record.confidence;
+    const nested = normalizeConfidence(nestedLabel);
+    if (nested) return nested;
+    const score = record.score ?? record.value ?? record.probability;
+    if (typeof score === "number") return confidenceFromScore(score);
+    if (typeof score === "string" && score.trim() !== "") {
+      const parsed = Number(score);
+      if (Number.isFinite(parsed)) return confidenceFromScore(parsed);
+    }
+  }
+  return undefined;
 }
 
 export function TranslationCard({ data }: { data: TranslationData }) {
@@ -17,7 +50,7 @@ export function TranslationCard({ data }: { data: TranslationData }) {
   const targetLang = data.targetLang || "Target";
   const romanization = data.romanization;
   const alternatives = data.alternatives || [];
-  const confidence = data.confidence;
+  const confidence = normalizeConfidence(data.confidence);
 
   const getConfidenceColor = (c: string) => {
     switch (c.toLowerCase()) {

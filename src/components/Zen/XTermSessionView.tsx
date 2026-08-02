@@ -6,6 +6,7 @@ import { terminalApi } from '@/api/terminalApi';
 import '@xterm/xterm/css/xterm.css';
 
 interface XTermSessionViewProps {
+  chatId: string;
   sessionId: string;
   active: boolean;
   onError: (message: string) => void;
@@ -25,7 +26,7 @@ function getErrorMessage(cause: unknown): string {
 }
 
 /** Real terminal renderer. The backend owns the PTY; this component owns only xterm lifecycle. */
-export function XTermSessionView({ sessionId, active, onError }: XTermSessionViewProps) {
+export function XTermSessionView({ chatId, sessionId, active, onError }: XTermSessionViewProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -73,7 +74,7 @@ export function XTermSessionView({ sessionId, active, onError }: XTermSessionVie
     const resize = () => {
       if (!host.offsetParent) return;
       fit.fit();
-      void terminalApi.resize(sessionId, Math.max(MIN_COLS, terminal.cols), Math.max(MIN_ROWS, terminal.rows));
+      void terminalApi.resize(chatId, sessionId, Math.max(MIN_COLS, terminal.cols), Math.max(MIN_ROWS, terminal.rows));
     };
 
     const outputBuffer: string[] = [];
@@ -92,7 +93,7 @@ export function XTermSessionView({ sessionId, active, onError }: XTermSessionVie
       if (active) terminal.focus();
     });
     const input = terminal.onData((data) => {
-      void terminalApi.write(sessionId, data).catch((error) => onError(getErrorMessage(error)));
+      void terminalApi.write(chatId, sessionId, data).catch((error) => onError(getErrorMessage(error)));
     });
 
     const enqueueOutput = (data: string) => {
@@ -109,7 +110,7 @@ export function XTermSessionView({ sessionId, active, onError }: XTermSessionVie
       unlisten = dispose;
       // The shell can print its banner before this listener attaches. Drain the
       // backend-owned PTY buffer after subscribing so the first prompt is not lost.
-      const initialOutput = await terminalApi.readOutput(sessionId);
+      const initialOutput = await terminalApi.readOutput(chatId, sessionId);
       replaySequence = initialOutput.sequence;
       if (initialOutput.data) enqueueOutput(initialOutput.data);
       resize();
@@ -144,7 +145,7 @@ export function XTermSessionView({ sessionId, active, onError }: XTermSessionVie
       if (initializationFrame) window.cancelAnimationFrame(initializationFrame);
       cleanup?.();
     };
-  }, [onError, sessionId]);
+  }, [chatId, onError, sessionId]);
 
   useEffect(() => {
     if (!active) return;
@@ -154,9 +155,9 @@ export function XTermSessionView({ sessionId, active, onError }: XTermSessionVie
     window.requestAnimationFrame(() => {
       fit.fit();
       terminal.focus();
-      void terminalApi.resize(sessionId, Math.max(MIN_COLS, terminal.cols), Math.max(MIN_ROWS, terminal.rows));
+      void terminalApi.resize(chatId, sessionId, Math.max(MIN_COLS, terminal.cols), Math.max(MIN_ROWS, terminal.rows));
     });
-  }, [active, sessionId]);
+  }, [active, chatId, sessionId]);
 
   return <div ref={hostRef} className="h-full min-h-0 w-full p-3" aria-label="Interactive terminal" />;
 }

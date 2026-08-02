@@ -99,7 +99,7 @@ impl AgentTool for ReadDocumentTool {
     async fn run(
         &self,
         app: AppHandle,
-        _chat_id: String,
+        chat_id: String,
         input: Value,
         _depth: u32,
         _allowed_tools: Option<Arc<Mutex<HashSet<String>>>>,
@@ -107,7 +107,10 @@ impl AgentTool for ReadDocumentTool {
     ) -> Result<Value> {
         let args: ReadDocumentArgs = serde_json::from_value(input)?;
         let state = app.state::<AppState>();
-        let workspace = state.workspace_folder.read().await.clone();
+        let workspace = state
+            .workspace_for_chat(&chat_id)
+            .await
+            .map_err(|e| anyhow::anyhow!("Unable to resolve session workspace: {}", e))?;
 
         // Resolve path
         let mut target_path = PathBuf::from(&args.file_path);
@@ -198,7 +201,7 @@ impl AgentTool for GrepDocumentsTool {
     async fn run(
         &self,
         app: AppHandle,
-        _chat_id: String,
+        chat_id: String,
         input: Value,
         _depth: u32,
         _allowed_tools: Option<Arc<Mutex<HashSet<String>>>>,
@@ -206,7 +209,10 @@ impl AgentTool for GrepDocumentsTool {
     ) -> Result<Value> {
         let args: GrepDocumentsArgs = serde_json::from_value(input)?;
         let state = app.state::<AppState>();
-        let workspace = state.workspace_folder.read().await.clone();
+        let workspace = state
+            .workspace_for_chat(&chat_id)
+            .await
+            .map_err(|e| anyhow::anyhow!("Unable to resolve session workspace: {}", e))?;
         let docs = crate::db::queries::list_documents(
             &state
                 .db()
@@ -305,7 +311,7 @@ impl AgentTool for WriteFileTool {
     async fn run(
         &self,
         app: AppHandle,
-        _chat_id: String,
+        chat_id: String,
         input: Value,
         _depth: u32,
         _allowed_tools: Option<Arc<Mutex<HashSet<String>>>>,
@@ -318,7 +324,10 @@ impl AgentTool for WriteFileTool {
 
         // Get workspace folder from AppState
         let state = app.state::<AppState>();
-        let workspace = state.workspace_folder.read().await.clone();
+        let workspace = state
+            .workspace_for_chat(&chat_id)
+            .await
+            .map_err(|e| anyhow::anyhow!("Unable to resolve session workspace: {}", e))?;
 
         // Resolve and validate path is within workspace
         let target_path = resolve_workspace_path(&workspace, &args.file_path)

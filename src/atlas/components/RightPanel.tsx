@@ -4,15 +4,29 @@ import { useGTSMStore } from "@/lib/stores/useGTSMStore";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Activity, Cpu, Box, Terminal as TerminalIcon, Map as MapIcon, Zap, X, Paintbrush, PenLine, Sigma
+  Activity, Map as MapIcon, Zap, PanelRightClose, PenLine, Sigma, Plus
 } from 'lucide-react';
-import { getDefaultRightPanelTab, getRightPanelFeature, isRightPanelFeatureVisible } from "@/lib/features/frontendFeatures";
+import { getDefaultWorkbenchView, getVisibleWorkbenchViews, isWorkbenchViewVisible } from "@/lib/features/workbenchRegistry";
+import type { RightPanelTabId } from "@/lib/features/frontendFeatures";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { WorkbenchHeaderCore } from "@/components/workbench/WorkbenchHeader";
+import { WorkbenchTabButton } from "@/components/Zen/WorkbenchTabButton";
+import { useChatStore } from "@/lib/stores/useChatStore";
+import { countPendingApprovals } from "@/atlas/components/chat/right-panel/approvalCenterModel";
+import { workbenchApi, type BackendWorkbenchTab } from "@/api/workbenchApi";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 // Lazy load heavy components to prevent main thread blocking and high INP
 const SystemDiagnostics = React.lazy(() => import("@/components/shared/SystemDiagnostics").then(m => ({ default: m.SystemDiagnostics })));
 const XTermPanel = React.lazy(() => import("@/components/Zen/XTermPanel").then(m => ({ default: m.XTermPanel })));
 const CesiumCanvas = React.lazy(() => import("@/components/workbench/MapContainer").then(m => ({ default: m.CesiumCanvas })));
 const ArtifactPanel = React.lazy(() => import("@/components/shared/ArtifactPanel").then(m => ({ default: m.ArtifactPanel })));
 const OrchestratorPanel = React.lazy(() => import("./right-panel/OrchestratorPanel").then(m => ({ default: m.OrchestratorPanel })));
+const ApprovalCenter = React.lazy(() => import("./chat/right-panel/ApprovalCenter").then(m => ({ default: m.ApprovalCenter })));
 const InteractiveDrawingCanvas = React.lazy(() => import("@/components/widgets/workbench/InteractiveDrawingCanvas"));
 
 const LoadingFallback = () => (
@@ -46,23 +60,157 @@ const MathGraphPlaceholder = () => (
  * RightPanel - The primary system utility panel.
  */
 export function RightPanel() {
-  const { activeRightTab, setActiveRightTab, setRightPanelOpen, operationalParams, rightPanelCanvasMode, setRightPanelCanvasMode } = useUIStore();
+  const { activeRightTab, setActiveRightTab, setRightPanelOpen, operationalParams, rightPanelCanvasMode, setRightPanelCanvasMode, activeChatId } = useUIStore();
+  const pendingApprovalCount = useChatStore((state) => countPendingApprovals(state.sessionMessages));
+  const workbenchViews = React.useMemo(() => getVisibleWorkbenchViews(), []);
+  const [orderedTabIds, setOrderedTabIds] = React.useState<string[]>([]);
+  const [layoutInitialized, setLayoutInitialized] = React.useState(false);
+  const [draggedTabId, setDraggedTabId] = React.useState<string | null>(null);
+
+  const getBaseViewId = React.useCallback((tabId: string) => tabId.split(":")[0] as RightPanelTabId, []);
+  const getViewForTab = React.useCallback((tabId: string) => workbenchViews.find((view) => view.id === getBaseViewId(tabId)), [getBaseViewId, workbenchViews]);
+
+  React.useEffect(() => {
+    let active = true;
+    if (!activeChatId) {
+      setOrderedTabIds([]);
+      setLayoutInitialized(false);
+      return () => { active = false; };
+    }
+
+    void workbenchApi.listTabs(activeChatId).then((saved) => {
+      if (!active) return;
+      const savedTabs = saved.sort((a, b) => a.position - b.position).filter((tab) => tab.viewId !== "__layout__");
+      const savedIds = savedTabs.map((tab) => tab.id);
+      const knownIds = new Set<string>(workbenchViews.map((view) => view.id));
+      const isLegacyDefaultLayout = savedTabs.length === workbenchViews.length
+        && savedTabs.every((tab) => tab.id === `${activeChatId}:workbench:${tab.viewId}`);
+      const nextIds: string[] = savedTabs
+        .filter((tab, index) => !isLegacyDefaultLayout && knownIds.has(tab.viewId) && savedIds.indexOf(tab.id) === index)
+        .map((tab) => tab.id);
+      setOrderedTabIds(nextIds);
+      setLayoutInitialized(true);
+
+      const now = new Date().toISOString();
+      if (saved.length === 0 || isLegacyDefaultLayout) void Promise.all([
+        ...savedTabs.map((tab) => workbenchApi.deleteTab(activeChatId, tab.id).catch(() => undefined)),
+        ...nextIds.map((tabId, position) => {
+        const view = getViewForTab(tabId);
+        if (!view) return Promise.resolve();
+        const existing = saved.find((tab) => tab.id === tabId);
+        const tab: BackendWorkbenchTab = {
+          id: tabId,
+          chatId: activeChatId,
+          viewId: view.id,
+          label: view.label,
+          position,
+          stateJson: existing?.stateJson || null,
+          createdAt: existing?.createdAt || now,
+          updatedAt: now,
+        };
+        return workbenchApi.upsertTab(tab).catch(() => undefined);
+      }),
+        workbenchApi.upsertTab({ id: `${activeChatId}:workbench:__layout__`, chatId: activeChatId, viewId: "__layout__", label: "", position: 0, stateJson: null, createdAt: now, updatedAt: now }),
+      ]);
+    }).catch(() => {
+      if (active) {
+        setOrderedTabIds([]);
+        setLayoutInitialized(true);
+      }
+    });
+
+    return () => { active = false; };
+  }, [activeChatId, getViewForTab, workbenchViews]);
+
+  const orderedTabList = (layoutInitialized ? orderedTabIds : [])
+    .map((id) => ({ id, view: getViewForTab(id) }))
+    .filter((tab): tab is { id: string; view: (typeof workbenchViews)[number] } => Boolean(tab.view));
+
+  const persistOrder = (nextIds: string[]) => {
+    if (!activeChatId) return;
+    const now = new Date().toISOString();
+    const writes = nextIds.map((tabId, position) => {
+      const view = getViewForTab(tabId);
+      if (!view) return Promise.resolve();
+      const tab: BackendWorkbenchTab = {
+        id: tabId,
+        chatId: activeChatId,
+        viewId: view.id,
+        label: view.label,
+        position,
+        stateJson: JSON.stringify({ active: tabId === activeRightTab }),
+        createdAt: now,
+        updatedAt: now,
+      };
+      return workbenchApi.upsertTab(tab).catch(() => undefined);
+    });
+    if (nextIds.length === 0) {
+      writes.push(workbenchApi.upsertTab({
+        id: `${activeChatId}:workbench:__layout__`, chatId: activeChatId, viewId: "__layout__", label: "", position: 0, stateJson: null, createdAt: now, updatedAt: now,
+      }));
+    }
+    void Promise.all(writes);
+  };
+
+  const moveTab = (tabId: string) => {
+    if (!draggedTabId || draggedTabId === tabId) return;
+    const current = orderedTabList.map((tab) => tab.id);
+    const from = current.indexOf(draggedTabId);
+    const to = current.indexOf(tabId);
+    if (from < 0 || to < 0) return;
+    current.splice(from, 1);
+    current.splice(to, 0, draggedTabId);
+    setOrderedTabIds(current);
+    persistOrder(current);
+    setDraggedTabId(null);
+  };
+
+  const closeTab = (tabId: string) => {
+    const current = orderedTabList.map((tab) => tab.id);
+    const index = current.indexOf(tabId);
+    if (index < 0) return;
+    const next = current.filter((id) => id !== tabId);
+    setOrderedTabIds(next);
+    if (activeRightTab === tabId) {
+      const nextActive = next[Math.max(0, Math.min(index - 1, next.length - 1))];
+      setActiveRightTab(nextActive ? getBaseViewId(nextActive) === "terminal" ? nextActive : getBaseViewId(nextActive) : "metrics");
+    }
+    if (activeChatId) void workbenchApi.deleteTab(activeChatId, tabId).catch(() => undefined);
+    persistOrder(next);
+  };
+
+  const addTab = (viewId: RightPanelTabId) => {
+    const current = orderedTabList.map((tab) => tab.id);
+    const existing = current.find((id) => getBaseViewId(id) === viewId);
+    const tabId = viewId === "terminal" ? `${viewId}:${crypto.randomUUID()}` : existing || viewId;
+    if (existing && viewId !== "terminal") {
+      setActiveRightTab(existing);
+      return;
+    }
+    const next = [...current, tabId];
+    setOrderedTabIds(next);
+    setLayoutInitialized(true);
+    setActiveRightTab(tabId);
+    persistOrder(next);
+  };
   const { mapMode, setMapMode } = useGTSMStore();
+  const reducedMotion = useReducedMotion();
   const [mapActivated, setMapActivated] = React.useState(false);
   const [mapClosing, setMapClosing] = React.useState(false);
 
-  const visibleActiveRightTab = isRightPanelFeatureVisible(activeRightTab)
-    ? activeRightTab
-    : getDefaultRightPanelTab();
+  const activeViewId = getBaseViewId(activeRightTab);
+  const visibleActiveRightTab = isWorkbenchViewVisible(activeViewId)
+    ? activeViewId
+    : getDefaultWorkbenchView().id;
 
   React.useEffect(() => {
-    if (visibleActiveRightTab !== activeRightTab) {
+    if (activeViewId !== visibleActiveRightTab) {
       setActiveRightTab(visibleActiveRightTab);
     }
-  }, [activeRightTab, setActiveRightTab, visibleActiveRightTab]);
+  }, [activeViewId, setActiveRightTab, visibleActiveRightTab]);
 
   const renderContent = () => {
-    if (!isRightPanelFeatureVisible(visibleActiveRightTab)) {
+    if (!isWorkbenchViewVisible(visibleActiveRightTab)) {
       return (
         <div className="flex flex-col items-center justify-center h-full py-32 text-muted-foreground italic opacity-40">
           <Zap size={40} className="mb-4 text-primary/30" />
@@ -83,10 +231,12 @@ export function RightPanel() {
             <SystemDiagnostics />
           </div>
         );
+      case 'approvals':
+        return <ApprovalCenter />;
       case 'artifacts':
         return <ArtifactPanel isEmbedded={true} />;
       case 'terminal':
-        return <XTermPanel />;
+        return activeChatId ? <XTermPanel chatId={activeChatId} /> : <div className="p-4 text-sm text-muted-foreground">Select a chat before opening a terminal.</div>;
       case 'agents':
         return <OrchestratorPanel />;
       case 'drawing':
@@ -114,46 +264,14 @@ export function RightPanel() {
     }
   };
 
-  const getTitle = () => {
-    const feature = getRightPanelFeature(visibleActiveRightTab);
-    if (feature) return feature.label;
-
-    const titles: Record<string, string> = {
-      metrics: 'System Metrics',
-      agents: 'Active Agents',
-      artifacts: 'Artifacts',
-      terminal: 'Terminal',
-      map: 'Operational Map',
-      drawing: 'Canvas Workspace',
-    };
-    return titles[visibleActiveRightTab] || 'Utility';
-  };
-
-  const getIcon = () => {
-    const feature = getRightPanelFeature(visibleActiveRightTab);
-    if (feature?.icon) {
-      const IconComp = feature.icon;
-      return <IconComp size={16} className="text-primary" />;
-    }
-
-    const icons: Record<string, any> = {
-      metrics: Activity,
-      agents: Cpu,
-      artifacts: Box,
-      terminal: TerminalIcon,
-      map: MapIcon,
-      drawing: Paintbrush,
-    };
-    const IconComp = icons[visibleActiveRightTab] || Activity;
-    return <IconComp size={16} className="text-primary" />;
-  };
+  const hasActiveTab = orderedTabList.some((tab) => tab.id === activeRightTab);
+  const showTabChooser = orderedTabList.length === 0 || !hasActiveTab;
 
   return (
-    <div className="flex flex-col h-full bg-background border-l border-border">
-      <header className="h-14 border-b border-border flex items-center justify-between px-4 bg-card/20 backdrop-blur shrink-0">
-        <div className="flex items-center gap-2.5">
-          {getIcon()}
-          <span className="text-[12px] font-bold uppercase tracking-[0.15em] text-foreground">{getTitle()}</span>
+    <div id="zen-workbench-panel" aria-label="Workbench panel" className="flex flex-col h-full bg-background border-l border-border">
+      <header className="workbench-header border-b border-border flex flex-col px-2 bg-card shrink-0">
+        <WorkbenchHeaderCore className={visibleActiveRightTab === "drawing" || (visibleActiveRightTab === "map" && mapActivated) ? undefined : "hidden"}>
+        <div className="flex min-w-0 items-center gap-2.5">
           {visibleActiveRightTab === 'drawing' && (
             <div className="ml-2 flex rounded-lg border border-border bg-muted/40 p-0.5">
               <button
@@ -208,13 +326,93 @@ export function RightPanel() {
             </div>
           )}
         </div>
-        <button 
-          onClick={() => setRightPanelOpen(false)}
-          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
-        >
-          <X size={16} />
-        </button>
-      </header>          {visibleActiveRightTab === 'map' ? (
+        </WorkbenchHeaderCore>
+        <nav className="flex min-w-0 items-center gap-1 overflow-x-auto pb-1.5" aria-label="Workbench views">
+          {orderedTabList.map(({ id, view }, tabIndex) => (
+            <div
+              key={id}
+              draggable
+              onDragStart={() => setDraggedTabId(id)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={() => moveTab(id)}
+              className="shrink-0"
+            >
+              <WorkbenchTabButton
+                view={view}
+                label={view.id === "terminal" ? `Terminal ${orderedTabList.slice(0, tabIndex + 1).filter((tab) => tab.view.id === "terminal").length}` : undefined}
+                selected={activeRightTab === id}
+                badge={view.id === "approvals" ? pendingApprovalCount : 0}
+                compact
+                onClick={() => setActiveRightTab(id)}
+                onClose={() => closeTab(id)}
+              />
+            </div>
+          ))}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="codex-focus ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="Add workbench tab"
+                title="Add workbench tab"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-52">
+              <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Open workbench view
+              </div>
+              {workbenchViews.map((view) => {
+                const Icon = view.icon || Activity;
+                const alreadyOpen = orderedTabList.some((tab) => tab.view.id === view.id);
+                return (
+                  <DropdownMenuItem
+                    key={view.id}
+                    onSelect={() => addTab(view.id)}
+                    className="gap-2 text-xs"
+                  >
+                    <Icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                    <span>{view.label}</span>
+                    {alreadyOpen && view.id !== "terminal" && <span className="ml-auto text-muted-foreground">Open</span>}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <button
+            type="button"
+            onClick={() => setRightPanelOpen(false)}
+            aria-label="Close workbench panel"
+            title="Close workbench panel"
+            className="codex-focus ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <PanelRightClose size={16} />
+          </button>
+        </nav>
+      </header>
+      {showTabChooser ? (
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto bg-background px-6 py-10 text-center">
+          <h2 className="text-xl font-semibold text-foreground">Open tab</h2>
+          <p className="mt-2 text-sm text-muted-foreground">Choose a tab to open in the side pane.</p>
+          <div className="mt-8 grid w-full max-w-[680px] grid-cols-2 gap-3 sm:grid-cols-3">
+            {workbenchViews.map((view) => {
+              const Icon = view.icon || Activity;
+              return (
+                <button
+                  key={view.id}
+                  type="button"
+                  onClick={() => addTab(view.id)}
+                  className="flex min-h-28 flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card px-4 py-5 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Icon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                  <span>{view.id === "terminal" ? "Terminal" : view.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : visibleActiveRightTab === 'map' ? (
         <div className="flex-1 flex flex-col relative overflow-hidden bg-background select-none">
           <div className="flex-1 relative w-full h-full flex flex-col">
             {mapActivated ? (
@@ -222,7 +420,7 @@ export function RightPanel() {
                 className="flex-1 flex flex-col w-full h-full"
                 initial={false}
                 animate={{ opacity: mapClosing ? 0 : 1, scale: mapClosing ? 0.96 : 1 }}
-                transition={{ duration: 0.3, ease: 'easeInOut' }}
+                transition={reducedMotion ? { duration: 0 } : { duration: 0.3, ease: 'easeInOut' }}
                 onAnimationComplete={() => {
                   if (mapClosing) {
                     setMapActivated(false);
@@ -259,7 +457,7 @@ export function RightPanel() {
             <span className="truncate max-w-[180px]">Target: {operationalParams?.label || "Active Search"}</span>
           </div>
         </div>
-      ) : visibleActiveRightTab === 'drawing' || visibleActiveRightTab === 'agents' || visibleActiveRightTab === 'terminal' || visibleActiveRightTab === 'artifacts' ? (
+      ) : visibleActiveRightTab === 'drawing' || visibleActiveRightTab === 'approvals' || visibleActiveRightTab === 'agents' || visibleActiveRightTab === 'terminal' || visibleActiveRightTab === 'artifacts' ? (
         <div className="flex-grow flex-1 relative overflow-hidden bg-background flex flex-col">
           <AnimatePresence mode="wait">
             <motion.div
@@ -267,7 +465,7 @@ export function RightPanel() {
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
-              transition={{ duration: 0.2 }}
+              transition={reducedMotion ? { duration: 0 } : { duration: 0.2 }}
               className="flex-grow flex flex-col overflow-hidden relative w-full h-full"
             >
               <Suspense fallback={<LoadingFallback />}>
@@ -284,7 +482,7 @@ export function RightPanel() {
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
-              transition={{ duration: 0.2 }}
+              transition={reducedMotion ? { duration: 0 } : { duration: 0.2 }}
               className="pb-8"
             >
               <Suspense fallback={<LoadingFallback />}>

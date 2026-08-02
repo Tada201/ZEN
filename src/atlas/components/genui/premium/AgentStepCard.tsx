@@ -1,4 +1,5 @@
 import { Terminal, Clock, Play, CheckCircle2, AlertTriangle, Cpu } from "lucide-react";
+import { CardShell } from "./CardShell";
 
 interface AgentStepData {
   stepNumber: number;
@@ -24,18 +25,18 @@ export function AgentStepCard({ data }: { data: AgentStepData }) {
   const getStatusColor = (s: string) => {
     switch (s) {
       case "running":
-        return "text-blue-400 border-blue-500 bg-blue-500/10 animate-pulse";
+        return "text-primary border-primary bg-primary/10";
       case "error":
-        return "text-rose-400 border-rose-500 bg-rose-500/10";
+        return "text-destructive border-destructive bg-destructive/10";
       default:
-        return "text-emerald-400 border-emerald-500 bg-emerald-500/10";
+        return "text-success border-success bg-success/10";
     }
   };
 
   const getStatusIcon = (s: string) => {
     switch (s) {
       case "running":
-        return <Play className="w-3.5 h-3.5 animate-spin" />;
+        return <Play className="w-3.5 h-3.5 motion-safe:animate-spin" />;
       case "error":
         return <AlertTriangle className="w-3.5 h-3.5" />;
       default:
@@ -44,7 +45,7 @@ export function AgentStepCard({ data }: { data: AgentStepData }) {
   };
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-lg flex flex-col">
+    <CardShell padded={false} className="w-full max-w-md flex flex-col p-5">
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center gap-2.5">
           <div className="p-1.5 rounded-lg border border-border bg-muted text-primary-foreground">
@@ -105,6 +106,6 @@ export function AgentStepCard({ data }: { data: AgentStepData }) {
           </div>
         )}
       </div>
-    </div>
+    </CardShell>
   );
 }

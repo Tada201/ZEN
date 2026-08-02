@@ -17,7 +17,14 @@ const source = `${parserSource}\n${readFileSync(sourcePath, "utf8")
   .replace(stripImport, "")
   .replace(stripExport, "")}`.replace(
   'import { CHAT_STATUS_PHASES } from "@/api/chatStatus";',
-  'const CHAT_STATUS_PHASES = { AgentStreaming: "agent_streaming", ToolCallStreaming: "tool_call_streaming", ToolCallReady: "tool_call_ready" };',
+  `const CHAT_STATUS_PHASES = {
+    AgentStreaming: "agent_streaming",
+    ToolCallStreaming: "tool_call_streaming",
+    ToolCallReady: "tool_call_ready",
+    ToolBatchPlanned: "tool_batch_planned",
+    ProviderReady: "provider_ready",
+    ToolExecuting: "tool_executing",
+  };`,
 );
 const transpiled = ts.transpileModule(source, {
   compilerOptions: {
@@ -29,7 +36,16 @@ const transpiled = ts.transpileModule(source, {
 });
 
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(transpiled.outputText).toString("base64")}`;
-const { groupAssistantSteps, groupToolCalls, isToolVisibleInChat, legacyMessageToActionStep, parseCardTags, toolResultMetaToOutput } = await import(moduleUrl);
+const {
+  groupAssistantSteps,
+  groupToolCalls,
+  isToolVisibleInChat,
+  legacyMessageToActionStep,
+  parseCardTags,
+  parentWorkingStatusLabel,
+  selectParentWorkingStatus,
+  toolResultMetaToOutput,
+} = await import(moduleUrl);
 
 const typesSourcePath = new URL("../src/atlas/components/chat/types.ts", import.meta.url);
 const typesSource = readFileSync(typesSourcePath, "utf8")
@@ -51,6 +67,100 @@ const transpiledTypes = ts.transpileModule(typesSource, {
 });
 const typesModuleUrl = `data:text/javascript;base64,${Buffer.from(transpiledTypes.outputText).toString("base64")}`;
 const { extractInlineThoughtBlocks } = await import(typesModuleUrl);
+
+// Parent-level status regression contract: the compact status is a single
+// projection and yields to detailed reasoning/execution surfaces.
+assert.equal(
+  selectParentWorkingStatus({
+    isStreaming: false,
+    chatStatusPhase: "agent_streaming",
+    hasActiveReasoning: false,
+    hasActiveExecution: false,
+    hasPendingResponse: false,
+  }),
+  undefined,
+  "terminal assistant messages must not expose a parent working status",
+);
+assert.equal(
+  selectParentWorkingStatus({
+    isStreaming: true,
+    chatStatusPhase: "agent_streaming",
+    hasActiveReasoning: true,
+    hasActiveExecution: false,
+    hasPendingResponse: false,
+  }),
+  undefined,
+  "live reasoning owns the parent status announcement",
+);
+assert.equal(
+  selectParentWorkingStatus({
+    isStreaming: true,
+    chatStatusPhase: "tool_executing",
+    hasActiveReasoning: false,
+    hasActiveExecution: true,
+    hasPendingResponse: false,
+  }),
+  undefined,
+  "running execution owns the parent status announcement",
+);
+const delegationFixtures = [
+  { status: "running", ownsParentStatus: true },
+  { status: "failed", ownsParentStatus: true },
+  { status: "cancelled", ownsParentStatus: true },
+];
+for (const delegation of delegationFixtures) {
+  assert.equal(
+    selectParentWorkingStatus({
+      isStreaming: true,
+      chatStatusPhase: "agent_streaming",
+      hasActiveReasoning: false,
+      hasActiveExecution: false,
+      // Mirrors SubagentStepData.status: each attention state suppresses the
+      // parent label while its detailed row remains visible.
+      hasActiveDelegation: delegation.ownsParentStatus && ["running", "failed", "cancelled"].includes(delegation.status),
+      hasPendingResponse: false,
+    }),
+    undefined,
+    `${delegation.status} subagent work owns the parent status announcement`,
+  );
+}
+assert.equal(
+  selectParentWorkingStatus({
+    isStreaming: true,
+    chatStatusPhase: "tool_executing",
+    hasActiveReasoning: false,
+    hasActiveExecution: false,
+    hasPendingResponse: true,
+  }),
+  "responding",
+  "post-tool response generation must replace stale execution phase text",
+);
+assert.equal(
+  selectParentWorkingStatus({
+    isStreaming: true,
+    chatStatusPhase: "agent_streaming",
+    hasActiveReasoning: false,
+    hasActiveExecution: false,
+    hasPendingResponse: true,
+  }),
+  "responding",
+  "response text must replace a stale agent phase after the tool row is no longer last",
+);
+assert.equal(
+  selectParentWorkingStatus({
+    isStreaming: true,
+    chatStatusPhase: "tool_batch_planned",
+    hasActiveReasoning: false,
+    hasActiveExecution: false,
+    hasPendingResponse: false,
+  }),
+  "planning",
+  "tool planning should use one compact planning status",
+);
+assert.equal(parentWorkingStatusLabel("thinking"), "Thinking...", "thinking status label should stay user-facing");
+assert.equal(parentWorkingStatusLabel("planning"), "Planning tools...", "planning status label should stay user-facing");
+assert.equal(parentWorkingStatusLabel("executing"), "Executing...", "execution status label should stay user-facing");
+assert.equal(parentWorkingStatusLabel("responding"), "Responding...", "response status label should stay user-facing");
 
 const parsed = parseCardTags('Before <card>{"type":"metric","data":{"value":42}}</card> After');
 assert.equal(parsed.cards.length, 1, "card tags should be extracted");

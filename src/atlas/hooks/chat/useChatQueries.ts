@@ -10,7 +10,7 @@ import { useUIStore, setActiveSessionId as setUISessionId } from "@/lib/stores/u
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import { useShallow } from "zustand/react/shallow";
 import type { ModelInfo } from "@/lib/types/provider";
-import { Session, Message, ChatFolder, ToolCall, Step, extractInlineThoughtBlocks } from "../../components/chat/types";
+import { Session, Message, ChatFolder, ToolCall, Step, extractInlineThoughtBlocks, mergeToolCallsFromSteps } from "../../components/chat/types";
 import { type Model } from "../../components/ModelSettingsContent";
 import { findLiveAssistantForFetched, mergeLiveToolState } from "./liveLedgerMerge";
 import { coalesceTimelineMessages } from "./chatTimelineReplay";
@@ -25,6 +25,7 @@ export const mapChatToSession = (chat: BackendChat): Session => ({
   pinned: chat.pinned === 1,
   folderId: chat.folderId,
   archived: chat.isArchived === 1,
+  workspaceRoot: chat.workspaceRoot ?? null,
 });
 
 /**
@@ -129,6 +130,11 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
   }
 
   const steps: Step[] = parsedSteps.length > 0 ? parsedSteps : [];
+  // `steps_json` is the durable chronological ledger. Reattach step-only
+  // tools here as well as in normalizeVercelMessage because this mapper is the
+  // actual SQLite history path used by useChatQueries. Without this boundary
+  // reconstruction, reloaded subagent child tools disappear from the card.
+  parsedToolCalls = mergeToolCallsFromSteps(parsedToolCalls, steps);
   if (steps.length === 0) {
     if (reasoning) {
       steps.push({ type: "reasoning", content: reasoning });

@@ -1,4 +1,4 @@
-import React, { Suspense, useMemo } from "react";
+import React, { Suspense, useMemo, useRef } from "react";
 import {
   Check, Copy, FileText, Code2, AlertTriangle, ChevronRight, RefreshCcw, Zap, X, Loader2,
 } from "lucide-react";
@@ -14,7 +14,8 @@ import {
   groupAssistantSteps,
   groupToolCalls,
   legacyMessageToActionStep,
-  shouldShowPostToolWorking,
+  parentWorkingStatusLabel,
+  selectParentWorkingStatus,
   splitOnCardTokens,
 } from "./assistantMessageParts";
 import { MarkdownContent } from "./MarkdownContent";
@@ -24,7 +25,6 @@ import { StreamingSkeleton } from "./StreamingSkeleton";
 import {
   AgentActionStep,
   ResearchTimeline,
-  getActionPresentation,
 } from "./AssistantMessageTrace";
 import { ExecutionGroup } from "./ExecutionGroup";
 import { SubagentExecutionCard } from "./SubagentExecutionCard";
@@ -56,27 +56,6 @@ function isVisibleChatStatusStep(step: Step) {
   return step.kind !== "chat_status" || (typeof phase === "string" && VISIBLE_CHAT_STATUS_PHASES.has(phase as ChatStatusPhase));
 }
 
-/**
- * Maps a visible chat_status phase to the compact label that the breathing
- * indicator displays near the top of the streaming assistant bubble. Mirrors
- * the phase-flow described in Section 6 of the chat inline UI flow spec.
- */
-function getBreathingPhaseLabel(phase: string | undefined): string {
-  switch (phase) {
-    case CHAT_STATUS_PHASES.AgentStreaming:
-      return "Thinking...";
-    case CHAT_STATUS_PHASES.ToolBatchPlanned:
-      return "Planning tools...";
-    case CHAT_STATUS_PHASES.ProviderReady:
-    case CHAT_STATUS_PHASES.ToolCallStreaming:
-    case CHAT_STATUS_PHASES.ToolCallReady:
-    case CHAT_STATUS_PHASES.ToolExecuting:
-      return "Executing...";
-    default:
-      return "Responding...";
-  }
-}
-
 function isVisibleChatActionStep(step: Step) {
   if (step.type !== "action") return false;
   if (!isVisibleChatStatusStep(step)) return false;
@@ -86,6 +65,76 @@ function isVisibleChatActionStep(step: Step) {
     return false;
   }
   return step.kind === "clarification_request";
+}
+
+type ExecutionToolIdentity = {
+  id?: string;
+  toolBatchId?: string;
+  batchId?: string;
+  executionId?: string;
+  runId?: string;
+  messageId?: string;
+  name?: string;
+  startTime?: number;
+};
+
+function getExecutionStepKey(
+  step: {
+    type: string;
+    eventId?: string;
+    toolCalls?: ExecutionToolIdentity[];
+  },
+  index: number,
+  groupKeyCache?: Map<string, string>,
+  groupFallbackKeyCache?: Map<string, string>,
+  groupFingerprintCounts?: Map<string, number>,
+) {
+  if (step.type === "tool-group") {
+    const tools = step.toolCalls ?? [];
+    const toolIds = tools.map((tool) => tool.id).filter((id): id is string => Boolean(id));
+    const rememberedKey = toolIds
+      .map((id) => groupKeyCache?.get(id))
+      .find((key): key is string => Boolean(key));
+    const stableTool = [...tools]
+      .sort((left, right) => (left.startTime ?? Number.MAX_SAFE_INTEGER) - (right.startTime ?? Number.MAX_SAFE_INTEGER))[0];
+    // Prefer an explicit batch/execution identity for a group that has one,
+    // but remember the first assigned key by child ID. This prevents a late
+    // batch identity or newly merged child from remounting the live group.
+    // A stable start-time/name fallback avoids using the visible list index
+    // when providers omit IDs on the first streamed update.
+    // The fallback fingerprint intentionally uses only immutable group shape.
+    // Timestamps and canonical IDs may arrive later, so they must not change
+    // the lookup key used to preserve the first rendered React identity.
+    const baseFingerprint = [...new Set(tools.map((tool) => `name:${tool.name || "tool"}`))]
+      .sort()
+      .join("|") || `index:${index}`;
+    const occurrence = groupFingerprintCounts
+      ? (groupFingerprintCounts.get(baseFingerprint) || 0)
+      : 0;
+    groupFingerprintCounts?.set(baseFingerprint, occurrence + 1);
+    const fallbackFingerprint = `${baseFingerprint}#${occurrence}`;
+    const rememberedFallbackKey = groupFallbackKeyCache?.get(fallbackFingerprint);
+    const canonicalIdentity = stableTool?.toolBatchId
+      || stableTool?.batchId
+      || stableTool?.executionId
+      || stableTool?.runId
+      || stableTool?.messageId
+      || stableTool?.id;
+    // Once a group has rendered, its fingerprint key wins before later
+    // metadata. A provider may attach a timestamp or batch ID after the first
+    // delta; the base fingerprint preserves the row without remounting it.
+    const identity = rememberedKey
+      || rememberedFallbackKey
+      || canonicalIdentity
+      || fallbackFingerprint;
+    const key = rememberedKey || rememberedFallbackKey || `tool-group-${identity}`;
+    groupFallbackKeyCache?.set(fallbackFingerprint, key);
+    toolIds.forEach((id) => groupKeyCache?.set(id, key));
+    return key;
+  }
+  if (step.type === "action" && step.eventId) return `action-${step.eventId}`;
+  if (step.type === "subagent" && step.eventId) return `subagent-${step.eventId}`;
+  return `${step.type}-${index}`;
 }
 
 function shouldShowToolGroupInTimeline(
@@ -351,6 +400,8 @@ export function AssistantMessage({
   compact?: boolean;
 }) {
   const { copied, copy } = useCopy();
+  const executionGroupKeyCacheRef = useRef(new Map<string, string>());
+  const executionGroupFallbackKeyCacheRef = useRef(new Map<string, string>());
   const groupedSteps = useMemo(() => {
     const legacyStep = legacyMessageToActionStep(message);
     return groupAssistantSteps(message.steps?.length ? message.steps : legacyStep ? [legacyStep] : undefined);
@@ -383,15 +434,6 @@ export function AssistantMessage({
     });
   }, [groupedSteps, revealCompletedToolHistory]);
 
-  const showPostToolWorking = useMemo(() => {
-    if (visibleGroupedSteps.length > 0) {
-      return shouldShowPostToolWorking(visibleGroupedSteps, message.status === "sending");
-    }
-    return message.status === "sending" && groupedToolCalls.length > 0 && groupedToolCalls.every(
-      (tool) => tool.status === "completed" || tool.status === "error",
-    );
-  }, [groupedToolCalls, message.status, visibleGroupedSteps]);
-
   const hasVisibleAnswer = Boolean(
     message.content?.trim() ||
     message.reasoning?.trim() ||
@@ -408,29 +450,54 @@ export function AssistantMessage({
   );
   const hasVisibleProgress = visibleGroupedSteps.some((step) => step.type === "action");
 
-  // Latest visible chat_status step (if any). Used by the compact breathing
-  // indicator so users see a single phase label that updates as the agent
-  // progresses through Thinking -> Planning tools -> Executing -> Responding.
-  const latestVisibleChatStatusStep = useMemo<Step | undefined>(() => {
+  // Chat-status steps are intentionally excluded from the visible timeline,
+  // so derive the latest compact phase from the grouped source rather than the
+  // filtered render list. This keeps the live phase reachable without adding a
+  // second chat-status row.
+  const latestChatStatusPhase = useMemo<string | undefined>(() => {
     if (message.status !== "sending") return undefined;
-    for (let i = visibleGroupedSteps.length - 1; i >= 0; i -= 1) {
-      const step = visibleGroupedSteps[i];
+    for (let i = groupedSteps.length - 1; i >= 0; i -= 1) {
+      const step = groupedSteps[i];
       if (step.type === "action" && step.kind === "chat_status") {
-        return step as Step;
+        const phase = step.metadata?.phase;
+        return typeof phase === "string" ? phase : undefined;
       }
     }
     return undefined;
-  }, [visibleGroupedSteps, message.status]);
+  }, [groupedSteps, message.status]);
 
-  const breathingPhase: ChatStatusPhase | undefined = (() => {
-    if (!latestVisibleChatStatusStep) return undefined;
-    const phase = latestVisibleChatStatusStep.metadata?.phase;
-    return typeof phase === "string" ? (phase as ChatStatusPhase) : undefined;
-  })();
-
-  const breathingPresentation = latestVisibleChatStatusStep
-    ? getActionPresentation(latestVisibleChatStatusStep)
-    : null;
+  const hasActiveReasoning = message.status === "sending" &&
+    visibleGroupedSteps[visibleGroupedSteps.length - 1]?.type === "reasoning";
+  const hasActiveExecution = visibleGroupedSteps.some((step) =>
+    step.type === "tool-group" && step.toolCalls.some((tool) =>
+      tool.status === "running" || tool.status === "awaiting_approval" || tool.status === "error",
+    ),
+  );
+  const hasActiveDelegation = visibleGroupedSteps.some((step) =>
+    step.type === "subagent" &&
+    (step.subagent?.status === "running" || step.subagent?.status === "failed" || step.subagent?.status === "cancelled"),
+  );
+  const hasResponseText = Boolean(
+    message.content?.trim() ||
+    groupedSteps.some((step) => step.type === "text" && Boolean((step.cleanText || step.content || "").trim())),
+  );
+  const hasTerminalToolGroup = groupedSteps.some((step) =>
+    step.type === "tool-group" &&
+    step.toolCalls.length > 0 &&
+    step.toolCalls.every((tool) => tool.status === "completed" || tool.status === "error"),
+  );
+  const parentWorkingStatus = selectParentWorkingStatus({
+    isStreaming: message.status === "sending",
+    chatStatusPhase: latestChatStatusPhase,
+    hasActiveReasoning,
+    hasActiveExecution,
+    hasActiveDelegation,
+    // Once response text has started, it owns the parent phase even if a
+    // provider leaves a stale phase as the latest chat-status event. A terminal
+    // tool group is retained as useful evidence for the post-tool transition,
+    // while direct text streaming also takes the same quiet parent path.
+    hasPendingResponse: hasResponseText && (hasTerminalToolGroup || !hasActiveReasoning),
+  });
 
   const hasOnlyLiveProgress =
     !hasVisibleAnswer &&
@@ -476,29 +543,21 @@ export function AssistantMessage({
                 <ResearchTimeline steps={message.metadata.researchSteps} />
               )}
 
-              {message.status === "sending" && latestVisibleChatStatusStep && (
+              {parentWorkingStatus && (
                 <div
-                  className="flex min-h-7 items-center gap-2 text-[12px] text-muted-foreground animate-in fade-in slide-in-from-top-1 duration-200 motion-reduce:animate-none"
+                  className="flex min-h-7 items-center gap-2 text-[12px] text-muted-foreground animate-in fade-in duration-150 motion-reduce:animate-none"
                   role="status"
                   aria-live="polite"
                   data-testid="chat-status-breathing-indicator"
-                  data-phase={breathingPhase ?? "unknown"}
+                  data-phase={parentWorkingStatus}
                 >
                   <span
-                    className="h-2 w-2 shrink-0 rounded-full bg-primary motion-safe:animate-pulse shadow-[0_0_0_3px_hsl(var(--primary)/0.18)]"
+                    className="h-2 w-2 shrink-0 rounded-full bg-primary motion-safe:animate-pulse"
                     aria-hidden="true"
                   />
-                  {breathingPresentation?.Icon && (
-                    <breathingPresentation.Icon
-                      className={cn(
-                        "h-3.5 w-3.5 shrink-0",
-                        latestVisibleChatStatusStep.status === "running" ? "motion-safe:animate-spin text-primary" : "text-muted-foreground",
-                      )}
-                      aria-hidden="true"
-                    />
-                  )}
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 motion-safe:animate-spin text-primary" aria-hidden="true" />
                   <span className="truncate font-sans leading-5">
-                    {getBreathingPhaseLabel(breathingPhase)}
+                    {parentWorkingStatusLabel(parentWorkingStatus)}
                   </span>
                 </div>
               )}
@@ -509,15 +568,19 @@ export function AssistantMessage({
               <>
                 {visibleGroupedSteps.length > 0 ? (
                   <div className={cn("space-y-4", compact && "space-y-2")}>
-                    {visibleGroupedSteps.map((step, idx) => {
-                      const stepKey = step.type === "tool-group" 
-                        ? `tool-group-${idx}-${step.toolCalls.map(t => t.id).join("-")}`
-                        : step.type === "action" 
-                          ? `action-${step.eventId || idx}`
-                          : `${step.type}-${idx}`;
-                      
+                    {(() => {
+                      const groupFingerprintCounts = new Map<string, number>();
+                      return visibleGroupedSteps.map((step, idx) => {
+                      const stepKey = getExecutionStepKey(
+                        step,
+                        idx,
+                        executionGroupKeyCacheRef.current,
+                        executionGroupFallbackKeyCacheRef.current,
+                        groupFingerprintCounts,
+                      );
+
                       return (
-                      <div key={stepKey} className="animate-in fade-in slide-in-from-top-1 duration-200 motion-reduce:animate-none">
+                      <div key={stepKey} className="animate-in fade-in duration-150 motion-reduce:animate-none">
                       {step.type === "text" ? (
                         <div className="prose-frontier">
                           <div className="flex flex-col gap-4">
@@ -541,7 +604,6 @@ export function AssistantMessage({
                               executionSteps={executionActionSteps}
                               sessionId={message.sessionId}
                               onOpenArtifact={onOpenArtifact}
-                              isStreaming={message.status === "sending"}
                             />
                           </div>
                         ) : step.type === "subagent" && step.subagent ? (
@@ -550,7 +612,6 @@ export function AssistantMessage({
                             childToolCalls={(message.toolCalls || []).filter(
                               (tc) => tc.traceId === step.subagent?.spawnId,
                             )}
-                            isStreaming={message.status === "sending"}
                             sessionId={message.sessionId}
                             onOpenArtifact={onOpenArtifact}
                           />
@@ -559,7 +620,8 @@ export function AssistantMessage({
                         ) : null}
                       </div>
                       );
-                    })}
+                      });
+                    })()}
                   </div>
                 ) : (
                   <div className="prose-frontier">
@@ -574,18 +636,7 @@ export function AssistantMessage({
                   </div>
                 )}
 
-                {showPostToolWorking && (
-                  <div
-                    className="animate-in fade-in slide-in-from-top-1 duration-200 motion-reduce:animate-none"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    <div className="flex min-h-7 items-center gap-2 text-[12px] text-muted-foreground">
-                      <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin text-muted-foreground" />
-                      <span>Working on the response...</span>
-                    </div>
-                  </div>
-                )}
+
               </>
             )}
             

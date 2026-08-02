@@ -15,13 +15,14 @@ interface TerminalTab {
 
 interface XTermPanelProps {
   className?: string;
+  chatId: string;
 }
 
 function getErrorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
-export function XTermPanel({ className = '' }: XTermPanelProps) {
+export function XTermPanel({ className = '', chatId }: XTermPanelProps) {
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -34,8 +35,8 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
   }, [tabs]);
 
   useEffect(() => () => {
-    for (const tab of tabsRef.current) void terminalApi.kill(tab.id);
-  }, []);
+    for (const tab of tabsRef.current) void terminalApi.kill(chatId, tab.id);
+  }, [chatId]);
 
   const openTerminal = useCallback(async () => {
     // This function runs only after the user explicitly confirmed the
@@ -46,8 +47,8 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
     setOpening(true);
     setError(null);
     try {
-      const approval = await terminalApi.requestApproval();
-      const id = await terminalApi.spawn(DEFAULT_COLS, DEFAULT_ROWS, approval.approvalId);
+      const approval = await terminalApi.requestApproval(chatId);
+      const id = await terminalApi.spawn(chatId, DEFAULT_COLS, DEFAULT_ROWS, approval.approvalId);
       setTabs((current) => [...current, { id, name: `Shell ${current.length + 1}` }]);
       setActiveId(id);
       setConfirmOpen(false);
@@ -61,7 +62,7 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
   const closeTerminal = useCallback(async (id: string) => {
     setError(null);
     try {
-      await terminalApi.kill(id);
+      await terminalApi.kill(chatId, id);
     } catch (cause) {
       setError(getErrorMessage(cause));
       return;
@@ -94,7 +95,7 @@ export function XTermPanel({ className = '' }: XTermPanelProps) {
       <div className="relative min-h-0 flex-1">
         {tabs.map((tab) => (
           <div key={tab.id} className={cn('absolute inset-0', tab.id === activeId ? 'block' : 'hidden')}>
-            <XTermSessionView sessionId={tab.id} active={tab.id === activeId} onError={setError} />
+            <XTermSessionView chatId={chatId} sessionId={tab.id} active={tab.id === activeId} onError={setError} />
           </div>
         ))}
         {!activeTab ? (

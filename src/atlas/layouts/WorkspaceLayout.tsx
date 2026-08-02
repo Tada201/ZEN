@@ -1,17 +1,17 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { SecondaryActivityBar } from "@/components/Zen/SecondaryActivityBar";
 import { StatusBar } from "@/components/Zen/StatusBar";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { 
-  SIDEBAR_COLLAPSED_WIDTH, 
   SIDEBAR_EXPANDED_WIDTH 
 } from "@/lib/constants/design";
 import { GripVertical } from "lucide-react";
+import { ZenTitleBar } from "@/components/workbench/ZenTitleBar";
 
 interface WorkspaceLayoutProps {
   sidebar?: React.ReactNode;
   main: React.ReactNode;
   rightPanel?: React.ReactNode;
+  windowHeader?: React.ReactNode;
   showStatusBar?: boolean;
 }
 
@@ -28,7 +28,8 @@ export function WorkspaceLayout({
   sidebar, 
   main, 
   rightPanel,
-  showStatusBar = true
+  windowHeader,
+  showStatusBar = true,
 }: WorkspaceLayoutProps) {
   const { sidebarOpen, rightPanelOpen, setSidebarOpen } = useUIStore();
   const [isMobile, setIsMobile] = useState(false);
@@ -101,6 +102,7 @@ export function WorkspaceLayout({
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden text-foreground font-sans" ref={containerRef}>
+      <ZenTitleBar>{windowHeader}</ZenTitleBar>
       <div className="flex-1 flex overflow-hidden relative">
         {/* 
           DANGER: DO NOT ADD A LEFT ACTIVITY BAR HERE. 
@@ -120,19 +122,17 @@ export function WorkspaceLayout({
               className="fixed inset-y-0 left-0 z-[60] w-[min(82vw,260px)] border-r border-border bg-card overflow-hidden md:hidden"
             >
               {React.cloneElement(sidebar as React.ReactElement<any>, {
-                isCollapsed: false,
-                onToggleSidebar: () => setSidebarOpen(false),
               })}
             </aside>
           </>
         )}
 
-        {sidebar && (
+        {sidebar && sidebarOpen && (
           <aside 
             className="hidden h-full border-r border-border bg-card shrink-0 overflow-hidden z-50 md:block"
-            style={{ width: sidebarOpen ? `${SIDEBAR_EXPANDED_WIDTH}px` : `${SIDEBAR_COLLAPSED_WIDTH}px` }}
+            style={{ width: `${SIDEBAR_EXPANDED_WIDTH}px` }}
           >
-            {React.cloneElement(sidebar as React.ReactElement<any>, { isCollapsed: !sidebarOpen })}
+            {React.cloneElement(sidebar as React.ReactElement<any>, {})}
           </aside>
         )}
 
@@ -164,10 +164,6 @@ export function WorkspaceLayout({
           </div>
         </div>
 
-        {/* Secondary Activity Bar Rail (Far Right) */}
-        <aside className="hidden w-[var(--activity-bar-width)] border-l border-border bg-card flex-col py-4 z-50 shrink-0 md:flex">
-          <SecondaryActivityBar />
-        </aside>
       </div>
 
       {/* Status Bar Footer */}

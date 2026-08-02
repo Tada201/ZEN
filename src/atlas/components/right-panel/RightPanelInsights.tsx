@@ -265,7 +265,6 @@ function SubAgentInspector({
               executionSteps={[]}
               sessionId={task.chatId}
               onOpenArtifact={handleOpenArtifact}
-              isStreaming={task.status === "in_progress"}
             />
           </div>
         ) : (

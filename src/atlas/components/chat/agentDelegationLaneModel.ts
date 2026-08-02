@@ -1,5 +1,8 @@
 import type { Step } from "./types";
 
+/** Maximum live child-agent transcript retained by the view model/UI path. */
+export const MAX_LIVE_OUTPUT_CHARS = 12_000;
+
 export type AgentDelegationLaneModel = {
   spawnId?: string;
   batchId?: string;

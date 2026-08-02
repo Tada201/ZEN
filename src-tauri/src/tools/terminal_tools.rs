@@ -63,7 +63,7 @@ impl Tool for RunCommandTool {
     async fn execute(
         &self,
         app: AppHandle,
-        _chat_id: String,
+        chat_id: String,
         args: serde_json::Value,
     ) -> Result<ToolOutput, ToolError> {
         let args: RunCommandArgs =
@@ -79,7 +79,12 @@ impl Tool for RunCommandTool {
 
         let timeout_ms = args.timeout_ms.unwrap_or(30_000).clamp(1_000, 120_000);
         let state = app.state::<AppState>();
-        let workspace = state.workspace_folder.read().await.clone();
+        let workspace = state
+            .workspace_for_chat(&chat_id)
+            .await
+            .map_err(|e| ToolError::ExecutionFailed {
+                message: format!("Unable to resolve session workspace: {}", e),
+            })?;
 
         let resolved_cwd = if let Some(cwd) = args.cwd.as_deref() {
             crate::workspace::resolve_workspace_path(&workspace, cwd).map_err(|e| {

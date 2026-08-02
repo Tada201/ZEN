@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { toolsApi } from "@/api";
+import { resolveToolApproval } from "./approvalActions";
 import { CHAT_STATUS_PHASES } from "@/api/chatStatus";
 import { Step } from "./types";
 import { AssistantTaskPlanPreview } from "./AssistantTaskPlanPreview";
@@ -25,12 +25,6 @@ import { buildAgentDelegationLaneModel } from "./agentDelegationLaneModel";
 import { humanizeToolName } from "./ToolCallCard";
 export { ResearchTimeline } from "./ResearchTimeline";
 
-export function resolveToolApproval(toolCallId: string | undefined, approved: boolean, rememberExact = false) {
-  if (!toolCallId) return;
-  toolsApi.resolveApproval(toolCallId, approved, rememberExact).catch((e) =>
-    console.error("resolve_tool_approval failed:", e)
-  );
-}
 function redactTracePreview(value: unknown, maxLength = 360): string {
   const text = typeof value === "string" ? value : value === undefined || value === null ? "" : JSON.stringify(value);
   if (!text.trim()) return "";
@@ -307,7 +301,7 @@ export function AgentActionStepInner({ step, isStreaming }: { step: Step; isStre
               {canExpand && (
                 <ChevronRight className={cn("h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none", isExpanded && "rotate-90")} />
               )}
-              <span className={cn("min-w-0 flex-1 truncate text-[12px] capitalize leading-5 text-muted-foreground", isRunning && "text-premium-shimmer")}>
+              <span className={cn("min-w-0 flex-1 truncate text-[12px] capitalize leading-5 text-muted-foreground", isRunning && "text-foreground")}>
               {presentation.label}
               </span>
             </button>

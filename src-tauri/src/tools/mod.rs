@@ -155,6 +155,19 @@ pub trait Tool: Send + Sync {
         args: serde_json::Value,
     ) -> Result<ToolOutput, ToolError>;
 
+    /// Execute with the stable agent call id available to mutation-aware tools.
+    /// Most tools use the default implementation; workspace mutation tools can
+    /// attach an exact, user-visible recovery checkpoint to this call.
+    async fn execute_with_context(
+        &self,
+        app: AppHandle,
+        chat_id: String,
+        _tool_call_id: String,
+        args: serde_json::Value,
+    ) -> Result<ToolOutput, ToolError> {
+        self.execute(app, chat_id, args).await
+    }
+
     /// Convenience: build ToolInfo for LLM provider
     fn info(&self) -> ToolInfo {
         ToolInfo {

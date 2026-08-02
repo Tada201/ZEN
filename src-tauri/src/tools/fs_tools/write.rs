@@ -66,7 +66,7 @@ impl Tool for WriteFileTool {
     async fn execute(
         &self,
         app: AppHandle,
-        _chat_id: String,
+        chat_id: String,
         args: serde_json::Value,
     ) -> Result<ToolOutput, ToolError> {
         let args: WriteFileArgs =
@@ -75,7 +75,12 @@ impl Tool for WriteFileTool {
             })?;
 
         let state = app.state::<AppState>();
-        let workspace = state.workspace_folder.read().await.clone();
+        let workspace = state
+            .workspace_for_chat(&chat_id)
+            .await
+            .map_err(|e| ToolError::ExecutionFailed {
+                message: format!("Unable to resolve session workspace: {}", e),
+            })?;
         let max_file_bytes = workspace_max_file_bytes(&state).await;
         enforce_content_size(args.content.len(), max_file_bytes, "write_file content")?;
         let target_path = crate::workspace::resolve_workspace_path(&workspace, &args.file_path)
@@ -190,7 +195,7 @@ impl Tool for EditFileTool {
     async fn execute(
         &self,
         app: AppHandle,
-        _chat_id: String,
+        chat_id: String,
         args: serde_json::Value,
     ) -> Result<ToolOutput, ToolError> {
         let args: EditFileArgs =
@@ -205,7 +210,12 @@ impl Tool for EditFileTool {
         }
 
         let state = app.state::<AppState>();
-        let workspace = state.workspace_folder.read().await.clone();
+        let workspace = state
+            .workspace_for_chat(&chat_id)
+            .await
+            .map_err(|e| ToolError::ExecutionFailed {
+                message: format!("Unable to resolve session workspace: {}", e),
+            })?;
         let max_file_bytes = workspace_max_file_bytes(&state).await;
         let target_path = crate::workspace::resolve_workspace_path(&workspace, &args.file_path)
             .map_err(|e| ToolError::PermissionDenied {

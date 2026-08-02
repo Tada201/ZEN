@@ -18,7 +18,6 @@ type ExecutionGroupProps = {
   executionSteps: Step[];
   sessionId?: string;
   onOpenArtifact: (artifact: ArtifactData) => void;
-  isStreaming: boolean;
 };
 
 export function ExecutionGroup({
@@ -26,7 +25,6 @@ export function ExecutionGroup({
   executionSteps,
   sessionId,
   onOpenArtifact,
-  isStreaming,
 }: ExecutionGroupProps) {
   return (
     <AgentExecutionTrace
@@ -34,7 +32,6 @@ export function ExecutionGroup({
       executionSteps={executionSteps}
       sessionId={sessionId}
       onOpenArtifact={onOpenArtifact}
-      isStreaming={isStreaming}
       preferCompact
     />
   );

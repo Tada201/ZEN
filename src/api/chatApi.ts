@@ -10,6 +10,8 @@ export interface BackendChat {
   pinned?: number;
   folderId?: string | null;
   isArchived?: number;
+  /** Workspace root captured for this chat; null means use the global workspace fallback. */
+  workspaceRoot?: string | null;
 }
 
 export interface BackendFolder {
@@ -122,6 +124,8 @@ export const chatApi = {
   importChat: (sourcePath: string) => callCommand<unknown>("import_chat", { sourcePath }),
   createChat: (title: string, model: string | null) =>
     callCommand<BackendChat>("create_chat", { title, model }),
+  setChatWorkspace: (chatId: string, workspaceRoot: string | null) =>
+    callCommand<BackendChat>("set_chat_workspace", { chatId, workspaceRoot }),
   deleteChat: (chatId: string) => callCommand<void>("delete_chat", { chatId }),
   updateChatTitle: (chatId: string, title: string) =>
     callCommand<void>("update_chat_title", { chatId, title }),

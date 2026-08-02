@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Ban,
   Bot,
   Check,
   ChevronRight,
@@ -11,11 +12,15 @@ import { cn } from "@/lib/utils";
 import { FoldOutCard, FoldOutCardContent, FoldOutCardTrigger } from "@/components/ui/fold-out-card";
 import type { ArtifactData, Step, ToolCall } from "./types";
 import { AgentExecutionTrace } from "./AgentExecutionTrace";
+import {
+  createDisclosureState,
+  toggleDisclosure,
+  transitionDisclosure,
+} from "./executionDisclosure";
 
 interface SubagentExecutionCardProps {
   step: Step;
   childToolCalls?: ToolCall[];
-  isStreaming?: boolean;
   sessionId?: string;
   onOpenArtifact: (artifact: ArtifactData) => void;
 }
@@ -30,18 +35,18 @@ function formatDuration(ms?: number): string {
 export function SubagentExecutionCard({
   step,
   childToolCalls,
-  isStreaming,
   sessionId,
   onOpenArtifact,
 }: SubagentExecutionCardProps) {
   const subagent = step.subagent;
-  if (!subagent) return null;
-
-  const status = subagent.status;
+  // Keep hooks unconditional while streamed reconciliation fills in the
+  // subagent payload. The render guard stays after lifecycle state is set up.
+  const resolvedSubagent = subagent ?? null;
+  const status = resolvedSubagent?.status ?? "completed";
   const isRunning = status === "running";
   const isFailed = status === "failed" || status === "cancelled";
   const isCompleted = status === "completed";
-  const duration = formatDuration(subagent.durationMs);
+  const duration = formatDuration(subagent?.durationMs);
 
   // Child tools that belong to this subagent (trace_id === spawn_id).
   const childTools = useMemo(() => {
@@ -49,13 +54,26 @@ export function SubagentExecutionCard({
     return childToolCalls;
   }, [childToolCalls]);
 
-  // Keep the card expanded while running, or when there is a result/error to
-  // inspect, so the user doesn't miss the sub-agent's output.
-  const shouldDefaultOpen = isRunning || isFailed || Boolean(subagent.resultSummary || subagent.error) || childTools.length > 0;
-  const [isExpanded, setIsExpanded] = useState(shouldDefaultOpen);
+  // Keep active or failed work open so the user does not miss an interruption.
+  // Completed work stays summary-first even when child tools are available;
+  // the user can open the child trace intentionally.
+  const shouldDefaultOpen = Boolean(resolvedSubagent) && (isRunning || isFailed || Boolean(resolvedSubagent?.error));
+  const disclosureStatus = isRunning ? "running" : isFailed ? (status === "cancelled" ? "cancelled" : "failed") : "completed";
+  const disclosureStateRef = useRef(createDisclosureState(disclosureStatus, shouldDefaultOpen));
+  const [isExpanded, setIsExpanded] = useState(disclosureStateRef.current.open);
+
+  useEffect(() => {
+    const nextState = transitionDisclosure(disclosureStateRef.current, disclosureStatus);
+    disclosureStateRef.current = nextState;
+    setIsExpanded((previous) => previous === nextState.open ? previous : nextState.open);
+  }, [disclosureStatus]);
+
+  if (!resolvedSubagent) return null;
 
   const statusIcon = isRunning ? (
     <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin text-primary" aria-hidden="true" />
+  ) : status === "cancelled" ? (
+    <Ban className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
   ) : isFailed ? (
     <CircleAlert className="h-3.5 w-3.5 text-destructive" aria-hidden="true" />
   ) : isCompleted ? (
@@ -71,23 +89,29 @@ export function SubagentExecutionCard({
       ? "Cancelled"
       : "Failed"
     : isCompleted
-    ? "Completed"
+    ? "Complete"
     : "Subagent";
 
   return (
     <FoldOutCard
       open={isExpanded}
-      onOpenChange={setIsExpanded}
-      className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+      onOpenChange={(nextOpen) => {
+        disclosureStateRef.current = toggleDisclosure(disclosureStateRef.current, nextOpen);
+        setIsExpanded(nextOpen);
+      }}
+      className="execution-subagent overflow-hidden rounded-md border border-border bg-card shadow-sm"
     >
-      <FoldOutCardTrigger className="min-h-10 w-full px-3 py-2 text-foreground transition-colors duration-200 hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary/60">
+      <FoldOutCardTrigger
+        aria-label={`${resolvedSubagent.agentName}, ${statusLabel}${duration ? `, Duration ${duration}` : ""}`}
+        className="execution-foldout-trigger min-h-10 w-full px-3 py-2 text-foreground transition-colors duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
+      >
         <div className="flex w-full items-center gap-2">
           <div
             className={cn(
               "flex h-6 w-6 shrink-0 items-center justify-center rounded-md",
-              isRunning && "bg-primary/10",
-              isFailed && "bg-destructive/10",
-              isCompleted && "bg-success/10",
+              isRunning && "bg-muted",
+              isFailed && "bg-muted",
+              isCompleted && "bg-muted",
               !isRunning && !isFailed && !isCompleted && "bg-muted"
             )}
           >
@@ -96,13 +120,14 @@ export function SubagentExecutionCard({
           <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
             <div className="flex w-full items-center gap-2">
               <span className="min-w-0 flex-1 truncate text-left text-[12px] font-medium text-foreground">
-                {subagent.agentName}
+                {resolvedSubagent.agentName}
               </span>
               <span
                 className={cn(
                   "shrink-0 text-[10px] font-medium uppercase tracking-wider",
                   isRunning && "text-primary",
-                  isFailed && "text-destructive",
+                  status === "cancelled" && "text-muted-foreground",
+                  isFailed && status !== "cancelled" && "text-destructive",
                   isCompleted && "text-success",
                   !isRunning && !isFailed && !isCompleted && "text-muted-foreground"
                 )}
@@ -110,18 +135,18 @@ export function SubagentExecutionCard({
                 {statusLabel}
               </span>
               {duration && (
-                <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
+                <span className="execution-subagent-duration shrink-0 text-[10px] text-muted-foreground tabular-nums">
                   {duration}
                 </span>
               )}
             </div>
             <span className="w-full truncate text-left text-[11px] text-muted-foreground">
-              {subagent.task}
+              {resolvedSubagent.task}
             </span>
           </div>
           <ChevronRight
             className={cn(
-              "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
+              "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
               isExpanded && "rotate-90"
             )}
           />
@@ -129,22 +154,22 @@ export function SubagentExecutionCard({
       </FoldOutCardTrigger>
       <FoldOutCardContent>
         <div className="px-3 pb-3 pt-1">
-          {(subagent.resultSummary || subagent.error) && (
+          {(resolvedSubagent.resultSummary || resolvedSubagent.error) && (
             <div
               className={cn(
                 "mb-2 rounded-lg border p-2.5 text-[12px] leading-relaxed",
-                subagent.error
-                  ? "border-destructive/20 bg-destructive/5 text-destructive/90"
+                resolvedSubagent.error
+                  ? "border-destructive bg-muted text-destructive"
                   : "border-border bg-muted text-foreground"
               )}
             >
-              {subagent.error ? (
+              {resolvedSubagent.error ? (
                 <div className="flex items-start gap-2">
                   <X className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
-                  <span className="whitespace-pre-wrap">{subagent.error}</span>
+                  <span className="whitespace-pre-wrap">{resolvedSubagent.error}</span>
                 </div>
               ) : (
-                <span className="whitespace-pre-wrap">{subagent.resultSummary}</span>
+                <span className="whitespace-pre-wrap">{resolvedSubagent.resultSummary}</span>
               )}
             </div>
           )}
@@ -160,7 +185,6 @@ export function SubagentExecutionCard({
                 executionSteps={[]}
                 sessionId={sessionId}
                 onOpenArtifact={onOpenArtifact}
-                isStreaming={isStreaming}
                 preferCompact
                 bare
               />

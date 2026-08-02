@@ -40,6 +40,22 @@ pub trait AgentTool: Send + Sync {
         token: tokio_util::sync::CancellationToken,
     ) -> Result<Value>;
 
+    /// Context-aware entry point for tools that need the stable call id.
+    /// Mutation recovery wraps legacy tools at the canonical service boundary,
+    /// so existing tools retain the smaller `run` contract by default.
+    async fn run_with_context(
+        &self,
+        app: tauri::AppHandle,
+        chat_id: String,
+        _tool_call_id: String,
+        input: Value,
+        depth: u32,
+        allowed_tools: Option<Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
+        token: tokio_util::sync::CancellationToken,
+    ) -> Result<Value> {
+        self.run(app, chat_id, input, depth, allowed_tools, token).await
+    }
+
     /// Execution timeout in seconds. Tools can override this for operations
     /// that need more or less time. Default is 45 seconds.
     fn timeout_seconds(&self) -> u64 {

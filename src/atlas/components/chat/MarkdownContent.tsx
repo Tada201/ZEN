@@ -291,18 +291,27 @@ export function MarkdownContent({
     mainContent = extracted.content;
   }
 
-  const isPlainShortText = false;
+  // Short, plain streaming deltas do not need a markdown tree. Keep the
+  // heuristic deliberately strict so links, emphasis, code, and headings still
+  // use the normal renderer; the stable wrapper keeps the transition calm when
+  // the stream later becomes rich markdown.
+  const isPlainShortText = Boolean(
+    isStreaming &&
+    mainContent.length <= 240 &&
+    !/[#*_`\[\]|]/.test(mainContent) &&
+    !mainContent.includes("```"),
+  );
 
   // 2a. Parse & extract ## References section for compact grid rendering
   const { clean: refStrippedContent, items: refItems } = useMemo(
-    () => parseReferencesSection(mainContent),
-    [mainContent]
+    () => isPlainShortText ? { clean: mainContent, items: null } : parseReferencesSection(mainContent),
+    [isPlainShortText, mainContent]
   );
 
   // 2b. Split main content into memoizable blocks (with references removed)
   const blocks = useMemo(
-    () => splitMarkdownIntoBlocks(refStrippedContent, !!isStreaming),
-    [refStrippedContent, isStreaming]
+    () => isPlainShortText ? [] : splitMarkdownIntoBlocks(refStrippedContent, !!isStreaming),
+    [isPlainShortText, refStrippedContent, isStreaming]
   );
 
   // 3. Build stable components reference for markdown rendering

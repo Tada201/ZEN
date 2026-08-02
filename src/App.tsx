@@ -1,4 +1,4 @@
-import { Component, Suspense, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
+import { Component, lazy, Suspense, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
 import { ZenProvider } from "./atlas/ZenContext";
 import { Toaster } from "sonner";
 import { useGlobalStreamListener } from "./atlas/hooks/useGlobalStreamListener";
@@ -12,6 +12,13 @@ import { BootScreen } from "./components/bootscreen";
 import { useAppInit } from "./hooks/useAppInit";
 
 import { WorkspaceApp } from "./atlas/sections/WorkspaceSection";
+import { EXECUTION_DISCLOSURE_HARNESS_QUERY } from "./atlas/components/chat/executionDisclosureHarnessContract";
+
+const ExecutionDisclosureHarness = lazy(() =>
+  import("./atlas/components/chat/ExecutionDisclosureHarness").then((module) => ({
+    default: module.ExecutionDisclosureHarness,
+  })),
+);
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   constructor(props: { children: ReactNode }) {
@@ -52,7 +59,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
  * Root Application Component.
  * Assembles the Integrated Workbench Shell using Zen.
  */
-function App() {
+function AppRuntime() {
   const [bootFinished, setBootFinished] = useState(false);
   const initializeVersion = useUpdateStore((state) => state.init);
   const themeId = useSettingsStore((state) => state.themeId);
@@ -104,6 +111,22 @@ function App() {
       </ZenProvider>
     </ErrorBoundary>
   );
+}
+
+function App() {
+  const executionDisclosureHarnessRequested = import.meta.env.DEV
+    && typeof window !== "undefined"
+    && window.location.search.includes(EXECUTION_DISCLOSURE_HARNESS_QUERY);
+
+  if (executionDisclosureHarnessRequested) {
+    return (
+      <Suspense fallback={<div className="fixed inset-0 bg-background" />}>
+        <ExecutionDisclosureHarness />
+      </Suspense>
+    );
+  }
+
+  return <AppRuntime />;
 }
 
 export default App;

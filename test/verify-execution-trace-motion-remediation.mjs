@@ -1,0 +1,42 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+const assistant = read("src/atlas/components/chat/AssistantMessage.tsx");
+const trace = read("src/atlas/components/chat/AgentExecutionTrace.tsx");
+const reasoning = read("src/atlas/components/chat/ReasoningBlock.tsx");
+const delegation = read("src/atlas/components/chat/AgentDelegationLane.tsx");
+const subagent = read("src/atlas/components/chat/SubagentExecutionCard.tsx");
+const actionTrace = read("src/atlas/components/chat/AssistantMessageTrace.tsx");
+const deepResearch = read("src/atlas/components/chat/DeepResearchRunMessage.tsx");
+const disclosure = read("src/atlas/components/chat/executionDisclosure.ts");
+const rightPanel = read("src/atlas/components/right-panel/RightPanelInsights.tsx");
+
+assert(assistant.includes("function getExecutionStepKey"), "assistant should centralize stable execution step identity");
+assert(assistant.includes("toolBatchId") && assistant.includes("executionId") && assistant.includes("runId"), "live group keys should prefer canonical execution identity");
+assert(assistant.includes("executionGroupKeyCacheRef") && assistant.includes("groupKeyCache"), "live group keys should cache child identity across stream updates");
+assert(assistant.includes("baseFingerprint") && assistant.includes("fallbackFingerprint") && assistant.includes("immutable group shape"), "groups without IDs should use immutable fingerprint identity before index fallback");
+assert(assistant.includes("rememberedKey"), "late canonical identity must not remount an already-visible live group");
+assert(!assistant.includes("step.toolCalls.map(t => t.id).join"), "live group keys must not depend on changing child-id lists");
+const executionGroupBlock = assistant.match(/<ExecutionGroup[\s\S]*?\/>/)?.[0] || "";
+const subagentBlock = assistant.match(/<SubagentExecutionCard[\s\S]*?\/>/)?.[0] || "";
+assert(!executionGroupBlock.includes("isStreaming="), "ExecutionGroup must not receive the removed presentation prop");
+assert(!subagentBlock.includes("isStreaming="), "SubagentExecutionCard must not receive the removed presentation prop");
+const rightPanelExecutionGroupBlock = rightPanel.match(/<ExecutionGroup[\s\S]*?\/>/)?.[0] || "";
+assert(!rightPanelExecutionGroupBlock.includes("isStreaming="), "right-panel ExecutionGroup projections must not pass the removed presentation prop");
+assert(!assistant.includes("slide-in-from-top-1"), "assistant trace motion must not use directional entrance slides");
+assert(assistant.includes("animate-in fade-in duration-150"), "assistant trace updates should use a short opacity-only entrance");
+assert(!trace.includes("animationDelay") && !trace.includes("slide-in-from-top-2"), "tool rows must not use index-based staggered waterfall motion");
+assert(trace.includes("transitionDisclosure") && disclosure.includes("live result cannot disappear"), "completed live groups must preserve their open surface");
+assert(!reasoning.includes("collapseTimeoutRef") && !reasoning.includes("setExpanded(false)"), "reasoning must not force-close after live completion");
+assert(reasoning.includes("}, 1000);"), "reasoning timer must align with displayed seconds");
+assert(reasoning.includes("transitionDisclosure") && reasoning.includes("toggleDisclosure"), "reasoning disclosure lifecycle should use the shared transition policy");
+assert(reasoning.includes("}, [isThinking]);"), "reasoning timer must not restart when disclosure is toggled");
+assert(delegation.includes("transitionDisclosure") && delegation.includes("toggleDisclosure"), "delegation lanes must use the shared disclosure transition policy");
+assert(subagent.includes("transitionDisclosure") && subagent.includes("toggleDisclosure"), "subagent cards must use the shared disclosure transition policy");
+assert(trace.includes("transitionDisclosure") && trace.includes("toggleDisclosure"), "grouped execution traces must use the shared disclosure transition policy");
+assert(actionTrace.includes("isRunning && \"text-foreground\""), "active action labels should use a stable semantic foreground color");
+assert(!actionTrace.includes("text-premium-shimmer"), "execution action labels must not use animated shimmer");
+assert(!deepResearch.includes("animate-text-shimmer"), "active research labels must not use animated shimmer");
+
+console.log("execution trace motion remediation verified");

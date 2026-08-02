@@ -2,7 +2,7 @@ import { useState, useMemo, memo, useDeferredValue, useRef, useEffect } from "re
 import { type TabId } from "../SettingsModal";
 import { 
   Plus, Search, Trash2, Settings2,
-  PanelLeftClose, PanelLeftOpen, MessageSquare, History,
+  MessageSquare, History,
   FolderPlus, Folder, Archive, Edit2, MoreHorizontal
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,6 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/utils";
 import { Session, ChatFolder } from "./types";
 import { SessionSidebarItem, type SearchResult } from "./SessionSidebarItem";
-import { SIDEBAR_COLLAPSED_WIDTH } from "@/lib/constants/design";
 import type { WorkspaceModeId } from "@/lib/features/frontendFeatures";
 
 interface SessionSidebarProps {
@@ -43,8 +42,6 @@ interface SessionSidebarProps {
   setSettingsTab: (tab: TabId) => void;
   setShowSettingsModal: (val: boolean) => void;
   onPreloadSettings?: () => void;
-  onToggleSidebar: () => void;
-  isCollapsed?: boolean;
   activeTab?: WorkspaceModeId;
   onTabChange?: (tab: WorkspaceModeId) => void;
   workspaceModes?: { id: WorkspaceModeId; label: string }[];
@@ -54,8 +51,8 @@ export const SessionSidebar = memo(({
   sessions, archivedSessions = [], folders, currentId, onSelect, onCreate, onDelete, onRename,
   onPin, onArchive, onUnarchive, onCreateFolder, onRenameFolder, onDeleteFolder, onMoveToFolder,
   search, searchResults = [], onSearchChange, onExport, onDeleteAll,
-  setSettingsTab, setShowSettingsModal, onPreloadSettings, onToggleSidebar,
-  isCollapsed = false, activeTab = "chat", onTabChange, workspaceModes = [{ id: "chat", label: "Chat" }]
+  setSettingsTab, setShowSettingsModal, onPreloadSettings,
+  activeTab = "chat", onTabChange, workspaceModes = [{ id: "chat", label: "Chat" }]
 }: SessionSidebarProps) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
@@ -168,65 +165,6 @@ export const SessionSidebar = memo(({
     return groups;
   }, [sessions, showArchived, deferredSearch]);
 
-  if (isCollapsed) {
-    return (
-      <div className="flex flex-col h-full py-3 items-center gap-4 shrink-0 overflow-hidden" style={{ width: `${SIDEBAR_COLLAPSED_WIDTH}px` }}>
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted/50"
-          onClick={onToggleSidebar}
-          aria-label="Open sidebar"
-          title="Open sidebar"
-        >
-          <PanelLeftOpen size={18} />
-        </Button>
-
-        <div className="w-8 h-px bg-muted/50 my-1" />
-
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted/50"
-          onClick={onCreate}
-          aria-label="New chat"
-          title="New chat"
-        >
-          <Plus size={18} />
-        </Button>
-
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted/50"
-          onClick={() => setShowArchived(!showArchived)} 
-          aria-label={showArchived ? "Back to chats" : "Archive"}
-          title={showArchived ? "Back to chats" : "Archive"}
-        >
-          {showArchived ? <History size={18} /> : <Archive size={18} />}
-        </Button>
-
-        <div className="flex-1" />
-
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted/50"
-          onClick={() => {
-            setSettingsTab("providers");
-            setShowSettingsModal(true);
-          }}
-          aria-label="Settings"
-          title="Settings"
-          onPointerEnter={onPreloadSettings}
-          onFocus={onPreloadSettings}
-        >
-          <Settings2 size={18} />
-        </Button>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col h-full select-none">
       {/* Header */}
@@ -245,16 +183,6 @@ export const SessionSidebar = memo(({
               title={showArchived ? "Hide archived" : "Show archived"}
             >
               <Archive size={14} />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/50"
-              onClick={onToggleSidebar}
-              aria-label="Close sidebar"
-              title="Close sidebar"
-            >
-              <PanelLeftClose size={15} />
             </Button>
           </div>
         </div>

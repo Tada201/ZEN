@@ -32,16 +32,58 @@ export type GroupedAssistantStep =
   | (Step & { type: "reasoning" | "action" | "subagent" })
   | { type: "tool-group"; toolCalls: ToolCall[] };
 
-export function shouldShowPostToolWorking(
-  steps: GroupedAssistantStep[],
-  isStreaming: boolean,
-): boolean {
-  if (!isStreaming || steps.length === 0) return false;
+/**
+ * Parent-level status is deliberately quieter than the detailed trace. A
+ * reasoning block or an actionable execution group already explains what is
+ * happening, so the compact parent indicator must yield to that surface.
+ */
+export type ParentWorkingStatus = "thinking" | "planning" | "executing" | "responding";
 
-  const last = steps[steps.length - 1];
-  if (last.type !== "tool-group" || last.toolCalls.length === 0) return false;
+export function selectParentWorkingStatus({
+  isStreaming,
+  chatStatusPhase,
+  hasActiveReasoning,
+  hasActiveExecution,
+  hasActiveDelegation = false,
+  hasPendingResponse,
+}: {
+  isStreaming: boolean;
+  chatStatusPhase?: string;
+  hasActiveReasoning: boolean;
+  hasActiveExecution: boolean;
+  hasActiveDelegation?: boolean;
+  hasPendingResponse: boolean;
+}): ParentWorkingStatus | undefined {
+  if (!isStreaming) return undefined;
 
-  return last.toolCalls.every((tool) => tool.status === "completed" || tool.status === "error");
+  // Detailed attention states own the announcement. This prevents a parent
+  // "Executing" or "Responding" label from competing with approval, failure,
+  // running tool, subagent, or live reasoning content.
+  if (hasActiveReasoning || hasActiveExecution || hasActiveDelegation) return undefined;
+
+  // A completed tool group followed by streamed assistant output is a distinct
+  // response phase and takes precedence over a stale provider phase.
+  if (hasPendingResponse) return "responding";
+
+  if (chatStatusPhase === CHAT_STATUS_PHASES.AgentStreaming) return "thinking";
+  if (chatStatusPhase === CHAT_STATUS_PHASES.ToolBatchPlanned) return "planning";
+  if (
+    chatStatusPhase === CHAT_STATUS_PHASES.ProviderReady ||
+    chatStatusPhase === CHAT_STATUS_PHASES.ToolCallStreaming ||
+    chatStatusPhase === CHAT_STATUS_PHASES.ToolCallReady ||
+    chatStatusPhase === CHAT_STATUS_PHASES.ToolExecuting
+  ) {
+    return "executing";
+  }
+
+  return undefined;
+}
+
+export function parentWorkingStatusLabel(status: ParentWorkingStatus): string {
+  if (status === "thinking") return "Thinking...";
+  if (status === "planning") return "Planning tools...";
+  if (status === "executing") return "Executing...";
+  return "Responding...";
 }
 
 function extractToolId(step: Step): string | undefined {

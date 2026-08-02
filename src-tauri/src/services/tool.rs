@@ -1,14 +1,15 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 use tokio_util::sync::CancellationToken;
 
 use crate::services::{
-    AuditEvent, PermissionDecision as SecurityDecision, PermissionRequest, PrivilegedOperation,
-    RiskLevel as SecurityRiskLevel, SecurityService,
+    AuditEvent, PermissionDecision as SecurityDecision, PermissionRequest,
+    PrivilegedOperation, RiskLevel as SecurityRiskLevel, SecurityService,
 };
 use crate::tools::{GlobalToolRegistry, ToolCall, ToolError};
 
@@ -81,6 +82,11 @@ impl ToolApprovalOutcome {
     }
 }
 
+struct MutationCapture {
+    path: PathBuf,
+    token: crate::services::checkpoint::MutationToken,
+}
+
 pub struct ToolApprovalExecutionContext {
     pub run_id: Option<String>,
     pub parent_agent_id: Option<String>,
@@ -104,6 +110,148 @@ impl ToolService {
             pending_approvals,
             execution_limit: Arc::new(Semaphore::new(16)),
         }
+    }
+
+    async fn capture_file_mutations(
+        &self,
+        app: &AppHandle,
+        chat_id: &str,
+        tool_call: &ToolCall,
+    ) -> Result<Vec<MutationCapture>, String> {
+        let paths: Vec<PathBuf> = match tool_call.name.as_str() {
+            "write_file" | "edit_file" | "file_write" => {
+                let path = tool_call
+                    .arguments
+                    .get("file_path")
+                    .or_else(|| tool_call.arguments.get("path"))
+                    .and_then(|value| value.as_str())
+                    .ok_or_else(|| "File mutation is missing a file path.".to_string())?;
+                vec![PathBuf::from(path)]
+            }
+            "apply_patch" => {
+                let patch = tool_call
+                    .arguments
+                    .get("patch")
+                    .and_then(|value| value.as_str())
+                    .ok_or_else(|| "Patch mutation is missing patch contents.".to_string())?;
+                crate::tools::patch_parser::parse_patches(patch)
+                    .map_err(|error| format!("Cannot checkpoint patch: {}", error))?
+                    .into_iter()
+                    .map(|hunk| hunk.path().to_path_buf())
+                    .collect()
+            }
+            _ => return Ok(Vec::new()),
+        };
+
+        let state = app.state::<crate::commands::AppState>();
+        let workspace = state
+            .workspace_for_chat(chat_id)
+            .await
+            .map_err(|error| error.to_string())?;
+        let mut captures = Vec::with_capacity(paths.len());
+        let mut seen = std::collections::HashSet::new();
+        for path in paths {
+            if !seen.insert(path.clone()) {
+                continue;
+            }
+            let resolved = match crate::workspace::resolve_workspace_path(
+                &workspace,
+                &path.to_string_lossy(),
+            ) {
+                Ok(resolved) => resolved,
+                Err(error) => {
+                    self.discard_file_mutations(app, chat_id, captures).await;
+                    return Err(format!("Cannot checkpoint workspace path: {}", error));
+                }
+            };
+            let original = if tokio::fs::try_exists(&resolved).await.unwrap_or(false) {
+                match tokio::fs::read(&resolved).await {
+                    Ok(bytes) => Some(bytes),
+                    Err(error) => {
+                        self.discard_file_mutations(app, chat_id, captures).await;
+                        return Err(format!("Cannot read {} before mutation: {}", resolved.display(), error));
+                    }
+                }
+            } else {
+                None
+            };
+            let token = match state
+                .checkpoints
+                .capture_before(chat_id, &tool_call.id, &resolved, original)
+                .await
+            {
+                Some(token) => token,
+                None => {
+                    self.discard_file_mutations(app, chat_id, captures).await;
+                    return Err("Cannot create a recovery checkpoint for this mutation.".to_string());
+                }
+            };
+            captures.push(MutationCapture { path: resolved, token });
+        }
+        Ok(captures)
+    }
+
+    async fn discard_file_mutations(
+        &self,
+        app: &AppHandle,
+        chat_id: &str,
+        captures: Vec<MutationCapture>,
+    ) {
+        let state = app.state::<crate::commands::AppState>();
+        for capture in captures {
+            state.checkpoints.discard(chat_id, capture.token).await;
+        }
+    }
+
+    async fn finalize_file_mutations(
+        &self,
+        app: &AppHandle,
+        chat_id: &str,
+        tool_call: &ToolCall,
+        captures: &[MutationCapture],
+        output: &mut serde_json::Value,
+    ) -> Result<(), String> {
+        if captures.is_empty() {
+            return Ok(());
+        }
+        let state = app.state::<crate::commands::AppState>();
+        // Read every post-mutation byte before committing any record. A read
+        // failure therefore cannot leave a partially finalized checkpoint.
+        let mut current_bytes = Vec::with_capacity(captures.len());
+        for capture in captures {
+            let current = if tokio::fs::try_exists(&capture.path).await.unwrap_or(false) {
+                Some(tokio::fs::read(&capture.path).await.map_err(|error| {
+                    format!("Cannot finalize recovery checkpoint for {}: {}", capture.path.display(), error)
+                })?)
+            } else {
+                None
+            };
+            current_bytes.push(current);
+        }
+        let mut changed_count = 0;
+        for (capture, current) in captures.iter().zip(current_bytes) {
+            if state
+                .checkpoints
+                .commit(chat_id, capture.token.clone(), current)
+                .await
+            {
+                changed_count += 1;
+            }
+        }
+        if changed_count == 0 {
+            return Ok(());
+        }
+        let checkpoint = serde_json::json!({
+            "available": true,
+            "tool_call_id": tool_call.id,
+            "file_count": changed_count,
+        });
+        if let Some(record) = output.as_object_mut() {
+            record.insert("checkpoint".to_string(), checkpoint);
+        } else {
+            *output = serde_json::json!({ "result": output.clone(), "checkpoint": checkpoint });
+        }
+        Ok(())
     }
 
     pub async fn execute_interactive(
@@ -471,6 +619,18 @@ impl ToolService {
             }
 
             let timeout_seconds = tool.timeout_seconds();
+            // Serialize file mutations with checkpoint restore. Non-file tools
+            // retain the existing concurrency limit and can still run in parallel.
+            let _mutation_guard = if is_file_mutation_tool(&v2_tool_call.name) {
+                Some(
+                    app.state::<crate::commands::AppState>()
+                        .checkpoints
+                        .acquire_mutation_lock()
+                        .await,
+                )
+            } else {
+                None
+            };
             let permit = match self
                 .acquire_execution_permit("agent_tool", &tool_call.name)
                 .await
@@ -488,9 +648,24 @@ impl ToolService {
                     };
                 }
             };
+            let captures = match self.capture_file_mutations(&app, &chat_id, &v2_tool_call).await {
+                Ok(captures) => captures,
+                Err(error) => {
+                    return crate::agent::types::ToolResult {
+                        tool_call_id: tool_call.id,
+                        content: serde_json::json!({
+                            "error": error,
+                            "tool": tool_call.name,
+                            "hint": "The file mutation was blocked because a safe recovery checkpoint could not be created."
+                        }),
+                        is_error: true,
+                        duration_ms: 0,
+                    };
+                }
+            };
             let tool_run_future = tool.run(
                 app.clone(),
-                chat_id,
+                chat_id.clone(),
                 tool_call.args.clone(),
                 depth,
                 allowed_tools,
@@ -532,6 +707,25 @@ impl ToolService {
             };
             drop(permit);
             let duration_ms = start.elapsed().as_millis() as u64;
+            let result_outcome = match result_outcome {
+                Ok(mut value) => match self
+                    .finalize_file_mutations(&app, &chat_id, &v2_tool_call, &captures, &mut value)
+                    .await
+                {
+                    Ok(()) => Ok(value),
+                    Err(error) => {
+                        self.discard_file_mutations(&app, &chat_id, captures).await;
+                        Err(error)
+                    }
+                },
+                Err(error) => {
+                    // Failed mutations are not advertised as undoable. A
+                    // later slice can add atomic patch transactions without
+                    // making an unsafe ownership assumption here.
+                    self.discard_file_mutations(&app, &chat_id, captures).await;
+                    Err(error)
+                }
+            };
 
             match result_outcome {
                 Ok(val) => {
@@ -755,11 +949,51 @@ impl ToolService {
             .acquire_execution_permit("tool_service", &tool_name)
             .await?;
         let start = std::time::Instant::now();
+        // Keep capture, mutation, finalization, and undo in one serialized
+        // transaction for file tools so a concurrent in-process writer cannot
+        // invalidate the expected-after comparison.
+        let _mutation_guard = if is_file_mutation_tool(&tool_call.name) {
+            Some(
+                app.state::<crate::commands::AppState>()
+                    .checkpoints
+                    .acquire_mutation_lock()
+                    .await,
+            )
+        } else {
+            None
+        };
+        let captures = self.capture_file_mutations(&app, &chat_id, &tool_call).await?;
         let result = tool
-            .execute(app, chat_id, tool_call.arguments)
+            .execute_with_context(
+                app.clone(),
+                chat_id.clone(),
+                tool_call.id.clone(),
+                tool_call.arguments.clone(),
+            )
             .await
             .map(|output| output.content)
             .map_err(|e| e.to_string());
+        let result = match result {
+            Ok(mut output) => {
+                match self
+                    .finalize_file_mutations(&app, &chat_id, &tool_call, &captures, &mut output)
+                    .await
+                {
+                    Ok(()) => Ok(output),
+                    Err(error) => {
+                        self.discard_file_mutations(&app, &chat_id, captures).await;
+                        Err(error)
+                    }
+                }
+            }
+            Err(error) => {
+                // Do not expose an undo action for a failed mutation. The
+                // operation may have partially applied and ownership of those
+                // bytes is ambiguous without an atomic workspace transaction.
+                self.discard_file_mutations(&app, &chat_id, captures).await;
+                Err(error)
+            }
+        };
         let duration_ms = start.elapsed().as_millis() as u64;
 
         self.audit(
@@ -1010,6 +1244,10 @@ pub fn approval_args_hash(args: &serde_json::Value) -> String {
 fn output_hash(output: &serde_json::Value) -> String {
     use sha2::{Digest, Sha256};
     format!("{:x}", Sha256::digest(output.to_string()))
+}
+
+fn is_file_mutation_tool(name: &str) -> bool {
+    matches!(name, "write_file" | "edit_file" | "file_write" | "apply_patch")
 }
 
 fn map_tool_operation(name: &str) -> PrivilegedOperation {

@@ -30,30 +30,57 @@ check(
 );
 
 const settingsTab = readFileSync("src/components/settings/Tabs/ToolsSettings.tsx", "utf8");
+const modeRegistry = readFileSync("src/lib/constants/permissionModes.ts", "utf8");
+const permissionMenu = readFileSync("src/atlas/components/PermissionModeMenu.tsx", "utf8");
+const settingsCommands = readFileSync("src-tauri/src/commands/settings.rs", "utf8");
 check(
-  "ToolsSettings maps new SafetyMode types (plan_mode, ask, auto_edit, yolo)",
-  /type SafetyMode\s*=\s*"plan_mode"\s*\|\s*"ask"\s*\|\s*"auto_edit"\s*\|\s*"yolo"/.test(settingsTab),
+  "Shared mode registry owns all SafetyMode variants",
+  /export type SafetyMode\s*=\s*"plan_mode"\s*\|\s*"ask"\s*\|\s*"auto_edit"\s*\|\s*"yolo"/.test(modeRegistry) &&
+    /SAFETY_MODE_DEFINITIONS/.test(modeRegistry) &&
+    /isSafetyMode/.test(modeRegistry),
 );
 check(
-  "ToolsSettings applyMode maps values to tools.permission-mode",
-  /onUpdate\("tools\.permission-mode",\s*mode\)/.test(settingsTab),
-);
-
-const chatInput = readFileSync("src/atlas/components/PremiumChatInput.tsx", "utf8");
-check(
-  "PremiumChatInput reads toolPermissionMode from settings store",
-  /const permissionMode = useSettingsStore/.test(chatInput),
+  "ToolsSettings consumes the shared mode registry",
+  /permissionModes/.test(settingsTab) &&
+    /SAFETY_MODE_DEFINITIONS\.map/.test(settingsTab) &&
+    /getSafetyModeSettingEntries/.test(settingsTab),
 );
 check(
-  "PremiumChatInput defines handleSelectPermissionMode callback",
-  /const handleSelectPermissionMode = useCallback/.test(chatInput),
+  "PermissionModeMenu consumes the shared mode registry",
+  /permissionModes/.test(permissionMenu) &&
+    /SAFETY_MODE_DEFINITIONS\.map/.test(permissionMenu) &&
+    /getSafetyModeSettings/.test(permissionMenu) &&
+    /isSafetyMode\(state\.toolPermissionMode\)/.test(permissionMenu),
 );
 check(
-  "PremiumChatInput renders dropdown items for Plan, Ask, Auto-Edit, and YOLO",
-  /handleSelectPermissionMode\("plan_mode"\)/.test(chatInput) &&
-    /handleSelectPermissionMode\("ask"\)/.test(chatInput) &&
-    /handleSelectPermissionMode\("auto_edit"\)/.test(chatInput) &&
-    /handleSelectPermissionMode\("yolo"\)/.test(chatInput),
+  "Registry projects all compatibility fields for each mode",
+  /toolPermissionMode: mode/.test(modeRegistry) &&
+    /toolYoloMode: true/.test(modeRegistry) &&
+    /toolAutoApproveLowRisk: true/.test(modeRegistry) &&
+    /toolGlobalDefault: "always_allow"/.test(modeRegistry) &&
+    /toolYoloMode: false/.test(modeRegistry) &&
+    /toolGlobalDefault: "confirm"/.test(modeRegistry),
+);
+check(
+  "All emitted permission keys are recognized by backend auto-sync",
+  /tools\.permission-mode/.test(settingsCommands) &&
+    /tools\.yolo-mode/.test(settingsCommands) &&
+    /tools\.auto-approve-low-risk/.test(settingsCommands) &&
+    /tools\.global-default/.test(settingsCommands),
+);
+check(
+  "Execution mode selector exposes accessible state and backend-sync feedback",
+  /aria-label=\{`Execution mode:/.test(permissionMenu) &&
+    /aria-current=\{selected \? "true"/.test(permissionMenu) &&
+    /syncFailed/.test(permissionMenu) &&
+    /toast\.error/.test(permissionMenu) &&
+    /previous mode was restored/.test(permissionMenu),
+);
+check(
+  "Full Access remains confirmation-gated",
+  /mode === "yolo"/.test(permissionMenu) &&
+    /window\.confirm/.test(permissionMenu) &&
+    /Hard security blocks still apply/.test(permissionMenu),
 );
 
 if (process.exitCode) {

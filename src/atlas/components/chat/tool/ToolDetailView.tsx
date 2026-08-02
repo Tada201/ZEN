@@ -40,6 +40,7 @@ function parseOutput(output: string): unknown {
 function FileChangeCard({
   file,
   defaultOpen,
+  onOpenArtifact,
 }: {
   file: {
     path: string;
@@ -49,6 +50,7 @@ function FileChangeCard({
     diff?: string;
   };
   defaultOpen?: boolean;
+  onOpenArtifact?: (artifact: ArtifactData) => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const parsed = useMemo(
@@ -61,34 +63,56 @@ function FileChangeCard({
     file.linesAdded !== undefined || file.linesRemoved !== undefined
       ? `+${file.linesAdded || 0} −${file.linesRemoved || 0}`
       : undefined;
+  const openArtifact = () => {
+    if (!onOpenArtifact || !file.diff) return;
+    onOpenArtifact({
+      type: "code",
+      title: file.path,
+      language: "diff",
+      content: file.diff,
+    });
+  };
 
   return (
-    <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left transition-colors duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-t-lg"
-      >
-        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground">
-          {filenameOf(file.path)}
-        </span>
-        {summary && (
-          <span className="shrink-0 text-[11px] font-medium tabular-nums text-foreground">
-            {summary}
+    <div className="codex-surface overflow-hidden shadow-none">
+      <div className="flex w-full min-w-0 items-center gap-2 rounded-t-lg px-3 py-2 text-left">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-label={`${open ? "Collapse" : "Expand"} diff for ${file.path}`}
+          onClick={() => setOpen((prev) => !prev)}
+          className="codex-row-action codex-focus flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground">
+            {filenameOf(file.path)}
           </span>
+          {summary && (
+            <span className="shrink-0 text-[11px] font-medium tabular-nums text-foreground">
+              {summary}
+            </span>
+          )}
+          <ChevronRight
+            className={cn(
+              "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
+              open && "rotate-90",
+            )}
+            aria-hidden="true"
+          />
+        </button>
+        {onOpenArtifact && file.diff && (
+          <button
+            type="button"
+            aria-label={`Open full diff for ${file.path}`}
+            onClick={openArtifact}
+            className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-primary transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            Open
+          </button>
         )}
         <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
           {file.changeType}
         </span>
-        <ChevronRight
-          className={cn(
-            "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
-            open && "rotate-90",
-          )}
-          aria-hidden="true"
-        />
-      </button>
+      </div>
 
       {open && (
         <div className="max-h-80 overflow-auto border-t border-border">
@@ -114,7 +138,13 @@ function FileChangeCard({
   );
 }
 
-function FileEditDetail({ outputPreview }: { outputPreview: ToolOutputPreview }) {
+function FileEditDetail({
+  outputPreview,
+  onOpenArtifact,
+}: {
+  outputPreview: ToolOutputPreview;
+  onOpenArtifact?: (artifact: ArtifactData) => void;
+}) {
   if (outputPreview.files.length === 0) return null;
 
   const totalAdded = outputPreview.files.reduce(
@@ -140,7 +170,12 @@ function FileEditDetail({ outputPreview }: { outputPreview: ToolOutputPreview })
 
       <div className="flex flex-col gap-2">
         {outputPreview.files.map((file) => (
-          <FileChangeCard key={file.path} file={file} defaultOpen />
+          <FileChangeCard
+            key={file.path}
+            file={file}
+            defaultOpen
+            onOpenArtifact={onOpenArtifact}
+          />
         ))}
       </div>
     </div>
@@ -192,7 +227,7 @@ function ToolDetailViewInner({
   const body = custom
     ? <>{custom}</>
     : outputPreview.files.length > 0
-      ? <FileEditDetail outputPreview={outputPreview} />
+      ? <FileEditDetail outputPreview={outputPreview} onOpenArtifact={onViewArtifact} />
       : (
         <ToolContentSwitch
           toolCall={toolCall}

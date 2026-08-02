@@ -1,19 +1,19 @@
 import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
-const inputSource = readFileSync(new URL("../src/atlas/components/PremiumChatInput.tsx", import.meta.url), "utf8");
+const resizeHookSource = readFileSync(new URL("../src/atlas/components/useAutoResizeTextarea.ts", import.meta.url), "utf8");
 const dropdownSource = readFileSync(new URL("../src/atlas/components/chat/input/ModelSearchDropdown.tsx", import.meta.url), "utf8");
 
 assert(
-  inputSource.includes("const resizeFrameRef = useRef<number | null>(null);"),
+  resizeHookSource.includes("const resizeFrameRef = useRef<number | null>(null);"),
   "chat input should keep textarea resize work cancellable",
 );
 assert(
-  inputSource.includes("window.requestAnimationFrame"),
+  resizeHookSource.includes("window.requestAnimationFrame"),
   "chat input should schedule textarea resize work outside the immediate input event",
 );
 assert(
-  inputSource.includes("window.cancelAnimationFrame"),
+  resizeHookSource.includes("window.cancelAnimationFrame"),
   "chat input should cancel stale textarea resize frames during rapid typing",
 );
 assert(

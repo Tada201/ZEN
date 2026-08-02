@@ -4,8 +4,6 @@
    Image attachments · API key management · SQLite persistence
  ═══════════════════════════════════════════════════════════════ */
 import { useState, useCallback, useEffect, useTransition, useMemo } from "react";
-import { PanelLeftOpen } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useChat } from "@/atlas/hooks/useChat";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -132,8 +130,6 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
     setSelectedModelId(id, provider);
   }, [setSelectedModelId]);
 
-  const onToggleSidebar = useCallback(() => setIsSidebarOpen(false), []);
-
   const latestStatusStep = useMemo(() => {
     const lastMessage = messages[messages.length - 1];
     if (!isStreaming || lastMessage?.role !== "assistant" || !lastMessage.steps) return null;
@@ -200,7 +196,6 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
               onSearchChange={setSearch}
               setSettingsTab={onOpenSettings}
               setShowSettingsModal={setShowSettingsModal}
-              onToggleSidebar={onToggleSidebar}
             />
           </motion.div>
         )}
@@ -233,19 +228,6 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
           layout
           className="relative flex flex-1 flex-col min-w-0 h-full bg-transparent overflow-hidden"
         >
-          {!isSidebarOpen && (
-            <div className="absolute left-4 top-4 z-20">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-9 w-9 rounded-xl bg-background/50 backdrop-blur-md border border-border shadow-sm hover:bg-muted/80"
-                onClick={() => setIsSidebarOpen(true)}
-              >
-                <PanelLeftOpen className="h-5 w-5" />
-              </Button>
-            </div>
-          )}
-
           <MessageList
             messages={messages}
             onOpenArtifact={handleOpenArtifact}

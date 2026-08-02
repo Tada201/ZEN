@@ -59,6 +59,13 @@ const STATUS_ICON_CLASS: Record<ExecutionStatus, string> = {
   awaiting_approval: "text-warning",
 };
 
+export function getExecutionStatusLabel(status: ExecutionStatus) {
+  if (status === "awaiting_approval") return "Needs approval";
+  if (status === "completed") return "Complete";
+  if (status === "error") return "Failed";
+  return "Running";
+}
+
 /**
  * A single-line execution row primitive used for tool calls, subagent
  * delegations, approval requests, and grouped execution summaries.
@@ -82,9 +89,15 @@ export function ExecutionRow({
   statusLabel,
 }: ExecutionRowProps) {
   const Icon = STATUS_ICONS[status];
+  const resolvedStatusLabel = statusLabel || getExecutionStatusLabel(status);
+  const resolvedAriaLabel = [
+    typeof title === "string" ? title : undefined,
+    resolvedStatusLabel,
+    duration ? `Duration ${duration}` : undefined,
+  ].filter(Boolean).join(", ");
   const clickable = Boolean(onClick);
   const containerClassName = cn(
-    "flex w-full min-w-0 items-center gap-2 rounded-md border border-border bg-card text-left transition-colors duration-200",
+    "execution-row flex w-full min-w-0 items-center gap-2 rounded-md border border-border bg-card text-left transition-colors duration-200 font-sans",
     category !== "generic" && "border-l-[3px]",
     CATEGORY_BORDER[category],
     clickable && "hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
@@ -96,6 +109,8 @@ export function ExecutionRow({
     return (
       <div
         aria-expanded={expanded}
+        aria-busy={status === "running"}
+        data-status={status}
         className={containerClassName}
       >
         <ExecutionRowContent
@@ -116,22 +131,24 @@ export function ExecutionRow({
       type="button"
       onClick={onClick}
       aria-expanded={expanded}
+      aria-busy={status === "running"}
+      data-status={status}
+      aria-label={resolvedAriaLabel}
       className={containerClassName}
     >
       <Icon
-        aria-label={statusLabel}
+        aria-label={resolvedStatusLabel}
         className={cn(
-          "h-3.5 w-3.5 shrink-0 transition-colors duration-200",
+          "execution-row-icon h-3.5 w-3.5 shrink-0 transition-colors duration-200",
           STATUS_ICON_CLASS[status],
         )}
       />
-
-      <span className="min-w-0 flex-1 py-1.5 pl-0.5">
-        <span className="block min-w-0 truncate text-[12px] font-medium leading-5 text-foreground">
+      <span className="execution-row-copy min-w-0 flex-1 py-1.5 pl-0.5">
+        <span className="execution-row-title block min-w-0 truncate text-[12px] font-medium leading-5 text-foreground">
           {title}
         </span>
         {subtitle && (
-          <span className="block min-w-0 truncate text-[11px] leading-4 text-muted-foreground">
+          <span className="execution-row-subtitle block min-w-0 truncate text-[11px] leading-4 text-muted-foreground">
             {subtitle}
           </span>
         )}
@@ -140,7 +157,7 @@ export function ExecutionRow({
       {badge}
 
       {duration && (
-        <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
+        <span className="execution-row-meta shrink-0 text-[11px] text-muted-foreground tabular-nums">
           {duration}
         </span>
       )}
@@ -148,7 +165,7 @@ export function ExecutionRow({
       {expanded !== undefined && (
         <ChevronRight
           className={cn(
-            "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
+            "execution-row-chevron h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
             expanded && "rotate-90",
           )}
           aria-hidden="true"
@@ -178,22 +195,22 @@ function ExecutionRowContent({
   statusLabel,
 }: ExecutionRowContentProps) {
   const Icon = STATUS_ICONS[status];
+  const resolvedStatusLabel = statusLabel || getExecutionStatusLabel(status);
   return (
     <>
       <Icon
-        aria-label={statusLabel}
+        aria-label={resolvedStatusLabel}
         className={cn(
-          "h-3.5 w-3.5 shrink-0 transition-colors duration-200",
+          "execution-row-icon h-3.5 w-3.5 shrink-0 transition-colors duration-200",
           STATUS_ICON_CLASS[status],
         )}
       />
-
-      <span className="min-w-0 flex-1 py-1.5 pl-0.5">
-        <span className="block min-w-0 truncate text-[12px] font-medium leading-5 text-foreground">
+      <span className="execution-row-copy min-w-0 flex-1 py-1.5 pl-0.5">
+        <span className="execution-row-title block min-w-0 truncate text-[12px] font-medium leading-5 text-foreground">
           {title}
         </span>
         {subtitle && (
-          <span className="block min-w-0 truncate text-[11px] leading-4 text-muted-foreground">
+          <span className="execution-row-subtitle block min-w-0 truncate text-[11px] leading-4 text-muted-foreground">
             {subtitle}
           </span>
         )}
@@ -202,7 +219,7 @@ function ExecutionRowContent({
       {badge}
 
       {duration && (
-        <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
+        <span className="execution-row-meta shrink-0 text-[11px] text-muted-foreground tabular-nums">
           {duration}
         </span>
       )}
@@ -210,7 +227,7 @@ function ExecutionRowContent({
       {expanded !== undefined && (
         <ChevronRight
           className={cn(
-            "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
+            "execution-row-chevron h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
             expanded && "rotate-90",
           )}
           aria-hidden="true"

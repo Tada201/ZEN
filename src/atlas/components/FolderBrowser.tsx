@@ -27,6 +27,8 @@ interface BrowseResult {
 interface FolderBrowserProps {
   value: string;
   onChange: (path: string) => void;
+  /** Render a compact trigger for dense surfaces such as the chat header. */
+  compact?: boolean;
 }
 
 const FILE_ICON_BY_EXTENSION: Record<string, string> = {
@@ -67,7 +69,7 @@ function entryType(entry: FolderEntry) {
   return entry.type === "dir" ? "dir" : "file";
 }
 
-export function FolderBrowser({ value, onChange }: FolderBrowserProps) {
+export function FolderBrowser({ value, onChange, compact = false }: FolderBrowserProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [browseData, setBrowseData] = useState<BrowseResult | null>(null);
@@ -91,10 +93,12 @@ export function FolderBrowser({ value, onChange }: FolderBrowserProps) {
   }, []);
 
   useEffect(() => {
-    if (open) {
-      browse(value || undefined);
+    if (!open) {
+      setSelectedPath(value || "");
+      return;
     }
-  }, [open, browse]);
+    browse(value || undefined);
+  }, [open, value, browse]);
 
   const handleConfirm = () => {
     onChange(selectedPath);
@@ -113,28 +117,42 @@ export function FolderBrowser({ value, onChange }: FolderBrowserProps) {
 
   return (
     <div className="space-y-2">
-      <div className="flex gap-2">
-        <div
-          className={cn(
-            "flex-1 flex items-center gap-2 px-3 h-9 rounded-lg border text-sm cursor-pointer transition-all",
-            "bg-muted/20 border-border/60 hover:border-primary/40 hover:bg-muted/30",
-            value ? "text-foreground" : "text-muted-foreground"
-          )}
-          onClick={() => setOpen(true)}
-        >
-          <Folder className="h-3.5 w-3.5 shrink-0 text-primary/70" />
-          <span className="truncate">{value || "No workspace selected"}</span>
-        </div>
+      {compact ? (
         <Button
           variant="outline"
           size="sm"
-          className="h-9 px-3 text-xs font-bold gap-1.5 border-border/60 hover:border-primary/40"
+          className="h-8 max-w-[220px] gap-1.5 rounded-lg border-border bg-card px-2.5 text-xs text-foreground hover:bg-muted"
           onClick={() => setOpen(true)}
+          title={value || "Uses the global workspace"}
+          aria-label={`Session workspace: ${value || "global workspace"}`}
         >
-          <FolderOpen className="h-3.5 w-3.5" />
-          Browse
+          <Folder className="h-3.5 w-3.5 shrink-0 text-primary" />
+          <span className="truncate">{value ? value.split(/[\\/]/).filter(Boolean).pop() : "Global workspace"}</span>
         </Button>
-      </div>
+      ) : (
+        <div className="flex gap-2">
+          <div
+            className={cn(
+              "flex-1 flex items-center gap-2 px-3 h-9 rounded-lg border text-sm cursor-pointer transition-all",
+              "bg-muted/20 border-border/60 hover:border-primary/40 hover:bg-muted/30",
+              value ? "text-foreground" : "text-muted-foreground"
+            )}
+            onClick={() => setOpen(true)}
+          >
+            <Folder className="h-3.5 w-3.5 shrink-0 text-primary/70" />
+            <span className="truncate">{value || "No workspace selected"}</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 px-3 text-xs font-bold gap-1.5 border-border/60 hover:border-primary/40"
+            onClick={() => setOpen(true)}
+          >
+            <FolderOpen className="h-3.5 w-3.5" />
+            Browse
+          </Button>
+        </div>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden bg-background border-border shadow-2xl">

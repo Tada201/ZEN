@@ -4,55 +4,19 @@ import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 import { WorkbenchSelect } from "../ui/WorkbenchSelect";
 import { mapBackendToolMeta, toolsApi, type ToolMeta } from "@/api";
 import { cn } from "@/lib/utils";
+import {
+  getSafetyModeSettingEntries,
+  isSafetyMode,
+  SAFETY_MODE_DEFINITIONS,
+  SAFETY_MODE_TONE_CLASSES,
+  type SafetyMode,
+} from "@/lib/constants/permissionModes";
 
 interface ToolsSettingsProps {
   settings: Record<string, string>;
   onUpdate: (key: string, value: string) => void;
 }
 
-type SafetyMode = "plan_mode" | "ask" | "auto_edit" | "yolo";
-
-const MODES: Array<{
-  id: SafetyMode;
-  title: string;
-  description: string;
-  detail: string;
-  icon: string;
-  tone: string;
-}> = [
-  {
-    id: "plan_mode",
-    title: "Plan mode",
-    description: "Plan before editing. Disallows file modifications and terminal commands.",
-    detail: "Read-only access, safest mode for analyzing code.",
-    icon: "lucide:file-text",
-    tone: "text-muted-foreground",
-  },
-  {
-    id: "ask",
-    title: "Ask before changes",
-    description: "Confirm file changes and commands before execution.",
-    detail: "Ask before file edits or terminal writes.",
-    icon: "lucide:hand",
-    tone: "text-primary",
-  },
-  {
-    id: "auto_edit",
-    title: "Edit automatically",
-    description: "Edit files when low/medium risk. Ask before high-impact changes (file writes and terminal commands).",
-    detail: "Edit run automatically; writes and shell prompt.",
-    icon: "lucide:shield-check",
-    tone: "text-success",
-  },
-  {
-    id: "yolo",
-    title: "Full access",
-    description: "Run permitted tools and scripts without confirmation.",
-    detail: "Run with fewer confirmations. Use in trusted env.",
-    icon: "lucide:shield-alert",
-    tone: "text-warning",
-  },
-];
 
 const RISK_STYLE: Record<string, string> = {
   Low: "border-emerald-500/20 bg-success/10 text-success",
@@ -85,33 +49,14 @@ const OVERRIDE_OPTIONS = [
 ];
 
 function currentMode(settings: Record<string, string>): SafetyMode {
-  return (settings["tools.permission-mode"] as SafetyMode) || "ask";
+  const value = settings["tools.permission-mode"];
+  return isSafetyMode(value) ? value : "ask";
 }
 
 function applyMode(mode: SafetyMode, onUpdate: ToolsSettingsProps["onUpdate"]) {
-  onUpdate("tools.permission-mode", mode);
-  if (mode === "yolo") {
-    onUpdate("tools.yolo-mode", "true");
-    onUpdate("tools.auto-approve-low-risk", "true");
-    onUpdate("tools.global-default", "always_allow");
-  } else if (mode === "auto_edit") {
-    onUpdate("tools.yolo-mode", "false");
-    onUpdate("tools.auto-approve-low-risk", "true");
-    onUpdate("tools.global-default", "confirm");
-  } else if (mode === "plan_mode") {
-    onUpdate("tools.yolo-mode", "false");
-    onUpdate("tools.auto-approve-low-risk", "true");
-    onUpdate("tools.global-default", "confirm");
-  } else {
-    // "ask"
-    onUpdate("tools.yolo-mode", "false");
-    onUpdate("tools.auto-approve-low-risk", "false");
-    onUpdate("tools.global-default", "confirm");
+  for (const [key, value] of getSafetyModeSettingEntries(mode)) {
+    onUpdate(key, value);
   }
-}
-
-function requiresAutonomousConfirmation(nextMode: SafetyMode | "autonomous") {
-  return nextMode === "autonomous" || nextMode === "yolo";
 }
 
 function categoryFor(tool: ToolMeta): string {
@@ -153,8 +98,8 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
   }, [query, tools]);
 
   const chooseMode = (nextMode: SafetyMode) => {
-    if (requiresAutonomousConfirmation(nextMode) && !window.confirm(
-      "Enable Full Access (YOLO Mode)? All permitted tools will execute automatically without confirmation. Hard security blocks still apply."
+    if (nextMode === "yolo" && !window.confirm(
+      "Enable Full Access? Permitted tools will execute without confirmation. Hard security blocks still apply."
     )) return;
     applyMode(nextMode, onUpdate);
   };
@@ -174,7 +119,7 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
           <p className="text-xs text-muted-foreground">One setting controls normal tool behavior.</p>
         </div>
         <div className="grid gap-2 lg:grid-cols-3">
-          {MODES.map((item) => {
+          {SAFETY_MODE_DEFINITIONS.map((item) => {
             const selected = mode === item.id;
             return (
               <button
@@ -188,10 +133,13 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
                 )}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <WorkbenchIcon name={item.icon} className={cn("h-5 w-5", item.tone)} />
+                  <WorkbenchIcon
+                    name={`lucide:${item.icon}`}
+                    className={cn("h-5 w-5", SAFETY_MODE_TONE_CLASSES[item.tone])}
+                  />
                   <span className={cn("h-4 w-4 rounded-full border", selected && "border-4 border-primary")} />
                 </div>
-                <p className="mt-3 text-sm font-semibold text-foreground">{item.title}</p>
+                <p className="mt-3 text-sm font-semibold text-foreground">{item.label}</p>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{item.description}</p>
                 <p className="mt-2 text-[11px] text-muted-foreground">{item.detail}</p>
               </button>

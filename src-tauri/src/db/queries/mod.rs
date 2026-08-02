@@ -29,4 +29,6 @@ pub use session_permissions::*;
 pub mod geojson;
 pub use geojson::*;
 pub mod favorites;
+pub mod workbench;
+pub use workbench::*;
 pub use favorites::*;

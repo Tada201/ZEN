@@ -27,11 +27,13 @@ pub struct TerminalSpawnParams<'a> {
     pub rows: u16,
     pub cwd: Option<String>,
     pub approval_id: String,
+    pub chat_id: String,
 }
 
 const INTERACTIVE_APPROVAL_TTL: Duration = Duration::from_secs(60);
 
 struct InteractiveTerminalApproval {
+    chat_id: String,
     cwd: PathBuf,
     decision: PermissionDecision,
     expires_at: Instant,
@@ -55,6 +57,7 @@ pub struct TerminalOutputEvent {
 pub struct TerminalService {
     pub sessions: Arc<Mutex<Vec<TerminalSession>>>,
     approvals: Arc<Mutex<HashMap<String, InteractiveTerminalApproval>>>,
+    owners: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl TerminalService {
@@ -62,6 +65,7 @@ impl TerminalService {
         Self {
             sessions: Arc::new(Mutex::new(Vec::new())),
             approvals: Arc::new(Mutex::new(HashMap::new())),
+            owners: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -69,6 +73,7 @@ impl TerminalService {
         &self,
         security: &SecurityService,
         workspace: PathBuf,
+        chat_id: String,
         cwd: Option<String>,
     ) -> ZenResult<TerminalApprovalGrant> {
         let cwd = resolve_terminal_cwd(&workspace, cwd)?;
@@ -80,6 +85,7 @@ impl TerminalService {
         approvals.insert(
             approval_id.clone(),
             InteractiveTerminalApproval {
+                chat_id,
                 cwd,
                 decision: PermissionDecision::Allow,
                 expires_at,
@@ -192,6 +198,7 @@ impl TerminalService {
             rows,
             cwd,
             approval_id,
+            chat_id,
         } = params;
         let resolved_cwd = resolve_terminal_cwd(&workspace, cwd)?;
         let approval = self.approvals.lock().await.remove(&approval_id);
@@ -209,7 +216,7 @@ impl TerminalService {
                 "Terminal approval is missing, expired, or already used".to_string(),
             ));
         };
-        if approval.expires_at <= Instant::now() || approval.cwd != resolved_cwd {
+        if approval.expires_at <= Instant::now() || approval.cwd != resolved_cwd || approval.chat_id != chat_id {
             security
                 .record_audit(AuditEvent {
                     operation: PrivilegedOperation::ShellCommand,
@@ -264,6 +271,7 @@ impl TerminalService {
             rows,
             Some(Box::new(on_output)),
         )?;
+        self.owners.lock().await.insert(session_id.clone(), chat_id);
         security
             .record_audit(AuditEvent {
                 operation: PrivilegedOperation::ShellCommand,
@@ -281,10 +289,14 @@ impl TerminalService {
         &self,
         manager: &RwLock<TerminalManager>,
         _security: &SecurityService,
+        chat_id: &str,
         id: String,
         data: String,
     ) -> ZenResult<()> {
         let manager = manager.read().await;
+        if self.owners.lock().await.get(&id).map(String::as_str) != Some(chat_id) {
+            return Err(ZenError::Custom("Terminal session belongs to another chat".to_string()));
+        }
         if let Some(session) = manager.get(&id) {
             session.write_data(&data).await?;
             // Interactive keystrokes are intentionally not audited individually.
@@ -299,10 +311,15 @@ impl TerminalService {
         &self,
         manager: &RwLock<TerminalManager>,
         security: &SecurityService,
+        chat_id: &str,
         id: String,
     ) -> ZenResult<()> {
+        if self.owners.lock().await.get(&id).map(String::as_str) != Some(chat_id) {
+            return Err(ZenError::Custom("Terminal session belongs to another chat".to_string()));
+        }
         let mut manager = manager.write().await;
         manager.kill_session(&id)?;
+        self.owners.lock().await.remove(&id);
         security
             .record_audit(AuditEvent {
                 operation: PrivilegedOperation::ShellCommand,
@@ -318,11 +335,15 @@ impl TerminalService {
     pub async fn resize_interactive(
         &self,
         manager: &RwLock<TerminalManager>,
+        chat_id: &str,
         id: String,
         cols: u16,
         rows: u16,
     ) -> ZenResult<()> {
         let manager = manager.read().await;
+        if self.owners.lock().await.get(&id).map(String::as_str) != Some(chat_id) {
+            return Err(ZenError::Custom("Terminal session belongs to another chat".to_string()));
+        }
         if let Some(session) = manager.get(&id) {
             let master = session.master.lock().await;
             master.resize(portable_pty::PtySize {
@@ -340,9 +361,13 @@ impl TerminalService {
     pub async fn read_interactive_output(
         &self,
         manager: &RwLock<TerminalManager>,
+        chat_id: &str,
         id: String,
     ) -> ZenResult<crate::terminal::TerminalOutputSnapshot> {
         let manager = manager.read().await;
+        if self.owners.lock().await.get(&id).map(String::as_str) != Some(chat_id) {
+            return Err(ZenError::Custom("Terminal session belongs to another chat".to_string()));
+        }
         if let Some(session) = manager.get(&id) {
             Ok(session.read_output().await)
         } else {

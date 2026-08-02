@@ -1,3 +1,4 @@
+pub mod checkpoint;
 pub mod document;
 pub mod gtsm;
 pub mod hardware;
@@ -18,6 +19,7 @@ pub mod tool;
 pub mod tts_service;
 pub mod usage;
 
+pub use checkpoint::{CheckpointInfo, CheckpointService, UndoResult};
 pub use document::DocumentService;
 pub use media::MediaService;
 pub use hardware::{HardwareInfo, HardwareService};

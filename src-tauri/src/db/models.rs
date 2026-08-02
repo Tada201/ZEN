@@ -18,6 +18,22 @@ pub struct Chat {
     pub total_tokens_out: Option<i32>,
     pub last_activity: Option<String>,
     pub folder_id: Option<String>,
+    /// Canonical workspace root captured for this chat session. `None` keeps
+    /// legacy sessions on the current global workspace until they are changed.
+    pub workspace_root: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkbenchTab {
+    pub id: String,
+    pub chat_id: String,
+    pub view_id: String,
+    pub label: String,
+    pub position: i32,
+    pub state_json: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 // ─── Chat Folder ───

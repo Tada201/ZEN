@@ -210,6 +210,8 @@ export type Session = {
   lastModel?: string | null;
   folderId?: string | null;
   archived?: boolean;
+  /** Session-specific workspace root; null/undefined uses the global workspace fallback. */
+  workspaceRoot?: string | null;
 };
 
 export type ChatFolder = {
@@ -359,6 +361,38 @@ function toToolCallArray(value: unknown): ToolCall[] {
   return Array.isArray(value) ? value as ToolCall[] : [];
 }
 
+/**
+ * Reattaches tool calls persisted inside the ordered execution timeline to the
+ * message-level tool-call index used by subagent cards and execution ledgers.
+ *
+ * `steps_json` is the chronological source of truth, while `tool_calls` is a
+ * legacy/summary column. Keep existing entries first (so a richer legacy
+ * record wins), then add step-only tools by stable id without duplicating
+ * repeated history rows with the same stable id.
+ */
+export function mergeToolCallsFromSteps(
+  existingToolCalls: ToolCall[] | undefined,
+  steps: Step[] | undefined,
+): ToolCall[] {
+  const merged: ToolCall[] = [];
+  const seenIds = new Set<string>();
+
+  for (const toolCall of existingToolCalls || []) {
+    if (toolCall.id && seenIds.has(toolCall.id)) continue;
+    merged.push(toolCall);
+    if (toolCall.id) seenIds.add(toolCall.id);
+  }
+
+  for (const step of steps || []) {
+    if (step.type !== "tool-call" || !step.toolCall) continue;
+    if (step.toolCall.id && seenIds.has(step.toolCall.id)) continue;
+    merged.push(step.toolCall);
+    if (step.toolCall.id) seenIds.add(step.toolCall.id);
+  }
+
+  return merged;
+}
+
 function toToolInvocationArray(value: unknown): ToolInvocation[] {
   return Array.isArray(value) ? value.filter(isToolInvocation) : [];
 }
@@ -462,26 +496,9 @@ export function normalizeVercelMessage(msg: unknown): Message {
   // Restore toolCalls from persisted steps so subagent child tools (which
   // live only inside steps after reload) stay reachable. SubagentExecutionCard
   // finds its children by filtering message.toolCalls against the subagent's
-  // spawnId via traceId. Without this restoration, a reloaded subagent loses
-  // its child tool trace because the backend persists child tools inside
-  // steps_json, not as top-level message.toolCalls. We merge by id to avoid
-  // duplicating tools that are already present on the message.
-  if (Array.isArray(normalized.steps)) {
-    const stepsToolCalls = normalized.steps
-      .filter((s): s is Step & { type: "tool-call" } => s?.type === "tool-call" && Boolean(s.toolCall))
-      .map((s) => s.toolCall) as ToolCall[];
-    if (stepsToolCalls.length > 0) {
-      const existingIds = new Set((normalized.toolCalls || []).map((tc) => tc.id));
-      const merged = [...(normalized.toolCalls || [])];
-      for (const tc of stepsToolCalls) {
-        if (tc.id && !existingIds.has(tc.id)) {
-          merged.push(tc);
-          existingIds.add(tc.id);
-        }
-      }
-      normalized.toolCalls = merged;
-    }
-  }
+  // spawnId via traceId. Keep this reconstruction centralized so the real DB
+  // mapper and this generic normalizer cannot drift.
+  normalized.toolCalls = mergeToolCallsFromSteps(normalized.toolCalls, normalized.steps);
 
   // If toolInvocations is present, populate toolCalls and steps
   const toolInvocations = toToolInvocationArray(msg.toolInvocations);

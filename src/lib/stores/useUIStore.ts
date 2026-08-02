@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { RightPanelTabId, SettingsTabId, WorkspaceModeId } from '@/lib/features/frontendFeatures';
+import type { SettingsTabId, WorkspaceModeId } from '@/lib/features/frontendFeatures';
 
 // Module-level session tracker — avoids circular import with useChatStore.
 // Updated by useChatQueries on session switch via setActiveSessionId.
@@ -38,9 +38,9 @@ interface UIState {
   styleMode: 'glass' | 'flat' | 'bordered';
   density: 'normal' | 'compact';
   rightPanelOpen: boolean;
-  activeRightTab: RightPanelTabId;
+  activeRightTab: string;
   rightPanelCanvasMode: 'draw' | 'mathplot';
-  rightTabBySession: Record<string, RightPanelTabId>;
+  rightTabBySession: Record<string, string>;
   agentsPanelDismissed: boolean;
   
   // Actions
@@ -69,7 +69,7 @@ interface UIState {
   setStyleMode: (mode: 'glass' | 'flat' | 'bordered') => void;
   setDensity: (density: 'normal' | 'compact') => void;
   setRightPanelOpen: (open: boolean) => void;
-  setActiveRightTab: (tab: RightPanelTabId) => void;
+  setActiveRightTab: (tab: string) => void;
   setRightPanelCanvasMode: (mode: 'draw' | 'mathplot') => void;
   setAgentsPanelDismissed: (dismissed: boolean) => void;
   restoreRightTabForSession: (sessionId: string | null) => void;

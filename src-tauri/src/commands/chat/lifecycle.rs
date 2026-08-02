@@ -90,10 +90,14 @@ pub async fn import_chat(state: State<'_, AppState>, source_path: String) -> Zen
     let export: ChatExport = serde_json::from_str(&content)
         .map_err(|e| ZenError::Custom(format!("Invalid export format: {}", e)))?;
 
+    // Workspace roots are machine-local capabilities, not portable chat data.
+    // Preserve the imported conversation, but require the user to explicitly
+    // select a local root after import rather than trusting an export path.
     let new_chat = queries::create_chat(
         &db,
         &format!("{} (Imported)", export.chat.title),
         export.chat.model.as_deref(),
+        None,
     )
     .await?;
 

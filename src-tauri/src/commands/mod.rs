@@ -3,6 +3,7 @@ pub mod artifacts;
 pub mod audio;
 pub mod canvas;
 pub mod chat;
+pub mod checkpoint;
 pub mod context_viewer;
 pub mod dependency;
 pub mod document;
@@ -16,6 +17,7 @@ pub mod spatial;
 pub mod system;
 pub mod terminal;
 pub mod voice;
+pub mod workbench;
 
 use serde::Serialize;
 use sqlx::SqlitePool;
@@ -38,9 +40,9 @@ use crate::agent::types::AgentRegistry;
 use crate::error::{ZenError, ZenResult};
 use crate::llm::{LlmProvider, ProviderRegistry};
 use crate::services::{
-    process_manager::ProcessManager, DocumentService, HardwareService, MediaService,
-    SecretService, SecurityService, SettingsService, SpeechService, TerminalService, ToolService,
-    TtsService, UsageService,
+    checkpoint::CheckpointService, process_manager::ProcessManager, DocumentService,
+    HardwareService, MediaService, SecretService, SecurityService, SettingsService,
+    SpeechService, TerminalService, ToolService, TtsService, UsageService,
 };
 use crate::tools::manager::ToolManager;
 
@@ -313,6 +315,7 @@ pub struct AppState {
     pub swarm: Arc<SwarmCoordinator>,
     pub tool_manager: Arc<ToolManager>,
     pub tool_service: Arc<ToolService>,
+    pub checkpoints: Arc<CheckpointService>,
     pub orchestrator: InitState<Arc<Orchestrator>>,
     pub geofence_engine: Arc<crate::services::gtsm::geofence::GeofenceEngine>,
     pub gtsm_cache: Arc<crate::services::gtsm::cache::GtsmCache>,
@@ -446,6 +449,7 @@ impl AppState {
             security.clone(),
             pending_tool_approvals.clone(),
         ));
+        let checkpoints = Arc::new(CheckpointService::new());
 
         let security_for_mcp_config = security.clone();
         let mcp_config = Arc::new(crate::services::McpConfigService::new(
@@ -500,6 +504,7 @@ impl AppState {
                 tool_registry_v2.clone(),
             )),
             tool_service: tool_service.clone(),
+            checkpoints,
             swarm: Arc::new(SwarmCoordinator::new(event_bus.clone())),
             orchestrator: InitState::new(),
             geofence_engine: Arc::new(crate::services::gtsm::geofence::GeofenceEngine::new()),
@@ -528,6 +533,22 @@ impl AppState {
 
     pub async fn db(&self) -> ZenResult<SqlitePool> {
         self.db.get().await
+    }
+
+    /// Resolve the workspace used by a chat execution without mutating the
+    /// process-wide workspace setting. Legacy chats with no stored root use
+    /// the current global workspace as an explicit compatibility fallback.
+    pub async fn workspace_for_chat(&self, chat_id: &str) -> ZenResult<PathBuf> {
+        let global_workspace = self.workspace_folder.read().await.clone();
+        let db = self.db().await?;
+        let chat = crate::db::queries::get_chat(&db, chat_id).await?;
+
+        match chat.workspace_root {
+            Some(root) if !root.trim().is_empty() =>
+                crate::workspace::canonicalize_workspace_root(std::path::Path::new(&root))
+                    .map_err(|e| ZenError::Custom(format!("Invalid session workspace root: {}", e))),
+            _ => Ok(global_workspace),
+        }
     }
 
     pub async fn rag(&self) -> ZenResult<Arc<dyn crate::rag::VectorStore>> {

@@ -10,6 +10,7 @@ import {
   Sun,
   Moon,
   Bot,
+  ShieldCheck,
 } from "lucide-react";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { useChatStore } from "@/lib/stores/useChatStore";
@@ -100,6 +101,18 @@ export function CommandPalette() {
       group: "Actions",
       icon: PanelLeft,
       run: () => toggleSidebar(),
+    });
+
+    out.push({
+      id: "a-approvals",
+      label: "Open approval center",
+      hint: "Review pending tool actions",
+      group: "Actions",
+      icon: ShieldCheck,
+      run: () => {
+        useUIStore.getState().setActiveRightTab("approvals");
+        useUIStore.getState().setRightPanelOpen(true);
+      },
     });
 
     out.push({

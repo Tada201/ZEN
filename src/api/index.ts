@@ -37,8 +37,10 @@ export {
 export type {
   BackendToolMeta,
   RunToolCommandRequest,
+  ToolCheckpoint,
   ToolMeta,
   ToolRiskLevel,
+  UndoToolCallResult,
 } from "./toolsApi";
 export {
   isSecretPresentValue,
@@ -61,3 +63,5 @@ export type { ComputeNavigationRouteRequest, GtsmFavorite, GtsmGeofence, GtsmMar
 export { voiceApi } from "./voiceApi";
 export type { TranscriptionResult } from "./voiceApi";
 export { sessionApi } from "./sessionApi";
+export { workbenchApi } from "./workbenchApi";
+export type { BackendWorkbenchTab } from "./workbenchApi";

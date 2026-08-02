@@ -4,6 +4,7 @@ import { strict as assert } from "node:assert";
 const featuresSource = readFileSync(new URL("../src/lib/features/frontendFeatures.ts", import.meta.url), "utf8");
 const rightPanelSource = readFileSync(new URL("../src/atlas/components/RightPanel.tsx", import.meta.url), "utf8");
 const railSource = readFileSync(new URL("../src/components/Zen/SecondaryActivityBar.tsx", import.meta.url), "utf8");
+const tabButtonSource = readFileSync(new URL("../src/components/Zen/WorkbenchTabButton.tsx", import.meta.url), "utf8");
 const uiStoreSource = readFileSync(new URL("../src/lib/stores/useUIStore.ts", import.meta.url), "utf8");
 const graphEventsSource = readFileSync(new URL("../src/atlas/hooks/stream/useGraphSessionEvents.ts", import.meta.url), "utf8");
 const globalListenerSource = readFileSync(new URL("../src/atlas/hooks/useGlobalStreamListener.ts", import.meta.url), "utf8");
@@ -11,7 +12,7 @@ const globalListenerSource = readFileSync(new URL("../src/atlas/hooks/useGlobalS
 // Only tabs with real panel implementations in RightPanel should be
 // visible in the right-rail feature registry.  analytics, workflows,
 // memory, and space were removed because they had no render branches.
-const IMPLEMENTED_TABS = ["metrics", "artifacts", "agents", "drawing", "terminal", "map"];
+const IMPLEMENTED_TABS = ["metrics", "approvals", "artifacts", "agents", "drawing", "terminal", "map"];
 
 for (const tab of IMPLEMENTED_TABS) {
   assert(
@@ -45,8 +46,25 @@ assert(
 );
 
 assert(
-  railSource.includes("getVisibleRightPanelFeatures()"),
-  "SecondaryActivityBar should render tabs from the shared right panel feature registry",
+  railSource.includes("getVisibleWorkbenchViews()") &&
+    railSource.includes("WorkbenchTabButton") &&
+    railSource.includes("countPendingApprovals") &&
+    railSource.includes('view.id === "approvals"') &&
+    railSource.includes("badge={view.id === \"approvals\" ? pendingApprovalCount : 0}"),
+  "SecondaryActivityBar should render registry-driven tabs and pass the pending-approval badge to the shared primitive",
+);
+assert(
+  tabButtonSource.includes("aria-expanded={selected}") &&
+    tabButtonSource.includes("pending approval") &&
+    tabButtonSource.includes("data-workbench-tab={view.id}"),
+  "WorkbenchTabButton should own tab selection semantics, attention copy, and stable tab identity",
+);
+
+assert(
+  rightPanelSource.includes('case \'approvals\':') &&
+    rightPanelSource.includes("ApprovalCenter") &&
+    rightPanelSource.includes("visibleActiveRightTab === 'approvals'"),
+  "RightPanel should mount the unified Approval Center tab",
 );
 
 for (const snippet of [

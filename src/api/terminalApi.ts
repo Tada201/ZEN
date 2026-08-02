@@ -11,14 +11,14 @@ export interface TerminalOutputSnapshot {
 }
 
 export const terminalApi = {
-  requestApproval: (cwd?: string | null) =>
-    callCommand<TerminalApprovalGrant>("terminal_request_approval", { cwd: cwd ?? null }),
-  spawn: (cols: number, rows: number, approvalId: string, cwd?: string | null) =>
-    callCommand<string>("terminal_spawn", { cols, rows, cwd: cwd ?? null, approvalId }),
-  kill: (id: string) => callCommand<void>("terminal_kill", { id }),
-  resize: (id: string, cols: number, rows: number) =>
-    callCommand<void>("terminal_resize", { id, cols, rows }),
-  readOutput: (id: string) => callCommand<TerminalOutputSnapshot>("terminal_read_output", { id }),
-  write: (id: string, data: string) =>
-    callCommand<void>("terminal_write", { id, data }),
+  requestApproval: (chatId: string, cwd?: string | null) =>
+    callCommand<TerminalApprovalGrant>("terminal_request_approval", { chatId, cwd: cwd ?? null }),
+  spawn: (chatId: string, cols: number, rows: number, approvalId: string, cwd?: string | null) =>
+    callCommand<string>("terminal_spawn", { chatId, cols, rows, cwd: cwd ?? null, approvalId }),
+  kill: (chatId: string, id: string) => callCommand<void>("terminal_kill", { chatId, id }),
+  resize: (chatId: string, id: string, cols: number, rows: number) =>
+    callCommand<void>("terminal_resize", { chatId, id, cols, rows }),
+  readOutput: (chatId: string, id: string) => callCommand<TerminalOutputSnapshot>("terminal_read_output", { chatId, id }),
+  write: (chatId: string, id: string, data: string) =>
+    callCommand<void>("terminal_write", { chatId, id, data }),
 };

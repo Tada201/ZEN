@@ -14,12 +14,14 @@ assert(
   runner.includes('current_agent.id == "generalist"'),
   "simple generalist turns should keep the quiet agent_step phase instead of showing noisy execution rows",
 );
-assert(
-  assistant.includes("VISIBLE_CHAT_STATUS_PHASES") &&
+assert(    assistant.includes("VISIBLE_CHAT_STATUS_PHASES") &&
     assistant.includes("isVisibleChatStatusStep") &&
     assistant.includes('step.kind !== "chat_status"') &&
-    assistant.includes("new Set([])"),
-  "assistant message rendering should keep the live agent phase out of chat_status cards",
+    assistant.includes("selectParentWorkingStatus") &&
+    assistant.includes("hasActiveDelegation") &&
+    assistant.includes('data-testid="chat-status-breathing-indicator"') &&
+    assistant.includes('aria-live="polite"'),
+  "assistant message rendering should keep live phases out of raw chat_status cards while exposing one compact breathing indicator",
 );
 assert(
   ledger.includes("shouldSkipChatActionStep") &&

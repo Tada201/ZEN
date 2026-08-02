@@ -52,6 +52,30 @@
 
   --radius: 0.5rem;
 
+  /* Execution ledger aliases — derived from the active theme so the trace
+     remains Codex-like without overriding a user's chosen ZEN palette. */
+  --execution-surface: hsl(var(--card));
+  --execution-surface-muted: hsl(var(--muted));
+  --execution-border: hsl(var(--border));
+  --execution-border-strong: hsl(var(--border-strong));
+  --execution-text: hsl(var(--foreground));
+  --execution-text-muted: hsl(var(--muted-foreground));
+  --execution-ui-font: var(--zen-font-family, "Inter", ui-sans-serif, system-ui, sans-serif);
+  --execution-code-font: ui-monospace, "JetBrains Mono", "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+  --execution-accent-soft: hsl(var(--primary) / 0.1);
+
+  /* Stable Codex workbench palette for high-frequency execution surfaces. */
+  --codex-bg: #1a1a1a;
+  --codex-surface: #242424;
+  --codex-surface-muted: #2d2d2d;
+  --codex-border: #333333;
+  --codex-text: #ebebeb;
+  --codex-blue: #4f90f8;
+  --codex-add: #3fb950;
+  --codex-remove: #f85149;
+  --codex-warning: #d29922;
+  --codex-radius: 4px;
+
   /* Layout chrome widths */
   --activity-bar-width: 48px;
   --sidebar-collapsed-width: 48px;
@@ -299,6 +323,251 @@ html[data-vibe="edex"] ::selection {
 /* Mono font utility */
 .font-mono {
   font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+}
+
+/* ── Codex-style workspace shell and execution ledger ─────────────────────
+   Workspace context is a solid structural surface. The transcript should scroll
+   beneath a stable boundary instead of behind a translucent overlay. */
+.workspace-context-bar,
+.workbench-header {
+  background: var(--execution-surface);
+  color: var(--execution-text);
+  border-color: var(--execution-border);
+}
+
+.workspace-context-bar {
+  /* The context bar sits inside the custom title bar and inherits that surface
+     instead of painting a second block beside the drag region. */
+  background: transparent;
+}
+
+.workspace-execution-status {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 240px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--execution-border);
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: var(--execution-surface-muted);
+  color: var(--execution-text-muted);
+  font-family: var(--execution-ui-font);
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 1.2;
+  letter-spacing: -0.005em;
+}
+
+.workspace-execution-status:is(button) {
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.workspace-execution-status:is(button):hover {
+  background: var(--execution-surface);
+  color: var(--execution-text);
+}
+
+.workspace-execution-status--running {
+  border-color: hsl(var(--primary) / 0.35);
+  color: hsl(var(--primary));
+}
+
+.workspace-execution-status--approval {
+  border-color: hsl(var(--warning) / 0.5);
+  color: hsl(var(--warning));
+}
+
+.workspace-execution-status--error {
+  border-color: hsl(var(--destructive) / 0.5);
+  color: hsl(var(--destructive));
+}
+
+.workspace-execution-status--completed {
+  color: hsl(var(--success));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-context-bar,
+  .workbench-header,
+  .workspace-execution-status:is(button) {
+    transition: none;
+  }
+}
+
+/* ── Codex-style execution ledger ────────────────────────────────────────
+   The mockup uses warm neutral surfaces, Inter-like UI text, and JetBrains-
+   Mono-like metadata. Keep the production trace theme-aware: semantic tokens
+   make the same compact card work across every ZEN theme without importing a
+   second palette or introducing glass/low-contrast surfaces. */
+.execution-card,
+.execution-group,
+.execution-subagent,
+.execution-reasoning-card {
+  border-radius: 6px;
+  border-color: var(--execution-border);
+  background: var(--execution-surface);
+  box-shadow: none;
+}
+
+.codex-surface {
+  background: var(--codex-surface);
+  border: 1px solid var(--codex-border);
+  border-radius: var(--codex-radius);
+  color: var(--codex-text);
+}
+
+.codex-surface-muted {
+  background: var(--codex-surface-muted);
+  border: 1px solid var(--codex-border);
+  border-radius: var(--codex-radius);
+}
+
+.codex-row-action {
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.codex-row-action:hover { background: var(--codex-surface-muted); }
+
+.codex-row-action:focus-visible,
+.codex-focus:focus-visible {
+  outline: 2px solid var(--codex-blue);
+  outline-offset: 1px;
+}
+
+.codex-mono {
+  font-family: var(--execution-code-font);
+  font-variant-numeric: tabular-nums;
+}
+
+.codex-diff-add { color: var(--codex-add); }
+.codex-diff-remove { color: var(--codex-remove); }
+
+.execution-row {
+  container-type: inline-size;
+  min-height: 34px;
+  padding-inline: 8px;
+  border-radius: 6px;
+  font-family: var(--execution-ui-font);
+  letter-spacing: -0.005em;
+}
+
+.execution-row:hover {
+  background: var(--execution-surface-muted);
+}
+
+.execution-row-title {
+  font-family: var(--execution-ui-font);
+  font-size: 12px;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+}
+
+.execution-row-subtitle,
+.execution-row-meta {
+  font-family: var(--execution-code-font);
+  font-variant-numeric: tabular-nums;
+}
+
+.execution-row-subtitle {
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.execution-row-meta {
+  max-width: 5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  letter-spacing: 0.01em;
+}
+
+.execution-subagent-duration {
+  max-width: 4rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Execution rows can live in the main transcript, a narrow right workbench,
+   or a nested subagent rail. Container queries keep the interaction usable
+   based on the actual surface width rather than the browser viewport. */
+@container (max-width: 28rem) {
+  .execution-row-meta {
+    max-width: 3.5rem;
+  }
+
+  .execution-row-subtitle {
+    max-width: 42cqw;
+  }
+}
+
+@container (max-width: 21rem) {
+  .execution-row-meta {
+    display: none;
+  }
+
+  .execution-row-subtitle {
+    max-width: 50cqw;
+  }
+}
+
+.execution-row-icon {
+  flex: 0 0 auto;
+}
+
+.execution-row[data-status="running"] .execution-row-icon,
+.execution-row[aria-busy="true"] .execution-row-icon {
+  color: hsl(var(--primary));
+}
+
+.execution-row[data-status="awaiting_approval"] {
+  border-left-color: hsl(var(--warning));
+}
+
+.execution-row[data-status="error"] {
+  border-left-color: hsl(var(--destructive));
+}
+
+.execution-row-chevron {
+  transition: transform 160ms cubic-bezier(.22, 1, .36, 1), color 160ms ease;
+}
+
+.execution-card-body {
+  padding: 8px;
+  border-top: 1px solid var(--execution-border);
+}
+
+.execution-reasoning-card .font-mono {
+  font-family: var(--execution-code-font);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.execution-reasoning-card [data-state="open"] {
+  background: var(--execution-surface-muted);
+}
+
+.execution-foldout-trigger > span {
+  font-family: var(--execution-ui-font);
+  letter-spacing: -0.005em;
+}
+
+.execution-subagent {
+  --execution-subagent-surface: var(--execution-surface-muted);
+}
+
+.execution-subagent [data-state="open"] {
+  background: var(--execution-subagent-surface);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .execution-row-chevron,
+  .execution-foldout-trigger {
+    transition: none;
+  }
 }
 
 /* Premium Glassmorphic Vignette Grid overlay class */

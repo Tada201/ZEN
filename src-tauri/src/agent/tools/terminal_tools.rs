@@ -53,7 +53,7 @@ impl AgentTool for RunCommandTool {
     async fn run(
         &self,
         app: AppHandle,
-        _chat_id: String,
+        chat_id: String,
         input: Value,
         _depth: u32,
         _allowed_tools: Option<
@@ -82,7 +82,10 @@ impl AgentTool for RunCommandTool {
 
         // Get workspace folder from AppState
         let state = app.state::<AppState>();
-        let workspace = state.workspace_folder.read().await.clone();
+        let workspace = state
+            .workspace_for_chat(&chat_id)
+            .await
+            .map_err(|e| anyhow::anyhow!("Unable to resolve session workspace: {}", e))?;
 
         // Resolve and validate cwd is within workspace (if provided)
         let resolved_cwd = if let Some(ref dir) = cwd {

@@ -147,6 +147,30 @@ export function useChatMutations({
     onError: (err) => toast.error(getIpcErrorMessage(err, "Failed to delete folder")),
   });
 
+  const setSessionWorkspaceMutation = useMutation({
+    mutationFn: async ({ chatId }: { chatId: string; workspaceRoot: string | null }) => {
+      // Workspace identity is part of the chat execution context. Once a chat
+      // exists, changing it would make later tool/terminal work ambiguous.
+      // The header intentionally exposes a locked placeholder until the
+      // immutable workspace-selection flow is implemented.
+      if (sessions.some((session) => session.id === chatId)) {
+        throw new Error("Chat workspace is immutable after initialization");
+      }
+      return chatApi.setChatWorkspace(chatId, null);
+    },
+    onSuccess: (chat) => {
+      const session = mapChatToSession(chat);
+      queryClient.setQueryData<Session[]>(["sessions"], (prev) =>
+        prev?.map((item) => (item.id === session.id ? { ...item, workspaceRoot: session.workspaceRoot, updatedAt: session.updatedAt } : item))
+      );
+      queryClient.setQueryData<Session[]>(["archived-sessions"], (prev) =>
+        prev?.map((item) => (item.id === session.id ? { ...item, workspaceRoot: session.workspaceRoot, updatedAt: session.updatedAt } : item))
+      );
+      toast.success(session.workspaceRoot ? "Session workspace updated" : "Session now follows the global workspace");
+    },
+    onError: (err) => toast.error(getIpcErrorMessage(err, "Failed to update session workspace")),
+  });
+
   const moveChatToFolderMutation = useMutation({
     mutationFn: ({ chatId, folderId }: { chatId: string; folderId: string | null }) => 
       folderId 
@@ -177,5 +201,7 @@ export function useChatMutations({
       renameFolderMutation.mutate({ folderId, name }),
     handleDeleteFolder: (folderId: string) => deleteFolderMutation.mutate(folderId),
     handleMoveToFolder: (chatId: string, folderId: string | null) => moveChatToFolderMutation.mutate({ chatId, folderId }),
+    handleSetSessionWorkspace: (chatId: string, workspaceRoot: string | null) =>
+      setSessionWorkspaceMutation.mutate({ chatId, workspaceRoot }),
   };
 }

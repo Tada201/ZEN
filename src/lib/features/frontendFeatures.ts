@@ -14,6 +14,7 @@ import {
   Settings,
   Sparkles,
   Sun,
+  ShieldCheck,
   Terminal,
   User,
   Zap,
@@ -49,6 +50,7 @@ export type SettingsTabId =
 
 export type RightPanelTabId =
   | "metrics"
+  | "approvals"
   | "agents"
   | "drawing"
   | "artifacts"
@@ -100,8 +102,9 @@ export const FRONTEND_FEATURES = [
   { id: "settings.embedding-models", label: "Embedding Models", maturity: "prototype", surfaces: ["settings", "commandPalette"], defaultVisible: false, labsOnly: true, risk: "heavy-runtime", settingsTabId: "embedding-models", icon: Search },
   { id: "settings.maps", label: "Maps", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "secrets", settingsTabId: "maps", icon: MapIcon },
   { id: "right.metrics", label: "System Metrics", maturity: "production", surfaces: ["rightRail"], defaultVisible: true, risk: "none", rightPanelTabId: "metrics", icon: Activity },
+  { id: "right.approvals", label: "Approval Center", description: "Review pending tool actions", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "privileged", rightPanelTabId: "approvals", icon: ShieldCheck },
   { id: "right.artifacts", label: "Artifacts", maturity: "production", surfaces: ["rightRail"], defaultVisible: true, risk: "untrusted-content", rightPanelTabId: "artifacts", icon: Box },
-  { id: "right.agents", label: "Active Agents", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "privileged", rightPanelTabId: "agents", icon: Cpu },
+  { id: "right.agents", label: "Subagents", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "privileged", rightPanelTabId: "agents", icon: Cpu },
   { id: "right.drawing", label: "Canvas Workspace", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "heavy-runtime", rightPanelTabId: "drawing", icon: Paintbrush },
   { id: "right.terminal", label: "Terminal", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "privileged", rightPanelTabId: "terminal", icon: Terminal },
   { id: "right.map", label: "Operational Map", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "heavy-runtime", rightPanelTabId: "map", icon: MapIcon },

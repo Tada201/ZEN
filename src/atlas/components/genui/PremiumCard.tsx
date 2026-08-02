@@ -37,6 +37,7 @@ import { FlashcardComponent } from './premium/FlashcardComponent';
 import { WorldTimeCard } from './premium/WorldTimeCard';
 import { MapComponent } from './Map';
 import { MessageComposer } from './MessageComposer';
+import { CardMotion } from './premium/motion/CardMotion';
 
 // ChartCard pulls in the entire Recharts library (~110 KB gzipped). Lazy-
 // load it so the vendor-recharts chunk defined in vite.config.ts is only
@@ -75,7 +76,7 @@ interface CardProps {
   data: any;
 }
 
-export function PremiumCard({ type, data }: CardProps) {
+function PremiumCardBody({ type, data }: CardProps) {
   const t = type.toLowerCase();
 
   // Specialized inline layouts
@@ -271,5 +272,18 @@ export function PremiumCard({ type, data }: CardProps) {
         <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-muted-foreground">{JSON.stringify(data, null, 2)}</pre>
       </details>
     </div>
+  );
+}
+
+/**
+ * One motion boundary for every model-generated card. Individual cards keep
+ * their own content and chrome, while entrance timing and reduced-motion
+ * behavior stay centralized at the GenUI boundary.
+ */
+export function PremiumCard(props: CardProps) {
+  return (
+    <CardMotion className="w-full">
+      <PremiumCardBody {...props} />
+    </CardMotion>
   );
 }

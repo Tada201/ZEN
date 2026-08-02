@@ -30,6 +30,17 @@ export interface RunToolCommandRequest {
   chatId?: string | null;
 }
 
+export interface ToolCheckpoint {
+  available: boolean;
+  tool_call_id: string;
+  file_count: number;
+}
+
+export interface UndoToolCallResult {
+  restored_files: number;
+  conflicts: string[];
+}
+
 export function normalizeToolRiskLevel(raw: string): ToolRiskLevel {
   const level = raw.toLowerCase();
   if (level === "critical") return "Critical";
@@ -72,4 +83,10 @@ export const toolsApi = {
 
   resolveApproval: (toolCallId: string, approved: boolean, rememberExact = false) =>
     callCommand<void>("resolve_tool_approval", { toolCallId, approved, rememberExact }),
+
+  getToolCheckpoint: (chatId: string, toolCallId: string) =>
+    callCommand<ToolCheckpoint | null>("get_tool_checkpoint", { chatId, toolCallId }),
+
+  undoToolCall: (chatId: string, toolCallId: string) =>
+    callCommand<UndoToolCallResult>("undo_tool_call", { chatId, toolCallId }),
 };

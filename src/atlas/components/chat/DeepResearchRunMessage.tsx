@@ -211,7 +211,7 @@ export function DeepResearchRunMessage({
                             <span
                                 className={cn(
                                     "text-xs transition-all duration-300",
-                                    isComplete ? "text-muted-foreground" : "text-primary animate-text-shimmer font-medium",
+                                    isComplete ? "text-muted-foreground" : "text-primary font-medium",
                                 )}
                             >
                                 {isStaleEmpty
@@ -273,7 +273,7 @@ export function DeepResearchRunMessage({
                                                 </span>
                                             )}
                                             {processRunning > 0 && (
-                                                <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary border border-primary text-premium-shimmer">
+                                                <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary border border-primary">
                                                     {processRunning} active
                                                 </span>
                                             )}

@@ -39,6 +39,10 @@ const cardSource = readFileSync(
   new URL("../src/atlas/components/chat/ToolCallCard.tsx", import.meta.url),
   "utf8",
 );
+const executionRowSource = readFileSync(
+  new URL("../src/atlas/components/chat/tool/ExecutionRow.tsx", import.meta.url),
+  "utf8",
+);
 const traceSource = readFileSync(
   new URL("../src/atlas/components/chat/AgentExecutionTrace.tsx", import.meta.url),
   "utf8",
@@ -156,10 +160,6 @@ checkAll(assert, [
       pinContains("Running", "action family table must include 'Running'"),
       pinExport("humanizeToolAction", "humanizeToolAction must be the central, exported helper in ToolCallCard.tsx"),
       legacyNameAbsent,
-      pinContains("function getStatusLabel", "tool cards should expose compact status labels"),
-      pinContains("Needs approval", "status labels should include 'Needs approval'"),
-      pinContains("Complete", "status labels should include 'Complete'"),
-      pinContains("Failed", "status labels should include 'Failed'"),
       pinContains("buildToolOutputPreview", "tool cards should derive summaries from structured preview data"),
       pinContains("Technical details", "raw output should be hidden behind an explicit disclosure"),
       pinContains("<details", "raw output disclosure must use the native <details> element"),
@@ -177,6 +177,20 @@ checkAll(assert, [
       ),
       pinContains("deltaLabel", "completed file edits should show a compact +/- delta on the collapsed line"),
       pinContains("<ToolDetailView", "tool card expansion must route through ToolDetailView"),
+    ],
+  },
+
+  // Status-label SSOT: both grouped and individual execution rows use the
+  // shared primitive, so status wording cannot drift between cards.
+  {
+    context: "ExecutionRow.tsx",
+    source: executionRowSource,
+    pins: [
+      pinContains("export function getExecutionStatusLabel", "execution rows must own compact status labels"),
+      pinContains("Needs approval", "status labels should include 'Needs approval'"),
+      pinContains("Complete", "status labels should include 'Complete'"),
+      pinContains("Failed", "status labels should include 'Failed'"),
+      pinContains("aria-busy", "running rows must expose busy state to assistive technology"),
     ],
   },
 
@@ -324,6 +338,8 @@ checkAll(assert, [
     pins: [
       pinContains("parseUnifiedDiff", "file edits must expand into a diff viewer"),
       pinContains("DiffCard", "file edits must render via the DiffCard component"),
+      pinContains("Open full diff", "file edits must expose the full diff in the artifact panel"),
+      pinContains("Collapse", "file diff disclosure must have an accessible label"),
     ],
   },
   {

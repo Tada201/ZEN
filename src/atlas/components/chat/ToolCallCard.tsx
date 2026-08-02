@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Copy, RefreshCcw } from "lucide-react";
+import { Copy, RefreshCcw, Undo2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { getIpcErrorMessage } from "@/api/tauriClient";
+import { toolsApi } from "@/api/toolsApi";
 import type { ToolCall } from "./types";
 import { buildToolOutputPreview } from "./tool/toolOutputPreview";
 import { ToolDetailView } from "./tool/ToolDetailView";
 import { FoldOutCard, FoldOutCardContent } from "@/components/ui/fold-out-card";
-import { ExecutionRow } from "./tool/ExecutionRow";
+import { ExecutionRow, getExecutionStatusLabel } from "./tool/ExecutionRow";
 import { classifyToolCategory } from "./tool/toolCategory";
 import { formatDuration } from "./tool/formatDuration";
 import { toToolInputRecord } from "./tool/toToolInputRecord";
@@ -98,13 +101,6 @@ export function humanizeToolAction(name: string, status: ToolCall["status"]) {
   return "Working";
 }
 
-function getStatusLabel(status: ToolCall["status"]) {
-  if (status === "awaiting_approval") return "Needs approval";
-  if (status === "completed") return "Complete";
-  if (status === "error") return "Failed";
-  return "Running";
-}
-
 export function ToolCallCard({
   toolCall,
   className,
@@ -113,6 +109,7 @@ export function ToolCallCard({
   onViewArtifact,
   onCancel,
   onRetry,
+  chatId,
 }: ToolCallCardProps) {
   const { id, name, status, input, output, approvalContext, durationMs } = toolCall;
   const inputRecord = useMemo(() => toToolInputRecord(input), [input]);
@@ -125,6 +122,10 @@ export function ToolCallCard({
   // false) it wins; otherwise `hasAction` decides.
   const hasAction = status === "running" || status === "awaiting_approval" || status === "error";
   const [isExpanded, setIsExpanded] = useState(() => defaultExpanded ?? hasAction);
+  const [isUndoing, setIsUndoing] = useState(false);
+  const [isUndone, setIsUndone] = useState(false);
+  const [checkpointAvailable, setCheckpointAvailable] = useState(false);
+  const checkpoint = outputPreview.checkpoint;
   const category = useMemo(() => {
     if (status === "awaiting_approval") return "approval";
     if (status === "error") return "error";
@@ -136,6 +137,24 @@ export function ToolCallCard({
       setIsExpanded(defaultExpanded ?? hasAction);
     }
   }, [defaultExpanded, hasAction]);
+
+  useEffect(() => {
+    let active = true;
+    setCheckpointAvailable(false);
+    if (status !== "completed" || !chatId || !checkpoint?.available) {
+      return () => { active = false; };
+    }
+
+    void toolsApi.getToolCheckpoint(chatId, checkpoint.toolCallId)
+      .then((result) => {
+        if (active) setCheckpointAvailable(result?.available === true);
+      })
+      .catch(() => {
+        if (active) setCheckpointAvailable(false);
+      });
+
+    return () => { active = false; };
+  }, [chatId, status, checkpoint?.available, checkpoint?.toolCallId]);
 
   const target = getInputTarget(inputRecord);
   const fileTarget = target && /[/\\.]|\.(tsx?|rs|md|json|toml|ya?ml|css|html)$/i.test(target) ? splitPath(target).filename : "";
@@ -154,9 +173,34 @@ export function ToolCallCard({
     ? compactText(streamingPreview || target || "Working...")
     : outputPreview.summary || target || humanizeToolName(name);
   const durationLabel = formatDuration(durationMs);
+  const canUndo = status === "completed" && Boolean(chatId && checkpoint?.available && checkpointAvailable) && !isUndone;
+
+  const handleUndo = async () => {
+    if (!chatId || !checkpoint?.available || isUndoing || isUndone) return;
+    if (!window.confirm(`Undo ${checkpoint.fileCount} file${checkpoint.fileCount === 1 ? "" : "s"} changed by this tool?`)) return;
+
+    setIsUndoing(true);
+    try {
+      const result = await toolsApi.undoToolCall(chatId, checkpoint.toolCallId);
+      if (result.conflicts.length > 0) {
+        toast.error("Undo stopped: the workspace changed after the agent edit.", {
+          description: "No files were overwritten. Review the conflicting files manually.",
+        });
+        return;
+      }
+      setIsUndone(true);
+      toast.success(`Undid ${result.restored_files} file${result.restored_files === 1 ? "" : "s"}.`);
+    } catch (error) {
+      toast.error("Could not undo this tool call.", {
+        description: getIpcErrorMessage(error, "The recovery checkpoint is no longer available."),
+      });
+    } finally {
+      setIsUndoing(false);
+    }
+  };
 
   return (
-    <FoldOutCard open={isExpanded} onOpenChange={(value) => { userToggledRef.current = true; setIsExpanded(value); }} className={cn("min-w-0 rounded-md border border-border bg-card", className)}>
+    <FoldOutCard open={isExpanded} onOpenChange={(value) => { userToggledRef.current = true; setIsExpanded(value); }} className={cn("execution-card codex-surface min-w-0", className)}>
       <ExecutionRow
         status={status}
         category={category}
@@ -164,14 +208,14 @@ export function ToolCallCard({
         subtitle={summary}
         duration={durationLabel}
         expanded={isExpanded}
-        statusLabel={getStatusLabel(status)}
+        statusLabel={getExecutionStatusLabel(status)}
         onClick={() => { userToggledRef.current = true; setIsExpanded((prev) => !prev); }}
       />
 
       <FoldOutCardContent>
-        <div className="space-y-2 px-2 py-2">
+        <div className="execution-card-body space-y-2 px-2 py-2">
           {approvalContext && (
-            <div className="rounded-md border border-warning bg-muted px-2 py-1.5">
+            <div className="codex-surface-muted border-l-2 border-l-warning px-2 py-1.5">
               <div className="text-[11px] font-medium leading-5 text-warning">Approval context</div>
               {approvalContext.description && (
                 <div className="text-[12px] leading-relaxed text-foreground">{approvalContext.description}</div>
@@ -188,6 +232,29 @@ export function ToolCallCard({
               outputPreview={outputPreview}
               onViewArtifact={onViewArtifact}
             />
+          )}
+
+          {canUndo && (
+            <div className="flex items-center justify-between gap-2 rounded-md border border-warning/60 bg-warning/5 px-2 py-1.5">
+              <span className="text-[11px] text-muted-foreground">
+                Recovery checkpoint · {checkpoint?.fileCount} file{checkpoint?.fileCount === 1 ? "" : "s"}
+              </span>
+              <button
+                type="button"
+                onClick={handleUndo}
+                disabled={isUndoing}
+                className="inline-flex h-7 items-center gap-1.5 rounded-md border border-warning/60 bg-transparent px-2.5 text-[11px] font-medium text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60"
+              >
+                {isUndoing ? <Loader2 className="h-3 w-3 motion-safe:animate-spin" /> : <Undo2 className="h-3 w-3" />}
+                {isUndoing ? "Undoing..." : "Undo"}
+              </button>
+            </div>
+          )}
+
+          {isUndone && (
+            <div className="rounded-md border border-success/50 bg-success/5 px-2 py-1.5 text-[11px] text-success" role="status">
+              Workspace restored for this tool call.
+            </div>
           )}
 
           {status === "awaiting_approval" && (

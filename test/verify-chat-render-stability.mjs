@@ -15,9 +15,11 @@ assert(markdownUtils.includes("id: `${type}-${blockIndex}`"), "markdown keys mus
 assert(!markdownUtils.includes("isComplete ? 'done' : 'streaming'"), "completion must not remount markdown blocks");
 assert(ledger.includes("appendActionStepInArrivalOrder"), "agent actions must preserve arrival chronology");
 assert(!ledger.includes("insertActionStepBeforeText"), "late tool events must not jump before existing text");
-assert(assistantParts.includes("shouldShowPostToolWorking"), "completed tools must expose a continuation state");
-assert(assistantMessage.includes("Working on the response..."), "chat must show activity between tool completion and resumed text");
-assert(assistantMessage.includes('aria-live="polite"'), "post-tool activity must be announced accessibly");
+assert(!assistantParts.includes("shouldShowPostToolWorking"), "obsolete post-tool status helper must not remain in the parent status path");
+assert(assistantParts.includes("selectParentWorkingStatus"), "completed tools must flow through the single parent status selector");
+assert(assistantMessage.includes("parentWorkingStatus"), "chat must expose one parent-level status projection");
+assert(!assistantMessage.includes("Working on the response..."), "legacy duplicate post-tool status row must be removed");
+assert(assistantMessage.includes('aria-live="polite"'), "parent status must be announced accessibly");
 assert(markdownContent.includes("isPlainShortText"), "plain short deltas should bypass the full markdown parser");
 
 console.log("chat render stability ok");

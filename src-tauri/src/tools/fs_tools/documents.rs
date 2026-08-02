@@ -114,7 +114,7 @@ impl Tool for ReadDocumentTool {
     async fn execute(
         &self,
         app: AppHandle,
-        _chat_id: String,
+        chat_id: String,
         args: serde_json::Value,
     ) -> Result<ToolOutput, ToolError> {
         let parsed_args: ReadDocumentArgs =
@@ -123,7 +123,12 @@ impl Tool for ReadDocumentTool {
             })?;
 
         let state = app.state::<AppState>();
-        let workspace = state.workspace_folder.read().await.clone();
+        let workspace = state
+            .workspace_for_chat(&chat_id)
+            .await
+            .map_err(|e| ToolError::ExecutionFailed {
+                message: format!("Unable to resolve session workspace: {}", e),
+            })?;
         let max_file_bytes = workspace_max_file_bytes(&state).await;
         let pool = state.db().await.map_err(|e| ToolError::ExecutionFailed {
             message: format!("DB error: {}", e),
@@ -252,7 +257,7 @@ impl Tool for GrepDocumentsTool {
     async fn execute(
         &self,
         app: AppHandle,
-        _chat_id: String,
+        chat_id: String,
         args: serde_json::Value,
     ) -> Result<ToolOutput, ToolError> {
         let parsed_args: GrepDocumentsArgs =
@@ -261,7 +266,12 @@ impl Tool for GrepDocumentsTool {
             })?;
 
         let state = app.state::<AppState>();
-        let workspace = state.workspace_folder.read().await.clone();
+        let workspace = state
+            .workspace_for_chat(&chat_id)
+            .await
+            .map_err(|e| ToolError::ExecutionFailed {
+                message: format!("Unable to resolve session workspace: {}", e),
+            })?;
         let max_file_bytes = workspace_max_file_bytes(&state).await;
         let pool = state.db().await.map_err(|e| ToolError::ExecutionFailed {
             message: format!("DB error: {}", e),

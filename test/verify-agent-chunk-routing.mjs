@@ -24,6 +24,8 @@ assert(ledger.includes("stripDuplicateResultSummary"), "ledger should avoid show
 assert(laneModel.includes("liveContent"), "delegation lane model should expose live content");
 assert(laneModel.includes("compactLivePreview"), "delegation lane model should expose compact transcript preview");
 assert(laneModel.includes("hasTranscript"), "delegation lane model should mark expandable transcript state");
+assert(laneModel.includes("MAX_LIVE_OUTPUT_CHARS"), "delegation output cap should have one named owner");
+assert(lane.includes("MAX_LIVE_OUTPUT_CHARS"), "delegation lane should consume the shared output cap");
 assert(lane.includes("Live output"), "delegation lane should render live output");
 assert(lane.includes("aria-expanded"), "delegation lane transcript should be expandable");
 assert(lane.includes("max-h-64"), "expanded transcript should be scroll bounded");

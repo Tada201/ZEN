@@ -217,9 +217,9 @@ pub async fn resolve_tool_approval(
                 tool_call_id = %tool_call_id,
                 "resolve_tool_approval: no pending approval found (already resolved or expired)"
             );
-            // Return Ok rather than an error – the runner may have already timed out
-            // or the user double-clicked; either way there is nothing harmful to do.
-            Ok(())
+            Err(crate::error::ZenError::Custom(
+                "Tool approval is missing, expired, or already resolved".to_string(),
+            ))
         }
     }
 }

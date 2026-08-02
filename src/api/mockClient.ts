@@ -211,10 +211,19 @@ const mockCommands: Record<string, (args: any) => any> = {
       pinned: 0,
       folderId: null,
       isArchived: 0,
+      workspaceRoot: null,
     };
     chats = [newChat, ...chats];
     saveData(KEY_CHATS, chats);
     return newChat;
+  },
+  set_chat_workspace: ({ chatId, workspaceRoot }: { chatId: string; workspaceRoot: string | null }) => {
+    chats = chats.map((chat) => chat.id === chatId
+      ? { ...chat, workspaceRoot, updatedAt: Date.now() }
+      : chat
+    );
+    saveData(KEY_CHATS, chats);
+    return chats.find((chat) => chat.id === chatId) || null;
   },
   delete_chat: ({ chatId }: { chatId: string }) => {
     chats = chats.filter(c => c.id !== chatId);

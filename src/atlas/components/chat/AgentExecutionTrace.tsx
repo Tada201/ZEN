@@ -2,16 +2,21 @@ import { useEffect, useMemo, useRef, useState, memo } from "react";
 import { cn } from "@/lib/utils";
 import type { ArtifactData, Step, ToolCall } from "./types";
 import { ToolCallCard, humanizeToolAction } from "./ToolCallCard";
-import { resolveToolApproval } from "./AssistantMessageTrace";
+import { resolveToolApproval } from "./approvalActions";
 import { buildAgentExecutionTraceModel } from "./agentExecutionTraceModel";
 import { buildToolOutputPreview as buildToolOutputPreviewImported } from "./tool/toolOutputPreview";
 import { isToolVisibleInChat } from "./assistantMessageParts";
 import { FoldOutCard, FoldOutCardContent } from "@/components/ui/fold-out-card";
-import { ExecutionRow } from "./tool/ExecutionRow";
+import { ExecutionRow, getExecutionStatusLabel } from "./tool/ExecutionRow";
 import type { ExecutionStatus } from "./tool/ExecutionRow";
 import { classifyToolCategory, type ToolCategory } from "./tool/toolCategory";
 import { formatDuration } from "./tool/formatDuration";
 import { toToolInputRecord } from "./tool/toToolInputRecord";
+import {
+  createDisclosureState,
+  toggleDisclosure,
+  transitionDisclosure,
+} from "./executionDisclosure";
 
 function compactToolDisplayName(tool: ToolCall): string {
   const name = tool.name.toLowerCase();
@@ -130,7 +135,6 @@ export function AgentExecutionTrace({
   executionSteps,
   sessionId,
   onOpenArtifact,
-  isStreaming,
   preferCompact = false,
   bare = false,
 }: {
@@ -138,7 +142,6 @@ export function AgentExecutionTrace({
   executionSteps?: Step[];
   sessionId?: string;
   onOpenArtifact: (a: ArtifactData) => void;
-  isStreaming?: boolean;
   preferCompact?: boolean;
   /**
    * When true, renders only the inner tool-row rail WITHOUT the surrounding
@@ -161,8 +164,6 @@ export function AgentExecutionTrace({
   const shouldDefaultOpen = preferCompact
     ? trace.active || importantToolCalls.length > 0
     : trace.active || trace.errorCount > 0 || trace.approvalCount > 0;
-  const [isExpanded, setIsExpanded] = useState(shouldDefaultOpen);
-  const userToggledRef = useRef(false);
   // Map tool call IDs to streaming argument previews from chat_status steps
   const streamingPreviews = useMemo(() => {
     const map = new Map<string, string>();
@@ -177,6 +178,8 @@ export function AgentExecutionTrace({
   }, [executionSteps]);
 
   const groupStatus = useMemo(() => getGroupStatus(normalizedToolCalls), [normalizedToolCalls]);
+  const disclosureStateRef = useRef(createDisclosureState(groupStatus, shouldDefaultOpen));
+  const [isExpanded, setIsExpanded] = useState(disclosureStateRef.current.open);
   const groupDuration = useMemo(() => getGroupDuration(normalizedToolCalls), [normalizedToolCalls]);
   const dominantCategory = useMemo<ToolCategory>(() => {
     const counts = new Map<ToolCategory, number>();
@@ -228,12 +231,23 @@ export function AgentExecutionTrace({
   }, [groupStatus, trace]);
 
   const summaryDuration = useMemo(() => formatDuration(groupDuration), [groupDuration]);
+  const statusLabel = getExecutionStatusLabel(groupStatus);
+  const traceAriaLabel = `${headerLabel}, ${statusLabel}${summarySubtitle ? `. ${summarySubtitle}` : ""}`;
+  const liveStatusMessage = groupStatus === "running"
+    ? `${headerLabel}. Running.`
+    : groupStatus === "awaiting_approval"
+      ? `${headerLabel}. Needs approval.`
+      : groupStatus === "error"
+        ? `${headerLabel}. Failed.`
+        : groupStatus === "completed"
+          ? `${headerLabel}. Complete.`
+          : headerLabel;
 
   useEffect(() => {
-    if (!userToggledRef.current && (trace.active || trace.errorCount > 0)) {
-      setIsExpanded(true);
-    }
-  }, [trace.errorCount, trace.active]);
+    const nextState = transitionDisclosure(disclosureStateRef.current, groupStatus);
+    disclosureStateRef.current = nextState;
+    setIsExpanded((previous) => previous === nextState.open ? previous : nextState.open);
+  }, [groupStatus]);
 
   if (normalizedToolCalls.length === 0) return null;
 
@@ -245,7 +259,7 @@ export function AgentExecutionTrace({
     return (
       <div className="relative pl-4 before:absolute before:left-[5px] before:top-1 before:h-[calc(100%-8px)] before:w-px before:bg-border flex flex-col gap-2">
         {normalizedToolCalls.map((tc, idx) => (
-          <div key={tc.id || tc.runId || idx} className="animate-in fade-in slide-in-from-top-2 duration-200 motion-reduce:animate-none" style={{ animationDelay: isStreaming ? `${idx * 50}ms` : undefined }}>
+          <div key={tc.id || tc.runId || idx} className="animate-in fade-in duration-150 motion-reduce:animate-none">
             <ToolTraceRow toolCall={tc} sessionId={sessionId} onOpenArtifact={onOpenArtifact} streamingPreview={streamingPreviews.get(tc.id) || undefined} />
           </div>
         ))}
@@ -254,7 +268,23 @@ export function AgentExecutionTrace({
   }
 
   return (
-    <FoldOutCard open={isExpanded} onOpenChange={(value) => { userToggledRef.current = true; setIsExpanded(value); }} className="font-sans">
+    <div
+      className="execution-trace min-w-0"
+      aria-label={traceAriaLabel}
+      aria-busy={groupStatus === "running"}
+    >
+      <span
+        className="sr-only"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {liveStatusMessage}
+      </span>
+      <FoldOutCard open={isExpanded} onOpenChange={(value) => {
+        disclosureStateRef.current = toggleDisclosure(disclosureStateRef.current, value);
+        setIsExpanded(value);
+      }} className="execution-group font-sans">
       <ExecutionRow
         status={groupStatus}
         category={dominantCategory}
@@ -262,20 +292,25 @@ export function AgentExecutionTrace({
         subtitle={summarySubtitle}
         duration={summaryDuration}
         expanded={isExpanded}
-        onClick={() => { userToggledRef.current = true; setIsExpanded((prev) => !prev); }}
+        onClick={() => {
+          const nextOpen = !isExpanded;
+          disclosureStateRef.current = toggleDisclosure(disclosureStateRef.current, nextOpen);
+          setIsExpanded(nextOpen);
+        }}
       />
 
       <FoldOutCardContent>
 
           <div className="relative pl-4 before:absolute before:left-[5px] before:top-1 before:h-[calc(100%-8px)] before:w-px before:bg-border flex flex-col gap-2">
             {normalizedToolCalls.map((tc, idx) => (
-              <div key={tc.id || tc.runId || idx} className="animate-in fade-in slide-in-from-top-2 duration-200 motion-reduce:animate-none" style={{ animationDelay: isStreaming ? `${idx * 50}ms` : undefined }}>
+              <div key={tc.id || tc.runId || idx} className="animate-in fade-in duration-150 motion-reduce:animate-none">
                 <ToolTraceRow toolCall={tc} sessionId={sessionId} onOpenArtifact={onOpenArtifact} streamingPreview={streamingPreviews.get(tc.id) || undefined} />
               </div>
             ))}
       </div>
       </FoldOutCardContent>
-    </FoldOutCard>
+      </FoldOutCard>
+    </div>
   );
 }
 
