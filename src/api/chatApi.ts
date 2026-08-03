@@ -122,8 +122,8 @@ export const chatApi = {
   searchChats: (query: string) => callCommand<SearchResult[]>("search_chats", { query }),
   exportChat: (chatId: string) => callCommand<unknown>("export_chat", { chatId }),
   importChat: (sourcePath: string) => callCommand<unknown>("import_chat", { sourcePath }),
-  createChat: (title: string, model: string | null) =>
-    callCommand<BackendChat>("create_chat", { title, model }),
+  createChat: (title: string, model: string | null, workspaceRoot?: string | null) =>
+    callCommand<BackendChat>("create_chat", { title, model, workspaceRoot: workspaceRoot ?? null }),
   setChatWorkspace: (chatId: string, workspaceRoot: string | null) =>
     callCommand<BackendChat>("set_chat_workspace", { chatId, workspaceRoot }),
   deleteChat: (chatId: string) => callCommand<void>("delete_chat", { chatId }),

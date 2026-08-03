@@ -17,6 +17,12 @@ assert(lane.includes("Live output") && lane.includes("max-h-64"), "delegation tr
 assert(lane.includes("whitespace-pre-wrap") && lane.includes("break-words"), "delegation transcript should wrap safely in narrow surfaces");
 assert(laneModel.includes("spawnId") && laneModel.includes("batchId"), "delegation model should preserve stable execution identity");
 assert(trace.includes("bare") && trace.includes("single foldout"), "child tool traces should remain behind the parent delegation disclosure");
+assert(trace.includes("execution-context-summary") && trace.includes("Execution lanes"), "inline traces should expose centralized agent and batch context");
 assert(subagent.includes("aria-label=") && subagent.includes("motion-reduce:transition-none"), "subagent summary should retain accessible disclosure and reduced motion");
+
+const checkpoint = readFileSync("src/atlas/hooks/stream/persistExecutionCheckpoint.ts", "utf8");
+assert(checkpoint.includes("projectStepsForPersistence"), "active checkpoints should reuse the canonical safe persistence projection");
+assert(checkpoint.includes("temp-assistant-"), "active checkpoints must reject optimistic assistant ids");
+assert(checkpoint.includes("CHECKPOINT_DELAY_MS"), "active checkpoints should be throttled to avoid one database write per event");
 
 console.log("execution trace delegation UX verified");

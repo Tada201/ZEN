@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useUIStore } from "@/lib/stores/useUIStore";
 import { FoldOutCard, FoldOutCardContent, FoldOutCardTrigger } from "@/components/ui/fold-out-card";
 import type { ArtifactData, Step, ToolCall } from "./types";
 import { AgentExecutionTrace } from "./AgentExecutionTrace";
@@ -39,11 +40,13 @@ export function SubagentExecutionCard({
   onOpenArtifact,
 }: SubagentExecutionCardProps) {
   const subagent = step.subagent;
+  const openSubagentInPanel = useUIStore((state) => state.openSubagentInPanel);
   // Keep hooks unconditional while streamed reconciliation fills in the
   // subagent payload. The render guard stays after lifecycle state is set up.
   const resolvedSubagent = subagent ?? null;
   const status = resolvedSubagent?.status ?? "completed";
-  const isRunning = status === "running";
+  const isStale = resolvedSubagent?.recoveryState === "stale";
+  const isRunning = status === "running" && !isStale;
   const isFailed = status === "failed" || status === "cancelled";
   const isCompleted = status === "completed";
   const duration = formatDuration(subagent?.durationMs);
@@ -82,7 +85,9 @@ export function SubagentExecutionCard({
     <Bot className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
   );
 
-  const statusLabel = isRunning
+  const statusLabel = isStale
+    ? "Interrupted"
+    : isRunning
     ? "Working"
     : isFailed
     ? status === "cancelled"
@@ -126,6 +131,7 @@ export function SubagentExecutionCard({
                 className={cn(
                   "shrink-0 text-[10px] font-medium uppercase tracking-wider",
                   isRunning && "text-primary",
+                  isStale && "text-warning",
                   status === "cancelled" && "text-muted-foreground",
                   isFailed && status !== "cancelled" && "text-destructive",
                   isCompleted && "text-success",
@@ -154,6 +160,15 @@ export function SubagentExecutionCard({
       </FoldOutCardTrigger>
       <FoldOutCardContent>
         <div className="px-3 pb-3 pt-1">
+          {sessionId && resolvedSubagent?.spawnId && (
+            <button
+              type="button"
+              onClick={() => openSubagentInPanel(sessionId, resolvedSubagent.spawnId)}
+              className="mb-2 inline-flex h-7 items-center rounded-md border border-border bg-background px-2.5 text-[11px] font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              Open full trace
+            </button>
+          )}
           {(resolvedSubagent.resultSummary || resolvedSubagent.error) && (
             <div
               className={cn(
@@ -171,6 +186,12 @@ export function SubagentExecutionCard({
               ) : (
                 <span className="whitespace-pre-wrap">{resolvedSubagent.resultSummary}</span>
               )}
+            </div>
+          )}
+          {isStale && (
+            <div className="mb-2 rounded-md border border-warning bg-muted px-2.5 py-2 text-[11px] text-foreground" role="status">
+              <span className="font-medium text-warning">Interrupted after reload.</span>{" "}
+              <span className="text-muted-foreground">The saved subagent trace is available for review.</span>
             </div>
           )}
           {childTools.length > 0 && (

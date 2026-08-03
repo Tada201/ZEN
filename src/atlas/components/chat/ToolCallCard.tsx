@@ -22,6 +22,8 @@ interface ToolCallCardProps {
   defaultExpanded?: boolean;
   streamingPreview?: string;
   chatId?: string;
+  /** Render as a quiet row in the shared execution ledger. */
+  ledgerRow?: boolean;
 }
 
 export function humanizeToolName(name: string) {
@@ -110,8 +112,11 @@ export function ToolCallCard({
   onCancel,
   onRetry,
   chatId,
+  ledgerRow = false,
 }: ToolCallCardProps) {
   const { id, name, status, input, output, approvalContext, durationMs } = toolCall;
+  const isStale = toolCall.recoveryState === "stale";
+  const executionStatus = isStale ? "error" as const : status;
   const inputRecord = useMemo(() => toToolInputRecord(input), [input]);
   const outputPreview = useMemo(() => buildToolOutputPreview(output || ""), [output]);
   const userToggledRef = useRef(false);
@@ -120,7 +125,7 @@ export function ToolCallCard({
   // sees work in progress and actionable states; completed background cards
   // collapse. `defaultExpanded` is an explicit override — when set (true or
   // false) it wins; otherwise `hasAction` decides.
-  const hasAction = status === "running" || status === "awaiting_approval" || status === "error";
+  const hasAction = !isStale && (status === "running" || status === "awaiting_approval" || status === "error");
   const [isExpanded, setIsExpanded] = useState(() => defaultExpanded ?? hasAction);
   const [isUndoing, setIsUndoing] = useState(false);
   const [isUndone, setIsUndone] = useState(false);
@@ -165,7 +170,7 @@ export function ToolCallCard({
     return `+${file.linesAdded || 0} −${file.linesRemoved || 0}`;
   }, [status, outputPreview.files]);
   const actionText = [
-    humanizeToolAction(name, status),
+    isStale ? "Interrupted" : humanizeToolAction(name, status),
     fileTarget || humanizeToolName(name),
     deltaLabel,
   ].filter(Boolean).join(" ");
@@ -200,20 +205,28 @@ export function ToolCallCard({
   };
 
   return (
-    <FoldOutCard open={isExpanded} onOpenChange={(value) => { userToggledRef.current = true; setIsExpanded(value); }} className={cn("execution-card codex-surface min-w-0", className)}>
+    <FoldOutCard open={isExpanded} onOpenChange={(value) => { userToggledRef.current = true; setIsExpanded(value); }} className={cn(ledgerRow ? "execution-card--ledger min-w-0" : "execution-card codex-surface min-w-0", isStale && "execution-card--stale", className)}>
       <ExecutionRow
-        status={status}
+        status={executionStatus}
         category={category}
         title={actionText}
         subtitle={summary}
         duration={durationLabel}
         expanded={isExpanded}
-        statusLabel={getExecutionStatusLabel(status)}
+        statusLabel={isStale ? "Interrupted" : getExecutionStatusLabel(executionStatus)}
+        variant={ledgerRow ? "ledger" : "card"}
+        className={ledgerRow ? "execution-row--ledger" : undefined}
         onClick={() => { userToggledRef.current = true; setIsExpanded((prev) => !prev); }}
       />
 
-      <FoldOutCardContent>
+      <FoldOutCardContent className={ledgerRow ? "execution-card-content--ledger" : undefined}>
         <div className="execution-card-body space-y-2 px-2 py-2">
+          {isStale && (
+            <div className="flex items-start gap-2 rounded-md border border-warning bg-muted px-2 py-1.5 text-[11px] text-foreground" role="status">
+              <span className="font-medium text-warning">Interrupted</span>
+              <span className="text-muted-foreground">The app was reloaded before this tool finished. Review the saved trace or retry it.</span>
+            </div>
+          )}
           {approvalContext && (
             <div className="codex-surface-muted border-l-2 border-l-warning px-2 py-1.5">
               <div className="text-[11px] font-medium leading-5 text-warning">Approval context</div>

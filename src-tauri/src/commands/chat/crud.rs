@@ -14,15 +14,25 @@ pub async fn create_chat(
     state: State<'_, AppState>,
     title: String,
     model: Option<String>,
+    workspace_root: Option<String>,
 ) -> ZenResult<Chat> {
-    info!(title = ?title, model = ?model, "Creating new chat session");
+    info!(title = ?title, model = ?model, workspace_root = ?workspace_root, "Creating new chat session");
     let db = state.db().await?;
-    let workspace_root = state.workspace_folder.read().await.clone();
+    let workspace_root = match workspace_root {
+        Some(root) if !root.trim().is_empty() => Some(
+            crate::workspace::canonicalize_workspace_root(std::path::Path::new(&root))
+                .map_err(|e| crate::error::ZenError::Custom(format!("Invalid workspace root: {}", e)))?,
+        ),
+        _ => Some(state.workspace_folder.read().await.clone()),
+    };
+    let workspace_root_string = workspace_root
+        .as_ref()
+        .map(|root| root.to_string_lossy().to_string());
     let chat = queries::create_chat(
         &db,
         &title,
         model.as_deref(),
-        Some(workspace_root.to_string_lossy().as_ref()),
+        workspace_root_string.as_deref(),
     )
     .await?;
     info!(chat_id = %chat.id, "Chat session created successfully");
@@ -36,12 +46,21 @@ pub async fn set_chat_workspace(
     workspace_root: Option<String>,
 ) -> ZenResult<Chat> {
     let db = state.db().await?;
+    let chat = queries::get_chat(&db, &chat_id).await?;
+    if chat.workspace_root.is_some() {
+        return Err(crate::error::ZenError::Custom(
+            "Chat workspace is immutable after initialization".to_string(),
+        ));
+    }
+
     let canonical_root = match workspace_root {
         Some(root) if !root.trim().is_empty() => Some(
             crate::workspace::canonicalize_workspace_root(std::path::Path::new(&root))
                 .map_err(|e| crate::error::ZenError::Custom(format!("Invalid workspace root: {}", e)))?,
         ),
-        _ => None,
+        _ => return Err(crate::error::ZenError::Custom(
+            "A workspace root is required when assigning a legacy chat".to_string(),
+        )),
     };
     let root_string = canonical_root
         .as_ref()

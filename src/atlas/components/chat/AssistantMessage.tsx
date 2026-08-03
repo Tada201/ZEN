@@ -5,7 +5,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import { CHAT_STATUS_PHASES, type ChatStatusPhase } from "@/api/chatStatus";
 import type { Message, ArtifactData, Step } from "./types";
 import type { SettingsTabId } from "@/lib/features/frontendFeatures";
@@ -139,24 +138,20 @@ function getExecutionStepKey(
 
 function shouldShowToolGroupInTimeline(
   step: { type: "tool-group"; toolCalls: Array<{ status: string }> },
-  isStreaming: boolean,
-  hasAssistantAnswerText: boolean,
-  revealCompletedToolHistory = false,
+  _isStreaming: boolean,
+  _hasAssistantAnswerText: boolean,
 ) {
-  // Completed-only tool groups are hidden once the assistant answer text
-  // arrives, keeping the transcript focused on the conversation. Groups with
-  // running, approval, or error states stay visible. The full execution
-  // history remains available via the expandable trace and persisted steps.
-  //
-  // `revealCompletedToolHistory` is a persisted opt-in preference: when true,
-  // completed successful groups stay visible even after the answer arrives,
-  // so users who want to audit past turns don't lose them on reload.
+  // Execution cards are part of the assistant's durable response timeline,
+  // not transient progress chrome. They must remain mounted after completion
+  // so the live stream and hydrated backend message have the same visible
+  // shape. Previously completed-only groups fell through to
+  // `isStreaming && !hasAssistantAnswerText`, so every successful tool card
+  // disappeared as soon as the answer finished.
   const hasActionableTool = step.toolCalls.some((tool) =>
     tool.status === "running" || tool.status === "awaiting_approval" || tool.status === "error"
   );
   if (hasActionableTool) return true;
-  if (revealCompletedToolHistory) return true;
-  return isStreaming && !hasAssistantAnswerText;
+  return true;
 }
 
 // Card types that pay down the most empty vertical whitespace when collapsed
@@ -419,20 +414,14 @@ export function AssistantMessage({
       .map((step) => step as Step);
   }, [groupedSteps]);
 
-  // Persisted appearance preference: when true, completed successful tool
-  // groups stay visible in the timeline even after the assistant answer
-  // arrives. Defaults to false so the transcript stays focused on the
-  // conversation. Read from the settings store so it survives reloads.
-  const revealCompletedToolHistory = useSettingsStore((s) => s.revealCompletedToolHistory);
-
   const visibleGroupedSteps = useMemo(() => {
     return groupedSteps.filter((step) => {
       if (step.type === "tool-group") {
-        return shouldShowToolGroupInTimeline(step, message.status === "sending", hasAssistantAnswerText, revealCompletedToolHistory);
+        return shouldShowToolGroupInTimeline(step, message.status === "sending", hasAssistantAnswerText);
       }
       return step.type !== "action" || isVisibleChatActionStep(step as Step);
     });
-  }, [groupedSteps, revealCompletedToolHistory]);
+  }, [groupedSteps, hasAssistantAnswerText, message.status]);
 
   const hasVisibleAnswer = Boolean(
     message.content?.trim() ||
@@ -444,7 +433,7 @@ export function AssistantMessage({
         ? Boolean((step.cleanText || step.content || "").trim())
         : step.type === "reasoning" ||
           step.type === "subagent" ||
-          (step.type === "tool-group" && shouldShowToolGroupInTimeline(step, message.status === "sending", hasAssistantAnswerText, revealCompletedToolHistory))
+          (step.type === "tool-group" && shouldShowToolGroupInTimeline(step, message.status === "sending", hasAssistantAnswerText))
     ) ||
     (message.status === "sending" && groupedToolCalls.length > 0)
   );
@@ -561,6 +550,13 @@ export function AssistantMessage({
                   </span>
                 </div>
               )}
+
+            {message.recoveryState === "recovered" && (
+              <div className="mb-3 flex items-start gap-2 rounded-md border border-warning bg-muted px-3 py-2 text-[12px]" role="status">
+                <span className="font-medium text-warning">Recovered after reload</span>
+                <span className="text-muted-foreground">This execution was interrupted. The saved trace remains available for review.</span>
+              </div>
+            )}
 
             {message.status === "sending" && !hasVisibleAnswer && !hasResearchProgress && !hasVisibleProgress ? (
               <StreamingSkeleton compact={compact} />

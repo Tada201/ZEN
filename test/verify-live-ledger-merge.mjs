@@ -94,6 +94,24 @@ assert.deepEqual(
   "DB refresh must preserve live tool chronology instead of moving tools below completed text",
 );
 
+const staleFetched = {
+  ...fetchedAssistant,
+  id: "db-assistant-stale",
+  content: "",
+  status: "sending",
+};
+const preservedFinal = mergeLiveToolState(staleFetched, liveAssistant);
+assert.equal(
+  preservedFinal.content,
+  liveAssistant.content,
+  "a stale post-done fetch must not replace the richer live final answer",
+);
+assert.equal(
+  preservedFinal.status,
+  "sent",
+  "a stale post-done fetch must not regress a finalized live assistant to sending",
+);
+
 const interleavedLive = {
   ...liveAssistant,
   steps: [

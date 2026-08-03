@@ -275,6 +275,15 @@ export function AgentActionStepInner({ step, isStreaming }: { step: Step; isStre
   const eventTime = formatActionTime(step.timestamp);
   const chips = getActionChips(step);
   const delegationLane = buildAgentDelegationLaneModel(step);
+  const statusLabel = step.status === "completed"
+      ? "Complete"
+      : step.status === "error"
+        ? "Failed"
+        : step.status === "cancelled"
+          ? "Cancelled"
+          : step.status === "running"
+            ? "Running"
+            : step.status;
 
   if (delegationLane) {
     return <AgentDelegationLane lane={delegationLane} />;
@@ -320,7 +329,7 @@ export function AgentActionStepInner({ step, isStreaming }: { step: Step; isStre
                   step.status === "running" && "text-muted-foreground",
                 )}
               >
-                {step.status}
+                {statusLabel}
               </span>
             )}
           </div>
@@ -381,8 +390,9 @@ function InlineApprovalControls({ approval, metadata }: { approval: ApprovalRequ
   ].filter(Boolean).join(" ");
 
   return (
-    <div className="mt-3 rounded-lg border border-warning bg-muted p-2">
+    <div className="mt-3 rounded-lg border border-warning bg-muted p-2" role="status" aria-label={`Approval required for ${toolName}`}>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-warning">Awaiting approval</span>
         <span className="min-w-0 flex-1 text-[11px] leading-5 text-foreground">
           Permission needed for <code className="rounded bg-muted px-1.5 py-0.5 text-foreground">{toolName}</code>
         </span>

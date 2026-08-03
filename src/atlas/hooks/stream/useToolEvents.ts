@@ -7,6 +7,7 @@ import { makeToolCall, upsertTool } from "./toolEventReducer";
 import type { Message, ToolCall } from "../../components/chat/types";
 import { focusActiveAgentsPanel, shouldFocusAgentsForTool } from "./agentPanelFocus";
 import { findWritableAssistantIndex } from "./messageTarget";
+import { persistExecutionCheckpointForEvent } from "./persistExecutionCheckpoint";
 
 interface UseToolEventsProps {
   resetHeartbeatTimeout: (chatId: string) => void;
@@ -108,6 +109,11 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
           getToolEventMeta(event.payload),
         );
         useChatStore.getState().setSessionMessages(chatId, (prev) => upsertTool(prev, chatId, tool));
+        persistExecutionCheckpointForEvent({
+          chatId,
+          messageId: event.payload.message_id || event.payload.messageId,
+          toolCallId: event.payload.tool_call_id,
+        });
       });
 
       const unlistenToolStart = await listenAppEvent("tool:start", (event) => {
@@ -130,6 +136,11 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
           getToolEventMeta(event.payload),
         );
         useChatStore.getState().setSessionMessages(chatId, (prev) => upsertTool(prev, chatId, tool));
+        persistExecutionCheckpointForEvent({
+          chatId,
+          messageId: event.payload.message_id || event.payload.messageId,
+          toolCallId: event.payload.tool_call_id,
+        });
       });
 
       const unlistenToolComplete = await listenAppEvent("tool:complete", (event) => {
@@ -184,6 +195,11 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
 
           return next;
         });
+        persistExecutionCheckpointForEvent({
+          chatId,
+          messageId: event.payload.message_id || event.payload.messageId,
+          toolCallId: event.payload.tool_call_id,
+        });
       });
 
       const unlistenAuthorizationTimeout = await listenAppEvent("tool:authorization_timeout", (event) => {
@@ -206,6 +222,12 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
           getToolEventMeta(event.payload),
         );
         useChatStore.getState().setSessionMessages(chatId, (prev) => upsertTool(prev, chatId, tool));
+        persistExecutionCheckpointForEvent({
+          chatId,
+          messageId: event.payload.message_id || event.payload.messageId,
+          toolCallId: event.payload.tool_call_id,
+          flush: true,
+        });
       });
 
       unlistenRefs.current.push(unlistenAuthorization, unlistenToolStart, unlistenToolComplete, unlistenAuthorizationTimeout);

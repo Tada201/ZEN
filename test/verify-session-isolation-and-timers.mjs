@@ -9,7 +9,7 @@ const check = (label, ok, detail = "") => {
   }
 };
 
-const chatCommands = readFileSync("src-tauri/src/commands/chat.rs", "utf8");
+const chatCommands = readFileSync("src-tauri/src/commands/chat/crud.rs", "utf8");
 check(
   "delete_chat cleans up recall_cache",
   /state\.recall_cache\.lock\(\)\.await;\s*cache\.remove\(&chat_id\)/.test(chatCommands),

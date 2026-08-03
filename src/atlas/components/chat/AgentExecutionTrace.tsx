@@ -239,9 +239,16 @@ export function AgentExecutionTrace({
       ? `${headerLabel}. Needs approval.`
       : groupStatus === "error"
         ? `${headerLabel}. Failed.`
-        : groupStatus === "completed"
-          ? `${headerLabel}. Complete.`
-          : headerLabel;
+          : groupStatus === "completed"
+            ? `${headerLabel}. Complete.`
+            : headerLabel;
+  const hasExecutionContext = Boolean(
+    trace.shouldShowBatchLanes ||
+    trace.agentSummary ||
+    trace.agentHierarchySummary ||
+    trace.handoffSummary ||
+    trace.activeLaneSummary,
+  );
 
   useEffect(() => {
     const nextState = transitionDisclosure(disclosureStateRef.current, groupStatus);
@@ -257,7 +264,7 @@ export function AgentExecutionTrace({
   // and conflicting collapse behavior that nested foldouts produced.
   if (bare) {
     return (
-      <div className="relative pl-4 before:absolute before:left-[5px] before:top-1 before:h-[calc(100%-8px)] before:w-px before:bg-border flex flex-col gap-2">
+      <div className="execution-tool-rail relative pl-4 before:absolute before:left-[5px] before:top-1 before:h-[calc(100%-8px)] before:w-px before:bg-border flex flex-col gap-1.5">
         {normalizedToolCalls.map((tc, idx) => (
           <div key={tc.id || tc.runId || idx} className="animate-in fade-in duration-150 motion-reduce:animate-none">
             <ToolTraceRow toolCall={tc} sessionId={sessionId} onOpenArtifact={onOpenArtifact} streamingPreview={streamingPreviews.get(tc.id) || undefined} />
@@ -284,7 +291,7 @@ export function AgentExecutionTrace({
       <FoldOutCard open={isExpanded} onOpenChange={(value) => {
         disclosureStateRef.current = toggleDisclosure(disclosureStateRef.current, value);
         setIsExpanded(value);
-      }} className="execution-group font-sans">
+      }} className="execution-group execution-group--ledger font-sans">
       <ExecutionRow
         status={groupStatus}
         category={dominantCategory}
@@ -292,6 +299,8 @@ export function AgentExecutionTrace({
         subtitle={summarySubtitle}
         duration={summaryDuration}
         expanded={isExpanded}
+        variant="ledger"
+        className="execution-row--ledger execution-row--group"
         onClick={() => {
           const nextOpen = !isExpanded;
           disclosureStateRef.current = toggleDisclosure(disclosureStateRef.current, nextOpen);
@@ -300,8 +309,53 @@ export function AgentExecutionTrace({
       />
 
       <FoldOutCardContent>
-
-          <div className="relative pl-4 before:absolute before:left-[5px] before:top-1 before:h-[calc(100%-8px)] before:w-px before:bg-border flex flex-col gap-2">
+          {hasExecutionContext && (
+            <div
+              className="mb-2 space-y-1.5 rounded-md border border-border bg-muted px-2.5 py-2 text-[11px]"
+              data-testid="execution-context-summary"
+            >
+              {(trace.agentSummary || trace.agentHierarchySummary || trace.handoffSummary) && (
+                <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground">
+                  <span className="font-medium text-foreground">Agents</span>
+                  {trace.agentSummary && <span className="truncate">{trace.agentSummary}</span>}
+                  {trace.agentHierarchySummary && <span className="truncate">{trace.agentHierarchySummary}</span>}
+                  {trace.handoffSummary && <span className="truncate">Handoff {trace.handoffSummary}</span>}
+                </div>
+              )}
+              {trace.activeLaneSummary && (
+                <div className="truncate text-primary" role="status" aria-live="polite">
+                  {trace.activeLaneSummary}
+                </div>
+              )}
+              {trace.shouldShowBatchLanes && (
+                <div className="grid gap-1 sm:grid-cols-2" aria-label="Execution lanes">
+                  {trace.batchLanes.slice(0, 4).map((lane) => {
+                    const laneStatus = lane.approvalCount > 0
+                      ? "Needs approval"
+                      : lane.errorCount > 0
+                        ? "Failed"
+                        : lane.runningCount > 0
+                          ? "Running"
+                          : "Complete";
+                    return (
+                      <div key={lane.id} className="flex min-w-0 items-center gap-1.5 rounded border border-border bg-background px-2 py-1">
+                        <span className="min-w-0 flex-1 truncate font-medium text-foreground">{lane.label}</span>
+                        <span className="shrink-0 text-muted-foreground">{lane.completedCount}/{lane.toolCount}</span>
+                        <span className={cn(
+                          "shrink-0",
+                          lane.approvalCount > 0 && "text-warning",
+                          lane.errorCount > 0 && "text-destructive",
+                          lane.runningCount > 0 && lane.errorCount === 0 && lane.approvalCount === 0 && "text-primary",
+                          lane.runningCount === 0 && lane.errorCount === 0 && lane.approvalCount === 0 && "text-success",
+                        )}>{laneStatus}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+          <div className="execution-tool-rail relative pl-4 before:absolute before:left-[5px] before:top-1 before:h-[calc(100%-8px)] before:w-px before:bg-border flex flex-col gap-1.5">
             {normalizedToolCalls.map((tc, idx) => (
               <div key={tc.id || tc.runId || idx} className="animate-in fade-in duration-150 motion-reduce:animate-none">
                 <ToolTraceRow toolCall={tc} sessionId={sessionId} onOpenArtifact={onOpenArtifact} streamingPreview={streamingPreviews.get(tc.id) || undefined} />
@@ -327,7 +381,7 @@ function ToolTraceRowInner({
 }) {
   return (
     <div className="relative">
-      <span className="absolute -left-[15px] top-2.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-background">
+      <span className="absolute -left-[15px] top-2.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-[var(--execution-surface)]">
         <span
           className={cn(
             "h-1.5 w-1.5 rounded-full transition-colors duration-200",
@@ -344,6 +398,7 @@ function ToolTraceRowInner({
       <ToolCallCard
         toolCall={toolCall}
         className="w-full min-w-0"
+        ledgerRow
         chatId={sessionId}
         onViewArtifact={onOpenArtifact}
         onCancel={() => resolveToolApproval(toolCall.id, false)}

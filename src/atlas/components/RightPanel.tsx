@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity, Map as MapIcon, Zap, PanelRightClose, PenLine, Sigma, Plus
 } from 'lucide-react';
-import { getDefaultWorkbenchView, getVisibleWorkbenchViews, isWorkbenchViewVisible } from "@/lib/features/workbenchRegistry";
+import { getDefaultWorkbenchView, getVisibleWorkbenchViews, getWorkbenchView, isWorkbenchViewVisible } from "@/lib/features/workbenchRegistry";
 import type { RightPanelTabId } from "@/lib/features/frontendFeatures";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { WorkbenchHeaderCore } from "@/components/workbench/WorkbenchHeader";
@@ -203,6 +203,8 @@ export function RightPanel() {
     ? activeViewId
     : getDefaultWorkbenchView().id;
 
+  const activeWorkbenchView = getWorkbenchView(visibleActiveRightTab);
+
   React.useEffect(() => {
     if (activeViewId !== visibleActiveRightTab) {
       setActiveRightTab(visibleActiveRightTab);
@@ -271,7 +273,12 @@ export function RightPanel() {
     <div id="zen-workbench-panel" aria-label="Workbench panel" className="flex flex-col h-full bg-background border-l border-border">
       <header className="workbench-header border-b border-border flex flex-col px-2 bg-card shrink-0">
         <WorkbenchHeaderCore className={visibleActiveRightTab === "drawing" || (visibleActiveRightTab === "map" && mapActivated) ? undefined : "hidden"}>
-        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="min-w-0 px-2">
+            <p className="truncate text-xs font-semibold text-foreground">{activeWorkbenchView?.label}</p>
+            {activeWorkbenchView?.description && (
+              <p className="truncate text-[10px] text-muted-foreground">{activeWorkbenchView.description}</p>
+            )}
+          </div>
           {visibleActiveRightTab === 'drawing' && (
             <div className="ml-2 flex rounded-lg border border-border bg-muted/40 p-0.5">
               <button
@@ -325,7 +332,6 @@ export function RightPanel() {
               </button>
             </div>
           )}
-        </div>
         </WorkbenchHeaderCore>
         <nav className="flex min-w-0 items-center gap-1 overflow-x-auto pb-1.5" aria-label="Workbench views">
           {orderedTabList.map(({ id, view }, tabIndex) => (

@@ -531,8 +531,90 @@ html[data-vibe="edex"] ::selection {
   border-left-color: hsl(var(--destructive));
 }
 
+.execution-card--stale .execution-row {
+  border-left: 3px solid hsl(var(--warning));
+}
+
+.execution-card--stale .execution-row-icon {
+  color: hsl(var(--warning));
+}
+
 .execution-row-chevron {
   transition: transform 160ms cubic-bezier(.22, 1, .36, 1), color 160ms ease;
+}
+
+/* Codex-style ledger rows are intentionally flush and quiet. The expanded
+   detail body still owns the surface; the collapsed action itself should read
+   as one line in a chronological rail, not as a stack of nested cards. */
+.execution-card--ledger {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.execution-group--ledger {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.execution-row--ledger {
+    min-height: 34px;
+    padding-inline: 9px;
+    border: 1px solid var(--execution-border);
+    border-radius: 6px;
+    background: var(--execution-surface);
+    color: hsl(var(--foreground));
+    box-shadow: 0 1px 2px hsl(var(--foreground) / 0.04);
+}
+
+.execution-row--ledger:hover {
+    background: var(--execution-surface-muted);
+    border-color: var(--execution-border-strong);
+}
+
+.execution-row--group {
+    min-height: 36px;
+    border-color: var(--execution-border-strong);
+    background: var(--execution-surface);
+}
+
+.execution-tool-rail {
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
+.execution-tool-rail > div {
+    min-width: 0;
+}
+
+.execution-row-status-dot {
+  background: hsl(var(--muted-foreground));
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.execution-row-status-dot--running {
+  background: hsl(var(--primary));
+  animation: execution-status-pulse 1.1s ease-in-out infinite;
+}
+
+.execution-row-status-dot--completed { background: hsl(var(--success)); }
+.execution-row-status-dot--error { background: hsl(var(--destructive)); }
+.execution-row-status-dot--awaiting_approval { background: hsl(var(--warning)); }
+
+@keyframes execution-status-pulse {
+  0%, 100% { transform: scale(.8); opacity: .65; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+
+.execution-card-content--ledger > div > div {
+  border-top: 0;
+}
+
+.execution-card-content--ledger .execution-card-body {
+  padding: 8px 6px 8px 24px;
 }
 
 .execution-card-body {
@@ -565,8 +647,12 @@ html[data-vibe="edex"] ::selection {
 
 @media (prefers-reduced-motion: reduce) {
   .execution-row-chevron,
-  .execution-foldout-trigger {
+  .execution-foldout-trigger,
+  .execution-row-status-dot--running,
+  .execution-card--stale .execution-row,
+  .execution-card--stale .execution-row-icon {
     transition: none;
+    animation: none;
   }
 }
 

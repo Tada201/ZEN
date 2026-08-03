@@ -4,6 +4,7 @@ import { useChatStore } from "@/lib/stores/useChatStore";
 import { toast } from "sonner";
 import { Session, ChatFolder } from "../../components/chat/types";
 import { mapChatToSession, mapChatFolderToFolder } from "./useChatQueries";
+import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 
 export function useChatMutations({
   currentSessionId,
@@ -21,10 +22,17 @@ export function useChatMutations({
   const queryClient = useQueryClient();
 
   const createSessionMutation = useMutation({
-    mutationFn: (title?: string) => chatApi.createChat(
-      title || "New Case",
-      selectedModelId === "No Model" ? null : selectedModelId,
-    ),
+    mutationFn: (input?: string | { title?: string; workspaceRoot?: string | null }) => {
+      const title = typeof input === "string" ? input : input?.title;
+      const workspaceRoot = typeof input === "string"
+        ? useSettingsStore.getState().workspacePath
+        : input?.workspaceRoot ?? useSettingsStore.getState().workspacePath;
+      return chatApi.createChat(
+        title || "New Case",
+        selectedModelId === "No Model" ? null : selectedModelId,
+        workspaceRoot || null,
+      );
+    },
     onSuccess: (chat) => {
       const session = mapChatToSession(chat);
       queryClient.setQueryData<Session[]>(["sessions"], (prev) => [session, ...(prev || [])]);
@@ -138,8 +146,11 @@ export function useChatMutations({
     mutationFn: (folderId: string) => chatApi.deleteFolder(folderId),
     onSuccess: (_, folderId) => {
       queryClient.setQueryData<ChatFolder[]>(["folders"], (prev) => prev?.filter((f) => f.id !== folderId));
-      // Clear folderId on any sessions that were in this folder.
+      // Clear folderId on both active and archived session projections.
       queryClient.setQueryData<Session[]>(["sessions"], (prev) =>
+        prev?.map((s) => (s.folderId === folderId ? { ...s, folderId: null } : s))
+      );
+      queryClient.setQueryData<Session[]>(["archived-sessions"], (prev) =>
         prev?.map((s) => (s.folderId === folderId ? { ...s, folderId: null } : s))
       );
       toast.success("Folder deleted");
@@ -148,15 +159,17 @@ export function useChatMutations({
   });
 
   const setSessionWorkspaceMutation = useMutation({
-    mutationFn: async ({ chatId }: { chatId: string; workspaceRoot: string | null }) => {
-      // Workspace identity is part of the chat execution context. Once a chat
-      // exists, changing it would make later tool/terminal work ambiguous.
-      // The header intentionally exposes a locked placeholder until the
-      // immutable workspace-selection flow is implemented.
-      if (sessions.some((session) => session.id === chatId)) {
+    mutationFn: async ({ chatId, workspaceRoot }: { chatId: string; workspaceRoot: string | null }) => {
+      // Only legacy chats without a captured root can be assigned one. New
+      // chats receive their canonical root during creation.
+      const session = [...sessions, ...archivedSessions].find((item) => item.id === chatId);
+      if (session?.workspaceRoot) {
         throw new Error("Chat workspace is immutable after initialization");
       }
-      return chatApi.setChatWorkspace(chatId, null);
+      if (!workspaceRoot?.trim()) {
+        throw new Error("A workspace root is required for a legacy chat");
+      }
+      return chatApi.setChatWorkspace(chatId, workspaceRoot);
     },
     onSuccess: (chat) => {
       const session = mapChatToSession(chat);
@@ -180,14 +193,16 @@ export function useChatMutations({
       queryClient.setQueryData<Session[]>(["sessions"], (prev) => 
         prev?.map(s => s.id === chatId ? { ...s, folderId } : s)
       );
+      queryClient.setQueryData<Session[]>(["archived-sessions"], (prev) =>
+        prev?.map(s => s.id === chatId ? { ...s, folderId } : s)
+      );
     },
     onError: (err) => toast.error(getIpcErrorMessage(err, "Failed to move chat")),
   });
 
   return {
-    handleCreateSession: async (title?: string | unknown): Promise<string> => {
-      const cleanTitle = typeof title === "string" ? title : undefined;
-      const chat = await createSessionMutation.mutateAsync(cleanTitle);
+    handleCreateSession: async (input?: string | { title?: string; workspaceRoot?: string | null }): Promise<string> => {
+      const chat = await createSessionMutation.mutateAsync(input);
       return chat.id;
     },
     handleDeleteSession: (id: string) => deleteSessionMutation.mutate(id),

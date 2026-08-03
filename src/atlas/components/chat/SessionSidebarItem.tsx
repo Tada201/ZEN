@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useRef } from "react";
 import { formatDistanceToNowStrict } from "date-fns";
 import {
   Archive,
@@ -52,6 +52,8 @@ interface SessionSidebarItemProps {
   onMoveToFolder: (chatId: string, folderId: string | null) => void;
   /** Open the app-level folder-name modal instead of using window.prompt. */
   onRequestCreateFolder: () => void;
+  /** Optional native drag source for moving this chat into a folder. */
+  onDragStart?: (event: React.DragEvent<HTMLDivElement>, chatId: string) => void;
   setEditingId: (id: string | null) => void;
   setEditTitle: (title: string) => void;
 }
@@ -113,9 +115,11 @@ export function SessionSidebarItemInner({
   onExport,
   onMoveToFolder,
   onRequestCreateFolder,
+  onDragStart,
   setEditingId,
   setEditTitle,
 }: SessionSidebarItemProps) {
+  const renameCommittedRef = useRef(false);
   const id = isSearchResult ? (item as SearchResult).chatId : (item as Session).id;
   const displayTitle = isSearchResult ? (item as SearchResult).chatTitle : (item as Session).title;
   const isPinned = !isSearchResult && (item as Session).pinned;
@@ -129,6 +133,11 @@ export function SessionSidebarItemInner({
     ? `${(item as SearchResult).chatId}-${(item as SearchResult).messageId}`
     : (item as Session).id;
 
+  const handleDragStart = (event: React.DragEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    onDragStart?.(event, id);
+  };
+
   return (
     <div
       key={itemKey}
@@ -139,7 +148,9 @@ export function SessionSidebarItemInner({
           ? "bg-card/[0.07] before:opacity-100"
           : "hover:bg-muted/50",
       )}
-      onClick={() => onSelect(id)}
+        onClick={() => onSelect(id)}
+        draggable={!isSearchResult}
+        onDragStart={handleDragStart}
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex-1 min-w-0 flex flex-col gap-0">
@@ -148,16 +159,24 @@ export function SessionSidebarItemInner({
               autoFocus
               className="w-full bg-transparent outline-none text-xs text-primary"
               value={editTitle}
+              onFocus={() => { renameCommittedRef.current = false; }}
               onChange={(e) => setEditTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  onRename(id, editTitle);
-                  setEditingId(null);
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  if (!renameCommittedRef.current) {
+                    renameCommittedRef.current = true;
+                    onRename(id, editTitle);
+                    setEditingId(null);
+                  }
                 }
-                if (e.key === "Escape") setEditingId(null);
+                if (event.key === "Escape") setEditingId(null);
               }}
               onBlur={() => {
-                onRename(id, editTitle);
+                if (!renameCommittedRef.current) {
+                  renameCommittedRef.current = true;
+                  onRename(id, editTitle);
+                }
                 setEditingId(null);
               }}
               onClick={(e) => e.stopPropagation()}

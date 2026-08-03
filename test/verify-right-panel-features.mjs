@@ -67,6 +67,21 @@ assert(
   "RightPanel should mount the unified Approval Center tab",
 );
 
+assert(
+  rightPanelSource.includes("workbenchApi.listTabs(activeChatId)") &&
+    rightPanelSource.includes("workbenchApi.upsertTab") &&
+    rightPanelSource.includes("workbenchApi.deleteTab(activeChatId, tabId)") &&
+    rightPanelSource.includes("crypto.randomUUID()"),
+  "right-panel tabs must restore per chat, persist order, delete closed tabs, and create unique terminal sessions",
+);
+
+assert(
+  uiStoreSource.includes("rightTabBySession") &&
+    uiStoreSource.includes("restoreRightTabForSession") &&
+    uiStoreSource.includes("if (_lastSessionId)"),
+  "right-panel active-tab memory must remain scoped to the current chat session",
+);
+
 for (const snippet of [
   "<InteractiveDrawingCanvas />",
 ]) {

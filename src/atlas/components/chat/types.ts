@@ -237,6 +237,8 @@ export type ToolCall = {
   id: string;
   name: string;
   status: "running" | "awaiting_approval" | "completed" | "error";
+  /** Set only during history hydration when no live stream owns the run. */
+  recoveryState?: "stale";
   input: Record<string, unknown> | string;
   output: string;
   durationMs?: number;
@@ -298,6 +300,7 @@ export interface SubagentStepData {
   agentName: string;
   task: string;
   status: "running" | "completed" | "failed" | "cancelled";
+  recoveryState?: "stale";
   resultSummary?: string;
   error?: string;
   durationMs?: number;
@@ -312,6 +315,7 @@ export type Step = {
   subagent?: SubagentStepData;
   kind?: MessageKind | string;
   status?: ExecutionEventStatus;
+  recoveryState?: "stale";
   metadata?: ActionMeta;
   timestamp?: number;
   eventId?: string;
@@ -340,6 +344,8 @@ export type Message = {
   thinking?: ThinkingConfig;
   deepResearch?: boolean;
   status?: "sending" | "sent" | "failed" | "cancelled";
+  /** Durable history was recovered after an interrupted live execution. */
+  recoveryState?: "recovered";
   error?: string;
   isThinking?: boolean;
   generativeUI?: number;

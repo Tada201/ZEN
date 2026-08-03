@@ -41,6 +41,15 @@ assert(
   "the custom title bar must keep native window controls",
 );
 assert(
+  titleBar.includes("isMaximized") && titleBar.includes("Restore window") && titleBar.includes("isMaximized ?"),
+  "the maximize control must expose truthful maximize and restore state",
+);
+assert(
+  contextHeader.includes("canNavigateBack || canNavigateForward") &&
+    contextHeader.includes("data-tauri-drag-region=\"deep\""),
+  "navigation chrome must disappear when there is no history and text chrome must remain draggable",
+);
+assert(
   workspace.split("{windowHeader}").length === 2,
   "the chat context must only be passed to the title bar, not rendered again inside the main area",
 );

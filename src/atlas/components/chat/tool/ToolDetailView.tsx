@@ -160,12 +160,13 @@ function FileEditDetail({
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2">
         <span className="text-[12px] font-medium text-foreground">
-          Edited {outputPreview.files.length} file
+          Review {outputPreview.files.length} changed file
           {outputPreview.files.length === 1 ? "" : "s"}
         </span>
-        <span className="text-[11px] tabular-nums text-foreground">
+        <span className="rounded border border-border bg-background px-1.5 py-0.5 text-[11px] tabular-nums text-success">
           +{totalAdded} −{totalRemoved}
         </span>
+        <span className="ml-auto text-[10px] uppercase tracking-wide text-muted-foreground">Expand to inspect</span>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -173,7 +174,7 @@ function FileEditDetail({
           <FileChangeCard
             key={file.path}
             file={file}
-            defaultOpen
+            defaultOpen={false}
             onOpenArtifact={onOpenArtifact}
           />
         ))}

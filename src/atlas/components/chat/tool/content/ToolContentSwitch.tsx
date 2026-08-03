@@ -5,6 +5,8 @@ import { SearchContent } from "./SearchContent";
 import { ArtifactContent } from "./ArtifactContent";
 import { GenericContent } from "./GenericContent";
 import { ImageContent } from "./ImageContent";
+import { McpContent } from "./McpContent";
+import { BrowserContent } from "./BrowserContent";
 
 interface ToolContentSwitchProps {
   toolCall: ToolCall;
@@ -24,12 +26,30 @@ function isTerminalTool(name: string): boolean {
   );
 }
 
+function isMcpTool(name: string, input: Record<string, unknown>): boolean {
+  const lower = name.toLowerCase();
+  return lower.includes("mcp") || lower.startsWith("ext:") || typeof input.server === "string" || typeof input.server_name === "string";
+}
+
+function isBrowserTool(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.includes("browser") || lower.includes("computer_use") || lower.includes("playwright");
+}
+
 export function ToolContentSwitch({
   toolCall,
   outputPreview,
   onViewArtifact,
   input,
 }: ToolContentSwitchProps) {
+  if (isMcpTool(toolCall.name, input)) {
+    return <McpContent toolCall={toolCall} outputPreview={outputPreview} input={input} />;
+  }
+
+  if (isBrowserTool(toolCall.name)) {
+    return <BrowserContent toolCall={toolCall} outputPreview={outputPreview} input={input} />;
+  }
+
   if (outputPreview.imageUri) {
     return <ImageContent toolCall={toolCall} outputPreview={outputPreview} />;
   }

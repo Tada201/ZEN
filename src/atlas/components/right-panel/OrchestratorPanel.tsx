@@ -123,6 +123,8 @@ function SubagentDetail({ item, onBack, onOpenArtifact }: { item: SubagentItem; 
 
 export function OrchestratorPanel() {
   const activeChatId = useUIStore((state) => state.activeChatId);
+  const focusedSubagent = useUIStore((state) => state.focusedSubagent);
+  const clearFocusedSubagent = useUIStore((state) => state.clearFocusedSubagent);
   const messages = useChatStore((state) => activeChatId ? state.sessionMessages[activeChatId] ?? EMPTY_MESSAGES : EMPTY_MESSAGES);
   const artifacts = useChatStore((state) => state.artifacts);
   const setActiveArtifact = useChatStore((state) => state.setActiveArtifact);
@@ -131,7 +133,18 @@ export function OrchestratorPanel() {
   const items = useMemo(() => buildSubagentItems(messages), [messages]);
   const selected = items.find((item) => item.id === selectedId) || null;
 
-  useEffect(() => { if (!selectedId || !items.some((item) => item.id === selectedId)) setSelectedId(null); }, [items, selectedId]);
+  useEffect(() => {
+    setSelectedId(null);
+    clearFocusedSubagent();
+  }, [activeChatId, clearFocusedSubagent]);
+
+  useEffect(() => {
+    if (focusedSubagent?.chatId === activeChatId) {
+      setSelectedId(focusedSubagent.spawnId);
+      return;
+    }
+    if (!selectedId || !items.some((item) => item.id === selectedId)) setSelectedId(null);
+  }, [activeChatId, focusedSubagent, items, selectedId]);
 
   const handleOpenArtifact = (artifact: NonNullable<Message["artifact"]>) => {
     const known = artifacts.find((candidate) => candidate.id === artifact.id);
@@ -139,7 +152,7 @@ export function OrchestratorPanel() {
     setArtifactPanelOpen(true);
   };
 
-  if (selected) return <SubagentDetail item={selected} onBack={() => setSelectedId(null)} onOpenArtifact={handleOpenArtifact} />;
+  if (selected) return <SubagentDetail item={selected} onBack={() => { setSelectedId(null); clearFocusedSubagent(); }} onOpenArtifact={handleOpenArtifact} />;
 
   const running = items.filter((item) => item.subagent.status === "running");
   const ended = items.filter((item) => item.subagent.status !== "running");

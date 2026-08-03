@@ -6,7 +6,6 @@ import { listenAppEvent } from "@/api/events";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { Message } from "../../components/chat/types";
 import { ttftMark, ttftReport } from "@/lib/ttft";
-import { chatApi } from "@/api/chatApi";
 import { findWritableAssistantIndex, markMessageAsFailed, markMessageAsFinished } from "./messageTarget";
 import {
   applyBufferedDeltaToChat,
@@ -18,7 +17,7 @@ import {
   type ChunkBuffer,
 } from "./chatChunkBuffer";
 import { reconcileStrayToolLedgers } from "./strayToolLedger";
-import { projectStepsForPersistence } from "./projectStepsForPersistence";
+import { persistExecutionCheckpointForEvent } from "./persistExecutionCheckpoint";
 
 interface UseChatChunkEventProps {
   resetHeartbeatTimeout: (chatId: string) => void;
@@ -294,13 +293,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         // MUST skip persistence here rather than fabricating an optimistic ID
         // (persisting with a fake ID would attach steps to the wrong DB row).
         if (backendAssistantId) {
-          const assistant = useChatStore.getState().sessionMessages[chatId]?.find((m) => m.id === backendAssistantId);
-          if (assistant?.steps && assistant.steps.length > 0) {
-            const projected = projectStepsForPersistence(assistant.steps);
-            chatApi.updateMessageSteps(chatId, backendAssistantId, JSON.stringify(projected)).catch((err) => {
-              console.error("[chat:done] Failed to persist message steps:", err);
-            });
-          }
+          persistExecutionCheckpointForEvent({ chatId, messageId: backendAssistantId, flush: true });
         }
 
         // Stop streaming after setSessionMessages unless we're in a

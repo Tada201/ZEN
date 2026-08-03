@@ -208,6 +208,32 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
   };
 };
 
+/**
+ * A hydrated `sending` row has no live stream after an app reload. Keep the
+ * saved timeline visible, but stop presenting it as an active run. Tool-level
+ * stale markers let the cards explain exactly what was interrupted without
+ * changing the backend status vocabulary.
+ */
+function markRecoveredMessage(message: Message): Message {
+  if (message.role !== "assistant" || message.status !== "sending") return message;
+  const markStep = (step: Step): Step => {
+    if (step.type === "tool-call" && step.toolCall?.status === "running") {
+      return { ...step, recoveryState: "stale", toolCall: { ...step.toolCall, recoveryState: "stale" } };
+    }
+    if (step.type === "subagent" && step.subagent?.status === "running") {
+      return { ...step, recoveryState: "stale", subagent: { ...step.subagent, recoveryState: "stale" } };
+    }
+    return step;
+  };
+  return {
+    ...message,
+    status: "sent",
+    recoveryState: "recovered",
+    steps: message.steps?.map(markStep),
+    toolCalls: message.toolCalls?.map((tool) => tool.status === "running" ? { ...tool, recoveryState: "stale" } : tool),
+  };
+}
+
 const EMPTY_ARRAY: Message[] = [];
 const MODEL_CATALOG_CACHE_KEY = "zen_model_catalog_cache_v1";
 type BackendModelInfo = ModelInfo & {
@@ -500,7 +526,8 @@ export function useChatQueries() {
         }
 
         const withToolState = mergeLiveToolState(updatedMsg, existing);
-        return existing?.artifact ? { ...withToolState, artifact: existing.artifact } : withToolState;
+        const hydrated = existing?.artifact ? { ...withToolState, artifact: existing.artifact } : withToolState;
+        return markRecoveredMessage(hydrated);
       });
 
       const fetchedIds = new Set(merged.map((message) => message.id));

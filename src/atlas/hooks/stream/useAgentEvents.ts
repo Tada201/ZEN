@@ -9,6 +9,7 @@ import { findWritableAssistantIndex } from "./messageTarget";
 import { appendActionStepToMessages } from "./agentActionLedger";
 import { getAgentChatId, rememberAgentChat } from "./agentLifecycleRouting";
 import { getDirectOrActiveStreamingChatId } from "./activeStreamRouting";
+import { persistExecutionCheckpointForToolCall } from "./persistExecutionCheckpoint";
 import {
   getTaskChatId,
   getTaskPlanChatId,
@@ -580,6 +581,10 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
 
           next[targetIdx] = { ...msg, steps };
           return next;
+        });
+        persistExecutionCheckpointForToolCall({
+          chatId,
+          toolCallId: payload.parent_tool_call_id || payload.parentToolCallId,
         });
       });
 

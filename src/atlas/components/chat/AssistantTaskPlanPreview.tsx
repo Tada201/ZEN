@@ -18,14 +18,14 @@ export function AssistantTaskPlanPreview({ step }: { step: Step }) {
   if (!preview.hasPreview) return null;
 
   return (
-    <div className="mt-2 space-y-1.5 rounded-md bg-card/[0.012] px-2 py-2">
+    <div className="mt-2 space-y-1.5 rounded-md border border-border bg-muted px-2 py-2">
       {preview.tasks.length > 0 && (
         <div className="space-y-1">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Planned tasks</div>
+          <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Task plan</div>
           <div className="grid gap-1 md:grid-cols-2">
             {preview.tasks.map((task: NormalizedTaskPreview) => {
               return (
-                <div key={task.id} className="flex min-w-0 items-center gap-1.5 rounded bg-card/[0.014] px-1.5 py-1">
+                <div key={task.id} className="flex min-w-0 items-center gap-1.5 rounded border border-border bg-background px-1.5 py-1">
                   <TaskStatusIcon status={task.status} />
                   <span className="min-w-0 flex-1 truncate text-[11px] leading-4 text-muted-foreground">
                     {task.label}
@@ -43,7 +43,7 @@ export function AssistantTaskPlanPreview({ step }: { step: Step }) {
 
       {preview.battlePlanSteps.length > 0 && (
         <div className="space-y-1">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Battle plan</div>
+          <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Plan steps</div>
           <div className="flex flex-col gap-0.5">
             {preview.battlePlanSteps.map((item, index) => (
               <div key={`${item}-${index}`} className="flex min-w-0 items-start gap-1.5 text-[11px] leading-5 text-muted-foreground">
@@ -57,9 +57,9 @@ export function AssistantTaskPlanPreview({ step }: { step: Step }) {
 
       {preview.taskResult && (
         <div className="space-y-1">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Task result</div>
+          <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Task result</div>
           {preview.taskResult.text && (
-            <div className="line-clamp-3 whitespace-pre-wrap rounded bg-card/[0.014] px-1.5 py-1 font-mono text-[11px] leading-5 text-muted-foreground">
+            <div className="line-clamp-3 whitespace-pre-wrap rounded border border-border bg-background px-1.5 py-1 font-mono text-[11px] leading-5 text-muted-foreground">
               {preview.taskResult.text}
             </div>
           )}

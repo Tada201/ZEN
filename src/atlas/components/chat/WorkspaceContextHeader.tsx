@@ -66,16 +66,26 @@ export function WorkspaceContextHeader({
     <header className="workspace-context-bar flex h-full min-w-0 flex-1 items-center text-[var(--codex-text)]">
       <WorkbenchHeaderCore>
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          <div className="flex items-center gap-0.5" aria-label="Chat navigation">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onNavigateBack} disabled={!canNavigateBack} aria-label="Go back" title="Go back">
-              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onNavigateForward} disabled={!canNavigateForward} aria-label="Go forward" title="Go forward">
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </Button>
-          </div>
+          {(canNavigateBack || canNavigateForward) && (
+            <div className="flex items-center gap-0.5" aria-label="Chat navigation">
+              {canNavigateBack && (
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onNavigateBack} aria-label="Go back" title="Go back">
+                  <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              )}
+              {canNavigateForward && (
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onNavigateForward} aria-label="Go forward" title="Go forward">
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              )}
+            </div>
+          )}
 
-          <span className="max-w-[min(34vw,20rem)] truncate text-[13px] font-semibold tracking-tight text-foreground font-sans">
+          <span
+            data-tauri-drag-region="deep"
+            className="max-w-[min(34vw,20rem)] cursor-default truncate text-[13px] font-semibold tracking-tight text-foreground font-sans"
+            title={session?.title || "New Chat"}
+          >
             {session?.title || "New Chat"}
           </span>
 
@@ -86,6 +96,7 @@ export function WorkspaceContextHeader({
           {/* The workspace root is fixed when the chat is initialized. Do not
               reintroduce an in-chat folder picker here. */}
           <span
+            data-tauri-drag-region="deep"
             className="flex h-7 max-w-[12rem] items-center gap-1.5 rounded-md border border-border bg-card px-2 text-[11px] text-muted-foreground"
             title={session?.workspaceRoot || "This chat uses the global workspace root"}
           >

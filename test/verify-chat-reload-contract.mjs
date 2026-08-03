@@ -57,8 +57,8 @@ assert.equal(completedNormalized.steps[0].toolCall.status, "completed", "rehydra
 assert.equal(completedNormalized.steps[1].type, "text", "second rehydrated step should be the answer text");
 assert.equal(completedNormalized.content, "Here is the final answer.", "rehydrated content should match the persisted answer");
 
-// The gate itself: source-level assertion that the hide rule exists and is
-// overrideable by the persisted preference.
+// The gate itself: source-level assertion that completed execution history
+// remains visible after the live stream and after backend hydration.
 const assistantSource = readFileSync(
   new URL("../src/atlas/components/chat/AssistantMessage.tsx", import.meta.url),
   "utf8",
@@ -72,12 +72,8 @@ assert.ok(
   "shouldShowToolGroupInTimeline must keep running/approval/error groups visible",
 );
 assert.ok(
-  /revealCompletedToolHistory\s*=\s*false/.test(assistantSource) || /revealCompletedToolHistory = false/.test(assistantSource),
-  "shouldShowToolGroupInTimeline must accept a revealCompletedToolHistory override parameter defaulting to false",
-);
-assert.ok(
-  /return\s+isStreaming\s*&&\s*!hasAssistantAnswer/.test(assistantSource),
-  "shouldShowToolGroupInTimeline must return isStreaming && !hasAssistantAnswerText on the fall-through (completed) branch",
+  /return\s+true\s*;/.test(assistantSource),
+  "shouldShowToolGroupInTimeline must keep completed tool groups visible after the answer arrives",
 );
 
 // ── 2. Error tool groups stay visible after reload ───────────────────────
@@ -213,15 +209,42 @@ assert.ok(
   projectedToolStep.toolCall.output.includes("[redacted]"),
   "error output projection should contain a [redacted] marker for scrubbed secrets",
 );
-// Completed tool output must be dropped entirely (not just capped).
+// Completed shell output must survive the persistence projection so an
+// expanded terminal card is identical before and after reload.
 const completedProjected = projectStepsForPersistence([
   {
     type: "tool-call",
-    toolCall: { id: "t-ok", name: "read_file", status: "completed", input: { path: "a.ts" }, output: "file contents here" },
+    toolCall: {
+      id: "t-ok",
+      name: "run_command",
+      status: "completed",
+      input: { command: "Get-ChildItem" },
+      output: JSON.stringify({
+        stdout: "first.txt\nsecond.txt\n",
+        stderr: "",
+        exit_code: 0,
+      }),
+    },
   },
 ]);
 const completedToolStep = completedProjected.find((s) => s.type === "tool-call");
-assert.equal(completedToolStep.toolCall.output, "", "completed tool output must be dropped entirely in the projection");
+assert.ok(completedToolStep.toolCall.output.includes("first.txt"), "completed shell stdout must survive projection");
+assert.ok(completedToolStep.toolCall.output.includes("second.txt"), "completed shell output must preserve line content");
+
+const secretProjected = projectStepsForPersistence([
+  {
+    type: "tool-call",
+    toolCall: {
+      id: "t-secret",
+      name: "run_command",
+      status: "completed",
+      input: { command: "echo $env:API_KEY" },
+      output: JSON.stringify({ stdout: "api_key=sk-live-should-not-persist" }),
+    },
+  },
+]);
+const secretToolStep = secretProjected.find((s) => s.type === "tool-call");
+assert.ok(!secretToolStep.toolCall.output.includes("sk-live-should-not-persist"), "completed shell output must redact secrets");
 
 // ── 7. Action metadata.error is redacted in the persisted projection ───────
 // Action steps (e.g. a failed agent action) carry metadata.error. Persisting

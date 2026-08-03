@@ -114,7 +114,27 @@ export function mergeLiveToolState(fetched: Message, existing?: Message): Messag
     }
   });
 
-  return { ...fetched, toolCalls, steps };
+  // `chat:done` stops the local stream before the invalidated message query
+  // necessarily observes the backend transaction. The live assistant is the
+  // chronology/content authority for that handoff: never replace a richer
+  // final answer with an older or empty fetched payload. This applies to all
+  // assistant messages, not only deep-research messages.
+  const liveContent = existing?.content || "";
+  const fetchedContent = fetched.content || "";
+  const preserveLiveContent = liveContent.trim().length > fetchedContent.trim().length;
+  const liveReasoning = existing?.reasoning || "";
+  const fetchedReasoning = fetched.reasoning || "";
+  const preserveLiveReasoning = liveReasoning.trim().length > fetchedReasoning.trim().length;
+  const preserveLiveTerminalStatus = preserveLiveContent && existing?.status === "sent" && fetched.status !== "sent";
+
+  return {
+    ...fetched,
+    ...(preserveLiveContent ? { content: liveContent } : {}),
+    ...(preserveLiveReasoning ? { reasoning: liveReasoning } : {}),
+    ...(preserveLiveTerminalStatus ? { status: "sent" as const, error: undefined } : {}),
+    toolCalls,
+    steps,
+  };
 }
 
 export function findLiveAssistantForFetched(

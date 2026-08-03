@@ -93,6 +93,8 @@ export interface ToolAuthorizationRequestEventPayload {
 export interface ToolAuthorizationTimeoutEventPayload {
   chat_id?: string | null;
   chatId?: string | null;
+  message_id?: string;
+  messageId?: string;
   run_id?: string;
   runId?: string;
   parent_agent_id?: string;

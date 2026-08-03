@@ -133,6 +133,8 @@ impl Tool for RunCommandTool {
         Ok(ToolOutput {
             content: json!({
                 "result": formatted,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
                 "exit_code": result.exit_code,
                 "timed_out": result.timed_out,
             }),

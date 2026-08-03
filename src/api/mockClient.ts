@@ -201,7 +201,7 @@ const mockCommands: Record<string, (args: any) => any> = {
       hasMore: offset + limit < chatMsgs.length,
     };
   },
-  create_chat: ({ title, model }: { title: string; model: string | null }) => {
+  create_chat: ({ title, model, workspaceRoot }: { title: string; model: string | null; workspaceRoot?: string | null }) => {
     const newChat = {
       id: `chat-${Date.now()}`,
       title: title || "New Session",
@@ -211,7 +211,7 @@ const mockCommands: Record<string, (args: any) => any> = {
       pinned: 0,
       folderId: null,
       isArchived: 0,
-      workspaceRoot: null,
+      workspaceRoot: workspaceRoot ?? null,
     };
     chats = [newChat, ...chats];
     saveData(KEY_CHATS, chats);

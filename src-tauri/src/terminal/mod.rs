@@ -335,13 +335,15 @@ impl TerminalManager {
                 let stdout_str = String::from_utf8_lossy(&stdout_out).to_string();
                 let stderr_str = String::from_utf8_lossy(&stderr_out).to_string();
                 let combined = if stderr_str.is_empty() {
-                    stdout_str
+                    stdout_str.clone()
                 } else {
                     format!("{}{}", stdout_str, stderr_str)
                 };
 
                 Ok(CommandResult {
                     output: combined,
+                    stdout: stdout_str,
+                    stderr: stderr_str,
                     exit_code: status.code().map(|c| c as u32),
                     timed_out: false,
                     was_truncated: false,
@@ -360,12 +362,14 @@ impl TerminalManager {
                 let stdout_str = String::from_utf8_lossy(&stdout_out).to_string();
                 let stderr_str = String::from_utf8_lossy(&stderr_out).to_string();
                 let combined = if stderr_str.is_empty() {
-                    stdout_str
+                    stdout_str.clone()
                 } else {
                     format!("{}{}", stdout_str, stderr_str)
                 };
                 Ok(CommandResult {
                     output: combined,
+                    stdout: stdout_str,
+                    stderr: stderr_str,
                     exit_code: None,
                     timed_out: is_timeout,
                     was_truncated: false,
@@ -435,6 +439,10 @@ impl Default for TerminalManager {
 #[derive(Debug, Clone)]
 pub struct CommandResult {
     pub output: String,
+    /// Raw streams are retained separately for the UI execution trace. The
+    /// combined `output` field remains the model-facing compatibility format.
+    pub stdout: String,
+    pub stderr: String,
     pub exit_code: Option<u32>,
     pub timed_out: bool,
     pub was_truncated: bool,

@@ -29,6 +29,8 @@ interface ExecutionRowProps {
   badge?: React.ReactNode;
   /** Accessible label for the status icon. */
   statusLabel?: string;
+  /** Quiet Codex-style ledger row: use a small status dot instead of a card icon. */
+  variant?: "card" | "ledger";
 }
 
 const STATUS_ICONS: Record<ExecutionStatus, LucideIcon> = {
@@ -87,6 +89,7 @@ export function ExecutionRow({
   onClick,
   badge,
   statusLabel,
+  variant = "card",
 }: ExecutionRowProps) {
   const Icon = STATUS_ICONS[status];
   const resolvedStatusLabel = statusLabel || getExecutionStatusLabel(status);
@@ -121,6 +124,7 @@ export function ExecutionRow({
           expanded={expanded}
           badge={badge}
           statusLabel={statusLabel}
+          variant={variant}
         />
       </div>
     );
@@ -136,13 +140,20 @@ export function ExecutionRow({
       aria-label={resolvedAriaLabel}
       className={containerClassName}
     >
-      <Icon
-        aria-label={resolvedStatusLabel}
-        className={cn(
-          "execution-row-icon h-3.5 w-3.5 shrink-0 transition-colors duration-200",
-          STATUS_ICON_CLASS[status],
-        )}
-      />
+      {variant === "ledger" ? (
+        <span
+          className={cn("execution-row-status-dot h-1.5 w-1.5 shrink-0 rounded-full", `execution-row-status-dot--${status}`)}
+          aria-hidden="true"
+        />
+      ) : (
+        <Icon
+          aria-label={resolvedStatusLabel}
+          className={cn(
+            "execution-row-icon h-3.5 w-3.5 shrink-0 transition-colors duration-200",
+            STATUS_ICON_CLASS[status],
+          )}
+        />
+      )}
       <span className="execution-row-copy min-w-0 flex-1 py-1.5 pl-0.5">
         <span className="execution-row-title block min-w-0 truncate text-[12px] font-medium leading-5 text-foreground">
           {title}
@@ -183,6 +194,7 @@ interface ExecutionRowContentProps {
   expanded?: boolean;
   badge?: React.ReactNode;
   statusLabel?: string;
+  variant?: "card" | "ledger";
 }
 
 function ExecutionRowContent({
@@ -193,18 +205,26 @@ function ExecutionRowContent({
   expanded,
   badge,
   statusLabel,
+  variant = "card",
 }: ExecutionRowContentProps) {
   const Icon = STATUS_ICONS[status];
   const resolvedStatusLabel = statusLabel || getExecutionStatusLabel(status);
   return (
     <>
-      <Icon
-        aria-label={resolvedStatusLabel}
-        className={cn(
-          "execution-row-icon h-3.5 w-3.5 shrink-0 transition-colors duration-200",
-          STATUS_ICON_CLASS[status],
-        )}
-      />
+      {variant === "ledger" ? (
+        <span
+          className={cn("execution-row-status-dot h-1.5 w-1.5 shrink-0 rounded-full", `execution-row-status-dot--${status}`)}
+          aria-hidden="true"
+        />
+      ) : (
+        <Icon
+          aria-label={resolvedStatusLabel}
+          className={cn(
+            "execution-row-icon h-3.5 w-3.5 shrink-0 transition-colors duration-200",
+            STATUS_ICON_CLASS[status],
+          )}
+        />
+      )}
       <span className="execution-row-copy min-w-0 flex-1 py-1.5 pl-0.5">
         <span className="execution-row-title block min-w-0 truncate text-[12px] font-medium leading-5 text-foreground">
           {title}

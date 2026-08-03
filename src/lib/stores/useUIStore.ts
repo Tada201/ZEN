@@ -42,6 +42,7 @@ interface UIState {
   rightPanelCanvasMode: 'draw' | 'mathplot';
   rightTabBySession: Record<string, string>;
   agentsPanelDismissed: boolean;
+  focusedSubagent: { chatId: string; spawnId: string } | null;
   
   // Actions
   setSidebarOpen: (open: boolean) => void;
@@ -72,6 +73,8 @@ interface UIState {
   setActiveRightTab: (tab: string) => void;
   setRightPanelCanvasMode: (mode: 'draw' | 'mathplot') => void;
   setAgentsPanelDismissed: (dismissed: boolean) => void;
+  openSubagentInPanel: (chatId: string, spawnId: string) => void;
+  clearFocusedSubagent: () => void;
   restoreRightTabForSession: (sessionId: string | null) => void;
   toggleSidebar: () => void;
   toggleRightPanel: () => void;
@@ -107,6 +110,7 @@ export const useUIStore = create<UIState>()(
       rightPanelCanvasMode: 'draw',
       rightTabBySession: {},
       agentsPanelDismissed: false,
+      focusedSubagent: null,
 
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
       setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
@@ -169,6 +173,13 @@ export const useUIStore = create<UIState>()(
       }),
       setRightPanelCanvasMode: (rightPanelCanvasMode) => set({ rightPanelCanvasMode }),
       setAgentsPanelDismissed: (agentsPanelDismissed) => set({ agentsPanelDismissed }),
+      openSubagentInPanel: (chatId, spawnId) => set({
+        focusedSubagent: { chatId, spawnId },
+        activeRightTab: 'agents',
+        rightPanelOpen: true,
+        agentsPanelDismissed: false,
+      }),
+      clearFocusedSubagent: () => set({ focusedSubagent: null }),
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       toggleRightPanel: () => set((state) => ({ rightPanelOpen: !state.rightPanelOpen })),
     }),
@@ -183,6 +194,7 @@ export const useUIStore = create<UIState>()(
           voiceModeOpen,
           aiSpeaking,
           agentsPanelDismissed,
+          focusedSubagent,
           rightTabBySession,
           activeChatId,
           ...rest

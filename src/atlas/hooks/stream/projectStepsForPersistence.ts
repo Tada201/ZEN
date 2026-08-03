@@ -17,7 +17,8 @@ import type { Step, ToolCall, ActionMeta, SubagentStepData } from "../../compone
  *  - `tool-call`: tool id, name, status, durationMs, agentName, and a
  *    compact input containing only target-like fields (file_path, command,
  *    query, url) so the card can still show "Read file.ts" without
- *    persisting full arguments. Output is dropped.
+ *    persisting full arguments. Completed shell output keeps a bounded,
+ *    redacted transcript so expanded terminal cards survive reload.
  *  - `action`: kind, status, content, timestamp, and lightweight metadata
  *    (phase, agentName, iteration, resultSummary, error). Heavy metadata
  *    (toolResult.rawResult, toolResult.args, toolCall.args) is dropped.
@@ -26,7 +27,7 @@ import type { Step, ToolCall, ActionMeta, SubagentStepData } from "../../compone
  *
  * What is excluded:
  *  - Raw tool arguments (full input objects)
- *  - Full tool output (stdout/stderr/diffs/base64)
+ *  - Full non-shell tool output (diffs/base64/large payloads)
  *  - Subagent child transcripts
  *  - Oversized reasoning blocks
  */
@@ -95,6 +96,7 @@ function compactToolCallInput(input: ToolCall["input"]): Record<string, unknown>
  * disclosure stays scannable without retaining full technical payloads.
  */
 const ERROR_SUMMARY_CAP = 280;
+const TERMINAL_OUTPUT_CAP = 12_000;
 const SECRET_PATTERN = /(api[_-]?key|authorization|bearer|credential|password|secret|token)[\s:=]+\S+/gi;
 // Also scrub JSON-quoted secrets ("api_key": "sk-...") that a failing tool
 // may echo back in an error body. Handles both the quoted-key form and the
@@ -112,16 +114,39 @@ function redactErrorSummary(raw: string): string {
   return `${stripped.slice(0, ERROR_SUMMARY_CAP - 1)}…`;
 }
 
+function isTerminalToolName(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.includes("terminal") || lower.includes("shell") || lower.includes("command") || lower.includes("bash") || lower.includes("exec");
+}
+
+/**
+ * Keep enough structured terminal output for the expanded card while applying
+ * the same secret redaction and size bound used by failure summaries. The
+ * model-facing formatted result is retained as a fallback for older adapters,
+ * but stdout/stderr are preserved separately whenever the backend provides
+ * them.
+ */
+function redactTerminalOutput(raw: string): string {
+  if (!raw) return "";
+  const redacted = raw
+    .replace(JSON_SECRET_PATTERN, '"$1":"[redacted]"')
+    .replace(SECRET_PATTERN, (_m, label: string) => `${label}=[redacted]`);
+  if (redacted.length <= TERMINAL_OUTPUT_CAP) return redacted;
+  return `${redacted.slice(0, TERMINAL_OUTPUT_CAP - 1)}…`;
+}
+
 function compactToolCall(toolCall: ToolCall): ToolCall {
-  // Error-state tools stay visible after reload (per the hide rule), so keep
-  // a small redacted summary of their output so the Technical details
-  // disclosure still shows what went wrong. Completed/running tools drop
-  // output entirely — completed groups are hidden after the answer arrives,
-  // and running tools are not persisted until they reach a terminal state.
-  const persistedOutput =
-    toolCall.status === "error" && typeof toolCall.output === "string"
+  // Error-state tools keep a short safe summary. Completed shell tools keep a
+  // larger bounded transcript because their expanded terminal card is a
+  // durable part of the execution trace. Running tools remain empty until a
+  // terminal result arrives.
+  const persistedOutput = typeof toolCall.output === "string"
+    ? toolCall.status === "error"
       ? redactErrorSummary(toolCall.output)
-      : "";
+      : toolCall.status === "completed" && isTerminalToolName(toolCall.name)
+        ? redactTerminalOutput(toolCall.output)
+        : ""
+    : "";
   return {
     id: toolCall.id,
     name: toolCall.name,

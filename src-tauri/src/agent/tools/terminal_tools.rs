@@ -151,6 +151,8 @@ impl AgentTool for RunCommandTool {
 
                 Ok(json!({
                     "result": formatted,
+                    "stdout": cmd_result.stdout,
+                    "stderr": cmd_result.stderr,
                     "exit_code": cmd_result.exit_code,
                     "timed_out": cmd_result.timed_out,
                 }))

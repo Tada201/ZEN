@@ -32,6 +32,16 @@ function compactText(value: unknown, maxLength = 220): string {
   return text.replace(/\s+/g, " ").trim().slice(0, maxLength);
 }
 
+// Keep terminal payloads lossless enough for the expanded command view. The
+// compact form above is intentionally used for one-line summaries, but using
+// it for stdout/stderr destroys line breaks and makes shell output look like a
+// clipped paragraph instead of a terminal transcript.
+function preserveText(value: unknown, maxLength = 12_000): string {
+  if (value === undefined || value === null || value === "") return "";
+  const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  return text.slice(0, maxLength).trim();
+}
+
 function parseMaybeJson(output: string): unknown {
   if (!output) return "";
   try {
@@ -229,9 +239,9 @@ export function buildToolOutputPreview(output: string): ToolOutputPreview {
   const checkpoint = normalizeCheckpoint(checkpointSource);
   const artifactSource = findFromCandidates(candidates, ["artifact", "generated_artifact", "generatedArtifact"]);
   const artifact = normalizeArtifact(artifactSource || unwrapOutputSource(record) || record);
-  const stdout = compactText(findFromCandidates(candidates, ["stdout", "output_text", "outputText"]), 600);
-  const stderr = compactText(findFromCandidates(candidates, ["stderr", "error"]), 600);
-  const content = compactText(
+  const stdout = preserveText(findFromCandidates(candidates, ["stdout", "output_text", "outputText"]));
+  const stderr = preserveText(findFromCandidates(candidates, ["stderr", "error"]));
+  const content = preserveText(
     firstValue(
       findFromCandidates(candidates, ["content", "result", "summary", "message", "excerpt"]),
       typeof parsed === "string" ? parsed : undefined,
