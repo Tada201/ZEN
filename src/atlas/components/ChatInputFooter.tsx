@@ -7,6 +7,7 @@ import { ModelSearchDropdown } from "./chat/input/ModelSearchDropdown";
 import { PinnedActionBar } from "./chat/input/PinnedActionBar";
 import { PermissionModeMenu } from "./PermissionModeMenu";
 import { ContextTrigger } from "./ContextTrigger";
+import { PlusActionMenu } from "./chat/input/PlusActionMenu";
 
 /**
  * `ChatInputFooter` — the bottom toolbar of the chat input composer:
@@ -32,6 +33,15 @@ type ReasoningConfigTypeLiteral = "none" | "effort" | "budget";
 export interface ChatInputFooterProps {
   isCompact: boolean;
   isSidebar?: boolean;
+  /** "welcome" selects a tighter footer for the workspace setup surface. */
+  variant?: "default" | "welcome";
+  // Welcome-only add-context menu wiring
+  isPlusMenuOpen?: boolean;
+  setIsPlusMenuOpen?: (open: boolean) => void;
+  handleFileChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onOpenSkills?: () => void;
+  isImageGenEnabled?: boolean;
+  setIsImageGenEnabled?: (value: boolean) => void;
   // Inline-model picker (only when !isSidebar)
   selectedModelOpen: boolean;
   setSelectedModelOpen: (open: boolean) => void;
@@ -75,8 +85,35 @@ export const ChatInputFooter = (props: ChatInputFooterProps) => {
   };
 
   return (
-    <div className="flex items-center justify-between px-3 py-2 bg-transparent gap-2 flex-wrap">
-      <div className="flex items-center gap-1.5 overflow-visible flex-wrap">
+    <div
+      className={cn(
+        "flex items-center justify-between bg-transparent gap-1.5 flex-wrap",
+        props.variant === "welcome" ? "border-t border-border px-2 py-1.5" : "px-3 py-2",
+      )}
+    >
+      <div className="flex items-center gap-1 overflow-visible flex-wrap">
+        {props.variant === "welcome" && props.setIsPlusMenuOpen && props.handleFileChange && (
+          <PlusActionMenu
+            isOpen={props.isPlusMenuOpen ?? false}
+            setIsOpen={props.setIsPlusMenuOpen}
+            onFileSelect={props.handleFileChange}
+            pinnedActions={props.pinnedActions}
+            togglePin={props.togglePin}
+            supportsReasoning={props.supportsReasoning}
+            isThinking={props.isThinking}
+            setIsThinking={props.setIsThinking}
+            isDeepResearch={props.isDeepResearch}
+            setIsDeepResearch={props.setIsDeepResearch}
+            isWebSearch={props.isWebSearch}
+            setIsWebSearch={props.setIsWebSearch}
+            generativeUI={props.generativeUI}
+            setGenerativeUI={props.setGenerativeUI}
+            onOpenSkills={props.onOpenSkills}
+            isImageGenEnabled={props.isImageGenEnabled}
+            setIsImageGenEnabled={props.setIsImageGenEnabled}
+            compact
+          />
+        )}
         {!props.isSidebar && (
           <ModelSearchDropdown
             isOpen={props.selectedModelOpen}
@@ -112,12 +149,15 @@ export const ChatInputFooter = (props: ChatInputFooterProps) => {
         />
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <ContextTrigger chatId={props.activeChatId} />
         <button
           onClick={handleMicClick}
           type="button"
-          className="p-1.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200 flex items-center justify-center"
+          className={cn(
+            "p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted flex items-center justify-center",
+            props.variant === "welcome" ? "rounded-md transition-colors" : "rounded-full transition-all duration-200",
+          )}
           aria-label="Open Voice Mode"
           title="Open Voice Mode"
         >
@@ -129,15 +169,20 @@ export const ChatInputFooter = (props: ChatInputFooterProps) => {
           disabled={!props.hasContent && !props.isLoading}
           aria-label={props.isLoading ? "Stop response" : "Send message"}
           className={cn(
-            "relative p-1.5 rounded-full transition-all duration-300",
+            "relative p-1.5",
+            props.variant === "welcome" ? "rounded-md transition-colors" : "rounded-full transition-all duration-300",
             props.isLoading
-              ? "bg-rose-500/90 text-foreground shadow-lg shadow-rose-500/20 hover:bg-rose-500"
+              ? props.variant === "welcome"
+                ? "bg-rose-500 text-foreground hover:bg-rose-600"
+                : "bg-rose-500 text-foreground shadow-lg shadow-rose-500/20 hover:bg-rose-600"
               : props.hasContent
-                ? "bg-primary text-primary-foreground shadow-sm hover:scale-105 active:scale-95"
+                ? props.variant === "welcome"
+                  ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                  : "bg-primary text-primary-foreground shadow-sm hover:scale-105 active:scale-95"
                 : "bg-muted text-muted-foreground cursor-not-allowed",
           )}
         >
-          {props.isLoading && (
+          {props.isLoading && props.variant !== "welcome" && (
             <span className="absolute inset-0 rounded-full animate-ping bg-rose-400/30" />
           )}
           {props.isLoading ? (

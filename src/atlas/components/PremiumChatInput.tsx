@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, memo, useCallback } from "react";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils/style";
 import { IS_TAURI } from "@/api";
 
@@ -51,6 +52,8 @@ import type { ChatInputFooterProps } from "./ChatInputFooter";
 
 export const PremiumChatInput = memo(
   ({
+    className,
+    variant,
     onSend,
     onAbort,
     isLoading,
@@ -68,6 +71,7 @@ export const PremiumChatInput = memo(
     isSidebar,
   }: PremiumChatInputProps) => {
     useRenderLogger("PremiumChatInput", { activeChatId, isLoading });
+    const isWelcome = variant === "welcome";
 
     // ── Message + mode toggles + auto-resize ──
     const [internalMessage, setInternalMessage] = useState("");
@@ -193,6 +197,7 @@ export const PremiumChatInput = memo(
         onOpenSkills,
         isImageGenEnabled,
         setIsImageGenEnabled,
+        variant,
         textareaRef,
         value: message,
         onChange: setMessage,
@@ -210,6 +215,7 @@ export const PremiumChatInput = memo(
         isWebSearch, setIsWebSearch,
         internalGenerativeUI, setGenerativeUIInternal,
         onOpenSkills, isImageGenEnabled, setIsImageGenEnabled,
+        variant,
         textareaRef, message, setMessage,
         handleSend, slashIsPopoverOpen, slashSelectedIndex,
         setSlashSelectedIndex, slash.suggestions, applySlashSuggestion,
@@ -243,6 +249,13 @@ export const PremiumChatInput = memo(
         setIsDeepResearch,
         generativeUI: internalGenerativeUI,
         setGenerativeUI: setGenerativeUIInternal,
+        variant,
+        isPlusMenuOpen,
+        setIsPlusMenuOpen,
+        handleFileChange,
+        onOpenSkills,
+        isImageGenEnabled,
+        setIsImageGenEnabled,
         // `PremiumChatInputProps.activeChatId` is `string | null | undefined`;
         // `ChatInputFooterProps.activeChatId` is `string | undefined`. Coerce
         // the source null into undefined so footer's optional field stays in
@@ -261,6 +274,8 @@ export const PremiumChatInput = memo(
         thinkingEffort, setThinkingEffort, thinkingBudget, setThinkingBudget,
         isWebSearch, setIsWebSearch, isDeepResearch, setIsDeepResearch,
         internalGenerativeUI, setGenerativeUIInternal,
+        variant, isPlusMenuOpen, setIsPlusMenuOpen, handleFileChange,
+        onOpenSkills, isImageGenEnabled, setIsImageGenEnabled,
         activeChatId, handleSend, isLoading, message, selectedFiles.length,
       ],
     );
@@ -273,10 +288,17 @@ export const PremiumChatInput = memo(
             onSelect={handleSuggestedClick}
           />
         )}
-        <div
+        <motion.div
           ref={containerRef}
+          layoutId="premium-chat-input-container"
+          layout
+          transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
           className={cn(
-            "w-full relative bg-neutral-950 border border-neutral-800 rounded-2xl shadow-2xl overflow-visible transition-all duration-200",
+            "w-full relative overflow-visible transition-all duration-200",
+            isWelcome
+              ? "rounded-b-xl border border-border bg-card shadow-sm"
+              : "rounded-2xl border border-neutral-800 bg-neutral-950 shadow-2xl",
+            className,
             isLoading &&
               "ring-1 ring-primary/40 shadow-[0_0_15px_-3px_rgba(var(--primary-rgb),0.1)]",
           )}
@@ -295,7 +317,7 @@ export const PremiumChatInput = memo(
               onToggle={() => setIsTaskDrawerOpen(!isTaskDrawerOpen)}
             />
           )}
-          {isLoading && (
+          {isLoading && !isWelcome && (
             <div className="absolute inset-x-4 -top-px h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent animate-shimmer-slide z-10" />
           )}
           <div className="flex flex-col">
@@ -340,7 +362,7 @@ export const PremiumChatInput = memo(
             <ChatInputTextAreaBlock {...textAreaProps} />
             <ChatInputFooter {...footerProps} />
           </div>
-        </div>
+        </motion.div>
       </div>
     );
   },

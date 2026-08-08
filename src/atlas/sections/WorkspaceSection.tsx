@@ -7,12 +7,16 @@ import type { TabId } from "../components/SettingsModal";
 import type { ArtifactData } from "../components/chat/types";
 import { SessionSidebar } from "../components/chat/SessionSidebar";
 import { WorkspaceContextHeader } from "../components/chat/WorkspaceContextHeader";
-import { Hammer } from "lucide-react";
+import { WorkspaceWelcome } from "../components/chat/WorkspaceWelcome";
+import { WorkspaceViewTransition, type WorkspaceView } from "../components/chat/WorkspaceViewTransition";
+import { Hammer, Loader2 } from "lucide-react";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { useChatStore } from "@/lib/stores/useChatStore";
+import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import { getVisibleWorkspaceModeFeatures, isWorkspaceModeVisible } from "@/lib/features/frontendFeatures";
 import { useShallow } from 'zustand/react/shallow';
 import { useRenderLogger } from "@/hooks/useRenderLogger";
+import { toast } from "sonner";
 
 import { MainArea } from "@/components/workbench/MainArea";
 import { VOICE_MODE_SYSTEM_PROMPT } from "../components/voice/voiceModePrompt";
@@ -36,7 +40,7 @@ const DeferredOverlayFallback = () => null;
 export function WorkspaceApp() {
   const [, startTransition] = useTransition();
   const {
-    sessions, archivedSessions, folders, currentSessionId, setCurrentSessionId,
+    sessions, sessionsLoading, archivedSessions, folders, currentSessionId, setCurrentSessionId,
     messages, search, setSearch, searchResults, setMessages,
     models, selectedModelId, setSelectedModelId,
     selectedProvider, isStreaming,
@@ -55,6 +59,16 @@ export function WorkspaceApp() {
 
   const [activeArtifact, setActiveArtifact] = useState<ArtifactData | null>(null);
   const [generativeUI, setGenerativeUI] = useState(false);
+  const configuredWorkspacePath = useSettingsStore((state) => state.workspacePath);
+  const [pendingWorkspaceRoot, setPendingWorkspaceRoot] = useState<string | null>(
+    () => useSettingsStore.getState().workspacePath || null,
+  );
+
+  useEffect(() => {
+    if (!pendingWorkspaceRoot && configuredWorkspacePath) {
+      setPendingWorkspaceRoot(configuredWorkspacePath);
+    }
+  }, [configuredWorkspacePath, pendingWorkspaceRoot]);
 
   const {
     settingsOpen,
@@ -136,11 +150,62 @@ export function WorkspaceApp() {
   }, [currentSessionId]);
 
   const handleSendMessageInternal = useCallback(async (data: any) => {
-    handleSendMessage({
+    const payload = {
       ...data,
-      generativeUI: data.generativeUI ?? generativeUI
-    });
-  }, [handleSendMessage, generativeUI]);
+      generativeUI: data.generativeUI ?? generativeUI,
+    };
+
+    if (!currentSessionId) {
+      let activeRoot = pendingWorkspaceRoot;
+
+      if (!activeRoot) {
+        try {
+          const { open } = await import("@tauri-apps/plugin-dialog");
+          const result = await open({
+            directory: true,
+            multiple: false,
+            title: "Choose a workspace folder",
+          });
+          const path = Array.isArray(result) ? result[0] : result;
+          if (typeof path === "string" && path.trim()) {
+            activeRoot = path;
+            setPendingWorkspaceRoot(path);
+          } else {
+            return;
+          }
+        } catch (error) {
+          console.error("[WorkspaceSection] Folder picker failed:", error);
+          toast.error("Choose a workspace folder before starting a task.");
+          return;
+        }
+      }
+
+      const targetSessionId = await handleCreateSession({
+        title: "New Case",
+        workspaceRoot: activeRoot,
+      });
+      handleSendMessage({ ...payload, targetSessionId });
+      return;
+    }
+
+    handleSendMessage(payload);
+  }, [currentSessionId, generativeUI, handleCreateSession, handleSendMessage, pendingWorkspaceRoot]);
+
+  const recentWorkspaces = useMemo(() => {
+    const paths = [
+      configuredWorkspacePath,
+      ...sessions.map((session) => session.workspaceRoot || ""),
+    ].filter((path): path is string => Boolean(path?.trim()));
+    return Array.from(new Set(paths));
+  }, [configuredWorkspacePath, sessions]);
+
+  const workspaceView: WorkspaceView = currentWorkspaceTab === "openui"
+    ? "openui"
+    : sessionsLoading
+      ? "loading"
+      : activeSession
+        ? "chat"
+        : "welcome";
 
   const handleDismissError = useCallback((messageId: string) => {
     if (!currentSessionId) return;
@@ -329,7 +394,8 @@ export function WorkspaceApp() {
           />
         }
         main={
-          currentWorkspaceTab === "openui" ? (
+          <WorkspaceViewTransition view={workspaceView}>
+            {currentWorkspaceTab === "openui" ? (
             <div className="flex-1 h-full flex flex-col items-center justify-center bg-background p-6 text-center select-none font-sans">
               <div className="w-16 h-16 rounded-2xl bg-muted border border-border flex items-center justify-center mb-6">
                 <Hammer className="w-7 h-7 text-muted-foreground" />
@@ -341,7 +407,41 @@ export function WorkspaceApp() {
                 This feature is currently undergoing a redesign to bring you an even better visualization and creation experience.
               </p>
             </div>
-          ) : (
+            ) : sessionsLoading ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 bg-background text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
+              <span className="text-xs">Loading workspaces</span>
+            </div>
+            ) : !activeSession ? (
+            <WorkspaceWelcome
+              recentWorkspaces={recentWorkspaces}
+              selectedWorkspace={pendingWorkspaceRoot}
+              onSelectWorkspace={setPendingWorkspaceRoot}
+              composer={
+                <PremiumChatInput
+                  variant="welcome"
+                  activeChatId={null}
+                  onSend={handleSendMessageInternal}
+                  onAbort={abortStream}
+                  isLoading={false}
+                  models={models}
+                  selectedModelId={selectedModelId}
+                  selectedProvider={selectedProvider}
+                  onSelectModel={(id, prov) => setSelectedModelId(id, prov)}
+                  generativeUI={generativeUI}
+                  onGenerativeUIChange={setGenerativeUI}
+                  onOpenModelSelector={() => {
+                    setActiveSettingsTab("providers");
+                    setSettingsOpen(true);
+                  }}
+                  onOpenSettings={() => {
+                    setActiveSettingsTab("general");
+                    setSettingsOpen(true);
+                  }}
+                />
+              }
+            />
+            ) : (
             <MainArea className="flex flex-col h-full relative">
               {/* The chat context lives in the window title bar. Do not render a
                   second copy of it here. */}
@@ -350,7 +450,7 @@ export function WorkspaceApp() {
               <div className="flex-1 overflow-hidden relative w-full h-full flex flex-col">
                 {!activeArtifact ? (
                   <div className="flex-1 flex flex-col h-full w-full bg-transparent overflow-hidden">
-                    <div className="flex-1 overflow-y-auto w-full">
+                    <div className="flex min-h-0 flex-1 w-full overflow-hidden">
                       <MessageList
                         messages={chatMessages}
                         onOpenArtifact={openArtifactInRightPanel}
@@ -394,7 +494,7 @@ export function WorkspaceApp() {
                   <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
                     <ResizablePanel defaultSize={60} minSize={30} className="flex flex-col h-full relative">
                       <div className="flex-1 flex flex-col h-full w-full overflow-hidden">
-                        <div className="flex-1 overflow-y-auto w-full">
+                        <div className="flex min-h-0 flex-1 w-full overflow-hidden">
                           <MessageList
                             messages={chatMessages}
                             onOpenArtifact={openArtifactInRightPanel}
@@ -452,7 +552,8 @@ export function WorkspaceApp() {
                 )}
               </div>
             </MainArea>
-          )
+            )}
+          </WorkspaceViewTransition>
         }
         rightPanel={
           <Suspense fallback={<DeferredOverlayFallback />}>
