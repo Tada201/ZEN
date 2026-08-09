@@ -65,7 +65,7 @@ function defaultFormat(value: number): string {
  * the current target on mount and on every change. Falls back to a static
  * placeholder when the value is missing or unparseable, and renders the
  * value as-is when it is a non-numeric ReactNode. Honors
- * `prefers-reduced-motion` from the project's existing motion hook.
+ * the app's central motion preference from the project's existing motion hook.
  *
  * Mid-flight changes adapt smoothly: if the target updates while a tween is
  * still in progress, the new tween starts from the most recently displayed

@@ -98,7 +98,7 @@ impl TerminalService {
                 "terminal_request_approval",
                 Some("interactive_shell".to_string()),
                 Some(
-                    "user confirmed opening an interactive terminal shell via UI dialog"
+                    "interactive terminal shell requested from the workbench terminal tab"
                         .to_string(),
                 ),
             )

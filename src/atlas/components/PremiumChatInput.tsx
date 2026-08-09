@@ -64,6 +64,7 @@ export const PremiumChatInput = memo(
     onOpenModelSelector,
     onOpenSkills,
     activeChatId,
+    readOnly = false,
     input: externalInput,
     onInputChange,
     generativeUI,
@@ -201,8 +202,9 @@ export const PremiumChatInput = memo(
         textareaRef,
         value: message,
         onChange: setMessage,
-        onSend: handleSend,
-        slashIsPopoverOpen,
+      onSend: handleSend,
+        readOnly,
+      slashIsPopoverOpen,
         slashSelectedIndex,
         setSlashSelectedIndex,
         slashSuggestions: slash.suggestions,
@@ -215,7 +217,7 @@ export const PremiumChatInput = memo(
         isWebSearch, setIsWebSearch,
         internalGenerativeUI, setGenerativeUIInternal,
         onOpenSkills, isImageGenEnabled, setIsImageGenEnabled,
-        variant,
+        variant, readOnly,
         textareaRef, message, setMessage,
         handleSend, slashIsPopoverOpen, slashSelectedIndex,
         setSlashSelectedIndex, slash.suggestions, applySlashSuggestion,
@@ -261,6 +263,7 @@ export const PremiumChatInput = memo(
         // the source null into undefined so footer's optional field stays in
         // shape.
         activeChatId: activeChatId ?? undefined,
+        readOnly,
         onSend: handleSend,
         isLoading,
         hasContent: message.trim().length > 0 || selectedFiles.length > 0,
@@ -276,13 +279,13 @@ export const PremiumChatInput = memo(
         internalGenerativeUI, setGenerativeUIInternal,
         variant, isPlusMenuOpen, setIsPlusMenuOpen, handleFileChange,
         onOpenSkills, isImageGenEnabled, setIsImageGenEnabled,
-        activeChatId, handleSend, isLoading, message, selectedFiles.length,
+        activeChatId, readOnly, handleSend, isLoading, message, selectedFiles.length,
       ],
     );
 
     return (
       <div className="flex flex-col gap-2.5 w-full relative">
-        {!IS_TAURI && (
+        {!IS_TAURI && !readOnly && (
           <SuggestedPromptStrip
             isLoading={isLoading}
             onSelect={handleSuggestedClick}
@@ -290,9 +293,11 @@ export const PremiumChatInput = memo(
         )}
         <motion.div
           ref={containerRef}
-          layoutId="premium-chat-input-container"
           layout
-          transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
+          transition={{
+            layout: { duration: 0.72, ease: [0.22, 1, 0.36, 1] },
+            default: { duration: 0.42, ease: [0.22, 1, 0.36, 1] },
+          }}
           className={cn(
             "w-full relative overflow-visible transition-all duration-200",
             isWelcome
@@ -304,13 +309,13 @@ export const PremiumChatInput = memo(
           )}
         >
           <SlashCommandPopover
-            isOpen={slashIsPopoverOpen}
+            isOpen={!readOnly && slashIsPopoverOpen}
             suggestions={slash.suggestions}
             selectedIndex={slashSelectedIndex}
             onSelect={applySlashSuggestion}
             onHover={setSlashSelectedIndex}
           />
-          {visibleTasks.length > 0 && (
+          {!readOnly && visibleTasks.length > 0 && (
             <TaskDrawer
               tasks={visibleTasks}
               isOpen={isTaskDrawerOpen}
@@ -321,7 +326,7 @@ export const PremiumChatInput = memo(
             <div className="absolute inset-x-4 -top-px h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent animate-shimmer-slide z-10" />
           )}
           <div className="flex flex-col">
-            {isSidebar && (
+            {isSidebar && !readOnly && (
               <div className="px-3 pt-2 flex items-center justify-between border-b border-border/10">
                 <ModelSearchDropdown
                   isOpen={selectedModelOpen}
@@ -335,7 +340,7 @@ export const PremiumChatInput = memo(
                 />
               </div>
             )}
-            <ActionPills
+            {!readOnly && <ActionPills
               generativeUI={internalGenerativeUI}
               setGenerativeUI={setGenerativeUIInternal}
               isThinking={isThinking}
@@ -346,8 +351,8 @@ export const PremiumChatInput = memo(
               setIsWebSearch={setIsWebSearch}
               selectedFiles={selectedFiles}
               removeFile={removeFile}
-            />
-            <div className="px-3 pt-2">
+            />}
+            {!readOnly && <div className="px-3 pt-2">
               <ImagePresetStrip
                 isImageGenEnabled={isImageGenEnabled}
                 onSelectPreset={(presetPrompt: string) => {
@@ -357,7 +362,7 @@ export const PremiumChatInput = memo(
                   );
                 }}
               />
-            </div>
+            </div>}
 
             <ChatInputTextAreaBlock {...textAreaProps} />
             <ChatInputFooter {...footerProps} />

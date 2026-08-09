@@ -5,14 +5,17 @@ import {
   ChevronDown,
   Folder,
   FolderOpen,
-  FolderPlus,
+  FolderLock,
   GitBranch,
   Search,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import { useSettingsStore } from "@/lib/stores/useSettingsStore";
+
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import appIconUrl from "../../../../src-tauri/icons/128x128.png";
+import { WelcomeBlackHoleBackground } from "./WelcomeBlackHoleBackground";
+import { WelcomeBlackHoleSvg } from "./WelcomeBlackHoleSvg";
+import { useWorkspaceTransitioning } from "./WorkspaceViewTransition";
 
 interface WorkspaceWelcomeProps {
   recentWorkspaces: string[];
@@ -22,20 +25,20 @@ interface WorkspaceWelcomeProps {
 }
 
 function workspaceName(path: string) {
-  const normalized = path.replaceAll("\\", "/").replace(/\/+$/, "");
+  const normalized = formatWorkspacePath(path).replaceAll("\\", "/").replace(/\/+$/, "");
   return normalized.split("/").filter(Boolean).at(-1) || path;
 }
 
-/** Turn technical filesystem paths into a compact breadcrumb for the UI. */
-function workspaceLocation(path: string) {
-  const normalized = path
-    .replaceAll("\\", "/")
-    .replace(/^\/\/\?\//, "")
-    .replace(/\/+$/, "");
-  const parts = normalized.split("/").filter(Boolean);
-  const withoutDrive = parts.filter((part) => !/^[A-Za-z]:$/.test(part));
-  if (withoutDrive.length === 0) return workspaceName(path);
-  return withoutDrive.slice(-2).join(" / ");
+function formatWorkspacePath(path: string) {
+  const trimmed = path.trim();
+  const extendedWindowsPrefix = "\\\\?\\";
+  if (trimmed.startsWith(extendedWindowsPrefix)) {
+    return trimmed.slice(extendedWindowsPrefix.length);
+  }
+  if (trimmed.startsWith("//?/")) {
+    return trimmed.slice(4);
+  }
+  return trimmed;
 }
 
 export function WorkspaceWelcome({
@@ -46,6 +49,14 @@ export function WorkspaceWelcome({
 }: WorkspaceWelcomeProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const welcomePageQuality = useSettingsStore((state) => state.welcomePageQuality);
+  const configuredWorkspacePath = useSettingsStore((state) => state.workspacePath);
+  const workspaceTransitioning = useWorkspaceTransitioning();
+  const workspaceStatus = selectedWorkspace
+    ? configuredWorkspacePath && formatWorkspacePath(selectedWorkspace) === formatWorkspacePath(configuredWorkspacePath)
+      ? "Default workspace"
+      : "Workspace selected for this chat"
+    : "Choose a workspace before sending";
 
   const filteredWorkspaces = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -84,30 +95,46 @@ export function WorkspaceWelcome({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  let welcomeBackground: ReactNode = null;
+  if (welcomePageQuality === "low") {
+    welcomeBackground = <WelcomeBlackHoleSvg paused={workspaceTransitioning} />;
+  } else if (welcomePageQuality === "high") {
+    welcomeBackground = <WelcomeBlackHoleBackground paused={workspaceTransitioning} />;
+  } else if (welcomePageQuality === "image") {
+    welcomeBackground = (
+      <img
+        src="/background.png"
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover object-center"
+      />
+    );
+  }
+
   return (
     <div className="relative flex h-full min-h-0 flex-col items-center justify-center overflow-hidden bg-background px-5 py-10 text-foreground">
-      <main className="relative z-10 flex w-full max-w-[640px] flex-col items-center">
-        <img
-          src={appIconUrl}
-          alt=""
-          aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 top-[-8rem] z-0 h-[clamp(22rem,45vw,30rem)] w-[clamp(22rem,45vw,30rem)] -translate-x-1/2 object-contain opacity-[0.07]"
-        />
+      {/* Welcome background
+          non-interactive. The configured animated, still-image, or disabled
+          mode is mounted at the root so it spans the full viewport. */}
+      {welcomeBackground}
 
-        <div className="relative z-10 mb-5 flex flex-col items-center">
+      <main className="relative z-10 flex w-full max-w-[640px] flex-col items-center">
+        <div className="relative z-10 mb-5 flex w-fit max-w-full flex-col items-center rounded-2xl border border-border/60 bg-background/80 px-5 py-4 shadow-[0_8px_24px_rgba(0,0,0,0.18)]">
           <div className="text-center">
-            <h1 className="text-lg font-semibold text-foreground sm:text-xl">
+            <h1 className="text-lg font-semibold leading-tight text-foreground sm:text-xl">
               Start where your work begins.
             </h1>
-            <p className="mt-1.5 text-[13.5px] text-muted-foreground">
-              Pick a workspace, then start a conversation.
-            </p>
+            <div className="mt-2 flex max-w-full items-center gap-1.5 text-[11px] text-muted-foreground" title={selectedWorkspace ? formatWorkspacePath(selectedWorkspace) : "No workspace selected"}>
+              <FolderLock className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+              <span className="font-medium text-foreground">{workspaceStatus}</span>
+              {selectedWorkspace && <span className="truncate">· {formatWorkspacePath(selectedWorkspace)}</span>}
+            </div>
           </div>
 
           {/* Quick-select recent workspace chips */}
           {recentWorkspaces.length > 0 && (
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
-              <span className="text-[10px] text-muted-foreground/70 uppercase tracking-wider font-mono mr-1">Recent:</span>
+            <div className="mt-3 flex max-w-full flex-wrap items-center justify-center gap-1.5">
+              <span className="mr-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground/80">Recent:</span>
               {recentWorkspaces.slice(0, 3).map((path) => {
                 const isSelected = path === selectedWorkspace;
                 return (
@@ -118,7 +145,7 @@ export function WorkspaceWelcome({
                     className={`flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors border ${
                       isSelected
                         ? "border-primary/50 bg-primary/10 text-primary"
-                        : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+                        : "border-border bg-card/95 text-muted-foreground hover:bg-muted hover:text-foreground"
                     }`}
                   >
                     <Folder className="h-3 w-3 shrink-0" aria-hidden="true" />
@@ -150,7 +177,7 @@ export function WorkspaceWelcome({
                 >
                   <Folder className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground" aria-hidden="true" />
                   <span className="font-medium text-foreground">
-                    {selectedWorkspace ? workspaceName(selectedWorkspace) : "Select workspace"}
+                    {selectedWorkspace ? `Workspace: ${workspaceName(selectedWorkspace)}` : "Choose workspace"}
                   </span>
                   <ChevronDown className="h-3 w-3 text-muted-foreground/70" aria-hidden="true" />
                 </button>
@@ -192,6 +219,7 @@ export function WorkspaceWelcome({
                             onClick={() => {
                               onSelectWorkspace(path);
                               setPickerOpen(false);
+                              setSearch("");
                             }}
                             className={`group flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors ${
                               isSelected
@@ -229,13 +257,12 @@ export function WorkspaceWelcome({
             <button
               type="button"
               disabled
-              aria-label="Git branch selector"
-              title="Git branch selector"
-              className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-not-allowed opacity-80"
+              aria-label="Git branch selection unavailable"
+              title="Git branch selection is not available yet"
+              className="flex cursor-not-allowed items-center gap-1.5 text-[11px] text-muted-foreground opacity-80"
             >
               <GitBranch className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-              <span className="font-medium text-foreground">main</span>
-              <ChevronDown className="h-3 w-3 text-muted-foreground/70" aria-hidden="true" />
+              <span className="font-medium text-muted-foreground">Branch unavailable</span>
             </button>
           </div>
 

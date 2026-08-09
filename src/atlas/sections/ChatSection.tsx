@@ -23,7 +23,7 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
   const [, startTransition] = useTransition();
   const {
     sessions, archivedSessions, folders, currentSessionId, setCurrentSessionId,
-    messages, setMessages, search, setSearch, searchResults,
+    messages, setMessages, search, searchResults,
     models, selectedModelId, setSelectedModelId,
     selectedProvider, isStreaming,
     handleCreateSession, handleDeleteSession,
@@ -34,6 +34,8 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
   } = useChat();
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const activeSession = [...sessions, ...archivedSessions].find((session) => session.id === currentSessionId) ?? null;
+  const isArchivedSession = activeSession?.archived === true || archivedSessions.some((session) => session.id === currentSessionId);
 
   const handleOpenArtifact = useCallback((art: ArtifactData) => {
     const artId = art.id || `art_${Date.now()}`;
@@ -74,12 +76,13 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
     systemPrompt?: string | null;
     systemPromptMode?: "append" | "replace" | null;
   }) => {
+    if (isArchivedSession) return;
     handleSendMessage({
       ...data,
       generativeUI: data.generativeUI != null ? data.generativeUI : generativeUI,
       tools: data.tools
     });
-  }, [handleSendMessage, generativeUI]);
+  }, [handleSendMessage, generativeUI, isArchivedSession]);
 
   const handleRetry = useCallback(async (messageId: string) => {
     const failedMsgIndex = messages.findIndex(m => m.id === messageId);
@@ -193,7 +196,6 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
               onMoveToFolder={handleMoveToFolder}
               search={search}
               searchResults={searchResults}
-              onSearchChange={setSearch}
               setSettingsTab={onOpenSettings}
               setShowSettingsModal={setShowSettingsModal}
             />
@@ -231,11 +233,11 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
           <MessageList
             messages={messages}
             onOpenArtifact={handleOpenArtifact}
-            isStreaming={isStreaming}
-            onRetry={handleRetry}
+            isStreaming={isArchivedSession ? false : isStreaming}
+            onRetry={isArchivedSession ? undefined : handleRetry}
             onOpenSettings={onOpenSettings}
-            onContinueResearch={handleContinueResearch}
-            onAbort={abortStream}
+            onContinueResearch={isArchivedSession ? undefined : handleContinueResearch}
+            onAbort={isArchivedSession ? undefined : abortStream}
           />
 
           <div className="absolute bottom-0 left-0 right-0 z-30 p-4 pb-8 bg-gradient-to-t from-background via-background/80 to-transparent pointer-events-none">
@@ -247,9 +249,10 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
               )}
               <PremiumChatInput
                 activeChatId={currentSessionId}
+                readOnly={isArchivedSession}
                 onSend={handleSendMessageInternal}
-                onAbort={abortStream}
-                isLoading={isStreaming}
+                onAbort={isArchivedSession ? undefined : abortStream}
+                isLoading={isArchivedSession ? false : isStreaming}
                 models={models}
                 selectedModelId={selectedModelId}
                 selectedProvider={selectedProvider}

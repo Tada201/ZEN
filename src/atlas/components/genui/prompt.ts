@@ -9,7 +9,7 @@ export function buildOpenUISystemPrompt(): string {
 ${buildCardCatalogPrompt()}
 
 ### ZEN OPENUI RENDERING CONTRACT
-1. Output OpenUI Lang only, not JSX, HTML, CSS, JavaScript, React code, imports, or markdown fences.
+1. Output OpenUI Lang only, not JSX, HTML, CSS, JavaScript, React code, or imports. When replying in Zen chat, wrap the OpenUI Lang in exactly one markdown code fence using the openui language tag: \`\`\`openui ... \`\`\`. Do not emit raw OpenUI assignments outside that fence.
 2. Define a single render entry named root. Use simple assignments such as header = Text(...), panel = Card(...), root = Stack([...]).
 3. Component arguments map strictly to positional parameters in sequence. Do NOT exceed the maximum argument count for any component.
 4. **Stack / VStack / HStack**: Signature: 'Stack(childrenArray, gap?, direction?, className?)' (Max 4 args). You MUST wrap all child elements in a single array '[...]' as the first argument. Never pass children as separate parameters (e.g., do NOT do 'Stack(a, b)'; do 'Stack([a, b])').

@@ -78,7 +78,7 @@ assert(!rightPanel.includes("workbench-header h-14 border-b border-border flex i
 
 assert(css.includes(".workspace-context-bar") && css.includes(".workbench-header"), "shared shell selectors must be defined");
 assert(css.includes("background: var(--execution-surface)"), "shell headers must use shared semantic execution surfaces");
-assert(css.includes("@media (prefers-reduced-motion: reduce)"), "shell refinement must include reduced-motion coverage");
+assert(css.includes('html[data-motion="off"] #root *'), "shell refinement must include the centralized app motion gate");
 assert(!layout.includes("SecondaryActivityBar"), "vertical activity rail must not remain in the main workspace layout");
 assert(!rail.includes("pending approval"), "activity rail must not own registry-facing tab copy");
 assert(tabButton.includes("aria-expanded={selected}"), "workbench tabs must expose workbench panel visibility");

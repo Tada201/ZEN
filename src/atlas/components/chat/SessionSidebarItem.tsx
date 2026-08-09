@@ -125,7 +125,8 @@ export function SessionSidebarItemInner({
   const isPinned = !isSearchResult && (item as Session).pinned;
   const updatedAt = isSearchResult ? undefined : (item as Session).updatedAt;
   const folderId = isSearchResult ? undefined : (item as Session).folderId;
-  const folderName = folderId ? folders.find((f) => f.id === folderId)?.name : undefined;
+  const folder = folderId ? folders.find((f) => f.id === folderId) : undefined;
+  const folderName = folder?.name;
   const relativeTime = updatedAt
     ? formatDistanceToNowStrict(updatedAt, { addSuffix: false })
     : null;
@@ -142,7 +143,7 @@ export function SessionSidebarItemInner({
     <div
       key={itemKey}
       className={cn(
-        "group relative flex flex-col gap-1 pl-3 pr-2 py-2 rounded-lg cursor-pointer transition-all",
+        "group relative flex flex-col gap-0.5 pl-2 pr-1.5 py-1.5 rounded-md cursor-pointer transition-all",
         "before:absolute before:left-0 before:top-1 before:bottom-1 before:w-[2px] before:rounded-full before:bg-primary/70 before:opacity-0 before:transition-opacity",
         id === currentId
           ? "bg-card/[0.07] before:opacity-100"
@@ -152,7 +153,7 @@ export function SessionSidebarItemInner({
         draggable={!isSearchResult}
         onDragStart={handleDragStart}
     >
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-1.5">
         <div className="flex-1 min-w-0 flex flex-col gap-0">
           {editingId === id ? (
             <input
@@ -182,7 +183,7 @@ export function SessionSidebarItemInner({
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <span
                 className={cn(
                   "truncate text-xs block flex-1 tracking-tight transition-colors",
@@ -192,6 +193,13 @@ export function SessionSidebarItemInner({
                 {displayTitle}
               </span>
               {isPinned && !showArchived && <Pin size={10} className="text-primary/60 shrink-0" />}
+              {showArchived && !isSearchResult && (
+                <ArchiveRestore
+                  size={10}
+                  className="shrink-0 text-muted-foreground/70"
+                  aria-label="Archived chat"
+                />
+              )}
             </div>
           )}
         </div>
@@ -245,7 +253,7 @@ export function SessionSidebarItemInner({
               {!isSearchResult && (
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger className="text-xs" onClick={(e) => e.stopPropagation()}>
-                    <Folder className="mr-2 h-3.5 w-3.5" /> Move to Folder
+                    <Folder className="mr-2 h-3.5 w-3.5" /> Move to group
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent className="bg-card border-border">
                     <DropdownMenuItem
@@ -266,6 +274,7 @@ export function SessionSidebarItemInner({
                         }}
                         className="text-xs"
                       >
+                        <span className="mr-2 h-2 w-2 rounded-full" style={{ backgroundColor: folder.color || "hsl(var(--primary))" }} aria-hidden="true" />
                         {folder.name}
                       </DropdownMenuItem>
                     ))}
@@ -277,7 +286,7 @@ export function SessionSidebarItemInner({
                       }}
                       className="text-xs"
                     >
-                      <Folder className="mr-2 h-3.5 w-3.5" /> New folder
+                      <Folder className="mr-2 h-3.5 w-3.5" /> New group
                     </DropdownMenuItem>
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
@@ -338,10 +347,9 @@ export function SessionSidebarItemInner({
       )}
 
       {!isSearchResult && (folderName || relativeTime) && (
-        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70 leading-none">
-          {folderName ? (
-            <span className="inline-flex items-center gap-1 max-w-[60%] truncate text-muted-foreground">
-              <Folder size={9} className="shrink-0" />
+        <div className="flex items-center gap-1 text-[10px] text-muted-foreground/70 leading-none">
+          {folderName ? (              <span className="inline-flex items-center gap-0.5 max-w-[60%] truncate text-muted-foreground">
+              <Folder size={9} className="shrink-0" style={{ color: folder?.color || "hsl(var(--muted-foreground))" }} />
               {folderName}
             </span>
           ) : null}

@@ -520,6 +520,12 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         .execute(pool)
         .await;
     let _ = sqlx::query(
+        "UPDATE chats SET is_archived = 0 WHERE is_archived = 1 AND archived_at IS NULL;",
+    )
+    .execute(pool)
+    .await?;
+
+    let _ = sqlx::query(
         "CREATE INDEX IF NOT EXISTS idx_chats_archived ON chats(is_archived, archived_at);",
     )
     .execute(pool)

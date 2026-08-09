@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Copy, RefreshCcw, Undo2, Loader2 } from "lucide-react";
+import { RefreshCcw, Undo2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getIpcErrorMessage } from "@/api/tauriClient";
@@ -290,30 +290,6 @@ export function ToolCallCard({
             </div>
           )}
 
-          {isExpanded && (status === "error" || (!hasPreview && outputPreview.raw)) && (
-            <details className="rounded-md bg-muted px-2 py-1.5">
-              <summary className="cursor-pointer select-none text-[11px] uppercase tracking-wide text-muted-foreground">
-                Technical details
-              </summary>
-              <div className="relative mt-1">
-                <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words pr-7 font-mono text-[11px] leading-relaxed text-muted-foreground">
-                  {redactDisplayValue(outputPreview.raw).slice(0, 1800)}
-                </pre>
-                {outputPreview.raw && (
-                  <button
-                    type="button"
-                    className="absolute right-1 top-1 h-6 w-6 text-muted-foreground hover:text-foreground transition-colors duration-200"
-                    aria-label="Copy details"
-                    onClick={async () => {
-                      try { await navigator.clipboard.writeText(redactDisplayValue(outputPreview.raw)); } catch { /* ignore */ }
-                    }}
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            </details>
-          )}
         </div>
       </FoldOutCardContent>
     </FoldOutCard>

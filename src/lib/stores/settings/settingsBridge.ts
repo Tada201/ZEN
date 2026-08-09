@@ -34,6 +34,7 @@ const DOT_TO_FIELD: Record<string, BridgeEntry> = {
   "ui.background-fit":     { field: "backgroundFit",     type: "string" },
   "ui.background-media-type": { field: "backgroundMediaType", type: "string" },
   "ui.compact-mode":       { field: "compactMode",      type: "boolean" },
+  "ui.welcome-page-quality": { field: "welcomePageQuality", type: "string" },
 
   // Workspace
   "workspace.root":              { field: "workspacePath",            type: "string" },

@@ -125,7 +125,7 @@ export function SmoothMarkdown({
   );
 
   return (
-    <div className="smooth-markdown text-sm leading-relaxed prose prose-invert max-w-none">
+    <div className="smooth-markdown text-sm leading-[1.45] prose prose-invert max-w-none">
       <ReactMarkdown 
         remarkPlugins={remarkPlugins} 
         rehypePlugins={rehypePlugins}

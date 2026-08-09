@@ -57,6 +57,7 @@ pub async fn send_message(
         provider = ?provider,
         web_search = ?web_search,
         deep_research = ?deep_research,
+        generative_ui = ?generative_ui,
         "Received send_message command"
     );
     let _ = app.emit(
@@ -347,15 +348,20 @@ Always use these specialized code blocks for visual scenarios:
         _ => base_instructions,
     };
 
-    if replace_system_prompt {
-        // Per-turn replacements used by specialized surfaces like Voice. Own their contract.
+    let generative_ui_addendum = if replace_system_prompt {
+        None
+    } else if generative_ui.unwrap_or(false) {
+        Some("[SYSTEM STATE WARNING]\nIMPORTANT: The Generative UI feature is currently ENABLED for this message turn. You MUST generate any visual mockups, dashboards, grids, stacks, or styled templates inside exactly one ```openui ... ``` code block using the specified OpenUI DSL catalog. Do not emit raw OpenUI assignments outside the fence.".to_string())
     } else {
-        if generative_ui.unwrap_or(false) {
-            instructions.push_str("\n\n[SYSTEM STATE WARNING]\nIMPORTANT: The Generative UI feature is currently ENABLED for this message turn. You MUST generate any visual mockups, dashboards, grids, stacks, or styled templates inside ```openui ... ``` code blocks using the specified DSL catalog.");
-        } else {
-            instructions.push_str("\n\n[SYSTEM STATE WARNING]\nIMPORTANT: The Generative UI feature is currently DISABLED for this message turn. Do NOT generate any 'openui' or visual sandbox layout blocks. Provide all responses in plain, standard markdown or text.");
-        }
+        Some("[SYSTEM STATE WARNING]\nIMPORTANT: The Generative UI feature is currently DISABLED for this message turn. Do NOT generate any 'openui' or visual sandbox layout blocks. Provide all responses in plain, standard markdown or text.".to_string())
+    };
 
+    if let Some(ref addendum) = generative_ui_addendum {
+        instructions.push_str("\n\n");
+        instructions.push_str(addendum);
+    }
+
+    if !replace_system_prompt {
         if image_gen.unwrap_or(false) || tool_ids.contains(&"generate_image".to_string()) {
             instructions.push_str("\n\n[IMAGE GENERATION CAPABILITY]\n\
             IMPORTANT: The Image Generation feature is currently ENABLED for this turn. The `generate_image` tool is available through the standard tool protocol. When the user asks to generate, create, draw, paint, or illustrate an image/artwork:\n\
@@ -582,7 +588,7 @@ Always use these specialized code blocks for visual scenarios:
                                 token: token_clone,
                                 approval_rx: None,
                                 extra_tool_ids: agent.tool_ids.clone(),
-                                extra_instructions: None,
+                                extra_instructions: generative_ui_addendum.clone(),
                                 model_context_window: model_context_window
                                     .filter(|&w| w > 0)
                                     .map(|w| w as usize),

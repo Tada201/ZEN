@@ -28,7 +28,7 @@ for (const selector of [
   ".execution-row-title",
   ".execution-row-subtitle",
   ".execution-row-meta",
-  "prefers-reduced-motion",
+  'html[data-motion="off"] #root *',
 ]) {
   assert(css.includes(selector), `execution theme must style ${selector}`);
 }

@@ -27,7 +27,11 @@ interface PaletteItem {
   run: () => void;
 }
 
-export function CommandPalette() {
+interface CommandPaletteProps {
+  onNewChat: () => void;
+}
+
+export function CommandPalette({ onNewChat }: CommandPaletteProps) {
   const {
     isCommandPaletteOpen: open,
     setCommandPaletteOpen: setOpen,
@@ -64,8 +68,7 @@ export function CommandPalette() {
       group: "Actions",
       icon: MessageSquarePlus,
       run: () => {
-        // Reset active session to trigger new chat
-        useChatStore.getState().setActiveSession(null);
+        onNewChat();
       },
     });
 
@@ -161,7 +164,7 @@ export function CommandPalette() {
 
     // 🧭 General settings (default)
     return out;
-  }, [theme, toggleVoiceMode, toggleSettings, setActiveSettingsTab, toggleSidebar, toggleRightPanel, toggleAboutModal, setTheme, toggleSearch]);
+  }, [onNewChat, theme, toggleVoiceMode, toggleSettings, setActiveSettingsTab, toggleSidebar, toggleRightPanel, toggleAboutModal, setTheme, toggleSearch]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

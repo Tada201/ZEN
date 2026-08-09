@@ -422,6 +422,9 @@ export function AssistantMessage({
       return step.type !== "action" || isVisibleChatActionStep(step as Step);
     });
   }, [groupedSteps, hasAssistantAnswerText, message.status]);
+  const hasVisibleTextStep = visibleGroupedSteps.some((step) =>
+    step.type === "text" && Boolean((step.cleanText || step.content || "").trim()),
+  );
 
   const hasVisibleAnswer = Boolean(
     message.content?.trim() ||
@@ -503,7 +506,7 @@ export function AssistantMessage({
     <div
       className={cn(
         "group flex w-full flex-col px-4 transition-all duration-200",
-        compact ? "bg-transparent py-2" : "bg-transparent py-4"
+        compact ? "bg-transparent py-1" : "bg-transparent py-1.5"
       )}
     >
         <div className={cn(
@@ -513,7 +516,7 @@ export function AssistantMessage({
         )}>
         <div className="flex min-w-0 flex-col gap-2 flex-1">
           <div className="relative">
-            <div className={cn("space-y-4", compact && "space-y-2")}>
+            <div className={cn("space-y-1.5", compact && "space-y-1")}>
               {(message.model || message.provider) && (
                 <div className="flex items-center gap-2 mb-2 select-none">
                   <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground hover:bg-muted border-border transition-colors">
@@ -563,10 +566,11 @@ export function AssistantMessage({
             ) : (
               <>
                 {visibleGroupedSteps.length > 0 ? (
-                  <div className={cn("space-y-4", compact && "space-y-2")}>
-                    {(() => {
-                      const groupFingerprintCounts = new Map<string, number>();
-                      return visibleGroupedSteps.map((step, idx) => {
+                  <>
+                    <div className={cn("space-y-1.5", compact && "space-y-1")}>
+                      {(() => {
+                        const groupFingerprintCounts = new Map<string, number>();
+                        return visibleGroupedSteps.map((step, idx) => {
                       const stepKey = getExecutionStepKey(
                         step,
                         idx,
@@ -579,7 +583,7 @@ export function AssistantMessage({
                       <div key={stepKey} className="animate-in fade-in duration-150 motion-reduce:animate-none">
                       {step.type === "text" ? (
                         <div className="prose-frontier">
-                          <div className="flex flex-col gap-4">
+                          <div className="flex flex-col gap-1.5">
                             {renderTextStepWithInlineCards(
                               step,
                               message.status === "sending",
@@ -616,9 +620,21 @@ export function AssistantMessage({
                         ) : null}
                       </div>
                       );
-                      });
-                    })()}
-                  </div>
+                        });
+                      })()}
+                    </div>
+                    {message.content?.trim() && !hasVisibleTextStep && (
+                      <div className="prose-frontier mt-1.5">
+                        <MarkdownContent
+                          content={message.content}
+                          isThinking={message.isThinking}
+                          isStreaming={message.status === "sending"}
+                          onOpenArtifact={onOpenArtifact}
+                          chatId={message.sessionId}
+                        />
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="prose-frontier">
                     {/* Fallback for messages with only raw content or legacy structure */}

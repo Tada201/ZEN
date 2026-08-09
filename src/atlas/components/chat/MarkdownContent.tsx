@@ -392,10 +392,10 @@ export function MarkdownContent({
     p: ({ children }) => {
       const galleryImages = extractImagesFromChildren(children);
       if (galleryImages) return <ImageGallery images={galleryImages} />;
-      return <p className="mb-4 last:mb-0">{children}</p>;
+      return <p className="mb-2 last:mb-0">{children}</p>;
     },
-    ul: ({ children }) => <ul className="mb-4 ml-6 list-disc space-y-2">{children}</ul>,
-    ol: ({ children }) => <ol className="mb-4 ml-6 list-decimal space-y-2">{children}</ol>,
+    ul: ({ children }) => <ul className="mb-2 ml-6 list-disc space-y-1">{children}</ul>,
+    ol: ({ children }) => <ol className="mb-2 ml-6 list-decimal space-y-1">{children}</ol>,
     li: ({ children }) => <li className="pl-1">{children}</li>,
     img: ({ src, alt }) => {
       if (!src) return null;

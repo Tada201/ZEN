@@ -3,7 +3,14 @@ import { strict as assert } from "node:assert";
 import ts from "typescript";
 
 const sourcePath = new URL("../src/atlas/components/chat/tool/toolOutputPreview.ts", import.meta.url);
-const source = readFileSync(sourcePath, "utf8");
+const redactionSource = readFileSync(
+  new URL("../src/atlas/components/chat/tool/toolTextRedaction.ts", import.meta.url),
+  "utf8",
+);
+const source = `${redactionSource}\n${readFileSync(sourcePath, "utf8").replace(
+  'import { redactToolText } from "./toolTextRedaction";\n',
+  "",
+)}`;
 const transpiled = ts.transpileModule(source, {
   compilerOptions: {
     module: ts.ModuleKind.ES2022,
@@ -135,5 +142,20 @@ const rawResult = buildToolOutputPreview(JSON.stringify({
 }));
 assert(rawResult.stderr.includes("Permission denied"), "raw_result error should be extracted");
 assert(rawResult.summary.includes("Permission denied"), "raw_result should drive fallback summary");
+
+const failedSecret = buildToolOutputPreview(JSON.stringify({
+  error: 'Authorization: Bearer "quoted bearer secret-value" api_key="quoted-api-secret"',
+  message: "This successful message field must not classify the result as failed.",
+}));
+assert(failedSecret.errorMessage, "structured error fields should populate errorMessage");
+assert(!failedSecret.errorMessage.includes("quoted bearer secret-value"), "quoted bearer secrets must be redacted");
+assert(!failedSecret.errorMessage.includes("quoted-api-secret"), "quoted credential values must be redacted");
+
+const successfulMessage = buildToolOutputPreview(JSON.stringify({
+  status: "success",
+  message: "The operation completed successfully.",
+}));
+assert.equal(successfulMessage.errorMessage, undefined, "successful message fields must not become failures");
+assert(successfulMessage.content.includes("completed successfully"), "successful message fields should remain output content");
 
 console.log("tool output preview ok");

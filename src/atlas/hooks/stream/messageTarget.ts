@@ -35,7 +35,19 @@ export function supersedeStaleSendingAssistants(messages: Message[]): Message[] 
   });
 }
 
-export function findWritableAssistantIndex(messages: Message[], chatId?: string | null): number {
+export function findWritableAssistantIndex(messages: Message[], chatId?: string | null, messageId?: string | null): number {
+  // Prefer the backend identity carried by stream events. This lets a chunk
+  // delivered around chat:done update its original assistant row without
+  // falling through to a different turn or being discarded after finalization.
+  if (messageId) {
+    const exactIdx = messages.findIndex((message) =>
+      message.id === messageId &&
+      message.role === "assistant" &&
+      (message.status === "sending" || message.status === "sent"),
+    );
+    if (exactIdx !== -1) return exactIdx;
+  }
+
   const activeAssistantId = chatId
     ? useChatStore.getState().getActiveAssistantForChat(chatId)
     : null;

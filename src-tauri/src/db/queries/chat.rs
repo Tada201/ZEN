@@ -173,7 +173,7 @@ pub async fn list_archived_chats_page(
     offset: i64,
 ) -> ZenResult<Vec<Chat>> {
     let chats = sqlx::query_as::<_, Chat>(
-        "SELECT c.id, c.title, c.model, c.created_at, c.updated_at, c.pinned, c.is_archived, c.archived_at, c.message_count, c.total_tokens_in, c.total_tokens_out, c.last_activity, COALESCE(c.folder_id, cfm.folder_id) as folder_id, c.workspace_root FROM chats c LEFT JOIN chat_folder_members cfm ON c.id = cfm.chat_id WHERE c.is_archived = 1 ORDER BY c.archived_at DESC LIMIT ? OFFSET ?",
+        "SELECT c.id, c.title, c.model, c.created_at, c.updated_at, c.pinned, c.is_archived, c.archived_at, c.message_count, c.total_tokens_in, c.total_tokens_out, c.last_activity, COALESCE(c.folder_id, cfm.folder_id) as folder_id, c.workspace_root FROM chats c LEFT JOIN chat_folder_members cfm ON c.id = cfm.chat_id WHERE c.is_archived = 1 AND c.archived_at IS NOT NULL ORDER BY c.archived_at DESC LIMIT ? OFFSET ?",
     )
     .bind(limit.clamp(1, MAX_ARCHIVED_CHAT_ITEMS + 1))
     .bind(offset.max(0))

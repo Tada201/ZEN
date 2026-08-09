@@ -13,6 +13,7 @@ import {
   clearChunkTrackingForChat,
   markFirstChunkTypeSent,
   normalizeChatChunkType,
+  chunkTrackingKey,
   replaceTextStepsWithContent,
   type ChunkBuffer,
 } from "./chatChunkBuffer";
@@ -45,12 +46,14 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
       const buf = buffers[chatId];
       if (!buf.delta) continue;
 
-      // Strip the already-handled first-chunk prefix so the delta
-      // is not rendered twice when chat:chunk:first already flushed it.
-      const prefix = firstChunkDeltas.current[chatId];
+      // Strip only a first prefix belonging to this backend stream. Never use
+      // a chat-global prefix here: a late event from an older turn must not
+      // alter the current assistant response.
+      const trackingKey = chunkTrackingKey(chatId, buf.messageId);
+      const prefix = firstChunkDeltas.current[trackingKey];
       if (prefix && buf.type === prefix.type && buf.delta.startsWith(prefix.delta)) {
         buf.delta = buf.delta.slice(prefix.delta.length);
-        delete firstChunkDeltas.current[chatId];
+        delete firstChunkDeltas.current[trackingKey];
       }
       if (!buf.delta) {
         delete buffers[chatId];
@@ -62,11 +65,13 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
       delete buffers[chatId];
 
       setSessionMessages(chatId, (prev: Message[]) => {
-        const assistantIdx = findWritableAssistantIndex(prev, chatId);
+        const assistantIdx = findWritableAssistantIndex(prev, chatId, buf.messageId);
         if (assistantIdx === -1) return prev;
 
         const next = [...prev];
-        next[assistantIdx] = applyBufferedDeltaToMessage(next[assistantIdx], delta, chunkType);
+        next[assistantIdx] = applyBufferedDeltaToMessage(next[assistantIdx], delta, chunkType, {
+          messageId: buf.messageId,
+        });
         return next;
       });
     }
@@ -87,11 +92,10 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         if (!delta) return;
         const chunkType = normalizeChatChunkType(event.payload.type);
 
-        // Guard: if the first chat:chunk already flushed before this event
-        // arrived (Tauri events across names are unordered), skip merging
-        // to avoid double-rendering the first delta.
-        if (!markFirstChunkTypeSent(chatId, chunkType)) {
-          firstChunkDeltas.current[chatId] = { delta, type: chunkType };
+        // If the normal event already applied this first delta, the delayed
+        // fast-path event is duplicate metadata only. Do not save it as a
+        // future prefix: that would strip unrelated text from the next turn.
+        if (!markFirstChunkTypeSent(chatId, chunkType, event.payload.message_id || undefined)) {
           return;
         }
 
@@ -100,15 +104,22 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
 
         const existing = chunkBuffersRef.current[chatId];
         if (existing && existing.type !== chunkType && existing.delta) {
-          applyBufferedDeltaToChat(chatId, existing.delta, existing.type);
+          applyBufferedDeltaToChat(chatId, existing.delta, existing.type, { messageId: existing.messageId });
           delete chunkBuffersRef.current[chatId];
         }
 
-        firstChunkDeltas.current[chatId] = { delta, type: chunkType };
+        const streamMessageId = event.payload.message_id || undefined;
+        const trackingKey = chunkTrackingKey(chatId, streamMessageId);
+        firstChunkDeltas.current[trackingKey] = {
+          delta,
+          type: chunkType,
+          messageId: streamMessageId,
+        };
 
         // Immediately merge the first delta into chat state — no buffering
         applyBufferedDeltaToChat(chatId, delta, chunkType, {
           isThinking: chunkType === "thought",
+          messageId: event.payload.message_id || undefined,
         });
 
         ttftMark(chatId, 'firstChunk');
@@ -128,6 +139,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         const delta: string = event.payload.delta || "";
         if (!delta) return;
 
+        const streamMessageId = event.payload.message_id || undefined;
         const existing = chunkBuffersRef.current[chatId];
         const isFirstChunk = !existing;
         const canAppendToExisting = existing?.type === incomingType;
@@ -139,17 +151,18 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
           const oldType = existing.type;
           delete chunkBuffersRef.current[chatId];
 
-          applyBufferedDeltaToChat(chatId, oldDelta, oldType);
+          applyBufferedDeltaToChat(chatId, oldDelta, oldType, { messageId: existing.messageId });
         }
 
         // Accumulate into buffer
         chunkBuffersRef.current[chatId] = {
           delta: (canAppendToExisting ? existing.delta : "") + delta,
           type: incomingType,
+          messageId: event.payload.message_id || existing?.messageId,
         };
 
         if (isFirstChunk) {
-          markFirstChunkTypeSent(chatId, incomingType);
+          markFirstChunkTypeSent(chatId, incomingType, streamMessageId);
           ttftMark(chatId, 'firstChunk');
           flushAllChunkBuffers();
 
@@ -167,36 +180,34 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
 
         clearHeartbeatTimeout(chatId);
         
-        // Ensure any pending chunks are flushed before finalization
+        // Ensure any pending chunks are flushed before finalization. The
+        // flush consumes and clears the buffer, so never read that buffer
+        // after flushing; doing so discarded the final reasoning fragment.
         flushAllChunkBuffers();
-
-        const buf = chunkBuffersRef.current[chatId];
-        let finalDelta = buf?.delta || "";
-
-        // Strip the already-handled first-chunk prefix if present
-        const prefix = firstChunkDeltas.current[chatId];
-        if (prefix && buf?.type === prefix.type && finalDelta.startsWith(prefix.delta)) {
-          finalDelta = finalDelta.slice(prefix.delta.length);
-        }
         clearChunkTrackingForChat(chatId, chunkBuffersRef.current, firstChunkDeltas.current);
 
-        if (finalDelta) {
-          applyBufferedDeltaToChat(chatId, finalDelta, buf?.type || "text", { isThinking: false });
-        } else {
-          // No pending text, but still clear the thinking flag
-          useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-            const assistantIdx = findWritableAssistantIndex(prev, chatId);
-            if (assistantIdx === -1) return prev;
-
-            const next = [...prev];
-            next[assistantIdx] = { ...next[assistantIdx], isThinking: false };
-            return next;
-          });
-        }
+        // Clear the thinking flag after the drain. Late thought chunks are
+        // routed by backend message_id and may still extend the completed
+        // reasoning step without being attached to a new assistant turn.
+        useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
+          const assistantIdx = findWritableAssistantIndex(prev, chatId, event.payload.message_id);
+          if (assistantIdx === -1) return prev;
+          const next = [...prev];
+          next[assistantIdx] = { ...next[assistantIdx], isThinking: false };
+          return next;
+        });
 
         const reason: string = event.payload.reason || "complete";
         const isCancelled = reason === "cancelled";
-        const assistantIdBeforeFinalize = useChatStore.getState().getActiveAssistantForChat(chatId);
+        const messagesBeforeFinalize = useChatStore.getState().sessionMessages[chatId] ?? [];
+        const assistantIndexBeforeFinalize = findWritableAssistantIndex(
+          messagesBeforeFinalize,
+          chatId,
+          event.payload.message_id,
+        );
+        const assistantIdBeforeFinalize = assistantIndexBeforeFinalize >= 0
+          ? messagesBeforeFinalize[assistantIndexBeforeFinalize]?.id
+          : undefined;
 
         // Track whether streaming should stop after message finalization.
         // For deep_research handoff (no content yet), keep streaming alive
@@ -205,7 +216,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         let shouldStopStreaming = true;
 
         useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-          const assistantIdx = findWritableAssistantIndex(prev, chatId);
+          const assistantIdx = findWritableAssistantIndex(prev, chatId, event.payload.message_id);
           if (assistantIdx === -1) return prev;
           const assistant = prev[assistantIdx];
 

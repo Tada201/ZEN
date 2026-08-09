@@ -5,6 +5,7 @@ import type { SettingsTabId } from "@/lib/features/frontendFeatures";
 import type { ArtifactData, Message } from "./types";
 import { MessageItem } from "./MessageItem";
 import { buildMessageListStreamSignature } from "./messageListStreamSignature";
+import { ChatTimelineScrubber } from "./ChatTimelineScrubber";
 
 const MemoizedMessageItem = memo(MessageItem);
 
@@ -100,7 +101,9 @@ export const MessageList = memo(function MessageList({
   }, []);
 
   return (
-    <ScrollArea ref={scrollRef} className="flex-1 bg-transparent">
+    <div className="relative flex min-h-0 flex-1">
+      <ChatTimelineScrubber messages={filteredMessages} scrollAreaRef={scrollRef} />
+      <ScrollArea ref={scrollRef} className="min-w-0 flex-1 bg-transparent">
       {filteredMessages.length === 0 ? (
         <div className="flex flex-col items-center justify-center px-6 pt-32 text-center">
           <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted text-primary">
@@ -109,23 +112,26 @@ export const MessageList = memo(function MessageList({
         </div>
       ) : (
         <div className="w-full pb-8">
-          {filteredMessages.map((message) => (              <MemoizedMessageItem
-              key={message.id}
-              message={message}
-              onOpenArtifact={onOpenArtifact}
-              onRetry={onRetry}
-              onOpenSettings={onOpenSettings}
-              onDismissError={onDismissError}
-              onRegenerate={onRegenerate}
-              onContinueResearch={onContinueResearch}
-              onAbort={onAbort}
-              isChatStreaming={_isStreaming}
-              messages={filteredMessages}
-              compact={compact}
-            />
+          {filteredMessages.map((message) => (
+            <div key={message.id} id={`chat-message-${message.id}`.replace(/[^a-zA-Z0-9_-]/g, "-")} className="scroll-mt-4">
+              <MemoizedMessageItem
+                message={message}
+                onOpenArtifact={onOpenArtifact}
+                onRetry={onRetry}
+                onOpenSettings={onOpenSettings}
+                onDismissError={onDismissError}
+                onRegenerate={onRegenerate}
+                onContinueResearch={onContinueResearch}
+                onAbort={onAbort}
+                isChatStreaming={_isStreaming}
+                messages={filteredMessages}
+                compact={compact}
+              />
+            </div>
           ))}
         </div>
       )}
-    </ScrollArea>
+      </ScrollArea>
+    </div>
   );
 });

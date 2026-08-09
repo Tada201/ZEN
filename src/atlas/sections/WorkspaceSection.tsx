@@ -1,4 +1,5 @@
 import React, { Suspense, useState, useCallback, useEffect, useTransition, useMemo, useRef } from "react";
+import { motion } from "framer-motion";
 import { useChat } from "@/atlas/hooks/useChat";
 import { WorkspaceLayout } from "../layouts/WorkspaceLayout";
 import { MessageList } from "../components/chat/MessageList";
@@ -6,10 +7,11 @@ import { PremiumChatInput } from "../components/PremiumChatInput";
 import type { TabId } from "../components/SettingsModal";
 import type { ArtifactData } from "../components/chat/types";
 import { SessionSidebar } from "../components/chat/SessionSidebar";
+import type { SearchResult } from "../components/chat/SessionSidebarItem";
 import { WorkspaceContextHeader } from "../components/chat/WorkspaceContextHeader";
 import { WorkspaceWelcome } from "../components/chat/WorkspaceWelcome";
 import { WorkspaceViewTransition, type WorkspaceView } from "../components/chat/WorkspaceViewTransition";
-import { Hammer, Loader2 } from "lucide-react";
+import { Hammer, Loader2, Search, X } from "lucide-react";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
@@ -37,6 +39,80 @@ const RightPanel = React.lazy(() => import("../components/RightPanel").then(m =>
 
 const DeferredOverlayFallback = () => null;
 
+function UniversalSessionSearch({
+  query,
+  results,
+  onQueryChange,
+  onClose,
+  onSelect,
+}: {
+  query: string;
+  results: SearchResult[];
+  onQueryChange: (value: string) => void;
+  onClose: () => void;
+  onSelect: (chatId: string) => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex items-start justify-center bg-background/70 px-4 pt-[12vh] backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Search sessions"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-xl overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 border-b border-border px-3">
+          <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <input
+            autoFocus
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") onClose();
+            }}
+            placeholder="Search sessions..."
+            aria-label="Search sessions"
+            className="h-11 min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+          />
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Close session search"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+        <div className="max-h-[52vh] overflow-y-auto p-1.5">
+          {query.trim().length < 2 ? (
+            <p className="px-3 py-6 text-center text-xs text-muted-foreground">Type at least two characters to search sessions.</p>
+          ) : results.length === 0 ? (
+            <p className="px-3 py-6 text-center text-xs text-muted-foreground">No matching sessions.</p>
+          ) : (
+            results.map((result) => (
+              <button
+                key={`${result.chatId}-${result.messageId}`}
+                type="button"
+                onClick={() => onSelect(result.chatId)}
+                className="flex w-full items-start gap-2 rounded-md px-2.5 py-2 text-left hover:bg-muted"
+              >
+                <Search className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-medium text-foreground">{result.chatTitle}</span>
+                  <span className="mt-0.5 block line-clamp-2 text-[10px] leading-relaxed text-muted-foreground">{result.messageContent}</span>
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function WorkspaceApp() {
   const [, startTransition] = useTransition();
   const {
@@ -44,6 +120,7 @@ export function WorkspaceApp() {
     messages, search, setSearch, searchResults, setMessages,
     models, selectedModelId, setSelectedModelId,
     selectedProvider, isStreaming,
+    startNewChat,
     handleCreateSession, handleDeleteSession,
     handleRenameSession, handlePinSession, handleArchiveSession,
     handleUnarchiveSession, handleExportSession,
@@ -97,9 +174,22 @@ export function WorkspaceApp() {
       setRightPanelOpen: s.setRightPanelOpen,
     }))
   );
+  const isUniversalSearchOpen = useChatStore((state) => state.isSearchOpen);
+  const toggleUniversalSearch = useChatStore((state) => state.toggleSearch);
   const visibleWorkspaceModes = getVisibleWorkspaceModeFeatures();
   const currentWorkspaceTab = isWorkspaceModeVisible(activeTab) ? activeTab : "chat";
-  const activeSession = sessions.find((session) => session.id === currentSessionId) ?? null;
+  const activeSession = [...sessions, ...archivedSessions].find((session) => session.id === currentSessionId) ?? null;
+  const isArchivedSession = activeSession?.archived === true || archivedSessions.some((session) => session.id === currentSessionId);
+
+  const handleStartNewChat = useCallback(() => {
+    if (currentSessionId && isStreaming) {
+      void abortStream();
+    }
+    setActiveArtifact(null);
+    setPendingWorkspaceRoot(configuredWorkspacePath || null);
+    startNewChat();
+  }, [abortStream, configuredWorkspacePath, currentSessionId, isStreaming, setActiveArtifact, startNewChat]);
+
   const sessionNavigation = useRef<{ current: string | null; past: string[]; future: string[]; replaying: boolean }>({
     current: null,
     past: [],
@@ -150,6 +240,11 @@ export function WorkspaceApp() {
   }, [currentSessionId]);
 
   const handleSendMessageInternal = useCallback(async (data: any) => {
+    if (isArchivedSession) {
+      toast.info("This chat is archived. Unarchive it before sending a new message.");
+      return;
+    }
+
     const payload = {
       ...data,
       generativeUI: data.generativeUI ?? generativeUI,
@@ -189,7 +284,7 @@ export function WorkspaceApp() {
     }
 
     handleSendMessage(payload);
-  }, [currentSessionId, generativeUI, handleCreateSession, handleSendMessage, pendingWorkspaceRoot]);
+  }, [currentSessionId, generativeUI, handleCreateSession, handleSendMessage, isArchivedSession, pendingWorkspaceRoot]);
 
   const recentWorkspaces = useMemo(() => {
     const paths = [
@@ -330,8 +425,8 @@ export function WorkspaceApp() {
     <WorkspaceContextHeader
       session={activeSession}
       messages={chatMessages}
-      isStreaming={isStreaming}
-      onNewChat={() => void handleCreateSession("New Chat")}
+      isStreaming={isArchivedSession ? false : isStreaming}
+      onNewChat={handleStartNewChat}
       onNavigateBack={navigateSessionBack}
       onNavigateForward={navigateSessionForward}
       canNavigateBack={navigationState.canBack}
@@ -339,6 +434,7 @@ export function WorkspaceApp() {
       onRenameSession={handleRenameSession}
       onPinSession={handlePinSession}
       onArchiveSession={handleArchiveSession}
+      onUnarchiveSession={handleUnarchiveSession}
       onExportSession={handleExportSession}
       onOpenApprovals={() => {
         setActiveRightTab("approvals");
@@ -358,6 +454,22 @@ export function WorkspaceApp() {
 
   return (
     <div className="h-screen w-screen bg-background overflow-hidden">
+      {isUniversalSearchOpen && (
+        <UniversalSessionSearch
+          query={search}
+          results={searchResults}
+          onQueryChange={setSearch}
+          onClose={() => {
+            setSearch("");
+            toggleUniversalSearch();
+          }}
+          onSelect={(chatId) => {
+            setSearch("");
+            toggleUniversalSearch();
+            startTransition(() => setCurrentSessionId(chatId));
+          }}
+        />
+      )}
       <WorkspaceLayout
         windowHeader={windowHeader}
         sidebar={
@@ -367,7 +479,14 @@ export function WorkspaceApp() {
             folders={folders}
             currentId={currentSessionId}
             onSelect={(id) => startTransition(() => setCurrentSessionId(id))}
-            onCreate={handleCreateSession}
+            onCreate={handleStartNewChat}
+            onOpenSearch={toggleUniversalSearch}
+            onCreateInWorkspace={(workspaceRoot) => {
+              if (currentSessionId && isStreaming) void abortStream();
+              setActiveArtifact(null);
+              setPendingWorkspaceRoot(workspaceRoot || configuredWorkspacePath || null);
+              startNewChat();
+            }}
             onDelete={handleDeleteSession}
             onRename={handleRenameSession}
             onPin={handlePinSession}
@@ -381,7 +500,6 @@ export function WorkspaceApp() {
             onMoveToFolder={handleMoveToFolder}
             search={search}
             searchResults={searchResults}
-            onSearchChange={setSearch}
             setSettingsTab={setActiveSettingsTab}
             setShowSettingsModal={setSettingsOpen}
             onPreloadSettings={preloadSettingsModal}
@@ -418,7 +536,13 @@ export function WorkspaceApp() {
               selectedWorkspace={pendingWorkspaceRoot}
               onSelectWorkspace={setPendingWorkspaceRoot}
               composer={
-                <PremiumChatInput
+                <motion.div
+                  layoutId="workspace-composer-shell"
+                  layout
+                  transition={{ layout: { duration: 0.72, ease: [0.22, 1, 0.36, 1] } }}
+                  className="w-full"
+                >
+                  <PremiumChatInput
                   variant="welcome"
                   activeChatId={null}
                   onSend={handleSendMessageInternal}
@@ -438,7 +562,8 @@ export function WorkspaceApp() {
                     setActiveSettingsTab("general");
                     setSettingsOpen(true);
                   }}
-                />
+                  />
+                </motion.div>
               }
             />
             ) : (
@@ -455,21 +580,28 @@ export function WorkspaceApp() {
                         messages={chatMessages}
                         onOpenArtifact={openArtifactInRightPanel}
                         onOpenSettings={() => setSettingsOpen(true)}
-                        onDismissError={handleDismissError}
-                        onRetry={handleRetry}
-                        onRegenerate={handleRegenerate}
-                        onContinueResearch={handleContinueResearch}
-                        onAbort={abortStream}
-                        isStreaming={isStreaming}
+                        onDismissError={isArchivedSession ? undefined : handleDismissError}
+                        onRetry={isArchivedSession ? undefined : handleRetry}
+                        onRegenerate={isArchivedSession ? undefined : handleRegenerate}
+                        onContinueResearch={isArchivedSession ? undefined : handleContinueResearch}
+                        onAbort={isArchivedSession ? undefined : abortStream}
+                        isStreaming={isArchivedSession ? false : isStreaming}
                       />
                     </div>
                     <div className="w-full shrink-0">
                       <div className="max-w-3xl mx-auto w-full px-6 py-4">
+                        <motion.div
+                          layoutId="workspace-composer-shell"
+                          layout
+                          transition={{ layout: { duration: 0.72, ease: [0.22, 1, 0.36, 1] } }}
+                          className="w-full"
+                        >
                           <PremiumChatInput
                             activeChatId={currentSessionId}
+                            readOnly={isArchivedSession}
                             onSend={handleSendMessageInternal}
-                            onAbort={abortStream}
-                            isLoading={isLoading}
+                            onAbort={isArchivedSession ? undefined : abortStream}
+                            isLoading={isArchivedSession ? false : isLoading}
                             models={models}
                             selectedModelId={selectedModelId}
                             selectedProvider={selectedProvider}
@@ -487,6 +619,7 @@ export function WorkspaceApp() {
                               setSettingsOpen(true);
                             }}
                           />
+                        </motion.div>
                       </div>
                     </div>
                   </div>
@@ -499,21 +632,28 @@ export function WorkspaceApp() {
                             messages={chatMessages}
                             onOpenArtifact={openArtifactInRightPanel}
                             onOpenSettings={() => setSettingsOpen(true)}
-                            onDismissError={handleDismissError}
-                            onRetry={handleRetry}
-                            onRegenerate={handleRegenerate}
-                            onContinueResearch={handleContinueResearch}
-                            onAbort={abortStream}
-                            isStreaming={isStreaming}
+                            onDismissError={isArchivedSession ? undefined : handleDismissError}
+                            onRetry={isArchivedSession ? undefined : handleRetry}
+                            onRegenerate={isArchivedSession ? undefined : handleRegenerate}
+                            onContinueResearch={isArchivedSession ? undefined : handleContinueResearch}
+                            onAbort={isArchivedSession ? undefined : abortStream}
+                            isStreaming={isArchivedSession ? false : isStreaming}
                           />
                         </div>
                         <div className="w-full bg-background border-t border-border p-4 shrink-0">
                           <div className="max-w-3xl mx-auto w-full">
+                            <motion.div
+                              layoutId="workspace-composer-shell"
+                              layout
+                              transition={{ layout: { duration: 0.72, ease: [0.22, 1, 0.36, 1] } }}
+                              className="w-full"
+                            >
                               <PremiumChatInput
                                 activeChatId={currentSessionId}
+                                readOnly={isArchivedSession}
                                 onSend={handleSendMessageInternal}
-                                onAbort={abortStream}
-                                isLoading={isLoading}
+                                onAbort={isArchivedSession ? undefined : abortStream}
+                                isLoading={isArchivedSession ? false : isLoading}
                                 models={models}
                                 selectedModelId={selectedModelId}
                                 selectedProvider={selectedProvider}
@@ -531,6 +671,7 @@ export function WorkspaceApp() {
                                   setSettingsOpen(true);
                                 }}
                               />
+                            </motion.div>
                           </div>
                         </div>
                       </div>
@@ -543,7 +684,7 @@ export function WorkspaceApp() {
                         <ArtifactPanel
                           artifact={activeArtifact}
                           onClose={() => setActiveArtifact(null)}
-                          isStreaming={isStreaming}
+                          isStreaming={isArchivedSession ? false : isStreaming}
                           embedded
                         />
                       </Suspense>
@@ -575,7 +716,7 @@ export function WorkspaceApp() {
 
       {isCommandPaletteOpen && (
         <Suspense fallback={<DeferredOverlayFallback />}>
-          <CommandPalette />
+          <CommandPalette onNewChat={handleStartNewChat} />
         </Suspense>
       )}
 

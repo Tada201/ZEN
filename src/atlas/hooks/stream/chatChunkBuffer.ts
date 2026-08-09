@@ -6,6 +6,12 @@ import { filterToolProtocolStream, stripToolProtocolText } from "@/atlas/lib/too
 export interface ChunkBuffer {
   delta: string;
   type: string;
+  messageId?: string;
+}
+
+export interface ChunkApplyOptions {
+  isThinking?: boolean;
+  messageId?: string;
 }
 
 interface InlineThinkSplit {
@@ -20,11 +26,21 @@ export function normalizeChatChunkType(type?: string): string {
 
 const firstChunkTypesMap = new Map<string, Set<string>>();
 
-export function markFirstChunkTypeSent(chatId: string, chunkType: string): boolean {
-  let typeSet = firstChunkTypesMap.get(chatId);
+/**
+ * Use the backend assistant ID whenever it exists. Chat-only keys are kept for
+ * legacy orchestrator events that predate message identity. Do not key this by
+ * React's temporary assistant ID: it is replaced by the persisted row later.
+ */
+export function chunkTrackingKey(chatId: string, messageId?: string): string {
+  return `${chatId}:${messageId || "chat"}`;
+}
+
+export function markFirstChunkTypeSent(chatId: string, chunkType: string, messageId?: string): boolean {
+  const key = chunkTrackingKey(chatId, messageId);
+  let typeSet = firstChunkTypesMap.get(key);
   if (!typeSet) {
     typeSet = new Set<string>();
-    firstChunkTypesMap.set(chatId, typeSet);
+    firstChunkTypesMap.set(key, typeSet);
   }
   if (typeSet.has(chunkType)) return false;
   typeSet.add(chunkType);
@@ -72,7 +88,7 @@ export function splitInlineThinkTags(text: string, initiallyOpen = false, pendin
   return { segments, open, pending: trailingPending };
 }
 
-function applyDeltaSegment(message: Message, delta: string, chunkType: string, options?: { isThinking?: boolean }): Message {
+function applyDeltaSegment(message: Message, delta: string, chunkType: string, options?: ChunkApplyOptions): Message {
   const prevSteps: Step[] = message.steps || [];
 
   if (chunkType === "thought") {
@@ -85,7 +101,7 @@ function applyDeltaSegment(message: Message, delta: string, chunkType: string, o
     return {
       ...message,
       reasoning: (message.reasoning || "") + delta,
-      isThinking: options?.isThinking ?? true,
+      isThinking: options?.isThinking ?? message.status === "sending",
       steps,
     };
   }
@@ -104,7 +120,7 @@ function applyDeltaSegment(message: Message, delta: string, chunkType: string, o
   };
 }
 
-function applyBufferedDelta(message: Message, delta: string, chunkType: string, options?: { isThinking?: boolean }): Message {
+function applyBufferedDelta(message: Message, delta: string, chunkType: string, options?: ChunkApplyOptions): Message {
   if (chunkType === "thought") {
     return applyDeltaSegment(message, delta, chunkType, options);
   }
@@ -167,6 +183,48 @@ function splitInlineThinkContent(content: string): { content: string; reasoning:
   };
 }
 
+function reconcileFinalTextSteps(steps: Step[], finalContent: string): Step[] {
+  const textStepLengths = steps
+    .filter((step) => step.type === "text")
+    .map((step) => (step.content || "").length);
+
+  if (textStepLengths.length === 0) {
+    return finalContent ? [...steps, { type: "text", content: finalContent }] : steps;
+  }
+
+  const nextSteps: Step[] = [];
+  let contentOffset = 0;
+  let textStepIndex = 0;
+
+  for (const step of steps) {
+    if (step.type !== "text") {
+      nextSteps.push(step);
+      continue;
+    }
+
+    const streamedLength = textStepLengths[textStepIndex] || 0;
+    const reconciledContent = finalContent.slice(contentOffset, contentOffset + streamedLength);
+    contentOffset += streamedLength;
+    textStepIndex += 1;
+
+    if (reconciledContent) {
+      nextSteps.push({ ...step, content: reconciledContent });
+    }
+  }
+
+  // chat:done is the canonical response boundary. If the provider's final
+  // payload contains text that was not delivered in a live chunk, append that
+  // tail as a new final text step. Keeping it after the existing execution
+  // timeline preserves tool ordering instead of moving post-tool prose ahead
+  // of the tool cards.
+  const missingTail = finalContent.slice(contentOffset);
+  if (missingTail) {
+    nextSteps.push({ type: "text", content: missingTail });
+  }
+
+  return nextSteps;
+}
+
 export function replaceTextStepsWithContent(message: Message, content: string): Message {
   const safeContent = stripToolProtocolText(content);
   const extracted = splitInlineThinkContent(safeContent);
@@ -194,13 +252,14 @@ export function replaceTextStepsWithContent(message: Message, content: string): 
   const hasExecutionTimeline = steps.some((step) => step.type !== "text" && step.type !== "reasoning");
 
   if (hasExecutionTimeline) {
-    // The streamed steps are the chronological source of truth. Replacing the
-    // first text step with the full final response moves post-tool commentary
-    // ahead of tool cards when chat:done arrives.
-    const updatedSteps = steps
-      .map((step) => step.type === "text"
-        ? { ...step, content: stripToolProtocolText(step.content || "") }
-        : step)
+    // Keep the streamed execution order, but reconcile every text step against
+    // the canonical chat:done content. This prevents a partial final response
+    // from remaining visible when the transition or IPC batching dropped a
+    // late text chunk.
+    const streamedSteps = steps.map((step) => step.type === "text"
+      ? { ...step, content: stripToolProtocolText(step.content || "") }
+      : step);
+    const updatedSteps = reconcileFinalTextSteps(streamedSteps, normalizedContent)
       .filter((step) => step.type !== "text" || Boolean(step.content?.trim()));
     return {
       ...message,
@@ -242,10 +301,16 @@ export function replaceTextStepsWithContent(message: Message, content: string): 
   };
 }
 
-export function applyBufferedDeltaToChat(chatId: string, delta: string, chunkType: string, options?: { isThinking?: boolean }) {
+export function applyBufferedDeltaToChat(chatId: string, delta: string, chunkType: string, options?: ChunkApplyOptions) {
   useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-    const assistantIdx = findWritableAssistantIndex(prev, chatId);
+    const assistantIdx = findWritableAssistantIndex(prev, chatId, options?.messageId);
     if (assistantIdx === -1) return prev;
+
+    // chat:done carries canonical final text. Do not duplicate it if a late
+    // text chunk arrives, but still accept a late thought chunk so the
+    // reasoning ledger is complete.
+    const target = prev[assistantIdx];
+    if (target.status !== "sending" && chunkType !== "thought" && target.content.trim()) return prev;
 
     const next = [...prev];
     next[assistantIdx] = applyBufferedDelta(next[assistantIdx], delta, chunkType, options);
@@ -253,7 +318,7 @@ export function applyBufferedDeltaToChat(chatId: string, delta: string, chunkTyp
   });
 }
 
-export function applyBufferedDeltaToMessage(message: Message, delta: string, chunkType: string, options?: { isThinking?: boolean }): Message {
+export function applyBufferedDeltaToMessage(message: Message, delta: string, chunkType: string, options?: ChunkApplyOptions): Message {
   return applyBufferedDelta(message, delta, chunkType, options);
 }
 
@@ -264,5 +329,7 @@ export function clearChunkTrackingForChat(
 ) {
   delete chunkBuffers[chatId];
   delete firstChunkDeltas[chatId];
-  firstChunkTypesMap.delete(chatId);
+  for (const key of firstChunkTypesMap.keys()) {
+    if (key.startsWith(`${chatId}:`)) firstChunkTypesMap.delete(key);
+  }
 }

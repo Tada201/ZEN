@@ -1,4 +1,5 @@
 import type { ArtifactData, FileChange } from "../types";
+import { redactToolText } from "./toolTextRedaction";
 
 export type ToolPreviewResultItem = {
   title: string;
@@ -14,6 +15,8 @@ export type ToolCheckpointPreview = {
 
 export type ToolOutputPreview = {
   summary: string;
+  /** Short, user-facing failure text extracted from the structured result. */
+  errorMessage?: string;
   checkpoint?: ToolCheckpointPreview;
   stdout?: string;
   stderr?: string;
@@ -30,6 +33,12 @@ function compactText(value: unknown, maxLength = 220): string {
   if (value === undefined || value === null || value === "") return "";
   const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
   return text.replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
+
+function compactErrorText(value: unknown, maxLength = 360): string {
+  const text = compactText(value, maxLength);
+  if (!text) return "";
+  return redactToolText(text).trim();
 }
 
 // Keep terminal payloads lossless enough for the expanded command view. The
@@ -252,6 +261,9 @@ export function buildToolOutputPreview(output: string): ToolOutputPreview {
   const imageUri = compactText(findFromCandidates(candidates, ["image_uri", "imageUri", "image_url"]), 500);
   const raw = typeof parsed === "string" ? parsed : JSON.stringify(parsed, null, 2);
   const commandSummary = inferCommandSummary(stdout, stderr, exitCode);
+  const errorMessage = compactErrorText(
+    findFromCandidates(candidates, ["error", "stderr", "error_message", "errorMessage", "error_text", "errorText"]),
+  );
 
   let summary = "";
   if (imageUri) {
@@ -277,6 +289,7 @@ export function buildToolOutputPreview(output: string): ToolOutputPreview {
 
   return {
     summary,
+    errorMessage: errorMessage || undefined,
     checkpoint,
     stdout,
     stderr,

@@ -210,7 +210,7 @@ export type Session = {
   lastModel?: string | null;
   folderId?: string | null;
   archived?: boolean;
-  /** Session-specific workspace root; null/undefined uses the global workspace fallback. */
+  /** Session-specific workspace root. Null means this legacy/imported chat follows the configured default workspace fallback. */
   workspaceRoot?: string | null;
 };
 

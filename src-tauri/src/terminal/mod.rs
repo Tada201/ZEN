@@ -208,7 +208,11 @@ impl TerminalManager {
                             b.sequence = b.sequence.saturating_add(1);
                             b.data.push_str(&text);
                             if b.data.len() > OUTPUT_BUFFER_LIMIT {
-                                let start = b.data.len() - OUTPUT_BUFFER_LIMIT;
+                                // Trim at a UTF-8 char boundary — a naive
+                                // `len - LIMIT` slice can land inside a
+                                // multibyte char (e.g. box-drawing glyphs in
+                                // shell banners) and panic the reader thread.
+                                let start = b.data.floor_char_boundary(b.data.len() - OUTPUT_BUFFER_LIMIT);
                                 b.data = b.data[start..].to_string();
                             }
                             b.sequence

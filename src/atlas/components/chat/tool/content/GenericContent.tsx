@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { Copy, Check } from "lucide-react";
+import { AlertCircle, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { ToolCall } from "../../types";
 import type { ToolOutputPreview } from "../toolOutputPreview";
 import { Panel } from "./primitives";
 import { TruncatedOutput } from "./TruncatedOutput";
+import { redactToolText } from "../toolTextRedaction";
 
 interface GenericContentProps {
   outputPreview: ToolOutputPreview;
@@ -11,14 +13,7 @@ interface GenericContentProps {
 }
 
 function redactInput(value: Record<string, unknown>): string {
-  const text = JSON.stringify(value, null, 2);
-  if (/(api[_-]?key|authorization|bearer|credential|password|secret|token)/i.test(text)) {
-    return text.replace(
-      /("(?:[^"]*(?:api[_-]?key|authorization|bearer|credential|password|secret|token)[^"]*)"\s*:\s*)"[^"]*"/gi,
-      '$1"[redacted]"',
-    );
-  }
-  return text;
+  return redactToolText(JSON.stringify(value, null, 2));
 }
 
 function OutputBlock({
@@ -29,10 +24,11 @@ function OutputBlock({
   label: string;
 }) {
   const [copied, setCopied] = useState(false);
+  const safeContent = redactToolText(content);
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(content);
+      await navigator.clipboard.writeText(safeContent);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -41,54 +37,77 @@ function OutputBlock({
   };
 
   return (
-    <Panel label={label}>
-      <div className="group relative">
-        <TruncatedOutput
-          content={content}
-          headLines={8}
-          tailLines={8}
-          className="text-foreground"
-        />
-
-        {content && (
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="absolute right-1 top-1 h-6 w-6 text-muted-foreground hover:text-foreground transition-colors duration-200"
-            aria-label="Copy output"
-            onClick={handleCopy}
-          >
-            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-          </Button>
-        )}
-      </div>
+    <Panel
+      label={label}
+      action={safeContent ? (
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-5 w-5 text-muted-foreground hover:text-foreground"
+          aria-label={`Copy ${label.toLowerCase()}`}
+          onClick={handleCopy}
+        >
+          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+        </Button>
+      ) : undefined}
+    >
+      <TruncatedOutput
+        content={safeContent}
+        headLines={8}
+        tailLines={8}
+        className="text-foreground"
+      />
     </Panel>
   );
 }
 
-export function GenericContent({ outputPreview, input }: GenericContentProps) {
+export function GenericContent({ outputPreview, input, toolCall }: GenericContentProps & { toolCall: ToolCall }) {
   const hasInput = Object.keys(input).length > 0;
-  const outputText = outputPreview.content || outputPreview.summary || outputPreview.raw;
+  const isFailure = toolCall.status === "error" || outputPreview.exitCode !== undefined && outputPreview.exitCode !== "0" || Boolean(outputPreview.stderr);
+  const failureMessage = redactToolText(outputPreview.errorMessage || outputPreview.stderr || outputPreview.summary || "The tool did not complete successfully.");
+  const outputText = redactToolText(isFailure
+    ? failureMessage
+    : outputPreview.content || outputPreview.summary || outputPreview.raw);
 
   return (
     <div className="flex flex-col gap-2">
+      {isFailure && (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-2.5 py-2" role="alert">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold text-destructive">Tool failed</div>
+            <div className="mt-0.5 break-words text-[11px] leading-relaxed text-foreground">{failureMessage}</div>
+          </div>
+        </div>
+      )}
       {hasInput && (
-        <details className="rounded-md bg-muted px-2 py-1.5">
-          <summary className="cursor-pointer select-none text-[11px] uppercase tracking-wide text-muted-foreground">
-            Technical details
+        <details className="overflow-hidden rounded-md border border-border bg-card/70">
+          <summary className="cursor-pointer select-none bg-muted/60 px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+            Input parameters
           </summary>
-          <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-muted-foreground">
+          <pre className="max-h-40 overflow-auto border-t border-border bg-background/30 px-2.5 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
             {redactInput(input)}
           </pre>
         </details>
       )}
 
-      {(outputPreview.content || outputPreview.summary || outputPreview.raw) && (
-        <OutputBlock content={outputText} label="Output" />
+      {(outputText || isFailure) && (
+        <OutputBlock content={outputText} label={isFailure ? "Error" : "Output"} />
       )}
 
-      {!hasInput && !outputPreview.content && !outputPreview.summary && !outputPreview.raw && (
+      {isFailure && outputPreview.raw && (
+        <details className="overflow-hidden rounded-md border border-border bg-card/50">
+          <summary className="cursor-pointer select-none bg-muted/40 px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+            Raw result
+          </summary>
+          <pre className="max-h-40 overflow-auto border-t border-border bg-background/30 px-2.5 py-2 font-mono text-[10px] leading-relaxed text-muted-foreground">
+            {redactToolText(outputPreview.raw).slice(0, 1800)}
+          </pre>
+        </details>
+      )}
+
+      {!hasInput && !outputText && !isFailure && (
         <Panel label="Output">
           <div className="text-[12px] leading-relaxed text-muted-foreground">No preview available.</div>
         </Panel>

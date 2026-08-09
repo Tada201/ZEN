@@ -9,12 +9,33 @@ const rendererSource = readFileSync(
   new URL("../src/atlas/components/OpenUIRenderer.tsx", import.meta.url),
   "utf8",
 );
+const backendSource = readFileSync(
+  new URL("../src-tauri/src/commands/chat/send.rs", import.meta.url),
+  "utf8",
+);
+const apiSource = readFileSync(
+  new URL("../src/api/chatApi.ts", import.meta.url),
+  "utf8",
+);
 
 assert(
   promptSource.includes("Output OpenUI Lang only") &&
     promptSource.includes("not JSX") &&
+    promptSource.includes("openui language tag") &&
     promptSource.includes("Define a single render entry named root"),
-  "GenUI prompt should tell the model to emit OpenUI Lang with a root assignment, not JSX",
+  "GenUI prompt should tell the model to emit fenced OpenUI Lang with a root assignment, not JSX",
+);
+
+assert(
+  backendSource.includes("extra_instructions: generative_ui_addendum.clone()") &&
+    backendSource.includes("generative_ui_addendum"),
+  "orchestrator requests should inherit the per-turn GenUI contract",
+);
+
+assert(
+  apiSource.includes("generativeUi,") &&
+    !apiSource.includes("generative_ui: generativeUi"),
+  "GenUI must cross the Tauri IPC boundary using its camelCase command argument",
 );
 
 assert(

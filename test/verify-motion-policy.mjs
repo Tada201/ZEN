@@ -10,6 +10,7 @@ const settingsSchema = read("src/lib/stores/settings/schema.ts");
 const interfaceSlice = read("src/lib/stores/settings/createInterfaceSlice.ts");
 const welcome = read("src/atlas/components/chat/WorkspaceWelcome.tsx");
 const transition = read("src/atlas/components/chat/WorkspaceViewTransition.tsx");
+const workspaceSection = read("src/atlas/sections/WorkspaceSection.tsx");
 const boot = read("src/components/bootscreen/index.tsx");
 const css = read("src/styles/index.css");
 
@@ -22,6 +23,13 @@ assert(settings.includes("animationsEnabled") && !settings.includes('updateSetti
 assert(!settingsSchema.includes("reducedMotion") && !interfaceSlice.includes("reducedMotion"), "settings store must not persist a second reduced-motion preference");
 assert(!welcome.includes('from "framer-motion"') && !welcome.includes('from "@/lib/motion"'), "static welcome branding must not add a separate motion policy");
 assert(transition.includes('from "@/lib/motion"') && !transition.includes('useReducedMotion } from "framer-motion"'), "workspace transition must use the central hook");
+assert(transition.includes("duration: 0.72") && transition.includes("y: 28") && transition.includes("y: -22"), "welcome-to-chat transition must use a visible scene crossfade");
+const premiumInput = read("src/atlas/components/PremiumChatInput.tsx");
+assert(premiumInput.includes("layout") && premiumInput.includes("layout: { duration: 0.72"), "composer internals must retain layout animation without competing shared IDs");
+assert(workspaceSection.includes('layoutId="workspace-composer-shell"') && workspaceSection.includes("duration: 0.72"), "welcome and chat must share an explicit composer morph shell");
+assert(transition.includes("WorkspaceTransitionContext") && transition.includes("handleAnimationStart"), "transition must expose lifecycle state to pause decorative rendering");
+assert(read("src/atlas/components/chat/WelcomeBlackHoleBackground.tsx").includes("pausedRef.current"), "WebGL background must pause its frame loop during scene transitions");
+assert(read("src/atlas/components/chat/WelcomeBlackHoleSvg.tsx").includes("shouldAnimate && !paused"), "SVG background must pause native particle motion during scene transitions");
 assert(boot.includes('from "@/lib/motion"') && boot.includes("!bootEnabled || reducedMotion"), "boot screen must honor the central policy");
 assert(css.includes('html[data-motion="off"] #root *') && !css.includes("prefers-reduced-motion"), "CSS motion must honor the app policy without an OS override");
 

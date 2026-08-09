@@ -70,5 +70,5 @@ export function ToolContentSwitch({
     return <ArtifactContent outputPreview={outputPreview} onViewArtifact={onViewArtifact} />;
   }
 
-  return <GenericContent outputPreview={outputPreview} input={input} />;
+  return <GenericContent outputPreview={outputPreview} input={input} toolCall={toolCall} />;
 }

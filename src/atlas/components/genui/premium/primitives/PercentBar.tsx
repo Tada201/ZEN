@@ -65,7 +65,7 @@ const easeOutQuint = (t: number) => 1 - Math.pow(1 - t, 5);
  *    expected range is this value?".
  *
  * Single-variant fill animates its width from 0% to value/max% on mount
- * (and on every value change) over 600 ms. Honors `prefers-reduced-motion`.
+ * (and on every value change) over 600 ms. Honors the app motion preference.
  */
 export function PercentBar({
   value,

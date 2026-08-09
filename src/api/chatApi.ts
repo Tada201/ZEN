@@ -10,7 +10,8 @@ export interface BackendChat {
   pinned?: number;
   folderId?: string | null;
   isArchived?: number;
-  /** Workspace root captured for this chat; null means use the global workspace fallback. */
+  archivedAt?: string | null;
+  /** Workspace root captured for this chat; null means legacy/imported chats use the configured default workspace fallback. */
   workspaceRoot?: string | null;
 }
 
@@ -135,9 +136,10 @@ export const chatApi = {
   archiveChat: (chatId: string) => callCommand<void>("archive_chat", { chatId }),
   unarchiveChat: (chatId: string) => callCommand<void>("unarchive_chat", { chatId }),
   bulkDeleteChats: (chatIds: string[]) => callCommand<void>("bulk_delete_chats", { chatIds }),
-  createFolder: (name: string) => callCommand<BackendFolder>("create_chat_folder", { name }),
-  updateFolder: (folderId: string, name: string) =>
-    callCommand<void>("update_chat_folder", { folderId, name }),
+  createFolder: (name: string, color?: string) =>
+    callCommand<BackendFolder>("create_chat_folder", { name, color: color ?? null, icon: "folder" }),
+  updateFolder: (folderId: string, name?: string, color?: string) =>
+    callCommand<void>("update_chat_folder", { folderId, name: name ?? null, color: color ?? null }),
   deleteFolder: (folderId: string) =>
     callCommand<void>("delete_chat_folder", { folderId }),
   moveChatToFolder: (chatId: string, folderId: string) =>
@@ -148,8 +150,11 @@ export const chatApi = {
     const { imageGen, generativeUi, ...rest } = request;
     return callCommand<void>("send_message", {
       ...rest,
-      image_gen: imageGen,
-      generative_ui: generativeUi,
+      // Tauri command arguments use camelCase on the JS boundary and map
+      // them to the Rust snake_case parameters. Sending generative_ui here
+      // bypasses that mapping, so Rust receives None and disables GenUI.
+      imageGen,
+      generativeUi,
     });
   },
   abortChat: (chatId: string) => callCommand<void>("abort_chat", { chatId }),

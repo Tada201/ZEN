@@ -71,9 +71,12 @@ impl SecurityService {
 }
 
 impl SecurityService {
-    /// Records that the user explicitly approved an interactive terminal session.
-    /// This is the canonical approval event for interactive shells; the frontend
-    /// confirmation dialog is the human-in-the-loop decision.
+    /// Records that the user opened an interactive terminal session.
+    /// This is the canonical audit event for interactive shells. The current
+    /// workbench security posture treats opening a terminal tab as the user's
+    /// explicit action: it automatically mints a short-lived approval token
+    /// without showing a second consent dialog. `terminal_spawn` consumes that
+    /// single-use token, and both operations remain session-scoped and audited.
     pub async fn grant_interactive_terminal_approval(
         &self,
         caller: impl Into<String>,

@@ -4,11 +4,12 @@ import { useGTSMStore } from "@/lib/stores/useGTSMStore";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Activity, Map as MapIcon, Zap, PanelRightClose, PenLine, Sigma, Plus
+  Activity, Map as MapIcon, Zap, PanelRightClose, PenLine, Sigma, Plus, Terminal
 } from 'lucide-react';
 import { getDefaultWorkbenchView, getVisibleWorkbenchViews, getWorkbenchView, isWorkbenchViewVisible } from "@/lib/features/workbenchRegistry";
 import type { RightPanelTabId } from "@/lib/features/frontendFeatures";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { cn } from "@/lib/utils";
 import { WorkbenchHeaderCore } from "@/components/workbench/WorkbenchHeader";
 import { WorkbenchTabButton } from "@/components/Zen/WorkbenchTabButton";
 import { useChatStore } from "@/lib/stores/useChatStore";
@@ -66,6 +67,9 @@ export function RightPanel() {
   const [orderedTabIds, setOrderedTabIds] = React.useState<string[]>([]);
   const [layoutInitialized, setLayoutInitialized] = React.useState(false);
   const [draggedTabId, setDraggedTabId] = React.useState<string | null>(null);
+  // Backend rows loaded on first listTabs. Used to preserve per-tab metadata
+  // (stateJson, createdAt) instead of stamping fresh values on every reorder.
+  const savedTabsRef = React.useRef<BackendWorkbenchTab[]>([]);
 
   const getBaseViewId = React.useCallback((tabId: string) => tabId.split(":")[0] as RightPanelTabId, []);
   const getViewForTab = React.useCallback((tabId: string) => workbenchViews.find((view) => view.id === getBaseViewId(tabId)), [getBaseViewId, workbenchViews]);
@@ -88,6 +92,7 @@ export function RightPanel() {
       const nextIds: string[] = savedTabs
         .filter((tab, index) => !isLegacyDefaultLayout && knownIds.has(tab.viewId) && savedIds.indexOf(tab.id) === index)
         .map((tab) => tab.id);
+      savedTabsRef.current = savedTabs;
       setOrderedTabIds(nextIds);
       setLayoutInitialized(true);
 
@@ -129,17 +134,20 @@ export function RightPanel() {
   const persistOrder = (nextIds: string[]) => {
     if (!activeChatId) return;
     const now = new Date().toISOString();
+    const savedById = new Map(savedTabsRef.current.map((tab) => [tab.id, tab]));
     const writes = nextIds.map((tabId, position) => {
       const view = getViewForTab(tabId);
       if (!view) return Promise.resolve();
+      const existing = savedById.get(tabId);
       const tab: BackendWorkbenchTab = {
         id: tabId,
         chatId: activeChatId,
         viewId: view.id,
         label: view.label,
         position,
-        stateJson: JSON.stringify({ active: tabId === activeRightTab }),
-        createdAt: now,
+        // Preserve per-tab state instead of overwriting with the active flag.
+        stateJson: existing?.stateJson ?? null,
+        createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       };
       return workbenchApi.upsertTab(tab).catch(() => undefined);
@@ -177,6 +185,7 @@ export function RightPanel() {
     }
     if (activeChatId) void workbenchApi.deleteTab(activeChatId, tabId).catch(() => undefined);
     persistOrder(next);
+    // Terminal PTY cleanup is handled by XTermPanel's unmount effect.
   };
 
   const addTab = (viewId: RightPanelTabId) => {
@@ -192,6 +201,8 @@ export function RightPanel() {
     setLayoutInitialized(true);
     setActiveRightTab(tabId);
     persistOrder(next);
+    // Terminal PTY lifecycle (spawn on mount, kill on unmount) is owned by
+    // XTermPanel; the workbench tab id doubles as its session key.
   };
   const { mapMode, setMapMode } = useGTSMStore();
   const reducedMotion = useReducedMotion();
@@ -210,6 +221,38 @@ export function RightPanel() {
       setActiveRightTab(visibleActiveRightTab);
     }
   }, [activeViewId, setActiveRightTab, visibleActiveRightTab]);
+
+  // Terminal panels stay mounted even when another workbench view is active.
+  // Each workbench tab maps 1:1 to a PTY; unmounting on view switch would kill
+  // the shell. We render them in a persistent layer and only show the focused
+  // tab's panel.
+  const terminalTabs = orderedTabList.filter((t) => getBaseViewId(t.id) === 'terminal');
+  const renderTerminalPanels = () => (
+    // This layer sits inside an `absolute inset-0` overlay; give it an
+    // explicit full size (the overlay's parent is not a flex container, so
+    // flex-grow/flex-1 would collapse the terminal to zero height).
+    <div className="relative h-full w-full overflow-hidden bg-background">
+      {terminalTabs.map((tab) => (
+        <div key={tab.id} className={tab.id === activeRightTab ? 'absolute inset-0 block' : 'absolute inset-0 hidden'}>
+          <XTermPanel chatId={activeChatId ?? ''} sessionId={tab.id} active={tab.id === activeRightTab} />
+        </div>
+      ))}
+    </div>
+  );
+  const renderTerminalEmptyState = () => (
+    <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+      <Terminal size={22} className="mb-4 text-muted-foreground" />
+      <h2 className="text-sm font-medium text-foreground">No terminal tabs open</h2>
+      <p className="mt-2 max-w-sm text-xs leading-5 text-muted-foreground">Open a terminal to run commands in the active workspace.</p>
+      <button
+        type="button"
+        onClick={() => addTab('terminal')}
+        className="mt-5 inline-flex items-center gap-1.5 border border-success px-3 py-2 text-xs font-medium text-success hover:bg-success hover:text-success-foreground"
+      >
+        <Plus size={13} /> New terminal
+      </button>
+    </div>
+  );
 
   const renderContent = () => {
     if (!isWorkbenchViewVisible(visibleActiveRightTab)) {
@@ -238,7 +281,8 @@ export function RightPanel() {
       case 'artifacts':
         return <ArtifactPanel isEmbedded={true} />;
       case 'terminal':
-        return activeChatId ? <XTermPanel chatId={activeChatId} /> : <div className="p-4 text-sm text-muted-foreground">Select a chat before opening a terminal.</div>;
+        if (!activeChatId) return <div className="p-4 text-sm text-muted-foreground">Select a chat before opening a terminal.</div>;
+        return terminalTabs.length === 0 ? renderTerminalEmptyState() : null;
       case 'agents':
         return <OrchestratorPanel />;
       case 'drawing':
@@ -396,108 +440,119 @@ export function RightPanel() {
             <PanelRightClose size={16} />
           </button>
         </nav>
-      </header>
-      {showTabChooser ? (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto bg-background px-6 py-10 text-center">
-          <h2 className="text-xl font-semibold text-foreground">Open tab</h2>
-          <p className="mt-2 text-sm text-muted-foreground">Choose a tab to open in the side pane.</p>
-          <div className="mt-8 grid w-full max-w-[680px] grid-cols-2 gap-3 sm:grid-cols-3">
-            {workbenchViews.map((view) => {
-              const Icon = view.icon || Activity;
-              return (
-                <button
-                  key={view.id}
-                  type="button"
-                  onClick={() => addTab(view.id)}
-                  className="flex min-h-28 flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card px-4 py-5 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <Icon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-                  <span>{view.id === "terminal" ? "Terminal" : view.label}</span>
-                </button>
-              );
-            })}
+        </header>
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        {showTabChooser ? (
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto bg-background px-6 py-10 text-center">
+            <h2 className="text-xl font-semibold text-foreground">Open tab</h2>
+            <p className="mt-2 text-sm text-muted-foreground">Choose a tab to open in the side pane.</p>
+            <div className="mt-8 grid w-full max-w-[680px] grid-cols-2 gap-3 sm:grid-cols-3">
+              {workbenchViews.map((view) => {
+                const Icon = view.icon || Activity;
+                return (
+                  <button
+                    key={view.id}
+                    type="button"
+                    onClick={() => addTab(view.id)}
+                    className="flex min-h-28 flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card px-4 py-5 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Icon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                    <span>{view.id === "terminal" ? "Terminal" : view.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ) : visibleActiveRightTab === 'map' ? (
-        <div className="flex-1 flex flex-col relative overflow-hidden bg-background select-none">
-          <div className="flex-1 relative w-full h-full flex flex-col">
-            {mapActivated ? (
+        ) : visibleActiveRightTab === 'map' ? (
+          <div className="flex-1 flex flex-col relative overflow-hidden bg-background select-none">
+            <div className="flex-1 relative w-full h-full flex flex-col">
+              {mapActivated ? (
+                <motion.div
+                  className="flex-1 flex flex-col w-full h-full"
+                  initial={false}
+                  animate={{ opacity: mapClosing ? 0 : 1, scale: mapClosing ? 0.96 : 1 }}
+                  transition={reducedMotion ? { duration: 0 } : { duration: 0.3, ease: 'easeInOut' }}
+                  onAnimationComplete={() => {
+                    if (mapClosing) {
+                      setMapActivated(false);
+                      setMapClosing(false);
+                    }
+                  }}
+                >
+                  <Suspense fallback={<LoadingFallback />}>
+                    <CesiumCanvas />
+                  </Suspense>
+                </motion.div>
+              ) : (
+                <div className="flex-grow flex flex-col items-center justify-center p-6 text-center bg-background">
+                  <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-4 motion-safe:animate-pulse">
+                    <MapIcon size={24} />
+                  </div>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-foreground">
+                    Operational Map
+                  </h3>
+                  <p className="text-[12px] text-muted-foreground max-w-[260px] mt-2 leading-relaxed">
+                    Initializing this viewer loads heavy WebGL and Cesium 3D asset engines. Click below to confirm and activate the canvas.
+                  </p>
+                  <button
+                    onClick={() => setMapActivated(true)}
+                    className="mt-6 px-4 py-2 bg-primary/10 hover:bg-primary/25 border border-primary/25 hover:border-primary/50 text-[11px] font-bold uppercase tracking-widest text-primary rounded-xl transition-all duration-200 shadow-sm shadow-primary/5 hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    Activate Viewer
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="px-4 py-2.5 bg-card/40 border-t border-border text-[11px] text-muted-foreground font-mono flex items-center justify-between shrink-0">
+              <span>Coordinates System: WGS 84</span>
+              <span className="truncate max-w-[180px]">Target: {operationalParams?.label || "Active Search"}</span>
+            </div>
+          </div>
+        ) : visibleActiveRightTab === 'drawing' || visibleActiveRightTab === 'approvals' || visibleActiveRightTab === 'agents' || visibleActiveRightTab === 'terminal' || visibleActiveRightTab === 'artifacts' ? (
+          <div className="flex-grow flex-1 relative overflow-hidden bg-background flex flex-col">
+            <AnimatePresence mode="wait">
               <motion.div
-                className="flex-1 flex flex-col w-full h-full"
-                initial={false}
-                animate={{ opacity: mapClosing ? 0 : 1, scale: mapClosing ? 0.96 : 1 }}
-                transition={reducedMotion ? { duration: 0 } : { duration: 0.3, ease: 'easeInOut' }}
-                onAnimationComplete={() => {
-                  if (mapClosing) {
-                    setMapActivated(false);
-                    setMapClosing(false);
-                  }
-                }}
+                key={visibleActiveRightTab}
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={reducedMotion ? { duration: 0 } : { duration: 0.2 }}
+                className="flex-grow flex flex-col overflow-hidden relative w-full h-full"
               >
                 <Suspense fallback={<LoadingFallback />}>
-                  <CesiumCanvas />
+                  {renderContent()}
                 </Suspense>
               </motion.div>
-            ) : (
-              <div className="flex-grow flex flex-col items-center justify-center p-6 text-center bg-background">
-                <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-4 motion-safe:animate-pulse">
-                  <MapIcon size={24} />
-                </div>
-                <h3 className="text-xs font-bold uppercase tracking-widest text-foreground">
-                  Operational Map
-                </h3>
-                <p className="text-[12px] text-muted-foreground max-w-[260px] mt-2 leading-relaxed">
-                  Initializing this viewer loads heavy WebGL and Cesium 3D asset engines. Click below to confirm and activate the canvas.
-                </p>
-                <button
-                  onClick={() => setMapActivated(true)}
-                  className="mt-6 px-4 py-2 bg-primary/10 hover:bg-primary/25 border border-primary/25 hover:border-primary/50 text-[11px] font-bold uppercase tracking-widest text-primary rounded-xl transition-all duration-200 shadow-sm shadow-primary/5 hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  Activate Viewer
-                </button>
-              </div>
-            )}
+            </AnimatePresence>
           </div>
-          <div className="px-4 py-2.5 bg-card/40 border-t border-border text-[11px] text-muted-foreground font-mono flex items-center justify-between shrink-0">
-            <span>Coordinates System: WGS 84</span>
-            <span className="truncate max-w-[180px]">Target: {operationalParams?.label || "Active Search"}</span>
+        ) : (
+          <ScrollArea className="flex-1 p-4">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={visibleActiveRightTab}
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={reducedMotion ? { duration: 0 } : { duration: 0.2 }}
+                className="pb-8"
+              >
+                <Suspense fallback={<LoadingFallback />}>
+                  {renderContent()}
+                </Suspense>
+              </motion.div>
+            </AnimatePresence>
+          </ScrollArea>
+        )}
+        {/* Terminal panels live in their own layer so their PTY sessions
+            survive view switches. Same subtree always mounted; CSS toggles
+            visibility. renderContent() returns null for the terminal view,
+            so this layer is the single render site for terminal panels. */}
+        {activeChatId && terminalTabs.length > 0 ? (
+          <div className={cn("absolute inset-0", visibleActiveRightTab === 'terminal' ? 'block' : 'hidden')} aria-hidden={visibleActiveRightTab !== 'terminal'}>
+            {renderTerminalPanels()}
           </div>
-        </div>
-      ) : visibleActiveRightTab === 'drawing' || visibleActiveRightTab === 'approvals' || visibleActiveRightTab === 'agents' || visibleActiveRightTab === 'terminal' || visibleActiveRightTab === 'artifacts' ? (
-        <div className="flex-grow flex-1 relative overflow-hidden bg-background flex flex-col">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={visibleActiveRightTab}
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              transition={reducedMotion ? { duration: 0 } : { duration: 0.2 }}
-              className="flex-grow flex flex-col overflow-hidden relative w-full h-full"
-            >
-              <Suspense fallback={<LoadingFallback />}>
-                {renderContent()}
-              </Suspense>
-            </motion.div>
-          </AnimatePresence>
-        </div>
-      ) : (
-        <ScrollArea className="flex-1 p-4">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={visibleActiveRightTab}
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              transition={reducedMotion ? { duration: 0 } : { duration: 0.2 }}
-              className="pb-8"
-            >
-              <Suspense fallback={<LoadingFallback />}>
-                {renderContent()}
-              </Suspense>
-            </motion.div>
-          </AnimatePresence>
-        </ScrollArea>
-      )}
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -71,10 +71,33 @@ export function XTermSessionView({ chatId, sessionId, active, onError }: XTermSe
     terminalRef.current = terminal;
     fitRef.current = fit;
 
+    // Debounce backend resize IPC: the right panel animates width over 300ms
+    // on open/close and drag-resize fires per mousemove, so the PTY would be
+    // flooded with ~18 out-of-order resizes. Local fit stays live per frame;
+    // only the IPC round-trip is trailing-debounced.
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+    const pushResize = () => {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        resizeTimer = undefined;
+        const cols = Math.max(MIN_COLS, terminal.cols);
+        const rows = Math.max(MIN_ROWS, terminal.rows);
+        void terminalApi.resize(chatId, sessionId, cols, rows).catch(() => undefined);
+      }, 80);
+    };
     const resize = () => {
+      // Panel transition starts at width 0 — skip until the host is visible
+      // and measurable, otherwise FitAddon.fit() throws on a zero-size box.
       if (!host.offsetParent) return;
-      fit.fit();
-      void terminalApi.resize(chatId, sessionId, Math.max(MIN_COLS, terminal.cols), Math.max(MIN_ROWS, terminal.rows));
+      const width = host.clientWidth;
+      const height = host.clientHeight;
+      if (width <= 0 || height <= 0) return;
+      try {
+        fit.fit();
+      } catch {
+        return;
+      }
+      pushResize();
     };
 
     const outputBuffer: string[] = [];
@@ -95,6 +118,52 @@ export function XTermSessionView({ chatId, sessionId, active, onError }: XTermSe
     const input = terminal.onData((data) => {
       void terminalApi.write(chatId, sessionId, data).catch((error) => onError(getErrorMessage(error)));
     });
+
+    // Standard terminal clipboard: copy selection / paste. xterm does not
+    // intercept these by default, so bind them with a custom key handler.
+    //   macOS:  Cmd+C copy (with selection), Cmd+V paste
+    //   Win/Linux: Ctrl+Shift+C copy, Ctrl+Shift+V paste;
+    //              Ctrl+C copies when a selection exists, otherwise passes
+    //              through to the shell as SIGINT.
+    const isMac = /Mac|iPhone|iPad/.test(navigator.platform || "");
+    const isWindows = /Win/.test(navigator.platform || navigator.userAgent || "");
+    const copySelection = () => {
+      const selection = terminal.getSelection();
+      if (!selection) return false;
+      void navigator.clipboard.writeText(selection).catch(() => undefined);
+      return true;
+    };
+    const pasteClipboard = () => {
+      void navigator.clipboard
+        .readText()
+        .then((text) => {
+          if (text) {
+            void terminalApi.write(chatId, sessionId, text).catch((error) => onError(getErrorMessage(error)));
+          }
+        })
+        .catch(() => undefined);
+      return true;
+    };
+    const keyHandler = (event: KeyboardEvent) => {
+      if (event.type !== "keydown") return true;
+      const mod = event.ctrlKey || event.metaKey;
+      if (!mod) return true;
+      const key = event.key.toLowerCase();
+      if (isMac) {
+        if (key === "c" && event.metaKey && !event.shiftKey && copySelection()) return false;
+        if (key === "v" && event.metaKey && !event.shiftKey) return !pasteClipboard();
+        return true;
+      }
+      if (key === "c" && event.ctrlKey && event.shiftKey && copySelection()) return false;
+      if (key === "v" && event.ctrlKey && event.shiftKey) return !pasteClipboard();
+      // Ctrl+C with an active selection copies; without one it stays SIGINT.
+      if (key === "c" && event.ctrlKey && !event.shiftKey && terminal.hasSelection() && copySelection()) return false;
+      // Plain Ctrl+V is reserved for readline quoted-insert on Linux. Keep
+      // the Windows convention while preserving Ctrl+Shift+V everywhere.
+      if (isWindows && key === "v" && event.ctrlKey && !event.shiftKey) return !pasteClipboard();
+      return true;
+    };
+    terminal.attachCustomKeyEventHandler(keyHandler);
 
     const enqueueOutput = (data: string) => {
       outputBuffer.push(data);
@@ -121,7 +190,9 @@ export function XTermSessionView({ chatId, sessionId, active, onError }: XTermSe
 
     cleanup = () => {
       if (frame) window.cancelAnimationFrame(frame);
+      if (resizeTimer) clearTimeout(resizeTimer);
       input.dispose();
+      terminal.attachCustomKeyEventHandler(() => true);
       resizeObserver.disconnect();
       unlisten?.();
       host.removeEventListener('mousedown', focusTerminal);
@@ -153,9 +224,14 @@ export function XTermSessionView({ chatId, sessionId, active, onError }: XTermSe
     const terminal = terminalRef.current;
     if (!fit || !terminal) return;
     window.requestAnimationFrame(() => {
-      fit.fit();
+      try {
+        fit.fit();
+      } catch {
+        // The container may still be measuring during the panel width
+        // transition; the ResizeObserver path refits once it settles.
+      }
       terminal.focus();
-      void terminalApi.resize(chatId, sessionId, Math.max(MIN_COLS, terminal.cols), Math.max(MIN_ROWS, terminal.rows));
+      void terminalApi.resize(chatId, sessionId, Math.max(MIN_COLS, terminal.cols), Math.max(MIN_ROWS, terminal.rows)).catch(() => undefined);
     });
   }, [active, chatId, sessionId]);
 

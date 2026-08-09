@@ -28,6 +28,7 @@ const SNAKE_OVERRIDES: Record<string, string> = {
   backgroundBlur: "ui.background-blur",
   backgroundFit: "ui.background-fit",
   backgroundMediaType: "ui.background-media-type",
+  welcomePageQuality: "ui.welcome-page-quality",
   revealCompletedToolHistory: "ui.reveal-completed-tool-history",
   memoryEnabled: "memory.enabled",
   memoryMaxTurns: "memory.max-turns",

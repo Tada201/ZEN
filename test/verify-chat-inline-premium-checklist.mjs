@@ -7,6 +7,7 @@ const row = read("src/atlas/components/chat/tool/ExecutionRow.tsx");
 const detail = read("src/atlas/components/chat/tool/ToolDetailView.tsx");
 const content = read("src/atlas/components/chat/tool/content/ToolContentSwitch.tsx");
 const card = read("src/atlas/components/chat/ToolCallCard.tsx");
+const generic = read("src/atlas/components/chat/tool/content/GenericContent.tsx");
 const subagent = read("src/atlas/components/chat/SubagentExecutionCard.tsx");
 const genui = read("src/atlas/components/genui/PremiumCard.tsx");
 const agentStep = read("src/atlas/components/genui/premium/AgentStepCard.tsx");
@@ -30,7 +31,8 @@ includesAll(trace, [
 includesAll(row, ["getExecutionStatusLabel", "aria-busy", "focus-visible:ring"], "execution row");
 includesAll(detail, ["DiffCard", "Open full diff", "parseUnifiedDiff"], "file diff surface");
 includesAll(content, ["TerminalContent", "SearchContent", "ImageContent", "ArtifactContent"], "tool content routing");
-includesAll(card, ["Approval context", "Technical details", "Retry", "Approve", "Deny"], "tool card actions");
+includesAll(card, ["Approval context", "Retry", "Approve", "Deny"], "tool card actions");
+includesAll(generic, ["Tool failed", "Input parameters", "Raw result"], "tool detail states");
 includesAll(subagent, ["resultSummary", "childToolCalls", "AgentExecutionTrace"], "subagent surface");
 includesAll(genui, ["Suspense", "Technical details", "ChartCardFallback", "CardMotion", "PremiumCardBody"], "GenUI fallback/lifecycle");
 includesAll(agentStep, ["CardShell", "motion-safe:animate-spin"], "agent step card");

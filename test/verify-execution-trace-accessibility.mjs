@@ -5,6 +5,7 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 const trace = read("src/atlas/components/chat/AgentExecutionTrace.tsx");
 const reasoning = read("src/atlas/components/chat/ReasoningBlock.tsx");
 const card = read("src/atlas/components/chat/ToolCallCard.tsx");
+const generic = read("src/atlas/components/chat/tool/content/GenericContent.tsx");
 const row = read("src/atlas/components/chat/tool/ExecutionRow.tsx");
 const assistant = read("src/atlas/components/chat/AssistantMessage.tsx");
 const group = read("src/atlas/components/chat/ExecutionGroup.tsx");
@@ -28,7 +29,7 @@ assert(trace.includes('defaultExpanded={'), "individual tool rows must explicitl
 assert(trace.includes('toolCall.status === "running"'), "running tool rows must be expanded by default");
 assert(trace.includes('toolCall.status === "awaiting_approval"'), "approval tool rows must be expanded by default");
 assert(trace.includes('toolCall.status === "error"'), "failed tool rows must be expanded by default");
-assert(card.includes("Technical details"), "raw tool payloads must remain behind an explicit disclosure");
+assert(generic.includes("Raw result") && generic.includes("Input parameters"), "raw tool payloads and inputs must remain behind explicit disclosures");
 assert(card.includes("Deny") && card.includes("Approve"), "approval rows must retain actionable decisions");
 assert(row.includes("aria-expanded") && row.includes("aria-busy"), "execution rows must expose expansion and running semantics");
 

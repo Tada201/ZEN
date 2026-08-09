@@ -49,7 +49,7 @@ const easeOutQuint = (t: number) => 1 - Math.pow(1 - t, 5);
  * animation only when `value` actually changes — no animation on identical
  * updates (avoids re-stroking on every parent re-render).
  *
- * Honors `prefers-reduced-motion` by snapping to the final state.
+ * Honors the app motion preference by snapping to the final state.
  */
 export function Ring({
   value,

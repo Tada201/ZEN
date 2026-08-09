@@ -5,7 +5,7 @@ import { useChatStore } from "@/lib/stores/useChatStore";
 import { getToolChatId, rememberToolChat } from "./toolLifecycleRouting";
 import { makeToolCall, upsertTool } from "./toolEventReducer";
 import type { Message, ToolCall } from "../../components/chat/types";
-import { focusActiveAgentsPanel, shouldFocusAgentsForTool } from "./agentPanelFocus";
+import { focusActiveAgentsPanel } from "./agentPanelFocus";
 import { findWritableAssistantIndex } from "./messageTarget";
 import { persistExecutionCheckpointForEvent } from "./persistExecutionCheckpoint";
 
@@ -119,9 +119,6 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
       const unlistenToolStart = await listenAppEvent("tool:start", (event) => {
         const chatId = getToolChatId(toolChatIdsRef.current, event.payload, useChatStore.getState());
         if (!chatId) return;
-        if (shouldFocusAgentsForTool(event.payload)) {
-          focusActiveAgentsPanel();
-        }
         rememberToolChat(toolChatIdsRef.current, event.payload, chatId);
         useChatStore.getState().setStreamingForChat(chatId, true);
         resetHeartbeatTimeout(chatId);
@@ -146,9 +143,6 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
       const unlistenToolComplete = await listenAppEvent("tool:complete", (event) => {
         const chatId = getToolChatId(toolChatIdsRef.current, event.payload, useChatStore.getState());
         if (!chatId) return;
-        if (event.payload.status !== "success" || shouldFocusAgentsForTool(event.payload)) {
-          focusActiveAgentsPanel();
-        }
         rememberToolChat(toolChatIdsRef.current, event.payload, chatId);
         resetHeartbeatTimeout(chatId);
         const status: ToolCall["status"] = event.payload.status === "success" ? "completed" : "error";

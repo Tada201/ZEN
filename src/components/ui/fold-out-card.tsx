@@ -18,7 +18,7 @@ import { useReducedMotion } from "@/hooks/useReducedMotion";
  *   animate auto height without measuring. The keyframe approach was
  *   rejected here because it requires extra CSS registration and the
  *   grid-rows trick survives arbitrary inner content.
- * - Honors prefers-reduced-motion by snapping the open/close state
+ * - Honors the app motion preference by snapping the open/close state
  *   instantly and not animating the chevron transform.
  *
  * The wrapper accepts any single-line `summary` content; the consumer is

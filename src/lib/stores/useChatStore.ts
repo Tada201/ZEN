@@ -99,6 +99,8 @@ interface ChatState {
   setIsStreaming: (isStreaming: boolean) => void;
 
   setActiveSession: (id: string | null) => void;
+  startNewChat: () => void;
+  isNewChatDraft: boolean;
 
   toggleSearch: () => void;
   setSearchQuery: (query: string) => void;
@@ -116,6 +118,7 @@ export const useChatStore = create<ChatState>()(
   persist(
     (set, get) => ({
       activeSessionId: null,
+      isNewChatDraft: false,
 
       isSearchOpen: false,
       searchQuery: '',
@@ -235,7 +238,9 @@ export const useChatStore = create<ChatState>()(
         });
       },
 
-      setActiveSession: (activeSessionId) => set({ activeSessionId }),
+      setActiveSession: (activeSessionId) => set({ activeSessionId, isNewChatDraft: false }),
+
+      startNewChat: () => set({ activeSessionId: null, isNewChatDraft: true }),
 
       toggleSearch: () => set((state) => ({ isSearchOpen: !state.isSearchOpen })),
       setSearchQuery: (searchQuery) => set({ searchQuery }),

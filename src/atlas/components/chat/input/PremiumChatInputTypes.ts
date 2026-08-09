@@ -2,6 +2,10 @@ import type { Model } from "../../ModelSelector";
 import type { Attachment } from "../types";
 
 export interface PremiumChatInputProps {
+  className?: string;
+  /** "welcome" selects a compact, attached composer for the workspace
+   *  setup surface. Default is "default". */
+  variant?: "default" | "welcome";
   onSend: (data: {
     message: string;
     model: string;
@@ -29,6 +33,8 @@ export interface PremiumChatInputProps {
   onOpenSkills?: () => void;
   onOpenSettings?: () => void;
   activeChatId?: string | null;
+  /** Archived transcripts stay readable but cannot be edited or resumed. */
+  readOnly?: boolean;
   input?: string;
   onInputChange?: (value: string) => void;
   generativeUI?: boolean;

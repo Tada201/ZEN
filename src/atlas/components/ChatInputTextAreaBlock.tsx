@@ -47,6 +47,7 @@ export interface ChatInputTextAreaBlockProps {
   slashSuggestions: SlashSuggestion[];
   applySlashSuggestion: (s: SlashSuggestion) => void;
   variant?: "default" | "welcome";
+  readOnly?: boolean;
 }
 
 export const ChatInputTextAreaBlock = ({
@@ -77,6 +78,7 @@ export const ChatInputTextAreaBlock = ({
   slashSuggestions,
   applySlashSuggestion,
   variant = "default",
+  readOnly = false,
 }: ChatInputTextAreaBlockProps) => {
   const isWelcome = variant === "welcome";
 
@@ -84,8 +86,10 @@ export const ChatInputTextAreaBlock = ({
     <textarea
       ref={textareaRef}
       value={value}
+      disabled={readOnly}
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={(e) => {
+        if (readOnly) return;
         if (slashIsPopoverOpen) {
           if (e.key === "ArrowDown") {
             e.preventDefault();
@@ -130,13 +134,15 @@ export const ChatInputTextAreaBlock = ({
           void onSend();
         }
       }}
-      placeholder="Ask anything... (type / for commands)"
+      placeholder={readOnly ? "Archived transcript — unarchive to continue" : "Ask anything... (type / for commands)"}
       aria-label="Message"
       rows={1}
       className={cn(
         "w-full bg-transparent border-none focus:ring-0 focus:outline-none outline-none ring-0 resize-none py-1 text-foreground dark:text-foreground placeholder:text-muted-foreground dark:placeholder:text-muted-foreground shadow-none",
         isWelcome ? "text-[14px]" : "text-[15px]",
+        readOnly && "cursor-not-allowed opacity-70",
       )}
+      aria-readonly={readOnly || undefined}
     />
   );
 
@@ -147,7 +153,7 @@ export const ChatInputTextAreaBlock = ({
         isWelcome ? "items-center px-2 pt-1.5 pb-1" : "items-start p-3",
       )}
     >
-      {!isWelcome && (
+      {!isWelcome && !readOnly && (
         <PlusActionMenu
           isOpen={isPlusMenuOpen}
           setIsOpen={setIsPlusMenuOpen}

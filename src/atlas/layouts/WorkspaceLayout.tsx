@@ -63,6 +63,22 @@ export function WorkspaceLayout({
     return () => media.removeEventListener("change", syncMobileLayout);
   }, [setSidebarOpen]);
 
+  // Header overlays are rendered through a portal, so publish the same live
+  // panel geometry globally. This keeps anchored status surfaces clear of the
+  // resizable right workbench without coupling the header to this layout.
+  const rightPanelVisible = !isMobile && rightPanelOpen && Boolean(rightPanel);
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty(
+      "--zen-right-panel-offset",
+      rightPanelVisible ? `${rightPanelWidth}px` : "0px",
+    );
+
+    return () => {
+      root.style.removeProperty("--zen-right-panel-offset");
+    };
+  }, [rightPanelVisible, rightPanelWidth]);
+
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setIsResizing(true);
@@ -142,7 +158,7 @@ export function WorkspaceLayout({
         </div>
 
         {/* Resizer Handle */}
-        {!isMobile && rightPanelOpen && rightPanel && (
+        {rightPanelVisible && (
           <div 
             onMouseDown={handleMouseDown}
             className={`w-1 cursor-col-resize bg-transparent hover:bg-muted transition-colors duration-200 z-50 relative flex items-center justify-center select-none group ${isResizing ? "bg-muted" : ""}`}
@@ -156,11 +172,11 @@ export function WorkspaceLayout({
 
         {/* Right Sidebar Panel: Mounted conditionally to prevent background render cycles */}
         <div 
-          style={{ width: !isMobile && rightPanelOpen && rightPanel ? `${rightPanelWidth}px` : "0px" }}
+          style={{ width: rightPanelVisible ? `${rightPanelWidth}px` : "0px" }}
           className={`h-full relative overflow-hidden shrink-0 ${isResizing ? "transition-none" : "transition-[width] duration-300 ease-in-out"}`}
         >
           <div className="h-full" style={{ width: `${rightPanelWidth}px` }}>
-            {!isMobile && rightPanelOpen && rightPanel}
+            {rightPanelVisible && rightPanel}
           </div>
         </div>
 

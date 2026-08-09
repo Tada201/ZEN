@@ -7,6 +7,7 @@ const ledger = readFileSync(new URL("../src/atlas/hooks/stream/agentActionLedger
 const assistantMessage = readFileSync(new URL("../src/atlas/components/chat/AssistantMessage.tsx", import.meta.url), "utf8");
 const assistantParts = readFileSync(new URL("../src/atlas/components/chat/assistantMessageParts.ts", import.meta.url), "utf8");
 const markdownContent = readFileSync(new URL("../src/atlas/components/chat/MarkdownContent.tsx", import.meta.url), "utf8");
+const chatQueries = readFileSync(new URL("../src/atlas/hooks/chat/useChatQueries.ts", import.meta.url), "utf8");
 
 assert(!messageList.includes("useVirtualizer"), "chat messages must remain in normal document flow");
 assert(!messageList.includes("position: `translateY"), "chat rows must not be absolutely translated");
@@ -21,5 +22,8 @@ assert(assistantMessage.includes("parentWorkingStatus"), "chat must expose one p
 assert(!assistantMessage.includes("Working on the response..."), "legacy duplicate post-tool status row must be removed");
 assert(assistantMessage.includes('aria-live="polite"'), "parent status must be announced accessibly");
 assert(markdownContent.includes("isPlainShortText"), "plain short deltas should bypass the full markdown parser");
+assert(chatQueries.includes("matchedLiveMessageIds"), "message hydration must track optimistic rows matched to backend assistant rows");
+assert(chatQueries.includes("if (existing) matchedLiveMessageIds.add(existing.id)"), "backend assistant reconciliation must record the matched optimistic identity");
+assert(chatQueries.includes("!matchedLiveMessageIds.has(message.id)"), "matched optimistic assistants must not be appended as duplicate agent messages");
 
 console.log("chat render stability ok");

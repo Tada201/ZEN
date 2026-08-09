@@ -32,21 +32,17 @@ assert(
   'tool focus gating should detect agent-owned and batch tool execution',
 );
 assert(
-  agentEventsSource.includes('focusActiveAgentsPanel({ force: true });') &&
-    agentEventsSource.includes('listenAppEvent("agent:spawn"') &&
-    agentEventsSource.includes('listenAppEvent("agent:chunk"') &&
-    agentEventsSource.includes('listenAppEvent("agent:handoff"'),
-  'agent spawn/chunk/handoff should force the Active Agents panel open',
-);
-assert(
   toolEventsSource.includes('listenAppEvent("tool:authorization_request"') &&
     toolEventsSource.includes('focusActiveAgentsPanel({ force: true });'),
   'tool approval requests should force the Active Agents panel open',
 );
 assert(
-  toolEventsSource.includes('shouldFocusAgentsForTool(event.payload)') &&
-    toolEventsSource.includes('focusActiveAgentsPanel();'),
-  'agent-owned or batched tools should open the Active Agents panel conservatively',
+  !agentEventsSource.includes('focusActiveAgentsPanel'),
+  'routine agent spawn/chunk/handoff should not force open the right panel',
+);
+assert(
+  !toolEventsSource.includes('shouldFocusAgentsForTool(event.payload)'),
+  'routine tool start/complete should not auto-open the right panel',
 );
 
 console.log('agent panel auto focus verifier passed');

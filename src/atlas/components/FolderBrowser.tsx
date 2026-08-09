@@ -123,11 +123,11 @@ export function FolderBrowser({ value, onChange, compact = false }: FolderBrowse
           size="sm"
           className="h-8 max-w-[220px] gap-1.5 rounded-lg border-border bg-card px-2.5 text-xs text-foreground hover:bg-muted"
           onClick={() => setOpen(true)}
-          title={value || "Uses the global workspace"}
-          aria-label={`Session workspace: ${value || "global workspace"}`}
+          title={value || "Uses the configured default workspace"}
+          aria-label={`Workspace: ${value || "default workspace"}`}
         >
           <Folder className="h-3.5 w-3.5 shrink-0 text-primary" />
-          <span className="truncate">{value ? value.split(/[\\/]/).filter(Boolean).pop() : "Global workspace"}</span>
+          <span className="truncate">{value ? `Workspace: ${value.split(/[\\/]/).filter(Boolean).pop()}` : "Default workspace"}</span>
         </Button>
       ) : (
         <div className="flex gap-2">
@@ -140,7 +140,7 @@ export function FolderBrowser({ value, onChange, compact = false }: FolderBrowse
             onClick={() => setOpen(true)}
           >
             <Folder className="h-3.5 w-3.5 shrink-0 text-primary/70" />
-            <span className="truncate">{value || "No workspace selected"}</span>
+            <span className="truncate">{value || "No default workspace configured"}</span>
           </div>
           <Button
             variant="outline"

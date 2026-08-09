@@ -75,6 +75,10 @@ assert.ok(
   /return\s+true\s*;/.test(assistantSource),
   "shouldShowToolGroupInTimeline must keep completed tool groups visible after the answer arrives",
 );
+assert.ok(
+  /message\.content\?\.trim\(\)\s*&&\s*!hasVisibleTextStep/.test(assistantSource),
+  "assistant markdown must still render when the timeline contains only reasoning/tool steps",
+);
 
 // ── 2. Error tool groups stay visible after reload ───────────────────────
 // An error-state tool call rehydrated from stepsJson must keep status "error"
@@ -166,6 +170,16 @@ assert.ok(
 assert.ok(
   !/updateMessageSteps\([^,]+,\s*assistantIdBeforeFinalize/.test(useChatChunkSource),
   "chat:done handler must NOT call updateMessageSteps with the optimistic assistantIdBeforeFinalize",
+);
+assert.ok(
+  useChatChunkSource.includes("messageId: event.payload.message_id || undefined") &&
+    useChatChunkSource.includes("findWritableAssistantIndex(prev, chatId, buf.messageId)"),
+  "stream chunks must retain backend message_id while flushing so late reasoning stays on the owning assistant",
+);
+assert.ok(
+  /flushAllChunkBuffers\(\);\s*clearChunkTrackingForChat\(chatId/.test(useChatChunkSource) &&
+    !/flushAllChunkBuffers\(\);[\s\S]{0,160}const buf = chunkBuffersRef\.current\[chatId\]/.test(useChatChunkSource),
+  "chat:done must not read a chunk buffer after the flush has consumed it",
 );
 
 // ── 6. Error-state tool output is redacted in the persisted projection ───

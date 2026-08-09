@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    background: #0a0a0c;
+    overflow: hidden;
+  }
+  #stage {
+    width: 100%;
+    height: 100vh;
+  }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const stage = document.getElementById('stage');
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, stage.clientWidth / stage.clientHeight, 0.1, 100);
+camera.position.set(0, 5.6, 4.4);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(stage.clientWidth, stage.clientHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+stage.appendChild(renderer.domElement);
+
+// disk group tilted once, shared by every ring and particle - single consistent
+// viewing angle for the whole disk, real perspective does the foreshortening
+const disk = new THREE.Group();
+disk.rotation.x = -0.55;
+disk.rotation.z = 0.18;
+scene.add(disk);
+
+const ringRadii = [1.15, 1.4, 1.65, 1.9, 2.15, 2.4, 2.65];
+const ringOpacities = [0.95, 0.78, 0.62, 0.48, 0.35, 0.24, 0.16];
+
+function makeRing(radius, opacity) {
+  const points = [];
+  const segments = 320;
+  for (let i = 0; i <= segments; i++) {
+    const t = (i / segments) * Math.PI * 2;
+    points.push(new THREE.Vector3(Math.cos(t) * radius, 0, Math.sin(t) * radius));
+  }
+  const geo = new THREE.BufferGeometry().setFromPoints(points);
+  const mat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity, depthTest: true, depthWrite: true });
+  const line = new THREE.Line(geo, mat);
+  line.renderOrder = 0;
+  return line;
+}
+
+ringRadii.forEach((r, i) => {
+  disk.add(makeRing(r, ringOpacities[i]));
+});
+
+const coreRadius = 0.55;
+
+// gravitational lensing / secondary image of the accretion disk
+//
+// IMPORTANT: this is an observed, camera-space image of the disk being lensed.
+// It must NOT be another 3D orbital plane tilted inside `disk`, otherwise the
+// camera perspective turns the intended smooth vertical lens into a warped
+// ellipse.  We therefore build the lensed image in camera-facing coordinates.
+// Project a point on the real 3D accretion disk onto the same camera-facing
+// plane used by the lensed image. This makes the lens tips follow the actual
+// visible disk geometry instead of using an arbitrary world-space width.
+function getProjectedDiskAnchor(diskRadius) {
+  const diskNormal = new THREE.Vector3(0, 1, 0).applyQuaternion(disk.quaternion).normalize();
+  const cameraForward = new THREE.Vector3();
+  camera.getWorldDirection(cameraForward).normalize();
+
+  // Line of nodes = intersection of the disk plane and the camera image plane.
+  // Points on this line are the visible left/right ends of a projected disk ring.
+  const lineOfNodes = new THREE.Vector3().crossVectors(diskNormal, cameraForward).normalize();
+  const worldPoint = lineOfNodes.multiplyScalar(diskRadius);
+
+  // Project that 3D point through the actual camera, then intersect the resulting
+  // viewing ray with the camera-facing plane containing lensImage.
+  const projected = worldPoint.clone().project(camera);
+  const rayPoint = new THREE.Vector3(projected.x, projected.y, 0.5).unproject(camera);
+  const rayDirection = rayPoint.sub(camera.position).normalize();
+  const planeNormal = cameraForward.clone();
+  const planePoint = lensImage.position.clone();
+  const denom = rayDirection.dot(planeNormal);
+
+  if (Math.abs(denom) < 1e-6) return 1.0;
+
+  const distance = planePoint.clone().sub(camera.position).dot(planeNormal) / denom;
+  const hit = camera.position.clone().add(rayDirection.multiplyScalar(distance));
+
+  // Convert the hit point into lensImage-local coordinates. Because lensImage
+  // is camera-facing with a fixed roll, this automatically accounts for both
+  // camera position and lensAlignment.
+  return Math.abs(hit.clone().sub(lensImage.position).applyQuaternion(lensImage.quaternion.clone().invert()).x);
+}
+
+const lensTune = {
+  liftExponent: 3.35,
+  bulgeScale: 1.60,
+  midSpread: 0.50,
+  midExponent: 0.80,
+  outerScale: 1.0,
+  outerExponent: 2.0,
+  intersectionSmoothness: 1.0,
+  leftAnchor: 1.025,
+  rightAnchor: 1.048,
+  verticalOffset: -0.15,
+  alignment: 0.20
+};
+
+function makeLensedCameraCurve(radius, bulge, width, opacity, diskAnchorRadius) {
+  const points = [];
+  const projectedAnchor = getProjectedDiskAnchor(diskAnchorRadius) / radius;
+  // Camera projection is asymmetric: the two disk tips need separate offsets.
+  const leftEquatorAnchor = projectedAnchor * lensTune.leftAnchor;
+  const rightEquatorAnchor = projectedAnchor * lensTune.rightAnchor;
+  const segments = 720;
+
+  for (let i = 0; i <= segments; i++) {
+    const t = (i / segments) * Math.PI * 2;
+    const c = Math.cos(t);
+    const s = Math.sin(t);
+    const a = Math.abs(s);
+
+    // At the left/right sides the image collapses back to the equatorial
+    // crossing.  Toward the top/bottom the same disk is lifted smoothly around
+    // the shadow, matching the characteristic gravitationally lensed shape.
+    // Keep the vertical image close to the horizontal disk. The upper/lower
+    // lobes are deliberately shallow so the lensed image does not tower above
+    // the black-hole shadow.
+    const lensFactor = Math.pow(a, lensTune.liftExponent);
+    const lift = 1.0 + (bulge * lensTune.bulgeScale) * lensFactor;
+
+    // Gravitationally lensed disk image spreads outward as it approaches the
+    // equatorial crossing.  This is the part that was too narrow before: the
+    // left/right sections should visibly flare along the horizontal disk.
+    // Lock the left/right tips to the same projected axis as the main disk.
+    // The lens should meet the horizontal disk at its pointed crossings, not
+    // terminate inside or outside of the accretion disk.
+    const equatorBlend = Math.pow(1.0 - a, lensTune.intersectionSmoothness);
+
+    // Extra width is only introduced away from the exact crossing so the lens
+    // smoothly bends around the shadow instead of becoming a separate loop.
+    const midBulge = lensTune.midSpread * Math.pow(a, lensTune.midExponent);
+    const outerBulge = width * lensTune.outerScale * Math.pow(a, lensTune.outerExponent);
+    const sideAnchor = c < 0 ? leftEquatorAnchor : rightEquatorAnchor;
+    const sideWidth = sideAnchor * equatorBlend + (1.0 + midBulge + outerBulge) * (1.0 - equatorBlend);
+
+    const x = radius * c * sideWidth;
+    const y = radius * s * lift;
+
+    // Keep the curve in a true camera-facing plane. No extra world-space tilt.
+    points.push(new THREE.Vector3(x, y, 0));
+  }
+
+  const geo = new THREE.BufferGeometry().setFromPoints(points);
+  const mat = new THREE.LineBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity,
+    depthTest: true,
+    depthWrite: false
+  });
+
+  return new THREE.Line(geo, mat);
+}
+
+// Camera-facing lens group. The disk itself remains tilted in 3D, but the
+// lensed image is locked to what the observer sees, avoiding unwanted camera
+// perspective distortion of the vertical arcs.
+const lensImage = new THREE.Group();
+// Drop the entire lensed image slightly so its center sits a little below
+// the horizontal disk, matching the annotated target.
+lensImage.position.set(0, lensTune.verticalOffset, 0);
+// Align the lensed image's equatorial crossing with the projected major axis
+// of the real accretion disk. The lens remains camera-facing, but its local
+// horizontal axis follows the disk's visible left-to-right direction.
+lensImage.rotation.z = lensTune.alignment;
+scene.add(lensImage);
+// Initialize camera-facing orientation before the first camera-space rebuild.
+lensImage.quaternion.copy(camera.quaternion);
+
+const lensRings = [
+  // Each lensed line is tied to a corresponding real disk ring.
+  // The tip therefore intersects the horizontal disk at the actual
+  // projected location for that ring, rather than sharing one guessed width.
+  { r: 0.67, bulge: 0.12, width: 0.22, opacity: 0.78, anchorRadius: 1.15 },
+  { r: 0.79, bulge: 0.16, width: 0.27, opacity: 0.64, anchorRadius: 1.40 },
+  { r: 0.91, bulge: 0.21, width: 0.32, opacity: 0.50, anchorRadius: 1.65 },
+  { r: 1.03, bulge: 0.26, width: 0.37, opacity: 0.38, anchorRadius: 1.90 }
+];
+
+let lensLines = [];
+let lensMasks = [];
+
+// Camera-space occlusion surface for the vertical/lensed disk.
+// The previous version only filled the narrow bands BETWEEN adjacent lens
+// lines, leaving the outer portions of the vertical disk transparent. That
+// allowed horizontal rings to show through in exactly the marked regions.
+//
+// Here the vertical disk gets one continuous opaque camera-space surface
+// bounded by its outermost lensed curve. The black-hole core still provides
+// the central silhouette, while this surface masks horizontal disk segments
+// that are visually behind the vertical disk.
+function makeLensOcclusionSurface(outerLine) {
+  const attr = outerLine.geometry.getAttribute('position');
+  const count = attr.count;
+  const positions = new Float32Array(count * 3);
+
+  // Build a triangle fan around the curve centroid. The curve is closed, so
+  // this produces a continuous camera-facing occlusion surface.
+  let cx = 0, cy = 0;
+  for (let i = 0; i < count - 1; i++) {
+    cx += attr.getX(i);
+    cy += attr.getY(i);
+  }
+  cx /= (count - 1);
+  cy /= (count - 1);
+
+  for (let i = 0; i < count; i++) {
+    positions[i * 3] = attr.getX(i);
+    positions[i * 3 + 1] = attr.getY(i);
+    // Put the occlusion plane slightly in front of the horizontal disk but
+    // behind the vertical lens strokes and the event-horizon silhouette.
+    positions[i * 3 + 2] = -0.004;
+  }
+
+  const centerIndex = count;
+  const fullPositions = new Float32Array((count + 1) * 3);
+  fullPositions.set(positions);
+  fullPositions[centerIndex * 3] = cx;
+  fullPositions[centerIndex * 3 + 1] = cy;
+  fullPositions[centerIndex * 3 + 2] = -0.004;
+
+  const indices = [];
+  for (let i = 0; i < count - 1; i++) {
+    indices.push(centerIndex, i, i + 1);
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(fullPositions, 3));
+  geo.setIndex(indices);
+
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0x0a0a0c,
+    side: THREE.DoubleSide,
+    transparent: false,
+    depthTest: false,
+    depthWrite: false
+  });
+
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.renderOrder = 1;
+  return mesh;
+}
+
+function rebuildLens() {
+  lensLines.forEach(line => {
+    lensImage.remove(line);
+    line.geometry.dispose();
+    line.material.dispose();
+  });
+  lensMasks.forEach(mask => {
+    lensImage.remove(mask);
+    mask.geometry.dispose();
+    mask.material.dispose();
+  });
+  lensMasks = [];
+  lensLines = lensRings.map(l => makeLensedCameraCurve(l.r, l.bulge, l.width, l.opacity, l.anchorRadius));
+
+  // One continuous surface is required so horizontal rings cannot leak
+  // through the spaces between the vertical lens strokes.
+  const surface = makeLensOcclusionSurface(lensLines[lensLines.length - 1]);
+  lensMasks.push(surface);
+  lensImage.add(surface);
+
+  lensLines.forEach(line => {
+    line.renderOrder = 2;
+    lensImage.add(line);
+  });
+  lensImage.position.y = lensTune.verticalOffset;
+  lensImage.rotation.z = lensTune.alignment;
+}
+rebuildLens();
+
+// event horizon core - flat solid dark sphere, occludes rings passing behind it
+const core = new THREE.Mesh(
+  new THREE.SphereGeometry(coreRadius, 48, 48),
+  new THREE.MeshBasicMaterial({ color: 0x0a0a0c })
+);
+core.renderOrder = 3;
+scene.add(core);
+
+// thin outline at the sphere's silhouette edge (camera-facing ring, not a mesh grid)
+const outlinePoints = [];
+const outlineSegments = 128;
+for (let i = 0; i <= outlineSegments; i++) {
+  const t = (i / outlineSegments) * Math.PI * 2;
+  outlinePoints.push(new THREE.Vector3(Math.cos(t) * coreRadius, Math.sin(t) * coreRadius, 0));
+}
+const outlineGeo = new THREE.BufferGeometry().setFromPoints(outlinePoints);
+const outlineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+const coreOutline = new THREE.Line(outlineGeo, outlineMat);
+coreOutline.renderOrder = 4;
+scene.add(coreOutline);
+
+// particles: small bright points traveling along each ring's actual warped
+// path, inner = faster (Keplerian: angular speed scales with 1/radius^1.5)
+const particleGroups = [];
+ringRadii.forEach((r, i) => {
+  const count = i === 0 ? 3 : 2;
+  const baseSpeed = 0.9 / Math.pow(r, 1.5);
+  for (let j = 0; j < count; j++) {
+    const geo = new THREE.SphereGeometry(0.028 - i * 0.003, 8, 8);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: ringOpacities[i] + 0.15 });
+    const mesh = new THREE.Mesh(geo, mat);
+    const angleOffset = (j / count) * Math.PI * 2 + i * 0.7;
+    disk.add(mesh);
+    particleGroups.push({ mesh, radius: r, speed: baseSpeed, angle: angleOffset });
+  }
+});
+
+// Z label as a plane with canvas texture, always facing camera, sits in front of core
+const labelCanvas = document.createElement('canvas');
+labelCanvas.width = 256;
+labelCanvas.height = 256;
+const ctx = labelCanvas.getContext('2d');
+ctx.fillStyle = 'rgba(0,0,0,0)';
+ctx.fillRect(0, 0, 256, 256);
+ctx.fillStyle = '#ffffff';
+ctx.font = 'bold 140px monospace';
+ctx.textAlign = 'center';
+ctx.textBaseline = 'middle';
+ctx.fillText('Z', 128, 138);
+const labelTexture = new THREE.CanvasTexture(labelCanvas);
+const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTexture, transparent: true }));
+label.scale.set(0.7, 0.7, 1);
+label.position.set(0, 0, 0);
+label.renderOrder = 5;
+scene.add(label);
+
+function onResize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+}
+window.addEventListener('resize', onResize);
+
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+
+  particleGroups.forEach(p => {
+    p.angle += p.speed * dt;
+    p.mesh.position.set(Math.cos(p.angle) * p.radius, 0, Math.sin(p.angle) * p.radius);
+  });
+
+  coreOutline.quaternion.copy(camera.quaternion);
+  lensImage.quaternion.copy(camera.quaternion);
+  // Keep the alignment fixed. Do not accumulate rotateZ() every animation frame.
+  lensImage.rotation.z = lensTune.alignment;
+  lensImage.position.y = lensTune.verticalOffset;
+
+  const t = clock.getElapsedTime();
+
+  renderer.render(scene, camera);
+}
+animate();
+
+</script>
+</body>
+</html>

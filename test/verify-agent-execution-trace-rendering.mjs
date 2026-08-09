@@ -13,6 +13,10 @@ const cardSource = readFileSync(
   new URL("../src/atlas/components/chat/ToolCallCard.tsx", import.meta.url),
   "utf8",
 );
+const genericContentSource = readFileSync(
+  new URL("../src/atlas/components/chat/tool/content/GenericContent.tsx", import.meta.url),
+  "utf8",
+);
 const assistantMessageSource = readFileSync(
   new URL("../src/atlas/components/chat/AssistantMessage.tsx", import.meta.url),
   "utf8",
@@ -32,10 +36,9 @@ assert(
   "trace model should still expose explicit batch lane data for non-UI consumers",
 );
 assert(
-  !traceSource.includes("ToolBatchLane") &&
-    !traceSource.includes("trace.batchLanes.map") &&
-    !traceSource.includes("trace.shouldShowBatchLanes"),
-  "trace UI must not render grouped batch lanes anymore",
+  traceSource.includes("trace.shouldShowBatchLanes") &&
+    !traceSource.includes('<span className="font-medium text-foreground">Agents</span>'),
+  "trace UI should keep real batch lanes but remove the redundant Agents summary row",
 );
 assert(
   !traceSource.includes("collapsedSummary") &&
@@ -63,9 +66,10 @@ assert(
 );
 assert(
   cardSource.includes("actionText") &&
-    cardSource.includes("isExpanded &&") &&
-    cardSource.includes("Technical details"),
-  "collapsed tool cards should stay single-row and reveal details only when expanded",
+    cardSource.includes("isExpanded") &&
+    genericContentSource.includes("Input parameters") &&
+    genericContentSource.includes("Raw result"),
+  "collapsed tool cards should stay single-row while the renderer owns explicit detail disclosures",
 );
 assert(
   assistantMessageSource.includes("visibleGroupedSteps") &&

@@ -69,6 +69,7 @@ export interface ChatInputFooterProps {
   setGenerativeUI: (v: boolean) => void;
   // Footer actions
   activeChatId?: string;
+  readOnly?: boolean;
   onSend: () => void;
   isLoading?: boolean;
   hasContent: boolean;
@@ -83,6 +84,17 @@ export const ChatInputFooter = (props: ChatInputFooterProps) => {
       state.toggleVoiceMode();
     }
   };
+
+  if (props.readOnly) {
+    return (
+      <div className={cn(
+        "flex items-center border-t border-border/60 px-3 py-2 text-[11px] text-muted-foreground",
+        props.variant === "welcome" && "px-2 py-1.5",
+      )}>
+        <span>Archived transcript · read-only</span>
+      </div>
+    );
+  }
 
   return (
     <div

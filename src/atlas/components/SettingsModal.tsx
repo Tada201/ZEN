@@ -110,15 +110,15 @@ export function SettingsContent({
   const updateSetting = useSettingsStore(s => s.updateSetting);
   const applyChanges = useSettingsStore(s => s.applyChanges);
   const discardChanges = useSettingsStore(s => s.discardChanges);
-  const reducedMotion = useSettingsStore(s => s.reducedMotion);
+  const animationsEnabled = useSettingsStore(s => s.animationsEnabled);
   const pendingChangeCount = useSettingsStore(s => Object.keys(s.activeSettings).length);
 
   const settingsRecord = useSettingsStore(useShallow(storeToSettingsRecord));
   const settings = useMemo(() => {
     const record = { ...settingsRecord };
-    record["ui.animations"] = reducedMotion ? "false" : "true";
+    record["ui.animations"] = animationsEnabled ? "true" : "false";
     return record;
-  }, [settingsRecord, reducedMotion]);
+  }, [settingsRecord, animationsEnabled]);
 
   const activeThemeValue = useMemo(() => {
     const raw = settings["ui.theme"];
@@ -153,10 +153,9 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
         return;
       }
 
-      // Special case: ui.animations maps to reducedMotion (inverted)
+      // Animation policy has one owner: the persisted animationsEnabled setting.
       if (key === "ui.animations") {
         const enabled = value === "true";
-        updateSetting("reducedMotion", !enabled);
         theme.setMotionEnabled(enabled);
         return;
       }
@@ -288,6 +287,27 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
                             onCheckedChange={(v) => handleUpdate("ui.animations", String(v))}
                             className="scale-90"
                           />
+                        </div>
+
+                        <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border bg-muted/30">
+                          <div className="space-y-0.5">
+                            <Label className="text-[13px] font-medium text-foreground">Welcome Page</Label>
+                            <p className="text-[10px] text-muted-foreground">Choose the welcome page background</p>
+                          </div>
+                          <Select
+                            value={settings["ui.welcome-page-quality"] || "high"}
+                            onValueChange={(value) => handleUpdate("ui.welcome-page-quality", value)}
+                          >
+                            <SelectTrigger className="h-8 w-[132px] shrink-0 bg-background text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="low">Low · SVG</SelectItem>
+                              <SelectItem value="high">High · Three.js</SelectItem>
+                              <SelectItem value="image">Still · Image</SelectItem>
+                              <SelectItem value="none">Off · None</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
 
                          <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30">

@@ -135,6 +135,8 @@ export interface ChatChunkEventPayload {
   chat_id?: string | null;
   delta?: string;
   type?: string;
+  /** Backend assistant row ID used to keep late chunks on their original turn. */
+  message_id?: string;
 }
 
 export interface ChatDoneEventPayload {

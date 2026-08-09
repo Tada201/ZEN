@@ -41,6 +41,10 @@ pub(crate) struct SynthesizeParams<'a> {
     pub config: ChatRequestConfig,
     pub token: CancellationToken,
     pub chat_id: &'a str,
+    /// Backend-owned assistant row that must own every synthesized stream chunk.
+    pub orchestrator_message_id: Option<&'a str>,
+    /// Per-turn instruction addendum inherited from the chat request.
+    pub extra_instructions: Option<&'a str>,
 }
 
 /// Parameters for running the orchestrator loop.
@@ -106,12 +110,15 @@ impl Orchestrator {
         }
 
         // Resolve agent configuration
-        let resolved = crate::agent::tools::child_runner::resolve_agent(
+        let mut resolved = crate::agent::tools::child_runner::resolve_agent(
             &self.agent_registry,
             agent_id,
             Some(model),
             None,
         )?;
+        // Keep the per-turn agent copy, including inherited tools and
+        // instructions. Resolving again from the registry would discard them.
+        resolved.agent = agent.clone();
 
         // Create runner for this agent using the unified child runner builder
         let mut runner = crate::agent::tools::child_runner::build_child_runner(
@@ -355,10 +362,12 @@ impl Orchestrator {
             config,
             token,
             chat_id,
+            orchestrator_message_id,
+            extra_instructions,
         } = params;
         info!("Synthesizing {} task results", task_results.len());
 
-        let system_prompt = r#"You are synthesizing the results of a multi-agent orchestration.
+        let mut system_prompt = r#"You are synthesizing the results of a multi-agent orchestration.
 Your job is to combine all task results into a comprehensive, coherent final answer.
 
 Guidelines:
@@ -369,7 +378,12 @@ Guidelines:
 5. Note any tasks that failed and their impact
 6. Provide actionable next steps if relevant
 
-Be thorough but organized. Use formatting (headers, lists, code blocks) to make the response easy to read."#;
+Be thorough but organized. Use formatting (headers, lists, code blocks) to make the response easy to read."#.to_string();
+
+        if let Some(addendum) = extra_instructions {
+            system_prompt.push_str("\n\n");
+            system_prompt.push_str(addendum);
+        }
 
         let task_results_str = task_results
             .iter()
@@ -387,7 +401,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
         let mut synth_messages = vec![
             ChatMessage {
                 role: "system".to_string(),
-                content: system_prompt.to_string(),
+                content: system_prompt,
                 reasoning_details: None,
                 images: None,
                 tool_calls: None,
@@ -413,6 +427,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
         let maybe_channel = self.on_event.clone();
         let app_clone = self.app.clone();
         let chat_id_owned = chat_id.to_string();
+        let message_id_for_callback = orchestrator_message_id.map(str::to_owned);
 
         // First-chunk immediate emission flag for TTFT diagnostics
         let first_chunk_sent = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -466,7 +481,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                     chat_id: chat_id_owned_2.clone(),
                     delta: chunk_text.clone(),
                     r#type: chunk_type.to_string(),
-                    message_id: None,
+                    message_id: message_id_for_callback.clone(),
                 })
                 .emit_via(&app_clone_2, &maybe_channel_clone);
             }
@@ -493,7 +508,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                         delta: old_text,
                         r#type: old_type.to_string(),
                         done: false,
-                        message_id: None,
+                        message_id: message_id_for_callback.clone(),
                     })
                     .emit_via(&app_clone_2, &maybe_channel_clone);
 
@@ -516,7 +531,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                             delta: text,
                             r#type: current_type.to_string(),
                             done: false,
-                            message_id: None,
+                            message_id: message_id_for_callback.clone(),
                         })
                         .emit_via(&app_clone_2, &maybe_channel_clone);
                     }
@@ -538,7 +553,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                     delta: text,
                     r#type: current_type.to_string(),
                     done: true,
-                    message_id: None,
+                    message_id: orchestrator_message_id.map(str::to_owned),
                 }));
             }
         }

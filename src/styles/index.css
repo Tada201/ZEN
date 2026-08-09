@@ -388,14 +388,6 @@ html[data-vibe="edex"] ::selection {
   color: hsl(var(--success));
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .workspace-context-bar,
-  .workbench-header,
-  .workspace-execution-status:is(button) {
-    transition: none;
-  }
-}
-
 /* ── Codex-style execution ledger ────────────────────────────────────────
    The mockup uses warm neutral surfaces, Inter-like UI text, and JetBrains-
    Mono-like metadata. Keep the production trace theme-aware: semantic tokens
@@ -645,17 +637,6 @@ html[data-vibe="edex"] ::selection {
   background: var(--execution-subagent-surface);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .execution-row-chevron,
-  .execution-foldout-trigger,
-  .execution-row-status-dot--running,
-  .execution-card--stale .execution-row,
-  .execution-card--stale .execution-row-icon {
-    transition: none;
-    animation: none;
-  }
-}
-
 /* Premium Glassmorphic Vignette Grid overlay class */
 .bg-vignette-grid {
   background-image:
@@ -799,10 +780,16 @@ html[data-vibe="edex"] ::selection {
   will-change: opacity, transform;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .boot-log-entry {
-    animation: none;
-  }
+/* Conversation minimap: briefly confirm the destination after a scrub jump. */
+@keyframes chat-scrub-target {
+  0%, 100% { outline-color: transparent; }
+  18% { outline-color: hsl(var(--primary) / 0.7); }
+}
+
+.chat-scrub-target {
+  outline: 1px solid transparent;
+  outline-offset: 6px;
+  animation: chat-scrub-target 900ms ease-out;
 }
 
 @keyframes slow-shimmer {
@@ -828,4 +815,20 @@ html[data-vibe="edex"] ::selection {
   background-clip: text;
   color: transparent;
   animation: slow-shimmer 4.8s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+
+/* ── Central motion policy ────────────────────────────────────────────────
+   React motion is governed by MotionConfig/useReducedMotion. This companion
+   rule covers CSS animations, loaders, transitions, and press feedback so a
+   single app preference cannot leave half the interface moving. */
+html[data-motion="off"] #root *,
+html[data-motion="off"] #root *::before,
+html[data-motion="off"] #root *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+html[data-motion="off"] #root .press:active {
+  transform: none !important;
+  opacity: 1 !important;
 }

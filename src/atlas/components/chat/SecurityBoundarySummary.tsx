@@ -24,13 +24,6 @@ const toneClasses: Record<BoundaryTone, string> = {
   danger: "text-destructive",
 };
 
-function shortPath(path: string) {
-  if (!path) return "Not set";
-  const normalized = path.replaceAll("\\", "/").replace(/\/+$/, "");
-  const parts = normalized.split("/").filter(Boolean);
-  return parts.at(-1) || path;
-}
-
 function terminalSummary(confirmCommands: boolean, autoExecute: boolean) {
   if (autoExecute) return { label: "Configured: auto-execute", tone: "warning" as const };
   if (confirmCommands) return { label: "Configured: approval", tone: "success" as const };
@@ -46,7 +39,13 @@ function modeWriteSummary(mode: SafetyMode, allowExternalPaths: boolean) {
 
 export function SecurityBoundarySummary({ onOpenSettings, workspaceRoot }: SecurityBoundarySummaryProps) {
   const configuredWorkspacePath = useSettingsStore((state) => state.workspacePath);
-  const workspacePath = workspaceRoot || configuredWorkspacePath;
+  const capturedWorkspacePath = workspaceRoot?.trim() || null;
+  const workspacePath = capturedWorkspacePath || configuredWorkspacePath || null;
+  const workspaceStatus = capturedWorkspacePath
+    ? "Locked for this chat"
+    : workspacePath
+      ? "Default workspace"
+      : "Workspace not configured";
   const workspaceAllowExternalPaths = useSettingsStore((state) => state.workspaceAllowExternalPaths);
   const terminalConfirmCommands = useSettingsStore((state) => state.terminalConfirmCommands);
   const terminalAutoExecute = useSettingsStore((state) => state.terminalAutoExecute);
@@ -181,8 +180,8 @@ export function SecurityBoundarySummary({ onOpenSettings, workspaceRoot }: Secur
           <BoundaryRow
             icon={<FolderLock className="h-3.5 w-3.5" aria-hidden="true" />}
             label="Workspace"
-            value={shortPath(workspacePath)}
-            detail={workspacePath || "No workspace root is configured."}
+            value={workspaceStatus}
+            detail={workspacePath || "No default workspace is configured."}
             tone={workspacePath ? "success" : "warning"}
           />
           <BoundaryRow

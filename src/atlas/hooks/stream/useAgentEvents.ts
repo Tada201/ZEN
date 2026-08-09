@@ -18,7 +18,6 @@ import {
   rememberTaskListChats,
   rememberWorkflowChat,
 } from "./taskWorkflowRouting";
-import { focusActiveAgentsPanel, shouldFocusAgentsForSpawn } from "./agentPanelFocus";
 import {
   syncAgentCompleteToActivity,
   syncAgentHandoffToActivity,
@@ -98,7 +97,6 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
   const workflowChatIdsRef = useRef<Map<string, string>>(new Map());
   const agentChunkBufferRef = useRef<Array<{ chatId: string; payload: AgentActionEventPayload }>>([]);
   const agentChunkFrameRef = useRef<number | null>(null);
-  const spawnIdRegistryRef = useRef<Set<string>>(new Set());
 
   const appendTaskActionStep = (payload: AgentActionEventPayload, kind: string) => {
     const chatId = getTaskChatId(taskChatIdsRef.current, useChatStore.getState(), payload);
@@ -318,30 +316,18 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
       });
 
       const unlistenAgentSpawn = await listenAppEvent("agent:spawn", (event) => {
-        const spawnId = event.payload.spawn_id;
-        if (shouldFocusAgentsForSpawn(spawnId, spawnIdRegistryRef.current)) {
-          focusActiveAgentsPanel({ force: true });
-        }
         const chatId = getAgentChatId(agentChatIdsRef.current, event.payload, useChatStore.getState());
         if (chatId) syncAgentSpawnToActivity(chatId, event.payload);
         appendAgentActionStep(event.payload, "agent_spawn");
       });
 
       const unlistenAgentComplete = await listenAppEvent("agent:complete", (event) => {
-        const spawnId = event.payload.spawn_id;
-        if (shouldFocusAgentsForSpawn(spawnId, spawnIdRegistryRef.current)) {
-          focusActiveAgentsPanel();
-        }
         const chatId = getAgentChatId(agentChatIdsRef.current, event.payload, useChatStore.getState());
         if (chatId) syncAgentCompleteToActivity(chatId, event.payload);
         appendAgentActionStep(event.payload, "agent_complete");
       });
 
       const unlistenAgentHandoff = await listenAppEvent("agent:handoff", (event) => {
-        const spawnId = event.payload.spawn_id;
-        if (shouldFocusAgentsForSpawn(spawnId, spawnIdRegistryRef.current)) {
-          focusActiveAgentsPanel({ force: true });
-        }
         const chatId = getAgentChatId(agentChatIdsRef.current, event.payload, useChatStore.getState());
         if (chatId) syncAgentHandoffToActivity(chatId, event.payload);
         appendAgentActionStep(event.payload, "agent_handoff");

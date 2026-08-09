@@ -85,7 +85,7 @@ export const ModelSearchDropdown = memo(({
   }, [modelSearch]);
 
   return (
-    <div className="relative">
+    <div className="relative z-[100]">
       <button 
         onClick={() => setIsOpen(!isOpen)}
         type="button"
@@ -104,12 +104,12 @@ export const ModelSearchDropdown = memo(({
       <AnimatePresence>
         {isOpen && (
           <>
-            <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
+            <div className="fixed inset-0 z-[110]" onClick={() => setIsOpen(false)} />
             <motion.div 
               initial={{ opacity: 0, y: -10 }} 
               animate={{ opacity: 1, y: 0 }} 
               exit={{ opacity: 0, y: -10 }} 
-              className="absolute bottom-full left-0 mb-2 min-w-[280px] max-w-[320px] bg-card dark:bg-card border border-border dark:border-border rounded-md shadow-2xl z-20 py-1 flex flex-col overflow-hidden font-sans"
+              className="absolute bottom-full left-0 z-[120] mb-2 min-w-[280px] max-w-[320px] bg-card dark:bg-card border border-border dark:border-border rounded-md shadow-2xl py-1 flex flex-col overflow-hidden font-sans"
             >
               <div className="px-2 pb-2 mb-1 border-b border-border dark:border-border/50 space-y-2">
                 <div className="flex items-center justify-between px-1">

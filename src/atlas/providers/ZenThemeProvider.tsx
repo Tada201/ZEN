@@ -1,7 +1,9 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { MotionConfig } from "framer-motion";
 import { ACCENT_SWATCHES, normalizeThemeId, RADIUS_PRESETS, THEME_PRESETS, type RadiusPreset, type StyleMode } from "../theme";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
+import { useReducedMotion } from "@/lib/motion";
 
 export type Density = "compact" | "cozy";
 
@@ -19,8 +21,6 @@ export type ThemeState = {
   setStyleMode: (s: StyleMode) => void;
   motionEnabled: boolean;
   setMotionEnabled: (b: boolean) => void;
-  pressEnabled: boolean;
-  setPressEnabled: (b: boolean) => void;
   density: Density;
   setDensity: (d: Density) => void;
   exportCSS: () => string;
@@ -28,8 +28,6 @@ export type ThemeState = {
 };
 
 const Ctx = createContext<ThemeState | null>(null);
-const MOTION_STORAGE_KEY = "ui-Zen-motion-enabled";
-const PRESS_STORAGE_KEY = "ui-Zen-press-enabled";
 const DENSITY_STORAGE_KEY = "ui-Zen-density";
 
 function applyThemeVariables(vars: Record<string, string>) {
@@ -66,18 +64,6 @@ function applyThemeVariables(vars: Record<string, string>) {
   });
 }
 
-function getInitialMotion(): boolean {
-  if (typeof window === "undefined") return true;
-  const stored = localStorage.getItem(MOTION_STORAGE_KEY);
-  if (stored !== null) return stored === "true";
-  return !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-function getInitialPress(): boolean {
-  if (typeof window === "undefined") return true;
-  const stored = localStorage.getItem(PRESS_STORAGE_KEY);
-  if (stored !== null) return stored === "true";
-  return !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
 function getInitialDensity(): Density {
   if (typeof window === "undefined") return "cozy";
   const stored = localStorage.getItem(DENSITY_STORAGE_KEY);
@@ -91,6 +77,7 @@ export function ZenThemeProvider({ children }: { children: ReactNode }) {
   const configuredAccentGlow = useSettingsStore((state) => state.accentGlow);
   const configuredRadiusPreset = useSettingsStore((state) => state.radiusPreset);
   const configuredStyleMode = useSettingsStore((state) => state.styleMode);
+  const animationsEnabled = useSettingsStore((state) => state.animationsEnabled);
   const updateSetting = useSettingsStore((state) => state.updateSetting);
   const [mode, setModeState] = useState<"light" | "dark">("dark");
   const [preset, setPreset] = useState("default-dark");
@@ -98,10 +85,10 @@ export function ZenThemeProvider({ children }: { children: ReactNode }) {
   const [accentGlow, setAccentGlow] = useState(ACCENT_SWATCHES[0].glow);
   const [radius, setRadiusState] = useState<RadiusPreset>("smooth");
   const [styleMode, setStyleModeState] = useState<StyleMode>("subtle");
-  const [motionEnabled, setMotionEnabledState] = useState(getInitialMotion);
-  const [pressEnabled, setPressEnabledState] = useState(getInitialPress);
   const [density, setDensityState] = useState<Density>(getInitialDensity);
   const [systemMode, setSystemMode] = useState<"light" | "dark">("dark");
+  const shouldReduceMotion = useReducedMotion();
+  const motionEnabled = animationsEnabled;
 
   // Track OS prefers-color-scheme media matches
   useEffect(() => {
@@ -123,16 +110,8 @@ export function ZenThemeProvider({ children }: { children: ReactNode }) {
   }, [configuredCompactMode]);
 
   const setMotionEnabled = useCallback((b: boolean) => {
-    setMotionEnabledState(b);
-    localStorage.setItem(MOTION_STORAGE_KEY, String(b));
-    document.documentElement.dataset.motion = String(b);
-  }, []);
-
-  const setPressEnabled = useCallback((b: boolean) => {
-    setPressEnabledState(b);
-    localStorage.setItem(PRESS_STORAGE_KEY, String(b));
-    document.documentElement.dataset.press = String(b);
-  }, []);
+    updateSetting("animationsEnabled", b);
+  }, [updateSetting]);
 
   const setDensity = useCallback((d: Density) => {
     setDensityState(d);
@@ -141,16 +120,14 @@ export function ZenThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    document.documentElement.dataset.motion = String(motionEnabled);
-    document.documentElement.dataset.press = String(pressEnabled);
+    document.documentElement.dataset.motion = motionEnabled ? "on" : "off";
     document.documentElement.dataset.density = density;
-  }, [motionEnabled, pressEnabled, density]);
+  }, [motionEnabled, density]);
 
   const resetPreferences = useCallback(() => {
     setMotionEnabled(true);
-    setPressEnabled(true);
     setDensity("cozy");
-  }, [setMotionEnabled, setPressEnabled, setDensity]);
+  }, [setMotionEnabled, setDensity]);
 
   const setMode = useCallback((m: "light" | "dark") => {
     setModeState(m);
@@ -245,11 +222,15 @@ export function ZenThemeProvider({ children }: { children: ReactNode }) {
   const value = useMemo<ThemeState>(() => ({
     mode, setMode, preset, applyPreset, accent, accentGlow, setAccent,
     radius, setRadius, styleMode, setStyleMode,
-    motionEnabled, setMotionEnabled, pressEnabled, setPressEnabled,
+    motionEnabled, setMotionEnabled,
     density, setDensity, exportCSS, resetPreferences,
-  }), [mode, setMode, preset, applyPreset, accent, accentGlow, setAccent, radius, setRadius, styleMode, setStyleMode, motionEnabled, setMotionEnabled, pressEnabled, setPressEnabled, density, setDensity, exportCSS, resetPreferences]);
+  }), [mode, setMode, preset, applyPreset, accent, accentGlow, setAccent, radius, setRadius, styleMode, setStyleMode, motionEnabled, setMotionEnabled, density, setDensity, exportCSS, resetPreferences]);
 
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return (
+    <MotionConfig reducedMotion={shouldReduceMotion ? "always" : "never"}>
+      <Ctx.Provider value={value}>{children}</Ctx.Provider>
+    </MotionConfig>
+  );
 }
 
 export function useZenTheme() {

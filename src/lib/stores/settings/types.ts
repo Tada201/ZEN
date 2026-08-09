@@ -50,6 +50,8 @@ import { ModelInfo, CustomProviderConfig } from '../../types/provider';
 
 export type BackgroundFit = "cover" | "contain" | "stretch" | "original" | "tile";
 export type BackgroundMediaType = "auto" | "image" | "video";
+/** Welcome background renderer: animated, static image, or disabled. */
+export type WelcomePageQuality = "low" | "high" | "image" | "none";
 
 // ─── Slice Interfaces ─────────────────────────────────────────────────────
 
@@ -91,11 +93,12 @@ export interface InterfaceSlice {
   styleMode: "" | "flat" | "subtle" | "bordered" | "glass";
   animationsEnabled: boolean;
   lowResourceMode: boolean;
+  /** Welcome background renderer: low uses SVG, high uses Three.js/WebGL. */
+  welcomePageQuality: WelcomePageQuality;
   bootEnabled: boolean;
   bootDuration: number;
   bootDurationMs: number;
   widgetSettings: WidgetSettings;
-  reducedMotion: boolean;
   compactMode: boolean;
   customCssPath: string;
   customCssEnabled: boolean;

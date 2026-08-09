@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { chatApi, providersApi, type BackendChat, type BackendFolder, type BackendMessage } from "@/api";
 import { useChatStore } from "@/lib/stores/useChatStore";
@@ -24,7 +24,9 @@ export const mapChatToSession = (chat: BackendChat): Session => ({
   updatedAt: parseBackendDate(chat.updatedAt).getTime(),
   pinned: chat.pinned === 1,
   folderId: chat.folderId,
-  archived: chat.isArchived === 1,
+  // A valid archived row has both the archive flag and the timestamp created
+  // by archive_chat. This keeps legacy malformed rows out of Archived chats.
+  archived: Number(chat.isArchived ?? 0) === 1 && Boolean(chat.archivedAt),
   workspaceRoot: chat.workspaceRoot ?? null,
 });
 
@@ -349,30 +351,37 @@ export function useChatQueries() {
   const queryClient = useQueryClient();
   const {
     activeSessionId: currentSessionId,
+    isNewChatDraft,
     setActiveSession: setCurrentSessionId,
+    startNewChat,
     messages,
     setMessages,
     setSessionMessages,
+    search,
+    setSearch,
     setStreamingForChat,
     isSessionStreaming,
   } = useChatStore(useShallow(state => ({
     activeSessionId: state.activeSessionId,
+    isNewChatDraft: state.isNewChatDraft,
     setActiveSession: state.setActiveSession,
+    startNewChat: state.startNewChat,
     messages: state.sessionMessages[state.activeSessionId ?? ''] ?? EMPTY_ARRAY,
     setMessages: state.setMessages,
     setSessionMessages: state.setSessionMessages,
+    search: state.searchQuery,
+    setSearch: state.setSearchQuery,
     setStreamingForChat: state.setStreamingForChat,
     isSessionStreaming: state.streamingChats[state.activeSessionId ?? ''] ?? false,
   })));
 
-  const [search, setSearch] = useState("");
   const prevSessionRef = useRef<string | null>(currentSessionId);
 
-  const { data: sessions = [] } = useQuery({
+  const { data: sessions = [], isLoading: sessionsLoading } = useQuery({
     queryKey: ["sessions"],
     queryFn: async () => {
       const page = await chatApi.listChatsPage(500, 0);
-      return page.items.map(mapChatToSession);
+      return page.items.map(mapChatToSession).filter((session) => !session.archived);
     },
     staleTime: 30000,
     gcTime: 5 * 60000,
@@ -382,7 +391,7 @@ export function useChatQueries() {
     queryKey: ["archived-sessions"],
     queryFn: async () => {
       const page = await chatApi.listArchivedChatsPage(500, 0);
-      return page.items.map(mapChatToSession);
+      return page.items.map(mapChatToSession).filter((session) => session.archived);
     },
     staleTime: 60000,
     gcTime: 5 * 60000,
@@ -482,11 +491,16 @@ export function useChatQueries() {
       const latestFetchedAssistantIndex = fetchedMessages.reduce((latestIndex, message, index) =>
         message.role === "assistant" ? index : latestIndex,
       -1);
+      // A backend assistant row can arrive with a new ID while the optimistic
+      // assistant is still in memory. Track the live row that was reconciled
+      // so it is not appended again below as an "unmatched" optimistic row.
+      const matchedLiveMessageIds = new Set<string>();
       const merged = fetchedMessages.map((msg, index) => {
         let updatedMsg = msg;
         const existing = findLiveAssistantForFetched(msg, currentMessages, {
           allowLatestFallback: index === latestFetchedAssistantIndex,
         });
+        if (existing) matchedLiveMessageIds.add(existing.id);
         
         // If the fetched message is a deep research message, and the existing live message
         // has content/is complete while the fetched one is stale/incomplete (e.g. status "failed"
@@ -532,7 +546,9 @@ export function useChatQueries() {
 
       const fetchedIds = new Set(merged.map((message) => message.id));
       const optimisticAssistants = currentMessages.filter((message) =>
-        isRecentOptimisticAssistant(message) && !fetchedIds.has(message.id)
+        isRecentOptimisticAssistant(message) &&
+        !fetchedIds.has(message.id) &&
+        !matchedLiveMessageIds.has(message.id)
       );
       if (optimisticAssistants.length > 0) {
         merged.push(...optimisticAssistants);
@@ -580,10 +596,10 @@ export function useChatQueries() {
   }, [currentSessionId, fetchedMessages, isMessagesFetching, isSessionStreaming, setStreamingForChat]);
 
   useEffect(() => {
-    if (sessions.length > 0 && !currentSessionId) {
+    if (sessions.length > 0 && !currentSessionId && !isNewChatDraft) {
       setCurrentSessionId(sessions[0].id);
     }
-  }, [sessions, currentSessionId]);
+  }, [sessions, currentSessionId, isNewChatDraft, setCurrentSessionId]);
 
   // ── Listen for backend title-maker updates ───────────────────────────────
   // `commands/chat/title.rs::generate_session_title` emits
@@ -672,13 +688,15 @@ export function useChatQueries() {
         voiceStore.close();
       }
 
-      // Track the active session for the UI store's per-session tab memory
+      // Track the active session for the UI store's per-session tab memory & active terminal binding
       setUISessionId(currentSessionId);
+      useUIStore.getState().setActiveChatId(currentSessionId);
       // Restore the right-panel tab remembered for the new session
       useUIStore.getState().restoreRightTabForSession(currentSessionId);
     } else {
       useTaskStore.getState().setActiveChatId(currentSessionId);
       setUISessionId(currentSessionId);
+      useUIStore.getState().setActiveChatId(currentSessionId);
     }
   }, [currentSessionId]);
 
@@ -694,10 +712,12 @@ export function useChatQueries() {
 
   return {
     sessions,
+    sessionsLoading,
     archivedSessions,
     folders,
     currentSessionId,
     setCurrentSessionId,
+    startNewChat,
     messages,
     setMessages,
     search,

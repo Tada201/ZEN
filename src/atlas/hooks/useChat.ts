@@ -12,10 +12,12 @@ export function useChat() {
 
   const {
     sessions,
+    sessionsLoading,
     archivedSessions,
     folders,
     currentSessionId,
     setCurrentSessionId,
+    startNewChat,
     messages,
     setMessages,
     search,
@@ -81,10 +83,12 @@ export function useChat() {
 
   return {
     sessions,
+    sessionsLoading,
     archivedSessions,
     folders,
     currentSessionId,
     setCurrentSessionId,
+    startNewChat,
     messages,
     setMessages,
     search,

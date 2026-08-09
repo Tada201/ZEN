@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import { useUIStore } from "@/lib/stores/useUIStore";
+import { useReducedMotion } from "@/lib/motion";
 import "./bootReveal.css";
 
 /**
@@ -31,6 +32,7 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
   const done = useCallback(() => onCompleteRef.current(), []);
 
   const bootEnabled = useSettingsStore((s) => s.bootEnabled ?? true);
+  const reducedMotion = useReducedMotion();
 
   // Dynamic layout panel states from store
   const { sidebarOpen, rightPanelOpen } = useUIStore();
@@ -63,14 +65,14 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
 
   // Skip boot screen if disabled in settings
   useEffect(() => {
-    if (!bootEnabled) {
+    if (!bootEnabled || reducedMotion) {
       done();
     }
-  }, [bootEnabled, done]);
+  }, [bootEnabled, done, reducedMotion]);
 
   // Staggered wireframe assembly — panels appear one by one
   useEffect(() => {
-    if (!bootEnabled) return;
+    if (!bootEnabled || reducedMotion) return;
     const delays = [
       setTimeout(() => setPanelVisible(v => ({...v, leftSidebar: true})), 100),
       setTimeout(() => setPanelVisible(v => ({...v, middleChat: true})), 500),
@@ -79,7 +81,7 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
       setTimeout(() => setPanelVisible(v => ({...v, bottomFooter: true})), 1700),
     ];
     return () => delays.forEach(clearTimeout);
-  }, [bootEnabled]);
+  }, [bootEnabled, reducedMotion]);
 
   // Reveal choreography. Runs on mount, regardless of any readiness signal —
   // the Rust side has already determined main should be visible by the time
@@ -90,7 +92,7 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
   //   t=3200  : wireframe shimmer cross-fades out
   //   t=4400  : BootScreen unmounts, WorkspaceApp takes over
   useEffect(() => {
-    if (!bootEnabled) return;
+    if (!bootEnabled || reducedMotion) return;
     const start = setTimeout(() => setRevealed(true), 250);
     const fade = setTimeout(() => setParentOpacity(0), 2800);
     const wireframeFade = setTimeout(() => setWireframeFaded(true), 3200);
@@ -101,9 +103,9 @@ export function BootScreen({ onComplete }: { onComplete: () => void }) {
       clearTimeout(wireframeFade);
       clearTimeout(doneTimer);
     };
-  }, [bootEnabled, done]);
+  }, [bootEnabled, done, reducedMotion]);
 
-  if (!bootEnabled) return null;
+  if (!bootEnabled || reducedMotion) return null;
 
   // Layout calculations matching WorkspaceLayout and SecondaryActivityBar
   const leftSidebarWidth = sidebarOpen ? 260 : 48;

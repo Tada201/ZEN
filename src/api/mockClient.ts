@@ -240,18 +240,18 @@ const mockCommands: Record<string, (args: any) => any> = {
     saveData(KEY_CHATS, chats);
   },
   archive_chat: ({ chatId }: { chatId: string }) => {
-    chats = chats.map(c => c.id === chatId ? { ...c, isArchived: 1, updatedAt: Date.now() } : c);
+    chats = chats.map(c => c.id === chatId ? { ...c, isArchived: 1, archivedAt: new Date().toISOString(), updatedAt: Date.now() } : c);
     saveData(KEY_CHATS, chats);
   },
   unarchive_chat: ({ chatId }: { chatId: string }) => {
-    chats = chats.map(c => c.id === chatId ? { ...c, isArchived: 0, updatedAt: Date.now() } : c);
+    chats = chats.map(c => c.id === chatId ? { ...c, isArchived: 0, archivedAt: null, updatedAt: Date.now() } : c);
     saveData(KEY_CHATS, chats);
   },
-  create_chat_folder: ({ name }: { name: string }) => {
+  create_chat_folder: ({ name, color }: { name: string; color?: string | null }) => {
     const newFolder = {
       id: `folder-${Date.now()}`,
       name,
-      color: "#6366f1",
+      color: color || "#6b7280",
       icon: "folder",
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -259,6 +259,19 @@ const mockCommands: Record<string, (args: any) => any> = {
     folders = [...folders, newFolder];
     saveData(KEY_FOLDERS, folders);
     return newFolder;
+  },
+  update_chat_folder: ({ folderId, name, color }: { folderId: string; name?: string | null; color?: string | null }) => {
+    folders = folders.map((folder) => folder.id === folderId
+      ? { ...folder, ...(name ? { name } : {}), ...(color ? { color } : {}), updatedAt: Date.now() }
+      : folder
+    );
+    saveData(KEY_FOLDERS, folders);
+  },
+  delete_chat_folder: ({ folderId }: { folderId: string }) => {
+    folders = folders.filter((folder) => folder.id !== folderId);
+    chats = chats.map((chat) => chat.folderId === folderId ? { ...chat, folderId: null } : chat);
+    saveData(KEY_FOLDERS, folders);
+    saveData(KEY_CHATS, chats);
   },
   move_chat_to_folder: ({ chatId, folderId }: { chatId: string; folderId: string }) => {
     chats = chats.map(c => c.id === chatId ? { ...c, folderId, updatedAt: Date.now() } : c);
@@ -362,6 +375,7 @@ const mockCommands: Record<string, (args: any) => any> = {
   // MCP
   mcp_get_config: () => ({ servers: {} }),
   mcp_save_config: () => {},
+  mcp_list_servers: () => [],
 
   // Graph / Session Map
   get_session_state: () => ({ nodes: [], edges: [] }),

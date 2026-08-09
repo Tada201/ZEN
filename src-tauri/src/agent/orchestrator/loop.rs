@@ -482,6 +482,8 @@ impl Orchestrator {
                 config,
                 token,
                 chat_id,
+                orchestrator_message_id: orchestrator_message_id.as_deref(),
+                extra_instructions: extra_instructions.as_deref(),
             })
             .await
         {

@@ -244,9 +244,6 @@ export function AgentExecutionTrace({
             : headerLabel;
   const hasExecutionContext = Boolean(
     trace.shouldShowBatchLanes ||
-    trace.agentSummary ||
-    trace.agentHierarchySummary ||
-    trace.handoffSummary ||
     trace.activeLaneSummary,
   );
 
@@ -314,14 +311,6 @@ export function AgentExecutionTrace({
               className="mb-2 space-y-1.5 rounded-md border border-border bg-muted px-2.5 py-2 text-[11px]"
               data-testid="execution-context-summary"
             >
-              {(trace.agentSummary || trace.agentHierarchySummary || trace.handoffSummary) && (
-                <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground">
-                  <span className="font-medium text-foreground">Agents</span>
-                  {trace.agentSummary && <span className="truncate">{trace.agentSummary}</span>}
-                  {trace.agentHierarchySummary && <span className="truncate">{trace.agentHierarchySummary}</span>}
-                  {trace.handoffSummary && <span className="truncate">Handoff {trace.handoffSummary}</span>}
-                </div>
-              )}
               {trace.activeLaneSummary && (
                 <div className="truncate text-primary" role="status" aria-live="polite">
                   {trace.activeLaneSummary}

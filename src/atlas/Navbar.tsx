@@ -40,7 +40,6 @@ export function Navbar({ onToggleInspector, inspectorOpen }: { onToggleInspector
   const {
     mode, setMode, accent, setAccent,
     motionEnabled, setMotionEnabled,
-    pressEnabled, setPressEnabled,
     density, setDensity,
     resetPreferences,
   } = useZenTheme();
@@ -208,15 +207,9 @@ export function Navbar({ onToggleInspector, inspectorOpen }: { onToggleInspector
                   <div className="space-y-0.5">
                     <SettingsToggle
                       label="Motion"
-                      hint="Hover lifts, transitions, sparkles"
+                      hint="Transitions, loaders, hover feedback"
                       value={motionEnabled}
                       onChange={setMotionEnabled}
-                    />
-                    <SettingsToggle
-                      label="Click press"
-                      hint="Buttons shrink on press"
-                      value={pressEnabled}
-                      onChange={setPressEnabled}
                     />
                   </div>
 

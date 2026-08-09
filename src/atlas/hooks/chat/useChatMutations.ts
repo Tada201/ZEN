@@ -93,6 +93,11 @@ export function useChatMutations({
         const remaining = sessions.filter((s) => s.id !== id);
         setCurrentSessionId(remaining.length > 0 ? remaining[0].id : null);
       }
+      // Reconcile both projections with the database. The optimistic move above
+      // keeps the UI responsive, while the refetch prevents stale query caches
+      // from making an active chat appear in Archived chats.
+      void queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      void queryClient.invalidateQueries({ queryKey: ["archived-sessions"] });
       toast.success("Session archived");
     },
     onError: (err) => toast.error(getIpcErrorMessage(err, "Failed to archive session")),
@@ -106,6 +111,8 @@ export function useChatMutations({
         queryClient.setQueryData<Session[]>(["archived-sessions"], (prev) => prev?.filter(s => s.id !== id));
         queryClient.setQueryData<Session[]>(["sessions"], (prev) => [{ ...session, archived: false }, ...(prev || [])]);
       }
+      void queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      void queryClient.invalidateQueries({ queryKey: ["archived-sessions"] });
       toast.success("Session unarchived");
     },
     onError: (err) => toast.error(getIpcErrorMessage(err, "Failed to unarchive session")),
@@ -123,7 +130,7 @@ export function useChatMutations({
   });
 
   const createFolderMutation = useMutation({
-    mutationFn: (name: string) => chatApi.createFolder(name),
+    mutationFn: ({ name, color }: { name: string; color?: string }) => chatApi.createFolder(name, color),
     onSuccess: (folder) => {
       queryClient.setQueryData<ChatFolder[]>(["folders"], (prev) => [mapChatFolderToFolder(folder), ...(prev || [])]);
     },
@@ -131,13 +138,13 @@ export function useChatMutations({
   });
 
   const renameFolderMutation = useMutation({
-    mutationFn: ({ folderId, name }: { folderId: string; name: string }) =>
-      chatApi.updateFolder(folderId, name),
-    onSuccess: (_, { folderId, name }) => {
+    mutationFn: ({ folderId, name, color }: { folderId: string; name: string; color?: string }) =>
+      chatApi.updateFolder(folderId, name, color),
+    onSuccess: (_, { folderId, name, color }) => {
       queryClient.setQueryData<ChatFolder[]>(["folders"], (prev) =>
-        prev?.map((f) => (f.id === folderId ? { ...f, name } : f))
+        prev?.map((f) => (f.id === folderId ? { ...f, name, ...(color ? { color } : {}) } : f))
       );
-      toast.success("Folder renamed");
+      toast.success(color ? "Group updated" : "Group renamed");
     },
     onError: (err) => toast.error(getIpcErrorMessage(err, "Failed to rename folder")),
   });
@@ -179,7 +186,7 @@ export function useChatMutations({
       queryClient.setQueryData<Session[]>(["archived-sessions"], (prev) =>
         prev?.map((item) => (item.id === session.id ? { ...item, workspaceRoot: session.workspaceRoot, updatedAt: session.updatedAt } : item))
       );
-      toast.success(session.workspaceRoot ? "Session workspace updated" : "Session now follows the global workspace");
+      toast.success(session.workspaceRoot ? "Session workspace assigned" : "Session now follows the default workspace");
     },
     onError: (err) => toast.error(getIpcErrorMessage(err, "Failed to update session workspace")),
   });
@@ -211,9 +218,9 @@ export function useChatMutations({
     handleArchiveSession: (id: string) => archiveSessionMutation.mutate(id),
     handleUnarchiveSession: (id: string) => unarchiveSessionMutation.mutate(id),
     handleDeleteAll: () => bulkDeleteMutation.mutate(sessions.map(s => s.id)),
-    handleCreateFolder: (name: string) => createFolderMutation.mutate(name),
-    handleRenameFolder: (folderId: string, name: string) =>
-      renameFolderMutation.mutate({ folderId, name }),
+    handleCreateFolder: (name: string, color?: string) => createFolderMutation.mutate({ name, color }),
+    handleRenameFolder: (folderId: string, name: string, color?: string) =>
+      renameFolderMutation.mutate({ folderId, name, color }),
     handleDeleteFolder: (folderId: string) => deleteFolderMutation.mutate(folderId),
     handleMoveToFolder: (chatId: string, folderId: string | null) => moveChatToFolderMutation.mutate({ chatId, folderId }),
     handleSetSessionWorkspace: (chatId: string, workspaceRoot: string | null) =>

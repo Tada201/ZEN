@@ -86,7 +86,7 @@ function buildPaths(values: ReadonlyArray<number | null | undefined>) {
  * container width while keeping the 100x100 viewBox coordinate space.
  *
  * On mount the line strokes itself in via `stroke-dashoffset` (RAF-driven,
- * respects `prefers-reduced-motion`); subsequent data updates do NOT replay
+ * respects the app motion preference); subsequent data updates do NOT replay
  * the entry animation — they snap to the new path, which is what you want
  * for live, frequently-changed series like stock tickers.
  *

@@ -3,6 +3,7 @@ import { strict as assert } from "node:assert";
 
 const sendSource = readFileSync(new URL("../src/atlas/hooks/chat/useSendMessage.ts", import.meta.url), "utf8");
 const inputSource = readFileSync(new URL("../src/atlas/components/PremiumChatInput.tsx", import.meta.url), "utf8");
+const syncSource = readFileSync(new URL("../src/atlas/components/useGenUISync.ts", import.meta.url), "utf8");
 const loaderSource = readFileSync(new URL("../src/atlas/components/genui/promptLoader.ts", import.meta.url), "utf8");
 
 assert(
@@ -18,12 +19,13 @@ assert(
   "send path should reuse the cached/warmed Gen UI prompt promise",
 );
 assert(
-  inputSource.includes("if (val) void preloadOpenUISystemPrompt();"),
+  syncSource.includes("if (internal) void preloadOpenUISystemPrompt();"),
   "Gen UI toggle should warm the prompt chunk before send",
 );
 assert(
-  inputSource.includes("if (internalGenerativeUI) void preloadOpenUISystemPrompt();"),
-  "controlled Gen UI state should warm the prompt chunk before send",
+  inputSource.includes("useGenUISync") &&
+    /useGenUISync\(\s*generativeUI\s*,\s*onGenerativeUIChange\s*,?\s*\)/.test(inputSource),
+  "PremiumChatInput should pass its controlled generativeUI value and change handler to useGenUISync",
 );
 assert(
   loaderSource.includes("let openUISystemPromptPromise: Promise<string> | null = null"),

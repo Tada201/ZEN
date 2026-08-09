@@ -23,6 +23,7 @@ interface PlusActionMenuProps {
   supportsImageGen?: boolean;
   isImageGenEnabled?: boolean;
   setIsImageGenEnabled?: (val: boolean) => void;
+  compact?: boolean;
 }
 
 export const PlusActionMenu = memo(({
@@ -35,7 +36,8 @@ export const PlusActionMenu = memo(({
   generativeUI, setGenerativeUI,
   onOpenSkills,
   isImageGenEnabled,
-  setIsImageGenEnabled
+  setIsImageGenEnabled,
+  compact = false,
 }: PlusActionMenuProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -55,13 +57,15 @@ export const PlusActionMenu = memo(({
         aria-label={isOpen ? "Close add menu" : "Open add menu"}
         title={isOpen ? "Close add menu" : "Open add menu"}
         className={cn(
-          "mt-0.5 p-1.5 rounded-md transition-all border flex items-center justify-center",
+          compact
+            ? "p-1 rounded-md transition-all border flex items-center justify-center"
+            : "mt-0.5 p-1.5 rounded-md transition-all border flex items-center justify-center",
           isOpen 
             ? "bg-muted dark:bg-muted border-border dark:border-border" 
             : "bg-transparent border-transparent hover:bg-muted dark:hover:bg-muted text-muted-foreground"
         )}
       >
-        <Plus className={cn("w-4 h-4 transition-transform duration-200", isOpen && "rotate-45")} />
+        <Plus className={cn(compact ? "w-3.5 h-3.5" : "w-4 h-4", "transition-transform duration-200", isOpen && "rotate-45")} />
       </button>
 
       <AnimatePresence>
