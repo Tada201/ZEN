@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
-import { loadSourceModule } from "./test-loader.mjs";
+import { closeSourceModuleLoader, loadSourceModule } from "./test-loader.mjs";
 
 const { findWritableAssistantIndex } = await loadSourceModule("../src/atlas/hooks/stream/messageTarget.ts");
 
@@ -33,3 +33,4 @@ assert.equal(
 );
 
 console.log("message target ok");
+await closeSourceModuleLoader();

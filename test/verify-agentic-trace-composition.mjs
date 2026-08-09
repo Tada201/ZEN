@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
-import { loadSourceModule } from "./test-loader.mjs";
+import { closeSourceModuleLoader, loadSourceModule } from "./test-loader.mjs";
 
 function loadTsModule(relativePath, replacements = []) {
   return loadSourceModule(relativePath);
@@ -173,3 +173,4 @@ assert.equal(approvalTool.input.command, "npm run build", "approval tool should 
 assert(approvalTool.output.includes("Production build completed"), "approval tool result preview output should survive completion");
 
 console.log("agentic trace composition ok");
+await closeSourceModuleLoader();

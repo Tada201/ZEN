@@ -32,23 +32,24 @@ assert(
 );
 
 assert(
-  assistantSource.match(/<AgentExecutionTrace[\s\S]*?preferCompact/g)?.length >= 2,
-  'assistant chat should render tool execution traces in compact mode',
+  assistantSource.includes('<ExecutionGroup') &&
+    assistantSource.includes('preferCompact'),
+  'assistant chat should render tool execution traces through the compact ExecutionGroup surface',
 );
 
 assert(
   traceSource.includes('preferCompact = false') &&
     traceSource.includes('importantToolCalls') &&
-    traceSource.includes('preferCompact && importantToolCalls.length === 0') &&
-    (traceSource.includes('preferCompact ? importantToolCalls : toolCalls') ||
-      traceSource.includes('preferCompact ? importantToolCalls : normalizedToolCalls')),
-  'agent execution trace should support compact chat mode while preserving approval/error tool rows',
+    /const compactToolCalls = preferCompact[\s\S]*?importantToolCalls/.test(traceSource) &&
+    /const renderedToolCalls = preferCompact[\s\S]*?status === "running"/.test(traceSource) &&
+    traceSource.includes('tool.status === "awaiting_approval" || tool.status === "error"'),
+  'agent execution trace should support compact chat mode while preserving approval/error/running tool rows',
 );
 
 assert(
   liveSessionSource.includes('Agent lanes') &&
     liveSessionSource.includes('Recent tools') &&
-    panelSource.includes('useChatStore(s => activeSessionId ? s.sessionMessages[activeSessionId] ?? EMPTY_MESSAGES : EMPTY_MESSAGES'),
+    /const\s+sessionMessages\s*=\s*useChatStore\(s\s*=>[\s\S]*?activeSessionId\s*\?\s*s\.sessionMessages\[activeSessionId\]\s*\?\?\s*EMPTY_MESSAGES\s*:\s*EMPTY_MESSAGES/.test(panelSource),
   'right panel should remain the detailed live execution surface',
 );
 
