@@ -1,0 +1,87 @@
+name: Remote Windows Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: remote-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-windows:
+    name: Build unsigned Windows artifact
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch runtime binaries
+        shell: pwsh
+        run: npm run runtime:fetch -- -Clean
+
+      - name: Secret artifact guard before build
+        shell: pwsh
+        run: npm run secret:artifacts
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Check Rust backend
+        working-directory: src-tauri
+        run: cargo check --all-targets
+
+      - name: Build unsigned Tauri bundle
+        run: npx tauri build
+
+      - name: Verify bundle contains no database or secret files
+        shell: pwsh
+        run: |
+          $bundlePath = "src-tauri/target/release/bundle"
+          $forbidden = Get-ChildItem -Path $bundlePath -Recurse -Include "*.db","*.sqlite","*.sqlite3","*.db-journal","*.sqlite-journal",".env","*.env.*" -File -ErrorAction SilentlyContinue
+          if ($forbidden.Count -gt 0) {
+            $forbidden | ForEach-Object { Write-Error "Forbidden artifact: $($_.FullName)" }
+            exit 1
+          }
+
+      - name: Secret artifact guard after build
+        shell: pwsh
+        run: npm run secret:artifacts
+
+      - name: Upload Windows build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zen-windows-unsigned-${{ github.sha }}
+          path: src-tauri/target/release/bundle/**
+          if-no-files-found: error
+          retention-days: 7

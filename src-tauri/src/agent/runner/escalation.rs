@@ -559,8 +559,11 @@ impl Runner {
         let early_token = token.child_token();
         let early_token_for_callback = early_token.clone();
 
-        // Allocate the assistant id synchronously, but do not block first token on
-        // SQLite placeholder persistence.
+        // Allocate the assistant id synchronously and make the placeholder durable
+        // before streaming or tool execution begins. The frontend can receive tool
+        // events immediately after this point, so deferring the insert until the
+        // stream completes creates a reload window where the live timeline exists
+        // only in memory and cannot be recovered from SQLite.
         let mut placeholder_insert = None;
         let msg_id = match assistant_message_id {
             Some(id) => id.clone(),
@@ -585,7 +588,7 @@ impl Runner {
                     let model = model.to_string();
                     let id_for_insert = id.clone();
                     placeholder_insert = Some(tokio::spawn(async move {
-                        let _ = queries::add_message(
+                        queries::add_message(
                             &db,
                             &queries::NewMessage {
                                 chat_id: &chat_id,
@@ -597,13 +600,28 @@ impl Runner {
                                 ..Default::default()
                             },
                         )
-                        .await;
+                        .await
                     }));
                 }
                 *assistant_message_id = Some(id.clone());
                 id
             }
         };
+
+        // Keep the real backend identity as the single persistence key. Awaiting
+        // only the placeholder insert is bounded to one SQLite write and happens
+        // before the provider callback can emit chunks or tool events.
+        if let Some(handle) = placeholder_insert.take() {
+            match handle.await {
+                Ok(Ok(_)) => {}
+                Ok(Err(error)) => {
+                    tracing::warn!(%error, %msg_id, "Failed to persist assistant placeholder before streaming");
+                }
+                Err(error) => {
+                    tracing::warn!(%error, %msg_id, "Assistant placeholder persistence task failed");
+                }
+            }
+        }
 
         let first_chunk_sent = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let first_chunk_sent_clone = first_chunk_sent.clone();

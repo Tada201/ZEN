@@ -177,9 +177,28 @@ assert.ok(
   "stream chunks must retain backend message_id while flushing so late reasoning stays on the owning assistant",
 );
 assert.ok(
+  useChatChunkSource.includes("const streamedText = (assistant.steps || [])") &&
+    useChatChunkSource.includes("assistant.content || streamedText"),
+  "chat:done must recover streamed text steps when an adapter sends an empty final content payload",
+);
+assert.ok(
   /flushAllChunkBuffers\(\);\s*clearChunkTrackingForChat\(chatId/.test(useChatChunkSource) &&
     !/flushAllChunkBuffers\(\);[\s\S]{0,160}const buf = chunkBuffersRef\.current\[chatId\]/.test(useChatChunkSource),
   "chat:done must not read a chunk buffer after the flush has consumed it",
+);
+
+// The backend must make the real assistant row durable before the provider
+// can emit tool events. Otherwise a reload during execution cannot recover the
+// live tool ledger from SQLite.
+const escalationSource = readFileSync(
+  new URL("../src-tauri/src/agent/runner/escalation.rs", import.meta.url),
+  "utf8",
+);
+assert.ok(
+  escalationSource.includes("if let Some(handle) = placeholder_insert.take()") &&
+    escalationSource.indexOf("if let Some(handle) = placeholder_insert.take()") <
+      escalationSource.indexOf("let first_chunk_sent"),
+  "assistant placeholder persistence must be awaited before provider streaming begins",
 );
 
 // ── 6. Error-state tool output is redacted in the persisted projection ───

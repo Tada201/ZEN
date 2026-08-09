@@ -269,10 +269,22 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
             return next;
           }
 
+          // The provider's done payload is canonical, but a few adapters
+          // finish with an empty `content` after the text chunks have already
+          // been committed to the timeline. Do not turn that valid streamed
+          // answer into an empty assistant message: recover it from the text
+          // steps before marking the message complete.
+          const streamedText = (assistant.steps || [])
+            .filter((step) => step.type === "text")
+            .map((step) => step.content || "")
+            .join("");
           const finalContent = isCancelled && event.payload.content
-            ? assistant.content
-            : (event.payload.content || assistant.content);
-          const finalized = event.payload.content && !isCancelled
+            ? assistant.content || streamedText
+            : (event.payload.content || assistant.content || streamedText);
+          const hasCanonicalOrRecoveredContent = Boolean(
+            !isCancelled && (event.payload.content || streamedText),
+          );
+          const finalized = hasCanonicalOrRecoveredContent
             ? replaceTextStepsWithContent(assistant, finalContent)
             : { ...assistant, content: finalContent };
 
