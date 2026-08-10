@@ -2,7 +2,9 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
-const read = (path) => readFile(resolve(root, path), "utf8");
+// GitHub's Windows runners check out text as CRLF. Normalize verifier inputs so
+// multiline contract checks are independent of the checkout line-ending mode.
+const read = async (path) => (await readFile(resolve(root, path), "utf8")).replace(/\r\n?/g, "\n");
 const failures = [];
 
 const tauri = JSON.parse(await read("src-tauri/tauri.conf.json"));

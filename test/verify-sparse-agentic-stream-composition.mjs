@@ -4,7 +4,9 @@ import ts from "typescript";
 
 function loadTsModule(relativePath, replacements = []) {
   const sourcePath = new URL(relativePath, import.meta.url);
-  let source = readFileSync(sourcePath, "utf8");
+  // The CI runner is Windows and may check out CRLF files. Normalize before
+  // exact import replacement so data: URL modules never retain relative imports.
+  let source = readFileSync(sourcePath, "utf8").replace(/\r\n?/g, "\n");
   for (const [from, to] of replacements) {
     source = source.replace(from, to);
   }
