@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { motionDurations, motionEasings, useReducedMotion } from '@/lib/motion';
 
 export type TabType = 'editor' | 'preview' | 'explorer' | 'settings';
 
@@ -33,6 +34,7 @@ export function TabSystem({
   onTabAdd,
   children 
 }: TabSystemProps) {
+  const reducedMotion = useReducedMotion();
   return (
     <div className="h-full flex flex-col bg-[#1e1e1e]">
       {/* Tab Bar */}
@@ -94,10 +96,13 @@ export function TabSystem({
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTabId}
-            initial={{ opacity: 0, y: 5 }}
+            initial={reducedMotion ? false : { opacity: 0, y: 5 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -5 }}
-            transition={{ duration: 0.15 }}
+            exit={reducedMotion ? undefined : { opacity: 0, y: -5 }}
+            transition={reducedMotion ? { duration: 0 } : {
+              duration: motionDurations.fast,
+              ease: motionEasings.standard,
+            }}
             className="h-full w-full"
           >
             {children}

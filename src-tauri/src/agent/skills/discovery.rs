@@ -264,7 +264,7 @@ mod tests {
         let outcome = load_skills_from_roots(&roots);
         assert_eq!(outcome.skills.len(), 1);
         assert_eq!(outcome.skills[0].description, "repo version");
-        assert_eq!(outcome.skills[0].allow_implicit_invocation, true);
+        assert!(outcome.skills[0].allow_implicit_invocation);
     }
 
     #[test]

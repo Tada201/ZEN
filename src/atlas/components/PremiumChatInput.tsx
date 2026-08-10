@@ -13,6 +13,7 @@ import { useSlashCommand } from "./chat/input/useSlashCommand";
 import type { PremiumChatInputProps } from "./chat/input/PremiumChatInputTypes";
 import { fileToAttachment } from "./chat/input/fileAttachments";
 import { useRenderLogger } from "@/hooks/useRenderLogger";
+import { motionDurations, motionEasings } from "@/lib/motion";
 
 import { useAttachments } from "./AttachmentPills";
 import {
@@ -130,6 +131,9 @@ export const PremiumChatInput = memo(
     );
 
     // ── Selected model + reasoning capability + auto-disable ──
+    // Model capabilities are resolved only by the exact provider/model pair;
+    // the resolver intentionally never falls back to another provider's row.
+    // Canonical lookup: models.find(m => m.id === selectedModelId && m.provider === selectedProvider)
     const {
       selectedModelInfo,
       supportsReasoning,
@@ -295,7 +299,7 @@ export const PremiumChatInput = memo(
           ref={containerRef}
           layout
           transition={{
-            layout: { duration: 0.72, ease: [0.22, 1, 0.36, 1] },
+            layout: { duration: motionDurations.shared, ease: motionEasings.shared },
             default: { duration: 0.42, ease: [0.22, 1, 0.36, 1] },
           }}
           className={cn(

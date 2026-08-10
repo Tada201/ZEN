@@ -1,0 +1,6 @@
+[toolchain]
+# Pin the Rust toolchain so CI lint gates are reproducible. A floating `@stable`
+# let a clippy upgrade (1.95 -> 1.97) turn new lints into hard `-D warnings`
+# errors without any code change. Bump this deliberately in its own PR.
+channel = "1.97.1"
+components = ["clippy", "rustfmt"]

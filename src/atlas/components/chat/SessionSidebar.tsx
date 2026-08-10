@@ -1,9 +1,10 @@
 import { useState, useMemo, memo, useDeferredValue, useEffect } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { type TabId } from "../SettingsModal";import {
   Plus, Search, Trash2, Settings2, Edit2, Folder,
   MessageSquare, History,
   FolderPlus, Archive, ArchiveRestore, ChevronDown, ChevronRight, FolderOpen, Clock3, GripVertical,
-  MessageCirclePlus, CalendarClock, Wand2, ListFilter,
+  MessageCirclePlus, CalendarClock, Wand2, ListFilter, ChevronsUpDown,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ import {
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ChatGroupDialog } from "./ChatGroupDialog";
 import { cn } from "@/lib/utils";
+import { motionDurations, motionEasings } from "@/lib/motion";
 import { Session, ChatFolder } from "./types";
 import { SessionSidebarItem, type SearchResult } from "./SessionSidebarItem";
 import type { WorkspaceModeId } from "@/lib/features/frontendFeatures";
@@ -157,6 +159,7 @@ export const SessionSidebar = memo(({
   const [dragOverWorkspacePosition, setDragOverWorkspacePosition] = useState<WorkspaceDropPosition>("before");
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Record<string, boolean>>({});
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
+  const [sectionsExpansion, setSectionsExpansion] = useState<"all" | "none" | null>(null);
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [casesMenuOpen, setCasesMenuOpen] = useState(false);
   const [confirmPurgeOpen, setConfirmPurgeOpen] = useState(false);
@@ -378,6 +381,29 @@ export const SessionSidebar = memo(({
     return [...workspaceGroups].sort((a, b) => (positions.get(a.root) ?? 0) - (positions.get(b.root) ?? 0));
   }, [workspaceGroups, workspaceOrder]);
 
+  const isFolderExpanded = (folderId: string, folderChats: Session[]) => {
+    if (sectionsExpansion === "all") return true;
+    if (sectionsExpansion === "none") return false;
+    return expandedFolders[folderId] ?? folderChats.some((session) => session.id === currentId);
+  };
+
+  const isWorkspaceExpanded = (root: string, workspaceSessions: Session[]) => {
+    if (sectionsExpansion === "all") return true;
+    if (sectionsExpansion === "none") return false;
+    return expandedWorkspaces[root] ?? (
+      root === "__global__" || workspaceSessions.some((session) => session.id === currentId)
+    );
+  };
+
+  const expandableSectionCount = displayMode === "timeline"
+    ? visibleFolders.length
+    : orderedWorkspaceGroups.length;
+  const allSectionsExpanded = expandableSectionCount > 0 && (
+    displayMode === "timeline"
+      ? visibleFolders.every((folder) => isFolderExpanded(folder.id, folderSessions.get(folder.id) ?? []))
+      : orderedWorkspaceGroups.every((group) => isWorkspaceExpanded(group.root, group.sessions))
+  );
+
   return (
     <div className="flex flex-col h-full select-none">
       {/* Reference-style utility navigation. Search, Automations, and Skills
@@ -448,6 +474,17 @@ export const SessionSidebar = memo(({
             <Button
               variant="ghost"
               size="icon"
+              className="h-6 w-6 text-muted-foreground hover:bg-muted/50 hover:text-foreground focus:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 active:bg-transparent"
+              onClick={() => setSectionsExpansion(allSectionsExpanded ? "none" : "all")}
+              disabled={expandableSectionCount === 0}
+              aria-label={allSectionsExpanded ? "Collapse all sections" : "Expand all sections"}
+              title={allSectionsExpanded ? "Collapse all sections" : "Expand all sections"}
+            >
+              <ChevronsUpDown size={13} aria-hidden="true" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               className={cn("h-6 w-6 text-muted-foreground hover:bg-muted/50 hover:text-foreground focus:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 active:bg-transparent", showArchived && "text-primary")}
               onClick={() => setShowArchived(!showArchived)}
               aria-label={showArchived ? "Show active chats" : "Open archived chats"}
@@ -513,7 +550,7 @@ export const SessionSidebar = memo(({
               <div className="px-1.5 pb-0.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Chat groups</div>
               {visibleFolders.map((folder) => {
                 const folderChats = folderSessions.get(folder.id) ?? [];
-                const isExpanded = expandedFolders[folder.id] ?? folderChats.some((session) => session.id === currentId);
+                const isExpanded = isFolderExpanded(folder.id, folderChats);
                 return (
                   <section key={folder.id} className="space-y-0.5">
                     <div
@@ -523,7 +560,10 @@ export const SessionSidebar = memo(({
                     >
                       <button
                         type="button"
-                        onClick={() => setExpandedFolders((current) => ({ ...current, [folder.id]: !isExpanded }))}
+                        onClick={() => {
+                          setSectionsExpansion(null);
+                          setExpandedFolders((current) => ({ ...current, [folder.id]: !isExpanded }));
+                        }}
                         className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
                         aria-expanded={isExpanded}
                         title={`${folder.name} folder`}
@@ -556,11 +596,21 @@ export const SessionSidebar = memo(({
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
-                    {isExpanded && folderChats.length > 0 && (
-                      <div className="ml-3 space-y-0.5 border-l border-border pl-1">
-                        {folderChats.map((session) => renderSessionItem(session))}
-                      </div>
-                    )}
+                    <AnimatePresence initial={false}>
+                      {isExpanded && folderChats.length > 0 && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: motionDurations.standard, ease: motionEasings.standard }}
+                          className="ml-3 overflow-hidden border-l border-border pl-1"
+                        >
+                          <div className="space-y-0.5">
+                            {folderChats.map((session) => renderSessionItem(session))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </section>
                 );
               })}
@@ -575,9 +625,7 @@ export const SessionSidebar = memo(({
             const archivedWorkspaceChatIds = archivedSessions
               .filter((session) => session.archived === true && !activeSessionIds.has(session.id) && workspaceRootKey(session) === root)
               .map((session) => session.id);
-            const isExpanded = expandedWorkspaces[root] ?? (
-              root === "__global__" || workspaceSessions.some((session) => session.id === currentId)
-            );
+            const isExpanded = isWorkspaceExpanded(root, workspaceSessions);
             const moveWorkspaceToFolder = (folderId: string | null) => moveChatsToFolder(workspaceChatIds, folderId);
             return (
               <ContextMenu key={root}>
@@ -643,7 +691,10 @@ export const SessionSidebar = memo(({
                       </span>
                       <button
                         type="button"
-                        onClick={() => setExpandedWorkspaces((current) => ({ ...current, [root]: !isExpanded }))}
+                        onClick={() => {
+                          setSectionsExpansion(null);
+                          setExpandedWorkspaces((current) => ({ ...current, [root]: !isExpanded }));
+                        }}
                         className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
                         aria-expanded={isExpanded}
                         title={root === "__global__" ? "Chats using the configured default workspace" : root}
@@ -672,11 +723,21 @@ export const SessionSidebar = memo(({
                         />
                       )}
                     </div>
-                    {isExpanded && (
-                      <div className="ml-3 space-y-0.5 border-l border-border pl-1">
-                        {workspaceSessions.map((session) => renderSessionItem(session))}
-                      </div>
-                    )}
+                    <AnimatePresence initial={false}>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: motionDurations.standard, ease: motionEasings.standard }}
+                          className="ml-3 overflow-hidden border-l border-border pl-1"
+                        >
+                          <div className="space-y-0.5">
+                            {workspaceSessions.map((session) => renderSessionItem(session))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </section>
                 </ContextMenuTrigger>
                 <ContextMenuContent className="w-48 bg-card border-border">

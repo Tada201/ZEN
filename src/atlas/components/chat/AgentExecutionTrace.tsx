@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, memo } from "react";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { ArtifactData, Step, ToolCall } from "./types";
 import { ToolCallCard, humanizeToolAction } from "./ToolCallCard";
@@ -17,6 +18,7 @@ import {
   toggleDisclosure,
   transitionDisclosure,
 } from "./executionDisclosure";
+import { executionCardMotion, motionDurations, motionEasings, useReducedMotion } from "@/lib/motion";
 
 function compactToolDisplayName(tool: ToolCall): string {
   const name = tool.name.toLowerCase();
@@ -152,6 +154,7 @@ export function AgentExecutionTrace({
    */
   bare?: boolean;
 }) {
+  const reducedMotion = useReducedMotion();
   const normalizedToolCalls = useMemo(() => dedupeTraceToolCalls(toolCalls).filter(isToolVisibleInChat), [toolCalls]);
   const trace = useMemo(() => buildAgentExecutionTraceModel(normalizedToolCalls, executionSteps), [normalizedToolCalls, executionSteps]);
   const importantToolCalls = useMemo(
@@ -161,6 +164,10 @@ export function AgentExecutionTrace({
   // `trace.active` = runningCount > 0 || approvalCount > 0, so
   // `trace.active || importantToolCalls.length > 0` covers running, approval,
   // and error — matching the old ExecutionGroup default-open behavior.
+  const compactToolCalls = preferCompact ? importantToolCalls : normalizedToolCalls;
+  const renderedToolCalls = preferCompact
+    ? normalizedToolCalls.filter((tool) => compactToolCalls.includes(tool) || tool.status === "running")
+    : compactToolCalls;
   const shouldDefaultOpen = preferCompact
     ? trace.active || importantToolCalls.length > 0
     : trace.active || trace.errorCount > 0 || trace.approvalCount > 0;
@@ -263,9 +270,17 @@ export function AgentExecutionTrace({
     return (
       <div className="execution-tool-rail relative pl-4 before:absolute before:left-[5px] before:top-1 before:h-[calc(100%-8px)] before:w-px before:bg-border flex flex-col gap-1.5">
         {normalizedToolCalls.map((tc, idx) => (
-          <div key={tc.id || tc.runId || idx} className="animate-in fade-in duration-150 motion-reduce:animate-none">
+          <motion.div
+            key={tc.id || tc.runId || idx}
+            initial={reducedMotion ? false : executionCardMotion.initial}
+            animate={executionCardMotion.animate}
+            transition={reducedMotion ? { duration: 0 } : {
+              duration: motionDurations.fast,
+              ease: motionEasings.standard,
+            }}
+          >
             <ToolTraceRow toolCall={tc} sessionId={sessionId} onOpenArtifact={onOpenArtifact} streamingPreview={streamingPreviews.get(tc.id) || undefined} />
-          </div>
+          </motion.div>
         ))}
       </div>
     );
@@ -345,10 +360,18 @@ export function AgentExecutionTrace({
             </div>
           )}
           <div className="execution-tool-rail relative pl-4 before:absolute before:left-[5px] before:top-1 before:h-[calc(100%-8px)] before:w-px before:bg-border flex flex-col gap-1.5">
-            {normalizedToolCalls.map((tc, idx) => (
-              <div key={tc.id || tc.runId || idx} className="animate-in fade-in duration-150 motion-reduce:animate-none">
+            {renderedToolCalls.map((tc, idx) => (
+              <motion.div
+                key={tc.id || tc.runId || idx}
+                initial={reducedMotion ? false : executionCardMotion.initial}
+                animate={executionCardMotion.animate}
+                transition={reducedMotion ? { duration: 0 } : {
+                  duration: motionDurations.fast,
+                  ease: motionEasings.standard,
+                }}
+              >
                 <ToolTraceRow toolCall={tc} sessionId={sessionId} onOpenArtifact={onOpenArtifact} streamingPreview={streamingPreviews.get(tc.id) || undefined} />
-              </div>
+              </motion.div>
             ))}
       </div>
       </FoldOutCardContent>

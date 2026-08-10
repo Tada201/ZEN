@@ -13,12 +13,16 @@ const loaderSource = readFileSync(
   new URL("../src/atlas/components/genui/promptLoader.ts", import.meta.url),
   "utf8",
 );
+const genUISyncSource = readFileSync(
+  new URL("../src/atlas/components/useGenUISync.ts", import.meta.url),
+  "utf8",
+);
 const promptSource = readFileSync(
   new URL("../src/atlas/components/genui/prompt.ts", import.meta.url),
   "utf8",
 );
 const chatCommandSource = readFileSync(
-  new URL("../src-tauri/src/commands/chat.rs", import.meta.url),
+  new URL("../src-tauri/src/commands/chat/send.rs", import.meta.url),
   "utf8",
 );
 const settingsMapperSource = readFileSync(
@@ -37,9 +41,11 @@ assert(
     sendSource.includes("systemPrompt: systemPrompt"),
   "send path should pass the cached OpenUI prompt only for Gen UI turns",
 );
+// Gen UI prompt warming was moved out of PremiumChatInput.tsx into
+// useGenUISync.ts (single idempotent effect on the internal toggle).
 assert(
-  inputSource.includes("if (val) void preloadOpenUISystemPrompt();") &&
-    inputSource.includes("if (internalGenerativeUI) void preloadOpenUISystemPrompt();"),
+  genUISyncSource.includes("if (internal) void preloadOpenUISystemPrompt();") &&
+    inputSource.includes("useGenUISync("),
   "input controls should warm the Gen UI prompt before send",
 );
 assert(
@@ -47,9 +53,11 @@ assert(
     loaderSource.includes('import("./prompt")'),
   "OpenUI prompt import should be cached behind a lazy loader",
 );
+// Caching moved out of prompt.ts into promptLoader.ts via a memoized promise.
 assert(
-  promptSource.includes("cachedOpenUISystemPrompt") &&
-    promptSource.includes("openuiLibrary.prompt(promptOptions)"),
+  promptSource.includes("buildOpenUISystemPrompt") &&
+    promptSource.includes("openuiLibrary.prompt(promptOptions)") &&
+    loaderSource.includes("if (!openUISystemPromptPromise)"),
   "OpenUI prompt builder should cache the generated prompt string",
 );
 assert(

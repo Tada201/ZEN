@@ -195,6 +195,40 @@ Rules:
 
 ## Frontend Rules
 
+### Premium Motion UX Contract
+
+Zen is a modern workbench, so UI motion is part of the interaction contract,
+not an optional polish pass. When creating or changing a component or feature:
+
+- Treat related components as one motion system. Coordinate the parent surface,
+  its children, adjacent panels, and surrounding layout so they enter, exit, and
+  resize as one intentional sequence rather than as independent snapshots.
+- Every user-visible state, visibility, layout, loading, navigation, or feedback
+  change must use the shared motion system in `src/lib/motion.ts`, or document
+  why it must remain instantaneous. Avoid abrupt mounts, unmounts, height jumps,
+  icon swaps, and panel snaps.
+- Use stable keys and coordinated enter/exit/layout transitions. Preserve the
+  visual relationship between a trigger and the surface it opens; never animate
+  a child independently in a way that makes its parent or neighboring content
+  jump.
+- Use motion to communicate continuity, hierarchy, progress, and causality.
+  Prefer short, calm fades, fades with small positional movement, and measured
+  layout transitions. Do not add bounce, shake, or decorative pulse merely to
+  make a surface feel lively.
+- Streaming content is the exception to per-update animation: do not animate
+  every token or delta. Animate the message/card mount and meaningful state
+  changes, then let the content stream steadily inside the stable surface.
+- New lazy-loaded surfaces, overlays, menus, cards, tool rows, side panels,
+  composer modes, and empty/loading states must participate in the same motion
+  choreography instead of introducing one-off CSS animation classes.
+- Motion must be controlled by Zen's user-owned animation preference and shared
+  tokens. Do not read the operating system reduced-motion preference directly,
+  and do not create a second motion policy.
+- Before shipping, inspect the full transition path at normal, loading, error,
+  empty, reload, narrow-layout, and animation-disabled states. A component is
+  not motion-complete if it looks smooth in isolation but causes a neighboring
+  component to snap or reflow.
+
 ### State Ownership
 
 Use one owner per state type:

@@ -1,4 +1,5 @@
 import { ArrowUp, Mic } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils/style";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import type { PremiumChatInputProps } from "./chat/input/PremiumChatInputTypes";
@@ -8,6 +9,7 @@ import { PinnedActionBar } from "./chat/input/PinnedActionBar";
 import { PermissionModeMenu } from "./PermissionModeMenu";
 import { ContextTrigger } from "./ContextTrigger";
 import { PlusActionMenu } from "./chat/input/PlusActionMenu";
+import { motionDurations, motionEasings, useReducedMotion } from "@/lib/motion";
 
 /**
  * `ChatInputFooter` — the bottom toolbar of the chat input composer:
@@ -76,6 +78,7 @@ export interface ChatInputFooterProps {
 }
 
 export const ChatInputFooter = (props: ChatInputFooterProps) => {
+  const reducedMotion = useReducedMotion();
   const handleMicClick = () => {
     const state = useUIStore.getState();
     if (state.voiceModeOpen) {
@@ -197,11 +200,29 @@ export const ChatInputFooter = (props: ChatInputFooterProps) => {
           {props.isLoading && props.variant !== "welcome" && (
             <span className="absolute inset-0 rounded-full animate-ping bg-rose-400/30" />
           )}
-          {props.isLoading ? (
-            <div className="relative w-4 h-4 bg-current rounded-[2px]" />
-          ) : (
-            <ArrowUp className="w-4 h-4 stroke-[3px]" />
-          )}
+          <AnimatePresence initial={false} mode="wait">
+            {props.isLoading ? (
+              <motion.div
+                key="stop"
+                initial={reducedMotion ? false : { opacity: 0, scale: 0.75 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={reducedMotion ? undefined : { opacity: 0, scale: 0.75 }}
+                transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
+                className="relative h-4 w-4 rounded-[2px] bg-current"
+              />
+            ) : (
+              <motion.span
+                key="send"
+                initial={reducedMotion ? false : { opacity: 0, y: 2 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reducedMotion ? undefined : { opacity: 0, y: -2 }}
+                transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
+                className="inline-flex"
+              >
+                <ArrowUp className="h-4 w-4 stroke-[3px]" />
+              </motion.span>
+            )}
+          </AnimatePresence>
         </button>
       </div>
     </div>

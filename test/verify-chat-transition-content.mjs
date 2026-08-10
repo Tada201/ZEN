@@ -11,7 +11,9 @@ const streamSource = read("src/atlas/hooks/stream/useChatChunkEvent.ts");
 
 assert(chunkSource.includes("reconcileFinalTextSteps"), "final stream content must reconcile into the execution timeline");
 assert(chunkSource.includes("canonical chat:done content"), "the final response must be treated as the canonical content boundary");
-assert(transitionSource.includes("key={view}") && transitionSource.includes('mode="sync"'), "welcome and chat scenes must remain keyed and crossfade together");
+// The scene is keyed on `sceneKey` (derived from view state) rather than the
+// literal `view` prop name; both still cause AnimatePresence to crossfade.
+assert(transitionSource.includes("key={sceneKey}") && transitionSource.includes('mode="sync"'), "welcome and chat scenes must remain keyed and crossfade together");
 assert(messageListSource.includes("key={message.id}"), "message rows must keep stable backend/optimistic IDs across the transition");
 assert(workspaceSource.includes("targetSessionId"), "the welcome submit must route its optimistic messages to the newly created session");
 assert(streamSource.includes("messageId: event.payload.message_id || undefined"), "stream chunks must retain the backend assistant identity");

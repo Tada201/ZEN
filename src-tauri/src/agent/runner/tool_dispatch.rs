@@ -953,6 +953,7 @@ impl Runner {
             .collect()
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn emit_tool_complete_for_result(
         &self,
         chat_id: &str,

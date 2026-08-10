@@ -1,4 +1,6 @@
+import { motion } from "framer-motion";
 import { useAnimationsEnabled } from "@/lib/motion";
+import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -224,13 +226,20 @@ function buildProjectedScene(viewportWidth: number, viewportHeight: number): Pro
 export function WelcomeBlackHoleSvg({
   className,
   paused = false,
+  draw = false,
 }: {
   className?: string;
   paused?: boolean;
+  draw?: boolean;
 }) {
   const animationsEnabled = useAnimationsEnabled();
+  const settingsHydrated = useSettingsStore((state) => state.isHydrated);
   const reducedMotion = useReducedMotion();
-  const shouldAnimate = animationsEnabled && !reducedMotion;
+  const shouldAnimate = settingsHydrated && animationsEnabled && !reducedMotion;
+  const shouldDraw = draw && shouldAnimate && !paused;
+  // Normalized pathLength lets every orbit draw at its own physical speed
+  // while the complete black-hole illustration finishes in three seconds.
+  const drawTransition = { duration: 3, ease: "linear" as const };
   const svgRef = useRef<SVGSVGElement>(null);
   const [viewport, setViewport] = useState(DEFAULT_VIEWPORT);
   const scene = useMemo(() => buildProjectedScene(viewport.width, viewport.height), [viewport]);
@@ -272,7 +281,18 @@ export function WelcomeBlackHoleSvg({
 
       <g fill="none" stroke="#fff" strokeWidth="1">
         {scene.diskPaths.map((path, index) => (
-          <path key={ringRadii[index]} d={path.renderPath} opacity={scene.diskOpacities[index]} />
+          <motion.path
+            key={ringRadii[index]}
+            d={path.renderPath}
+            pathLength={1}
+            initial={draw ? { pathLength: 0, opacity: 0 } : false}
+            animate={
+              draw && !settingsHydrated
+                ? { pathLength: 0, opacity: 0 }
+                : { pathLength: 1, opacity: scene.diskOpacities[index] }
+            }
+            transition={shouldDraw ? drawTransition : { duration: 0 }}
+          />
         ))}
 
         {scene.diskPaths.map((path, index) => {
@@ -310,20 +330,38 @@ export function WelcomeBlackHoleSvg({
       <path d={scene.outerLensPath} fill="#0a0a0c" stroke="none" opacity="0.96" />
       <g fill="none" stroke="#fff" strokeWidth="1.1">
         {scene.lensPaths.map((path, index) => (
-          <path key={lensRings[index].radius} d={path} opacity={lensRings[index].opacity} />
+          <motion.path
+            key={lensRings[index].radius}
+            d={path}
+            pathLength={1}
+            initial={draw ? { pathLength: 0, opacity: 0 } : false}
+            animate={
+              draw && !settingsHydrated
+                ? { pathLength: 0, opacity: 0 }
+                : { pathLength: 1, opacity: lensRings[index].opacity }
+            }
+            transition={shouldDraw ? drawTransition : { duration: 0 }}
+          />
         ))}
       </g>
 
-        <ellipse
-          cx={scene.core.center.x}
-          cy={scene.core.center.y}
-          rx={scene.core.radiusX}
-          ry={scene.core.radiusY}
-          fill="#0a0a0c"
-          stroke="#fff"
-          strokeWidth="1"
-          opacity="0.98"
-        />
+      <motion.ellipse
+        cx={scene.core.center.x}
+        cy={scene.core.center.y}
+        rx={scene.core.radiusX}
+        ry={scene.core.radiusY}
+        pathLength={1}
+        fill="#0a0a0c"
+        stroke="#fff"
+        strokeWidth="1"
+        initial={draw ? { pathLength: 0, opacity: 0 } : false}
+        animate={
+          draw && !settingsHydrated
+            ? { pathLength: 0, opacity: 0 }
+            : { pathLength: 1, opacity: 0.98 }
+        }
+        transition={shouldDraw ? drawTransition : { duration: 0 }}
+      />
     </svg>
   );
 }

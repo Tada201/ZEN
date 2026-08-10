@@ -8,7 +8,10 @@ const expect = (condition, message) => {
   if (!condition) failures.push(message);
 };
 
-const card = await read("src/atlas/components/chat/DeepResearchMessage.tsx");
+const card = [
+  await read("src/atlas/components/chat/DeepResearchMessage.tsx"),
+  await read("src/atlas/components/chat/DeepResearchRunMessage.tsx"),
+].join("\n");
 const messageItem = await read("src/atlas/components/chat/MessageItem.tsx");
 const messageList = await read("src/atlas/components/chat/MessageList.tsx");
 const chatSection = await read("src/atlas/sections/ChatSection.tsx");
@@ -48,7 +51,8 @@ expect(card.includes("message.status === \"sent\" || message.metadata?.status ==
 
 // ── Elapsed Timer Stops on Stale ─────────────────────────────────────────
 
-expect(card.includes("{!isComplete && (") && card.includes("formatTime(elapsed)"),
+expect(card.includes("{!isComplete && (") &&
+  (card.includes("formatTime(elapsed)") || card.includes("formatElapsed(elapsed)")),
   "The elapsed timer badge must be hidden when isComplete is true (including stale sending).");
 
 // ── Cancel Button (onAbort) ──────────────────────────────────────────────
@@ -104,7 +108,9 @@ const globalStream = await read("src/atlas/hooks/useGlobalStreamListener.ts");
 expect(globalStream.includes("useAgentEvents({ resetHeartbeatTimeout })") || globalStream.includes("useAgentEvents({resetHeartbeatTimeout})"),
   "useGlobalStreamListener must pass resetHeartbeatTimeout to useAgentEvents.");
 
-expect(chatSection.includes("onAbort={abortStream}") && chatSection.includes("MessageList"),
+expect((chatSection.includes("onAbort={abortStream}") ||
+  chatSection.includes("onAbort={isArchivedSession ? undefined : abortStream}")) &&
+  chatSection.includes("MessageList"),
   "ChatSection must pass abortStream as onAbort to MessageList.");
 
 expect(messageList.includes("onAbort") && messageList.includes("MemoizedMessageItem"),

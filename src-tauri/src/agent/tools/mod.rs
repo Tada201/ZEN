@@ -43,6 +43,7 @@ pub trait AgentTool: Send + Sync {
     /// Context-aware entry point for tools that need the stable call id.
     /// Mutation recovery wraps legacy tools at the canonical service boundary,
     /// so existing tools retain the smaller `run` contract by default.
+    #[allow(clippy::too_many_arguments)]
     async fn run_with_context(
         &self,
         app: tauri::AppHandle,

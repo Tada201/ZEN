@@ -2,6 +2,7 @@ import React, { memo, useRef } from 'react';
 import { Plus, Paperclip, Camera, ImageIcon, Lightbulb, Compass, Globe, Layout } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { motionDurations, motionEasings, useReducedMotion } from '@/lib/motion';
 import { MenuItem } from './MenuItem';
 
 interface PlusActionMenuProps {
@@ -39,6 +40,7 @@ export const PlusActionMenu = memo(({
   setIsImageGenEnabled,
   compact = false,
 }: PlusActionMenuProps) => {
+  const reducedMotion = useReducedMotion();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -73,9 +75,13 @@ export const PlusActionMenu = memo(({
           <>
             <div className="fixed inset-0 z-20" onClick={() => setIsOpen(false)} />
             <motion.div 
-              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              initial={reducedMotion ? false : { opacity: 0, y: 10, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              exit={reducedMotion ? undefined : { opacity: 0, y: 10, scale: 0.98 }}
+              transition={reducedMotion ? { duration: 0 } : {
+                duration: motionDurations.fast,
+                ease: motionEasings.standard,
+              }}
               className="absolute bottom-full left-0 mb-2 w-56 bg-card dark:bg-muted border border-border dark:border-border rounded-xl shadow-2xl z-30 p-1.5 text-foreground/80 dark:text-foreground"
             >
               <div className="space-y-0.5">

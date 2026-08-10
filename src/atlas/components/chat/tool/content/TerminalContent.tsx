@@ -56,7 +56,7 @@ export function TerminalContent({ toolCall, outputPreview }: TerminalContentProp
               "inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 font-sans text-[10px] font-medium",
               isStale ? "border-warning text-warning" : isRunning ? "border-primary text-primary" : isFailed ? "border-destructive text-destructive" : "border-success text-success",
             )}>
-              {isStale ? <CircleAlert className="h-3 w-3" /> : isRunning ? <Loader2 className="h-3 w-3 motion-safe:animate-spin" /> : isFailed ? <CircleAlert className="h-3 w-3" /> : <CircleCheck className="h-3 w-3" />}
+              {isStale ? <CircleAlert className="h-3 w-3" /> : isRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : isFailed ? <CircleAlert className="h-3 w-3" /> : <CircleCheck className="h-3 w-3" />}
               {statusLabel}
             </span>
           </div>

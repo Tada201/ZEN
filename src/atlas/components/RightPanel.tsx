@@ -9,6 +9,7 @@ import {
 import { getDefaultWorkbenchView, getVisibleWorkbenchViews, getWorkbenchView, isWorkbenchViewVisible } from "@/lib/features/workbenchRegistry";
 import type { RightPanelTabId } from "@/lib/features/frontendFeatures";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { motionDurations, motionEasings } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { WorkbenchHeaderCore } from "@/components/workbench/WorkbenchHeader";
 import { WorkbenchTabButton } from "@/components/Zen/WorkbenchTabButton";
@@ -30,18 +31,26 @@ const OrchestratorPanel = React.lazy(() => import("./right-panel/OrchestratorPan
 const ApprovalCenter = React.lazy(() => import("./chat/right-panel/ApprovalCenter").then(m => ({ default: m.ApprovalCenter })));
 const InteractiveDrawingCanvas = React.lazy(() => import("@/components/widgets/workbench/InteractiveDrawingCanvas"));
 
-const LoadingFallback = () => (
-  <div className="flex flex-col items-center justify-center h-full py-32 text-muted-foreground italic opacity-60">
-    <div className="relative w-10 h-10 mb-4 flex items-center justify-center">
-      <svg width="40" height="40" viewBox="0 0 100 100" className="text-primary motion-safe:animate-spin">
-        <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" strokeWidth="4" strokeDasharray="80 100" />
-      </svg>
-    </div>
-    <p className="text-[11px] uppercase tracking-widest font-black text-muted-foreground">
-      Initializing Module...
-    </p>
-  </div>
-);
+const LoadingFallback = () => {
+  const reducedMotion = useReducedMotion();
+  return (
+    <motion.div
+      initial={reducedMotion ? false : { opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
+      className="flex h-full flex-col items-center justify-center py-32 text-muted-foreground italic opacity-60"
+    >
+      <div className="relative mb-4 flex h-10 w-10 items-center justify-center">
+        <svg width="40" height="40" viewBox="0 0 100 100" className="text-primary animate-spin">
+          <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" strokeWidth="4" strokeDasharray="80 100" />
+        </svg>
+      </div>
+      <p className="text-[11px] uppercase tracking-widest font-black text-muted-foreground">
+        Initializing Module...
+      </p>
+    </motion.div>
+  );
+};
 
 const MathGraphPlaceholder = () => (
   <div className="flex h-full flex-col items-center justify-center bg-background p-8 text-center">
@@ -471,7 +480,7 @@ export function RightPanel() {
                   className="flex-1 flex flex-col w-full h-full"
                   initial={false}
                   animate={{ opacity: mapClosing ? 0 : 1, scale: mapClosing ? 0.96 : 1 }}
-                  transition={reducedMotion ? { duration: 0 } : { duration: 0.3, ease: 'easeInOut' }}
+                  transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.surface, ease: motionEasings.standard }}
                   onAnimationComplete={() => {
                     if (mapClosing) {
                       setMapActivated(false);
@@ -485,7 +494,7 @@ export function RightPanel() {
                 </motion.div>
               ) : (
                 <div className="flex-grow flex flex-col items-center justify-center p-6 text-center bg-background">
-                  <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-4 motion-safe:animate-pulse">
+                  <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-4 animate-pulse">
                     <MapIcon size={24} />
                   </div>
                   <h3 className="text-xs font-bold uppercase tracking-widest text-foreground">
@@ -516,7 +525,7 @@ export function RightPanel() {
                 initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
-                transition={reducedMotion ? { duration: 0 } : { duration: 0.2 }}
+                transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.standard, ease: motionEasings.standard }}
                 className="flex-grow flex flex-col overflow-hidden relative w-full h-full"
               >
                 <Suspense fallback={<LoadingFallback />}>
@@ -533,7 +542,7 @@ export function RightPanel() {
                 initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
-                transition={reducedMotion ? { duration: 0 } : { duration: 0.2 }}
+                transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.standard, ease: motionEasings.standard }}
                 className="pb-8"
               >
                 <Suspense fallback={<LoadingFallback />}>

@@ -13,13 +13,20 @@ const llm = await read("src-tauri/src/agent/deep_research/llm.rs");
 const moduleSource = await read("src-tauri/src/agent/deep_research/mod.rs");
 const events = await read("src/api/events.ts");
 const reducer = await read("src/atlas/hooks/stream/useAgentEvents.ts");
-const card = await read("src/atlas/components/chat/DeepResearchMessage.tsx");
+const card = [
+  await read("src/atlas/components/chat/DeepResearchMessage.tsx"),
+  await read("src/atlas/components/chat/DeepResearchRunMessage.tsx"),
+  await read("src/atlas/components/chat/ResearchClarificationCard.tsx"),
+].join("\n");
 const settingsTab = await read("src/components/settings/Tabs/DeepResearchSettings.tsx");
 const settingsSchema = await read("src/lib/stores/settings/schema.ts");
 const chatQueries = await read("src/atlas/hooks/chat/useChatQueries.ts");
 const chunkHandler = await read("src/atlas/hooks/stream/useChatChunkEvent.ts");
 const settingsFeatures = await read("src/lib/features/frontendFeatures.ts");
-const chatCommand = await read("src-tauri/src/commands/chat.rs");
+const chatCommand = [
+  await read("src-tauri/src/commands/chat/mod.rs"),
+  await read("src-tauri/src/commands/chat/send.rs"),
+].join("\n");
 const phases = await read("src-tauri/src/agent/deep_research/phases.rs");
 
 expect(engine.includes("fn milestone_progress") && engine.includes("AtomicU8"),

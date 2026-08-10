@@ -25,7 +25,6 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::new())
         .setup(|app| {
@@ -426,6 +425,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::system::get_system_metrics,
             commands::system::get_system_status,
+            commands::system::get_user_display_name,
             commands::system::get_init_status,
             commands::system::set_complete,
             commands::system::get_system_stats,
@@ -449,8 +449,10 @@ pub fn run() {
             commands::document::delete_document,
             commands::settings::get_setting,
             commands::settings::set_setting,
+            commands::settings::delete_secret,
             commands::settings::set_settings,
             commands::settings::get_all_settings,
+            commands::settings::get_provider_catalog,
             commands::settings::discover_models,
             commands::settings::get_all_available_models,
             commands::settings::get_provider_usage,

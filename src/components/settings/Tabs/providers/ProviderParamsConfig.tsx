@@ -1,6 +1,7 @@
 import { useMemo, memo, useState } from 'react';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
+import { DEFAULT_PROVIDER_CAPABILITY_PROFILE, PROVIDER_CAPABILITY_PROFILES } from '@/lib/types/provider';
 
 interface ParamConfig {
     id: string;
@@ -76,6 +77,15 @@ const COMMON_PARAMS: Record<string, ParamConfig> = {
         step: 0.05,
         default: 1.1
     },
+    seed: {
+        id: 'seed',
+        label: 'Seed',
+        description: 'Use a fixed seed for repeatable sampling when supported.',
+        min: 0,
+        max: 2147483647,
+        step: 1,
+        default: 0
+    },
     stop: {
         id: 'stop',
         label: 'Stop Sequences',
@@ -87,25 +97,6 @@ const COMMON_PARAMS: Record<string, ParamConfig> = {
     }
 };
 
-const PROVIDER_SUPPORTED_PARAMS: Record<string, string[]> = {
-    openai: ['temperature', 'topP', 'maxTokens', 'presencePenalty', 'frequencyPenalty', 'stop'],
-    anthropic: ['temperature', 'topP', 'topK', 'maxTokens', 'stop'],
-    google: ['temperature', 'topP', 'topK', 'maxTokens', 'stop'],
-    gemini: ['temperature', 'topP', 'topK', 'maxTokens', 'stop'],
-    mistral: ['temperature', 'topP', 'maxTokens', 'stop'],
-    groq: ['temperature', 'topP', 'maxTokens', 'stop'],
-    deepseek: ['temperature', 'topP', 'maxTokens', 'stop'],
-    ollama: ['temperature', 'topP', 'topK', 'maxTokens', 'repeatPenalty', 'stop'],
-    lmstudio: ['temperature', 'topP', 'maxTokens', 'stop'],
-    xai: ['temperature', 'topP', 'maxTokens', 'stop'],
-    openrouter: ['temperature', 'topP', 'maxTokens', 'stop'],
-    opencode: ['temperature', 'topP', 'maxTokens', 'stop'],
-    together: ['temperature', 'topP', 'maxTokens', 'stop'],
-    perplexity: ['temperature', 'topP', 'maxTokens', 'stop'],
-    nine_router: ['temperature', 'topP', 'topK', 'maxTokens', 'repeatPenalty', 'presencePenalty', 'frequencyPenalty', 'stop'],
-    aihubmix: ['temperature', 'topP', 'maxTokens', 'presencePenalty', 'frequencyPenalty', 'stop'],
-};
-
 const EMPTY_PARAMS = {};
 
 export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string }) => {
@@ -114,7 +105,7 @@ export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string
     const [showAdvanced, setShowAdvanced] = useState(false);
 
     const supportedParams = useMemo(() => {
-        const keys = PROVIDER_SUPPORTED_PARAMS[providerKey] || ['temperature', 'topP', 'maxTokens'];
+        const keys = (PROVIDER_CAPABILITY_PROFILES[providerKey] || DEFAULT_PROVIDER_CAPABILITY_PROFILE).parameters;
         return keys.map(k => COMMON_PARAMS[k]).filter(Boolean);
     }, [providerKey]);
 

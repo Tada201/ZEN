@@ -129,7 +129,7 @@ pub fn make_provider(config: &ProviderConfig) -> Arc<dyn LlmProvider> {
     let p_type = config.provider_type.to_lowercase();
     match p_type.as_str() {
         "ollama" => Arc::new(OllamaProvider::new(&config.base_url)),
-        "anthropic" => Arc::new(AnthropicProvider::new(&config.api_key)),
+        "anthropic" => Arc::new(AnthropicProvider::new(&config.api_key, &config.base_url)),
         "lmstudio" => Arc::new(LmStudioProvider::new(&config.base_url)),
         _ => {
             let mut extra_headers = vec![];

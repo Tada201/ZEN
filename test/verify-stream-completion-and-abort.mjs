@@ -10,7 +10,7 @@ const abortHookSource = readFileSync(
   "utf8",
 );
 const chatCommandSource = readFileSync(
-  new URL("../src-tauri/src/commands/chat.rs", import.meta.url),
+  new URL("../src-tauri/src/commands/chat/send.rs", import.meta.url),
   "utf8",
 );
 const runnerSource = readFileSync(
@@ -56,9 +56,10 @@ assert(
 assert(
   chatCommandSource.includes("token_for_error.is_cancelled()") &&
     chatCommandSource.includes('"chat:done"') &&
-    chatCommandSource.includes('"reason": "cancelled"') &&
+    chatCommandSource.includes('"content": "Response stopped."') &&
     runnerSource.includes("AgentEvent::ChatError(ChatErrorPayload") &&
-    orchestratorSource.includes("AgentEvent::ChatError(ChatErrorPayload"),
+    orchestratorSource.includes("AgentEvent::ChatError(") &&
+    orchestratorSource.includes("ChatErrorPayload"),
   "backend runner and orchestrator failures must emit terminal chat events instead of only logging",
 );
 

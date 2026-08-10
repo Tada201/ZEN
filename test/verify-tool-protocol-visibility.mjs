@@ -44,7 +44,10 @@ assert.equal(stripToolProtocolText('```json\n{"name":"Zen"}\n```'), '```json\n{"
 
 assert(chunkBufferSource.includes("filterToolProtocolStream"));
 assert(chunkBufferSource.includes("stripToolProtocolText(content)"));
-assert(chunkBufferSource.includes("The streamed steps are the chronological source of truth"));
+// The reconciliation comment was rewritten; the new wording emphasises that
+// streamed text steps are reconciled against the canonical chat:done content
+// (instead of "chronological source of truth").
+assert(chunkBufferSource.includes("reconcile every text step against"));
 assert(!chunkBufferSource.includes("remove subsequent partial text steps"));
 assert(voiceEventsSource.includes("rawResponseRef.current += delta"));
 assert(voiceTextSource.includes("(?:```|$)"));

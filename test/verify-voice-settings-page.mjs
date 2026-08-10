@@ -47,7 +47,9 @@ for (const field of [
   "voiceDisplayAgentAutoCompactEnabled",
   "voiceDisplayAgentCompactThreshold",
   "voiceDisplayAgentPrompt",
-  "voiceDisplayAgentBoardMemoryLimit",
+  // `voiceDisplayAgentBoardMemoryLimit` was removed from settings: the board
+  // memory cap is now a hard constant `VOICE_DISPLAY_AGENT_BOARD_SNAPSHOT_LIMIT`
+  // in src/atlas/components/voice/voiceStageStore.ts (no longer user-tunable).
 ]) {
   assertIncludes(settingsSchema, field, `Settings schema missing ${field}.`);
   assertIncludes(audioSlice, field, `Audio slice missing ${field}.`);
@@ -56,9 +58,10 @@ for (const field of [
 
 assertIncludes(voiceDefaults, "VOICE_DISPLAY_AGENT_DEFAULT_CONTEXT_TOKENS = 131072", "Voice context default must be 128k.");
 assertIncludes(voiceDefaults, "VOICE_DISPLAY_AGENT_DEFAULT_COMPACT_THRESHOLD = 75", "Voice compaction threshold default must be 75%.");
-assertIncludes(voiceDefaults, "VOICE_DISPLAY_AGENT_DEFAULT_BOARD_MEMORY_LIMIT = 3", "Voice board memory default must be 3.");
+// BOARD_SNAPSHOT_LIMIT replaced the per-user DEFAULT_BOARD_MEMORY_LIMIT knob;
+// it is now a hard constant (=3) exported from voiceDefaults.ts.
+assertIncludes(voiceDefaults, "VOICE_DISPLAY_AGENT_BOARD_SNAPSHOT_LIMIT = 3", "Voice board memory default must be 3.");
 assertIncludes(voiceSettings, "max={50}", "Voice max-turns control must cap at 50.");
-assertIncludes(voiceSettings, "max={3}", "Voice board-memory control must cap at 3.");
 assertIncludes(voiceDefaults, "Do not browse, call tools, fetch data", "Default prompt must keep the render agent tool-free.");
 
 assertIncludes(packageJson, '"test:voice-settings-page"', "Voice settings verifier must be registered in package.json.");

@@ -869,9 +869,9 @@ impl McpClient {
         };
 
         match endpoint {
-            ServerEndpoint::Http(http_endpoint) => {
+            ServerEndpoint::Http(endpoint) => {
                 let call_url =
-                    format!("{}/tools/call", http_endpoint.url.trim_end_matches('/'));
+                    format!("{}/tools/call", endpoint.url.trim_end_matches('/'));
                 let body = serde_json::json!({
                     "jsonrpc": "2.0",
                     "method": methods::TOOLS_CALL,
@@ -883,7 +883,7 @@ impl McpClient {
                 });
 
                 let client = reqwest::Client::new();
-                let resp = Self::apply_mcp_headers(client.post(&call_url), Some(&http_endpoint))
+                let resp = Self::apply_mcp_headers(client.post(&call_url), Some(&endpoint))
                     .json(&body)
                     .timeout(std::time::Duration::from_secs(30))
                     .send()

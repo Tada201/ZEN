@@ -361,16 +361,16 @@ Always use these specialized code blocks for visual scenarios:
         instructions.push_str(addendum);
     }
 
-    if !replace_system_prompt {
-        if image_gen.unwrap_or(false) || tool_ids.contains(&"generate_image".to_string()) {
-            instructions.push_str("\n\n[IMAGE GENERATION CAPABILITY]\n\
+    if !replace_system_prompt
+        && (image_gen.unwrap_or(false) || tool_ids.contains(&"generate_image".to_string()))
+    {
+        instructions.push_str("\n\n[IMAGE GENERATION CAPABILITY]\n\
             IMPORTANT: The Image Generation feature is currently ENABLED for this turn. The `generate_image` tool is available through the standard tool protocol. When the user asks to generate, create, draw, paint, or illustrate an image/artwork:\n\
             1. Call `tool_list({\"query\":\"image\"})` to discover the `generate_image` tool.\n\
             2. Call `tool_info({\"tool_id\":\"generate_image\"})` to read its schema.\n\
             3. Call `tool_exec({\"tool_id\":\"generate_image\",\"arguments\":{\"prompt\":\"<detailed description>\"}})` with a highly descriptive prompt.\n\
             4. After the tool returns, it will provide an `image_uri` (e.g., `asset://localhost/...`). You MUST display the generated image directly to the user inside your chat response block using standard markdown image syntax: `![Generated Image](image_uri)`. This is required because there is no automatic preview in the tool card, and the image will only render if you place it in your response text.\n\n\
             IMPORTANT: Do NOT call `generate_image` directly. Use `tool_list` -> `tool_info` -> `tool_exec` as with any other tool.");
-        }
     }
 
     // Detect voice mode and read display agent settings

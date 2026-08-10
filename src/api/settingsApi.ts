@@ -10,6 +10,8 @@ export const settingsApi = {
   getAllSettings: () => callCommand<Record<string, string>>("get_all_settings"),
   setSetting: (key: string, value: string) =>
     callCommand<void>("set_setting", { key, value }),
+  deleteSecret: (key: string) =>
+    callCommand<void>("delete_secret", { key }),
   setSettings: (settings: Record<string, string>) =>
     callCommand<void>("set_settings", { settings }),
 };

@@ -178,10 +178,10 @@ impl InitProgress {
             // conversation_store, rag) are external/optional and may be
             // `error` (e.g. LanceDB can't mount on this machine) without
             // blocking the boot gate.
-            if p.id == "bg.orchestrator" {
-                if p.status == "done" || p.status == "skipped" || p.status == "error" {
-                    orchestrator_terminal = true;
-                }
+            if p.id == "bg.orchestrator"
+                && (p.status == "done" || p.status == "skipped" || p.status == "error")
+            {
+                orchestrator_terminal = true;
             }
             if p.id.starts_with("bg.") && p.status != "done" && p.status != "skipped" && p.status != "error" {
                 background_complete = false;
@@ -241,10 +241,10 @@ impl SysInfoState {
 ///
 /// Both signals must be `true` for the canonical Tauri splash → main
 /// transition (see https://v2.tauri.app/learn/splashscreen/):
-///   * `backend_ready`  — critical init + bg.orchestrator (chat-essential)
-///                        reached terminal state (set in lib.rs).
-///   * `frontend_ready` — the React app called `set_complete("frontend")`
-///                        after its own init hook (useAppInit) finished.
+/// * `backend_ready`  — critical init + bg.orchestrator (chat-essential)
+///   reached terminal state (set in lib.rs).
+/// * `frontend_ready` — the React app called `set_complete("frontend")`
+///   after its own init hook (useAppInit) finished.
 pub struct SetupFlags {
     pub frontend_ready: bool,
     pub backend_ready: bool,

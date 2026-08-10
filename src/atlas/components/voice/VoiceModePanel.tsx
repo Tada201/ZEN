@@ -239,7 +239,7 @@ export function VoiceModePanelInner({
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
-              className="absolute top-2 z-20 flex items-center gap-2 rounded-full border border-orange-500/20 bg-orange-950/30 px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider text-orange-400 backdrop-blur-sm motion-safe:animate-pulse"
+              className="absolute top-2 z-20 flex items-center gap-2 rounded-full border border-orange-500/20 bg-orange-950/30 px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider text-orange-400 backdrop-blur-sm animate-pulse"
             >
               <Sparkles size={10} />
               <span>AGENT ACTION: {toolAction}</span>
@@ -300,7 +300,7 @@ export function VoiceModePanelInner({
             )}
             title={agentActivity.displayAgentRunning ? "Voice display agent is rendering the board" : "Voice display agent is idle"}
           >
-            <span className={cn("h-1.5 w-1.5 rounded-full", agentActivity.displayAgentRunning ? "bg-cyan-300 motion-safe:animate-pulse" : "bg-muted")} />
+            <span className={cn("h-1.5 w-1.5 rounded-full", agentActivity.displayAgentRunning ? "bg-cyan-300 animate-pulse" : "bg-muted")} />
             <Bot size={13} />
             <span>{agentActivity.displayAgentRunning ? "DISPLAY" : "IDLE"}</span>
           </div>

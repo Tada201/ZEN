@@ -177,7 +177,7 @@ export const ReasoningBlock = memo(function ReasoningBlock({ content, isThinking
         <CollapsibleTrigger
           aria-label={expanded ? "Collapse reasoning details" : "Expand reasoning details"}
           className={cn(
-            "group/reasoning flex min-h-8 w-full items-center justify-between px-2.5 py-1.5 text-left outline-none transition-colors motion-reduce:transition-none hover:bg-muted",
+            "group/reasoning flex min-h-8 w-full items-center justify-between px-2.5 py-1.5 text-left outline-none transition-colors hover:bg-muted",
             expanded && "border-b border-border bg-muted"
           )}
         >
@@ -185,7 +185,7 @@ export const ReasoningBlock = memo(function ReasoningBlock({ content, isThinking
             <div className="relative flex h-4 w-4 shrink-0 items-center justify-center">
               <div className={cn(
                 "w-1.5 h-1.5 rounded-full transition-colors duration-200",
-                isThinking ? "bg-primary motion-safe:animate-pulse" : "bg-muted-foreground"
+                isThinking ? "bg-primary motion-safe:animate-pulse motion-reduce:transition-none" : "bg-muted-foreground"
               )} />
             </div>
 

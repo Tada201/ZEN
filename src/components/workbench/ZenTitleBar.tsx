@@ -91,10 +91,10 @@ export function ZenTitleBar({ children }: ZenTitleBarProps = {}) {
         <img
           src={appIconUrl}
           alt=""
-          className="h-5 w-5 rounded object-contain transition-opacity group-hover:opacity-0 group-focus-visible:opacity-0 motion-reduce:transition-none"
+          className="h-5 w-5 rounded object-contain transition-opacity group-hover:opacity-0 group-focus-visible:opacity-0"
         />
         <SidebarIcon
-          className="absolute h-4 w-4 text-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none"
+          className="absolute h-4 w-4 text-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
           aria-hidden="true"
         />
       </button>

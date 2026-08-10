@@ -510,7 +510,7 @@ impl Runner {
                     let mut cache = state.context_breakdown_cache.write().await;
                     cache.insert(breakdown.chat_id.clone(), breakdown.clone());
                 }
-                let _ = self.emit(crate::agent::event_bus::AgentEvent::ContextBreakdown(breakdown));
+                self.emit(crate::agent::event_bus::AgentEvent::ContextBreakdown(breakdown));
             }
 
             let system_content = enrich_ctx.system_content;

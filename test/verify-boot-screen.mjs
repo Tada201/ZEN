@@ -37,13 +37,15 @@ assert(!/setCriticalDone|setCoreDone/.test(bootSource), "BootScreen must not mai
 assert(!/heldAtFull/.test(bootSource), "BootScreen must not gate the reveal animation behind a 100% hold phase");
 assert(!/isInitialized/.test(bootSource), "BootScreen must not depend on useAppInit's isInitialized (Rust owns the gate)");
 
-// What BootScreen must still do:
-//   - render the wireframe assembly (panels appear staggered)
-//   - play the cover-mask reveal animation on mount
-//   - call onComplete after the reveal so WorkspaceApp can take over
-assert(/setTimeout\(\(\)\s*=>\s*setRevealed\(true\)/.test(bootSource), "BootScreen must play the cover-mask reveal animation on mount");
-assert(/setTimeout\(\(\)\s*=>\s*done\(\),\s*4400\)/.test(bootSource), "BootScreen must unmount after the reveal (~4.4s)");
-assert(/setPanelVisible\(v\s*=>\s*\(\{\.\.\.v,\s*leftSidebar:\s*true\}\)\),\s*100\)/.test(bootSource), "BootScreen must assemble the wireframe panels in a stagger");
+// The main-window handoff is intentionally not a fake app-shell wireframe.
+// It reuses the canonical black-hole geometry and keeps the reveal bounded.
+assert(bootSource.includes("WelcomeBlackHoleSvg"), "BootScreen must reuse the canonical black-hole welcome geometry");
+assert(bootSource.includes("WelcomeBlackHoleSvg draw"), "BootScreen must use the path-by-path black-hole draw animation");
+assert(!bootSource.includes("Welcome, "), "BootScreen must keep the splash focused on the logo");
+assert(!bootSource.includes("clipPath"), "BootScreen must not use a generic directional wipe");
+assert(bootSource.includes("zen:main-visible") && bootSource.includes("handoffReady"), "BootScreen must wait for the native main-window handoff before starting its reveal");
+assert(!bootSource.includes("mix-blend-screen"), "BootScreen must render the packaged logo without blend effects");
+assert(/Math\.min\(5000,\s*Math\.max\(3200,\s*bootDurationMs\)\)/.test(bootSource), "BootScreen reveal must remain bounded and allow the three-second draw");
 
 // Boot progress must be deterministic — no Math.random hot-loop fuzz.
 assert(!bootSource.includes("Math.random"), "boot progress must be deterministic and avoid decorative hot-loop randomness");

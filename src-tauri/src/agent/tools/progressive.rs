@@ -420,6 +420,15 @@ impl ProgressiveToolRegistry {
             DetailLevel::Full,
         ));
 
+        self.register_metadata(ToolMetadata::new(
+            "skill",
+            "Skill",
+            "List, load, or execute an explicitly selected skill using the canonical skill tool.",
+            "system",
+            vec!["skill", "instructions", "guidance", "load"],
+            DetailLevel::Full,
+        ));
+
         self.tool_factory.insert(
             "get_system_metrics".to_string(),
             Box::new(|| {

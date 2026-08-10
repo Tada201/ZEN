@@ -22,6 +22,12 @@ pub struct MediaService {
     app_data_dir: OnceLock<PathBuf>,
 }
 
+impl Default for MediaService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MediaService {
     pub fn new() -> Self {
         Self {

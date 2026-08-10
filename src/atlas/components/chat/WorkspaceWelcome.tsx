@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { motion } from "framer-motion";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   Check,
@@ -11,6 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
+import { motionDurations, motionEasings, useReducedMotion } from "@/lib/motion";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { WelcomeBlackHoleBackground } from "./WelcomeBlackHoleBackground";
@@ -50,6 +52,7 @@ export function WorkspaceWelcome({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [search, setSearch] = useState("");
   const welcomePageQuality = useSettingsStore((state) => state.welcomePageQuality);
+  const reducedMotion = useReducedMotion();
   const configuredWorkspacePath = useSettingsStore((state) => state.workspacePath);
   const workspaceTransitioning = useWorkspaceTransitioning();
   const workspaceStatus = selectedWorkspace
@@ -118,8 +121,26 @@ export function WorkspaceWelcome({
           mode is mounted at the root so it spans the full viewport. */}
       {welcomeBackground}
 
-      <main className="relative z-10 flex w-full max-w-[640px] flex-col items-center">
-        <div className="relative z-10 mb-5 flex w-fit max-w-full flex-col items-center rounded-2xl border border-border/60 bg-background/80 px-5 py-4 shadow-[0_8px_24px_rgba(0,0,0,0.18)]">
+      <motion.main
+        className="relative z-10 flex w-full max-w-[640px] flex-col items-center"
+        initial={reducedMotion ? false : { opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={reducedMotion ? { duration: 0 } : {
+          duration: motionDurations.standard,
+          ease: motionEasings.standard,
+          delay: 0.08,
+        }}
+      >
+        <motion.div
+          className="relative z-10 mb-5 flex w-fit max-w-full flex-col items-center rounded-2xl border border-border/60 bg-background/80 px-5 py-4 shadow-[0_8px_24px_rgba(0,0,0,0.18)]"
+          initial={reducedMotion ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={reducedMotion ? { duration: 0 } : {
+            duration: motionDurations.standard,
+            ease: motionEasings.standard,
+            delay: 0.14,
+          }}
+        >
           <div className="text-center">
             <h1 className="text-lg font-semibold leading-tight text-foreground sm:text-xl">
               Start where your work begins.
@@ -155,9 +176,18 @@ export function WorkspaceWelcome({
               })}
             </div>
           )}
-        </div>
+        </motion.div>
 
-        <div className="relative z-10 flex w-full flex-col">
+        <motion.div
+          className="relative z-10 flex w-full flex-col"
+          initial={reducedMotion ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={reducedMotion ? { duration: 0 } : {
+            duration: motionDurations.standard,
+            ease: motionEasings.standard,
+            delay: 0.2,
+          }}
+        >
           {/* Top toolbar integrated directly above composer using theme tokens */}
           <div className="relative z-30 flex items-center gap-4 rounded-t-xl border-x border-t border-border bg-card px-3.5 h-[38px]">
             <Popover
@@ -270,8 +300,8 @@ export function WorkspaceWelcome({
           <div className="relative z-40 w-full">
             {composer}
           </div>
-        </div>
-      </main>
+        </motion.div>
+      </motion.main>
     </div>
   );
 }

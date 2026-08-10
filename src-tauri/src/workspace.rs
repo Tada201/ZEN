@@ -66,7 +66,7 @@ pub fn validate_workspace_path(workspace_root: &Path, requested_path: &Path) -> 
 
         // Reconstruct the full path using the canonicalized ancestor to inherit the same UNC prefix/format
         let relative = requested_path
-            .strip_prefix(&ancestor)
+            .strip_prefix(ancestor)
             .unwrap_or(requested_path);
         canonical_ancestor.join(relative)
     };
@@ -190,8 +190,8 @@ pub fn get_default_workspace() -> PathBuf {
 #[cfg(target_os = "windows")]
 fn strip_unc_prefix(path: &Path) -> PathBuf {
     let path_str = path.to_string_lossy();
-    if path_str.starts_with(r"\\?\") {
-        PathBuf::from(&path_str[4..])
+    if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
+        PathBuf::from(stripped)
     } else {
         path.to_path_buf()
     }

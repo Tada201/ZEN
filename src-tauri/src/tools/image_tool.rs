@@ -299,8 +299,8 @@ Use for: drawing, painting, creating artwork, illustrations, sketches, photo-rea
             });
         }
 
-        let is_png = &image_data[0..8] == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
-        let is_jpg = &image_data[0..3] == [0xFF, 0xD8, 0xFF];
+        let is_png = image_data[0..8] == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        let is_jpg = image_data[0..3] == [0xFF, 0xD8, 0xFF];
 
         if !is_png && !is_jpg {
             return Err(ToolError::ExecutionFailed {

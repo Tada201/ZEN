@@ -100,8 +100,11 @@ export function useSendHandler(ctx: UseSendHandlerCtx): UseSendHandlerResult {
     }
     if (!ctx.message.trim() && ctx.selectedFiles.length === 0) return;
 
-    const modelId = ctx.selectedModelId || ctx.selectedModelInfo?.id || "No Model";
-    const providerId = ctx.selectedProvider || ctx.selectedModelInfo?.provider || "ollama";
+    const selectedModelId = ctx.selectedModelId;
+    const selectedProvider = ctx.selectedProvider;
+    const selectedModelInfo = ctx.selectedModelInfo;
+    const modelId = selectedModelId || selectedModelInfo?.id || "No Model";
+    const providerId = selectedProvider || selectedModelInfo?.provider || "ollama";
     const attachments = await ctx.convertFiles(ctx.selectedFiles);
 
     ctx.onSend({

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { Message } from "./types";
 import { scrubberTicks, tickIndexAt, type ChatScrubberAccent, type ChatScrubberTick } from "./chatScrubberModel";
+import { motionDurations, motionEasings, useReducedMotion } from "@/lib/motion";
 
 const accentLabels: Record<ChatScrubberAccent, string> = {
   approval: "Approval",
@@ -25,6 +27,7 @@ export function ChatTimelineScrubber({
   scrollAreaRef: RefObject<HTMLDivElement | null>;
 }) {
   const ticks = useMemo(() => scrubberTicks(messages), [messages]);
+  const reducedMotion = useReducedMotion();
   const railRef = useRef<HTMLDivElement>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [focusIndex, setFocusIndex] = useState(0);
@@ -103,7 +106,10 @@ export function ChatTimelineScrubber({
   const preview: ChatScrubberTick | null = hoverIndex === null ? null : ticks[hoverIndex] || null;
 
   return (
-    <nav
+    <motion.nav
+      initial={reducedMotion ? false : { opacity: 0, x: -4 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.standard, ease: motionEasings.standard }}
       className={cn("relative z-10 mx-2 hidden w-7 shrink-0 self-center py-2 sm:mx-3 sm:flex", dragging && "cursor-grabbing")}
       aria-label={`Conversation minimap, ${ticks.length} message${ticks.length === 1 ? "" : "s"}`}
       onMouseLeave={() => { if (!dragging) showPreview(null); }}
@@ -174,8 +180,13 @@ export function ChatTimelineScrubber({
         ))}
       </div>
 
-      {preview && (
-        <div
+      <AnimatePresence initial={false}>
+        {preview && (
+        <motion.div
+          initial={reducedMotion ? false : { opacity: 0, x: -4, scale: 0.98 }}
+          animate={{ opacity: 1, x: 0, scale: 1 }}
+          exit={reducedMotion ? undefined : { opacity: 0, x: -4, scale: 0.98 }}
+          transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
           className="pointer-events-none absolute left-full top-0 z-20 w-[min(300px,calc(100vw-48px))] -translate-y-1/2 rounded-lg border border-border bg-card px-2.5 py-2 shadow-2xl"
           style={{ top: cardY || "50%" }}
           role="tooltip"
@@ -187,8 +198,9 @@ export function ChatTimelineScrubber({
           </div>
           <p className="mb-1 line-clamp-2 text-[11px] leading-relaxed text-foreground">{preview.label}</p>
           {preview.reply && <p className="line-clamp-2 text-[11px] leading-relaxed text-muted-foreground"><b className="mr-1 text-[9px] uppercase">Agent</b>{preview.reply}</p>}
-        </div>
-      )}
-    </nav>
+        </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.nav>
   );
 }

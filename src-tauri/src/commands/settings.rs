@@ -3,8 +3,162 @@ use crate::db::models::{ModelInfo, ProviderConfig};
 use crate::error::{AppResult, ZenResult};
 use crate::services::is_secret_key;
 use crate::tools::manager::{ToolManager, ToolMetadata};
-use std::collections::HashMap;
+use serde::Serialize;
+use std::collections::{HashMap, HashSet};
 use tauri::State;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderCatalogEntry {
+    pub id: String,
+    pub default_base_url: String,
+    pub base_url: String,
+    pub is_local: bool,
+    pub configured: bool,
+    pub api_key_present: bool,
+    pub enabled: bool,
+}
+
+/// Keep the global model getter deterministic. Providers and gateways can
+/// expose the same model more than once, but identity is scoped to the
+/// provider rather than the display name alone.
+fn normalize_model_catalog(mut models: Vec<ModelInfo>) -> Vec<ModelInfo> {
+    let mut seen = HashSet::new();
+    models.retain(|model| {
+        let provider = model.provider.as_deref().unwrap_or("unknown");
+        seen.insert(format!("{provider}\u{0}{}", model.id))
+    });
+    models.sort_by(|left, right| {
+        left.provider
+            .as_deref()
+            .unwrap_or("unknown")
+            .cmp(right.provider.as_deref().unwrap_or("unknown"))
+            .then_with(|| left.name.cmp(&right.name))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    models
+}
+
+fn custom_models_from_settings(
+    settings: &HashMap<String, String>,
+    provider_id: &str,
+) -> Vec<ModelInfo> {
+    let Some(raw_custom) = settings.get("custom_providers") else {
+        return Vec::new();
+    };
+    let Ok(custom_providers) = serde_json::from_str::<Vec<serde_json::Value>>(raw_custom) else {
+        return Vec::new();
+    };
+    let Some(provider) = custom_providers
+        .into_iter()
+        .find(|provider| provider.get("id").and_then(|value| value.as_str()) == Some(provider_id))
+    else {
+        return Vec::new();
+    };
+    let Some(raw_models) = provider.get("customModels") else {
+        return Vec::new();
+    };
+    let Ok(mut models) = serde_json::from_value::<Vec<ModelInfo>>(raw_models.clone()) else {
+        return Vec::new();
+    };
+    for model in &mut models {
+        if model.provider.is_none() {
+            model.provider = Some(provider_id.to_string());
+        }
+        if model.name.trim().is_empty() {
+            model.name = model.id.clone();
+        }
+    }
+    models
+}
+
+/// Return the backend's provider catalog and current non-secret connection
+/// state. This is the runtime source for discovery; raw credentials never
+/// cross the IPC boundary.
+#[tauri::command]
+pub async fn get_provider_catalog(state: State<'_, AppState>) -> ZenResult<Vec<ProviderCatalogEntry>> {
+    let settings = state.settings_manager.get_all().await?;
+    let mut entries = Vec::new();
+
+    for provider_id in crate::llm::provider_meta::catalog_names() {
+        let Some(meta) = crate::llm::provider_meta::PROVIDER_CATALOG
+            .iter()
+            .find(|provider| provider.name == provider_id)
+        else {
+            continue;
+        };
+        let api_key_key = meta
+            .api_key_key
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("{}_api_key", provider_id));
+        let api_key_present = state
+            .secret_manager
+            .has_secret(&api_key_key)
+            .await
+            .unwrap_or(false);
+        let base_url = settings
+            .get(&format!("{}_base_url", provider_id))
+            .filter(|value| !value.is_empty())
+            .cloned()
+            .unwrap_or_else(|| meta.default_base_url.to_string());
+        let is_local = base_url.starts_with("http://localhost")
+            || base_url.starts_with("http://127.0.0.1")
+            || matches!(provider_id, "ollama" | "lmstudio" | "nine_router" | "vx");
+        let configured = api_key_present
+            || settings.contains_key(&format!("{}_base_url", provider_id))
+            || meta.api_key_key.is_none();
+
+        entries.push(ProviderCatalogEntry {
+            id: provider_id.to_string(),
+            default_base_url: meta.default_base_url.to_string(),
+            base_url,
+            is_local,
+            configured,
+            api_key_present,
+            enabled: true,
+        });
+    }
+
+    // Custom provider definitions are public metadata; their API keys are
+    // stored separately under <provider-id>_api_key in the OS keyring.
+    if let Some(raw_custom) = settings.get("custom_providers") {
+        if let Ok(custom_providers) = serde_json::from_str::<Vec<serde_json::Value>>(raw_custom) {
+            for provider in custom_providers {
+                let Some(id) = provider.get("id").and_then(|value| value.as_str()) else {
+                    continue;
+                };
+                let base_url = provider
+                    .get("baseUrl")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                let api_key_present = state
+                    .secret_manager
+                    .has_secret(&format!("{}_api_key", id))
+                    .await
+                    .unwrap_or(false);
+                entries.push(ProviderCatalogEntry {
+                    id: id.to_string(),
+                    default_base_url: base_url.clone(),
+                    base_url,
+                    is_local: false,
+                    configured: api_key_present
+                        || provider
+                            .get("baseUrl")
+                            .and_then(|value| value.as_str())
+                            .is_some_and(|value| !value.trim().is_empty()),
+                    api_key_present,
+                    enabled: provider
+                        .get("enabled")
+                        .and_then(|value| value.as_bool())
+                        .unwrap_or(true),
+                });
+            }
+        }
+    }
+
+    Ok(entries)
+}
 
 /// Get the canonical tool list with metadata for the Tools settings tab.
 /// Reads from the live registry so stale manual lists cannot drift.
@@ -45,6 +199,22 @@ pub async fn set_setting(state: State<'_, AppState>, key: String, value: String)
     invalidate_provider_cache_if_needed(&state, std::iter::once(key.as_str())).await;
     maybe_sync_tool_permissions(&state, std::iter::once(key.as_str())).await;
 
+    Ok(())
+}
+
+/// Remove a provider credential from the OS keyring and clear its redacted
+/// presence marker. This is intentionally separate from normal settings writes
+/// so the frontend can expose an explicit, auditable credential action.
+#[tauri::command]
+pub async fn delete_secret(state: State<'_, AppState>, key: String) -> AppResult<()> {
+    if !is_secret_key(&key) {
+        return Err(crate::error::ZenError::Custom(
+            "Only credential keys can be removed through this command".to_string(),
+        ));
+    }
+
+    state.secret_manager.delete_secret(&key).await?;
+    invalidate_provider_cache_if_needed(&state, std::iter::once(key.as_str())).await;
     Ok(())
 }
 
@@ -136,41 +306,33 @@ pub async fn get_all_available_models(
     if let Some(p_name) = provider {
         // Fetch from specific provider
         let provider_instance = state.provider_by_name(&p_name, &db).await?;
-        provider_instance.list_models().await
+        let settings = state.settings_manager.get_all().await?;
+        let manual_models = custom_models_from_settings(&settings, &p_name);
+        match provider_instance.list_models().await {
+            Ok(mut models) => {
+                models.extend(manual_models);
+                Ok(normalize_model_catalog(models))
+            }
+            Err(error) if !manual_models.is_empty() => {
+                eprintln!("Using saved manual models for {} after discovery failed: {}", p_name, error);
+                Ok(normalize_model_catalog(manual_models))
+            }
+            Err(error) => Err(error),
+        }
     } else {
-        // Enumerate all configured providers — canonical names match providerOrder
-        // and the crate::llm::create_provider / ProviderRegistry naming contract.
+        // Enumerate the canonical backend catalog so model discovery cannot
+        // silently drift from provider construction and settings metadata.
         let mut all_models = Vec::new();
         let all_settings = state.settings_manager.get_all().await?;
-
-        let known_providers: Vec<&str> = vec![
-            "ollama",
-            "lmstudio",
-            "nine_router",
-            "opencode",
-            "openai",
-            "anthropic",
-            "google",
-            "groq",
-            "mistral",
-            "deepseek",
-            "openrouter",
-            "together",
-            "perplexity",
-            "qwen",
-            "xai",
-            "kilocode",
-            "nvidia",
-            "aihubmix",
-        ];
-
-        for p_name in known_providers {
+        for p_name in crate::llm::provider_meta::catalog_names() {
             // Settings keys use snake_case (frontend camelCase is mapped via
             // settingsMapper.ts → mapStateToSqlite before persist).
-            let api_key_key: String = match p_name {
-                "google" | "gemini" => "gemini_api_key".to_string(),
-                other => format!("{}_api_key", other),
-            };
+            let api_key_key = crate::llm::provider_meta::PROVIDER_CATALOG
+                .iter()
+                .find(|meta| meta.name == p_name)
+                .and_then(|meta| meta.api_key_key)
+                .map(str::to_string)
+                .unwrap_or_else(|| format!("{}_api_key", p_name));
             let base_url_key = format!("{}_base_url", p_name);
 
             let has_key = state
@@ -184,7 +346,10 @@ pub async fn get_all_available_models(
                 .unwrap_or(false);
             let is_local_runtime = p_name == "ollama" || p_name == "lmstudio";
             let is_local_gateway = p_name == "nine_router";
-            let is_no_key_builtin = p_name == "opencode";
+            let is_no_key_builtin = crate::llm::provider_meta::PROVIDER_CATALOG
+                .iter()
+                .find(|meta| meta.name == p_name)
+                .is_some_and(|meta| meta.api_key_key.is_none());
             let is_active = all_settings
                 .get("active_provider")
                 .map(|v| v == p_name)
@@ -215,7 +380,43 @@ pub async fn get_all_available_models(
                 }
             }
         }
-        Ok(all_models)
+
+        // Custom providers use the same registry path as built-ins after
+        // registration: their endpoint, headers, and credential are stored
+        // under the provider id. Include enabled custom nodes in the global
+        // catalog so the chat picker and provider settings share one source
+        // of truth instead of relying only on the frontend's cached models.
+        if let Some(raw_custom) = all_settings.get("custom_providers") {
+            if let Ok(custom_providers) = serde_json::from_str::<Vec<serde_json::Value>>(raw_custom) {
+                for custom_provider in custom_providers {
+                    let Some(custom_id) = custom_provider.get("id").and_then(|value| value.as_str()) else {
+                        continue;
+                    };
+                    let enabled = custom_provider
+                        .get("enabled")
+                        .and_then(|value| value.as_bool())
+                        .unwrap_or(true);
+                    if !enabled {
+                        continue;
+                    }
+                    let manual_models = custom_models_from_settings(&all_settings, custom_id);
+                    if let Ok(provider_instance) = state.provider_by_name(custom_id, &db).await {
+                        match provider_instance.list_models().await {
+                            Ok(mut models) => {
+                                models.extend(manual_models);
+                                all_models.extend(models);
+                            }
+                            Err(e) if !manual_models.is_empty() => {
+                                eprintln!("Using saved manual models for {} after discovery failed: {}", custom_id, e);
+                                all_models.extend(manual_models);
+                            }
+                            Err(e) => eprintln!("Failed to fetch models from custom provider {}: {}", custom_id, e),
+                        }
+                    }
+                }
+            }
+        }
+        Ok(normalize_model_catalog(all_models))
     }
 }
 

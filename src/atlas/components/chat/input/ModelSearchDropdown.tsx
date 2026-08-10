@@ -2,6 +2,7 @@ import { memo, useState, useEffect, useMemo, useDeferredValue } from 'react';
 import { ChevronDown, Search, Check, Sliders } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils/style';
+import { motionDurations, motionEasings, useReducedMotion } from '@/lib/motion';
 import type { Model } from '../../ModelSelector';
 import { ProviderIcon } from './ProviderIcon';
 
@@ -25,6 +26,7 @@ export const ModelSearchDropdown = memo(({
   onOpenModelSelector,
   isCompact
 }: ModelSearchDropdownProps) => {
+  const reducedMotion = useReducedMotion();
   const [modelSearch, setModelSearch] = useState('');
   const [focusedModelIndex, setFocusedModelIndex] = useState(0);
   const deferredModelSearch = useDeferredValue(modelSearch);
@@ -106,9 +108,13 @@ export const ModelSearchDropdown = memo(({
           <>
             <div className="fixed inset-0 z-[110]" onClick={() => setIsOpen(false)} />
             <motion.div 
-              initial={{ opacity: 0, y: -10 }} 
+              initial={reducedMotion ? false : { opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }} 
-              exit={{ opacity: 0, y: -10 }} 
+              exit={reducedMotion ? undefined : { opacity: 0, y: -10 }}
+              transition={reducedMotion ? { duration: 0 } : {
+                duration: motionDurations.fast,
+                ease: motionEasings.standard,
+              }}
               className="absolute bottom-full left-0 z-[120] mb-2 min-w-[280px] max-w-[320px] bg-card dark:bg-card border border-border dark:border-border rounded-md shadow-2xl py-1 flex flex-col overflow-hidden font-sans"
             >
               <div className="px-2 pb-2 mb-1 border-b border-border dark:border-border/50 space-y-2">

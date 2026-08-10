@@ -74,6 +74,7 @@ pub(super) struct IterativeDeepResearcher<'a> {
 
 impl<'a> IterativeDeepResearcher<'a> {
     /// Construct a new researcher with default configuration.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
         app: &'a AppHandle,
         llm_provider: &'a dyn LlmProvider,

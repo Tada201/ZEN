@@ -14,9 +14,9 @@ use crate::llm::LlmProvider;
 pub struct AnthropicProvider {
     client: Client,
     api_key: String,
+    base_url: String,
 }
 
-const ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 
 fn anthropic_reasoning_metadata(model_id: &str) -> (Option<bool>, Option<String>) {
@@ -237,7 +237,7 @@ struct ToolCallAcc {
 }
 
 impl AnthropicProvider {
-    pub fn new(api_key: &str) -> Self {
+    pub fn new(api_key: &str, base_url: &str) -> Self {
         Self {
             client: Client::builder()
                 .timeout(std::time::Duration::from_secs(60))
@@ -245,11 +245,16 @@ impl AnthropicProvider {
                 .build()
                 .expect("Failed to build Anthropic HTTP client"),
             api_key: api_key.to_string(),
+            base_url: base_url.trim_end_matches('/').to_string(),
         }
     }
 
     fn url(&self, path: &str) -> String {
-        format!("{}{}", ANTHROPIC_BASE_URL, path)
+        // Accept both Anthropic's host root and compatible gateways that
+        // expose an OpenAI-style `/v1` base URL. The request paths below
+        // already include `/v1`, so avoid producing `/v1/v1/...`.
+        let base_url = self.base_url.strip_suffix("/v1").unwrap_or(&self.base_url);
+        format!("{}{}", base_url, path)
     }
 
     fn parse_data_url(&self, data_url: &str) -> Option<AnthropicImageSource> {
@@ -904,7 +909,7 @@ impl LlmProvider for AnthropicProvider {
         // Anthropic has no /v1/models endpoint. We try a simple request to validate the key.
         // A lightweight check: just verify the API key header is accepted.
         // We'll try hitting /v1/messages with an invalid body — a 400 means key is valid.
-        let url = format!("{}/v1/messages", ANTHROPIC_BASE_URL);
+        let url = self.url("/v1/messages");
         match self
             .client
             .post(&url)

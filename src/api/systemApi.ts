@@ -62,6 +62,7 @@ export interface InitStatus {
 }
 
 export const systemApi = {
+  getUserDisplayName: () => callCommand<string>("get_user_display_name", {}),
   getHardwareInfo: () => callCommand<HardwareInfo>("get_hardware_info", {}),
   getSystemMetrics: () => callCommand<BackendSystemMetrics>("get_system_metrics", {}),
   getInitStatus: () => callCommand<InitStatus>("get_init_status", {}),

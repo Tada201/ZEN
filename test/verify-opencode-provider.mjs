@@ -31,12 +31,15 @@ assert(
   "OpenCode Free base URL must be persisted and discoverable by provider config",
 );
 
+// The hardcoded `p_name == "opencode"` check was replaced by a generic
+// catalog-driven lookup (`api_key_key.is_none()`), which covers opencode and
+// any future no-key built-ins. Keep the discovery-OR assertion as-is.
 assert(
   backendProviderMeta.includes('name: "opencode"') &&
     backendProviderMeta.includes('name: "opencode_free"') &&
     backendProviderMeta.includes('default_base_url: "https://opencode.ai/zen/v1"') &&
-    backendSettings.includes('"opencode"') &&
-    backendSettings.includes('let is_no_key_builtin = p_name == "opencode";') &&
+    backendSettings.includes("let is_no_key_builtin = ") &&
+    backendSettings.includes("meta.api_key_key.is_none()") &&
     backendSettings.includes("let should_fetch = if is_local") &&
     backendSettings.includes("is_no_key_builtin || is_active || has_key || has_url"),
   "Backend provider registry must include native OpenCode defaults and discovery",

@@ -30,6 +30,7 @@ import { normalizeSettingsTab, type TabId } from "./settingsNavigation";
 export type { TabId } from "./settingsNavigation";
 
 const ProvidersSettings = React.lazy(() => import("@/components/settings/Tabs/ProvidersSettings").then(m => ({ default: m.ProvidersSettings })));
+const UsageStatsSettings = React.lazy(() => import("@/components/settings/Tabs/UsageStatsSettings").then(m => ({ default: m.UsageStatsSettings })));
 const SkillsSettingsContent = React.lazy(() => import("./SkillsSettingsContent").then(m => ({ default: m.SkillsSettingsContent })));
 const FolderBrowser = React.lazy(() => import("./FolderBrowser").then(m => ({ default: m.FolderBrowser })));
 const VoiceSettings = React.lazy(() => import("@/components/settings/Tabs/VoiceSettings").then(m => ({ default: m.VoiceSettings })));
@@ -77,7 +78,7 @@ export function SettingsModal({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[94vh] max-h-[820px] w-[96vw] max-w-[1180px] gap-0 overflow-hidden border-border/60 bg-background p-0 shadow-2xl focus:outline-none focus-visible:outline-none">
+      <DialogContent className="!left-0 !top-0 !h-screen !max-h-none !w-screen !max-w-none !translate-x-0 !translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-background p-0 shadow-2xl focus:outline-none focus-visible:outline-none data-[state=closed]:slide-out-to-bottom-2 data-[state=open]:slide-in-from-bottom-2">
         <DialogTitle className="sr-only">Settings</DialogTitle>
         <DialogDescription className="sr-only">Configure application preferences.</DialogDescription>
         <SettingsContent
@@ -224,12 +225,25 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-background md:flex-row">
+      <header className="absolute inset-x-0 top-0 z-20 flex h-14 items-center justify-between border-b border-border/60 bg-background/90 px-4 backdrop-blur-xl md:pl-[17rem] md:pr-8">
+        <div className="flex min-w-0 items-center gap-3">
+          <WorkbenchIcon name="lucide:settings-2" size={16} className="shrink-0 text-primary" />
+          <div className="min-w-0">
+            <h1 className="truncate text-sm font-semibold text-foreground">Settings</h1>
+            <p className="hidden text-[11px] text-muted-foreground sm:block">Configure Zen across providers, models, and workspaces.</p>
+          </div>
+        </div>
+        <button type="button" onClick={onClose} className="flex h-8 items-center gap-2 rounded-md border border-border/70 px-3 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+          <WorkbenchIcon name="lucide:arrow-left" size={13} />
+          Back to workspace
+        </button>
+      </header>
       <SettingsSidebar activeTab={activeTab} onSelectTab={setActiveTab} />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden bg-background">
-        <ScrollArea className="flex-1">
-          <div className="mx-auto w-full max-w-3xl space-y-6 p-5 md:p-8 lg:p-10">
+        <ScrollArea className="flex-1 pt-14">
+          <div className="mx-auto w-full max-w-7xl space-y-6 p-5 md:p-10 lg:p-12">
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeTab}
@@ -336,6 +350,10 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
 
                 {activeTab === "providers" && (
                   <ProvidersSettings />
+                )}
+
+                {activeTab === "usage" && (
+                  <UsageStatsSettings />
                 )}
 
                 {activeTab === "capabilities" && (

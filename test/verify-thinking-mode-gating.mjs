@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
 const inputSource = readFileSync(new URL("../src/atlas/components/PremiumChatInput.tsx", import.meta.url), "utf8");
+const reasoningCapsSource = readFileSync(new URL("../src/atlas/components/useReasoningCapabilities.ts", import.meta.url), "utf8");
+const chatInputModesSource = readFileSync(new URL("../src/atlas/components/useChatInputModes.ts", import.meta.url), "utf8");
 const providerTypesSource = readFileSync(new URL("../src/lib/types/provider.ts", import.meta.url), "utf8");
 const querySource = readFileSync(new URL("../src/atlas/hooks/chat/useChatQueries.ts", import.meta.url), "utf8");
 const modelSelectorSource = readFileSync(new URL("../src/atlas/components/ModelSelector.tsx", import.meta.url), "utf8");
@@ -9,7 +11,7 @@ const dbModelsSource = readFileSync(new URL("../src-tauri/src/db/models.rs", imp
 const openAiModelsSource = readFileSync(new URL("../src-tauri/src/llm/openai_compat/models.rs", import.meta.url), "utf8");
 const pinnedSource = readFileSync(new URL("../src/atlas/components/chat/input/PinnedActionBar.tsx", import.meta.url), "utf8");
 const plusSource = readFileSync(new URL("../src/atlas/components/chat/input/PlusActionMenu.tsx", import.meta.url), "utf8");
-const chatCommandSource = readFileSync(new URL("../src-tauri/src/commands/chat.rs", import.meta.url), "utf8");
+const chatCommandSource = readFileSync(new URL("../src-tauri/src/commands/chat/send.rs", import.meta.url), "utf8");
 const openAiStreamSource = readFileSync(new URL("../src-tauri/src/llm/openai_compat/stream.rs", import.meta.url), "utf8");
 const anthropicSource = readFileSync(new URL("../src-tauri/src/llm/anthropic.rs", import.meta.url), "utf8");
 
@@ -33,18 +35,22 @@ assert(
   "chat model mapping should preserve provider reasoning metadata",
 );
 
+// Reasoning-capability derivation was carved out of PremiumChatInput.tsx into
+// useReasoningCapabilities.ts (keeps the composer under the 350-line budget).
 assert(
-  inputSource.includes("selectedModelInfo.supportsReasoning === true") &&
-    inputSource.includes("return selectedModelInfo.reasoningConfigType ?? 'none';"),
+  reasoningCapsSource.includes("selectedModelInfo.supportsReasoning === true") &&
+    reasoningCapsSource.includes('return "none";') &&
+    inputSource.includes("useReasoningCapabilities("),
   "chat input should render Thinking from provider metadata, not local model-name guesses",
 );
 
+// buildThinkingPayload moved into useChatInputModes.ts (mode ownership).
 assert(
-  inputSource.includes("const buildThinkingPayload = useCallback((): ThinkingPayload =>") &&
-    inputSource.includes("if (reasoningConfigType === 'effort')") &&
-    inputSource.includes("if (reasoningConfigType === 'budget')") &&
-    inputSource.includes("return { enabled: true };") &&
-    inputSource.includes("thinking: buildThinkingPayload()"),
+  chatInputModesSource.includes("const buildThinkingPayload = useCallback(") &&
+    chatInputModesSource.includes('if (reasoningConfigType === "effort")') &&
+    chatInputModesSource.includes('if (reasoningConfigType === "budget")') &&
+    chatInputModesSource.includes("return { enabled: true };") &&
+    inputSource.includes("buildThinkingPayload"),
   "chat input should only send reasoning parameters supported by the selected model metadata",
 );
 

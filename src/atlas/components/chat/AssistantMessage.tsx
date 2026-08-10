@@ -1,4 +1,5 @@
 import React, { Suspense, useMemo, useRef } from "react";
+import { motion } from "framer-motion";
 import {
   Check, Copy, FileText, Code2, AlertTriangle, ChevronRight, RefreshCcw, Zap, X, Loader2,
 } from "lucide-react";
@@ -32,13 +33,23 @@ import {
   FoldOutCardContent,
   FoldOutCardTrigger,
 } from "@/components/ui/fold-out-card";
+import { executionCardMotion, motionDurations, motionEasings, useReducedMotion } from "@/lib/motion";
 
 const PremiumCard = React.lazy(() => import("../genui/PremiumCard").then(m => ({ default: m.PremiumCard })));
 const OpenUIRenderer = React.lazy(() => import("../OpenUIRenderer").then(m => ({ default: m.OpenUIRenderer })));
 
-const CardFallback = () => (
-  <div className="h-24 w-full rounded-xl border border-border bg-muted motion-safe:animate-pulse" aria-hidden="true" />
-);
+const CardFallback = () => {
+  const reducedMotion = useReducedMotion();
+  return (
+    <div
+      className={cn(
+        "h-24 w-full rounded-xl border border-border bg-muted",
+        !reducedMotion && "animate-pulse",
+      )}
+      aria-hidden="true"
+    />
+  );
+};
 
 // Chat-status phases that are safe to surface as compact inline badges without
 // duplicating the main tool execution trace.
@@ -58,12 +69,10 @@ function isVisibleChatStatusStep(step: Step) {
 function isVisibleChatActionStep(step: Step) {
   if (step.type !== "action") return false;
   if (!isVisibleChatStatusStep(step)) return false;
-  if (step.kind === "chat_status") {
-    // Visible chat_status phases are shown only via the breathing indicator,
-    // not as full timeline rows.
-    return false;
-  }
-  return step.kind === "clarification_request";
+  if (step.kind === "approval_request") return true;
+  if (step.kind === "clarification_request") return true;
+  if (step.kind === "chat_status") return true;
+  return false;
 }
 
 type ExecutionToolIdentity = {
@@ -311,6 +320,7 @@ function renderTextStepWithInlineCards(
   isStreaming: boolean,
   onOpenArtifact: (a: ArtifactData) => void,
   chatId: string | undefined,
+  reducedMotion: boolean,
 ) {
   const orderedCards = step.orderedCards ?? [];
   const fallbackCards = step.cards ?? [];
@@ -328,12 +338,18 @@ function renderTextStepWithInlineCards(
             // flex-col gap still owns the vertical rhythm so cards stay
             // breathing-roomed against adjacent prose.
             return (
-              <div
+              <motion.div
                 key={`card-${segIdx}`}
-                className="w-full animate-in fade-in slide-in-from-top-2 duration-200 motion-reduce:animate-none"
+                className="w-full"
+                initial={reducedMotion ? false : executionCardMotion.initial}
+                animate={executionCardMotion.animate}
+                transition={reducedMotion ? { duration: 0 } : {
+                  duration: motionDurations.fast,
+                  ease: motionEasings.standard,
+                }}
               >
                 <RenderPremiumCard card={segment.card} />
-              </div>
+              </motion.div>
             );
           }
           if (!segment.content.trim()) return null;
@@ -358,11 +374,19 @@ function renderTextStepWithInlineCards(
   return (
     <>
       {fallbackCards.length > 0 && (
-        <div className="flex flex-col gap-4 my-2 w-full animate-in fade-in slide-in-from-top-2 duration-200 motion-reduce:animate-none">
+        <motion.div
+          className="flex flex-col gap-4 my-2 w-full"
+          initial={reducedMotion ? false : executionCardMotion.initial}
+          animate={executionCardMotion.animate}
+          transition={reducedMotion ? { duration: 0 } : {
+            duration: motionDurations.fast,
+            ease: motionEasings.standard,
+          }}
+        >
           {fallbackCards.map((card, idx) => (
             <RenderPremiumCard key={idx} card={card} />
           ))}
-        </div>
+        </motion.div>
       )}
       {Boolean(prose) && (
         <MarkdownContent
@@ -394,6 +418,7 @@ export function AssistantMessage({
   onRegenerate?: (id: string) => void;
   compact?: boolean;
 }) {
+  const reducedMotion = useReducedMotion();
   const { copied, copy } = useCopy();
   const executionGroupKeyCacheRef = useRef(new Map<string, string>());
   const executionGroupFallbackKeyCacheRef = useRef(new Map<string, string>());
@@ -509,10 +534,13 @@ export function AssistantMessage({
         compact ? "bg-transparent py-1" : "bg-transparent py-1.5"
       )}
     >
-        <div className={cn(
+        <motion.div
+          initial={false}
+          animate={wasCancelled ? { opacity: 0, y: -8 } : { opacity: 1, y: 0 }}
+          transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
+          className={cn(
           "mx-auto flex w-full items-start gap-0",
-          compact ? "max-w-full" : "max-w-[800px]",
-          wasCancelled && "animate-out fade-out slide-out-to-top-2 duration-200 fill-mode-forwards motion-reduce:animate-none"
+          compact ? "max-w-full" : "max-w-[800px]"
         )}>
         <div className="flex min-w-0 flex-col gap-2 flex-1">
           <div className="relative">
@@ -536,22 +564,25 @@ export function AssistantMessage({
               )}
 
               {parentWorkingStatus && (
-                <div
-                  className="flex min-h-7 items-center gap-2 text-[12px] text-muted-foreground animate-in fade-in duration-150 motion-reduce:animate-none"
+                <motion.div
+                  initial={reducedMotion ? false : { opacity: 0, y: 2 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
+                  className="flex min-h-7 items-center gap-2 text-[12px] text-muted-foreground"
                   role="status"
                   aria-live="polite"
                   data-testid="chat-status-breathing-indicator"
                   data-phase={parentWorkingStatus}
                 >
                   <span
-                    className="h-2 w-2 shrink-0 rounded-full bg-primary motion-safe:animate-pulse"
+                    className="h-2 w-2 shrink-0 rounded-full bg-primary motion-safe:animate-pulse motion-reduce:transition-none"
                     aria-hidden="true"
                   />
-                  <Loader2 className="h-3.5 w-3.5 shrink-0 motion-safe:animate-spin text-primary" aria-hidden="true" />
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 motion-safe:animate-spin motion-reduce:transition-none text-primary" aria-hidden="true" />
                   <span className="truncate font-sans leading-5">
                     {parentWorkingStatusLabel(parentWorkingStatus)}
                   </span>
-                </div>
+                </motion.div>
               )}
 
             {message.recoveryState === "recovered" && (
@@ -580,7 +611,16 @@ export function AssistantMessage({
                       );
 
                       return (
-                      <div key={stepKey} className="animate-in fade-in duration-150 motion-reduce:animate-none">
+                      <motion.div
+                        key={stepKey}
+                        className="animate-in fade-in duration-150 motion-reduce:transition-none"
+                        initial={reducedMotion ? false : executionCardMotion.initial}
+                        animate={executionCardMotion.animate}
+                        transition={reducedMotion ? { duration: 0 } : {
+                          duration: motionDurations.fast,
+                          ease: motionEasings.standard,
+                        }}
+                      >
                       {step.type === "text" ? (
                         <div className="prose-frontier">
                           <div className="flex flex-col gap-1.5">
@@ -589,6 +629,7 @@ export function AssistantMessage({
                               message.status === "sending",
                               onOpenArtifact,
                               message.sessionId,
+                              reducedMotion,
                             )}
                           </div>
                         </div>
@@ -604,6 +645,7 @@ export function AssistantMessage({
                               executionSteps={executionActionSteps}
                               sessionId={message.sessionId}
                               onOpenArtifact={onOpenArtifact}
+                              preferCompact
                             />
                           </div>
                         ) : step.type === "subagent" && step.subagent ? (
@@ -618,7 +660,7 @@ export function AssistantMessage({
                         ) : step.type === "action" ? (
                           <AgentActionStep step={step} isStreaming={message.status === "sending"} />
                         ) : null}
-                      </div>
+                      </motion.div>
                       );
                         });
                       })()}
@@ -632,7 +674,7 @@ export function AssistantMessage({
                           onOpenArtifact={onOpenArtifact}
                           chatId={message.sessionId}
                         />
-                      </div>
+                        </div>
                     )}
                   </>
                 ) : (
@@ -653,7 +695,12 @@ export function AssistantMessage({
             )}
             
              {inlineError && (
-              <div className="flex items-start gap-3 rounded-xl border border-destructive bg-destructive/10 p-4 animate-in fade-in zoom-in-95 duration-200 motion-reduce:animate-none">
+              <motion.div
+                initial={reducedMotion ? false : { opacity: 0, y: 4, scale: 0.99 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.standard, ease: motionEasings.standard }}
+                className="flex items-start gap-3 rounded-xl border border-destructive bg-destructive/10 p-4"
+              >
                 <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
                 <div className="flex flex-1 flex-col gap-2 min-w-0">
                   <div className="flex flex-col gap-1 font-sans">
@@ -687,7 +734,7 @@ export function AssistantMessage({
                     </Button>
                   )}
                 </div>
-              </div>
+              </motion.div>
             )}
 
             {message.artifact?.type === "openui" && (
@@ -784,7 +831,7 @@ export function AssistantMessage({
             </div>
           )}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

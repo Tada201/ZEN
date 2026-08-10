@@ -32,6 +32,7 @@ function statusLabel(status: string, modelCount: number) {
     if (status === "active") return "Connected";
     if (status === "failed") return "Connection failed";
     if (status === "configured") return modelCount > 0 ? "Configured" : "Ready to test";
+    if (status === "disabled") return "Disabled";
     return "Not configured";
 }
 
@@ -124,6 +125,7 @@ export function ProviderGallery({
                                                 status === "active" && "bg-success",
                                                 status === "failed" && "bg-rose-400",
                                                 status === "configured" && "bg-amber-400",
+                                                status === "disabled" && "bg-muted-foreground/40",
                                                 status === "none" && "bg-muted"
                                             )} />
                                             <WorkbenchIcon name="lucide:chevron-right" size={14} className="shrink-0 text-muted-foreground/60" />

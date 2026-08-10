@@ -16,6 +16,28 @@ Expires:
 
 ## Backend Exemptions
 
+File: src-tauri/src/agent/runner/helpers.rs
+Owner: backend/agent
+Rule Exempted: Rust hard file-size limit
+Reason: Legacy shared runner helper module containing context, streaming, and tool normalization utilities.
+Split or Fix Plan: Split context budgeting, stream helpers, and tool normalization into focused runner modules.
+Expires: Next refactoring cycle
+
+File: src-tauri/src/agent/tools/spawn_tools.rs
+Owner: backend/agent
+Rule Exempted: Rust hard file-size limit
+Reason: Legacy subagent spawning workflow owns handoff, validation, and execution coordination.
+Split or Fix Plan: Extract handoff construction, child execution, and result normalization into separate modules.
+Expires: Next refactoring cycle
+
+File: src-tauri/src/tools/permission.rs
+Owner: backend/security
+Rule Exempted: Rust hard file-size limit
+Reason: Canonical permission policy, path validation, redaction, and regression matrix currently share one security boundary.
+Split or Fix Plan: Split policy evaluation, path guards, redaction, and tests while preserving one public permission API.
+Expires: Next refactoring cycle
+
+
 File: src-tauri/src/agent/deep_research/phases.rs
 Owner: backend/agent
 Rule Exempted: Rust hard file-size limit
@@ -66,6 +88,76 @@ Split or Fix Plan: Decompose registry lookup, validation, and execution into dis
 Expires: Next refactoring cycle
 
 ## Frontend Exemptions
+
+File: src/atlas/components/chat/AssistantMessage.tsx
+Owner: frontend/chat
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Legacy assistant message renderer owns streaming, citations, reasoning, and tool timeline composition.
+Split or Fix Plan: Extract message parts, action controls, and execution timeline adapters into focused components.
+Expires: Next frontend refactor
+
+File: src/atlas/components/chat/SessionSidebar.tsx
+Owner: frontend/chat
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Legacy session navigation surface combines filtering, folders, archive actions, and responsive layout.
+Split or Fix Plan: Extract session filtering, folder controls, and row composition into focused modules.
+Expires: Next frontend refactor
+
+File: src/atlas/components/chat/types.ts
+Owner: frontend/chat
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Shared chat contracts are centralized here to prevent duplicated type definitions across the timeline.
+Split or Fix Plan: Partition types by message, execution, and session domains without changing public imports.
+Expires: Next frontend refactor
+
+File: src/atlas/components/chat/WelcomeBlackHoleBackground.tsx
+Owner: frontend/chat
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Legacy visual background implementation owns the canvas/SVG composition and animation policy.
+Split or Fix Plan: Extract geometry, rendering primitives, and motion orchestration into focused modules.
+Expires: Next frontend refactor
+
+File: src/atlas/components/RightPanel.tsx
+Owner: frontend/workbench
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Utility panel coordinates multiple tabs and live agent/context surfaces in one responsive shell.
+Split or Fix Plan: Extract tab registry and each panel content into focused modules.
+Expires: Next frontend refactor
+
+File: src/atlas/hooks/chat/useChatQueries.ts
+Owner: frontend/chat
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Query hooks centralize chat pagination and reload-safe message hydration contracts.
+Split or Fix Plan: Split chat list, message pagination, and artifact query hooks while keeping the public hook facade.
+Expires: Next frontend refactor
+
+File: src/atlas/hooks/stream/useAgentEvents.ts
+Owner: frontend/chat
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Canonical event routing hook coordinates stream, tool, agent, and persistence events.
+Split or Fix Plan: Extract event-family handlers behind the existing hook facade.
+Expires: Next frontend refactor
+
+File: src/atlas/sections/WorkspaceSection.tsx
+Owner: frontend/workbench
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Workspace section coordinates tabs, editor lifecycle, and app-owned workspace actions.
+Split or Fix Plan: Extract tab lifecycle, workspace commands, and view composition into focused modules.
+Expires: Next frontend refactor
+
+File: src/components/settings/Tabs/ProvidersSettings.tsx
+Owner: frontend/settings
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Provider settings orchestrate catalog, credentials presence, model discovery, and connection state.
+Split or Fix Plan: Extract provider rows, discovery controls, and connection status into focused modules.
+Expires: Next frontend refactor
+
+File: src/lib/stores/settings/createProviderSlice.ts
+Owner: frontend/settings
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Provider state slice currently owns compatibility migration and canonical provider selection state.
+Split or Fix Plan: Split provider catalog, model selection, and persistence migration into domain slices.
+Expires: Next frontend refactor
 
 File: src/components/ui/sidebar.tsx
 Owner: frontend/ui

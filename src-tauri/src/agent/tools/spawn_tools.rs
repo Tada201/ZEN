@@ -518,8 +518,7 @@ impl SpawnAgentTool {
         let handoff = child_runner::build_subagent_handoff(
             &resolved,
             task,
-            context,
-            success_criteria.as_deref(),
+            context,              success_criteria,
             &constraints,
             &relevant_files,
             depth,

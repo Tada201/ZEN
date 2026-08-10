@@ -205,7 +205,7 @@ impl PermissionDecision {
                     }
                 }
             }
-            "ask" | _ => {
+            _ => {
                 // Ask Before Changes (default standard safety):
                 // Low risk runs automatically. Medium, High, and Critical trigger confirmation.
                 if risk_level == RiskLevel::Low {
@@ -1272,9 +1272,11 @@ mod tests {
         let plans = workspace.join("plans");
         std::fs::create_dir_all(&plans).unwrap();
 
-        let mut settings = ToolPermissions::default();
-        settings.permission_mode = "plan_mode".to_string();
-        settings.plans_root = Some(plans.clone());
+        let settings = ToolPermissions {
+            permission_mode: "plan_mode".to_string(),
+            plans_root: Some(plans.clone()),
+            ..ToolPermissions::default()
+        };
 
         let target = plans.join("roadmap.md");
         let args = serde_json::json!({ "path": target.to_string_lossy() });
@@ -1303,9 +1305,11 @@ mod tests {
         let plans = workspace.join("plans");
         std::fs::create_dir_all(&plans).unwrap();
 
-        let mut settings = ToolPermissions::default();
-        settings.permission_mode = "plan_mode".to_string();
-        settings.plans_root = Some(plans.clone());
+        let settings = ToolPermissions {
+            permission_mode: "plan_mode".to_string(),
+            plans_root: Some(plans.clone()),
+            ..ToolPermissions::default()
+        };
 
         // Path outside the plans_root but contains the lookalike string.
         // The legacy substring check would have allowed this.
@@ -1341,9 +1345,11 @@ mod tests {
         std::fs::create_dir_all(&plans).unwrap();
         std::fs::create_dir_all(&outside).unwrap();
 
-        let mut settings = ToolPermissions::default();
-        settings.permission_mode = "plan_mode".to_string();
-        settings.plans_root = Some(plans.canonicalize().unwrap());
+        let settings = ToolPermissions {
+            permission_mode: "plan_mode".to_string(),
+            plans_root: Some(plans.canonicalize().unwrap()),
+            ..ToolPermissions::default()
+        };
 
         // Attempted ../secrets/key via plans directory.
         let traversal = plans.join("../secrets/key.txt");
@@ -1368,8 +1374,10 @@ mod tests {
         // When plans_root is None, preserve the legacy substring match so
         // existing test fixtures don't break. This is documented behavior;
         // production callers should always populate plans_root.
-        let mut settings = ToolPermissions::default();
-        settings.permission_mode = "plan_mode".to_string();
+        let settings = ToolPermissions {
+            permission_mode: "plan_mode".to_string(),
+            ..ToolPermissions::default()
+        };
         // plans_root left as None.
 
         let args = serde_json::json!({ "path": "anywhere/plans/foo.md" });
@@ -1405,9 +1413,11 @@ mod tests {
         let leak = plans.join("leak");
         std::os::unix::fs::symlink(&key, &leak).unwrap();
 
-        let mut settings = ToolPermissions::default();
-        settings.permission_mode = "plan_mode".to_string();
-        settings.plans_root = Some(plans.canonicalize().unwrap());
+        let settings = ToolPermissions {
+            permission_mode: "plan_mode".to_string(),
+            plans_root: Some(plans.canonicalize().unwrap()),
+            ..ToolPermissions::default()
+        };
 
         let args = serde_json::json!({ "path": leak.to_string_lossy() });
         let decision = PermissionDecision::from_input(
@@ -1432,9 +1442,11 @@ mod tests {
         // to prevent the attacker from supplying "plans/roadmap.md" and
         // having it silently bind against the workspace plans_root via
         // server-side resolution that we can't perform here.
-        let mut settings = ToolPermissions::default();
-        settings.permission_mode = "plan_mode".to_string();
-        settings.plans_root = Some(PathBuf::from("/abs/workspace/plans"));
+        let settings = ToolPermissions {
+            permission_mode: "plan_mode".to_string(),
+            plans_root: Some(PathBuf::from("/abs/workspace/plans")),
+            ..ToolPermissions::default()
+        };
 
         let args = serde_json::json!({ "path": "plans/roadmap.md" });
         let decision = PermissionDecision::from_input(

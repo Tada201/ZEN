@@ -10,8 +10,9 @@ import { SessionSidebar } from "../components/chat/SessionSidebar";
 import type { SearchResult } from "../components/chat/SessionSidebarItem";
 import { WorkspaceContextHeader } from "../components/chat/WorkspaceContextHeader";
 import { WorkspaceWelcome } from "../components/chat/WorkspaceWelcome";
+import { MainWindowLoadingScreen } from "../components/chat/MainWindowLoadingScreen";
 import { WorkspaceViewTransition, type WorkspaceView } from "../components/chat/WorkspaceViewTransition";
-import { Hammer, Loader2, Search, X } from "lucide-react";
+import { Hammer, Search, X } from "lucide-react";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
@@ -19,6 +20,7 @@ import { getVisibleWorkspaceModeFeatures, isWorkspaceModeVisible } from "@/lib/f
 import { useShallow } from 'zustand/react/shallow';
 import { useRenderLogger } from "@/hooks/useRenderLogger";
 import { toast } from "sonner";
+import { motionDurations, motionEasings, useReducedMotion } from "@/lib/motion";
 
 import { MainArea } from "@/components/workbench/MainArea";
 import { VOICE_MODE_SYSTEM_PROMPT } from "../components/voice/voiceModePrompt";
@@ -52,15 +54,24 @@ function UniversalSessionSearch({
   onClose: () => void;
   onSelect: (chatId: string) => void;
 }) {
+  const reducedMotion = useReducedMotion();
+
   return (
-    <div
+    <motion.div
+      initial={reducedMotion ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={reducedMotion ? undefined : { opacity: 0 }}
+      transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.standard, ease: motionEasings.standard }}
       className="fixed inset-0 z-[80] flex items-start justify-center bg-background/70 px-4 pt-[12vh] backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label="Search sessions"
       onClick={onClose}
     >
-      <div
+      <motion.div
+        initial={reducedMotion ? false : { opacity: 0, y: -8, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.standard, ease: motionEasings.standard }}
         className="w-full max-w-xl overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
@@ -108,8 +119,8 @@ function UniversalSessionSearch({
             ))
           )}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -512,7 +523,10 @@ export function WorkspaceApp() {
           />
         }
         main={
-          <WorkspaceViewTransition view={workspaceView}>
+          <WorkspaceViewTransition
+            view={workspaceView}
+            transitionKey={workspaceView === "chat" ? currentSessionId : workspaceView}
+          >
             {currentWorkspaceTab === "openui" ? (
             <div className="flex-1 h-full flex flex-col items-center justify-center bg-background p-6 text-center select-none font-sans">
               <div className="w-16 h-16 rounded-2xl bg-muted border border-border flex items-center justify-center mb-6">
@@ -526,10 +540,7 @@ export function WorkspaceApp() {
               </p>
             </div>
             ) : sessionsLoading ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 bg-background text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
-              <span className="text-xs">Loading workspaces</span>
-            </div>
+            <MainWindowLoadingScreen />
             ) : !activeSession ? (
             <WorkspaceWelcome
               recentWorkspaces={recentWorkspaces}
@@ -539,7 +550,7 @@ export function WorkspaceApp() {
                 <motion.div
                   layoutId="workspace-composer-shell"
                   layout
-                  transition={{ layout: { duration: 0.72, ease: [0.22, 1, 0.36, 1] } }}
+                  transition={{ layout: { duration: motionDurations.shared, ease: motionEasings.shared } }}
                   className="w-full"
                 >
                   <PremiumChatInput
@@ -593,7 +604,7 @@ export function WorkspaceApp() {
                         <motion.div
                           layoutId="workspace-composer-shell"
                           layout
-                          transition={{ layout: { duration: 0.72, ease: [0.22, 1, 0.36, 1] } }}
+                          transition={{ layout: { duration: motionDurations.shared, ease: motionEasings.shared } }}
                           className="w-full"
                         >
                           <PremiumChatInput
@@ -645,7 +656,7 @@ export function WorkspaceApp() {
                             <motion.div
                               layoutId="workspace-composer-shell"
                               layout
-                              transition={{ layout: { duration: 0.72, ease: [0.22, 1, 0.36, 1] } }}
+                              transition={{ layout: { duration: motionDurations.shared, ease: motionEasings.shared } }}
                               className="w-full"
                             >
                               <PremiumChatInput

@@ -90,15 +90,12 @@ fn is_bidi_control_char(ch: char) -> bool {
 ///
 /// Stripping rules (in order):
 /// 1. ASCII control chars    (U+0000..U+001F) — already stripped.
-/// 2. U+007F (DEL)           — ASCII control continuation block, must
-///                             be stripped alongside the lower ASCII
-///                             controls; some terminals honour it as
-///                             "delete previous char" on output replay.
-/// 3. Bidi format controls  (U+202A..U+202E, U+2066..U+2069) — can
-///                             rewrite visual order of wrapped content
-///                             and have been used in prompt-injection
-///                             attacks to make `<system_reminder>`-
-///                             bearing blocks look like benign data.
+/// 2. U+007F (DEL) — ASCII control continuation block; strip it alongside
+///    the lower ASCII controls because some terminals honour it as "delete
+///    previous char" on output replay.
+/// 3. Bidi format controls (U+202A..U+202E, U+2066..U+2069) — can rewrite
+///    visual order of wrapped content and have been used in prompt-injection
+///    attacks to make `<system_reminder>`-bearing blocks look benign.
 /// 4. XML-significant chars are escaped (`&`, `<`, `>`).
 fn escape_xml_body(value: &str) -> String {
     let mut out = String::with_capacity(value.len());

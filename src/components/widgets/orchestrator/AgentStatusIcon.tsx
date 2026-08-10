@@ -27,7 +27,7 @@ export function AgentStatusIcon({ status }: { status: ActiveAgentTask['status'] 
                 : Clock;
     return (
         <Icon
-            className={cn("h-3.5 w-3.5", tone, status === 'in_progress' && "motion-safe:animate-spin")}
+            className={cn("h-3.5 w-3.5", tone, status === 'in_progress' && "animate-spin")}
             aria-hidden="true"
         />
     );

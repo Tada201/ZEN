@@ -55,7 +55,7 @@ const CATEGORY_BORDER: Record<ToolCategory, string> = {
 };
 
 const STATUS_ICON_CLASS: Record<ExecutionStatus, string> = {
-  running: "text-primary motion-safe:animate-spin",
+  running: "text-primary animate-spin",
   completed: "text-success",
   error: "text-destructive",
   awaiting_approval: "text-warning",

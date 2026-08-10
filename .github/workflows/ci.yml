@@ -75,8 +75,11 @@ jobs:
         run: npm ci
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        # Pinned to match rust-toolchain.toml — do not float @stable, a clippy
+        # upgrade once turned new lints into hard -D warnings failures.
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: "1.97.1"
           components: clippy
 
       - name: Rust cache
@@ -97,10 +100,8 @@ jobs:
         shell: pwsh
         run: npm run runtime:fetch -- -Clean
 
-      - name: Cargo check
-        working-directory: src-tauri
-        run: cargo check --all-targets
-
+      # `cargo clippy --all-targets` already type-checks every target, so a
+      # separate `cargo check` only re-compiles the same crates. Dropped.
       - name: Cargo clippy
         working-directory: src-tauri
         run: cargo clippy --all-targets -- -D warnings
@@ -175,7 +176,9 @@ jobs:
         run: npm audit --audit-level=high || true
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.97.1"
 
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked

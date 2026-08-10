@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { motion } from "framer-motion";
 import { Bot } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { SettingsTabId } from "@/lib/features/frontendFeatures";
@@ -6,6 +7,7 @@ import type { ArtifactData, Message } from "./types";
 import { MessageItem } from "./MessageItem";
 import { buildMessageListStreamSignature } from "./messageListStreamSignature";
 import { ChatTimelineScrubber } from "./ChatTimelineScrubber";
+import { motionDurations, motionEasings, useReducedMotion } from "@/lib/motion";
 
 const MemoizedMessageItem = memo(MessageItem);
 
@@ -33,6 +35,7 @@ export const MessageList = memo(function MessageList({
   compact?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const reducedMotion = useReducedMotion();
   const isAutoScrolling = useRef(true);
   const scrollFrameRef = useRef<number | null>(null);
   const previousMessageCount = useRef(0);
@@ -113,7 +116,17 @@ export const MessageList = memo(function MessageList({
       ) : (
         <div className="w-full pb-8">
           {filteredMessages.map((message) => (
-            <div key={message.id} id={`chat-message-${message.id}`.replace(/[^a-zA-Z0-9_-]/g, "-")} className="scroll-mt-4">
+            <motion.div
+              key={message.id}
+              id={`chat-message-${message.id}`.replace(/[^a-zA-Z0-9_-]/g, "-")}
+              className="scroll-mt-4"
+              initial={reducedMotion ? false : { opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={reducedMotion ? { duration: 0 } : {
+                duration: motionDurations.standard,
+                ease: motionEasings.standard,
+              }}
+            >
               <MemoizedMessageItem
                 message={message}
                 onOpenArtifact={onOpenArtifact}
@@ -127,7 +140,7 @@ export const MessageList = memo(function MessageList({
                 messages={filteredMessages}
                 compact={compact}
               />
-            </div>
+            </motion.div>
           ))}
         </div>
       )}

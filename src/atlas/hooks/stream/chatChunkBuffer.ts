@@ -328,8 +328,11 @@ export function clearChunkTrackingForChat(
   firstChunkDeltas: Record<string, ChunkBuffer>,
 ) {
   delete chunkBuffers[chatId];
-  delete firstChunkDeltas[chatId];
-  for (const key of firstChunkTypesMap.keys()) {
-    if (key.startsWith(`${chatId}:`)) firstChunkTypesMap.delete(key);
+  for (const key of Object.keys(firstChunkDeltas)) {
+    if (key === chatId || key.startsWith(`${chatId}:`)) delete firstChunkDeltas[key];
   }
+  for (const key of firstChunkTypesMap.keys()) {
+    if (key === chatId || key.startsWith(`${chatId}:`)) firstChunkTypesMap.delete(key);
+  }
+  firstChunkTypesMap.delete(chatId);
 }

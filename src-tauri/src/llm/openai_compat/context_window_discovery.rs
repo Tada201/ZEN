@@ -112,7 +112,7 @@ pub fn extract_context_window(error: &str) -> Option<u64> {
                 let num_str = m.as_str().replace(',', "");
                 if let Ok(tokens) = num_str.parse::<u64>() {
                     // Sanity: context windows are at least 1K and at most 10M tokens.
-                    if tokens >= 1_000 && tokens <= 10_000_000 {
+                    if (1_000..=10_000_000).contains(&tokens) {
                         return Some(tokens);
                     }
                 }
@@ -124,7 +124,7 @@ pub fn extract_context_window(error: &str) -> Option<u64> {
     if let Some(caps) = RE_ANTHROPIC_ALT.captures(error) {
         if let Some(m) = caps.get(1) {
             if let Ok(tokens) = m.as_str().parse::<u64>() {
-                if tokens >= 1_000 && tokens <= 10_000_000 {
+                if (1_000..=10_000_000).contains(&tokens) {
                     return Some(tokens);
                 }
             }

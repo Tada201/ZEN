@@ -1,5 +1,7 @@
 import { memo, useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Paperclip, FileText, X } from 'lucide-react';
+import { motionDurations, motionEasings, useReducedMotion } from '@/lib/motion';
 
 interface ActionPillsProps {
   generativeUI?: boolean;
@@ -39,6 +41,7 @@ export const ActionPills = memo(({
   selectedFiles, removeFile
 }: ActionPillsProps) => {
   const [objectUrls, setObjectUrls] = useState<Record<number, string>>({});
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     // Generate object URLs for images to show live previews in composer
@@ -61,15 +64,21 @@ export const ActionPills = memo(({
   }
 
   return (
-    <div className="flex flex-wrap gap-2 px-3 pt-3">
+    <motion.div layout={!reducedMotion} className="flex flex-wrap gap-2 px-3 pt-3">
+      <AnimatePresence initial={false}>
       {selectedFiles.map((file, i) => {
         const isImg = isImageFile(file);
         const isTxt = isTextFile(file);
         const imgUrl = objectUrls[i];
 
         return (
-          <div 
-            key={i} 
+          <motion.div
+            layout={!reducedMotion}
+            initial={reducedMotion ? false : { opacity: 0, y: -4, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={reducedMotion ? undefined : { opacity: 0, y: -4, scale: 0.96 }}
+            transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
+            key={`${file.name}:${file.lastModified}:${i}`}
             className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 bg-muted/10 dark:bg-muted/50 border border-border/10 dark:border-border rounded-lg text-[12px] font-medium text-foreground/80 dark:text-foreground group hover:border-border/20 dark:hover:border-border transition-all duration-200"
           >
             {isImg && imgUrl ? (
@@ -104,10 +113,11 @@ export const ActionPills = memo(({
             >
               <X className="w-3 h-3 text-muted-foreground dark:text-muted-foreground hover:text-foreground/80 dark:hover:text-foreground" />
             </button>
-          </div>
+          </motion.div>
         );
       })}
-    </div>
+      </AnimatePresence>
+    </motion.div>
   );
 });
 

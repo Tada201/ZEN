@@ -1,7 +1,9 @@
 import { AlertCircle, Check, Circle, Loader2, ShieldAlert } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { Message } from "./types";
 import { deriveWorkspaceExecutionStatus } from "./workspaceExecutionStatus";
+import { motionDurations, motionEasings, useReducedMotion } from "@/lib/motion";
 
 export function WorkspaceExecutionIndicator({
   messages,
@@ -18,6 +20,7 @@ export function WorkspaceExecutionIndicator({
   onOpenAgents: () => void;
 }) {
   const status = deriveWorkspaceExecutionStatus(messages, isStreaming);
+  const reducedMotion = useReducedMotion();
   if (hideWhenIdle && status.kind === "idle") return null;
   const isActionable = status.kind === "approval" || status.kind === "running" || status.kind === "error";
   const Icon = status.kind === "approval"
@@ -33,19 +36,28 @@ export function WorkspaceExecutionIndicator({
   const label = `${status.label}. ${status.detail}.`;
 
   const content = (
-    <>
-      <Icon
-        className={cn(
-          "h-3.5 w-3.5 shrink-0",
-          status.kind === "running" && "motion-safe:animate-spin",
-        )}
-        aria-hidden="true"
-      />
-      <span className="truncate">{status.label}</span>
-      <span className="hidden truncate text-[10px] font-normal text-muted-foreground sm:inline">
-        {status.detail}
-      </span>
-    </>
+    <AnimatePresence initial={false} mode="wait">
+      <motion.span
+        key={`${status.kind}:${status.label}:${status.detail}`}
+        initial={reducedMotion ? false : { opacity: 0, y: 2 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={reducedMotion ? undefined : { opacity: 0, y: -2 }}
+        transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
+        className="inline-flex min-w-0 items-center gap-1.5"
+      >
+        <Icon
+          className={cn(
+            "h-3.5 w-3.5 shrink-0",
+            status.kind === "running" && "animate-spin",
+          )}
+          aria-hidden="true"
+        />
+        <span className="truncate">{status.label}</span>
+        <span className="hidden truncate text-[10px] font-normal text-muted-foreground sm:inline">
+          {status.detail}
+        </span>
+      </motion.span>
+    </AnimatePresence>
   );
 
   if (!isActionable) {

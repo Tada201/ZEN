@@ -60,7 +60,7 @@ impl AgentTool for SystemMetricsTool {
 
         let mut total_transmitted = 0;
         let mut total_received = 0;
-        for (_interface_name, data) in nets.iter() {
+        for data in nets.values() {
             total_transmitted += data.transmitted();
             total_received += data.received();
         }

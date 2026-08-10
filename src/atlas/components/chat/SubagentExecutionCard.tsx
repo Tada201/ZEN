@@ -74,7 +74,7 @@ export function SubagentExecutionCard({
   if (!resolvedSubagent) return null;
 
   const statusIcon = isRunning ? (
-    <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin text-primary" aria-hidden="true" />
+    <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin motion-reduce:transition-none text-primary" aria-hidden="true" />
   ) : status === "cancelled" ? (
     <Ban className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
   ) : isFailed ? (
@@ -108,7 +108,7 @@ export function SubagentExecutionCard({
     >
       <FoldOutCardTrigger
         aria-label={`${resolvedSubagent.agentName}, ${statusLabel}${duration ? `, Duration ${duration}` : ""}`}
-        className="execution-foldout-trigger min-h-10 w-full px-3 py-2 text-foreground transition-colors duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
+        className="execution-foldout-trigger min-h-10 w-full px-3 py-2 text-foreground transition-colors duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="flex w-full items-center gap-2">
           <div

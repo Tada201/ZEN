@@ -113,7 +113,7 @@ impl Parser {
     fn parse(&mut self) -> Result<f64, String> {
         let val = self.parse_expr()?;
         if self.peek().is_some() {
-            return Err(format!("Unexpected trailing tokens after expression"));
+            return Err("Unexpected trailing tokens after expression".to_string());
         }
         Ok(val)
     }
@@ -171,20 +171,15 @@ impl Parser {
                         // If there's a following expression, it's "N% of expr"
                         // We'll leave left as a raw percentage marker and handle
                         // in a special way by interpreting percent as "left / 100"
-                        left = left / 100.0;
+                        left /= 100.0;
                         // If next token is an operand (number, ident, paren),
                         // it's "N% of expr" — multiply
-                        if let Some(next) = self.peek() {
-                            match next {
-                                Token::Number(_) | Token::Ident(_) | Token::LParen => {
-                                    let of_val = self.parse_expr()?;
-                                    left = left * of_val;
-                                }
-                                _ => {}
-                            }
+                        if let Some(Token::Number(_) | Token::Ident(_) | Token::LParen) = self.peek() {
+                            let of_val = self.parse_expr()?;
+                            left *= of_val;
                         }
                     } else {
-                        left = left / 100.0;
+                        left /= 100.0;
                     }
                 }
                 _ => break,
@@ -353,7 +348,7 @@ fn call_function(name: &str, args: &[f64]) -> Result<f64, String> {
             let mut sorted = args.to_vec();
             sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
             let n = sorted.len();
-            if n % 2 == 0 {
+            if n.is_multiple_of(2) {
                 Ok((sorted[n / 2 - 1] + sorted[n / 2]) / 2.0)
             } else {
                 Ok(sorted[n / 2])
@@ -429,7 +424,7 @@ fn format_data_stats(data: &[f64]) -> serde_json::Value {
     let mean = sum / n;
     let mut sorted = data.to_vec();
     sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    let median = if sorted.len() % 2 == 0 {
+    let median = if sorted.len().is_multiple_of(2) {
         (sorted[sorted.len() / 2 - 1] + sorted[sorted.len() / 2]) / 2.0
     } else {
         sorted[sorted.len() / 2]

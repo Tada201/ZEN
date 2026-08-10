@@ -40,7 +40,7 @@ function StatusBadge({ task }: { task: ActiveAgentTask }) {
             aria-label={`${label} agent`}
         >
             <BadgeIcon
-                className={cn("h-3.5 w-3.5", tone, isRunning && "motion-safe:animate-spin")}
+                className={cn("h-3.5 w-3.5", tone, isRunning && "animate-spin")}
                 aria-hidden="true"
             />
             <span className={cn("text-[11px] font-medium", tone)}>
@@ -130,7 +130,7 @@ export default function AgentWorkspace({
                     <div className="agent-workspace__logs px-4">
                         {taskLogs.length === 0 ? (
                             <div className="py-20 flex flex-col items-center justify-center text-muted-foreground text-[11px] uppercase font-mono italic gap-4 tracking-widest">
-                                <Loader2 className="h-7 w-7 motion-safe:animate-spin text-muted-foreground/60" aria-hidden="true" />
+                                <Loader2 className="h-7 w-7 animate-spin text-muted-foreground/60" aria-hidden="true" />
                                 Loading…
                             </div>
                         ) : (

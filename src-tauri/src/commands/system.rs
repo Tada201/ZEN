@@ -1,7 +1,7 @@
 use crate::commands::{AppState, InitStatus};
 use crate::error::{AppError, AppResult};
 use crate::models::SystemMetrics;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
 pub async fn get_system_metrics(state: State<'_, AppState>) -> AppResult<SystemMetrics> {
@@ -12,6 +12,17 @@ pub async fn get_system_metrics(state: State<'_, AppState>) -> AppResult<SystemM
 #[tauri::command]
 pub async fn get_system_status() -> AppResult<String> {
     Ok("OPERATIONAL".to_string())
+}
+
+/// Returns the local account name for the short, local-only welcome message.
+#[tauri::command]
+pub async fn get_user_display_name() -> AppResult<String> {
+    let name = std::env::var("USERNAME")
+        .or_else(|_| std::env::var("USER"))
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "there".to_string());
+    Ok(name)
 }
 
 #[tauri::command]
@@ -32,6 +43,10 @@ pub async fn perform_handoff(app: &AppHandle) {
         splash.close().ok();
     }
     if let Some(main) = app.get_webview_window("main") {
+        // Tell the React boot overlay to begin only after the native handoff
+        // is ready. Otherwise a cold start can consume the whole animation
+        // while the main window is still hidden behind the splashscreen.
+        let _ = app.emit("zen:main-visible", ());
         main.show().ok();
         main.set_focus().ok();
     }

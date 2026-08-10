@@ -1,7 +1,7 @@
 import React, { useState, memo, useCallback, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
-import { providerOrder, PROVIDER_KEY_MAP } from '@/lib/types/provider';
+import { providerOrder, PROVIDER_KEY_MAP, PROVIDER_BASE_URL_MAP, type ProviderCatalogEntry } from '@/lib/types/provider';
 import { cn } from '@/lib/utils/style';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
 import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
@@ -19,7 +19,7 @@ import { ProviderUsagePanel } from './providers/ProviderUsagePanel';
 import { providersApi } from '@/api';
 
 const CATEGORIES = [
-    { id: 'cloud', label: 'Cloud Intelligence', providers: ['opencode', 'openai', 'anthropic', 'google', 'xai', 'mistral', 'groq', 'perplexity', 'deepseek', 'openrouter', 'together', 'kilo', 'aihubmix'] },
+    { id: 'cloud', label: 'Cloud Intelligence', providers: ['opencode', 'mimo', 'openai', 'anthropic', 'google', 'xai', 'mistral', 'groq', 'perplexity', 'deepseek', 'openrouter', 'together', 'kilocode', 'aihubmix'] },
     { id: 'local', label: 'Local & Private', providers: ['ollama', 'lmstudio', 'nine_router'] },
     { id: 'custom', label: 'Custom Nodes', providers: [] },
 ];
@@ -27,6 +27,7 @@ const CATEGORIES = [
 export const ProvidersSettings = memo(() => {
     const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [providerCatalog, setProviderCatalog] = useState<ProviderCatalogEntry[]>([]);
 
     const customProvidersValue = useSettingsStore(s => s.customProviders);
     const customProviders = useMemo(
@@ -47,6 +48,16 @@ export const ProvidersSettings = memo(() => {
     const nineRouterBaseUrl = useSettingsStore(s => s.nineRouterBaseUrl);
     const nineRouterApiKey = useSettingsStore(s => s.nineRouterApiKey);
     const lastRemovedProviderId = useSettingsStore(s => s.lastRemovedProviderId);
+
+    useEffect(() => {
+        let cancelled = false;
+        void providersApi.getCatalog().then((catalog) => {
+            if (!cancelled) setProviderCatalog(catalog);
+        }).catch(() => {
+            // The local store remains the fallback for mock/dev runtimes.
+        });
+        return () => { cancelled = true; };
+    }, []);
 
     useEffect(() => {
         if (lastRemovedProviderId && selectedProviderId === lastRemovedProviderId) {
@@ -124,9 +135,15 @@ export const ProvidersSettings = memo(() => {
 
     const getProviderStatus = useCallback((id: string) => {
         const state = useSettingsStore.getState();
+        const customProvider = state.customProviders.find(provider => provider.id === id);
+        if (customProvider?.enabled === false) return 'disabled';
         const status = connectionStatuses[id];
         if (status === 'success') return 'active';
         if (status === 'error') return 'failed';
+
+        const runtimeProvider = providerCatalog.find(provider => provider.id === id);
+        if (runtimeProvider?.enabled === false) return 'disabled';
+        if (runtimeProvider?.apiKeyPresent || runtimeProvider?.configured) return 'configured';
         
         // Check if inference params are configured
         const params = state.providerParams[id];
@@ -139,7 +156,7 @@ export const ProvidersSettings = memo(() => {
             if (value) return 'configured';
         }
         return 'none';
-    }, [connectionStatuses]);
+    }, [connectionStatuses, providerCatalog]);
 
     const handleAddFormTest = useCallback(async () => {
         if (addForm.testStatus === 'testing') return;
@@ -349,9 +366,11 @@ export const ProvidersSettings = memo(() => {
         const isCustom = !providerOrder.find(p => p.key === selectedProviderId);
         const displayData = isCustom ? {
             name: (providerData as any).displayName ?? (providerData as any).name ?? 'Unknown provider',
+            description: 'OpenAI-compatible custom connection.',
             category: 'custom'
         } : {
             name: (providerData as any).name ?? (providerData as any).displayName ?? 'Unknown provider',
+            description: (providerData as any).description ?? 'Configure this provider connection and model catalog.',
             category: (providerData as any).category ?? 'cloud'
         };
 
@@ -371,7 +390,7 @@ export const ProvidersSettings = memo(() => {
                     </div>
                     <div className="min-w-0">
                         <h3 className="text-base font-bold tracking-tight text-foreground truncate leading-tight">{displayData.name}</h3>
-                        <p className="text-xs text-muted-foreground">Provider configuration</p>
+                        <p className="text-xs text-muted-foreground">{displayData.description}</p>
                     </div>
                 </div>
 
@@ -384,6 +403,7 @@ export const ProvidersSettings = memo(() => {
                                 baseUrl={(providerData as any).baseUrl ?? ''}
                                 apiKey={(providerData as any).apiKey}
                                 headers={(providerData as any).headers}
+                                customModels={(providerData as any).customModels}
                             />
                         ) : (
                             <>
@@ -393,12 +413,12 @@ export const ProvidersSettings = memo(() => {
                                         displayName={(providerData as any).name}
                                     />
                                 )}
-                                {(providerData as any).isLocal && (
+                                {(providerData as any).baseUrl || PROVIDER_BASE_URL_MAP[selectedProviderId] ? (
                                     <EndpointConfig
                                         providerKey={selectedProviderId}
                                         displayName={(providerData as any).name}
                                     />
-                                )}
+                                ) : null}
                             </>
                         )}
 
@@ -664,7 +684,12 @@ export const ProvidersSettings = memo(() => {
                             displayName={displayData.name}
                             requiresKey={(providerData as any).requiresKey || false}
                             isLocal={(providerData as any).isLocal || false}
-                            apiKeyPresent={true} // Simplified for now
+                            apiKeyPresent={isCustom
+                                ? Boolean((providerData as any).apiKey)
+                                : Boolean((() => {
+                                    const keyField = PROVIDER_KEY_MAP[selectedProviderId];
+                                    return keyField ? (useSettingsStore.getState() as any)[keyField] : true;
+                                })())}
                         />
 
                         <ProviderUsagePanel models={availableModelsByProvider[selectedProviderId] || []} />
@@ -685,7 +710,7 @@ export const ProvidersSettings = memo(() => {
             getModelCount={(id) => availableModelsByProvider[id]?.length || 0}
             onProviderClick={handleProviderClick}
             onAddCustom={() => setIsAddingCustom(true)}
-            onRefresh={() => { void fetchModels(); }}
+            onRefresh={() => { void fetchModels(undefined, true); }}
             refreshing={fetchingModels}
         />
     );

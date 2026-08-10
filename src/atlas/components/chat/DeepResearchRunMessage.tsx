@@ -23,7 +23,7 @@ function ProcessStepItem({ step }: { step: ResearchStep }) {
     return (
         <div className="flex min-w-0 items-start gap-2 text-[11px] py-1.5 px-2 rounded-md bg-muted hover:bg-muted transition-colors">
             {status === "completed" && <CheckCircle2 className="h-3.5 w-3.5 text-success mt-0.5 shrink-0" />}
-            {status === "running" && <Loader2 className="h-3.5 w-3.5 text-primary animate-spin mt-0.5 shrink-0" />}
+            {status === "running" && <Loader2 className="h-3.5 w-3.5 text-primary motion-safe:animate-spin motion-reduce:transition-none mt-0.5 shrink-0" />}
             {status === "error" && <XCircle className="h-3.5 w-3.5 text-destructive mt-0.5 shrink-0" />}
             {status === "pending" && <CircleDashed className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />}
             <span
@@ -201,7 +201,7 @@ export function DeepResearchRunMessage({
                     compact ? "max-w-full" : "max-w-[800px]",
                 )}
             >
-                <div className="flex min-h-[360px] w-full flex-col rounded-xl border border-primary bg-card p-5 shadow-sm">
+                <div className="flex h-[280px] min-h-[280px] w-full flex-col rounded-xl border border-primary bg-card p-5 shadow-sm">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
                             {isComplete ? <Search className="h-4 w-4 text-primary" /> : <ResearchMatrix />}
@@ -316,7 +316,7 @@ export function DeepResearchRunMessage({
                         <CollapsibleContent className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1 max-h-[400px]">
                             {steps.length === 0 && !isComplete && (
                                 <div className="flex items-center gap-2 text-xs text-muted-foreground py-2 px-2">
-                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <Loader2 className="h-3 w-3 motion-safe:animate-spin motion-reduce:transition-none" />
                                     <span>Initializing research plan...</span>
                                 </div>
                             )}

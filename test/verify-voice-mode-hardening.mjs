@@ -9,10 +9,11 @@ const files = {
   stage: "src/atlas/components/voice/VoiceStage.tsx",
   generatedContent: "src/lib/security/generatedContent.ts",
   stageStore: "src/atlas/components/voice/voiceStageStore.ts",
+  voiceDefaults: "src/lib/stores/settings/voiceDefaults.ts",
   events: "src/api/events.ts",
   voiceCommand: "src-tauri/src/commands/voice.rs",
   runtimeResource: "src-tauri/src/services/runtime_resource.rs",
-  chatCommand: "src-tauri/src/commands/chat.rs",
+  chatCommand: "src-tauri/src/commands/chat/send.rs",
   ttsService: "src-tauri/src/services/tts_service/mod.rs",
   dependencyCommand: "src-tauri/src/commands/dependency.rs",
   speechService: "src-tauri/src/services/speech_service/mod.rs",
@@ -116,17 +117,17 @@ const checks = [
   ],
   [
     "voice turns replace the normal chat prompt with a TTS-safe prompt",
+    // WorkspaceSection owns the single VoiceModeOverlay mount and the voice
+    // prompt wiring; ChatSection no longer mounts voice (double-subscription).
     src.voicePrompt.includes("VOICE_MODE_SYSTEM_PROMPT") &&
       src.voicePrompt.includes("read aloud by text-to-speech") &&
-      src.chatSection.includes("VOICE_MODE_SYSTEM_PROMPT") &&
-      src.chatSection.includes('systemPromptMode: "replace"') &&
       src.workspaceSection.includes("VOICE_MODE_SYSTEM_PROMPT") &&
       src.workspaceSection.includes('systemPromptMode: "replace"') &&
       src.sendMessage.includes("systemPromptMode") &&
       src.chatApi.includes('systemPromptMode?: "append" | "replace" | null') &&
       src.chatCommand.includes("system_prompt_mode: Option<String>") &&
       src.chatCommand.includes("replace_system_prompt") &&
-      src.chatCommand.includes("Those prompts own their output contract"),
+      src.chatCommand.includes("eq_ignore_ascii_case(\"replace\")"),
   ],
   [
     "voice mode reads back completed assistant responses through TTS",
@@ -328,7 +329,7 @@ const checks = [
       src.panel.includes("CaptionsOff") &&
       src.stage.includes('aria-label="Voice display canvas"') &&
       src.stage.includes("rounded-sm border bg-transparent") &&
-      src.stage.includes('listening: "border-white/85"') &&
+      src.stage.includes('listening: "border-border/85"') &&
       !src.stage.includes("Voice Stage") &&
       !src.stage.includes("Current Focus") &&
       !src.stage.includes("Blackboard Blocks"),
@@ -361,7 +362,10 @@ const checks = [
       src.overlay.includes("ttftMetric={ttftMetric}") &&
       src.panel.includes("TtftMetricSnapshot") &&
       src.panel.includes("TTFT") &&
-      src.chatSection.includes("chatId={currentSessionId ?? undefined}") &&
+      // VoiceModeOverlay is mounted only in WorkspaceSection now; ChatSection
+      // explicitly avoids double-mounting (see its comment). The chatId prop
+      // therefore only needs to come from WorkspaceSection.
+      src.chatSection.includes("VoiceModeOverlay intentionally not mounted here") &&
       src.workspaceSection.includes("chatId={currentSessionId ?? undefined}"),
   ],
   [
@@ -388,22 +392,29 @@ const checks = [
   ],
   [
     "voice stage lifecycle guards stale render updates",
+    // Stale renders are guarded two ways: the overlay drops blocks whose
+    // generation moved on, and the store refuses writes unless lifecycle is
+    // active (isWritable gates every mutation).
     src.stageStore.includes('VoiceStageLifecycle = "active" | "paused" | "cancelled" | "closed"') &&
       src.stageStore.includes("generation: number") &&
       src.stageStore.includes("pause: () => void") &&
       src.stageStore.includes("cancel: (reason?: string) => void") &&
+      src.stageStore.includes("isWritable") &&
+      src.stageStore.includes('lifecycle === "active"') &&
       src.overlay.includes("stageGenerationRef") &&
-      src.overlay.includes("state.lifecycle !== 'active'") &&
       src.overlay.includes("state.generation !== generation"),
   ],
   [
     "voice stage retains bounded board context",
+    // The snapshot cap is the SSOT constant VOICE_DISPLAY_AGENT_BOARD_SNAPSHOT_LIMIT
+    // in voiceDefaults.ts; the store applies it via boardMemoryLimit().
     src.stageStore.includes("retainedBoards: VoiceStageBoardSnapshot[]") &&
       src.stageStore.includes("saveCurrentBoard: (title?: string) => void") &&
       src.stageStore.includes("forgetBoards: () => void") &&
-      src.stageStore.includes("voiceDisplayAgentBoardMemoryLimit") &&
-      src.stageStore.includes("MAX_BOARD_MEMORY_LIMIT = 3") &&
-      src.stageStore.includes("requestType === \"new\"") &&
+      src.stageStore.includes("boardMemoryLimit") &&
+      src.stageStore.includes("VOICE_DISPLAY_AGENT_BOARD_SNAPSHOT_LIMIT") &&
+      src.voiceDefaults.includes("VOICE_DISPLAY_AGENT_BOARD_SNAPSHOT_LIMIT = 3") &&
+      src.stageStore.includes('requestType === "new"') &&
       src.stageStore.includes("rememberBoard(state.retainedBoards, state.document.widgets"),
   ],
 ];

@@ -31,10 +31,10 @@ export function WorkbenchTabButton({ view, selected, onClick, badge = 0, compact
         title={view.description ? `${displayLabel}: ${view.description}` : displayLabel}
         className={cn(
           compact
-            ? "relative flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2 text-[11px] transition-colors duration-200 motion-reduce:transition-none"
-            : "relative flex h-9 w-9 items-center justify-center rounded-xl transition-colors duration-200 motion-reduce:transition-none",
+            ? "relative flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2 text-[11px] transition-colors duration-200"
+            : "relative flex h-9 w-9 items-center justify-center rounded-xl transition-colors duration-200",
           selected ? "border-primary/30 bg-primary/10 pr-7 text-primary shadow-sm" : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
-          "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+          "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring motion-reduce:transition-none",
         )}
       >
         <Icon size={20} strokeWidth={selected ? 2.5 : 2} aria-hidden="true" />

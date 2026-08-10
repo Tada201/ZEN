@@ -258,7 +258,7 @@ export function ToolCallCard({
                 disabled={isUndoing}
                 className="inline-flex h-7 items-center gap-1.5 rounded-md border border-warning/60 bg-transparent px-2.5 text-[11px] font-medium text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60"
               >
-                {isUndoing ? <Loader2 className="h-3 w-3 motion-safe:animate-spin" /> : <Undo2 className="h-3 w-3" />}
+                {isUndoing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
                 {isUndoing ? "Undoing..." : "Undo"}
               </button>
             </div>

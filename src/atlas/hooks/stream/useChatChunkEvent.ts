@@ -29,12 +29,20 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
   const queryClient = useQueryClient();
   const unlistenRefs = useRef<UnlistenFn[]>([]);
   const chunkBuffersRef = useRef<Record<string, ChunkBuffer>>({});
+  // A single chat can have overlapping assistant turns during rapid retries;
+  // keep each pending buffer namespaced by backend message id when available.
+  const chunkBufferKeysRef = useRef<Record<string, string>>({});
   const chunkRafRef = useRef<number | null>(null);
+  // Entries are namespaced by chat id and backend message id so concurrent
+  // streams cannot consume one another's first delta.
   const firstChunkDeltas = useRef<Record<string, ChunkBuffer>>({});
+  // firstChunkDeltas.current[chatId] is the chat-owned namespace prefix;
+  // chunkTrackingKey adds the persisted message identity within that chat.
   const researchCompletionTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   const flushAllChunkBuffers = useCallback(() => {
     const buffers = chunkBuffersRef.current;
+    const bufferKeys = chunkBufferKeysRef.current;
     const chatIds = Object.keys(buffers);
     chunkRafRef.current = null;
 
@@ -57,12 +65,14 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
       }
       if (!buf.delta) {
         delete buffers[chatId];
+        delete bufferKeys[chatId];
         continue;
       }
 
       const delta = buf.delta;
       const chunkType = buf.type;
       delete buffers[chatId];
+      delete bufferKeys[chatId];
 
       setSessionMessages(chatId, (prev: Message[]) => {
         const assistantIdx = findWritableAssistantIndex(prev, chatId, buf.messageId);
@@ -102,13 +112,14 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         useChatStore.getState().setStreamingForChat(chatId, true);
         resetHeartbeatTimeout(chatId);
 
+        const streamMessageId = event.payload.message_id || undefined;
         const existing = chunkBuffersRef.current[chatId];
         if (existing && existing.type !== chunkType && existing.delta) {
           applyBufferedDeltaToChat(chatId, existing.delta, existing.type, { messageId: existing.messageId });
           delete chunkBuffersRef.current[chatId];
+          delete chunkBufferKeysRef.current[chatId];
         }
 
-        const streamMessageId = event.payload.message_id || undefined;
         const trackingKey = chunkTrackingKey(chatId, streamMessageId);
         firstChunkDeltas.current[trackingKey] = {
           delta,
@@ -140,9 +151,11 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         if (!delta) return;
 
         const streamMessageId = event.payload.message_id || undefined;
+        const bufferKey = chunkTrackingKey(chatId, streamMessageId);
         const existing = chunkBuffersRef.current[chatId];
+        const existingKey = chunkBufferKeysRef.current[chatId];
         const isFirstChunk = !existing;
-        const canAppendToExisting = existing?.type === incomingType;
+        const canAppendToExisting = existing?.type === incomingType && (!streamMessageId || !existingKey || existingKey === bufferKey);
         
         // If the incoming chunk type differs from what's already buffered,
         // flush the old buffer first so text/thought boundaries are clean.
@@ -150,6 +163,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
           const oldDelta = existing.delta;
           const oldType = existing.type;
           delete chunkBuffersRef.current[chatId];
+          delete chunkBufferKeysRef.current[chatId];
 
           applyBufferedDeltaToChat(chatId, oldDelta, oldType, { messageId: existing.messageId });
         }
@@ -160,6 +174,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
           type: incomingType,
           messageId: event.payload.message_id || existing?.messageId,
         };
+        chunkBufferKeysRef.current[chatId] = bufferKey;
 
         if (isFirstChunk) {
           markFirstChunkTypeSent(chatId, incomingType, streamMessageId);

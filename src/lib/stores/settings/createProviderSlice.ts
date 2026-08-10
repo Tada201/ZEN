@@ -116,10 +116,14 @@ function dedupeModelsById(models: ModelInfo[], preferredOrder: "first" | "last" 
     const seen = new Map<string, ModelInfo>();
     for (const model of models) {
         if (!model || typeof model.id !== "string" || model.id.length === 0) continue;
+        // Model IDs are only unique inside a provider. Keeping the provider in
+        // the identity prevents OpenRouter/custom entries such as `gpt-4o`
+        // from overwriting the direct OpenAI entry in the global catalog.
+        const identity = `${model.provider || "custom"}\u0000${model.id}`;
         if (preferredOrder === "last") {
-            seen.set(model.id, model);
-        } else if (!seen.has(model.id)) {
-            seen.set(model.id, model);
+            seen.set(identity, model);
+        } else if (!seen.has(identity)) {
+            seen.set(identity, model);
         }
     }
     return Array.from(seen.values());
@@ -148,6 +152,21 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
   xaiApiKey: "",
   kilocodeApiKey: "",
   nvidiaApiKey: "",
+  openaiBaseUrl: "https://api.openai.com/v1",
+  anthropicBaseUrl: "https://api.anthropic.com",
+  googleBaseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+  groqBaseUrl: "https://api.groq.com/openai/v1",
+  mistralBaseUrl: "https://api.mistral.ai/v1",
+  deepseekBaseUrl: "https://api.deepseek.com",
+  openrouterBaseUrl: "https://openrouter.ai/api/v1",
+  togetherBaseUrl: "https://api.together.xyz/v1",
+  perplexityBaseUrl: "https://api.perplexity.ai",
+  qwenBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  xaiBaseUrl: "https://api.x.ai/v1",
+  kilocodeBaseUrl: "https://api.kilo.ai/api/gateway",
+  nvidiaBaseUrl: "https://integrate.api.nvidia.com/v1",
+  aihubmixBaseUrl: "https://aihubmix.com/v1",
+  mimoBaseUrl: "https://api.xiaomimimo.com/api/free-ai/openai/chat",
   nineRouterBaseUrl: "http://localhost:20128/v1",
   opencodeBaseUrl: "https://opencode.ai/zen/v1",
   nineRouterApiKey: "",
@@ -194,10 +213,10 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
   connectionStatuses: {},
   testingConnections: {},
 
-  fetchModels: async (providerOverride) => {
+  fetchModels: async (providerOverride, force = false) => {
     const provider = providerOverride || get().activeProvider;
     const cachedProviderModels = get().availableModelsByProvider[provider] || [];
-    if (!providerOverride && isModelCacheFresh() && get().availableModels.length > 0) {
+    if (!providerOverride && !force && isModelCacheFresh() && get().availableModels.length > 0) {
         // Keep Atomic-style immediate hydration, then let explicit refreshes
         // invalidate or replace the cache instead of flashing an empty picker.
         return cachedProviderModels.map(model => model.id);
@@ -214,25 +233,25 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
         }
     }
 
+    const customModels: ModelInfo[] = [];
+    (get().customProviders || []).forEach(cp => {
+        if (cp.enabled && (!providerOverride || cp.id === provider)) {
+            cp.customModels.forEach(m => {
+                customModels.push(normalizeModelInfo({
+                    ...m,
+                    provider: cp.id,
+                    source: 'direct',
+                    state: 'unloaded' as const
+                }));
+            });
+        }
+    });
+
     const requestGeneration = ++modelFetchGeneration;
     set({ fetchingModels: true });
     try {
         const backendModels = (await providersApi.getAllAvailableModels(providerOverride || null))
           .map(m => normalizeModelInfo({ ...m, source: m.source || 'local' }));
-        
-        const customModels: ModelInfo[] = [];
-        (get().customProviders || []).forEach(cp => {
-            if (cp.enabled) {
-                cp.customModels.forEach(m => {
-                    customModels.push(normalizeModelInfo({
-                        ...m,
-                        provider: cp.id,
-                        source: 'direct',
-                        state: 'unloaded' as const
-                    }));
-                });
-            }
-        });
 
         const fetchedModels = [...backendModels, ...customModels];
         const allModels = providerOverride
@@ -250,9 +269,18 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
             return (groupedModels[provider] || []).map(model => model.id);
         }
         writeCachedModels(allModels);
+        const refreshedStatuses: Record<string, 'idle' | 'success' | 'error'> = providerOverride
+            ? { [provider]: perProvider.length > 0 ? 'success' as const : 'error' as const }
+            : Object.fromEntries(
+                Object.entries(groupedModels).map(([providerId, providerModels]) => [
+                    providerId,
+                    providerModels.length > 0 ? 'success' as const : 'error' as const,
+                ])
+            );
         set({ 
             availableModels: allModels,
             availableModelsByProvider: groupedModels,
+            connectionStatuses: { ...get().connectionStatuses, ...refreshedStatuses },
             fetchingModels: false 
         });
 
@@ -265,6 +293,25 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
             console.error('Failed to fetch models:', err);
         }
         if (requestGeneration === modelFetchGeneration) {
+            // Manual model IDs are an intentional offline fallback for custom
+            // OpenAI-compatible endpoints that do not expose /models or are
+            // temporarily unreachable. Keep them visible instead of turning
+            // a saved provider into an apparently empty configuration.
+            if (customModels.length > 0) {
+                const fallbackModels = dedupeModelsById([
+                    ...get().availableModels.filter(model => model.provider !== provider),
+                    ...customModels,
+                ], "first");
+                const fallbackGrouped = groupModelsByProvider(fallbackModels);
+                writeCachedModels(fallbackModels);
+                set({
+                    availableModels: fallbackModels,
+                    availableModelsByProvider: fallbackGrouped,
+                    fetchingModels: false,
+                    connectionStatuses: { ...get().connectionStatuses, [provider]: 'success' },
+                });
+                return customModels.map(model => model.id);
+            }
             set(s => ({
                 fetchingModels: false,
                 connectionStatuses: { ...s.connectionStatuses, [provider]: suppressed ? s.connectionStatuses[provider] || 'idle' : 'error' },
@@ -401,7 +448,11 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
     if (!providerToRemove) return;
 
     try {
-        await syncCustomProviderBackendSettings(providerToRemove.id, "", "", {});
+        await settingsApi.deleteSecret(customProviderApiKeySetting(providerToRemove.id));
+        await settingsApi.setSettings({
+            [customProviderBaseUrlSetting(providerToRemove.id)]: "",
+            [`${providerToRemove.id}_headers`]: "",
+        });
     } catch (error) {
         console.warn('[removeCustomProvider] Backend settings cleanup failed; proceeding with frontend removal.', error);
     }

@@ -833,21 +833,21 @@ impl Runner {
                             acc.push_str(&chunk_text);
                         }
                     }
-                    if !chunk_text.is_empty() {
-                        if should_emit_live_stream_event(
+                    if !chunk_text.is_empty()
+                        && should_emit_live_stream_event(
                             runner_depth,
                             LiveEventKind::AgentChunk,
-                        ) {
-                            if let Some((agent_id, agent_name)) = agent_stream_clone.as_ref() {
-                                AgentEvent::AgentChunk(AgentChunkPayload {
-                                    chat_id: chat_id_clone.clone(),
-                                    agent_id: agent_id.clone(),
-                                    agent_name: agent_name.clone(),
-                                    delta: chunk_text.clone(),
-                                    r#type: chunk_type.to_string(),
-                                })
-                                .emit_via(&app_clone, &on_event_clone);
-                            }
+                        )
+                    {
+                        if let Some((agent_id, agent_name)) = agent_stream_clone.as_ref() {
+                            AgentEvent::AgentChunk(AgentChunkPayload {
+                                chat_id: chat_id_clone.clone(),
+                                agent_id: agent_id.clone(),
+                                agent_name: agent_name.clone(),
+                                delta: chunk_text.clone(),
+                                r#type: chunk_type.to_string(),
+                            })
+                            .emit_via(&app_clone, &on_event_clone);
                         }
                     }
                     if chunk_type == "text" && !chunk_text.is_empty() {

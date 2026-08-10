@@ -262,6 +262,21 @@ export interface ProviderSlice {
   kilocodeApiKey: string;
   nineRouterApiKey: string;
   aihubmixApiKey: string;
+  openaiBaseUrl: string;
+  anthropicBaseUrl: string;
+  googleBaseUrl: string;
+  groqBaseUrl: string;
+  mistralBaseUrl: string;
+  deepseekBaseUrl: string;
+  openrouterBaseUrl: string;
+  togetherBaseUrl: string;
+  perplexityBaseUrl: string;
+  qwenBaseUrl: string;
+  xaiBaseUrl: string;
+  kilocodeBaseUrl: string;
+  nvidiaBaseUrl: string;
+  aihubmixBaseUrl: string;
+  mimoBaseUrl: string;
   nineRouterBaseUrl: string;
   opencodeBaseUrl: string;
   // Local providers
@@ -290,7 +305,7 @@ export interface ProviderSlice {
   connectionStatuses: Record<string, 'idle' | 'success' | 'error'>;
   testingConnections: Record<string, boolean>;
 
-  fetchModels: (providerOverride?: string) => Promise<string[]>;
+  fetchModels: (providerOverride?: string, force?: boolean) => Promise<string[]>;
   testProviderConnection: (providerOverride?: string) => Promise<void>;
   addCustomProvider: (config: Omit<CustomProviderConfig, 'id' | 'enabled'>) => Promise<string>;
   removeCustomProvider: (id: string) => Promise<void>;

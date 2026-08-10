@@ -140,7 +140,7 @@ export function useSendMessage(
         presencePenalty: providerParams.presencePenalty != null ? Number(providerParams.presencePenalty) : undefined,
         frequencyPenalty: providerParams.frequencyPenalty != null ? Number(providerParams.frequencyPenalty) : undefined,
         repeatPenalty: providerParams.repeatPenalty != null ? Number(providerParams.repeatPenalty) : undefined,
-        seed: null,
+        seed: providerParams.seed != null ? Number(providerParams.seed) : null,
         stop: providerParams.stop,
         thinking: data.thinking,
         deepResearch: data.deepResearch,

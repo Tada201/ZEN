@@ -6,7 +6,8 @@ import { WorkbenchInput } from '@/components/settings/ui/WorkbenchInput';
 import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
 import { cn } from '@/lib/utils/style';
-import { isSecretPresentValue } from '@/api';
+import { isSecretPresentValue, settingsApi } from '@/api';
+import type { ModelInfo } from '@/lib/types/provider';
 
 interface CustomProviderConfigProps {
     providerId: string;
@@ -14,9 +15,10 @@ interface CustomProviderConfigProps {
     baseUrl: string;
     apiKey?: string;
     headers?: Record<string, string>;
+    customModels?: ModelInfo[];
 }
 
-export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, apiKey, headers = {} }: CustomProviderConfigProps) => {
+export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, apiKey, headers = {}, customModels = [] }: CustomProviderConfigProps) => {
     const [showKey, setShowKey] = useState(false);
     const updateCustomProvider = useSettingsStore(s => s.updateCustomProvider);
     const removeCustomProvider = useSettingsStore(s => s.removeCustomProvider);
@@ -28,9 +30,11 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
     const [localKey, setLocalKey] = useState(isSecretPresentValue(apiKey) ? '' : apiKey || '');
     const [keyDirty, setKeyDirty] = useState(false);
     const [headersText, setHeadersText] = useState(Object.entries(headers).map(([key, value]) => `${key}: ${value}`).join('\n'));
+    const [modelsText, setModelsText] = useState(customModels.map(model => model.id).join('\n'));
     const [saveError, setSaveError] = useState<string | null>(null);
     const [isPinging, setIsPinging] = useState(false);
     const runConnectionTest = useSettingsStore(s => s.testProviderConnection);
+    const fetchModels = useSettingsStore(s => s.fetchModels);
     const handlePing = async () => {
         if (isPinging) return;
         setIsPinging(true);
@@ -51,6 +55,39 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
         }
     };
     const keyPlaceholder = isSecretPresentValue(apiKey) ? 'Saved key present. Enter a new key to replace it.' : 'Optional secure key...';
+
+    const saveManualModels = async () => {
+        const ids = Array.from(new Set(modelsText.split(/[\n,]/).map(value => value.trim()).filter(Boolean)));
+        const nextModels: ModelInfo[] = ids.map(id => {
+            const previous = customModels.find(model => model.id === id);
+            return previous || {
+                id,
+                name: id,
+                provider: providerId,
+                source: 'direct',
+                state: 'unloaded',
+                capabilities: ['text'],
+            };
+        });
+        await updateCustomProvider(providerId, { customModels: nextModels });
+        await fetchModels(providerId);
+    };
+
+    const handleRemoveKey = async () => {
+        try {
+            // Use the explicit credential-delete command so custom providers
+            // follow the same keyring/audit path as built-in providers.
+            await settingsApi.deleteSecret(`${providerId}_api_key`);
+            await updateCustomProvider(providerId, { apiKey: '' } as any);
+            setLocalKey('');
+            setKeyDirty(false);
+            toast.success(`${displayName} key removed.`);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setSaveError(message);
+            toast.error(`Could not remove the key: ${message}`);
+        }
+    };
 
     const isEnabled = useSettingsStore(s => s.customProviders.find(cp => cp.id === providerId)?.enabled ?? true);
     // @ts-ignore
@@ -130,8 +167,9 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">Secure Key</label>
                     <span className="text-[11px] text-muted-foreground/60">Auth token if required.</span>
                 </div>
-                <form
-                    className="relative max-w-lg group"
+                <div className="flex max-w-2xl items-center gap-2">
+                  <form
+                    className="relative min-w-0 flex-1 group"
                     onSubmit={(event) => event.preventDefault()}
                     autoComplete="off"
                 >
@@ -158,7 +196,19 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                     >
                         <WorkbenchIcon name={showKey ? "lucide:eye-off" : "lucide:eye"} size={13} />
                     </WorkbenchButton>
-                </form>
+                  </form>
+                  {isSecretPresentValue(apiKey) && (
+                    <WorkbenchButton
+                        type="button"
+                        variant="ghost"
+                        onClick={() => void handleRemoveKey()}
+                        className="h-9 shrink-0 px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    >
+                        <WorkbenchIcon name="lucide:key-round-off" size={13} className="mr-1.5" />
+                        Remove key
+                    </WorkbenchButton>
+                  )}
+                </div>
             </div>
 
             <details className="rounded-md border border-border/40 p-3">
@@ -182,6 +232,20 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                     className="mt-3 min-h-20 w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-[12px] outline-none"
                 />
             </details>
+
+            <div className="flex flex-col gap-2">
+                <div className="flex flex-col">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">Manual model IDs</label>
+                    <span className="text-[11px] text-muted-foreground/60">One model ID per line. These remain available when the endpoint has no model-list route.</span>
+                </div>
+                <textarea
+                    value={modelsText}
+                    onChange={(event) => setModelsText(event.target.value)}
+                    onBlur={() => { void saveManualModels().catch(error => setSaveError(String(error))); }}
+                    placeholder="provider/model-id"
+                    className="min-h-20 max-w-2xl resize-y rounded-lg border border-border/60 bg-muted/20 px-3 py-2 font-mono text-[11px] text-foreground outline-none focus:border-primary/50"
+                />
+            </div>
 
             {saveError && <div className="rounded-md border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-[11px] text-destructive">{saveError}</div>}
 

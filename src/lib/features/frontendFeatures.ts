@@ -29,6 +29,7 @@ export type SettingsTabId =
   | "appearance"
   | "chat"
   | "providers"
+  | "usage"
   | "capabilities"
   | "intelligence"
   | "deep-research"
@@ -83,6 +84,7 @@ export const FRONTEND_FEATURES = [
   { id: "settings.appearance", label: "Appearance", maturity: "production", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "none", settingsTabId: "appearance", icon: Sun },
   { id: "settings.chat", label: "Chat", maturity: "production", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "none", settingsTabId: "chat", icon: MessageSquare },
   { id: "settings.providers", label: "Providers", maturity: "production", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "secrets", settingsTabId: "providers", icon: Bot },
+  { id: "settings.usage", label: "Usage stats", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "none", settingsTabId: "usage", icon: Activity },
   { id: "settings.capabilities", label: "Capabilities", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "privileged", settingsTabId: "capabilities", icon: Sparkles },
   { id: "settings.intelligence", label: "Intelligence", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "heavy-runtime", settingsTabId: "intelligence", icon: Search },
   { id: "settings.deep-research", label: "Deep Research", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "heavy-runtime", settingsTabId: "deep-research", icon: Search },

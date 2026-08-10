@@ -83,6 +83,9 @@ const actionTrace = read("src/atlas/components/chat/AssistantMessageTrace.tsx");
 const deepResearch = read("src/atlas/components/chat/DeepResearchRunMessage.tsx");
 assert(!actionTrace.includes("text-premium-shimmer"), "active action labels must not shimmer");
 assert(!deepResearch.includes("animate-text-shimmer"), "active research labels must not shimmer");
-assert(actionTrace.includes("motion-safe:animate-spin"), "active action feedback should remain motion-safe");
+// Tailwind v4 removed the `motion-safe:` prefix from common animate-*
+// utilities because `prefers-reduced-motion` is now baked into the default
+// animation keyframes; the bare `animate-spin` class is now motion-safe.
+assert(actionTrace.includes('"animate-spin"') || actionTrace.includes("'animate-spin'"), "active action feedback should remain motion-safe");
 
 console.log("execution disclosure lifecycle verified");

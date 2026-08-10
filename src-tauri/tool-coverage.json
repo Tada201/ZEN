@@ -56,6 +56,13 @@
     "evidence": "Compatibility alias for write-capable filesystem behavior; must stay covered by ToolService policy."
   },
   {
+    "id": "apply_patch",
+    "risk": "High",
+    "owner": "backend/filesystem",
+    "status": "phase35-legacy-exemption",
+    "evidence": "Structured patch writes route through the canonical ToolService permission boundary and patch parser."
+  },
+  {
     "id": "web_search",
     "risk": "Medium",
     "owner": "backend/search",
@@ -117,5 +124,12 @@
     "owner": "backend/agent",
     "status": "phase35-legacy-exemption",
     "evidence": "Agent handoff compatibility tool retained; execution must stay behind ToolService permission checks."
+  },
+  {
+    "id": "generate_image",
+    "risk": "Medium",
+    "owner": "backend/media",
+    "status": "documented-service-owned",
+    "evidence": "Image generation is provider-backed and routed through the canonical tool service permission boundary."
   }
 ]

@@ -68,7 +68,12 @@ export const ModelConfig = React.memo(({ providerKey, displayName, requiresKey, 
                             >
                                 <div className="line-clamp-2 font-mono text-xs font-semibold text-foreground">{model.name || model.id}</div>
                                 <div className="mt-2 truncate font-mono text-[10px] text-muted-foreground" title={model.id}>{model.id}</div>
-                                {model.capabilities?.length ? <div className="mt-2 truncate text-[10px] text-muted-foreground">{model.capabilities.join(' · ')}</div> : null}
+                                <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-muted-foreground">
+                                    {model.contextWindow ? <span>{formatContextWindow(model.contextWindow)} context</span> : null}
+                                    {model.maxTokens ? <span>{formatContextWindow(model.maxTokens)} output</span> : null}
+                                    {model.supportsReasoning ? <span className="text-primary/80">reasoning</span> : null}
+                                </div>
+                                {model.capabilities?.length ? <div className="mt-1 truncate text-[10px] text-muted-foreground/70">{model.capabilities.join(' · ')}</div> : null}
                             </button>
                         );
                     })}
@@ -79,3 +84,9 @@ export const ModelConfig = React.memo(({ providerKey, displayName, requiresKey, 
         </div>
     );
 });
+
+function formatContextWindow(value: number): string {
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value % 1_000_000 === 0 ? 0 : 1)}M`;
+    if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
+    return String(value);
+}

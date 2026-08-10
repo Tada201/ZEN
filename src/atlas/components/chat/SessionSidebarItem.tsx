@@ -1,4 +1,5 @@
 import { memo, useRef } from "react";
+import { motion } from "framer-motion";
 import { formatDistanceToNowStrict } from "date-fns";
 import {
   Archive,
@@ -23,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { motionEasings, motionDurations } from "@/lib/motion";
 import { ChatFolder, Session } from "./types";
 
 export interface SearchResult {
@@ -144,15 +146,23 @@ export function SessionSidebarItemInner({
       key={itemKey}
       className={cn(
         "group relative flex flex-col gap-0.5 pl-2 pr-1.5 py-1.5 rounded-md cursor-pointer transition-all",
-        "before:absolute before:left-0 before:top-1 before:bottom-1 before:w-[2px] before:rounded-full before:bg-primary/70 before:opacity-0 before:transition-opacity",
+        "transition-colors",
         id === currentId
-          ? "bg-card/[0.07] before:opacity-100"
+          ? "bg-card/[0.07]"
           : "hover:bg-muted/50",
       )}
         onClick={() => onSelect(id)}
         draggable={!isSearchResult}
-        onDragStart={handleDragStart}
+      onDragStart={handleDragStart}
     >
+      {id === currentId && (
+        <motion.span
+          layoutId="active-session-indicator"
+          className="absolute left-0 top-1 bottom-1 w-[2px] rounded-full bg-primary"
+          transition={{ duration: motionDurations.standard, ease: motionEasings.standard }}
+          aria-hidden="true"
+        />
+      )}
       <div className="flex items-center justify-between gap-1.5">
         <div className="flex-1 min-w-0 flex flex-col gap-0">
           {editingId === id ? (

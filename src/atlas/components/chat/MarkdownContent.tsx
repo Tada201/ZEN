@@ -10,6 +10,7 @@ import { ReasoningBlock } from "./ReasoningBlock";
 import { FileTree } from "./FileTree";
 import { splitMarkdownIntoBlocks, type MarkdownBlock } from "./markdown-utils";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
+import { useReducedMotion } from "@/lib/motion";
 import { isSafeGeneratedHref } from "@/lib/security/generatedLinks";
 import { toAssetUrl } from "@/lib/utils/assetUrl";
 import {
@@ -183,14 +184,16 @@ const ChartBlock = React.lazy(() => import("./ChartBlock").then(m => ({ default:
 const OpenUIRenderer = React.lazy(() => import("../OpenUIRenderer").then(m => ({ default: m.OpenUIRenderer })));
 const SmoothMarkdown = React.lazy(() => import("./SmoothMarkdown").then(m => ({ default: m.SmoothMarkdown })));
 
-const RichBlockFallback = () => (    <div
-    className="my-6 h-24 animate-pulse rounded-xl border border-border bg-card"
+const RichBlockFallback = () => {
+  const reducedMotion = useReducedMotion();
+  return (<div
+    className={`my-6 h-24 rounded-xl border border-border bg-card ${reducedMotion ? "" : "animate-pulse"}`}
     aria-hidden="true"
   >
     <div className="m-6 h-3 w-2/3 rounded-full bg-muted" />
     <div className="mx-6 mt-3 h-3 w-1/2 rounded-full bg-muted" />
-  </div>
-);
+  </div>);
+};
 const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
   block,
   isStreaming,

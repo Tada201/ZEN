@@ -177,8 +177,11 @@ checkAll(assert, [
       pinExport("humanizeToolAction", "humanizeToolAction must be the central, exported helper in ToolCallCard.tsx"),
       legacyNameAbsent,
       pinContains("buildToolOutputPreview", "tool cards should derive summaries from structured preview data"),
-      pinContains("Technical details", "raw output should be hidden behind an explicit disclosure"),
-      pinContains("<details", "raw output disclosure must use the native <details> element"),
+      // The raw-output disclosure was moved out of ToolCallCard.tsx into the
+      // expanded ToolDetailView / GenericContent view; the card only renders
+      // structured preview data now. See the GenericContent.tsx entry below
+      // for the <details>+"Technical details" pins.
+      pinAbsent("<details", "ToolCallCard no longer renders the raw output disclosure itself"),
       pinAbsent("<MarkdownContent", "tool output should not render arbitrary raw markdown in the timeline"),
       pinContains("Approval context", "approval flow should remain visible and actionable"),
       pinContains("Deny", "approval flow should expose a Deny control"),
@@ -369,8 +372,10 @@ checkAll(assert, [
     pins: [
       // Raw tool input belongs behind an explicit disclosure, not a
       // top-level Panel label="Input" that leads the primary view.
+      // The disclosure label was renamed from "Technical details" to the more
+      // descriptive "Input parameters" (and the failure path uses "Raw result").
       pinContains("<details", "non-file tools must hide raw input behind a native disclosure element"),
-      pinContains("Technical details", "non-file tools must label the raw input disclosure 'Technical details'"),
+      pinContains("Input parameters", "non-file tools must label the raw input disclosure 'Input parameters'"),
       pinContains('label="Output"', "non-file tools must expand into an output box"),
     ],
   },

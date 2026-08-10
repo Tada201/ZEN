@@ -25,6 +25,63 @@ export interface ProviderInfo {
     icon?: string;
 }
 
+export interface ProviderCatalogEntry {
+    id: string;
+    defaultBaseUrl: string;
+    baseUrl: string;
+    isLocal: boolean;
+    configured: boolean;
+    apiKeyPresent: boolean;
+    enabled?: boolean;
+}
+
+export type ProviderParameterId =
+    | 'temperature'
+    | 'topP'
+    | 'topK'
+    | 'maxTokens'
+    | 'frequencyPenalty'
+    | 'presencePenalty'
+    | 'repeatPenalty'
+    | 'seed'
+    | 'stop';
+
+/** Canonical provider/model controls used by both settings and request builders. */
+export interface ProviderCapabilityProfile {
+    parameters: readonly ProviderParameterId[];
+    supportsReasoning: boolean;
+    supportsTools: boolean;
+    supportsVision: boolean;
+}
+
+export const PROVIDER_CAPABILITY_PROFILES: Record<string, ProviderCapabilityProfile> = {
+    openai: { parameters: ['temperature', 'topP', 'maxTokens', 'presencePenalty', 'frequencyPenalty', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
+    anthropic: { parameters: ['temperature', 'topP', 'topK', 'maxTokens', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
+    google: { parameters: ['temperature', 'topP', 'topK', 'maxTokens', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
+    gemini: { parameters: ['temperature', 'topP', 'topK', 'maxTokens', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
+    ollama: { parameters: ['temperature', 'topP', 'topK', 'maxTokens', 'repeatPenalty', 'seed', 'stop'], supportsReasoning: false, supportsTools: true, supportsVision: true },
+    lmstudio: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsReasoning: false, supportsTools: true, supportsVision: true },
+    nine_router: { parameters: ['temperature', 'topP', 'topK', 'maxTokens', 'repeatPenalty', 'presencePenalty', 'frequencyPenalty', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
+    mistral: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
+    groq: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
+    deepseek: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: false },
+    xai: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
+    openrouter: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
+    opencode: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
+    mimo: { parameters: ['temperature', 'topP', 'maxTokens', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: false },
+    together: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
+    perplexity: { parameters: ['temperature', 'topP', 'maxTokens', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: false },
+    aihubmix: { parameters: ['temperature', 'topP', 'maxTokens', 'presencePenalty', 'frequencyPenalty', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
+    kilocode: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
+};
+
+export const DEFAULT_PROVIDER_CAPABILITY_PROFILE: ProviderCapabilityProfile = {
+    parameters: ['temperature', 'topP', 'maxTokens', 'stop'],
+    supportsReasoning: false,
+    supportsTools: true,
+    supportsVision: false,
+};
+
 export interface CustomProviderConfig {
     id: string;
     displayName: string;
@@ -57,11 +114,25 @@ export const PROVIDER_KEY_MAP: Record<string, string> = {
 };
 
 export const PROVIDER_BASE_URL_MAP: Record<string, string> = {
+    openai: 'openaiBaseUrl',
+    anthropic: 'anthropicBaseUrl',
+    google: 'googleBaseUrl',
+    groq: 'groqBaseUrl',
+    mistral: 'mistralBaseUrl',
+    deepseek: 'deepseekBaseUrl',
+    openrouter: 'openrouterBaseUrl',
+    together: 'togetherBaseUrl',
+    perplexity: 'perplexityBaseUrl',
+    qwen: 'qwenBaseUrl',
+    xai: 'xaiBaseUrl',
+    kilocode: 'kilocodeBaseUrl',
+    nvidia: 'nvidiaBaseUrl',
+    aihubmix: 'aihubmixBaseUrl',
+    mimo: 'mimoBaseUrl',
     ollama: 'ollamaBaseUrl',
     lmstudio: 'lmstudioBaseUrl',
     nine_router: 'nineRouterBaseUrl',
     opencode: 'opencodeBaseUrl',
-    mimo: 'mimoBaseUrl',
 };
 
 

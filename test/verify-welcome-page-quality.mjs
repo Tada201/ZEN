@@ -40,6 +40,8 @@ assert(svg.includes("rotateDiskPoint") && svg.includes("getProjectedDiskAnchor")
 assert(svg.includes("makeLensPath") && svg.includes("outerLensPath"), "SVG renderer must include the lens and occlusion geometry");
 assert(!svg.includes(">Z<"), "SVG renderer must not render the incorrect Z label");
 assert(svg.includes("aria-hidden=\"true\""), "decorative SVG must be hidden from assistive technology");
-assert(!svg.includes("three"), "low-quality SVG renderer must not import Three.js");
+// Comments may mention "Three.js" for provenance, but the renderer must not
+// import or depend on the three.js package.
+assert(!svg.includes('from "three"') && !svg.includes("from 'three'") && !svg.includes('require("three")'), "low-quality SVG renderer must not import Three.js");
 
 console.log("welcome page quality setting contract verified");

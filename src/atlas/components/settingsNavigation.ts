@@ -31,6 +31,7 @@ const TAB_GROUPS: SettingsTabGroup[] = [
     tabs: [
       { id: "chat", label: "Chat", icon: "lucide:message-square", description: "Conversation settings" },
       { id: "providers", label: "Providers", icon: "lucide:server-cog", description: "Connections and models" },
+      { id: "usage", label: "Usage stats", icon: "lucide:chart-no-axes-combined", description: "Tokens and model activity" },
       { id: "capabilities", label: "Capabilities", icon: "lucide:sparkles", description: "Agent skills" },
       { id: "intelligence", label: "Intelligence", icon: "lucide:search", description: "RAG & memory" },
       { id: "deep-research", label: "Deep Research", icon: "lucide:book-open-check", description: "Research agents & sources" },

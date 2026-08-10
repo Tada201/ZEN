@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
 const inputPath = new URL("../src/atlas/components/PremiumChatInput.tsx", import.meta.url);
-const source = readFileSync(inputPath, "utf8");
+const source = [
+  readFileSync(inputPath, "utf8"),
+  readFileSync(new URL("../src/atlas/components/useReasoningCapabilities.ts", import.meta.url), "utf8"),
+  readFileSync(new URL("../src/atlas/components/useSendHandler.ts", import.meta.url), "utf8"),
+].join("\n");
 
 assert(
   !source.includes("|| models[0]"),
@@ -10,8 +14,8 @@ assert(
 );
 
 assert(
-  source.includes("models.find(m => m.id === selectedModelId && m.provider === selectedProvider)") &&
-    !source.includes("models.find(m => m.id === selectedModelId)\n      || models[0]"),
+  source.includes("m.id === selectedModelId && m.provider === selectedProvider") &&
+    !source.includes("|| models[0]"),
   "selected model metadata should only come from an exact provider/model match",
 );
 

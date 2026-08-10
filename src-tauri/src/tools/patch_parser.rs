@@ -47,9 +47,9 @@ enum ParserState {
 pub fn parse_patches(patch_str: &str) -> Result<Vec<PatchHunk>, String> {
     let mut hunks = Vec::new();
     let mut state = ParserState::Idle;
-    let mut lines_iter = patch_str.lines().enumerate();
+    let lines_iter = patch_str.lines().enumerate();
 
-    while let Some((line_num, raw_line)) = lines_iter.next() {
+    for (line_num, raw_line) in lines_iter {
         let line = raw_line.trim_end();
         let display_line_num = line_num + 1;
 
@@ -92,11 +92,7 @@ pub fn parse_patches(patch_str: &str) -> Result<Vec<PatchHunk>, String> {
                 }
                 ParserState::AccumulatingAdd { lines, .. } => {
                     // LLM might prefix added lines with "+"
-                    let cleaned_line = if line.starts_with('+') {
-                        &line[1..]
-                    } else {
-                        raw_line
-                    };
+                    let cleaned_line = line.strip_prefix('+').unwrap_or(raw_line);
                     lines.push(cleaned_line.to_string());
                 }
                 ParserState::AccumulatingUpdateSearch { path, search_lines } => {

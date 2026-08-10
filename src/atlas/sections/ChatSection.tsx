@@ -6,6 +6,7 @@
 import { useState, useCallback, useEffect, useTransition, useMemo } from "react";
 import { useChat } from "@/atlas/hooks/useChat";
 import { motion, AnimatePresence } from "framer-motion";
+import { motionDurations, motionEasings, useReducedMotion } from "@/lib/motion";
 
 // Modular Components
 import {
@@ -20,6 +21,7 @@ import { useUIStore } from "@/lib/stores/useUIStore";
 import { useChatStore } from "@/lib/stores/useChatStore";
 
 export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
+  const reducedMotion = useReducedMotion();
   const [, startTransition] = useTransition();
   const {
     sessions, archivedSessions, folders, currentSessionId, setCurrentSessionId,
@@ -173,7 +175,10 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: 256, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            transition={{ duration: 0.3, ease: "easeInOut" }}
+            transition={reducedMotion ? { duration: 0 } : {
+              duration: motionDurations.surface,
+              ease: motionEasings.standard,
+            }}
             className="fixed inset-y-0 left-0 z-50 h-full w-64 min-w-[256px] max-w-[256px] flex-shrink-0 overflow-hidden border-r border-border bg-background/95 backdrop-blur-xl lg:relative lg:bg-background/50"
           >
             <SessionSidebar
@@ -207,9 +212,10 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
       <AnimatePresence>
         {isSidebarOpen && (
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={reducedMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.standard }}
             onClick={() => setIsSidebarOpen(false)}
             className="fixed inset-0 z-40 bg-background/40 backdrop-blur-sm lg:hidden"
           />
@@ -227,7 +233,7 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
       <div className="flex-grow h-full w-full relative z-10">
         {/* Main Chat Area */}
         <motion.main 
-          layout
+          layout={!reducedMotion}
           className="relative flex flex-1 flex-col min-w-0 h-full bg-transparent overflow-hidden"
         >
           <MessageList
@@ -242,11 +248,23 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
 
           <div className="absolute bottom-0 left-0 right-0 z-30 p-4 pb-8 bg-gradient-to-t from-background via-background/80 to-transparent pointer-events-none">
             <div className="mx-auto max-w-[700px] w-full pointer-events-auto">
-              {latestStatusStep && (
-                <div className="mb-2 w-full animate-in fade-in slide-in-from-bottom-2 duration-300 pointer-events-none bg-background/50 backdrop-blur-md rounded-lg shadow-sm border border-border/50">
-                  <AgentActionStep step={latestStatusStep} isStreaming={true} />
-                </div>
-              )}
+              <AnimatePresence initial={false}>
+                {latestStatusStep && (
+                  <motion.div
+                    key="latest-status-step"
+                    initial={reducedMotion ? false : { opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={reducedMotion ? undefined : { opacity: 0, y: -4 }}
+                    transition={reducedMotion ? { duration: 0 } : {
+                      duration: motionDurations.standard,
+                      ease: motionEasings.standard,
+                    }}
+                    className="mb-2 w-full pointer-events-none rounded-lg border border-border/50 bg-background/50 shadow-sm backdrop-blur-md"
+                  >
+                    <AgentActionStep step={latestStatusStep} isStreaming={true} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
               <PremiumChatInput
                 activeChatId={currentSessionId}
                 readOnly={isArchivedSession}

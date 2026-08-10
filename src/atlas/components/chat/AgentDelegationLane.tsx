@@ -103,7 +103,7 @@ export function AgentDelegationLane({ lane }: { lane: AgentDelegationLaneModel }
             )}
             role="status"
           >
-            <StatusIcon className={cn("h-3.5 w-3.5", isRunning && "motion-safe:animate-spin")} aria-hidden="true" />
+            <StatusIcon className={cn("h-3.5 w-3.5", isRunning && "motion-safe:animate-spin motion-reduce:transition-none")} aria-hidden="true" />
             {statusLabel}
           </span>
         </div>

@@ -36,7 +36,7 @@ export function AgentStepCard({ data }: { data: AgentStepData }) {
   const getStatusIcon = (s: string) => {
     switch (s) {
       case "running":
-        return <Play className="w-3.5 h-3.5 motion-safe:animate-spin" />;
+        return <Play className="w-3.5 h-3.5 motion-safe:animate-spin motion-reduce:transition-none" />;
       case "error":
         return <AlertTriangle className="w-3.5 h-3.5" />;
       default:

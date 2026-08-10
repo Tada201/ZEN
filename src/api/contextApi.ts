@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { callCommand } from "@/api/tauriClient";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   ContextBreakdown,
@@ -30,7 +30,7 @@ export const contextApi = {
    * after a page reload or when the user opens the tab mid-run.
    */
   getBreakdown(chatId: string): Promise<ContextBreakdown | null> {
-    return invoke<ContextBreakdown | null>("get_context_breakdown", {
+    return callCommand<ContextBreakdown | null>("get_context_breakdown", {
       chatId,
     });
   },
@@ -43,7 +43,7 @@ export const contextApi = {
     chatId: string,
     contextWindow?: number,
   ): Promise<ContextSnapshot> {
-    return invoke<ContextSnapshot>("get_context_snapshot", {
+    return callCommand<ContextSnapshot>("get_context_snapshot", {
       chatId,
       contextWindow,
     });

@@ -7,10 +7,13 @@ const redactionSource = readFileSync(
   new URL("../src/atlas/components/chat/tool/toolTextRedaction.ts", import.meta.url),
   "utf8",
 );
-const source = `${redactionSource}\n${readFileSync(sourcePath, "utf8").replace(
-  'import { redactToolText } from "./toolTextRedaction";\n',
+// Strip the redaction import regardless of CRLF/LF line endings, then prepend
+// the redaction source so the concatenated module declares it exactly once.
+const previewSource = readFileSync(sourcePath, "utf8").replace(
+  /^import\s*\{\s*redactToolText\s*\}\s*from\s*["']\.\/toolTextRedaction["'];?\s*\r?\n/m,
   "",
-)}`;
+);
+const source = `${redactionSource}\n${previewSource}`;
 const transpiled = ts.transpileModule(source, {
   compilerOptions: {
     module: ts.ModuleKind.ES2022,

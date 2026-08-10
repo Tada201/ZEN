@@ -242,7 +242,7 @@ function assertContainsAll(section, source, patterns) {
     !assertContainsAll(
       section,
       src,
-      [/pub\s+async\s+fn\s+sync_external_servers\s*\(\s*self\s*:\s*&\s*Arc\s*<\s*Self\s*>\s*\)/],
+      [/pub\s+async\s+fn\s+sync_external_servers\s*\(\s*self\s*:\s*&\s*Arc\s*<\s*Self\s*>\s*(?:,|\))/],
     )
   ) {
     allOk = false;

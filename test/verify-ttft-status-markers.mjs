@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
 const agentEventsSource = readFileSync(new URL("../src/atlas/hooks/stream/useAgentEvents.ts", import.meta.url), "utf8");
-const chatCommandSource = readFileSync(new URL("../src-tauri/src/commands/chat.rs", import.meta.url), "utf8");
+const chatCommandSource = readFileSync(new URL("../src-tauri/src/commands/chat/send.rs", import.meta.url), "utf8");
 
 assert(
   agentEventsSource.includes('import { ttftMark, type TtftMarker } from "@/lib/ttft";'),

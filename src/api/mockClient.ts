@@ -162,6 +162,10 @@ const mockCommands: Record<string, (args: any) => any> = {
     settings[key] = value;
     saveData(KEY_SETTINGS, settings);
   },
+  delete_secret: ({ key }: { key: string }) => {
+    settings[key] = "";
+    saveData(KEY_SETTINGS, settings);
+  },
   set_settings: ({ settings: newSettings }: { settings: Record<string, string> }) => {
     settings = { ...settings, ...newSettings };
     saveData(KEY_SETTINGS, settings);
@@ -283,6 +287,11 @@ const mockCommands: Record<string, (args: any) => any> = {
   },
 
   // Providers and Models
+  get_provider_catalog: () => [
+    { id: "ollama", defaultBaseUrl: "http://localhost:11434", baseUrl: "http://localhost:11434", isLocal: true, configured: true, apiKeyPresent: false, enabled: true },
+    { id: "openai", defaultBaseUrl: "https://api.openai.com/v1", baseUrl: "https://api.openai.com/v1", isLocal: false, configured: false, apiKeyPresent: false, enabled: true },
+    { id: "anthropic", defaultBaseUrl: "https://api.anthropic.com", baseUrl: "https://api.anthropic.com", isLocal: false, configured: false, apiKeyPresent: false, enabled: true },
+  ],
   get_all_available_models: () => [
     { id: "claude-3-5-sonnet", name: "Claude 3.5 Sonnet", provider: "anthropic" },
     { id: "claude-3-opus", name: "Claude 3 Opus", provider: "anthropic" },
@@ -309,6 +318,7 @@ const mockCommands: Record<string, (args: any) => any> = {
   terminal_write: () => {},
 
   // System Metrics — return shape matching BackendSystemMetrics / HardwareInfo
+  get_user_display_name: () => "tuyen",
   get_hardware_info: () => ({
     os: "Windows 11 (Dev Mode)",
     cpu: "Intel Core i7-13700H",

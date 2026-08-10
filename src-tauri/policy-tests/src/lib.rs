@@ -1,6 +1,12 @@
 #[path = "../../src/services/secret_policy.rs"]
 pub mod secret_policy;
 
+pub mod tools {
+    pub mod patch_parser {
+        include!("../../src/tools/patch_parser.rs");
+    }
+}
+
 #[path = "../../src/tools/permission.rs"]
 pub mod permission;
 

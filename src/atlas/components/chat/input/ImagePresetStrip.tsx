@@ -1,5 +1,7 @@
 import { memo } from 'react';
+import { motion } from 'framer-motion';
 import { Sparkles, Compass, Eye, Image as ImageIcon, Paintbrush, Monitor } from 'lucide-react';
+import { motionDurations, motionEasings, useReducedMotion } from '@/lib/motion';
 
 export interface StylePreset {
   id: string;
@@ -56,10 +58,16 @@ export const ImagePresetStrip = memo(({
   onSelectPreset,
   isImageGenEnabled
 }: ImagePresetStripProps) => {
+  const reducedMotion = useReducedMotion();
   if (!isImageGenEnabled) return null;
 
   return (
-    <div className="w-full overflow-x-auto scrollbar-none flex items-center gap-2 px-1 py-1 mb-1 animate-in fade-in slide-in-from-top-1 duration-200">
+    <motion.div
+      initial={reducedMotion ? false : { opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
+      className="w-full overflow-x-auto scrollbar-none flex items-center gap-2 px-1 py-1 mb-1"
+    >
       <div className="flex items-center gap-1.5 shrink-0 pr-2 mr-2 border-r border-border/10 dark:border-border">
         <Sparkles className="w-3.5 h-3.5 text-warning" />
         <span className="text-[11px] font-semibold text-muted-foreground dark:text-muted-foreground select-none">Presets</span>
@@ -80,6 +88,6 @@ export const ImagePresetStrip = memo(({
           );
         })}
       </div>
-    </div>
+    </motion.div>
   );
 });

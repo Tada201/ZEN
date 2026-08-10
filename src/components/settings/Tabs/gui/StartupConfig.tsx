@@ -6,7 +6,7 @@ import { WorkbenchInput } from '@/components/settings/ui/WorkbenchInput';
 
 export const StartupConfig = memo(() => {
     const bootEnabled = useSettingsStore(s => s.bootEnabled ?? true);
-    const bootDurationMs = useSettingsStore(s => s.bootDurationMs ?? 2500);
+    const bootDurationMs = useSettingsStore(s => s.bootDurationMs ?? 3200);
     const updateSetting = useSettingsStore(s => s.updateSetting);
 
     return (

@@ -195,13 +195,11 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
     // exists. Treat that row as live while the runner owns it; mapping it as a
     // failure lets a refetch overwrite the optimistic research card and makes
     // the chat appear to reset.
-    status: isPendingDeepResearch
-      ? "sending"
-      : msg.isComplete === 1
-        ? "sent"
-        : hasMeaningfulContent
-          ? "sending"
-          : "failed",
+    status: isPendingDeepResearch ? "sending" : msg.isComplete === 1
+      ? "sent"
+      : hasMeaningfulContent
+        ? "sending"
+        : "failed",
     kind: msg.kind as any,
     metadata: parsedMetadata,
     error: typeof parsedMetadata?.error === "string" && parsedMetadata.error.trim()

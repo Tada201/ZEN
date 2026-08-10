@@ -1,7 +1,16 @@
+## Planning Source-of-Truth
+
+The `specs/` directory contains legacy planning artifacts from an earlier
+architecture phase. Treat it as archival reference only: do not read it, use
+it for current planning or architectural decisions, or update it unless the
+user explicitly asks for a historical comparison. Use the current repository
+code, `RULES.md`, the frontend/security contracts, and the active user request
+as the source of truth.
+
 <!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan:
-[003-streaming-architecture-redesign/plan.md](specs/003-streaming-architecture-redesign/plan.md)
+The linked plan is retained for historical provenance only. Do not read it or
+use it for current feature planning or architectural decisions; use the
+repository source of truth described above instead.
 
 ## Codegraph Navigation
 - Use the codegraph located in `graphify-out/` to explore code relationships, community hubs, and god nodes.

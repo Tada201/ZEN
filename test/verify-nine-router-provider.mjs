@@ -9,7 +9,7 @@ const chatSection = readFileSync(new URL("../src/atlas/sections/ChatSection.tsx"
 const workspaceSection = readFileSync(new URL("../src/atlas/sections/WorkspaceSection.tsx", import.meta.url), "utf8");
 const voiceSettings = readFileSync(new URL("../src/components/settings/Tabs/VoiceSettings.tsx", import.meta.url), "utf8");
 const voiceDisplay = readFileSync(new URL("../src-tauri/src/agent/runner/voice_display.rs", import.meta.url), "utf8");
-const chatCommand = readFileSync(new URL("../src-tauri/src/commands/chat.rs", import.meta.url), "utf8");
+const chatCommand = readFileSync(new URL("../src-tauri/src/commands/chat/send.rs", import.meta.url), "utf8");
 const backendSettings = readFileSync(new URL("../src-tauri/src/commands/settings.rs", import.meta.url), "utf8");
 const backendMeta = readFileSync(new URL("../src-tauri/src/llm/provider_meta.rs", import.meta.url), "utf8");
 const models = readFileSync(new URL("../src-tauri/src/llm/openai_compat/models.rs", import.meta.url), "utf8");
@@ -52,7 +52,15 @@ assert(
   "Inactive global refreshes must not poll 9Router",
 );
 
-assert(models.includes('"nine_router"') && models.includes("provider_is_mixed_router"), "9Router must use mixed-router capability rules");
+// 9router was deliberately removed from provider_is_mixed_router (see
+// models.rs comment: ~90% of its catalog is tool-capable, so it falls through
+// to the `fallback` default instead of the conservative `false`).
+assert(
+  models.includes('"openrouter" | "together" | "perplexity"') &&
+    models.includes("provider_is_mixed_router"),
+  "Mixed-router capability rules must remain for non-9Router routers",
+);
+assert(!models.includes('"nine_router" | "openrouter"'), "9Router must not be in the mixed-router list");
 assert(!stream.includes('| "kilocode" | "nine_router"'), "9Router must not default every model to tool support");
 assert(stream.includes("model_supports_reasoning") && stream.includes("!allow_reasoning"), "9Router reasoning fields must be capability-gated");
 

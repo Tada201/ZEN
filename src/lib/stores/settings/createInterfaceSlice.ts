@@ -14,7 +14,7 @@ export const createInterfaceSlice: StateCreator<SettingsState, [], [], Interface
   welcomePageQuality: "high",
   bootEnabled: true,
   bootDuration: 2500,
-  bootDurationMs: 2500,
+  bootDurationMs: 3200,
   widgetSettings: DEFAULT_WIDGET_SETTINGS,
   compactMode: false,
   customCssPath: "",

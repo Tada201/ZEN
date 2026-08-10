@@ -12,7 +12,7 @@ export function ResearchTimeline({ steps }: { steps: Array<{ text: string; statu
           {completedCount === steps.length ? (
             <CheckCircle2 className="h-3.5 w-3.5 text-success/80" />
           ) : (
-            <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin text-muted-foreground" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
           )}
         </span>
         <span className="min-w-0 flex-1">
@@ -41,7 +41,7 @@ export function ResearchTimeline({ steps }: { steps: Array<{ text: string; statu
             </span>
             <div className="flex min-h-8 min-w-0 items-center gap-2 rounded-md px-1 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-muted/20">
               {step.status === "running" ? (
-                <Loader2 className="h-3.5 w-3.5 shrink-0 motion-safe:animate-spin text-primary" />
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
               ) : step.status === "completed" ? (
                 <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
               ) : step.status === "error" ? (

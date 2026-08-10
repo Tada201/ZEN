@@ -1,4 +1,5 @@
 import React, { Suspense, useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import { 
   X, Copy, Check, Download, Code2, PanelRight, Eye 
 } from "lucide-react";
@@ -8,6 +9,7 @@ import { cn } from "@/lib/utils";
 import type { ArtifactData } from "./types";
 import { SandboxedIframe } from "../SandboxedIframe";
 import { useCopy } from "./CodeBlock";
+import { motionDurations, motionEasings, useReducedMotion } from "@/lib/motion";
 
 const MarkdownContent = React.lazy(() => import("./MarkdownContent").then(m => ({ default: m.MarkdownContent })));
 const OpenUIRenderer = React.lazy(() => import("../OpenUIRenderer").then(m => ({ default: m.OpenUIRenderer })));
@@ -30,6 +32,7 @@ export function ArtifactPanel({
   embedded?: boolean;
 }) {
   const { copied, copy } = useCopy();
+  const reducedMotion = useReducedMotion();
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview");
 
   const content = artifact.content || "";
@@ -84,8 +87,12 @@ export function ArtifactPanel({
   };
 
   return (
-    <div className={cn(
-      "flex flex-col bg-[#1e1e24] sm:relative sm:inset-auto sm:z-fixed sm:h-full sm:shrink-0 sm:border-l border-border/80 shadow-none animate-in slide-in-from-right duration-200",
+    <motion.div
+      initial={reducedMotion ? false : { opacity: 0, x: 16 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.surface, ease: motionEasings.standard }}
+      className={cn(
+      "flex flex-col bg-[#1e1e24] sm:relative sm:inset-auto sm:z-fixed sm:h-full sm:shrink-0 sm:border-l border-border/80 shadow-none",
       embedded ? "w-full h-full border-l-0 shadow-none relative inset-auto z-auto" : "fixed inset-y-0 right-0 z-[100] sm:w-[320px] md:w-[360px] lg:w-[400px] xl:w-[450px]"
     )}>
       {/* Header */}
@@ -173,7 +180,12 @@ export function ArtifactPanel({
             </pre>
           </div>
         ) : (
-          <div className="h-full animate-fade-in bg-[#1e1e24]">
+          <motion.div
+            initial={reducedMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
+            className="h-full bg-[#1e1e24]"
+          >
             {artifact.type === "markdown" ? (
               <div className="p-5 text-xs max-w-none prose prose-slate dark:prose-invert">
                 <Suspense fallback={<PreviewFallback />}>
@@ -199,9 +211,9 @@ export function ArtifactPanel({
                 <pre className="text-[12px] leading-relaxed"><code>{artifact.content}</code></pre>
               </div>
             )}
-          </div>
+          </motion.div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }

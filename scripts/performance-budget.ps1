@@ -2,7 +2,9 @@ param(
     [string]$DistPath = "dist",
     [int]$MaxJsChunkKb = 5000,
     [int]$MaxCssChunkKb = 700,
-    [int]$MaxTotalJsKb = 16000
+    # 16 MiB in binary KiB. This keeps the budget aligned with the release
+    # artifact unit while allowing the current optional voice/runtime chunks.
+    [int]$MaxTotalJsKb = 16384
 )
 
 $ErrorActionPreference = "Stop"

@@ -1,3 +1,4 @@
+import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { ArchiveRestore, ArrowLeft, ArrowRight, FolderLock, MessageCirclePlus, MoreHorizontal, PanelRightOpen } from "lucide-react";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
@@ -11,6 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { PromptDialog } from "@/components/ui/PromptDialog";
 import { RunStatusPopover } from "./RunStatusPopover";
+import { motionDurations, motionEasings, useReducedMotion } from "@/lib/motion";
 
 interface WorkspaceContextHeaderProps {
   session: Session | null;
@@ -65,6 +67,7 @@ export function WorkspaceContextHeader({
   onToggleWorkbench,
 }: WorkspaceContextHeaderProps) {
   const [renameOpen, setRenameOpen] = useState(false);
+  const reducedMotion = useReducedMotion();
   const configuredWorkspacePath = useSettingsStore((state) => state.workspacePath);
   const capturedWorkspacePath = session?.workspaceRoot?.trim() || null;
   const effectiveWorkspacePath = capturedWorkspacePath || configuredWorkspacePath || null;
@@ -96,18 +99,30 @@ export function WorkspaceContextHeader({
             </div>
           )}
 
-          <span
-            data-tauri-drag-region="deep"
-            className="max-w-[min(34vw,20rem)] cursor-default truncate text-[13px] font-semibold tracking-tight text-foreground font-sans"
-            title={session?.title || "New Chat"}
-          >
-            {session?.title || "New Chat"}
-          </span>
-          {session?.archived && (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground" title="This chat is archived">
-              <ArchiveRestore className="h-3 w-3" aria-hidden="true" /> Archived
-            </span>
-          )}
+          <AnimatePresence initial={false} mode="popLayout">
+            <motion.div
+              key={session?.id || "new-chat"}
+              layout={!reducedMotion}
+              initial={reducedMotion ? false : { opacity: 0, x: -5 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={reducedMotion ? undefined : { opacity: 0, x: 5 }}
+              transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
+              className="flex min-w-0 items-center gap-1.5"
+            >
+              <span
+                data-tauri-drag-region="deep"
+                className="max-w-[min(34vw,20rem)] cursor-default truncate text-[13px] font-semibold tracking-tight text-foreground font-sans"
+                title={session?.title || "New Chat"}
+              >
+                {session?.title || "New Chat"}
+              </span>
+              {session?.archived && (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground" title="This chat is archived">
+                  <ArchiveRestore className="h-3 w-3" aria-hidden="true" /> Archived
+                </span>
+              )}
+            </motion.div>
+          </AnimatePresence>
 
           <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onNewChat} aria-label="Start a new chat" title="New chat">
             <MessageCirclePlus className="h-3.5 w-3.5" aria-hidden="true" />

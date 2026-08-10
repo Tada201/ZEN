@@ -42,7 +42,7 @@ pub fn truncate_to_budget(content: &str, max_tokens: usize) -> String {
     let mut low = 0usize;
     let mut high = chars.len();
     while low < high {
-        let mid = low + (high - low + 1) / 2;
+        let mid = low + (high - low).div_ceil(2);
         let prefix: String = chars[..mid].iter().collect();
         if estimate_tokens(&prefix) <= max_tokens {
             low = mid;

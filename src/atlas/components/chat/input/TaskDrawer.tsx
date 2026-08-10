@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { motionDurations, motionEasings, useReducedMotion } from '@/lib/motion';
 import { ChevronDown, Check } from 'lucide-react';
 import type { Task } from '@/lib/stores/taskStore';
 
@@ -10,6 +11,7 @@ interface TaskDrawerProps {
 }
 
 export function TaskDrawer({ tasks, isOpen, onToggle }: TaskDrawerProps) {
+  const reducedMotion = useReducedMotion();
   const completedCount = tasks.filter(t => t.status === 'completed').length;
   const totalCount = tasks.length;
 
@@ -34,9 +36,13 @@ export function TaskDrawer({ tasks, isOpen, onToggle }: TaskDrawerProps) {
       <AnimatePresence initial={false}>
         {isOpen && (
           <motion.div
-            initial={{ height: 0 }}
-            animate={{ height: 'auto' }}
-            exit={{ height: 0 }}
+            initial={reducedMotion ? false : { height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={reducedMotion ? undefined : { height: 0, opacity: 0 }}
+            transition={reducedMotion ? { duration: 0 } : {
+              duration: motionDurations.standard,
+              ease: motionEasings.standard,
+            }}
             className="overflow-hidden bg-[#1c1c1c]"
           >
             <div className="px-4 pb-3 space-y-2">

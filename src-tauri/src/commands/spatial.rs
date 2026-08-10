@@ -687,6 +687,7 @@ pub async fn list_favorites_db(state: State<'_, AppState>) -> Result<Vec<GtsmFav
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn save_favorite_db(
     state: State<'_, AppState>,
     id: String,

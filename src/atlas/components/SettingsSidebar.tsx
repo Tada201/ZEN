@@ -26,8 +26,8 @@ export function SettingsSidebar({
   }, [searchQuery]);
 
   return (
-    <aside className="flex w-full shrink-0 flex-col border-b border-border/60 bg-muted/10 md:w-60 md:border-b-0 md:border-r">
-      <div className="border-b border-border/60 p-4">
+    <aside className="flex w-full shrink-0 flex-col border-b border-border/60 bg-muted/10 pt-14 md:w-64 md:border-b-0 md:border-r">
+      <div className="border-b border-border/60 p-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-bold text-sm flex items-center gap-2 tracking-tight text-foreground">
             <WorkbenchIcon name="lucide:settings-2" size={16} className="text-primary" />

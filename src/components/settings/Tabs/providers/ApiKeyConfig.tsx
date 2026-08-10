@@ -6,6 +6,8 @@ import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
 import { PROVIDER_KEY_MAP } from '@/lib/types/provider';
 import { isSecretPresentValue } from '@/api';
+import { toast } from 'sonner';
+import { settingsApi } from '@/api/settingsApi';
 
 interface ApiKeyConfigProps {
     providerKey: string;
@@ -40,6 +42,15 @@ export const ApiKeyConfig = React.memo(({ providerKey, displayName }: ApiKeyConf
         fetchModels(providerKey);
     }, [providerKey, applyChanges, fetchModels]);
 
+    const handleRemove = useCallback(async () => {
+        const target = PROVIDER_KEY_MAP[providerKey];
+        if (!target) return;
+        await settingsApi.deleteSecret(target.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`));
+        updateSetting({ [target]: '' } as any);
+        toast.success(`${displayName} key removed.`);
+        fetchModels(providerKey);
+    }, [applyChanges, displayName, fetchModels, providerKey, updateSetting]);
+
     return (
         <form
             className="flex flex-col gap-2.5"
@@ -50,7 +61,8 @@ export const ApiKeyConfig = React.memo(({ providerKey, displayName }: ApiKeyConf
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">API Key</label>
                 <span className="text-[11px] text-muted-foreground/60">Required for authentication to {displayName}.</span>
             </div>
-            <div className="relative max-w-lg">
+            <div className="flex max-w-2xl items-center gap-2">
+              <div className="relative min-w-0 flex-1">
                 <WorkbenchInput
                     type={showKey ? "text" : "password"}
                     value={visibleApiKey}
@@ -67,6 +79,18 @@ export const ApiKeyConfig = React.memo(({ providerKey, displayName }: ApiKeyConf
                 >
                     <WorkbenchIcon name={showKey ? "lucide:eye-off" : "lucide:eye"} size={13} />
                 </WorkbenchButton>
+              </div>
+              {isSecretPresentValue(apiKey) && (
+                <WorkbenchButton
+                  type="button"
+                  variant="ghost"
+                  onClick={() => void handleRemove()}
+                  className="h-9 shrink-0 px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <WorkbenchIcon name="lucide:key-round-off" size={13} className="mr-1.5" />
+                  Remove key
+                </WorkbenchButton>
+              )}
             </div>
         </form>
     );

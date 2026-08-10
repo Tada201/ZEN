@@ -6,6 +6,8 @@ import {
 } from "@/lib/constants/design";
 import { GripVertical } from "lucide-react";
 import { ZenTitleBar } from "@/components/workbench/ZenTitleBar";
+import { motion } from "framer-motion";
+import { motionCssEasings, motionDurations, motionEasings, useReducedMotion } from "@/lib/motion";
 
 interface WorkspaceLayoutProps {
   sidebar?: React.ReactNode;
@@ -32,7 +34,9 @@ export function WorkspaceLayout({
   showStatusBar = true,
 }: WorkspaceLayoutProps) {
   const { sidebarOpen, rightPanelOpen, setSidebarOpen } = useUIStore();
+  const reducedMotion = useReducedMotion();
   const [isMobile, setIsMobile] = useState(false);
+  const [sidebarPeekOpen, setSidebarPeekOpen] = useState(false);
   
   // Custom right panel resizer state
   const [rightPanelWidth, setRightPanelWidth] = useState(() => {
@@ -62,6 +66,12 @@ export function WorkspaceLayout({
     media.addEventListener("change", syncMobileLayout);
     return () => media.removeEventListener("change", syncMobileLayout);
   }, [setSidebarOpen]);
+
+  // A peek is a transient desktop affordance. Once the user explicitly opens
+  // the sidebar, the normal flow owns its geometry again.
+  useEffect(() => {
+    if (sidebarOpen || isMobile) setSidebarPeekOpen(false);
+  }, [sidebarOpen, isMobile]);
 
   // Header overlays are rendered through a portal, so publish the same live
   // panel geometry globally. This keeps anchored status surfaces clear of the
@@ -143,13 +153,57 @@ export function WorkspaceLayout({
           </>
         )}
 
-        {sidebar && sidebarOpen && (
-          <aside 
-            className="hidden h-full border-r border-border bg-card shrink-0 overflow-hidden z-50 md:block"
-            style={{ width: `${SIDEBAR_EXPANDED_WIDTH}px` }}
+        {/* Desktop sidebar keeps its layout slot mounted so collapse is a
+            reversible width transition instead of an unmount/remount snap. */}
+        {sidebar && (
+          <motion.aside
+            aria-hidden={!sidebarOpen}
+            data-motion-surface="left-sidebar-shell"
+            className="hidden h-full shrink-0 overflow-hidden border-r border-border bg-card md:block"
+            animate={{
+              width: sidebarOpen ? SIDEBAR_EXPANDED_WIDTH : 0,
+              opacity: sidebarOpen ? 1 : 0,
+            }}
+            transition={reducedMotion
+              ? { duration: 0 }
+              : { duration: motionDurations.surface, ease: motionEasings.standard }}
           >
-            {React.cloneElement(sidebar as React.ReactElement<any>, {})}
-          </aside>
+            <div className="h-full w-[260px]">
+              {React.cloneElement(sidebar as React.ReactElement<any>, {})}
+            </div>
+          </motion.aside>
+        )}
+
+        {/* Edge-triggered peek never participates in flex layout. It floats
+            over the chat surface and closes as soon as the pointer leaves it. */}
+        {sidebar && !isMobile && (
+          <>
+            {!sidebarOpen && (
+              <div
+                aria-hidden="true"
+                className="absolute inset-y-0 left-0 z-[55] w-3"
+                onPointerEnter={() => setSidebarPeekOpen(true)}
+              />
+            )}
+            <motion.aside
+              initial={false}
+              animate={sidebarPeekOpen && !sidebarOpen
+                ? { x: 0, opacity: 1 }
+                : { x: -SIDEBAR_EXPANDED_WIDTH - 8, opacity: 0 }}
+              transition={reducedMotion
+                ? { duration: 0 }
+                : { duration: motionDurations.surface, ease: motionEasings.shared }}
+              onPointerLeave={() => setSidebarPeekOpen(false)}
+              aria-hidden={!sidebarPeekOpen || sidebarOpen}
+              data-motion-surface="left-sidebar-peek"
+              className="pointer-events-none absolute inset-y-0 left-0 z-[60] hidden w-[260px] overflow-hidden border-r border-border bg-card shadow-[18px_0_42px_rgba(0,0,0,0.28)] md:block"
+              style={{ pointerEvents: sidebarPeekOpen && !sidebarOpen ? "auto" : "none" }}
+            >
+              <div className="h-full w-[260px]">
+                {React.cloneElement(sidebar as React.ReactElement<any>, {})}
+              </div>
+            </motion.aside>
+          </>
         )}
 
         {/* Main Content Area: Stays permanently mounted to preserve DOM state/scrolls */}
@@ -171,12 +225,28 @@ export function WorkspaceLayout({
         )}
 
         {/* Right Sidebar Panel: Mounted conditionally to prevent background render cycles */}
-        <div 
-          style={{ width: rightPanelVisible ? `${rightPanelWidth}px` : "0px" }}
-          className={`h-full relative overflow-hidden shrink-0 ${isResizing ? "transition-none" : "transition-[width] duration-300 ease-in-out"}`}
+        <div
+          className="h-full relative overflow-hidden shrink-0"
+          data-motion-surface="right-panel-shell"
+          style={{
+            width: rightPanelVisible ? `${rightPanelWidth}px` : "0px",
+            transition: isResizing || reducedMotion
+              ? "none"
+              : `width ${motionDurations.surface * 1000}ms ${motionCssEasings.standard}`,
+          }}
         >
           <div className="h-full" style={{ width: `${rightPanelWidth}px` }}>
-            {rightPanelVisible && rightPanel}
+            {rightPanelVisible && (
+              <motion.div
+                key="right-workbench-surface"
+                initial={reducedMotion ? false : { opacity: 0, x: 16 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.surface, ease: motionEasings.standard }}
+                className="h-full w-full"
+              >
+                {rightPanel}
+              </motion.div>
+            )}
           </div>
         </div>
 

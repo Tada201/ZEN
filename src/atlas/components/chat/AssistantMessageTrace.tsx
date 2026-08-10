@@ -293,7 +293,7 @@ export function AgentActionStepInner({ step, isStreaming }: { step: Step; isStre
     <div className="font-sans">
       <div className="flex min-h-8 items-start gap-2 rounded-md px-1 py-1 transition-colors duration-200 hover:bg-muted">
         <div className={cn("mt-[3px] flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground", presentation.iconClass)}>
-          <Icon className={cn("h-3.5 w-3.5", isRunning && "motion-safe:animate-spin")} />
+          <Icon className={cn("h-3.5 w-3.5", isRunning && "animate-spin")} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
@@ -308,7 +308,7 @@ export function AgentActionStepInner({ step, isStreaming }: { step: Step; isStre
               )}
             >
               {canExpand && (
-                <ChevronRight className={cn("h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none", isExpanded && "rotate-90")} />
+                <ChevronRight className={cn("h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-200", isExpanded && "rotate-90")} />
               )}
               <span className={cn("min-w-0 flex-1 truncate text-[12px] capitalize leading-5 text-muted-foreground", isRunning && "text-foreground")}>
               {presentation.label}

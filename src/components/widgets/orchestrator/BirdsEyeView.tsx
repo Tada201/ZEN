@@ -91,7 +91,7 @@ function TaskCard({
             </div>
 
             {isRunning && (
-                <div className="agent-card__progress-bar absolute bottom-0 left-0 h-[1px] bg-primary motion-safe:animate-pulse" style={{ width: '100%' }} />
+                <div className="agent-card__progress-bar absolute bottom-0 left-0 h-[1px] bg-primary animate-pulse" style={{ width: '100%' }} />
             )}
         </div>
     );
@@ -126,7 +126,7 @@ export default function BirdsEyeView({
                 <div className="flex items-center gap-3">
                     {runningTasks.length > 0 && (
                         <div className="flex items-center gap-1.5 rounded-md bg-card border border-border px-2 py-0.5">
-                            <Loader2 className="h-3 w-3 text-primary motion-safe:animate-spin" aria-hidden="true" />
+                            <Loader2 className="h-3 w-3 text-primary animate-spin" aria-hidden="true" />
                             <span className="text-[11px] text-foreground">{runningTasks.length} running</span>
                         </div>
                     )}

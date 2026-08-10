@@ -87,7 +87,7 @@ impl Orchestrator {
             Ok(b) => b,
             Err(e) => {
                 let error_msg = format!("Failed to break goal into tasks: {}", e);
-                if let (Some(ref pool), Some(ref msg_id)) =
+                if let (Some(pool), Some(msg_id)) =
                     (self.db_pool.as_ref(), orchestrator_message_id.as_ref())
                 {
                     let failure_metadata = serde_json::json!({
@@ -204,7 +204,7 @@ impl Orchestrator {
 
                     let cancelled_content =
                         "Orchestration was cancelled by the user after reviewing the plan.";
-                    if let (Some(ref pool), Some(ref msg_id)) =
+                    if let (Some(pool), Some(msg_id)) =
                         (self.db_pool.as_ref(), orchestrator_message_id.as_ref())
                     {
                         let _ = queries::update_message(
@@ -417,7 +417,7 @@ impl Orchestrator {
             );
             let cancelled_early_content =
                 "Orchestration cancelled before any tasks could complete.";
-            if let (Some(ref pool), Some(ref msg_id)) =
+            if let (Some(pool), Some(msg_id)) =
                 (self.db_pool.as_ref(), orchestrator_message_id.as_ref())
             {
                 let _ = queries::update_message(
@@ -493,7 +493,7 @@ impl Orchestrator {
                 // Persist the failure to the orchestrator assistant message so
                 // a reload shows a coherent failed row instead of an
                 // incomplete placeholder.
-                if let (Some(ref pool), Some(ref msg_id)) =
+                if let (Some(pool), Some(msg_id)) =
                     (self.db_pool.as_ref(), orchestrator_message_id.as_ref())
                 {
                     let failure_metadata = serde_json::json!({
@@ -544,7 +544,7 @@ impl Orchestrator {
         let final_content = final_response.content.clone().unwrap_or_default();
         let tokens_in = final_response.tokens_in.unwrap_or(0) as i64;
         let tokens_out = final_response.tokens_out.unwrap_or(0) as i64;
-        if let (Some(ref pool), Some(ref msg_id)) =
+        if let (Some(pool), Some(msg_id)) =
             (self.db_pool.as_ref(), orchestrator_message_id.as_ref())
         {
             let _ = queries::update_message(

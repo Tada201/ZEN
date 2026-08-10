@@ -1,8 +1,6 @@
 import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
-const mcpServer = readFileSync(new URL("../src-tauri/src/mcp/server.rs", import.meta.url), "utf8");
-const mcpHttp = readFileSync(new URL("../src-tauri/src/mcp/http.rs", import.meta.url), "utf8");
 const toolsMod = readFileSync(new URL("../src-tauri/src/tools/mod.rs", import.meta.url), "utf8");
 const fsToolsMod = readFileSync(new URL("../src-tauri/src/tools/fs_tools/mod.rs", import.meta.url), "utf8");
 const fsToolsWrite = readFileSync(new URL("../src-tauri/src/tools/fs_tools/write.rs", import.meta.url), "utf8");
@@ -44,12 +42,10 @@ const generalistAgent = readFileSync(new URL("../src-tauri/resources/agents/gene
 const researcherAgent = readFileSync(new URL("../src-tauri/resources/agents/researcher.json", import.meta.url), "utf8");
 const operationalAgent = readFileSync(new URL("../src-tauri/resources/agents/operational_expert.json", import.meta.url), "utf8");
 
-assert(mcpServer.includes("http_auth_token") && mcpServer.includes("Uuid::new_v4()"), "MCP should create a per-launch HTTP auth token");
-assert(mcpHttp.includes("x-zen-mcp-token") && mcpHttp.includes("Missing or invalid MCP auth token"), "MCP HTTP should require the auth token");
-assert(mcpServer.includes("check_http_rate_limit") && mcpHttp.includes("MCP rate limit exceeded"), "MCP HTTP should rate-limit requests");
-assert(!mcpCommands.includes("mcp_get_http_token") && !tauriLib.includes("commands::mcp::mcp_get_http_token"), "MCP bearer token must not be exposed through renderer IPC");
-assert(!mcpApi.includes("getHttpToken") && mcpSettings.includes("HTTP Client Access") && mcpSettings.includes("x-zen-mcp-token"), "MCP settings should show endpoint/header guidance without revealing the bearer");
-assert(!mockClient.includes("mcp_get_http_token") && mockClient.includes("http_auth_required"), "mock MCP API should not expose a token command");
+// The MCP HTTP transport (mcp/server.rs + mcp/http.rs) was removed in cf2f785
+// ("MCP server -> client"); MCP now runs over stdio only, so per-launch HTTP
+// auth-token, x-zen-mcp-token header, and HTTP rate-limit assertions no longer
+// apply and were removed with the subsystem.
 assert(mockClient.includes("redactMockValue") && mockClient.includes("console.log(`[Mock IPC] ${command}`, redactMockValue(args))"), "mock IPC logging should redact command arguments");
 assert(toolService.includes("Critical tools require interactive approval") && toolService.includes("execute_non_interactive"), "non-interactive MCP should not execute critical tools");
 assert(
@@ -76,7 +72,6 @@ assert(toolService.includes("registry.get_legacy(&tool_call.name)") && !toolDisp
 assert(toolManager.includes("sync_legacy_tool_definitions") && commandsMod.includes("register_legacy_tool"), "startup/tool manager should sync legacy executors into the canonical registry");
 assert(toolPipeline.includes("enforce_tool_allowlist(&allowlist, &real_id, \"agent\")") && toolPipeline.includes("enforce_tool_allowlist(&allowlist, tool_id, \"agent\")"), "tool_exec and tool_info should use the shared allowlist helper");
 assert(toolManager.includes("sanitize_tool_info_schema") && toolManager.includes("TOOL_INFO_MAX_SCHEMA_BYTES"), "tool_info schemas should be capped before model exposure");
-assert(toolsMod.includes("mcp_exposable_definitions") && mcpCommands.includes("mcp_exposable_definitions") && mcpServer.includes("mcp_exposable_definitions"), "MCP should only advertise directly executable v2 tools");
 assert(
   toolsMod.includes("pub mod terminal_tools") &&
     toolsMod.includes("registry.register(Arc::new(RunCommandTool))") &&
@@ -136,7 +131,7 @@ assert(
     chatCommands.includes("tool_ids.dedup()"),
   "YOLO chat turns should expand the backend tool allowlist beyond web_search and normal tool-intent turns should include coding tools"
 );
-assert(mcpServer.includes("direct_tool_risk") && mcpServer.includes("Tool not available through non-interactive MCP"), "MCP tools/call should enforce direct low/medium tool exposure");
+assert(toolsMod.includes("direct_tool_risk") && agentCommands.includes("direct_tool_risk"), "direct low/medium tool exposure should be enforced via the canonical registry risk lookup");
 assert(agentCommands.includes("renderer_allowed") && agentCommands.includes("not available through renderer-initiated execution"), "renderer tool command IPC should enforce direct low/medium tool exposure");
 assert(escalation.includes("Sha256::digest(args.to_string())") && !escalation.includes("format!(\"sig:{name}:{}\", args)"), "early tool dedupe keys should hash args instead of storing full JSON");
 assert(escalation.includes("sig:{index}:{name}") && escalation.includes("Some(index)"), "early tool dedupe keys should not collide when providers omit tool-call ids");
@@ -151,10 +146,10 @@ assert(
   "terminal spawn must require a single-use explicit approval token and deny missing, expired, or mismatched approvals",
 );
 assert(escalation.includes("redact_tool_preview_string") && escalation.includes("redact_tool_preview_args"), "streamed tool-call previews should be redacted before reaching the renderer");
-assert(permissionModeMenu.includes("Enable YOLO mode?") && permissionModeMenu.includes("YOLO mode is enabled") && permissionModeMenu.includes("YOLO"), "chat input permission menu should confirm and visibly indicate YOLO mode");
+assert(permissionModeMenu.includes('mode === "yolo"') && permissionModeMenu.includes("window.confirm") && permissionModeMenu.includes("Hard security blocks still apply"), "chat input permission menu should confirm and visibly indicate YOLO mode");
 assert(
   toolsSettings.includes('nextMode === "yolo"') &&
-    toolsSettings.includes("Enable Full Access (YOLO Mode)?") &&
+    toolsSettings.includes("Enable Full Access?") &&
     toolsSettings.includes("Hard security blocks still apply"),
   "settings should confirm autonomous activation and explain the non-bypassable security floor",
 );

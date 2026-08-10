@@ -79,6 +79,33 @@ These rules apply to all code under `src/`.
    hardcoded, or product-inconsistent palettes in widgets.
 8. Use icon buttons for common actions, with tooltips for unclear icons.
 
+### Premium Motion UX Contract
+
+Motion is a first-class part of Zen's product quality. New components and
+features must be designed as participants in the motion relationship of the
+surfaces around them:
+
+1. Coordinate parent and child transitions. A panel, card, menu, overlay, or
+   composer mode must not appear as an isolated snapshot while its trigger,
+   container, or neighboring layout jumps.
+2. Give every meaningful visibility, state, layout, loading, navigation, and
+   feedback change a deliberate transition using the shared app motion tokens.
+   If a change must be instant, document the reason in the component.
+3. Prefer calm, short fades, small positional reveals, and layout transitions.
+   Avoid decorative bounce, shake, and unbounded pulse effects.
+4. Use stable React keys and coordinated enter/exit behavior. Do not animate
+   token-by-token streaming deltas; animate the message or execution surface
+   mount and meaningful phase changes only.
+5. Lazy-loaded modules, empty states, errors, tool cards, subagent rows,
+   overlays, menus, right-panel tabs, and composer modes must use the central
+   motion policy rather than one-off animation classes.
+6. Motion is controlled only by Zen's persisted user preference through
+   `src/lib/motion.ts`; do not add direct OS reduced-motion checks or parallel
+   motion policies.
+7. Review the complete interaction path, including loading, error, reload,
+   responsive, and animation-disabled states. The result must remain smooth in
+   relation to adjacent components, not only within the new component itself.
+
 ### Surface & Readability Rules
 
 The chat timeline and other primary surfaces must feel solid, readable, and

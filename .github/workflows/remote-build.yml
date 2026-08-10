@@ -31,7 +31,10 @@ jobs:
           cache: npm
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        # Pinned to match rust-toolchain.toml — do not float @stable.
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.97.1"
 
       - name: Cache Rust target
         uses: Swatinem/rust-cache@v2

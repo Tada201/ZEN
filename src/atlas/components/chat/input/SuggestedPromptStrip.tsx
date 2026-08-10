@@ -1,3 +1,6 @@
+import { motion } from "framer-motion";
+import { motionDurations, motionEasings, useReducedMotion } from "@/lib/motion";
+
 interface SuggestedPrompt {
   label: string;
   prompt: string;
@@ -18,8 +21,15 @@ export function SuggestedPromptStrip({
   isLoading?: boolean;
   onSelect: (prompt: string) => void;
 }) {
+  const reducedMotion = useReducedMotion();
+
   return (
-    <div className="flex flex-wrap gap-2 px-1 pb-1 animate-fade-in">
+    <motion.div
+      initial={reducedMotion ? false : { opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
+      className="flex flex-wrap gap-2 px-1 pb-1"
+    >
       {SUGGESTED_PROMPTS.map((item) => (
         <button
           key={item.prompt}
@@ -35,6 +45,6 @@ export function SuggestedPromptStrip({
           </div>
         </button>
       ))}
-    </div>
+    </motion.div>
   );
 }

@@ -162,8 +162,9 @@ Respond with ONLY the category name, nothing else."#,
                     "product" => Some(ResearchCategory::Product),
                     "comparison" => Some(ResearchCategory::Comparison),
                     "howto" => Some(ResearchCategory::HowTo),
-                    "factcheck" | "fact" | "fact-check" => Some(ResearchCategory::FactCheck),
-                    "landscape" | "general" | _ => Some(ResearchCategory::Landscape),
+                    "factcheck" | "fact" | "fact-check" => Some(ResearchCategory::FactCheck),                      "landscape" | "general" => Some(ResearchCategory::Landscape),
+                      _ => Some(ResearchCategory::Landscape),
+
                 }
             }
             Err(e) => {
@@ -306,11 +307,11 @@ Respond with ONLY the JSON object, nothing else."#,
                 let has_valid_questions = parsed
                     .get("sub_questions")
                     .and_then(|v| v.as_array())
-                    .map_or(false, |a| !a.is_empty());
+                    .is_some_and(|a| !a.is_empty());
                 let has_valid_topics = parsed
                     .get("key_topics")
                     .and_then(|v| v.as_array())
-                    .map_or(false, |a| !a.is_empty());
+                    .is_some_and(|a| !a.is_empty());
 
                 if has_valid_questions || has_valid_topics {
                     info!("Plan revision: plan updated after round {}", round_num);
@@ -599,12 +600,12 @@ Return ONLY the query string, nothing else."#,
         let mut agent_start_times: Vec<std::time::Instant> = Vec::with_capacity(count);
         let mut futures = Vec::with_capacity(count);
 
-        for i in 0..count {
+        for (i, agent_name) in agent_names.iter().enumerate().take(count) {
             agent_start_times.push(std::time::Instant::now());
             let sem = semaphore.clone();
             let question = question.to_string();
             let sub_q = sub_questions.get(i).cloned().unwrap_or_default();
-            let agent_name = agent_names[i].clone();
+            let agent_name = agent_name.clone();
 
             futures.push(async move {
                 // ── 1. Generate focused query for this sub-question ────────
@@ -1047,7 +1048,7 @@ impl<'a> IterativeDeepResearcher<'a> {
         // Build each future in a for loop that moves owned url/title/display_text
         // into the async block while keeping self_ref and semaphore as &-borrows
         // (cloned outside the async move to avoid moving the shared Arc/Self).
-        for ((url, title), display_text) in urls_to_fetch.into_iter().zip(url_display.into_iter()) {
+        for ((url, title), display_text) in urls_to_fetch.into_iter().zip(url_display) {
             let sem = semaphore.clone();
             futures.push(async move {
                 let _permit = sem.acquire().await.expect("Semaphore closed");
@@ -1233,12 +1234,11 @@ impl<'a> IterativeDeepResearcher<'a> {
                         let num_str: String = chars[start..pos].iter().collect();
                         if let Ok(n) = num_str.parse::<f64>() {
                             // Filter: reasonable data values (not years, small counts, or huge numbers)
-                            if n > 0.01
+                            if (n > 0.01
                                 && n < 1_000_000_000.0
-                                && n != num_str.parse::<f64>().unwrap_or(0.0).round()
+                                && n != num_str.parse::<f64>().unwrap_or(0.0).round())
+                                || (n > 0.0 && n < 1_000_000.0 && num_str.len() >= 3)
                             {
-                                numbers.push(n);
-                            } else if n > 0.0 && n < 1_000_000.0 && num_str.len() >= 3 {
                                 numbers.push(n);
                             }
                         }
