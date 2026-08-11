@@ -41,8 +41,8 @@ expect(release.includes("- name: Sign Windows installers\n        if: startsWith
   "Signing and published release artifacts must be limited to version tags.");
 
 const ci = await read(".github/workflows/ci.yml");
-expect(ci.includes("pull_request:") && ci.includes("push:"),
-  "CI must run automatically for main pushes and pull requests.");
+expect(ci.includes("workflow_dispatch:") && !ci.includes("pull_request:") && !ci.includes("\n  push:"),
+  "CI must remain manual-only to conserve hosted-runner resources.");
 
 const runtimeResources = await read("src-tauri/src/services/runtime_resource.rs");
 expect(runtimeResources.includes('join("runtimes")') && runtimeResources.includes("RuntimeBinarySource::AppData"),

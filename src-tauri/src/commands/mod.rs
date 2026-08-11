@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod artifacts;
+pub mod backup;
 pub mod audio;
 pub mod canvas;
 pub mod chat;

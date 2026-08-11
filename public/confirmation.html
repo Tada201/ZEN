@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Zen Confirmation</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, sans-serif; }
+    body { margin: 0; background: #09090b; color: #fafafa; }
+    main { min-height: 100vh; box-sizing: border-box; padding: 24px; display: grid; align-content: center; gap: 16px; }
+    .eyebrow { color: #a1a1aa; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: 20px; font-weight: 650; }
+    p { margin: 0; color: #a1a1aa; font-size: 13px; line-height: 1.5; }
+    .card { border: 1px solid #27272a; background: #18181b; padding: 14px; }
+    .warning { color: #fbbf24; }
+    .actions { display: flex; justify-content: flex-end; gap: 8px; }
+    button { border: 1px solid #3f3f46; background: transparent; color: #fafafa; padding: 9px 14px; font: inherit; cursor: pointer; }
+    button.primary { border-color: #8b5cf6; background: #7c3aed; }
+    button:hover { filter: brightness(1.12); }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">Zen · confirmation</div>
+    <h1 id="title">Confirm action</h1>
+    <div class="card"><p id="description">Review this action before continuing.</p><p id="warning" class="warning"></p></div>
+    <div class="actions"><button id="cancel">Cancel</button><button id="confirm" class="primary">Continue</button></div>
+  </main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const operation = params.get('operation') || 'action';
+    const copy = {
+      reset: ['Delete all Zen data?', 'This removes chats, databases, indexes, downloaded runtimes, models, media, and registered API keys.', 'Zen must restart to finish this cleanup.'],
+      restore: ['Restore this backup?', 'This adds imported chats and messages while preserving existing Zen data. API keys and workspace paths are not imported.', 'You can restart Zen after the restore completes.'],
+      restart: ['Restart Zen?', 'Zen will close and relaunch to apply the completed operation.', 'Unsaved UI changes will be lost.'],
+    }[operation] || ['Confirm action', 'Review this operation before continuing.', ''];
+    document.getElementById('title').textContent = copy[0];
+    document.getElementById('description').textContent = copy[1];
+    document.getElementById('warning').textContent = copy[2];
+    async function applyOperation(nextOperation) {
+      const nextCopy = {
+        reset: ['Delete all Zen data?', 'This removes chats, databases, indexes, downloaded runtimes, models, media, and registered API keys.', 'Zen must restart to finish this cleanup.'],
+        restore: ['Restore this backup?', 'This adds imported chats and messages while preserving existing Zen data. API keys and workspace paths are not imported.', 'You can restart Zen after the restore completes.'],
+        restart: ['Restart Zen?', 'Zen will close and relaunch to apply the completed operation.', 'Unsaved UI changes will be lost.'],
+      }[nextOperation];
+      if (!nextCopy) return;
+      document.getElementById('title').textContent = nextCopy[0];
+      document.getElementById('description').textContent = nextCopy[1];
+      document.getElementById('warning').textContent = nextCopy[2];
+      window.__zenPromptOperation = nextOperation;
+    }
+    (async () => {
+      try {
+        const { listen } = await import('@tauri-apps/api/event');
+        await listen('external-prompt-request', (event) => applyOperation(event.payload));
+      } catch (_) { /* browser preview has no Tauri event bridge */ }
+    })();
+    window.__zenPromptOperation = operation;
+    async function respond(confirmed) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('resolve_external_prompt', { operation: window.__zenPromptOperation, confirmed });
+      } finally {
+        window.close();
+      }
+    }
+    document.getElementById('cancel').onclick = () => respond(false);
+    document.getElementById('confirm').onclick = () => respond(true);
+  </script>
+</body>
+</html>

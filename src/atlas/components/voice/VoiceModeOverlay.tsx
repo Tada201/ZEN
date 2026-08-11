@@ -35,7 +35,7 @@ export function VoiceModeOverlay({
     const toggleVoiceMode = onClose;
 
     const userSttEngine = useSettingsStore(s => s.sttEngine);
-    const sttWhisperModel = useSettingsStore(s => s.sttWhisperModel ?? 'ggml-tiny.en.bin');
+    const sttWhisperModel = useSettingsStore(s => s.sttWhisperModel ?? 'ggml-base.en.bin');
     const sttComputeDevice = useSettingsStore(s => s.sttComputeDevice ?? 'auto');
     const ttsEngine = useSettingsStore(s => s.ttsEngine ?? 'piper');
     const ttsPiperVoiceId = useSettingsStore(s => s.ttsPiperVoiceId ?? 'default');

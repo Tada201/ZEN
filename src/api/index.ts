@@ -49,6 +49,8 @@ export {
 } from "./settingsApi";
 export { providersApi } from "./providersApi";
 export type { ProviderConfigRequest } from "./providersApi";
+export { backupApi } from "./backupApi";
+export type { BackupInspection, BackupOptions, BackupSummary } from "./backupApi";
 export { systemApi } from "./systemApi";
 export type { BackendSystemMetrics, HardwareInfo } from "./systemApi";
 export { terminalApi } from "./terminalApi";

@@ -11,6 +11,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { normalizeBrowserPreviewUrl } from '@/lib/security/browserPreviewUrl';
 
 interface BrowserPreviewProps {
   initialUrl?: string;
@@ -18,29 +19,39 @@ interface BrowserPreviewProps {
 }
 
 export function BrowserPreview({ initialUrl = "about:blank", onUrlChange }: BrowserPreviewProps) {
-  const [url, setUrl] = useState(initialUrl);
-  const [inputValue, setInputValue] = useState(initialUrl);
+  const safeInitialUrl = normalizeBrowserPreviewUrl(initialUrl) ?? "about:blank";
+  const [url, setUrl] = useState(safeInitialUrl);
+  const [inputValue, setInputValue] = useState(safeInitialUrl);
+  const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [history, setHistory] = useState<string[]>([initialUrl]);
+  const [history, setHistory] = useState<string[]>([safeInitialUrl]);
   const [historyIndex, setHistoryIndex] = useState(0);
 
   useEffect(() => {
-    if (initialUrl !== url) {
-      setUrl(initialUrl);
-      setInputValue(initialUrl);
+    const nextUrl = normalizeBrowserPreviewUrl(initialUrl);
+    if (!nextUrl) {
+      setError("This preview only allows public HTTP(S) addresses.");
+      return;
     }
-  }, [initialUrl]);
+    if (nextUrl !== url) {
+      setUrl(nextUrl);
+      setInputValue(nextUrl);
+      setError(null);
+    }
+  }, [initialUrl, url]);
 
   const handleNavigate = (newUrl: string) => {
-    let formattedUrl = newUrl;
-    if (!/^https?:\/\//i.test(newUrl) && !newUrl.startsWith('about:')) {
-      formattedUrl = 'https://' + newUrl;
+    const formattedUrl = normalizeBrowserPreviewUrl(newUrl);
+    if (!formattedUrl) {
+      setError("This preview only allows public HTTP(S) addresses.");
+      return;
     }
-    
+
+    setError(null);
     setUrl(formattedUrl);
     setInputValue(formattedUrl);
     onUrlChange?.(formattedUrl);
-    
+
     const newHistory = history.slice(0, historyIndex + 1);
     newHistory.push(formattedUrl);
     setHistory(newHistory);
@@ -134,6 +145,7 @@ export function BrowserPreview({ initialUrl = "about:blank", onUrlChange }: Brow
             <MoreVertical className="w-4 h-4" />
           </button>
         </div>
+        {error && <p className="px-2 text-[11px] text-destructive" role="alert">{error}</p>}
       </div>
 
       {/* Browser Content */}
@@ -160,7 +172,7 @@ export function BrowserPreview({ initialUrl = "about:blank", onUrlChange }: Brow
             src={url}
             className="w-full h-full border-none"
             title="Preview"
-            sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
+            sandbox="allow-forms allow-scripts"
           />
         )}
       </div>

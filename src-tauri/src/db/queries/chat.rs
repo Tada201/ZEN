@@ -13,6 +13,17 @@ const MAX_SEARCH_RESULTS: i64 = 100;
 
 // --- Chats ---
 
+pub async fn insert_chat_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    id: &str,
+    title: &str,
+    model: Option<&str>,
+) -> ZenResult<()> {
+    sqlx::query("INSERT INTO chats (id, title, model, workspace_root) VALUES (?, ?, ?, NULL)")
+        .bind(id).bind(title).bind(model).execute(&mut **tx).await?;
+    Ok(())
+}
+
 pub async fn create_chat(
     pool: &SqlitePool,
     title: &str,

@@ -1,4 +1,5 @@
 pub mod checkpoint;
+pub mod data_cleanup;
 pub mod document;
 pub mod gtsm;
 pub mod hardware;

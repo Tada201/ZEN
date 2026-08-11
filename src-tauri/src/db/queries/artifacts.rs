@@ -1,6 +1,6 @@
 use crate::db::models::*;
 use crate::error::ZenResult;
-use sqlx::SqlitePool;
+use sqlx::{Row, SqlitePool};
 
 const MAX_ARTIFACT_LIST_ITEMS: i64 = 1_000;
 const MAX_CHAT_ARTIFACT_ITEMS: i64 = 500;
@@ -80,6 +80,15 @@ pub async fn delete_artifact(pool: &SqlitePool, id: &str) -> ZenResult<()> {
         .execute(pool)
         .await?;
     Ok(())
+}
+
+pub async fn count_messages(pool: &SqlitePool) -> ZenResult<i64> {
+    Ok(sqlx::query("SELECT COUNT(*) AS count FROM messages").fetch_one(pool).await?.get::<i64, _>("count"))
+}
+
+pub async fn get_all_messages_for_backup(pool: &SqlitePool, chat_id: &str) -> ZenResult<Vec<Message>> {
+    sqlx::query_as::<_, Message>("SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC, id ASC")
+        .bind(chat_id).fetch_all(pool).await.map_err(Into::into)
 }
 
 pub async fn get_messages(pool: &SqlitePool, chat_id: &str) -> ZenResult<Vec<Message>> {

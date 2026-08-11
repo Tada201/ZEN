@@ -221,14 +221,14 @@ const checks = [
   ],
   [
     "voice Whisper defaults and backend are configured for low latency",
-    src.settingsSchema.includes('default("ggml-tiny.en.bin")') &&
-      src.audioSlice.includes('sttWhisperModel: "ggml-tiny.en.bin"') &&
-      src.overlay.includes("?? 'ggml-tiny.en.bin'") &&
+    src.settingsSchema.includes('default("ggml-base.en.bin")') &&
+      src.audioSlice.includes('sttWhisperModel: "ggml-base.en.bin"') &&
+      src.overlay.includes("?? 'ggml-base.en.bin'") &&
       src.sttConfig.includes("Fastest, recommended for voice commands") &&
-      src.voiceCommand.includes('unwrap_or_else(|| "ggml-tiny.en.bin".to_string())') &&
+      src.voiceCommand.includes('unwrap_or_else(|| "ggml-base.en.bin".to_string())') &&
       src.voiceCommand.includes("Whisper transcription request finished") &&
       !src.voiceCommand.includes("rms < 0.0025") &&
-      src.speechService.includes('let model_name = "ggml-tiny.en.bin".to_string()') &&
+      src.speechService.includes('let model_name = "ggml-base.en.bin".to_string()') &&
       src.speechService.includes("whisper-server inference response received"),
   ],
   [

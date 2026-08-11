@@ -20,7 +20,6 @@ pub struct ResolvedBinary {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeBinarySource {
     AppData,
-    PathLookup,
 }
 
 impl RuntimeResources {
@@ -122,41 +121,27 @@ impl RuntimeResources {
         })
     }
 
-    pub fn whisper_server_binary(&self, has_cuda: bool, prefer_vulkan: bool) -> ResolvedBinary {
-        let base_dir = self.app_data_dir.join("runtimes").join("whisper");
+    pub fn whisper_server_binary(
+        &self,
+        has_cuda: bool,
+        prefer_vulkan: bool,
+    ) -> Result<ResolvedBinary, String> {
+        let candidates = [
+            (has_cuda, self.whisper_cuda_server_path()),
+            (prefer_vulkan, self.whisper_vulkan_server_path()),
+            (true, self.app_data_dir.join("runtimes/whisper/whisper-server.exe")),
+        ];
 
-        if has_cuda {
-            let cublas = self.whisper_cuda_server_path();
-            if cublas.exists() {
-                return ResolvedBinary {
-                    path: cublas,
-                    source: RuntimeBinarySource::AppData,
-                };
-            }
-        }
-
-        if prefer_vulkan {
-            let vulkan = self.whisper_vulkan_server_path();
-            if vulkan.exists() {
-                return ResolvedBinary {
-                    path: vulkan,
-                    source: RuntimeBinarySource::AppData,
-                };
-            }
-        }
-
-        let bundled = base_dir.join("whisper-server.exe");
-        if bundled.exists() {
-            return ResolvedBinary {
-                path: bundled,
+        candidates
+            .into_iter()
+            .find(|(enabled, path)| *enabled && path.is_file())
+            .map(|(_, path)| ResolvedBinary {
+                path,
                 source: RuntimeBinarySource::AppData,
-            };
-        }
-
-        ResolvedBinary {
-            path: PathBuf::from("whisper-server"),
-            source: RuntimeBinarySource::PathLookup,
-        }
+            })
+            .ok_or_else(|| {
+                "Whisper runtime is not installed. Install Whisper from Settings > Dependencies before using local speech recognition.".to_string()
+            })
     }
 
     pub fn piper_binary(&self) -> ResolvedBinary {
@@ -323,6 +308,33 @@ mod tests {
             resources.whisper_model_path("tiny.en.bin"),
             resources.downloaded_model_path("tiny.en.bin")
         );
+    }
+
+    #[test]
+    fn missing_whisper_runtime_returns_installer_error() {
+        let dirs = TestDirs::new("missing-whisper");
+        let error = dirs
+            .runtime_resources()
+            .whisper_server_binary(false, false)
+            .expect_err("missing runtime must not fall back to PATH");
+        assert!(error.contains("Settings > Dependencies"));
+    }
+
+    #[test]
+    fn resolves_installed_whisper_runtime_from_app_data() {
+        let dirs = TestDirs::new("installed-whisper");
+        let binary = dirs
+            .app_data
+            .join("runtimes/whisper/whisper-server.exe");
+        fs::create_dir_all(binary.parent().expect("runtime parent")).expect("create runtime dir");
+        fs::write(&binary, b"verified test binary").expect("write test binary");
+
+        let resolved = dirs
+            .runtime_resources()
+            .whisper_server_binary(false, false)
+            .expect("installed app-data runtime should resolve");
+        assert_eq!(resolved.path, binary);
+        assert_eq!(resolved.source, RuntimeBinarySource::AppData);
     }
 
     #[test]

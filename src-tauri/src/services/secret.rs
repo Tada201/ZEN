@@ -106,6 +106,32 @@ impl SecretService {
         Ok(self.get_secret(key).await?.is_some())
     }
 
+    /// Remove only credentials owned by the current Zen provider catalog and
+    /// declared custom providers. The keyring has no portable enumeration API,
+    /// so unrelated credentials are never guessed or deleted.
+    pub async fn delete_known_secrets(&self, custom_provider_ids: &[String]) -> AppResult<usize> {
+        let mut keys = std::collections::BTreeSet::new();
+        for provider in crate::llm::provider_meta::PROVIDER_CATALOG {
+            if let Some(key) = provider.api_key_key {
+                keys.insert(key.to_string());
+            }
+        }
+        for id in custom_provider_ids {
+            if is_valid_custom_provider_id(id) {
+                keys.insert(format!("{id}_api_key"));
+            }
+        }
+
+        let mut deleted = 0;
+        for key in keys {
+            if self.has_secret(&key).await? {
+                self.delete_secret(&key).await?;
+                deleted += 1;
+            }
+        }
+        Ok(deleted)
+    }
+
     pub async fn migrate_plaintext_settings_to_keyring(&self) -> AppResult<usize> {
         let settings = self.settings.get_all().await?;
         let mut migrated = 0;
@@ -154,6 +180,12 @@ impl SecretService {
             Err(e) => Err(keyring_error("delete", key, e)),
         }
     }
+}
+
+fn is_valid_custom_provider_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 64
+        && id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
 }
 
 fn keyring_entry(key: &str) -> AppResult<keyring::Entry> {

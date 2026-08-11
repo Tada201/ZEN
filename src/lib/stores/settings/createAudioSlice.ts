@@ -56,7 +56,7 @@ export const createAudioSlice: StateCreator<SettingsState, [], [], AudioSlice> =
   ttsEngine: "piper",
   sttEnabled: false,
   sttEngine: "whisper",
-  sttWhisperModel: "ggml-tiny.en.bin",
+  sttWhisperModel: "ggml-base.en.bin",
   sttComputeDevice: "auto",
   webTtsVoiceURI: "",
   webTtsRate: 1.0,

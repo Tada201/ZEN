@@ -1,8 +1,7 @@
 name: Remote Windows Build
 
+# Manual-only to conserve hosted-runner resources. Run from Actions when needed.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:

@@ -14,4 +14,19 @@ export const settingsApi = {
     callCommand<void>("delete_secret", { key }),
   setSettings: (settings: Record<string, string>) =>
     callCommand<void>("set_settings", { settings }),
+  getDataCleanupStatus: () =>
+    callCommand<{
+      hasPreviousData: boolean;
+      items: Array<{ category: string; path: string; exists: boolean }>;
+      restartRequired: boolean;
+    }>("get_data_cleanup_status"),
+  resetSettingsAndSecrets: () =>
+    callCommand<{ removedCategories: string[]; failedCategories: string[]; restartRequired: boolean; message: string }>(
+      "reset_settings_and_secrets",
+    ),
+  resetAllZenData: () =>
+    callCommand<{ removedCategories: string[]; failedCategories: string[]; restartRequired: boolean; message: string }>(
+      "reset_all_zen_data",
+      { confirmation: "DELETE ALL ZEN DATA" },
+    ),
 };

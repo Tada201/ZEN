@@ -1,8 +1,12 @@
 use crate::db::models::*;
 use crate::error::ZenResult;
-use sqlx::SqlitePool;
+use sqlx::{Row, SqlitePool};
 
 // --- Settings ---
+
+pub async fn count_settings(pool: &SqlitePool) -> ZenResult<i64> {
+    Ok(sqlx::query("SELECT COUNT(*) AS count FROM settings").fetch_one(pool).await?.get::<i64, _>("count"))
+}
 
 pub async fn get_setting(pool: &SqlitePool, key: &str) -> ZenResult<Option<String>> {
     let result = sqlx::query_as::<_, Setting>("SELECT * FROM settings WHERE key = ?")
@@ -56,6 +60,11 @@ pub async fn bulk_set_settings(
     }
 
     tx.commit().await?;
+    Ok(())
+}
+
+pub async fn clear_settings(pool: &SqlitePool) -> ZenResult<()> {
+    sqlx::query("DELETE FROM settings").execute(pool).await?;
     Ok(())
 }
 

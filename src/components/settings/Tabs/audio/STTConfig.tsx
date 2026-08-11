@@ -27,7 +27,7 @@ const WHISPER_VARIANTS: WhisperVariant[] = [
 
 export const STTConfig = memo(() => {
     const sttEngine = useSettingsStore(s => s.sttEngine ?? 'whisper');
-    const sttWhisperModel = useSettingsStore(s => s.sttWhisperModel ?? 'ggml-tiny.en.bin');
+    const sttWhisperModel = useSettingsStore(s => s.sttWhisperModel ?? 'ggml-base.en.bin');
     const sttComputeDevice = useSettingsStore(s => s.sttComputeDevice ?? 'auto');
     const updateSetting = useSettingsStore(s => s.updateSetting);
 

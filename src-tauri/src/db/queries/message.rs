@@ -48,6 +48,19 @@ impl<'a> Default for NewMessage<'a> {
     }
 }
 
+pub async fn add_message_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    msg: &NewMessage<'_>,
+    id: &str,
+) -> ZenResult<()> {
+    sqlx::query("INSERT INTO messages (id, chat_id, role, content, model, is_complete, tool_calls, tool_call_id, images, attachments, tokens_in, tokens_out, kind, metadata, reasoning_details, steps_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(id).bind(msg.chat_id).bind(msg.role).bind(msg.content).bind(msg.model).bind(msg.is_complete as i32)
+        .bind(msg.tool_calls).bind(msg.tool_call_id).bind(msg.images).bind(msg.attachments).bind(msg.tokens_in).bind(msg.tokens_out)
+        .bind(msg.kind).bind(msg.metadata).bind(msg.reasoning_details).bind(msg.steps_json)
+        .bind(chrono::Utc::now().to_rfc3339()).execute(&mut **tx).await?;
+    Ok(())
+}
+
 pub async fn add_message(pool: &SqlitePool, msg: &NewMessage<'_>) -> ZenResult<Message> {
     let id = msg
         .id

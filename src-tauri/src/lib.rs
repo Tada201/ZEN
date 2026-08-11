@@ -78,6 +78,9 @@ pub fn run() {
                         return;
                     }
                 }
+                if let Err(error) = crate::services::data_cleanup::apply_pending_reset(&app_dir) {
+                    tracing::error!(%error, "Pending Zen data cleanup could not be completed");
+                }
 
                 // Backend logging (instant)
                 if let Err(e) =                        crate::services::init_backend_logging(&app_dir) {
@@ -423,6 +426,10 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::system::relaunch_app,
+            commands::system::open_external_prompt,
+            commands::system::resolve_external_prompt,
+            commands::system::export_diagnostics,
             commands::system::get_system_metrics,
             commands::system::get_system_status,
             commands::system::get_user_display_name,
@@ -442,6 +449,10 @@ pub fn run() {
             commands::workbench::delete_workbench_tab,
             commands::dependency::list_dependency_status,
             commands::dependency::install_managed_dependency,
+            commands::backup::get_backup_summary,
+            commands::backup::export_zen_backup,
+            commands::backup::inspect_zen_backup,
+            commands::backup::import_zen_backup,
             commands::document::ingest_document,
             commands::document::list_documents,
             commands::document::list_documents_page,
@@ -450,6 +461,9 @@ pub fn run() {
             commands::settings::get_setting,
             commands::settings::set_setting,
             commands::settings::delete_secret,
+            commands::settings::get_data_cleanup_status,
+            commands::settings::reset_settings_and_secrets,
+            commands::settings::reset_all_zen_data,
             commands::settings::set_settings,
             commands::settings::get_all_settings,
             commands::settings::get_provider_catalog,

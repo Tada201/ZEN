@@ -20,6 +20,19 @@
         "visible": false
       },
       {
+        "label": "prompt",
+        "title": "Zen Confirmation",
+        "width": 460,
+        "height": 320,
+        "decorations": true,
+        "alwaysOnTop": true,
+        "resizable": false,
+        "center": true,
+        "visible": false,
+        "skipTaskbar": true,
+        "url": "confirmation.html"
+      },
+      {
         "label": "splashscreen",
         "title": "Zen Startup",
         "width": 780,

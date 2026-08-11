@@ -62,6 +62,9 @@ export interface InitStatus {
 }
 
 export const systemApi = {
+  relaunchApp: () => callCommand<void>("relaunch_app", {}),
+  openExternalPrompt: (operation: "reset" | "restore" | "restart") => callCommand<boolean>("open_external_prompt", { operation }),
+  exportDiagnostics: (destination: string) => callCommand<void>("export_diagnostics", { destination }),
   getUserDisplayName: () => callCommand<string>("get_user_display_name", {}),
   getHardwareInfo: () => callCommand<HardwareInfo>("get_hardware_info", {}),
   getSystemMetrics: () => callCommand<BackendSystemMetrics>("get_system_metrics", {}),

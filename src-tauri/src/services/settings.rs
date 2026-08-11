@@ -103,6 +103,14 @@ impl SettingsService {
         Ok(cache.clone())
     }
 
+    pub async fn clear(&self) -> AppResult<()> {
+        if let Some(pool) = self.db_pool.read().await.as_ref() {
+            crate::db::queries::clear_settings(pool).await?;
+        }
+        self.cache.write().await.clear();
+        Ok(())
+    }
+
     pub async fn get_all_public(&self) -> AppResult<HashMap<String, String>> {
         let cache = self.cache.read().await;
         Ok(cache

@@ -81,7 +81,9 @@ impl SpeechService {
             .any(|gpu| gpu.vendor == "AMD" || gpu.vendor == "Intel")
     }
 
-    fn resolved_whisper_binary(&self) -> crate::services::runtime_resource::ResolvedBinary {
+    fn resolved_whisper_binary(
+        &self,
+    ) -> Result<crate::services::runtime_resource::ResolvedBinary, String> {
         self.runtime
             .whisper_server_binary(self.hardware.has_cuda, self.prefers_vulkan())
     }
@@ -113,7 +115,7 @@ impl SpeechService {
         let runtime = RuntimeResources::new(app_data_dir, resource_dir);
         // Keep the fresh-install default aligned with the managed dependency
         // package. Additional Whisper models remain optional downloads.
-        let model_name = "ggml-tiny.en.bin".to_string();
+        let model_name = "ggml-base.en.bin".to_string();
         let model_path = runtime.whisper_model_path(&model_name);
 
         Self {
@@ -301,7 +303,13 @@ impl SpeechService {
 
     pub fn runtime_status(&self) -> WhisperRuntimeStatus {
         let resolved = self.resolved_whisper_binary();
-        let binary_path = resolved.path.display().to_string();
+        let (binary_path, binary_source) = match resolved {
+            Ok(binary) => (
+                binary.path.display().to_string(),
+                format!("{:?}", binary.source),
+            ),
+            Err(_) => (String::new(), "Unavailable".to_string()),
+        };
         let cuda_server_available = self.runtime.whisper_cuda_server_path().exists()
             || self.runtime.whisper_app_data_cuda_server_path().exists();
         let vulkan_server_available = self.runtime.whisper_vulkan_server_path().exists()
@@ -333,7 +341,7 @@ impl SpeechService {
             cuda_server_available,
             vulkan_server_available,
             binary_path,
-            binary_source: format!("{:?}", resolved.source),
+            binary_source,
         }
     }
 
@@ -382,7 +390,7 @@ impl SpeechService {
             self.ensure_model().await?;
         }
 
-        let resolved_binary = self.resolved_whisper_binary();
+        let resolved_binary = self.resolved_whisper_binary()?;
         info!(
             path = %resolved_binary.path.display(),
             source = ?resolved_binary.source,
@@ -541,8 +549,12 @@ impl SpeechService {
                             let respawn_port = respawn_port.unwrap_or(WHISPER_PORT);
                             *active_port.write().await = respawn_port;
 
-                            let resolved_binary =
-                                runtime.whisper_server_binary(has_cuda, prefer_vulkan);
+                            let Ok(resolved_binary) =
+                                runtime.whisper_server_binary(has_cuda, prefer_vulkan)
+                            else {
+                                tracing::warn!("Whisper runtime unavailable; watchdog will wait for installation before respawning");
+                                continue;
+                            };
                             let mut command = tokio::process::Command::new(&resolved_binary.path);
                             configure_tokio_command_for_binary(&mut command, &resolved_binary.path);
                             let model = model_path.read().await;

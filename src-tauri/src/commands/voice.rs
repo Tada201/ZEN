@@ -153,7 +153,7 @@ pub async fn transcribe_audio(
         None => crate::db::queries::get_setting(&state.db().await?, "stt_whisper_model")
             .await
             .unwrap_or_default()
-            .unwrap_or_else(|| "ggml-tiny.en.bin".to_string()),
+            .unwrap_or_else(|| "ggml-base.en.bin".to_string()),
     };
 
     let speech_lock = state.speech.read().await;
@@ -248,7 +248,7 @@ pub async fn transcribe_stream(
         None => crate::db::queries::get_setting(&state.db().await?, "stt_whisper_model")
             .await
             .unwrap_or_default()
-            .unwrap_or_else(|| "ggml-tiny.en.bin".to_string()),
+            .unwrap_or_else(|| "ggml-base.en.bin".to_string()),
     };
 
     let speech_lock = state.speech.read().await;

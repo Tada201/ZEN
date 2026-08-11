@@ -1,11 +1,11 @@
 use crate::commands::AppState;
 use crate::db::models::{ModelInfo, ProviderConfig};
 use crate::error::{AppResult, ZenResult};
-use crate::services::is_secret_key;
+use crate::services::{is_secret_key, data_cleanup};
 use crate::tools::manager::{ToolManager, ToolMetadata};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
-use tauri::State;
+use tauri::{Manager, State};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -200,6 +200,51 @@ pub async fn set_setting(state: State<'_, AppState>, key: String, value: String)
     maybe_sync_tool_permissions(&state, std::iter::once(key.as_str())).await;
 
     Ok(())
+}
+
+async fn custom_provider_ids(state: &AppState) -> Vec<String> {
+    let Ok(Some(raw)) = state.settings_manager.get("custom_providers").await else { return Vec::new(); };
+    serde_json::from_str::<serde_json::Value>(&raw)
+        .ok()
+        .and_then(|value| value.as_object().cloned())
+        .map(|providers| providers.keys().cloned().collect())
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+pub async fn get_data_cleanup_status(app: tauri::AppHandle) -> AppResult<data_cleanup::ZenDataStatus> {
+    let app_data_dir = app.path()
+        .app_data_dir()
+        .map_err(|error| crate::error::ZenError::Custom(format!("Could not resolve app data directory: {error}")))?;
+    Ok(data_cleanup::inspect(&app_data_dir))
+}
+
+#[tauri::command]
+pub async fn reset_settings_and_secrets(state: State<'_, AppState>) -> AppResult<data_cleanup::ZenCleanupResult> {
+    let custom_provider_ids = custom_provider_ids(&state).await;
+    data_cleanup::reset_settings_and_secrets(
+        &state.settings_manager,
+        state.secret_manager.clone(),
+        &custom_provider_ids,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn reset_all_zen_data(app: tauri::AppHandle, state: State<'_, AppState>, confirmation: String) -> AppResult<data_cleanup::ZenCleanupResult> {
+    if confirmation != "DELETE ALL ZEN DATA" {
+        return Err(crate::error::ZenError::Custom("Explicit confirmation is required".to_string()));
+    }
+    let app_data_dir = app.path()
+        .app_data_dir()
+        .map_err(|error| crate::error::ZenError::Custom(format!("Could not resolve app data directory: {error}")))?;
+    let custom_provider_ids = custom_provider_ids(&state).await;
+    data_cleanup::request_full_reset(
+        &app_data_dir,
+        state.secret_manager.clone(),
+        &custom_provider_ids,
+    )
+    .await
 }
 
 /// Remove a provider credential from the OS keyring and clear its redacted
