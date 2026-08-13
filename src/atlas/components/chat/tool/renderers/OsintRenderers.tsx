@@ -86,40 +86,6 @@ export function AircraftList({ output }: RendererContext) {
   );
 }
 
-/* ── Weather ──────────────────────────────────────────────────── */
-// Output: { summary, data: { temperature, wind_speed, humidity, precipitation, description, ... } }
-export function WeatherCard({ output }: RendererContext) {
-  const record = asRecord(output);
-  const data = asRecord(record.data);
-  const temp = num(data.temperature);
-  if (temp === undefined && !str(data.description)) return null;
-
-  const stats: Array<{ label: string; value: string }> = [];
-  if (num(data.wind_speed) !== undefined) stats.push({ label: "Wind", value: `${num(data.wind_speed)!.toFixed(0)} km/h` });
-  if (num(data.humidity) !== undefined) stats.push({ label: "Humidity", value: `${num(data.humidity)!.toFixed(0)}%` });
-  if (num(data.precipitation) !== undefined) stats.push({ label: "Precip", value: `${num(data.precipitation)} mm` });
-  if (num(data.cloud_cover) !== undefined) stats.push({ label: "Cloud", value: `${num(data.cloud_cover)!.toFixed(0)}%` });
-
-  return (
-    <Panel label="Weather">
-      <div className="flex items-baseline gap-2">
-        {temp !== undefined && <span className="text-[20px] font-semibold tabular-nums text-foreground">{temp.toFixed(0)}°C</span>}
-        {str(data.description) && <span className="text-[12px] text-muted-foreground">{str(data.description)}</span>}
-      </div>
-      {stats.length > 0 && (
-        <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
-          {stats.map((stat) => (
-            <div key={stat.label} className="flex items-baseline justify-between gap-2">
-              <span className="text-[11px] text-muted-foreground">{stat.label}</span>
-              <span className="text-[11px] tabular-nums text-foreground">{stat.value}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </Panel>
-  );
-}
-
 /* ── Route ────────────────────────────────────────────────────── */
 // Output: { status, provider, distance_km, duration_minutes, summary, steps_count }
 export function RouteCard({ input, output }: RendererContext) {

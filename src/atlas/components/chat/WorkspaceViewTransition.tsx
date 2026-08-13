@@ -2,6 +2,7 @@ import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useReducedMotion } from "@/lib/motion";
 import { motionDurations, motionEasings } from "@/lib/motion";
+import { WorkspaceBackground } from "@/components/workbench/WorkspaceBackground";
 
 export type WorkspaceView = "openui" | "loading" | "welcome" | "chat";
 
@@ -12,10 +13,22 @@ interface WorkspaceViewTransitionProps {
   children: ReactNode;
 }
 
-const WorkspaceTransitionContext = createContext(false);
+interface WorkspaceTransitionState {
+  isTransitioning: boolean;
+  isLeavingWelcome: boolean;
+}
+
+const WorkspaceTransitionContext = createContext<WorkspaceTransitionState>({
+  isTransitioning: false,
+  isLeavingWelcome: false,
+});
 
 export function useWorkspaceTransitioning() {
-  return useContext(WorkspaceTransitionContext);
+  return useContext(WorkspaceTransitionContext).isTransitioning;
+}
+
+export function useWorkspaceLeavingWelcome() {
+  return useContext(WorkspaceTransitionContext).isLeavingWelcome;
 }
 
 /**
@@ -57,19 +70,25 @@ export function WorkspaceViewTransition({ view, transitionKey, children }: Works
 
   const sceneKey = `${view}:${transitionKey ?? ""}`;
 
+  const transitionState = {
+    isTransitioning,
+    isLeavingWelcome: view !== "welcome",
+  };
+
   return (
-    <WorkspaceTransitionContext.Provider value={isTransitioning}>
+    <WorkspaceTransitionContext.Provider value={transitionState}>
       <div className="relative h-full min-h-0 overflow-hidden">
+        <WorkspaceBackground />
         <LayoutGroup id="workspace-view">
           <AnimatePresence initial={false} mode="sync">
             <motion.div
               onAnimationStart={handleAnimationStart}
               onAnimationComplete={handleAnimationComplete}
             key={sceneKey}
-            className="absolute inset-0 h-full w-full origin-center will-change-[opacity,transform]"
-            initial={prefersReducedMotion ? false : { opacity: 0, y: 28, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={prefersReducedMotion ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: -22, scale: 1.015 }}
+            className="absolute inset-0 h-full w-full origin-center"
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 28 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={prefersReducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: -22 }}
             transition={
               prefersReducedMotion
                 ? { duration: 0 }

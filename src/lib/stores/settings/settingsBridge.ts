@@ -56,20 +56,13 @@ const DOT_TO_FIELD: Record<string, BridgeEntry> = {
   "chat.chain-of-thought":  { field: "thinkingMode",         type: "boolean" },
   "chat.reasoning-budget":  { field: "thinkingBudget",       type: "number" },
   "chat.reasoning-effort":  { field: "reasoningEffort",      type: "string" },
+  "chat.reasoning-disclosure-density": { field: "reasoningDisclosureDensity", type: "string" },
   "chat.prompt-caching":    { field: "promptCaching",        type: "boolean" },
   "chat.hardware-accel":    { field: "gpuAcceleration",      type: "boolean" },
-  // Title-maker: chat session auto-titling settings.
-  //
-  // TODO: The four title-maker bridge entries (`titleMakerEnabled`,
-  // `titleMakerModel`, `titleMakerProvider`, `titleMakerPrompt`)
-  // were removed in the tsc-cleanup pass because `SettingsState`
-  // does not yet expose these fields. The Rust title-maker command
-  // reads the underlying SQLite via `queries::get_setting`, so the
-  // typed store and the bridge MUST eventually agree on these names.
-  // When the runtime gains title-maker persistence (post-`unified-ui`
-  // milestone), add the four fields to a new `AiSlice`/chat slice
-  // and re-introduce the four entries below.
-
+  "chat.title-maker-enabled": { field: "titleMakerEnabled", type: "boolean" },
+  "chat.title-maker-model":   { field: "titleMakerModel", type: "string" },
+  "chat.title-maker-provider": { field: "titleMakerProvider", type: "string" },
+  "chat.title-maker-prompt":  { field: "titleMakerPrompt", type: "string" },
   // Agent / Orchestrator
   "agent.token-budget":          { field: "agentTokenBudget",      type: "number" },
 
@@ -129,11 +122,11 @@ const DOT_TO_FIELD: Record<string, BridgeEntry> = {
   "embeddings.chunk-overlap":{ field: "chunkOverlap",     type: "number" },
   "memory.enabled":              { field: "memoryEnabled",              type: "boolean" },
   "memory.max-turns":             { field: "memoryMaxTurns",              type: "number" },
-  "memory.summarization-enabled":  { field: "memorySummarizationEnabled",  type: "boolean" },
-  "memory.summarization-model":    { field: "memorySummarizationModel",    type: "string" },
-  "memory.semantic-recall-enabled":{ field: "memorySemanticRecallEnabled", type: "boolean" },
-  "memory.max-recalled-messages":  { field: "memoryMaxRecalledMessages",  type: "number" },
-  "memory.drift-threshold":        { field: "memoryDriftThreshold",        type: "number" },
+  "memory.summarization_enabled":  { field: "memorySummarizationEnabled",  type: "boolean" },
+  "memory.summarization_model":    { field: "memorySummarizationModel",    type: "string" },
+  "memory.semantic_recall_enabled":{ field: "memorySemanticRecallEnabled", type: "boolean" },
+  "memory.max_recalled_messages":  { field: "memoryMaxRecalledMessages",  type: "number" },
+  "memory.drift_threshold":        { field: "memoryDriftThreshold",        type: "number" },
   "providerParams":          { field: "providerParams",   type: "json" },
 };
 
@@ -150,6 +143,7 @@ const TRANSIENT_FIELDS = new Set<string>([
   "isHydrated",
   "isDirty",
   "activeSettings",
+  "stagedOriginals",
   "availableModels",
   "availableModelsByProvider",
   "fetchingModels",

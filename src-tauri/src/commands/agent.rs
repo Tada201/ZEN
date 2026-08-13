@@ -2,31 +2,138 @@ use crate::commands::AppState;
 use crate::error::ZenResult;
 use serde::Serialize;
 use tauri::State;
+use crate::agent::types::{AgentConfigMode, AgentProfile};
 
 #[derive(Debug, Serialize)]
 pub struct AgentInfoResponse {
     pub id: String,
     pub name: String,
     pub description: String,
+    pub instructions: String,
+    pub tool_ids: Vec<String>,
     pub tool_count: usize,
     pub model_override: Option<String>,
+    pub model_provider: Option<String>,
     pub max_iterations: Option<usize>,
+    pub context_window: Option<usize>,
+    pub max_messages_in_memory: Option<usize>,
+    pub model_tier: String,
+    pub color: Option<String>,
+    pub user_invocable: bool,
+    pub model_invocable: bool,
+    pub allow_nested_delegation: bool,
+    pub allowed_agent_ids: Vec<String>,
+    pub inject_agents_md: bool,
+    pub is_builtin: bool,
+    pub user_editable: bool,
+    pub config_mode: String,
+}
+
+async fn validate_profile_tools(state: &AppState, profile: &AgentProfile) -> ZenResult<()> {
+    for tool_id in &profile.agent.tool_ids {
+        if !state.tool_manager.exists(tool_id).await {
+            return Err(crate::error::ZenError::Custom(format!(
+                "Unknown or unavailable tool '{}'. Refresh the tool list and try again.",
+                tool_id
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn agent_response(state: &AppState, profile: AgentProfile) -> AgentInfoResponse {
+    let is_builtin = state.agent_registry.is_builtin(&profile.agent.id);
+    let is_model_only = matches!(profile.config_mode, AgentConfigMode::ModelOnly);
+    let config_mode = match profile.config_mode {
+        AgentConfigMode::ModelOnly => "model_only",
+        AgentConfigMode::ReadOnly => "read_only",
+        AgentConfigMode::Full if is_builtin => "read_only",
+        AgentConfigMode::Full => "full",
+    };
+    AgentInfoResponse {
+        id: profile.agent.id,
+        name: profile.agent.name,
+        description: profile.agent.description.unwrap_or_default(),
+        // Do not expose fixed built-in prompts to the settings surface.
+        instructions: if is_model_only { String::new() } else { profile.agent.instructions },
+        tool_ids: profile.agent.tool_ids.clone(),
+        tool_count: profile.agent.tool_ids.len(),
+        model_override: profile.agent.model_override,
+        model_provider: profile.model_provider,
+        max_iterations: profile.agent.max_iterations,
+        context_window: profile.agent.context_window,
+        max_messages_in_memory: profile.agent.max_messages_in_memory,
+        model_tier: profile.agent.model_tier.description().to_string(),
+        color: profile.color,
+        user_invocable: profile.user_invocable,
+        model_invocable: profile.model_invocable,
+        allow_nested_delegation: profile.allow_nested_delegation,
+        allowed_agent_ids: profile.allowed_agent_ids,
+        inject_agents_md: profile.inject_agents_md,
+        is_builtin,
+        user_editable: !is_builtin,
+        config_mode: config_mode.to_string(),
+    }
 }
 
 #[tauri::command]
 pub async fn list_agents(state: State<'_, AppState>) -> ZenResult<Vec<AgentInfoResponse>> {
-    let agents = state.agent_registry.list();
-    Ok(agents
-        .iter()
-        .map(|a| AgentInfoResponse {
-            id: a.id.clone(),
-            name: a.name.clone(),
-            description: a.description.clone().unwrap_or_default(),
-            tool_count: a.tool_ids.len(),
-            model_override: a.model_override.clone(),
-            max_iterations: a.max_iterations,
-        })
+    Ok(state
+        .agent_registry
+        .list_profiles()
+        .into_iter()
+        .map(|profile| agent_response(&state, profile))
         .collect())
+}
+
+#[tauri::command]
+pub async fn create_agent(state: State<'_, AppState>, profile: AgentProfile) -> ZenResult<AgentInfoResponse> {
+    validate_profile_tools(&state, &profile).await?;
+    if state.agent_registry.get(&profile.agent.id).is_some() {
+        return Err(crate::error::ZenError::Custom("An agent with this ID already exists.".to_string()));
+    }
+    let saved = state
+        .agent_registry
+        .save_user_profile(profile)
+        .map_err(crate::error::ZenError::Custom)?;
+    Ok(agent_response(&state, saved))
+}
+
+#[tauri::command]
+pub async fn update_agent(state: State<'_, AppState>, profile: AgentProfile) -> ZenResult<AgentInfoResponse> {
+    validate_profile_tools(&state, &profile).await?;
+    if state.agent_registry.get(&profile.agent.id).is_none() {
+        return Err(crate::error::ZenError::Custom("Agent not found.".to_string()));
+    }
+    let saved = state
+        .agent_registry
+        .save_user_profile(profile)
+        .map_err(crate::error::ZenError::Custom)?;
+    Ok(agent_response(&state, saved))
+}
+
+#[tauri::command]
+pub async fn set_voice_display_model(
+    state: State<'_, AppState>,
+    model: Option<String>,
+) -> ZenResult<()> {
+    let value = model.unwrap_or_default();
+    if value.len() > 256 || value.chars().any(|character| character == '\n' || character == '\r') {
+        return Err(crate::error::ZenError::Custom("Invalid voice display model selection.".to_string()));
+    }
+    state
+        .settings_manager
+        .set("voiceDisplayAgentModel".to_string(), value)
+        .await
+        .map_err(|error| crate::error::ZenError::Custom(error.to_string()))
+}
+
+#[tauri::command]
+pub async fn delete_agent(state: State<'_, AppState>, agent_id: String) -> ZenResult<bool> {
+    state
+        .agent_registry
+        .delete_user_profile(&agent_id)
+        .map_err(crate::error::ZenError::Custom)
 }
 
 #[tauri::command]
@@ -39,7 +146,6 @@ pub async fn spawn_agent(
     let agent = state
         .agent_registry
         .get(&agent_id)
-        .cloned()
         .ok_or_else(|| {
             crate::error::ZenError::Custom(format!("Agent '{}' not found in registry", agent_id))
         })?;

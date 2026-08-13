@@ -12,8 +12,9 @@ const DISK_ROTATION_X = -0.55;
 const DISK_ROTATION_Z = 0.18;
 const LENS_ALIGNMENT = 0.2;
 const LENS_POSITION = { x: 0, y: -0.15, z: 0 };
-// Match the high-quality scene's 1.5x increase over its previous 1.2 scale.
-const BLACK_HOLE_SCALE = 1.5;
+// The SVG welcome scene is intentionally 1.5x smaller than its former 1.5x
+// enlargement so the workspace/composer remain visually dominant.
+const BLACK_HOLE_SCALE = 1;
 // Keep the low-quality mode visibly alive without animating every outer ring.
 const SVG_OUTER_PARTICLE_COUNT = 1;
 

@@ -9,6 +9,7 @@ const source = readFileSync(sourcePath, "utf8");
 // inject a runtime mock so the isolated data-URL module can still be exercised.
 const preparedSource = source
   .replace(/import\s+\{\s*useChatStore\s*\}\s+from\s+["']@\/lib\/stores\/useChatStore["'];?\s*\n?/, "")
+  .replace(/import\s+\{\s*rememberRecoveryTool\s*\}\s+from\s+["']\.\/strayToolLedger["'];?\s*\n?/, "globalThis.__recoveryTools = []; function rememberRecoveryTool(messageId, tool) { if (messageId) globalThis.__recoveryTools.push({ messageId, tool }); }")
   .trim() +
   `\nconst useChatStore = {\n` +
   `  getState: () => ({\n` +
@@ -131,12 +132,14 @@ assert(slowTool.completedAt > fastTool.completedAt, "parallel completion order s
 messages = upsertTool(
   [{ id: "user-only", sessionId: chatId, role: "user", content: "test", status: "sent" }],
   chatId,
-  makeToolCall("tool-orphan", "run_command", "awaiting_approval", { command: "npm run build" }, "", undefined, 500),
+  makeToolCall("tool-orphan", "run_command", "awaiting_approval", { command: "npm run build" }, "", undefined, 500, { messageId: "backend-orphan" }),
   500,
 );
 
-assert.equal(messages[1].role, "system", "orphan tool events should create a fallback ledger row");
-assert.equal(messages[1].toolCalls[0].status, "awaiting_approval", "fallback ledger should preserve approval state");
+assert.equal(messages.length, 1, "unowned tool events must not create a renderable fallback ledger row");
+assert.equal(globalThis.__recoveryTools.length, 1, "unowned tool events should be retained in the recovery buffer");
+assert.equal(globalThis.__recoveryTools[0].messageId, "backend-orphan", "recovery should be keyed by backend message ownership");
+assert.equal(globalThis.__recoveryTools[0].tool.status, "awaiting_approval", "recovery should preserve approval state");
 
 // P0 stray-tool fallback: when no assistant is sending and metadata does not
 // match, the activeAssistantByChat registry should route the tool to the
@@ -155,6 +158,92 @@ messages = upsertTool(
 const registeredAssistant = messages.find((message) => message.id === "assistant-registered");
 assert.equal(registeredAssistant.toolCalls.length, 1, "activeAssistantByChat fallback should attach stray tool to registered assistant");
 assert.equal(messages.findIndex((message) => message.id.startsWith("tool-ledger-")), -1, "activeAssistantByChat fallback should prevent orphan ledger creation");
+
+globalThis.__activeAssistantByChat = {};
+
+// Chronological ordering: a tool that fires AFTER answer text was streamed
+// must appear after that text, not hoisted above it. This is the multi-turn
+// clumping regression — iteration-2 tools were being spliced before the first
+// text step, stacking every tool card above the prose.
+messages = [
+  { id: "user-order", sessionId: chatId, role: "user", content: "order", status: "sent" },
+  {
+    id: "assistant-order",
+    sessionId: chatId,
+    role: "assistant",
+    content: "First answer paragraph.",
+    status: "sending",
+    steps: [
+      { type: "tool-call", toolCall: makeToolCall("tool-iter1", "web_search", "completed", {}, "{}", 10, 100) },
+      { type: "text", content: "First answer paragraph." },
+    ],
+    toolCalls: [makeToolCall("tool-iter1", "web_search", "completed", {}, "{}", 10, 100)],
+  },
+];
+messages = upsertTool(
+  messages,
+  chatId,
+  makeToolCall("tool-iter2", "read_file", "running", { path: "b.ts" }, "", undefined, 200),
+  200,
+);
+const orderedAssistant = messages.find((message) => message.id === "assistant-order");
+const iter2StepIndex = orderedAssistant.steps.findIndex((s) => s.type === "tool-call" && s.toolCall.id === "tool-iter2");
+const textStepIndex = orderedAssistant.steps.findIndex((s) => s.type === "text");
+assert(iter2StepIndex > textStepIndex, "a later-iteration tool must appear after earlier answer text, not hoisted above it");
+assert.equal(orderedAssistant.steps[orderedAssistant.steps.length - 1].toolCall?.id, "tool-iter2", "newest tool step should be appended last (chronological order)");
+
+// Backend-id recovery routing: a tool carrying a backend messageId that no
+// message owns must NOT graft onto a previous, already-`sent` assistant. It
+// stays out of the render tree until chat:done can place it on the correct
+// backend-id row instead of the prior turn's bubble.
+globalThis.__activeAssistantByChat = {};
+messages = [
+  { id: "user-prev", sessionId: chatId, role: "user", content: "turn 1", status: "sent" },
+  { id: "backend-turn-1", sessionId: chatId, role: "assistant", content: "Turn 1 done.", status: "sent", steps: [], toolCalls: [] },
+];
+messages = upsertTool(
+  messages,
+  chatId,
+  makeToolCall("tool-turn2", "read_file", "running", { path: "c.ts" }, "", undefined, 300, { messageId: "backend-turn-2" }),
+  300,
+);
+assert.equal(messages.length, 2, "backend-id tool with no owner must remain outside the render tree");
+assert.equal(globalThis.__recoveryTools.at(-1).messageId, "backend-turn-2", "backend-id tool should enter recovery under its owner id");
+const priorTurn = messages.find((message) => message.id === "backend-turn-1");
+assert.equal(priorTurn.toolCalls.length, 0, "the previous finalized assistant must not absorb the new turn's tool");
+
+globalThis.__activeAssistantByChat = {};
+
+// Screenshot regression: chat-wide runId must NOT pull a new turn's tool onto
+// the previous, already-sent assistant. `execution_run_id` is the chat id, so
+// every tool in the chat shares one runId. When turn 2 starts, its tool must
+// attach to the NEW sending assistant, not the finalized turn-1 assistant that
+// holds same-runId tools.
+messages = [
+  { id: "user-1", sessionId: chatId, role: "user", content: "turn 1", status: "sent" },
+  {
+    id: "backend-1",
+    sessionId: chatId,
+    role: "assistant",
+    content: "Turn 1 answer.",
+    status: "sent",
+    steps: [{ type: "tool-call", toolCall: makeToolCall("t1", "run_command", "completed", {}, "{}", 5, 100, { runId: chatId, messageId: "backend-1" }) }],
+    toolCalls: [makeToolCall("t1", "run_command", "completed", {}, "{}", 5, 100, { runId: chatId, messageId: "backend-1" })],
+  },
+  { id: "user-2", sessionId: chatId, role: "user", content: "turn 2", status: "sent" },
+  { id: "temp-assistant-2", sessionId: chatId, role: "assistant", content: "", status: "sending", steps: [], toolCalls: [] },
+];
+messages = upsertTool(
+  messages,
+  chatId,
+  makeToolCall("t2", "run_command", "running", { command: "ls" }, "", undefined, 200, { runId: chatId }),
+  200,
+);
+const turn1 = messages.find((m) => m.id === "backend-1");
+const turn2 = messages.find((m) => m.id === "temp-assistant-2");
+assert.equal(turn1.toolCalls.length, 1, "same chat-wide runId must not append the new turn's tool to the finalized turn-1 assistant");
+assert.equal(turn2.toolCalls.length, 1, "new turn's tool must attach to the active sending assistant below the latest user message");
+assert.equal(turn2.toolCalls[0].id, "t2", "the sending assistant should own the new tool");
 
 globalThis.__activeAssistantByChat = {};
 

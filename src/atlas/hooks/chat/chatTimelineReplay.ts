@@ -117,13 +117,21 @@ function isEmptyToolInput(input: ToolCall["input"] | undefined) {
 
 function mergeReplayToolCall(previous: ToolCall | undefined, incoming: ToolCall): ToolCall {
   if (!previous) return incoming;
-  const keepTerminalStatus = (previous.status === "completed" || previous.status === "error") && incoming.status === "running";
+  const previousTerminal = previous.status === "completed" || previous.status === "error";
+  const incomingTerminal = incoming.status === "completed" || incoming.status === "error";
+  const previousTime = previous.lastUpdatedAt ?? previous.completedAt;
+  const incomingTime = incoming.lastUpdatedAt ?? incoming.completedAt;
+  const keepTerminalStatus = previousTerminal && (
+    incoming.status === "running" ||
+    (incomingTerminal && (incomingTime === undefined || (previousTime !== undefined && incomingTime < previousTime)))
+  );
   return {
     ...previous,
     ...incoming,
     status: keepTerminalStatus ? previous.status : incoming.status,
     input: isEmptyToolInput(incoming.input) ? previous.input : incoming.input,
     output: incoming.output || previous.output,
+    outputPreview: incoming.outputPreview || previous.outputPreview,
     durationMs: incoming.durationMs ?? previous.durationMs,
     approvalContext: incoming.approvalContext || previous.approvalContext,
     runId: incoming.runId || previous.runId,
@@ -260,15 +268,36 @@ export function coalesceTimelineMessages(messages: Message[]): Message[] {
   };
 
   const flushPendingIntoMessage = (message: Message): Message => {
-    const toolCalls = Array.from(pendingTools.values());
+    // Action rows and the assistant row can both carry the same canonical
+    // tool. Merge them by id before projecting the timeline; concatenating the
+    // two sources creates duplicate cards after reload and can make a late
+    // completion look like a second execution.
+    const mergedToolCalls = Array.from(pendingTools.values());
+    const mergedToolIndexes = new Map(mergedToolCalls.map((tool, index) => [tool.id, index]));
+    for (const incoming of message.toolCalls || []) {
+      const existingIndex = mergedToolIndexes.get(incoming.id);
+      if (existingIndex === undefined) {
+        mergedToolIndexes.set(incoming.id, mergedToolCalls.length);
+        mergedToolCalls.push(incoming);
+      } else {
+        mergedToolCalls[existingIndex] = mergeReplayToolCall(mergedToolCalls[existingIndex], incoming);
+      }
+    }
+
+    const mergedToolsById = new Map(mergedToolCalls.map((tool) => [tool.id, tool]));
     const assistantToolIds = new Set((message.toolCalls || []).map((tc) => tc.id));
     const dedupedPendingSteps = pendingSteps.filter(
       (step) => !(step.type === "tool-call" && step.toolCall?.id && assistantToolIds.has(step.toolCall.id))
     );
+    const mergedMessageSteps = (message.steps || []).map((step) => {
+      if (step.type !== "tool-call" || !step.toolCall?.id) return step;
+      const merged = mergedToolsById.get(step.toolCall.id);
+      return merged ? { ...step, toolCall: merged } : step;
+    });
     const next = {
       ...message,
-      toolCalls: [...toolCalls, ...(message.toolCalls || [])],
-      steps: [...dedupedPendingSteps, ...(message.steps || [])],
+      toolCalls: mergedToolCalls,
+      steps: [...dedupedPendingSteps, ...mergedMessageSteps],
       metadata: {
         ...(message.metadata || {}),
         ...(dedupedPendingSteps.length > 0 ? { timelineActionCount: dedupedPendingSteps.length } : {}),

@@ -41,8 +41,11 @@ interface UIState {
   activeRightTab: string;
   rightPanelCanvasMode: 'draw' | 'mathplot';
   rightTabBySession: Record<string, string>;
+  browserPreviewUrlByChat: Record<string, string>;
   agentsPanelDismissed: boolean;
+  subagentHistoryClearedAtByChat: Record<string, number>;
   focusedSubagent: { chatId: string; spawnId: string } | null;
+  focusedRun: { chatId: string; messageId?: string; nodeId?: string } | null;
   
   // Actions
   setSidebarOpen: (open: boolean) => void;
@@ -72,9 +75,14 @@ interface UIState {
   setRightPanelOpen: (open: boolean) => void;
   setActiveRightTab: (tab: string) => void;
   setRightPanelCanvasMode: (mode: 'draw' | 'mathplot') => void;
+  setBrowserPreviewUrl: (chatId: string, url: string) => void;
+  openBrowserPreview: (chatId: string, url: string) => void;
   setAgentsPanelDismissed: (dismissed: boolean) => void;
+  clearSubagentHistory: (chatId: string) => void;
   openSubagentInPanel: (chatId: string, spawnId: string) => void;
   clearFocusedSubagent: () => void;
+  openRunInspector: (chatId: string, messageId?: string, nodeId?: string) => void;
+  clearFocusedRun: () => void;
   restoreRightTabForSession: (sessionId: string | null) => void;
   toggleSidebar: () => void;
   toggleRightPanel: () => void;
@@ -109,8 +117,11 @@ export const useUIStore = create<UIState>()(
       activeRightTab: 'metrics',
       rightPanelCanvasMode: 'draw',
       rightTabBySession: {},
+      browserPreviewUrlByChat: {},
       agentsPanelDismissed: false,
+      subagentHistoryClearedAtByChat: {},
       focusedSubagent: null,
+      focusedRun: null,
 
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
       setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
@@ -172,7 +183,22 @@ export const useUIStore = create<UIState>()(
         return state;
       }),
       setRightPanelCanvasMode: (rightPanelCanvasMode) => set({ rightPanelCanvasMode }),
+      setBrowserPreviewUrl: (chatId, url) => set((state) => ({
+        browserPreviewUrlByChat: { ...state.browserPreviewUrlByChat, [chatId]: url },
+      })),
+      openBrowserPreview: (chatId, url) => set((state) => ({
+        browserPreviewUrlByChat: { ...state.browserPreviewUrlByChat, [chatId]: url },
+        rightTabBySession: { ...state.rightTabBySession, [chatId]: "browser" },
+        activeRightTab: "browser",
+        rightPanelOpen: true,
+      })),
       setAgentsPanelDismissed: (agentsPanelDismissed) => set({ agentsPanelDismissed }),
+      clearSubagentHistory: (chatId) => set((state) => ({
+        subagentHistoryClearedAtByChat: {
+          ...state.subagentHistoryClearedAtByChat,
+          [chatId]: Date.now(),
+        },
+      })),
       openSubagentInPanel: (chatId, spawnId) => set({
         focusedSubagent: { chatId, spawnId },
         activeRightTab: 'agents',
@@ -180,6 +206,13 @@ export const useUIStore = create<UIState>()(
         agentsPanelDismissed: false,
       }),
       clearFocusedSubagent: () => set({ focusedSubagent: null }),
+      openRunInspector: (chatId, messageId, nodeId) => set({
+        focusedRun: { chatId, messageId, nodeId },
+        focusedSubagent: null,
+        activeRightTab: 'inspector',
+        rightPanelOpen: true,
+      }),
+      clearFocusedRun: () => set({ focusedRun: null }),
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       toggleRightPanel: () => set((state) => ({ rightPanelOpen: !state.rightPanelOpen })),
     }),
@@ -195,6 +228,7 @@ export const useUIStore = create<UIState>()(
           aiSpeaking,
           agentsPanelDismissed,
           focusedSubagent,
+          focusedRun,
           rightTabBySession,
           activeChatId,
           ...rest

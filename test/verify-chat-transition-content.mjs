@@ -16,7 +16,8 @@ assert(chunkSource.includes("canonical chat:done content"), "the final response 
 assert(transitionSource.includes("key={sceneKey}") && transitionSource.includes('mode="sync"'), "welcome and chat scenes must remain keyed and crossfade together");
 assert(messageListSource.includes("key={message.id}"), "message rows must keep stable backend/optimistic IDs across the transition");
 assert(workspaceSource.includes("targetSessionId"), "the welcome submit must route its optimistic messages to the newly created session");
-assert(streamSource.includes("messageId: event.payload.message_id || undefined"), "stream chunks must retain the backend assistant identity");
+assert(!workspaceSource.includes('layoutId="workspace-composer-shell"'), "welcome-to-chat composer must not use cross-scene shared layout projection");
+assert(streamSource.includes("message_id") && streamSource.includes("messageId"), "stream chunks must retain the backend assistant identity");
 
 // Load the pure reconciliation helper without initializing the store/event imports.
 const stripped = chunkSource

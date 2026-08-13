@@ -3,7 +3,7 @@
    Sessions · Markdown · Code blocks · Tool calls · Artifact panel
    Image attachments · API key management · SQLite persistence
  ═══════════════════════════════════════════════════════════════ */
-import { useState, useCallback, useEffect, useTransition, useMemo } from "react";
+import { useState, useCallback, useEffect, useTransition } from "react";
 import { useChat } from "@/atlas/hooks/useChat";
 import { motion, AnimatePresence } from "framer-motion";
 import { motionDurations, motionEasings, useReducedMotion } from "@/lib/motion";
@@ -13,7 +13,6 @@ import {
   ArtifactData
 } from "../components/chat/types";
 import { SessionSidebar } from "../components/chat/SessionSidebar";
-import { AgentActionStep } from "../components/chat/AssistantMessageTrace";
 import { MessageList } from "../components/chat/MessageList";
 import { PremiumChatInput } from "../components/PremiumChatInput";
 import { SettingsModal, type TabId } from "../components/SettingsModal";
@@ -32,12 +31,19 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
     handleRenameSession, handlePinSession, handleArchiveSession,
     handleUnarchiveSession, handleExportSession,
     handleDeleteAll, handleCreateFolder, handleRenameFolder, handleDeleteFolder, handleMoveToFolder,
-    handleSendMessage, abortStream
+    handleSendMessage, abortStream, pauseStream, resumeStream
   } = useChat();
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const activeSession = [...sessions, ...archivedSessions].find((session) => session.id === currentSessionId) ?? null;
   const isArchivedSession = activeSession?.archived === true || archivedSessions.some((session) => session.id === currentSessionId);
+  const isChatPaused = (() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message.role === "assistant") return message.status === "paused";
+    }
+    return false;
+  })();
 
   const handleOpenArtifact = useCallback((art: ArtifactData) => {
     const artId = art.id || `art_${Date.now()}`;
@@ -135,19 +141,6 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
     setSelectedModelId(id, provider);
   }, [setSelectedModelId]);
 
-  const latestStatusStep = useMemo(() => {
-    const lastMessage = messages[messages.length - 1];
-    if (!isStreaming || lastMessage?.role !== "assistant" || !lastMessage.steps) return null;
-    
-    for (let i = lastMessage.steps.length - 1; i >= 0; i--) {
-      const step = lastMessage.steps[i];
-      if (step.type === "action" && step.kind === "chat_status") {
-        return step;
-      }
-    }
-    return null;
-  }, [messages, isStreaming]);
-
   // Auto-collapse sidebar on mobile
   useEffect(() => {
     const handleResize = () => {
@@ -232,9 +225,8 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
       {/* Resizable Layout Area */}
       <div className="flex-grow h-full w-full relative z-10">
         {/* Main Chat Area */}
-        <motion.main 
-          layout={!reducedMotion}
-          className="relative flex flex-1 flex-col min-w-0 h-full bg-transparent overflow-hidden"
+        <main
+          className="relative flex flex-1 min-w-0 h-full flex-col overflow-hidden bg-transparent"
         >
           <MessageList
             messages={messages}
@@ -243,33 +235,22 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
             onRetry={isArchivedSession ? undefined : handleRetry}
             onOpenSettings={onOpenSettings}
             onContinueResearch={isArchivedSession ? undefined : handleContinueResearch}
-            onAbort={isArchivedSession ? undefined : abortStream}
           />
 
-          <div className="absolute bottom-0 left-0 right-0 z-30 p-4 pb-8 bg-gradient-to-t from-background via-background/80 to-transparent pointer-events-none">
-            <div className="mx-auto max-w-[700px] w-full pointer-events-auto">
-              <AnimatePresence initial={false}>
-                {latestStatusStep && (
-                  <motion.div
-                    key="latest-status-step"
-                    initial={reducedMotion ? false : { opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={reducedMotion ? undefined : { opacity: 0, y: -4 }}
-                    transition={reducedMotion ? { duration: 0 } : {
-                      duration: motionDurations.standard,
-                      ease: motionEasings.standard,
-                    }}
-                    className="mb-2 w-full pointer-events-none rounded-lg border border-border/50 bg-background/50 shadow-sm backdrop-blur-md"
-                  >
-                    <AgentActionStep step={latestStatusStep} isStreaming={true} />
-                  </motion.div>
-                )}
-              </AnimatePresence>
+          <div className="relative z-30 shrink-0 px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-3">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 -top-12 h-12 bg-gradient-to-t from-background via-background/80 to-transparent"
+            />
+            <div className="relative mx-auto w-full max-w-[700px]">
               <PremiumChatInput
                 activeChatId={currentSessionId}
                 readOnly={isArchivedSession}
                 onSend={handleSendMessageInternal}
                 onAbort={isArchivedSession ? undefined : abortStream}
+                onPause={isArchivedSession ? undefined : pauseStream}
+                onResume={isArchivedSession ? undefined : resumeStream}
+                isPaused={isArchivedSession ? false : isChatPaused}
                 isLoading={isArchivedSession ? false : isStreaming}
                 models={models}
                 selectedModelId={selectedModelId}
@@ -280,7 +261,7 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
               />
             </div>
           </div>
-        </motion.main>
+        </main>
       </div>
 
       {/* Settings Modal */}

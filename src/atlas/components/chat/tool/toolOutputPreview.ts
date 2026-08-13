@@ -32,7 +32,7 @@ export type ToolOutputPreview = {
 function compactText(value: unknown, maxLength = 220): string {
   if (value === undefined || value === null || value === "") return "";
   const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
-  return text.replace(/\s+/g, " ").trim().slice(0, maxLength);
+  return redactToolText(text).replace(/\s+/g, " ").trim().slice(0, maxLength);
 }
 
 function compactErrorText(value: unknown, maxLength = 360): string {
@@ -128,25 +128,45 @@ function normalizeFileRecord(value: unknown): FileChange | undefined {
   const linesAdded = firstValue(record.linesAdded, record.lines_added, record.additions, record.added);
   const linesRemoved = firstValue(record.linesRemoved, record.lines_removed, record.deletions, record.removed);
   const rawChangeType = firstValue(record.changeType, record.change_type, record.action, record.operation);
-  const changeType = rawChangeType === "created" || rawChangeType === "create"
+  const normalizedChangeType = typeof rawChangeType === "string" ? rawChangeType.toLowerCase() : "";
+  const changeType = normalizedChangeType === "created" || normalizedChangeType === "create" || normalizedChangeType === "added" || normalizedChangeType === "add"
     ? "created"
-    : rawChangeType === "deleted" || rawChangeType === "delete"
+    : normalizedChangeType === "deleted" || normalizedChangeType === "delete" || normalizedChangeType === "removed" || normalizedChangeType === "remove"
       ? "deleted"
       : "modified";
+  const rawDiff = firstValue(record.diff, record.unified_diff, record.unifiedDiff, record.patch);
 
   return {
     path,
     changeType,
     linesAdded: typeof linesAdded === "number" ? linesAdded : undefined,
     linesRemoved: typeof linesRemoved === "number" ? linesRemoved : undefined,
-    diff: typeof record.diff === "string" ? record.diff : undefined,
+    diff: typeof rawDiff === "string" ? redactToolText(rawDiff) : undefined,
   };
 }
 
 function normalizeFiles(value: unknown): FileChange[] {
   if (Array.isArray(value)) {
-    return value.slice(0, 5).map(normalizeFileRecord).filter((file): file is FileChange => Boolean(file));
+    return value.slice(0, 20).map(normalizeFileRecord).filter((file): file is FileChange => Boolean(file));
   }
+
+  const record = asRecord(value);
+  const nestedFiles = firstValue(record.files, record.changed_files, record.changedFiles);
+  if (nestedFiles !== undefined) {
+    return normalizeFiles(nestedFiles);
+  }
+
+  // `apply_patch` returns a result envelope with one file record per entry.
+  // Treat only entries carrying file-change fields as files so search-result
+  // arrays are not accidentally rendered as edits.
+  if (Array.isArray(record.results)) {
+    const resultFiles = record.results
+      .slice(0, 20)
+      .map(normalizeFileRecord)
+      .filter((file): file is FileChange => Boolean(file));
+    if (resultFiles.length > 0) return resultFiles;
+  }
+
   const singleFile = normalizeFileRecord(value);
   return singleFile ? [singleFile] : [];
 }
@@ -188,7 +208,7 @@ function normalizeArtifact(value: unknown): ArtifactData | undefined {
     type,
     title: compactText(record.title || record.name || "Generated artifact", 120) || "Generated artifact",
     language: typeof record.language === "string" ? record.language : undefined,
-    content,
+    content: redactToolText(content),
     version: typeof record.version === "number" ? record.version : undefined,
     chatId: typeof record.chatId === "string" ? record.chatId : typeof record.chat_id === "string" ? record.chat_id : undefined,
     messageId: typeof record.messageId === "string" ? record.messageId : typeof record.message_id === "string" ? record.message_id : undefined,
@@ -248,8 +268,8 @@ export function buildToolOutputPreview(output: string): ToolOutputPreview {
   const checkpoint = normalizeCheckpoint(checkpointSource);
   const artifactSource = findFromCandidates(candidates, ["artifact", "generated_artifact", "generatedArtifact"]);
   const artifact = normalizeArtifact(artifactSource || unwrapOutputSource(record) || record);
-  const stdout = preserveText(findFromCandidates(candidates, ["stdout", "output_text", "outputText"]));
-  const stderr = preserveText(findFromCandidates(candidates, ["stderr", "error"]));
+  const stdout = redactToolText(preserveText(findFromCandidates(candidates, ["stdout", "output_text", "outputText"])));
+  const stderr = redactToolText(preserveText(findFromCandidates(candidates, ["stderr", "error"])));
   const content = preserveText(
     firstValue(
       findFromCandidates(candidates, ["content", "result", "summary", "message", "excerpt"]),
@@ -259,7 +279,7 @@ export function buildToolOutputPreview(output: string): ToolOutputPreview {
   );
   const exitCode = findFromCandidates(candidates, ["exit_code", "exitCode", "code"]);
   const imageUri = compactText(findFromCandidates(candidates, ["image_uri", "imageUri", "image_url"]), 500);
-  const raw = typeof parsed === "string" ? parsed : JSON.stringify(parsed, null, 2);
+  const raw = redactToolText(typeof parsed === "string" ? parsed : JSON.stringify(parsed, null, 2));
   const commandSummary = inferCommandSummary(stdout, stderr, exitCode);
   const errorMessage = compactErrorText(
     findFromCandidates(candidates, ["error", "stderr", "error_message", "errorMessage", "error_text", "errorText"]),
@@ -298,7 +318,7 @@ export function buildToolOutputPreview(output: string): ToolOutputPreview {
     files,
     artifact,
     imageUri: imageUri || undefined,
-    content,
+    content: redactToolText(content),
     raw,
   };
 }

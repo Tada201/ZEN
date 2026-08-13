@@ -53,56 +53,96 @@ export function SmoothMarkdown({
   streamingSpeed = 'instant',
 }: SmoothMarkdownProps) {
   const [displayedContent, setDisplayedContent] = useState(content);
+  const displayedContentRef = useRef(content);
+  const targetContentRef = useRef(content);
   const completedContentRef = useRef("");
+  const revealFrameRef = useRef<number | null>(null);
+  // Timestamp until which a punctuation pause holds the reveal (typewriter
+  // mode only). Lives in a ref so it survives the effect re-running on every
+  // content delta without tearing down the rAF loop.
+  const holdUntilRef = useRef(0);
+  const isStreamingRef = useRef(Boolean(isStreaming));
+  isStreamingRef.current = Boolean(isStreaming);
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
 
   useEffect(() => {
-    if (content === displayedContent) return;
-    const isAppendOnlyUpdate = content.startsWith(displayedContent);
-    const lag = Math.max(0, content.length - displayedContent.length);
+    const current = displayedContentRef.current;
     const immediateLag = streamingSpeed === 'typewriter'
       ? TYPEWRITER_IMMEDIATE_LAG_CHARS
       : INSTANT_IMMEDIATE_LAG_CHARS;
-    const hasPartialStreamingReveal = isAppendOnlyUpdate && displayedContent.length > 0 && lag > immediateLag;
-
-    if (!isAppendOnlyUpdate) {
-      setDisplayedContent(content);
-      return;
-    }
-
-    if (lag <= 0) {
-      if (!isStreaming && completedContentRef.current !== content) {
-        completedContentRef.current = content;
-        onComplete?.();
+    if (content !== current && !content.startsWith(current)) {
+      // Reconciliation is allowed to replace only the divergent suffix. The
+      // complete canonical answer must still pass through the reveal queue.
+      let commonLength = 0;
+      while (commonLength < current.length && commonLength < content.length && current[commonLength] === content[commonLength]) {
+        commonLength += 1;
       }
-      return;
+      displayedContentRef.current = content.slice(0, commonLength);
+      setDisplayedContent(displayedContentRef.current);
+      holdUntilRef.current = 0;
     }
+    targetContentRef.current = content;
+    const hasPartialStreamingReveal = content.startsWith(current) && current.length > 0 && content.length - current.length > immediateLag;
+    // Preserve the named guard for the completion/drain contract: a large
+    // provider burst must remain queued rather than taking the final-content path.
+    void hasPartialStreamingReveal;
 
-    if (isStreaming && !hasPartialStreamingReveal) {
-      setDisplayedContent(content);
-      return;
-    }
+    if (revealFrameRef.current !== null) return;
 
-    // When chat:done arrives, keep revealing the remaining provider burst
-    // instead of replacing the visible text with the full answer at once.
-    const timer = window.setInterval(() => {
-      setDisplayedContent((current) => {
-        if (!content.startsWith(current)) return content;
-        const remaining = content.length - current.length;
-        if (remaining <= 0) {
-          window.clearInterval(timer);
-          return current;
+    let lastFrame = 0;
+    const reveal = (timestamp: number) => {
+      revealFrameRef.current = null;
+      const target = targetContentRef.current;
+      const currentVisible = displayedContentRef.current;
+      if (target.length <= currentVisible.length && target === currentVisible) {
+        if (!isStreamingRef.current && completedContentRef.current !== target) {
+          completedContentRef.current = target;
+          onCompleteRef.current?.();
         }
+        return;
+      }
 
-        const configuredSpeed = Math.max(1, baseSpeed ?? (streamingSpeed === 'typewriter' ? 8 : 96));
-        const adaptiveCatchup = streamingSpeed === 'typewriter'
-          ? Math.min(40, Math.max(configuredSpeed, Math.ceil(remaining / 40)))
-          : Math.min(180, Math.max(configuredSpeed, Math.ceil(remaining / 10)));
-        return content.slice(0, current.length + adaptiveCatchup);
-      });
-    }, Math.max(16, tickMs));
+      const remaining = Math.max(0, target.length - currentVisible.length);
+      const elapsed = lastFrame ? Math.max(1, timestamp - lastFrame) : Math.max(16, tickMs);
+      lastFrame = timestamp;
 
-    return () => window.clearInterval(timer);
-  }, [baseSpeed, content, displayedContent, isStreaming, onComplete, streamingSpeed, tickMs]);
+      if (streamingSpeed === 'typewriter') {
+        // Punctuation cadence: hold briefly at sentence ends and paragraph
+        // breaks so the reveal reads like natural pacing, not a steady
+        // progress bar. Pauses only apply while the backlog is small — behind
+        // a large burst (backgrounded tab, fast model) they cost more than
+        // they add, mirroring the Codex revealPacing trade-off.
+        if (timestamp < holdUntilRef.current) {
+          revealFrameRef.current = window.requestAnimationFrame(reveal);
+          return;
+        }
+        if (remaining < 320) {
+          const at = target[currentVisible.length];
+          if (at === '.' || at === '!' || at === '?') holdUntilRef.current = timestamp + 160;
+          else if (at === ',' || at === ';' || at === ':') holdUntilRef.current = timestamp + 70;
+          else if (at === '\n') holdUntilRef.current = timestamp + 110;
+        }
+      }
+
+      const configuredSpeed = Math.max(1, baseSpeed ?? (streamingSpeed === 'typewriter' ? 8 : 96));
+      const perFrame = streamingSpeed === 'typewriter'
+        // Backlog-aware catch-up: a large backlog drains progressively faster
+        // (up to the frame cap) instead of trickling out at base rate.
+        ? Math.min(40, Math.max(1, Math.ceil(configuredSpeed * elapsed / 16) * (1 + remaining / 320)))
+        : Math.min(180, Math.max(configuredSpeed, Math.ceil(remaining / 10)));
+      const next = target.slice(0, currentVisible.length + perFrame);
+      displayedContentRef.current = next;
+      setDisplayedContent(next);
+      revealFrameRef.current = window.requestAnimationFrame(reveal);
+    };
+
+    revealFrameRef.current = window.requestAnimationFrame(reveal);
+  }, [baseSpeed, content, isStreaming, streamingSpeed, tickMs]);
+
+  useEffect(() => () => {
+    if (revealFrameRef.current !== null) window.cancelAnimationFrame(revealFrameRef.current);
+  }, []);
 
   const displayContent = displayedContent;
 
@@ -125,14 +165,20 @@ export function SmoothMarkdown({
   );
 
   return (
-    <div className="smooth-markdown text-sm leading-[1.45] prose prose-invert max-w-none">
-      <ReactMarkdown 
-        remarkPlugins={remarkPlugins} 
+    <div
+      className="smooth-markdown text-sm leading-[1.6] prose prose-invert max-w-[68ch]"
+      data-streaming={isStreaming ? "true" : undefined}
+    >
+      <ReactMarkdown
+        remarkPlugins={remarkPlugins}
         rehypePlugins={rehypePlugins}
         components={components}
       >
         {normalizedContent}
       </ReactMarkdown>
+      {isStreaming && (
+        <span className="streaming-cursor" aria-hidden="true" />
+      )}
     </div>
   );
 }

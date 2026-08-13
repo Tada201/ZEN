@@ -90,7 +90,7 @@ export function MermaidDiagram({ code, isStreaming }: { code: string; isStreamin
 
   if (isStreaming) {
     return (
-      <div ref={containerRef} className="space-y-2 my-6">
+      <div ref={containerRef} className="space-y-1.5 my-3">
         <div className="flex items-center gap-2 text-sm text-warning bg-warning/10 px-3 py-2 rounded-lg border border-warning/20">
           <span className="w-2 h-2 rounded-full bg-warning animate-pulse" />
           <span>Rendering Mermaid Diagram...</span>
@@ -102,7 +102,7 @@ export function MermaidDiagram({ code, isStreaming }: { code: string; isStreamin
 
   if (error) {
     return (
-      <div ref={containerRef} className="space-y-2 my-6">
+      <div ref={containerRef} className="space-y-1.5 my-3">
         <div className="flex flex-col gap-1 text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-lg border border-destructive/20">
           <div className="flex items-center gap-2 font-medium">
             <span className="w-2 h-2 rounded-full bg-destructive" />
@@ -121,7 +121,7 @@ export function MermaidDiagram({ code, isStreaming }: { code: string; isStreamin
     return (
       <div
         ref={containerRef}
-        className="my-6 h-32 rounded-xl border border-border/40 bg-card/90"
+        className="my-3 h-24 rounded-lg border border-border/40 bg-card/90"
         aria-hidden="true"
       />
     );
@@ -131,7 +131,7 @@ export function MermaidDiagram({ code, isStreaming }: { code: string; isStreamin
     return (
       <div
         ref={containerRef}
-        className="my-6 h-32 animate-pulse rounded-xl border border-border/40 bg-card/90 shadow-sm"
+        className="my-3 h-24 animate-pulse rounded-lg border border-border/40 bg-card/90 shadow-sm"
         aria-hidden="true"
       />
     );
@@ -140,7 +140,7 @@ export function MermaidDiagram({ code, isStreaming }: { code: string; isStreamin
   return (
     <div
       ref={containerRef}
-      className="my-6 overflow-hidden flex justify-center bg-card/90 p-6 rounded-xl border border-border/40 shadow-sm min-h-[128px] transition-[height,opacity] duration-300 ease-in-out"
+      className="my-3 overflow-hidden flex justify-center bg-card/90 p-3 rounded-lg border border-border/40 shadow-sm min-h-[96px] transition-[height,opacity] duration-300 ease-in-out"
       // Mermaid is strict-mode rendered and then DOMPurify-sanitized before SVG injection.
       dangerouslySetInnerHTML={{ __html: svg }}
     />

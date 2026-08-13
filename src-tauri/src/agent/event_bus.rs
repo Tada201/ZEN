@@ -164,6 +164,10 @@ pub struct AgentHandoffPayload {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentChunkPayload {
     pub chat_id: String,
+    /// Stable child-run identity. Without this, parallel children using the
+    /// same agent type collapse into one frontend transcript lane.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spawn_id: Option<String>,
     pub agent_id: String,
     pub agent_name: String,
     pub delta: String,
@@ -261,7 +265,7 @@ pub struct SubagentStepPayload {
     pub agent_id: String,
     pub agent_name: String,
     pub task: String,
-    /// One of: running, completed, failed, cancelled.
+    /// One of: running, completed, failed, cancelled, incomplete, uncertain.
     pub status: String,
     /// Short result summary when the sub-agent completes successfully.
     pub result_summary: Option<String>,
@@ -280,6 +284,15 @@ pub struct ToolStartPayload {
     pub tool_name: String,
     pub tool_call_id: String,
     pub arguments: serde_json::Value,
+    /// Monotonic position within the owning run.
+    pub sequence: u64,
+    /// ISO-8601 event timestamp emitted by the backend.
+    pub timestamp: String,
+    /// Canonical lifecycle phase for this event.
+    pub phase: String,
+    /// Stable parent tool call for child-agent execution events.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_tool_call_id: Option<String>,
     /// Per-run correlation id (UUID) minted once per `Runner::run()`. Unlike
     /// `run_id` (currently the chat_id, stable across turns), this isolates a
     /// single run so all its events can be reassembled into one trace.
@@ -309,6 +322,15 @@ pub struct ToolStartPayload {
 pub struct ToolCompletePayload {
     pub tool_name: String,
     pub tool_call_id: String,
+    /// Monotonic position within the owning run.
+    pub sequence: u64,
+    /// ISO-8601 event timestamp emitted by the backend.
+    pub timestamp: String,
+    /// Canonical lifecycle phase for this event.
+    pub phase: String,
+    /// Stable parent tool call for child-agent execution events.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_tool_call_id: Option<String>,
     /// Per-run correlation id (UUID). See `ToolStartPayload::trace_id`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trace_id: Option<String>,
@@ -341,6 +363,14 @@ pub struct ToolAuthorizationPayload {
     pub tool_call_id: String,
     pub tool_name: String,
     pub arguments: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_tool_call_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sequence: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timestamp: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phase: Option<String>,
     /// Per-run correlation id (UUID). See `ToolStartPayload::trace_id`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trace_id: Option<String>,
@@ -663,7 +693,11 @@ impl AgentEvent {
     /// Tauri event name for frontend bridging.
     pub fn event_name(&self) -> &'static str {
         match self {
-            AgentEvent::AgentSpawn(_) | AgentEvent::AgentSpawned { .. } => "agent:spawn",
+            AgentEvent::AgentSpawn(_) => "agent:spawn",
+            // Legacy swarm bookkeeping must not masquerade as a second rich
+            // frontend spawn event. The dedicated spawn event above carries
+            // the chat and stable spawn identity.
+            AgentEvent::AgentSpawned { .. } => "agent:spawned",
             AgentEvent::AgentComplete(_) => "agent:complete",
             AgentEvent::AgentTerminated { .. } => "agent:terminated",
             AgentEvent::AgentHandoff(_) => "agent:handoff",

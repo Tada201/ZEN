@@ -240,7 +240,7 @@ export const MicrophoneConfig = memo(() => {
                     }
                 />
 
-                <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
+                <div className="rounded-xl border border-border bg-background px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
                         <div className="flex min-w-0 flex-col gap-1">
                             <div className="flex items-center gap-2 text-[12px] font-bold text-foreground">

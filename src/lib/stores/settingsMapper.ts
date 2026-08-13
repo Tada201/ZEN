@@ -30,6 +30,7 @@ const SNAKE_OVERRIDES: Record<string, string> = {
   backgroundMediaType: "ui.background-media-type",
   welcomePageQuality: "ui.welcome-page-quality",
   revealCompletedToolHistory: "ui.reveal-completed-tool-history",
+  reasoningDisclosureDensity: "chat.reasoning-disclosure-density",
   memoryEnabled: "memory.enabled",
   memoryMaxTurns: "memory.max-turns",
   // Tool permission mode is double-keyed for backwards compatibility with

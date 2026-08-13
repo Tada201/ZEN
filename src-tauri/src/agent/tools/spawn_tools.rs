@@ -145,6 +145,8 @@ fn should_emit_inline_chat_message_for_complete() -> bool {
 pub(crate) struct SpawnParams<'a> {
     pub app: AppHandle,
     pub chat_id: String,
+    /// The parent spawn/delegation tool call that owns this child run.
+    pub parent_tool_call_id: Option<String>,
     pub agent_id: &'a str,
     pub task: &'a str,
     pub context: &'a str,
@@ -477,6 +479,7 @@ impl SpawnAgentTool {
             success_criteria,
             constraints,
             relevant_files,
+            parent_tool_call_id,
         } = params;
         child_runner::check_depth(depth)?;
 
@@ -489,14 +492,32 @@ impl SpawnAgentTool {
         // Determine the caller's tool ceiling so ad-hoc agents inherit the
         // same authority (minus delegation tools) instead of the hardcoded
         // generalist set.
-        let caller_tool_ids: Vec<String> = if let Some(ref allowed) = allowed_tools {
+        let (caller_tool_ids, allowed_child_agent_ids): (Vec<String>, Vec<String>) = if let Some(ref allowed) = allowed_tools {
             let guard = allowed.lock().await;
-            guard.iter().cloned().collect()
+            let child_ids = guard
+                .iter()
+                .filter_map(|value| value.strip_prefix(child_runner::ALLOWED_CHILD_AGENT_PREFIX).map(str::to_string))
+                .collect();
+            let tool_ids = guard
+                .iter()
+                .filter(|value| !value.starts_with(child_runner::ALLOWED_CHILD_AGENT_PREFIX))
+                .cloned()
+                .collect();
+            (tool_ids, child_ids)
         } else {
-            Vec::new()
+            (Vec::new(), Vec::new())
         };
 
-        let resolved = if let Some(instructions) = adhoc_instructions {
+        // Nested profiles carry their allowed child-agent IDs in an internal
+        // capability marker. The root runner has no markers and remains the
+        // only unrestricted delegation boundary.
+        if !allowed_child_agent_ids.is_empty()
+            && (adhoc_instructions.is_some() || !allowed_child_agent_ids.iter().any(|id| id == agent_id))
+        {
+            anyhow::bail!("This subagent is not allowed to invoke agent '{}'", agent_id);
+        }
+
+        let mut resolved = if let Some(instructions) = adhoc_instructions {
             child_runner::resolve_adhoc_agent(
                 &self.agent_registry,
                 if agent_id.is_empty() { None } else { Some(agent_id) },
@@ -514,6 +535,7 @@ impl SpawnAgentTool {
                 explicit_max_steps,
             )?
         };
+        child_runner::inject_workspace_agents_md(&app, &mut resolved).await;
 
         let handoff = child_runner::build_subagent_handoff(
             &resolved,
@@ -527,11 +549,13 @@ impl SpawnAgentTool {
         let memory_scope = child_runner::subagent_memory_scope(agent_id, task);
 
         let spawn_id = Uuid::new_v4().to_string();
+        let parent_tool_call_id = parent_tool_call_id.clone();
 
         // Create a shared inbox so the parent/orchestrator can inject messages
         // into this sub-agent while it is running.
         let message_inbox: Arc<tokio::sync::Mutex<VecDeque<crate::db::models::ChatMessage>>> =
             Arc::new(tokio::sync::Mutex::new(VecDeque::new()));
+        let child_tool_call_ids = Arc::new(tokio::sync::Mutex::new(Vec::new()));
         {
             let state = app.state::<AppState>();
             let mut queues = state.subagent_message_queues.lock().await;
@@ -553,11 +577,18 @@ impl SpawnAgentTool {
         // event emitted by the sub-agent is correlated with this subagent step.
         child_runner_instance = child_runner_instance
             .with_trace_id(spawn_id.clone())
+            .with_parent_tool_call_id(parent_tool_call_id.clone())
+            .with_child_tool_call_ids(child_tool_call_ids.clone())
             .with_memory_scope(memory_scope)
             .with_message_inbox(message_inbox);
 
         let state = app.state::<AppState>();
-        let provider = state.provider().await?;
+        let provider = if let Some(provider_name) = resolved.model_provider.as_deref() {
+            let db = state.db().await?;
+            state.provider_by_name(provider_name, &db).await?
+        } else {
+            state.provider().await?
+        };
 
         // Register this sub-agent instance with the SwarmCoordinator so the
         // swarm view stays consistent with actual running sub-agents.
@@ -644,7 +675,7 @@ impl SpawnAgentTool {
                 crate::agent::event_bus::SubagentStepPayload {
                     chat_id: chat_id.clone(),
                     spawn_id: spawn_id.clone(),
-                    parent_tool_call_id: None,
+                    parent_tool_call_id: parent_tool_call_id.clone(),
                     agent_id: agent_id.to_string(),
                     agent_name: resolved.agent.name.clone(),
                     task: task.to_string(),
@@ -653,7 +684,9 @@ impl SpawnAgentTool {
                     error: None,
                     duration_ms: 0,
                     timestamp: chrono::Utc::now().to_rfc3339(),
-                    child_tool_call_ids: None,
+                    // Child tool ids are linked authoritatively by each child
+                    // tool event's parent_tool_call_id and trace_id.
+                    child_tool_call_ids: Some(Vec::new()),
                 },
             ));
 
@@ -737,6 +770,7 @@ impl SpawnAgentTool {
                 });
 
                 // Update the chat-visible sub-agent step with the final result.
+                let completed_child_tool_call_ids = child_tool_call_ids.lock().await.clone();
                 state
                     .agent
                     .event_bus
@@ -744,7 +778,7 @@ impl SpawnAgentTool {
                         crate::agent::event_bus::SubagentStepPayload {
                             chat_id: chat_id.clone(),
                             spawn_id: spawn_id.clone(),
-                            parent_tool_call_id: None,
+                            parent_tool_call_id: parent_tool_call_id.clone(),
                             agent_id: agent_id.to_string(),
                             agent_name: resolved.agent.name.clone(),
                             task: task.to_string(),
@@ -753,7 +787,9 @@ impl SpawnAgentTool {
                             error: None,
                             duration_ms: spawn_duration_ms,
                             timestamp: chrono::Utc::now().to_rfc3339(),
-                            child_tool_call_ids: None,
+                            // Child tool ids are linked authoritatively by each child
+                            // tool event's parent_tool_call_id and trace_id.
+                            child_tool_call_ids: Some(completed_child_tool_call_ids),
                         },
                     ));
 
@@ -772,6 +808,8 @@ impl SpawnAgentTool {
             }
             Err(e) => {
                 let error_text = e.to_string();
+                let was_cancelled = error_text.contains("Sub-agent task cancelled by user");
+                let terminal_status = if was_cancelled { "cancelled" } else { "failed" };
                 let error_class = classify_spawn_error(&error_text);
                 let retry_hint = match error_class {
                     ErrorClass::Transient => "This looks like a transient error (network, timeout, rate limit). You may retry the same task.",
@@ -787,13 +825,14 @@ impl SpawnAgentTool {
                     task,
                     spawn_id: &spawn_id,
                     label,
-                    status: "failed",
+                    status: terminal_status,
                     error: Some(&error_text),
                     result_summary: None,
                     duration_ms: spawn_duration_ms,
                 });
 
                 // Mark the chat-visible sub-agent step as failed.
+                let failed_child_tool_call_ids = child_tool_call_ids.lock().await.clone();
                 state
                     .agent
                     .event_bus
@@ -801,16 +840,18 @@ impl SpawnAgentTool {
                         crate::agent::event_bus::SubagentStepPayload {
                             chat_id: chat_id.clone(),
                             spawn_id: spawn_id.clone(),
-                            parent_tool_call_id: None,
+                            parent_tool_call_id: parent_tool_call_id.clone(),
                             agent_id: agent_id.to_string(),
                             agent_name: resolved.agent.name.clone(),
                             task: task.to_string(),
-                            status: "failed".to_string(),
+                            status: terminal_status.to_string(),
                             result_summary: None,
                             error: Some(error_text.clone()),
                             duration_ms: spawn_duration_ms,
                             timestamp: chrono::Utc::now().to_rfc3339(),
-                            child_tool_call_ids: None,
+                            // Child tool ids are linked authoritatively by each child
+                            // tool event's parent_tool_call_id and trace_id.
+                            child_tool_call_ids: Some(failed_child_tool_call_ids),
                         },
                     ));
 
@@ -820,7 +861,7 @@ impl SpawnAgentTool {
                     "spawn_id": spawn_id,
                     "agent_id": agent_id,
                     "agent_name": resolved.agent.name,
-                    "status": "error",
+                    "status": terminal_status,
                     "error": error_text,
                     "error_class": error_class.as_str(),
                     "retry_hint": retry_hint,
@@ -987,6 +1028,10 @@ impl AgentTool for SpawnAgentTool {
 
             // Execute waves sequentially. Agents within a wave run in parallel,
             // and their results become available to subsequent waves.
+            let parent_tool_call_id = input
+                .get("_parent_tool_call_id")
+                .and_then(Value::as_str)
+                .map(str::to_string);
             let mut results: HashMap<String, Value> = HashMap::new();
             let mut indexed_results: Vec<(usize, Value)> = Vec::with_capacity(graph.nodes.len());
             let mut wave_summaries: Vec<Vec<Value>> = Vec::new();
@@ -1012,6 +1057,7 @@ impl AgentTool for SpawnAgentTool {
                     let chat_id = chat_id.clone();
                     let allowed_tools = allowed_tools.clone();
                     let token = token.clone();
+                    let parent_tool_call_id = parent_tool_call_id.clone();
                     let id = node.id.clone();
                     let original_idx = idx;
                     let fut = async move {
@@ -1062,6 +1108,7 @@ impl AgentTool for SpawnAgentTool {
                                 success_criteria: success_criteria.as_deref(),
                                 constraints,
                                 relevant_files,
+                                parent_tool_call_id,
                             })
                             .await?;
                         Ok::<(usize, String, Value), anyhow::Error>((original_idx, id, result))
@@ -1192,6 +1239,10 @@ impl AgentTool for SpawnAgentTool {
 
         let (success_criteria, constraints, relevant_files) = handoff_fields_from_input(&input);
         let context = input.get("context").and_then(Value::as_str).unwrap_or("");
+        let parent_tool_call_id = input
+            .get("_parent_tool_call_id")
+            .and_then(Value::as_str)
+            .map(str::to_string);
 
         self.do_spawn(SpawnParams {
             app,
@@ -1210,6 +1261,7 @@ impl AgentTool for SpawnAgentTool {
             success_criteria: success_criteria.as_deref(),
             constraints,
             relevant_files,
+            parent_tool_call_id,
         })
         .await
     }

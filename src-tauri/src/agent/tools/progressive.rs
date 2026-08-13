@@ -1,6 +1,4 @@
 mod discovery;
-mod guidance;
-mod vector_search;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -12,8 +10,6 @@ use tokio::sync::RwLock;
 use crate::agent::tools::AgentTool;
 
 use discovery::{ListToolsStandalone, ToolsSearchTool};
-use guidance::GuidanceTool;
-use vector_search::VectorSearchStandalone;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -122,19 +118,6 @@ impl ProgressiveToolRegistry {
         // tools_search factory will be set later via set_tools_search_factory()
 
         self.register_metadata(ToolMetadata::new(
-            "guidance",
-            "Guidance",
-            "Provides step-by-step guidance for complex tasks. Use when user needs help understanding a process or learning something.",
-            "system",
-            vec!["help", "guide", "tutorial", "learn", "explain"],
-            DetailLevel::Minimal,
-        ));
-        self.tool_factory.insert(
-            "guidance".to_string(),
-            Box::new(|| Arc::new(GuidanceTool::new_standalone()) as Arc<dyn AgentTool>),
-        );
-
-        self.register_metadata(ToolMetadata::new(
             "web_search",
             "Web Search",
             "Search the web for current information, news, facts, or answers to questions. Use when you need up-to-date information or facts not in the knowledge base.",
@@ -186,19 +169,6 @@ impl ProgressiveToolRegistry {
         );
 
         self.register_metadata(ToolMetadata::new(
-            "vector_search",
-            "Knowledge Base Search",
-            "Search the user's local knowledge base for documents and information. Use for private data, previously ingested documents, or personal files.",
-            "search",
-            vec!["rag", "knowledge", "documents", "vector", "embedding", "private"],
-            DetailLevel::Standard,
-        ));
-        self.tool_factory.insert(
-            "vector_search".to_string(),
-            Box::new(|| Arc::new(VectorSearchStandalone::new_standalone()) as Arc<dyn AgentTool>),
-        );
-
-        self.register_metadata(ToolMetadata::new(
             "get_system_metrics",
             "System Metrics",
             "Retrieve real-time hardware performance metrics including CPU load, RAM usage, and network throughput.",
@@ -208,27 +178,9 @@ impl ProgressiveToolRegistry {
         ));
 
         self.register_metadata(ToolMetadata::new(
-            "calculate_route",
-            "Calculate Route",
-            "Calculate a driving route between two locations with distance and duration.",
-            "map",
-            vec!["route", "navigation", "driving", "directions", "map"],
-            DetailLevel::Standard,
-        ));
-
-        self.register_metadata(ToolMetadata::new(
-            "geocode_search",
-            "Geocode Search",
-            "Search for a place name and get its latitude/longitude coordinates.",
-            "map",
-            vec!["geocode", "location", "coordinates", "place", "address"],
-            DetailLevel::Standard,
-        ));
-
-        self.register_metadata(ToolMetadata::new(
             "read_document_content",
             "Read Document",
-            "Read the contents of an ingested document from the knowledge base.",
+            "Read authoritative contents from an uploaded or workspace file. Prefer the exact file_path returned by list_documents.",
             "file",
             vec!["file", "read", "document", "knowledge", "text"],
             DetailLevel::Full,
@@ -243,7 +195,7 @@ impl ProgressiveToolRegistry {
         self.register_metadata(ToolMetadata::new(
             "list_documents",
             "List Documents",
-            "List all documents currently ingested and available in local knowledge base",
+            "List uploaded documents with their exact recorded file paths. Call this first when a document path is unknown.",
             "file",
             vec!["file", "directory", "list", "filesystem", "disk"],
             DetailLevel::Full,
@@ -259,24 +211,6 @@ impl ProgressiveToolRegistry {
         ));
 
         self.register_metadata(ToolMetadata::new(
-            "get_military_aircraft",
-            "Flight Tracking",
-            "Track real-time flight information by flight number or route.",
-            "osint",
-            vec!["flight", "aircraft", "airport", "tracking", "adsb"],
-            DetailLevel::Full,
-        ));
-
-        self.register_metadata(ToolMetadata::new(
-            "get_earthquakes",
-            "Earthquake Data",
-            "Get recent earthquake data from USGS.",
-            "osint",
-            vec!["earthquake", "seismic", "usgs", "quake"],
-            DetailLevel::Full,
-        ));
-
-        self.register_metadata(ToolMetadata::new(
             "spawn_agent",
             "Spawn Agent",
             "Spawn a specialized sub-agent for complex multi-step tasks.",
@@ -285,41 +219,11 @@ impl ProgressiveToolRegistry {
             DetailLevel::Full,
         ));
 
-        self.register_metadata(ToolMetadata::new(
-            "handoff_to_agent",
-            "Handoff to Agent",
-            "Signal that the current conversation should be handed off to a specialized agent.",
-            "agent",
-            vec!["agent", "handoff", "transfer"],
-            DetailLevel::Full,
-        ));
+        // Delegation is intentionally represented by `spawn_agent` only.
 
-        self.register_metadata(ToolMetadata::new(
-            "write_to_memory",
-            "Write to Memory",
-            "Writes a finding, observation, or intermediate result to session-scoped vector memory.",
-            "memory",
-            vec!["memory", "write", "store", "save", "session"],
-            DetailLevel::Full,
-        ));
-
-        self.register_metadata(ToolMetadata::new(
-            "search_session_memory",
-            "Search Session Memory",
-            "Searches within the current session's vector memory for relevant findings.",
-            "memory",
-            vec!["memory", "search", "retrieve", "find", "session"],
-            DetailLevel::Full,
-        ));
-
-        self.register_metadata(ToolMetadata::new(
-            "get_memory_stats",
-            "Get Memory Stats",
-            "Returns statistics about the current session's vector memory, including entry count.",
-            "memory",
-            vec!["memory", "stats", "count", "info", "session"],
-            DetailLevel::Full,
-        ));
+        // Session-memory tools are retained in source only while their
+        // persistence and retrieval contract is redesigned. Do not expose or
+        // factory-register them until that future fix is complete.
 
         self.register_metadata(ToolMetadata::new(
             "draw",
@@ -330,37 +234,16 @@ impl ProgressiveToolRegistry {
             DetailLevel::Full,
         ));
 
-        self.register_metadata(ToolMetadata::new(
-            "activate_3d_globe",
-            "3D Globe Control",
-            "Navigate the 3D globe visualization to a location or coordinate.",
-            "visualization",
-            vec!["globe", "3d", "earth", "map", "cesium"],
-            DetailLevel::Full,
-        ));
+        // Future feature: the legacy 3D globe tool is intentionally not
+        // discoverable. It will return as part of one unified world-map tool.
 
-        self.register_metadata(ToolMetadata::new(
-            "reverse_geocode",
-            "Reverse Geocode",
-            "Convert coordinates to address.",
-            "map",
-            vec!["geocode", "location", "address", "reverse"],
-            DetailLevel::Standard,
-        ));
-
-        self.register_metadata(ToolMetadata::new(
-            "get_weather",
-            "Weather Info",
-            "Get weather for a location.",
-            "osint",
-            vec!["weather", "forecast", "climate"],
-            DetailLevel::Standard,
-        ));
+        // Weather is intentionally not an agent tool. Use web_search for
+        // current weather information until a canonical information tool is defined.
 
         self.register_metadata(ToolMetadata::new(
             "grep_documents",
             "Grep Documents",
-            "Search for text within documents.",
+            "Search uploaded documents for exact substrings; read matching files with read_document_content before relying on them.",
             "file",
             vec!["file", "search", "grep", "text"],
             DetailLevel::Full,
@@ -393,14 +276,8 @@ impl ProgressiveToolRegistry {
             DetailLevel::Full,
         ));
 
-        self.register_metadata(ToolMetadata::new(
-            "create_geofence",
-            "Create Geofence",
-            "Create a geofence around a location.",
-            "map",
-            vec!["geofence", "map", "boundary", "area"],
-            DetailLevel::Full,
-        ));
+        // Geofencing is removed from the agent tool catalog until its complete
+        // lifecycle and user-facing management surface are ready.
 
         self.register_metadata(ToolMetadata::new(
             "graph_session",
@@ -435,50 +312,16 @@ impl ProgressiveToolRegistry {
                 Arc::new(crate::agent::tools::system_tools::SystemMetricsTool) as Arc<dyn AgentTool>
             }),
         );
-        self.tool_factory.insert(
-            "calculate_route".to_string(),
-            Box::new(|| {
-                Arc::new(crate::agent::tools::routing_tools::RouteTool) as Arc<dyn AgentTool>
-            }),
-        );
-        self.tool_factory.insert(
-            "geocode_search".to_string(),
-            Box::new(|| {
-                Arc::new(crate::agent::tools::routing_tools::GeocodeTool) as Arc<dyn AgentTool>
-            }),
-        );
-        self.tool_factory.insert(
-            "reverse_geocode".to_string(),
-            Box::new(|| {
-                Arc::new(crate::agent::tools::routing_tools::ReverseGeocodeTool)
-                    as Arc<dyn AgentTool>
-            }),
-        );
+        // Legacy routing/geocoding wrappers remain source-only for the future
+        // unified `world_map` tool; they are intentionally not registered.
         self.tool_factory.insert(
             "run_command".to_string(),
             Box::new(|| {
                 Arc::new(crate::agent::tools::terminal_tools::RunCommandTool) as Arc<dyn AgentTool>
             }),
         );
-        self.tool_factory.insert(
-            "get_military_aircraft".to_string(),
-            Box::new(|| {
-                Arc::new(crate::agent::tools::osint_tools::MilitaryTrackingTool)
-                    as Arc<dyn AgentTool>
-            }),
-        );
-        self.tool_factory.insert(
-            "get_weather".to_string(),
-            Box::new(|| {
-                Arc::new(crate::agent::tools::osint_tools::WeatherTool) as Arc<dyn AgentTool>
-            }),
-        );
-        self.tool_factory.insert(
-            "get_earthquakes".to_string(),
-            Box::new(|| {
-                Arc::new(crate::agent::tools::osint_tools::EarthquakeTool) as Arc<dyn AgentTool>
-            }),
-        );
+        // Legacy OSINT feed wrappers remain source-only for the future
+        // unified `world_map` tool. Current weather still uses web_search.
         self.tool_factory.insert(
             "draw".to_string(),
             Box::new(|| {
@@ -515,59 +358,22 @@ impl ProgressiveToolRegistry {
                 Arc::new(crate::tools::fs_tools::ApplyPatchTool) as Arc<dyn AgentTool>
             }),
         );
-        self.tool_factory.insert(
-            "create_geofence".to_string(),
-            Box::new(|| {
-                Arc::new(crate::agent::tools::geofence_tools::CreateGeofenceTool)
-                    as Arc<dyn AgentTool>
-            }),
-        );
-        self.tool_factory.insert(
-            "activate_3d_globe".to_string(),
-            Box::new(|| {
-                Arc::new(crate::agent::tools::map_tools::MapTool::new()) as Arc<dyn AgentTool>
-            }),
-        );
+        // Future map tools intentionally have no factories. The eventual
+        // unified world-map tool should be registered here once its UI contract
+        // is complete.
         self.tool_factory.insert(
             "graph_session".to_string(),
             Box::new(|| {
                 Arc::new(crate::agent::tools::graph_session::GraphSessionTool) as Arc<dyn AgentTool>
             }),
         );
-        self.tool_factory.insert(
-            "write_to_memory".to_string(),
-            Box::new(|| {
-                Arc::new(crate::agent::tools::session_memory_tools::WriteToMemoryTool)
-                    as Arc<dyn AgentTool>
-            }),
-        );
-        self.tool_factory.insert(
-            "search_session_memory".to_string(),
-            Box::new(|| {
-                Arc::new(crate::agent::tools::session_memory_tools::SearchSessionMemoryTool)
-                    as Arc<dyn AgentTool>
-            }),
-        );
-        self.tool_factory.insert(
-            "get_memory_stats".to_string(),
-            Box::new(|| {
-                Arc::new(crate::agent::tools::session_memory_tools::GetMemoryStatsTool)
-                    as Arc<dyn AgentTool>
-            }),
-        );
-        self.tool_factory.insert(
-            "handoff_to_agent".to_string(),
-            Box::new(|| {
-                Arc::new(crate::agent::tools::handoff_tools::HandoffTool) as Arc<dyn AgentTool>
-            }),
-        );
+        // Session-memory wrappers remain source-only until their future
+        // persistence/retrieval redesign is complete.
+        // Delegated work uses only `spawn_agent`; handoff is not exposed as a
+        // second agent tool.
 
         let mut guard = self.loaded_tools.lock().unwrap();
         // tools_search and list_tools will be loaded on-demand via get_or_load_tool when registry_arc is set
-        guard.insert(
-            "guidance".to_string(),
-            Arc::new(GuidanceTool::new_standalone()),
-        );
         guard.insert(
             "web_search".to_string(),
             Arc::new(crate::search::tool::WebSearchTool),
@@ -576,10 +382,8 @@ impl ProgressiveToolRegistry {
             "web_fetch".to_string(),
             Arc::new(crate::tools::web_fetch::WebFetchTool),
         );
-        guard.insert(
-            "vector_search".to_string(),
-            Arc::new(VectorSearchStandalone::new_standalone()),
-        );
+        // Vector search was removed. Local document tools read exact workspace
+        // paths for deterministic output.
     }
 
     /// Sets up the tools_search factory with a reference to the live registry.

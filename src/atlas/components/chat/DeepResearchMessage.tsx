@@ -16,7 +16,6 @@ export function DeepResearchMessage({
     message,
     compact,
     onContinueResearch,
-    onAbort,
     isChatStreaming,
     messages,
 }: DeepResearchRunMessageProps & { message: Message }) {
@@ -36,7 +35,6 @@ export function DeepResearchMessage({
             isChatStreaming={isChatStreaming}
             messages={messages}
             onContinueResearch={onContinueResearch}
-            onAbort={onAbort}
         />
     );
 }

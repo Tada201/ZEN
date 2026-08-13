@@ -136,7 +136,7 @@ export function WorkspaceApp() {
     handleRenameSession, handlePinSession, handleArchiveSession,
     handleUnarchiveSession, handleExportSession,
     handleDeleteAll, handleCreateFolder, handleRenameFolder, handleDeleteFolder, handleMoveToFolder,
-    handleSendMessage, abortStream
+    handleSendMessage, abortStream, pauseStream, resumeStream
   } = useChat();
 
   useRenderLogger("WorkspaceApp", { currentSessionId, isStreaming });
@@ -144,6 +144,8 @@ export function WorkspaceApp() {
   const chatMessages = useMemo(() => {
     return messages.filter(m => m.role !== "tool");
   }, [messages]);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
 
   const [activeArtifact, setActiveArtifact] = useState<ArtifactData | null>(null);
   const [generativeUI, setGenerativeUI] = useState(false);
@@ -329,20 +331,21 @@ export function WorkspaceApp() {
   }, [currentSessionId]);
 
   const handleRetry = useCallback((messageId: string) => {
-    const failedMsgIndex = messages.findIndex((m) => m.id === messageId);
+    const currentMessages = messagesRef.current;
+    const failedMsgIndex = currentMessages.findIndex((m) => m.id === messageId);
     if (failedMsgIndex === -1) return;
 
     let lastUserMsg = null;
     for (let i = failedMsgIndex - 1; i >= 0; i--) {
-      if (messages[i].role === "user") {
-        lastUserMsg = messages[i];
+      if (currentMessages[i].role === "user") {
+        lastUserMsg = currentMessages[i];
         break;
       }
     }
     if (!lastUserMsg?.content) return;
 
-    const failedMsg = messages[failedMsgIndex];
-    setMessages(messages.slice(0, failedMsgIndex));
+    const failedMsg = currentMessages[failedMsgIndex];
+    setMessages(currentMessages.slice(0, failedMsgIndex));
     handleSendMessageInternal({
       message: lastUserMsg.content,
       model: failedMsg.model || selectedModelId,
@@ -350,26 +353,29 @@ export function WorkspaceApp() {
       generativeUI: failedMsg.generativeUI != null ? !!failedMsg.generativeUI : generativeUI,
       thinking: failedMsg.thinking || { enabled: false },
     });
-  }, [messages, setMessages, handleSendMessageInternal, selectedModelId, selectedProvider, generativeUI]);
+  }, [setMessages, handleSendMessageInternal, selectedModelId, selectedProvider, generativeUI]);
 
   const handleRegenerate = useCallback((messageId: string) => {
-    const msgIndex = messages.findIndex(m => m.id === messageId);
+    const currentMessages = messagesRef.current;
+    const msgIndex = currentMessages.findIndex(m => m.id === messageId);
     if (msgIndex === -1) return;
     let lastUserMsg = null;
     for (let i = msgIndex - 1; i >= 0; i--) {
-      if (messages[i].role === "user") {
-        lastUserMsg = messages[i];
+      if (currentMessages[i].role === "user") {
+        lastUserMsg = currentMessages[i];
         break;
       }
     }
     if (!lastUserMsg?.content) return;
-    setMessages(messages.slice(0, msgIndex));
+    setMessages(currentMessages.slice(0, msgIndex));
     handleSendMessageInternal({
       message: lastUserMsg.content,
       model: selectedModelId,
       provider: selectedProvider,
     });
-  }, [messages, setMessages, selectedModelId, selectedProvider, handleSendMessageInternal]);
+  }, [setMessages, selectedModelId, selectedProvider, handleSendMessageInternal]);
+
+  const openSettings = useCallback(() => setSettingsOpen(true), [setSettingsOpen]);
 
   const handleContinueResearch = useCallback((request: string) => {
     handleSendMessageInternal({
@@ -402,10 +408,18 @@ export function WorkspaceApp() {
     if (isStreaming) return true;
     if (messages.length > 0) {
       const last = messages[messages.length - 1];
-      if (last.role === 'assistant' && last.status === 'sending') return true;
+      if (last.role === 'assistant' && (last.status === 'sending' || last.status === 'paused')) return true;
     }
     return false;
   }, [isStreaming, messages]);
+
+  const isChatPaused = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message.role === "assistant") return message.status === "paused";
+    }
+    return false;
+  }, [messages]);
 
   // Global Cmd+K shortcut — reads latest store state directly to avoid re-registering on every toggle
   useEffect(() => {
@@ -547,14 +561,12 @@ export function WorkspaceApp() {
               selectedWorkspace={pendingWorkspaceRoot}
               onSelectWorkspace={setPendingWorkspaceRoot}
               composer={
-                <motion.div
-                  layoutId="workspace-composer-shell"
-                  layout
-                  transition={{ layout: { duration: motionDurations.shared, ease: motionEasings.shared } }}
+                <div
                   className="w-full"
                 >
                   <PremiumChatInput
                   variant="welcome"
+
                   activeChatId={null}
                   onSend={handleSendMessageInternal}
                   onAbort={abortStream}
@@ -569,12 +581,8 @@ export function WorkspaceApp() {
                     setActiveSettingsTab("providers");
                     setSettingsOpen(true);
                   }}
-                  onOpenSettings={() => {
-                    setActiveSettingsTab("general");
-                    setSettingsOpen(true);
-                  }}
                   />
-                </motion.div>
+                </div>
               }
             />
             ) : (
@@ -590,21 +598,17 @@ export function WorkspaceApp() {
                       <MessageList
                         messages={chatMessages}
                         onOpenArtifact={openArtifactInRightPanel}
-                        onOpenSettings={() => setSettingsOpen(true)}
+                        onOpenSettings={openSettings}
                         onDismissError={isArchivedSession ? undefined : handleDismissError}
                         onRetry={isArchivedSession ? undefined : handleRetry}
                         onRegenerate={isArchivedSession ? undefined : handleRegenerate}
                         onContinueResearch={isArchivedSession ? undefined : handleContinueResearch}
-                        onAbort={isArchivedSession ? undefined : abortStream}
                         isStreaming={isArchivedSession ? false : isStreaming}
                       />
                     </div>
                     <div className="w-full shrink-0">
                       <div className="max-w-3xl mx-auto w-full px-6 py-4">
-                        <motion.div
-                          layoutId="workspace-composer-shell"
-                          layout
-                          transition={{ layout: { duration: motionDurations.shared, ease: motionEasings.shared } }}
+                        <div
                           className="w-full"
                         >
                           <PremiumChatInput
@@ -612,6 +616,9 @@ export function WorkspaceApp() {
                             readOnly={isArchivedSession}
                             onSend={handleSendMessageInternal}
                             onAbort={isArchivedSession ? undefined : abortStream}
+                            onPause={isArchivedSession ? undefined : pauseStream}
+                            onResume={isArchivedSession ? undefined : resumeStream}
+                            isPaused={isArchivedSession ? false : isChatPaused}
                             isLoading={isArchivedSession ? false : isLoading}
                             models={models}
                             selectedModelId={selectedModelId}
@@ -625,12 +632,8 @@ export function WorkspaceApp() {
                               setActiveSettingsTab("providers");
                               setSettingsOpen(true);
                             }}
-                            onOpenSettings={() => {
-                              setActiveSettingsTab("general");
-                              setSettingsOpen(true);
-                            }}
                           />
-                        </motion.div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -642,28 +645,27 @@ export function WorkspaceApp() {
                           <MessageList
                             messages={chatMessages}
                             onOpenArtifact={openArtifactInRightPanel}
-                            onOpenSettings={() => setSettingsOpen(true)}
+                            onOpenSettings={openSettings}
                             onDismissError={isArchivedSession ? undefined : handleDismissError}
                             onRetry={isArchivedSession ? undefined : handleRetry}
-                            onRegenerate={isArchivedSession ? undefined : handleRegenerate}
+                                onRegenerate={isArchivedSession ? undefined : handleRegenerate}
                             onContinueResearch={isArchivedSession ? undefined : handleContinueResearch}
-                            onAbort={isArchivedSession ? undefined : abortStream}
                             isStreaming={isArchivedSession ? false : isStreaming}
                           />
                         </div>
                         <div className="w-full bg-background border-t border-border p-4 shrink-0">
                           <div className="max-w-3xl mx-auto w-full">
-                            <motion.div
-                              layoutId="workspace-composer-shell"
-                              layout
-                              transition={{ layout: { duration: motionDurations.shared, ease: motionEasings.shared } }}
+                            <div
                               className="w-full"
                             >
-                              <PremiumChatInput
-                                activeChatId={currentSessionId}
+                          <PremiumChatInput
+                            activeChatId={currentSessionId}
                                 readOnly={isArchivedSession}
                                 onSend={handleSendMessageInternal}
                                 onAbort={isArchivedSession ? undefined : abortStream}
+                                onPause={isArchivedSession ? undefined : pauseStream}
+                                onResume={isArchivedSession ? undefined : resumeStream}
+                                isPaused={isArchivedSession ? false : isChatPaused}
                                 isLoading={isArchivedSession ? false : isLoading}
                                 models={models}
                                 selectedModelId={selectedModelId}
@@ -677,12 +679,8 @@ export function WorkspaceApp() {
                                   setActiveSettingsTab("providers");
                                   setSettingsOpen(true);
                                 }}
-                                onOpenSettings={() => {
-                                  setActiveSettingsTab("general");
-                                  setSettingsOpen(true);
-                                }}
                               />
-                            </motion.div>
+                            </div>
                           </div>
                         </div>
                       </div>

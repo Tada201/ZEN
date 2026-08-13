@@ -9,74 +9,85 @@ interface SlashCommandPopoverProps {
   isOpen: boolean;
   suggestions: SlashSuggestion[];
   selectedIndex: number;
+  listboxId: string;
   onSelect: (suggestion: SlashSuggestion) => void;
   onHover: (index: number) => void;
 }
 
 export const SlashCommandPopover = forwardRef<HTMLDivElement, SlashCommandPopoverProps>(
-  ({ isOpen, suggestions, selectedIndex, onSelect, onHover }, _ref) => {
+  ({ isOpen, suggestions, selectedIndex, listboxId, onSelect, onHover }, ref) => {
     const reducedMotion = useReducedMotion();
     if (!isOpen || suggestions.length === 0) return null;
 
     return (
       <AnimatePresence>
         <motion.div
-          initial={reducedMotion ? false : { opacity: 0, y: 4, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={reducedMotion ? undefined : { opacity: 0, y: 4, scale: 0.98 }}
+          ref={ref}
+          initial={reducedMotion ? false : { opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={reducedMotion ? undefined : { opacity: 0, y: 4 }}
           transition={reducedMotion ? { duration: 0 } : {
             duration: motionDurations.fast,
             ease: motionEasings.standard,
           }}
-          className="absolute left-0 right-0 bottom-full mb-2 z-40 mx-3"
+          className="absolute left-0 right-0 bottom-full mb-1 z-40 mx-2"
         >
-          <div className="bg-card/95 backdrop-blur-sm border border-border/80 rounded-xl shadow-2xl overflow-hidden">
-            <div className="px-3 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border/50">
+          <div className="composer-popover overflow-hidden">
+            <div className="composer-popover-header border-b px-2 py-1 uppercase">
               Commands
             </div>
-            <div className="max-h-72 overflow-y-auto py-1">
-              {suggestions.map((s, i) => {
-                const Icon = s.kind === "skill" ? Book : Terminal;
-                const isSelected = i === selectedIndex;
+            <div
+              id={listboxId}
+              role="listbox"
+              aria-label="Slash commands"
+              aria-activedescendant={`${listboxId}-option-${selectedIndex}`}
+              className="max-h-72 overflow-y-auto py-1"
+            >
+              {suggestions.map((suggestion, index) => {
+                const Icon = suggestion.kind === "skill" ? Book : Terminal;
+                const isSelected = index === selectedIndex;
                 return (
                   <button
-                    key={`${s.kind}-${s.name}`}
+                    key={`${suggestion.kind}-${suggestion.name}`}
+                    id={`${listboxId}-option-${index}`}
                     type="button"
-                    onClick={() => onSelect(s)}
-                    onMouseEnter={() => onHover(i)}
+                    role="option"
+                    tabIndex={-1}
+                    aria-selected={isSelected}
+                    onClick={() => onSelect(suggestion)}
+                    onMouseEnter={() => onHover(index)}
                     className={cn(
-                      "w-full text-left px-3 py-2 flex items-start gap-2.5 transition-colors",
-                      isSelected
-                        ? "bg-primary/10 text-foreground"
-                        : "hover:bg-muted/50 text-foreground/90",
+                      "composer-menu-item items-start text-left",
+                      isSelected ? "bg-primary/10 text-foreground" : "text-foreground",
                     )}
                   >
                     <Icon
+                      aria-hidden="true"
                       className={cn(
-                        "w-3.5 h-3.5 mt-0.5 flex-shrink-0",
+                        "mt-0.5 h-3.5 w-3.5 flex-shrink-0",
                         isSelected ? "text-primary" : "text-muted-foreground",
                       )}
                     />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono font-semibold">
-                          {s.invocationSyntax}
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-semibold">
+                          {suggestion.invocationSyntax}
                         </span>
                         <span
                           className={cn(
-                            "text-[9px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider",
-                            s.kind === "skill"
+                            "rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider",
+                            suggestion.kind === "skill"
                               ? "bg-primary/15 text-primary"
                               : "bg-muted text-muted-foreground",
                           )}
                         >
-                          {s.kind}
+                          {suggestion.kind}
                         </span>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground leading-snug mt-0.5 truncate">
-                        {s.description}
-                      </p>
-                    </div>
+                      </span>
+                      <span className="mt-0.5 truncate text-[11px] leading-snug text-muted-foreground">
+                        {suggestion.description}
+                      </span>
+                    </span>
                   </button>
                 );
               })}

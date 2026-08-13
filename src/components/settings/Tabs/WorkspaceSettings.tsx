@@ -20,7 +20,7 @@ export function WorkspaceSettings({ settings, onUpdate }: WorkspaceSettingsProps
       <SettingsSection title="Directories" icon="lucide:folder-open" description="Workspace and data paths">
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-foreground/80">Workspace Root</label>
+            <label className="text-[13px] font-medium text-foreground">Workspace Root</label>
             <FolderBrowser
               value={settings["workspace.root"] || ""}
               onChange={(path) => onUpdate("workspace.root", path)}
@@ -34,8 +34,8 @@ export function WorkspaceSettings({ settings, onUpdate }: WorkspaceSettingsProps
       </SettingsSection>
 
       <SettingsSection title="Security Architecture" icon="lucide:shield" description="Sandboxing and file access controls">
-        <div className="rounded-md border border-border/50 bg-muted/20 px-3 py-3">
-          <div className="flex items-center gap-2 text-[13px] font-medium text-foreground/80">
+        <div className="rounded-lg border border-border bg-card px-3 py-3">
+          <div className="flex items-center gap-2 text-[13px] font-medium text-foreground">
             <WorkbenchIcon name="lucide:lock" size={14} />
             Workspace sandbox enforced
           </div>
@@ -66,8 +66,8 @@ export function WorkspaceSettings({ settings, onUpdate }: WorkspaceSettingsProps
       </SettingsSection>
 
       <SettingsSection title="Git Integration" icon="lucide:git-branch" description="Version control preferences">
-        <div className="rounded-md border border-border/50 bg-muted/20 px-3 py-3">
-          <div className="flex items-center gap-2 text-[13px] font-medium text-foreground/80">
+        <div className="rounded-lg border border-border bg-card px-3 py-3">
+          <div className="flex items-center gap-2 text-[13px] font-medium text-foreground">
             <WorkbenchIcon name="lucide:git-branch" size={14} />
             Git automation is not enabled
           </div>

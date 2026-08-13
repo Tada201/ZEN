@@ -38,7 +38,7 @@ export function UsageStatsSettings() {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-8">
-      <header className="flex flex-col gap-3 border-b border-border/60 pb-6 lg:flex-row lg:items-end lg:justify-between">
+      <header className="flex flex-col gap-3 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="flex items-center gap-2 text-primary">
             <WorkbenchIcon name="lucide:chart-no-axes-combined" size={17} />
@@ -68,7 +68,7 @@ export function UsageStatsSettings() {
 
 function SummaryCard({ label, value, icon }: { label: string; value: string; icon: string }) {
   return (
-    <div className="rounded-xl border border-border/70 bg-card/40 p-4">
+    <div className="rounded-xl border border-border bg-card p-4">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <WorkbenchIcon name={icon} size={14} className="text-primary" />
         {label}

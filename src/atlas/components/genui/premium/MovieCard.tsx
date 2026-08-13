@@ -2,7 +2,7 @@ import { BookOpen } from 'lucide-react';
 
 export function MovieCard({ data }: { data: any }) {
   return (
-    <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-lg max-w-md flex">
+    <div className="genui-card-surface w-full max-w-none min-w-0 rounded-2xl border border-border bg-card overflow-hidden shadow-lg flex">
       <div className="w-28 bg-card flex items-center justify-center relative overflow-hidden flex-none">
         {data.poster ? (
           <img src={data.poster} alt={data.title} className="h-full w-full object-cover" />

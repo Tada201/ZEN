@@ -21,7 +21,7 @@ export function MemoryRecallCard({ data }: { data: MemoryRecallData }) {
   const usedInContext = !!data.usedInContext;
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-lg flex flex-col">
+    <div className="genui-card-surface w-full max-w-none min-w-0 rounded-2xl border border-border bg-card p-5 shadow-lg flex flex-col">
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center gap-2.5">
           <div className="p-1.5 rounded-lg border border-primary bg-primary/10 text-primary">

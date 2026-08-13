@@ -3,7 +3,6 @@ import {
   Activity,
   Bot,
   Calculator,
-  Cloud,
   Cpu,
   FileSearch,
   FileText,
@@ -17,7 +16,7 @@ import {
 } from "lucide-react";
 import type { ToolCall } from "../../types";
 import type { ToolOutputPreview } from "../toolOutputPreview";
-import { EarthquakeList, AircraftList, WeatherCard, RouteCard, GeocodeList } from "./OsintRenderers";
+import { EarthquakeList, AircraftList, RouteCard, GeocodeList } from "./OsintRenderers";
 import { SystemMetricsCard } from "./SystemMetricsCard";
 import { CalculatorCard } from "./CalculatorCard";
 import { TodosCard } from "./TodosCard";
@@ -52,7 +51,6 @@ export interface ToolRenderer {
 const RENDERERS: Record<string, ToolRenderer> = {
   get_earthquakes: { icon: Activity, render: EarthquakeList },
   get_military_aircraft: { icon: Radar, render: AircraftList },
-  get_weather: { icon: Cloud, render: WeatherCard },
   calculate_route: { icon: Route, render: RouteCard },
   geocode_search: { icon: MapPin, render: GeocodeList },
   reverse_geocode: { icon: MapPin, render: GeocodeList },
@@ -70,13 +68,28 @@ const ICON_FALLBACKS: Record<string, LucideIcon> = {
   web_search: Globe,
   web_fetch: Globe,
   spawn_agent: Bot,
-  delegate_to_agent: Bot,
 };
 
-export function getToolRenderer(name: string): ToolRenderer | undefined {
-  return RENDERERS[name];
+function canonicalToolName(name: string, input?: Record<string, unknown>): string {
+  const normalized = name.trim().toLowerCase();
+  if (normalized !== "tool_exec" && normalized !== "tool-exec" && normalized !== "execute_tool") {
+    return normalized;
+  }
+
+  const nested = input?.arguments && typeof input.arguments === "object" && !Array.isArray(input.arguments)
+    ? input.arguments as Record<string, unknown>
+    : undefined;
+  const candidate = input?.tool_id || input?.toolId || input?.tool || input?.name
+    || nested?.tool_id || nested?.toolId || nested?.tool || nested?.name;
+  return typeof candidate === "string" && candidate.trim() ? candidate.trim().toLowerCase() : normalized;
 }
 
-export function getToolIcon(name: string): LucideIcon | undefined {
-  return RENDERERS[name]?.icon ?? ICON_FALLBACKS[name];
+/** Resolve aliases and tool_exec envelopes before choosing a specialized view. */
+export function getToolRenderer(name: string, input?: Record<string, unknown>): ToolRenderer | undefined {
+  return RENDERERS[canonicalToolName(name, input)];
+}
+
+export function getToolIcon(name: string, input?: Record<string, unknown>): LucideIcon | undefined {
+  const canonical = canonicalToolName(name, input);
+  return RENDERERS[canonical]?.icon ?? ICON_FALLBACKS[canonical];
 }

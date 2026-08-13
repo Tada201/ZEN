@@ -42,13 +42,6 @@
     "evidence": "Legacy agent spawning tool retained for compatibility; execution must stay behind ToolService permission checks."
   },
   {
-    "id": "delegate_to_agent",
-    "risk": "High",
-    "owner": "backend/agent",
-    "status": "deprecated-hidden",
-    "evidence": "Deprecated spawn_agent alias retained as source compatibility only; omitted from discovery metadata, factories, known-tool registration, and default agent allowlists."
-  },
-  {
     "id": "file_write",
     "risk": "High",
     "owner": "backend/filesystem",
@@ -77,53 +70,11 @@
     "evidence": "Document reads are workspace/user-selected bounded paths; retained as medium risk due file read capability."
   },
   {
-    "id": "geocode_search",
-    "risk": "Medium",
-    "owner": "backend/gtsm",
-    "status": "documented-service-owned",
-    "evidence": "GTSM/geocoding network calls are service-owned and tracked in privileged-operations.md."
-  },
-  {
-    "id": "reverse_geocode",
-    "risk": "Medium",
-    "owner": "backend/gtsm",
-    "status": "documented-service-owned",
-    "evidence": "GTSM/geocoding network calls are service-owned and tracked in privileged-operations.md."
-  },
-  {
-    "id": "create_geofence",
-    "risk": "Medium",
-    "owner": "backend/gtsm",
-    "status": "documented-service-owned",
-    "evidence": "Geofence operations are service-owned; retained as medium risk due operational-map side effects."
-  },
-  {
-    "id": "calculate_route",
-    "risk": "Medium",
-    "owner": "backend/gtsm",
-    "status": "documented-service-owned",
-    "evidence": "Routing network calls are service-owned and tracked in privileged-operations.md."
-  },
-  {
     "id": "draw",
     "risk": "Medium",
     "owner": "backend/canvas",
     "status": "documented-service-owned",
     "evidence": "Canvas mutations are bounded to app graph sessions; retained as medium due generated UI side effects."
-  },
-  {
-    "id": "activate_3d_globe",
-    "risk": "Medium",
-    "owner": "backend/gtsm",
-    "status": "documented-service-owned",
-    "evidence": "Operational-map activation changes app state but does not perform direct host I/O."
-  },
-  {
-    "id": "handoff_to_agent",
-    "risk": "Medium",
-    "owner": "backend/agent",
-    "status": "phase35-legacy-exemption",
-    "evidence": "Agent handoff compatibility tool retained; execution must stay behind ToolService permission checks."
   },
   {
     "id": "generate_image",

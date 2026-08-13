@@ -10,6 +10,7 @@ const mapper = read("src/lib/stores/settingsMapper.ts");
 const settingsModal = read("src/atlas/components/SettingsModal.tsx");
 const welcome = read("src/atlas/components/chat/WorkspaceWelcome.tsx");
 const svg = read("src/atlas/components/chat/WelcomeBlackHoleSvg.tsx");
+const transition = read("src/atlas/components/chat/WorkspaceViewTransition.tsx");
 
 assert(types.includes('WelcomePageQuality = "low" | "high" | "image" | "none"'), "welcome background must expose animated, image, and disabled modes");
 assert(schema.includes('welcomePageQuality: z.enum(["low", "high", "image", "none"]).default("high")'), "schema must validate all welcome background modes");
@@ -22,7 +23,7 @@ assert(settingsModal.includes("Low · SVG") && settingsModal.includes("High · T
 assert(settingsModal.includes("Still · Image") && settingsModal.includes("Off · None"), "Welcome Page must offer still-image and disabled choices");
 assert(welcome.includes('welcomePageQuality === "low"'), "welcome page must select the low-quality renderer");
 assert(welcome.includes('welcomePageQuality === "high"'), "welcome page must select the high-quality renderer");
-assert(welcome.includes('welcomePageQuality === "image"') && welcome.includes('src="/background.png"'), "welcome page must support the public still image");
+assert(!welcome.includes('src="/background.png"') && transition.includes("WorkspaceBackground"), "welcome page must reuse the shared workspace wallpaper for still-image mode");
 assert(welcome.includes('let welcomeBackground: ReactNode = null'), "welcome page must support disabling the background");
 assert(!welcome.includes('Pick a workspace, then start a conversation.'), "welcome page should not render the redundant workspace subtitle");
 assert(welcome.includes("formatWorkspacePath") && welcome.includes("extendedWindowsPrefix"), "welcome page must normalize extended Windows workspace paths for display");
@@ -35,7 +36,7 @@ assert(svg.includes('shapeRendering="optimizeSpeed"'), "SVG renderer must reques
 assert(svg.includes("dur={`${duration}s`}"), "SVG particles must have continuous native motion timing");
 assert(!svg.includes('calcMode="discrete"'), "SVG particles must not use discrete keyframes that cause teleporting");
 assert(svg.includes("CAMERA_POSITION") && svg.includes("CAMERA_FOV_DEGREES"), "SVG renderer must define the supplied camera position and field of view");
-assert(svg.includes("BLACK_HOLE_SCALE = 1.5"), "SVG renderer must apply the requested 1.5x scale");
+assert(svg.includes("BLACK_HOLE_SCALE = 1"), "SVG renderer must apply the reduced 1.5x smaller scale");
 assert(svg.includes("rotateDiskPoint") && svg.includes("getProjectedDiskAnchor"), "SVG renderer must project the tilted disk and camera-space lens geometry");
 assert(svg.includes("makeLensPath") && svg.includes("outerLensPath"), "SVG renderer must include the lens and occlusion geometry");
 assert(!svg.includes(">Z<"), "SVG renderer must not render the incorrect Z label");

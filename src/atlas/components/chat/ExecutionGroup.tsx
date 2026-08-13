@@ -17,6 +17,7 @@ type ExecutionGroupProps = {
   toolCalls: ToolCall[];
   executionSteps: Step[];
   sessionId?: string;
+  messageId?: string;
   onOpenArtifact: (artifact: ArtifactData) => void;
   preferCompact?: boolean;
 };
@@ -25,6 +26,7 @@ export function ExecutionGroup({
   toolCalls,
   executionSteps,
   sessionId,
+  messageId,
   onOpenArtifact,
   preferCompact = true,
 }: ExecutionGroupProps) {
@@ -33,6 +35,7 @@ export function ExecutionGroup({
       toolCalls={toolCalls}
       executionSteps={executionSteps}
       sessionId={sessionId}
+      messageId={messageId}
       onOpenArtifact={onOpenArtifact}
       preferCompact={preferCompact}
     />

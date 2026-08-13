@@ -277,6 +277,7 @@ impl ContextMiddleware for SystemPromptMiddleware {
                 "- Choose tools autonomously; do not ask the user which tool to use.\n",
             );
             ctx.try_push_section(ContextSectionId::ToolSystem, &mut remaining, "- Execute dependent tools sequentially. Use parallel tool calls only when results do not depend on each other.\n");
+            ctx.try_push_section(ContextSectionId::ToolSystem, &mut remaining, "- For uploaded/local documents: call `list_documents` when the exact path is unknown, then call `read_document_content` with the returned `file_path` for authoritative contents. Use `grep_documents` only for exact-term discovery, and read matching files before relying on them.\n");
             ctx.try_push_section(ContextSectionId::ToolSystem, &mut remaining, "- After tool results arrive, use their specific data in the next response and summarize findings before final answer when useful.\n");
             ctx.try_push_section(ContextSectionId::ToolSystem, &mut remaining, "- If a tool is unknown or denied, use the hint in the result and rediscover with `tool_list`.\n");
             if !ctx.tools_supported {
@@ -426,8 +427,19 @@ impl ContextMiddleware for SystemPromptMiddleware {
         }
 
         if ctx.tools_enabled && ctx.authorized_tool_ids.iter().any(|t| t == "spawn_agent") {
+            ctx.try_push_section(
+                ContextSectionId::AgentRoles,
+                &mut remaining,
+                "\n\n## Delegation Rule\nUse only `spawn_agent` for delegated child work. It accepts either one task or an `agents` array for bounded parallel work. Do not call or invent `delegate_to_agent`, `handoff_to_agent`, or any separate subagent tool.\n",
+            );
             if let Some(state) = self.app.try_state::<crate::commands::AppState>() {
-                let agents = state.agent_registry.list();
+                let agents = state
+                    .agent_registry
+                    .list_profiles()
+                    .into_iter()
+                    .filter(|profile| profile.model_invocable)
+                    .map(|profile| profile.agent)
+                    .collect::<Vec<_>>();
                 if !agents.is_empty() {
                     ctx.try_push_section(
                         ContextSectionId::AgentRoles,

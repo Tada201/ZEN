@@ -129,7 +129,7 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
                 aria-pressed={selected}
                 className={cn(
                   "min-h-32 rounded-lg border p-4 text-left transition-colors",
-                  selected ? "border-primary/50 bg-primary/[0.07]" : "border-border bg-card/30 hover:bg-muted/40",
+                  selected ? "border-primary bg-card" : "border-border bg-card hover:bg-muted",
                 )}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -148,7 +148,7 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
         </div>
       </section>
 
-      <section className="rounded-lg border border-border bg-card/20">
+      <section className="rounded-lg border border-border bg-card">
         <button
           type="button"
           onClick={() => setAdvancedOpen((open) => !open)}
@@ -182,7 +182,7 @@ export function ToolsSettings({ settings, onUpdate }: ToolsSettingsProps) {
                 const override = settings[permissionKey] || "inherit";
                 const statusLabel = STATUS_LABEL[tool.status] || tool.status;
                 return (
-                  <div key={tool.id} className="flex items-center gap-3 rounded-md border border-transparent px-2 py-2 hover:border-border hover:bg-muted/25">
+                  <div key={tool.id} className="flex items-center gap-3 rounded-md border border-transparent px-2 py-2 hover:border-border hover:bg-muted">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted">
                       <WorkbenchIcon name={tool.icon} className="h-4 w-4 text-muted-foreground" />
                     </div>

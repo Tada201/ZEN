@@ -3,7 +3,7 @@ use super::actions::{
 };
 use super::escalation::{EarlyToolExecutionContext, EarlyToolExecutionState, EscalationParams};
 use super::helpers::{
-    generate_handoff_summary, parse_file_changes, parse_text_tool_calls,
+    parse_file_changes, parse_text_tool_calls,
     strip_text_tool_call_blocks, FileReadTracker,
 };
 use super::lifecycle::Runner;
@@ -152,7 +152,7 @@ impl Runner {
         tracing::info!(chat_id = %chat_id, trace_id = %trace_id, run_id, depth = self.depth, "run: trace begin");
 
         let mut iteration: usize = 0;
-        let mut current_agent = agent;
+        let current_agent = agent;
         let mut call_counts: HashMap<String, usize> = HashMap::new();
         let mut consecutive_errors = 0;
         let mut just_received_tool_results = false;
@@ -227,6 +227,11 @@ impl Runner {
         loop {
             // Yield to the executor to prevent thread starvation during tight loops
             tokio::task::yield_now().await;
+
+            // Cooperative pause: wait before the next model/tool boundary.
+            // Stop still wins while paused and follows the normal partial-trace
+            // cancellation path below.
+            let _ = crate::commands::wait_for_chat_resume(&self.app, &chat_id, &token).await;
 
             if token.is_cancelled() {
                 tracing::info!(chat_id = %chat_id, "Agent loop cancelled by client");
@@ -409,6 +414,7 @@ impl Runner {
                 // mixing it into the main chat stream.
                 self.emit(AgentEvent::AgentChunk(crate::agent::event_bus::AgentChunkPayload {
                     chat_id: chat_id.clone(),
+                    spawn_id: self.trace_id(),
                     agent_id: current_agent.id.clone(),
                     agent_name: current_agent.name.clone(),
                     delta: format!("step {}", iteration),
@@ -1064,125 +1070,6 @@ impl Runner {
                     tracing::warn!("Tool '{}' error: {}", tool_call.name, result.content);
                 } else {
                     had_success = true;
-                }
-
-                // Check for agent handoff
-                if tool_call.name == "handoff_to_agent" {
-                    if let Some(target_id) = result
-                        .content
-                        .get("target_agent_id")
-                        .or_else(|| {
-                            result
-                                .content
-                                .get("output")
-                                .and_then(|v| v.get("target_agent_id"))
-                        })
-                        .and_then(|v| v.as_str())
-                    {
-                        if let Some(next_agent) = self.agent_registry.get(target_id) {
-                            tracing::info!("HANDOFF: {} → {}", current_agent.id, next_agent.id);
-
-                            // Emit chat:status for general status updates
-                            if should_emit_iteration_status(self.depth) {
-                                self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
-                                    message: format!("Transferring to {}", next_agent.name),
-                                    chat_id: chat_id.clone(),
-                                    iteration: Some(iteration),
-                                    phase: Some(ChatStatusPhase::HANDOFF.to_string()),
-                                    metadata: Some(serde_json::json!({
-                                        "fromAgent": current_agent.name,
-                                        "toAgent": next_agent.name,
-                                        "iteration": iteration,
-                                    })),
-                                }));
-                            }
-
-                            // Phase 3.4: Generate handoff summary (context compression)
-                            let handoff_summary = generate_handoff_summary(
-                                &conversation,
-                                &current_agent.name,
-                                &tool_call.args,
-                            );
-
-                            // Emit structured handoff action with summary
-                            let handoff_reason = tool_call
-                                .args
-                                .get("reason")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("Specialized expertise required")
-                                .to_string();
-
-                            let handoff_meta = HandoffMeta {
-                                from_agent: current_agent.id.clone(),
-                                to_agent: next_agent.id.clone(),
-                                reason: format!(
-                                    "{} | Summary: {}",
-                                    handoff_reason, handoff_summary
-                                ),
-                            };
-
-                            let action_meta = ActionMeta {
-                                agent_id: current_agent.id.clone(),
-                                agent_name: current_agent.name.clone(),
-                                iteration,
-                                depth: self.depth,
-                                tool_call: None,
-                                tool_result: None,
-                                handoff: Some(handoff_meta),
-                                progress_percent: None,
-                                spawn: None,
-                                approval_request: None,
-                                ..Default::default()
-                            };
-
-                            if let Some(ref db) = self.db_pool {
-                                let _ = persist_and_emit_action(ActionPersistParams {
-                                    app: &self.app,
-                                    db_pool: db,
-                                    chat_id: &chat_id,
-                                    id: None,
-                                    kind: MessageKind::AgentHandoff,
-                                    content: format!(
-                                        "{} handing off to {}",
-                                        current_agent.name, next_agent.name
-                                    ),
-                                    meta: action_meta,
-                                    role: None,
-                                    tool_call_id: None,
-                                    channel: &self.on_event,
-                                })
-                                .await;
-                            } else {
-                                let _ = emit_action_only(ActionEmitParams {
-                                    app: &self.app,
-                                    chat_id: &chat_id,
-                                    id: None,
-                                    kind: MessageKind::AgentHandoff,
-                                    content: format!(
-                                        "{} handing off to {}",
-                                        current_agent.name, next_agent.name
-                                    ),
-                                    meta: action_meta,
-                                    channel: &self.on_event,
-                                });
-                            }
-
-                            // Inject context bridge so the new agent knows what happened before it
-                            conversation.push(ChatMessage {
-                                role: "system".to_string(),
-                                content: format!(
-                                    "[Context bridge] You are now taking over from {}. {}",
-                                    current_agent.name, handoff_summary
-                                ),
-                                reasoning_details: None,
-                                images: None,
-                                tool_calls: None,
-                                tool_call_id: None,
-                            });
-
-                            current_agent = next_agent.clone();
-                        }
-                    }
                 }
 
                 // Extract string content from tool result:

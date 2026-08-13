@@ -86,6 +86,6 @@ assert(!deepResearch.includes("animate-text-shimmer"), "active research labels m
 // Tailwind v4 removed the `motion-safe:` prefix from common animate-*
 // utilities because `prefers-reduced-motion` is now baked into the default
 // animation keyframes; the bare `animate-spin` class is now motion-safe.
-assert(actionTrace.includes('"animate-spin"') || actionTrace.includes("'animate-spin'"), "active action feedback should remain motion-safe");
+assert(actionTrace.includes("animate-spin"), "active action feedback should remain motion-safe");
 
 console.log("execution disclosure lifecycle verified");

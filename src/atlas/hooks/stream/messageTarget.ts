@@ -43,7 +43,7 @@ export function findWritableAssistantIndex(messages: Message[], chatId?: string 
     const exactIdx = messages.findIndex((message) =>
       message.id === messageId &&
       message.role === "assistant" &&
-      (message.status === "sending" || message.status === "sent"),
+      (message.status === "sending" || message.status === "sent" || message.status === "paused"),
     );
     if (exactIdx !== -1) return exactIdx;
   }
@@ -57,14 +57,14 @@ export function findWritableAssistantIndex(messages: Message[], chatId?: string 
     if (
       activeIdx !== -1 &&
       messages[activeIdx].role === "assistant" &&
-      messages[activeIdx].status === "sending"
+      (messages[activeIdx].status === "sending" || messages[activeIdx].status === "paused")
     ) {
       return activeIdx;
     }
   }
 
   for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === "assistant" && messages[i].status === "sending") return i;
+    if (messages[i].role === "assistant" && (messages[i].status === "sending" || messages[i].status === "paused")) return i;
   }
 
   // A database refresh can reconcile the optimistic placeholder before its

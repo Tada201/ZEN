@@ -83,21 +83,21 @@ export const InputControls = memo(() => {
                         <button
                             type="button"
                             onClick={() => applyCaptureProfile('quiet')}
-                            className="h-8 rounded-md border border-border bg-muted/40 px-3 text-[11px] font-bold text-foreground hover:bg-muted"
+                            className="h-8 rounded-md border border-border bg-background px-3 text-[11px] font-bold text-foreground hover:bg-muted"
                         >
                             Quiet Room
                         </button>
                         <button
                             type="button"
                             onClick={() => applyCaptureProfile('noisy')}
-                            className="h-8 rounded-md border border-border bg-muted/40 px-3 text-[11px] font-bold text-foreground hover:bg-muted"
+                            className="h-8 rounded-md border border-border bg-background px-3 text-[11px] font-bold text-foreground hover:bg-muted"
                         >
                             Noisy Room
                         </button>
                         <button
                             type="button"
                             onClick={() => applyCaptureProfile('headset')}
-                            className="h-8 rounded-md border border-border bg-muted/40 px-3 text-[11px] font-bold text-foreground hover:bg-muted"
+                            className="h-8 rounded-md border border-border bg-background px-3 text-[11px] font-bold text-foreground hover:bg-muted"
                         >
                             Headset
                         </button>
@@ -172,7 +172,7 @@ export const InputControls = memo(() => {
                     }
                 />
 
-                <div className="rounded-xl border border-border bg-card/60 px-4 py-3 text-[11px] text-muted-foreground">
+                <div className="rounded-xl border border-border bg-background px-4 py-3 text-[11px] text-muted-foreground">
                     Current mode: <span className="font-bold text-foreground">{voiceInputMode ? 'Hold Spacebar to speak' : 'Voice activity detection'}</span>
                 </div>
             </div>

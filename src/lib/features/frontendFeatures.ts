@@ -2,11 +2,13 @@ import type { ComponentType } from "react";
 import {
   Activity,
   Bot,
+  Globe,
   Box,
   Cpu,
   Headphones,
   Info,
   Layers,
+  ListTree,
   Map as MapIcon,
   MessageSquare,
   Paintbrush,
@@ -51,12 +53,14 @@ export type SettingsTabId =
 
 export type RightPanelTabId =
   | "metrics"
+  | "inspector"
   | "approvals"
   | "agents"
   | "drawing"
   | "artifacts"
   | "terminal"
-  | "map";
+  | "map"
+  | "browser";
 
 export type WorkspaceModeId = "chat" | "openui";
 
@@ -91,7 +95,10 @@ export const FRONTEND_FEATURES = [
   { id: "settings.agents", label: "Agents", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "privileged", settingsTabId: "agents", icon: Bot },
   { id: "settings.voice", label: "Voice", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "none", settingsTabId: "voice", icon: Headphones },
   { id: "settings.audio", label: "Audio", maturity: "production", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "none", settingsTabId: "audio", icon: Headphones },
-  { id: "settings.terminal", label: "Terminal", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "privileged", settingsTabId: "terminal", icon: User },
+  // Terminal controls are not yet consumed by the runtime. Keep the working
+  // terminal surface available elsewhere without advertising a settings page
+  // whose controls are not real.
+  { id: "settings.terminal", label: "Terminal", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: false, risk: "privileged", settingsTabId: "terminal", icon: User },
   { id: "settings.workspace", label: "Workspace", maturity: "production", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "privileged", settingsTabId: "workspace", icon: Layers },
   { id: "settings.tools", label: "Tools", maturity: "production", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "privileged", settingsTabId: "tools", icon: Info },
   { id: "settings.dependencies", label: "Dependencies", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "heavy-runtime", settingsTabId: "dependencies", icon: Box },
@@ -104,12 +111,14 @@ export const FRONTEND_FEATURES = [
   { id: "settings.embedding-models", label: "Embedding Models", maturity: "prototype", surfaces: ["settings", "commandPalette"], defaultVisible: false, labsOnly: true, risk: "heavy-runtime", settingsTabId: "embedding-models", icon: Search },
   { id: "settings.maps", label: "Maps", maturity: "partial", surfaces: ["settings", "commandPalette"], defaultVisible: true, risk: "secrets", settingsTabId: "maps", icon: MapIcon },
   { id: "right.metrics", label: "System Metrics", maturity: "production", surfaces: ["rightRail"], defaultVisible: true, risk: "none", rightPanelTabId: "metrics", icon: Activity },
+  { id: "right.inspector", label: "Run Inspector", description: "Trace execution, agents, and tool results", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "none", rightPanelTabId: "inspector", icon: ListTree },
   { id: "right.approvals", label: "Approval Center", description: "Review pending tool actions", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "privileged", rightPanelTabId: "approvals", icon: ShieldCheck },
   { id: "right.artifacts", label: "Artifacts", maturity: "production", surfaces: ["rightRail"], defaultVisible: true, risk: "untrusted-content", rightPanelTabId: "artifacts", icon: Box },
   { id: "right.agents", label: "Subagents", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "privileged", rightPanelTabId: "agents", icon: Cpu },
   { id: "right.drawing", label: "Canvas Workspace", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "heavy-runtime", rightPanelTabId: "drawing", icon: Paintbrush },
   { id: "right.terminal", label: "Terminal", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "privileged", rightPanelTabId: "terminal", icon: Terminal },
   { id: "right.map", label: "Operational Map", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "heavy-runtime", rightPanelTabId: "map", icon: MapIcon },
+  { id: "right.browser", label: "Browser Preview", description: "Preview website links without leaving Zen", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "untrusted-content", rightPanelTabId: "browser", icon: Globe },
   { id: "workspace.chat", label: "Chat", maturity: "production", surfaces: ["workspaceMode", "sidebar"], defaultVisible: true, risk: "none", workspaceModeId: "chat", icon: MessageSquare },
   { id: "workspace.openui", label: "Canvas", maturity: "prototype", surfaces: ["workspaceMode", "sidebar"], defaultVisible: false, labsOnly: true, requiresSecurityReview: true, risk: "untrusted-content", workspaceModeId: "openui", icon: Paintbrush },
 ] satisfies FrontendFeature[];

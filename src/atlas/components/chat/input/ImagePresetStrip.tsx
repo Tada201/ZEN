@@ -66,13 +66,13 @@ export const ImagePresetStrip = memo(({
       initial={reducedMotion ? false : { opacity: 0, y: -4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
-      className="w-full overflow-x-auto scrollbar-none flex items-center gap-2 px-1 py-1 mb-1"
+      className="flex min-w-0 w-full items-center gap-1.5 overflow-x-auto scrollbar-none px-1 py-0.5 mb-0.5"
     >
-      <div className="flex items-center gap-1.5 shrink-0 pr-2 mr-2 border-r border-border/10 dark:border-border">
+      <div className="composer-toolbar flex items-center gap-1 mr-1.5 shrink-0 border-r pr-1.5">
         <Sparkles className="w-3.5 h-3.5 text-warning" />
         <span className="text-[11px] font-semibold text-muted-foreground dark:text-muted-foreground select-none">Presets</span>
       </div>
-      <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+      <div className="flex min-w-max items-center gap-1.5">
         {STYLE_PRESETS.map((preset) => {
           const Icon = preset.icon;
           return (
@@ -80,9 +80,9 @@ export const ImagePresetStrip = memo(({
               key={preset.id}
               type="button"
               onClick={() => onSelectPreset(preset.prompt)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted dark:bg-muted/90 border border-border dark:border-border/50 hover:bg-muted dark:hover:bg-muted text-[11px] font-semibold text-foreground dark:text-foreground hover:text-foreground dark:hover:text-foreground shadow-sm transition-all duration-200 whitespace-nowrap active:scale-95"
+              className="composer-chip px-2 py-1 text-[11px] font-semibold whitespace-nowrap shadow-sm transition-colors"
             >
-              <Icon className="w-3 h-3 text-muted-foreground/70 dark:text-foreground" />
+              <Icon className="h-3 w-3 text-muted-foreground" />
               {preset.name}
             </button>
           );

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bot, ChevronDown, CheckCircle2, CircleDashed, Globe, Loader2, Search, Square, XCircle } from "lucide-react";
+import { Bot, ChevronDown, CheckCircle2, CircleDashed, Globe, Loader2, Search, XCircle } from "lucide-react";
 import {
     Collapsible,
     CollapsibleContent,
@@ -79,7 +79,6 @@ export function DeepResearchRunMessage({
     isChatStreaming,
     messages,
     onContinueResearch,
-    onAbort,
 }: DeepResearchRunMessageProps) {
     const steps: ResearchStep[] = useMemo(() => {
         if (message.metadata?.researchSteps && Array.isArray(message.metadata.researchSteps)) {
@@ -190,20 +189,20 @@ export function DeepResearchRunMessage({
     return (
         <div
             className={cn(
-                "group flex w-full flex-col px-4 transition-all duration-200",
-                compact ? "bg-transparent py-2" : "bg-transparent py-4",
+                "group flex w-full flex-col px-3 transition-all duration-200",
+                compact ? "bg-transparent py-1" : "bg-transparent py-2",
                 "hover:bg-muted",
             )}
         >
             <div
                 className={cn(
-                    "mx-auto flex w-full flex-col gap-4 items-start",
+                    "mx-auto flex w-full flex-col gap-2 items-start",
                     compact ? "max-w-full" : "max-w-[800px]",
                 )}
             >
-                <div className="flex h-[280px] min-h-[280px] w-full flex-col rounded-xl border border-primary bg-card p-5 shadow-sm">
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+                <div className="flex h-[240px] min-h-[240px] w-full flex-col rounded-lg border border-primary bg-card p-3 shadow-sm">
+                    <div className="flex items-center gap-2 mb-2">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-md bg-muted">
                             {isComplete ? <Search className="h-4 w-4 text-primary" /> : <ResearchMatrix />}
                         </div>
                         <div className="flex flex-col">
@@ -236,17 +235,6 @@ export function DeepResearchRunMessage({
                         </div>
                         {!isComplete && (
                             <div className="ml-auto flex items-center gap-2">
-                                {onAbort && (
-                                    <button
-                                        type="button"
-                                        onClick={onAbort}
-                                        className="inline-flex items-center gap-1 rounded-full border border-destructive bg-card px-2.5 py-0.5 text-[10px] font-medium text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                                        title="Stop research"
-                                    >
-                                        <Square className="h-2.5 w-2.5" />
-                                        Stop
-                                    </button>
-                                )}
                                 <div className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 border border-border text-[10px] font-mono text-primary">
                                     <span className="relative flex h-1.5 w-1.5">
                                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
@@ -259,7 +247,7 @@ export function DeepResearchRunMessage({
                     </div>
 
                     <Collapsible defaultOpen={!isComplete || isStaleEmpty} className="flex min-h-0 w-full flex-1 flex-col">
-                        <CollapsibleTrigger className="flex w-full flex-col gap-2 rounded-lg p-2 hover:bg-muted text-xs text-muted-foreground transition-all">
+                        <CollapsibleTrigger className="flex w-full flex-col gap-1 rounded-md p-1.5 hover:bg-muted text-xs text-muted-foreground transition-all">
                             <div className="flex w-full items-center justify-between">
                                 <div className="flex items-center gap-2 flex-wrap">
                                     <span className="font-medium text-foreground">
@@ -313,7 +301,7 @@ export function DeepResearchRunMessage({
                             )}
                         </CollapsibleTrigger>
 
-                        <CollapsibleContent className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1 max-h-[400px]">
+                        <CollapsibleContent className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1 max-h-[360px]">
                             {steps.length === 0 && !isComplete && (
                                 <div className="flex items-center gap-2 text-xs text-muted-foreground py-2 px-2">
                                     <Loader2 className="h-3 w-3 motion-safe:animate-spin motion-reduce:transition-none" />
@@ -342,7 +330,7 @@ export function DeepResearchRunMessage({
                                 </div>
                             )}
 
-                            <div className={cn("flex gap-3", hasAgents ? "flex-col md:flex-row" : "flex-col")}>
+                            <div className={cn("flex gap-2", hasAgents ? "flex-col md:flex-row" : "flex-col")}>
                                 <div className={cn("flex flex-col gap-1", hasAgents ? "md:w-1/2" : "w-full")}>
                                     <div className="flex items-center gap-1.5 px-2 py-1">
                                         <Globe className="h-3 w-3 text-primary" />
@@ -376,7 +364,7 @@ export function DeepResearchRunMessage({
                                                 </span>
                                             )}
                                         </div>
-                                        <div className="flex flex-col gap-2">
+                                        <div className="flex flex-col gap-1">
                                             {agents.map((agent) => (
                                                 <ResearchAgentCard
                                                     key={agent.index}

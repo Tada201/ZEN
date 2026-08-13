@@ -1,4 +1,5 @@
 import { ExternalLink, Globe } from "lucide-react";
+import { isSafeGeneratedHref } from "@/lib/security/generatedLinks";
 
 interface LinkPreviewData {
   url: string;
@@ -11,20 +12,29 @@ interface LinkPreviewData {
 }
 
 export function LinkPreviewCard({ data }: { data: LinkPreviewData }) {
-  const url = data.url || "#";
+  const candidateUrl = data.url || "";
+  const safeUrl = isSafeGeneratedHref(candidateUrl) ? candidateUrl : "";
   const title = data.title || "Link Preview";
   const description = data.description || "";
-  const domain = data.domain || (url !== "#" ? new URL(url).hostname : "");
+  const domain = data.domain || (() => {
+    try {
+      return safeUrl ? new URL(safeUrl).hostname : "";
+    } catch {
+      return "";
+    }
+  })();
   const favicon = data.favicon;
   const image = data.image;
   const publishedAt = data.publishedAt;
 
   return (
     <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex flex-col sm:flex-row items-stretch w-full max-w-lg rounded-xl border border-border bg-card hover:bg-muted active:bg-muted transition-all overflow-hidden group shadow-lg"
+      href={safeUrl || undefined}
+      target={safeUrl ? "_blank" : undefined}
+      rel={safeUrl ? "noopener noreferrer" : undefined}
+      aria-disabled={!safeUrl}
+      onClick={(event) => { if (!safeUrl) event.preventDefault(); }}
+      className="genui-card-surface flex flex-col sm:flex-row items-stretch w-full max-w-none min-w-0 rounded-xl border border-border bg-card hover:bg-muted active:bg-muted transition-all overflow-hidden group shadow-lg"
     >
       <div className="flex flex-col flex-1 p-4 min-w-0 justify-between">
         <div>

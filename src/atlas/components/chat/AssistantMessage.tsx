@@ -1,7 +1,6 @@
 import React, { Suspense, useMemo, useRef } from "react";
-import { motion } from "framer-motion";
 import {
-  Check, Copy, FileText, Code2, AlertTriangle, ChevronRight, RefreshCcw, Zap, X, Loader2,
+  Check, Copy, FileText, Code2, AlertTriangle, ChevronRight, RefreshCcw, Zap, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,12 +27,14 @@ import {
 } from "./AssistantMessageTrace";
 import { ExecutionGroup } from "./ExecutionGroup";
 import { SubagentExecutionCard } from "./SubagentExecutionCard";
+import { buildDelegationTree } from "@/atlas/agentRuntime/delegationTree";
 import {
   FoldOutCard,
   FoldOutCardContent,
   FoldOutCardTrigger,
 } from "@/components/ui/fold-out-card";
-import { executionCardMotion, motionDurations, motionEasings, useReducedMotion } from "@/lib/motion";
+import { useReducedMotion } from "@/lib/motion";
+import { presentExecutionError } from "@/atlas/agentRuntime/executionError";
 
 const PremiumCard = React.lazy(() => import("../genui/PremiumCard").then(m => ({ default: m.PremiumCard })));
 const OpenUIRenderer = React.lazy(() => import("../OpenUIRenderer").then(m => ({ default: m.OpenUIRenderer })));
@@ -51,13 +52,14 @@ const CardFallback = () => {
   );
 };
 
-// Chat-status phases that are safe to surface as compact inline badges without
-// duplicating the main tool execution trace.
-const VISIBLE_CHAT_STATUS_PHASES: ReadonlySet<ChatStatusPhase> = new Set([
+// Tool-lifecycle status phases (planned / executing / preparing / ready) are
+// NOT surfaced as timeline rows: they duplicate the tool card, which already
+// shows the tool name, args, live spinner, and result — matching the Codex
+// trace where each tool is a single expandable block, not a status log. The
+// transient parent phase is still conveyed once by the breathing indicator
+// (selectParentWorkingStatus reads it straight from the grouped steps).
+const VISIBLE_CHAT_STATUS_PHASES: ReadonlySet<ChatStatusPhase> = new Set<ChatStatusPhase>([
   CHAT_STATUS_PHASES.AgentStreaming,
-  CHAT_STATUS_PHASES.ToolBatchPlanned,
-  CHAT_STATUS_PHASES.ProviderReady,
-  CHAT_STATUS_PHASES.ToolExecuting,
 ]);
 
 
@@ -150,12 +152,10 @@ function shouldShowToolGroupInTimeline(
   _isStreaming: boolean,
   _hasAssistantAnswerText: boolean,
 ) {
-  // Execution cards are part of the assistant's durable response timeline,
-  // not transient progress chrome. They must remain mounted after completion
-  // so the live stream and hydrated backend message have the same visible
-  // shape. Previously completed-only groups fell through to
-  // `isStreaming && !hasAssistantAnswerText`, so every successful tool card
-  // disappeared as soon as the answer finished.
+  // Execution cards are durable timeline elements — they stay mounted after
+  // completion so live streaming and hydrated reloads produce the same visible
+  // shape. Actionable tools (running/awaiting_approval/error) short-circuit;
+  // completed groups also remain, so there is no hidden state.
   const hasActionableTool = step.toolCalls.some((tool) =>
     tool.status === "running" || tool.status === "awaiting_approval" || tool.status === "error"
   );
@@ -320,7 +320,6 @@ function renderTextStepWithInlineCards(
   isStreaming: boolean,
   onOpenArtifact: (a: ArtifactData) => void,
   chatId: string | undefined,
-  reducedMotion: boolean,
 ) {
   const orderedCards = step.orderedCards ?? [];
   const fallbackCards = step.cards ?? [];
@@ -338,18 +337,12 @@ function renderTextStepWithInlineCards(
             // flex-col gap still owns the vertical rhythm so cards stay
             // breathing-roomed against adjacent prose.
             return (
-              <motion.div
+              <div
                 key={`card-${segIdx}`}
                 className="w-full"
-                initial={reducedMotion ? false : executionCardMotion.initial}
-                animate={executionCardMotion.animate}
-                transition={reducedMotion ? { duration: 0 } : {
-                  duration: motionDurations.fast,
-                  ease: motionEasings.standard,
-                }}
               >
                 <RenderPremiumCard card={segment.card} />
-              </motion.div>
+              </div>
             );
           }
           if (!segment.content.trim()) return null;
@@ -374,19 +367,13 @@ function renderTextStepWithInlineCards(
   return (
     <>
       {fallbackCards.length > 0 && (
-        <motion.div
-          className="flex flex-col gap-4 my-2 w-full"
-          initial={reducedMotion ? false : executionCardMotion.initial}
-          animate={executionCardMotion.animate}
-          transition={reducedMotion ? { duration: 0 } : {
-            duration: motionDurations.fast,
-            ease: motionEasings.standard,
-          }}
+        <div
+          className="flex flex-col gap-2 my-1 w-full"
         >
           {fallbackCards.map((card, idx) => (
             <RenderPremiumCard key={idx} card={card} />
           ))}
-        </motion.div>
+        </div>
       )}
       {Boolean(prose) && (
         <MarkdownContent
@@ -418,7 +405,6 @@ export function AssistantMessage({
   onRegenerate?: (id: string) => void;
   compact?: boolean;
 }) {
-  const reducedMotion = useReducedMotion();
   const { copied, copy } = useCopy();
   const executionGroupKeyCacheRef = useRef(new Map<string, string>());
   const executionGroupFallbackKeyCacheRef = useRef(new Map<string, string>());
@@ -430,6 +416,10 @@ export function AssistantMessage({
   const groupedToolCalls = useMemo(() => {
     return groupToolCalls(message.toolCalls);
   }, [message.toolCalls]);
+
+  const delegationTree = useMemo(() => {
+    return buildDelegationTree(message.steps, message.toolCalls);
+  }, [message.steps, message.toolCalls]);
 
   const hasAssistantAnswerText = Boolean(message.content?.trim() || message.reasoning?.trim() || message.artifact);
 
@@ -444,9 +434,15 @@ export function AssistantMessage({
       if (step.type === "tool-group") {
         return shouldShowToolGroupInTimeline(step, message.status === "sending", hasAssistantAnswerText);
       }
+      if (step.type === "subagent") {
+        const spawnId = step.subagent?.spawnId;
+        // Nested delegations render inside their parent card so the parent chat
+        // remains a compact delegation ledger instead of a flat agent dump.
+        if (spawnId && delegationTree.nodes.get(spawnId)?.parentSpawnId) return false;
+      }
       return step.type !== "action" || isVisibleChatActionStep(step as Step);
     });
-  }, [groupedSteps, hasAssistantAnswerText, message.status]);
+  }, [delegationTree, groupedSteps, hasAssistantAnswerText, message.status]);
   const hasVisibleTextStep = visibleGroupedSteps.some((step) =>
     step.type === "text" && Boolean((step.cleanText || step.content || "").trim()),
   );
@@ -487,7 +483,9 @@ export function AssistantMessage({
     visibleGroupedSteps[visibleGroupedSteps.length - 1]?.type === "reasoning";
   const hasActiveExecution = visibleGroupedSteps.some((step) =>
     step.type === "tool-group" && step.toolCalls.some((tool) =>
-      tool.status === "running" || tool.status === "awaiting_approval" || tool.status === "error",
+      (tool.status === "running" && tool.recoveryState !== "stale") ||
+      tool.status === "awaiting_approval" ||
+      tool.status === "error",
     ),
   );
   const hasActiveDelegation = visibleGroupedSteps.some((step) =>
@@ -525,28 +523,40 @@ export function AssistantMessage({
 
   const showMessageActions = hasVisibleAnswer && !hasOnlyLiveProgress;
   const hasResearchProgress = Boolean(message.metadata?.researchSteps?.length);
-  const wasCancelled = message.status === "cancelled";
-  const inlineError = message.status === "failed" ? message.error?.trim() : "";
+  const rawInlineError = message.status === "failed" ? message.error?.trim() : "";
+  const errorPresentation = rawInlineError
+    ? presentExecutionError(rawInlineError, {
+        context: "assistant",
+        category: message.metadata?.errorCategory,
+        recoverable: message.metadata?.recoverable === true,
+      })
+    : null;
+  const inlineError = errorPresentation?.summary || "";
+  const technicalError = message.metadata?.errorTechnicalDetails || errorPresentation?.technicalDetails || "";
+  const tracePersistencePresentation = message.metadata?.tracePersistence === "failed"
+    ? presentExecutionError(message.metadata.tracePersistenceError || "Trace checkpoint failed", {
+        context: "persistence",
+        category: "persistence",
+        recoverable: true,
+      })
+    : null;
   return (
     <div
       className={cn(
-        "group flex w-full flex-col px-4 transition-all duration-200",
-        compact ? "bg-transparent py-1" : "bg-transparent py-1.5"
+        "group flex w-full flex-col px-3",
+        compact ? "bg-transparent py-0.5" : "bg-transparent py-1"
       )}
     >
-        <motion.div
-          initial={false}
-          animate={wasCancelled ? { opacity: 0, y: -8 } : { opacity: 1, y: 0 }}
-          transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
+        <div
           className={cn(
           "mx-auto flex w-full items-start gap-0",
           compact ? "max-w-full" : "max-w-[800px]"
         )}>
-        <div className="flex min-w-0 flex-col gap-2 flex-1">
+        <div className="flex min-w-0 flex-col gap-1 flex-1">
           <div className="relative">
-            <div className={cn("space-y-1.5", compact && "space-y-1")}>
+            <div className={cn("space-y-1", compact && "space-y-0.5")}>
               {(message.model || message.provider) && (
-                <div className="flex items-center gap-2 mb-2 select-none">
+                <div className="flex items-center gap-1.5 mb-1 select-none">
                   <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground hover:bg-muted border-border transition-colors">
                     <Zap className="mr-1 h-3 w-3" />
                     {message.model || "Default"}
@@ -564,31 +574,54 @@ export function AssistantMessage({
               )}
 
               {parentWorkingStatus && (
-                <motion.div
-                  initial={reducedMotion ? false : { opacity: 0, y: 2 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
-                  className="flex min-h-7 items-center gap-2 text-[12px] text-muted-foreground"
+                <div
+                  className="flex min-h-6 items-center gap-1.5 text-[12px] text-muted-foreground"
                   role="status"
                   aria-live="polite"
                   data-testid="chat-status-breathing-indicator"
                   data-phase={parentWorkingStatus}
                 >
                   <span
-                    className="h-2 w-2 shrink-0 rounded-full bg-primary motion-safe:animate-pulse motion-reduce:transition-none"
+                    className="h-2 w-2 shrink-0 rounded-full bg-primary animate-[execution-status-pulse_1.4s_ease-in-out_infinite] motion-reduce:animate-none"
                     aria-hidden="true"
                   />
-                  <Loader2 className="h-3.5 w-3.5 shrink-0 motion-safe:animate-spin motion-reduce:transition-none text-primary" aria-hidden="true" />
                   <span className="truncate font-sans leading-5">
                     {parentWorkingStatusLabel(parentWorkingStatus)}
                   </span>
-                </motion.div>
+                </div>
               )}
 
             {message.recoveryState === "recovered" && (
-              <div className="mb-3 flex items-start gap-2 rounded-md border border-warning bg-muted px-3 py-2 text-[12px]" role="status">
+              <div className="mb-2 flex items-start gap-1.5 rounded-md border border-warning bg-muted px-2 py-1.5 text-[12px]" role="status">
                 <span className="font-medium text-warning">Recovered after reload</span>
                 <span className="text-muted-foreground">This execution was interrupted. The saved trace remains available for review.</span>
+              </div>
+            )}
+
+            {message.status === "cancelled" && (
+              <div className="mb-2 flex items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1.5 text-[12px]" role="status">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-muted-foreground" aria-hidden="true" />
+                <span className="font-medium text-muted-foreground">Stopped</span>
+                <span className="text-muted-foreground">This response was interrupted.</span>
+              </div>
+            )}
+
+            {message.status === "paused" && (
+              <div className="mb-2 flex items-center gap-1.5 rounded-md border border-warning bg-muted px-2 py-1.5 text-[12px]" role="status" aria-live="polite">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-warning" aria-hidden="true" />
+                <span className="font-medium text-warning">Paused</span>
+                <span className="text-muted-foreground">Execution is waiting at a safe boundary.</span>
+              </div>
+            )}
+
+            {tracePersistencePresentation && (
+              <div className="mb-2 flex items-start gap-1.5 rounded-md border border-warning bg-muted px-2 py-1.5 text-[12px]" role="status">
+                <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-warning" aria-hidden="true" />
+                <div className="min-w-0">
+                  <span className="font-medium text-warning">{tracePersistencePresentation.title}</span>
+                  <span className="ml-1 text-muted-foreground">{tracePersistencePresentation.summary}</span>
+                  <div className="text-[11px] text-muted-foreground">Next: {tracePersistencePresentation.actionLabel}</div>
+                </div>
               </div>
             )}
 
@@ -598,7 +631,7 @@ export function AssistantMessage({
               <>
                 {visibleGroupedSteps.length > 0 ? (
                   <>
-                    <div className={cn("space-y-1.5", compact && "space-y-1")}>
+                    <div className={cn("space-y-1", compact && "space-y-0.5")}>
                       {(() => {
                         const groupFingerprintCounts = new Map<string, number>();
                         return visibleGroupedSteps.map((step, idx) => {
@@ -611,39 +644,34 @@ export function AssistantMessage({
                       );
 
                       return (
-                      <motion.div
+                      <div
                         key={stepKey}
                         className="animate-in fade-in duration-150 motion-reduce:transition-none"
-                        initial={reducedMotion ? false : executionCardMotion.initial}
-                        animate={executionCardMotion.animate}
-                        transition={reducedMotion ? { duration: 0 } : {
-                          duration: motionDurations.fast,
-                          ease: motionEasings.standard,
-                        }}
                       >
                       {step.type === "text" ? (
                         <div className="prose-frontier">
-                          <div className="flex flex-col gap-1.5">
+                          <div className="flex flex-col gap-1">
                             {renderTextStepWithInlineCards(
                               step,
                               message.status === "sending",
                               onOpenArtifact,
                               message.sessionId,
-                              reducedMotion,
                             )}
                           </div>
                         </div>
                         ) : step.type === "reasoning" ? (
                           <ReasoningBlock 
-                            content={step.content || ""} 
+                            content={step.content || ""}
+                            sections={step.reasoningSections}
                             isThinking={message.status === "sending" && idx === visibleGroupedSteps.length - 1}
                           />
                         ) : step.type === "tool-group" && step.toolCalls ? (
-                          <div className="space-y-1.5">
+                          <div className="space-y-1">
                             <ExecutionGroup
                               toolCalls={step.toolCalls}
                               executionSteps={executionActionSteps}
                               sessionId={message.sessionId}
+                              messageId={message.id}
                               onOpenArtifact={onOpenArtifact}
                               preferCompact
                             />
@@ -651,22 +679,24 @@ export function AssistantMessage({
                         ) : step.type === "subagent" && step.subagent ? (
                           <SubagentExecutionCard
                             step={step}
-                            childToolCalls={(message.toolCalls || []).filter(
-                              (tc) => tc.traceId === step.subagent?.spawnId,
-                            )}
+                            childToolCalls={message.toolCalls || []}
+                            childAgents={delegationTree.childrenByParent.get(step.subagent.spawnId) || []}
+                            delegation={delegationTree.nodes.get(step.subagent.spawnId)}
+                            delegationTree={delegationTree}
+                            messageId={message.id}
                             sessionId={message.sessionId}
                             onOpenArtifact={onOpenArtifact}
                           />
                         ) : step.type === "action" ? (
                           <AgentActionStep step={step} isStreaming={message.status === "sending"} />
                         ) : null}
-                      </motion.div>
+                      </div>
                       );
                         });
                       })()}
                     </div>
                     {message.content?.trim() && !hasVisibleTextStep && (
-                      <div className="prose-frontier mt-1.5">
+                      <div className="prose-frontier mt-1">
                         <MarkdownContent
                           content={message.content}
                           isThinking={message.isThinking}
@@ -695,17 +725,14 @@ export function AssistantMessage({
             )}
             
              {inlineError && (
-              <motion.div
-                initial={reducedMotion ? false : { opacity: 0, y: 4, scale: 0.99 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.standard, ease: motionEasings.standard }}
-                className="flex items-start gap-3 rounded-xl border border-destructive bg-destructive/10 p-4"
+              <div
+                className="flex items-start gap-2 rounded-md border border-destructive bg-destructive/10 p-3"
               >
                 <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-                <div className="flex flex-1 flex-col gap-2 min-w-0">
+                <div className="flex flex-1 flex-col gap-1.5 min-w-0">
                   <div className="flex flex-col gap-1 font-sans">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-destructive">Operation Failed</span>
+                      <span className="text-xs font-semibold text-destructive">{errorPresentation?.title || "Operation failed"}</span>
                       {onDismissError && (
                         <button
                           type="button"
@@ -717,12 +744,25 @@ export function AssistantMessage({
                         </button>
                       )}
                     </div>
-                    <p className="text-[12px] text-destructive leading-relaxed font-mono mt-0.5 max-h-48 overflow-y-auto whitespace-pre-wrap break-words">
+                    <p className="text-[12px] text-destructive leading-relaxed mt-0.5">
                       {inlineError}
                     </p>
+                    {errorPresentation && errorPresentation.action !== "none" && (
+                      <div className="text-[11px] text-muted-foreground">Next: {errorPresentation.actionLabel}</div>
+                    )}
+                    {technicalError && technicalError !== inlineError && (
+                      <details className="mt-1 rounded-md border border-destructive/20 bg-background px-2 py-1">
+                        <summary className="cursor-pointer select-none text-[11px] font-medium text-muted-foreground">
+                          Technical details
+                        </summary>
+                        <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap break-words text-[10px] leading-relaxed text-muted-foreground">
+                          {technicalError}
+                        </pre>
+                      </details>
+                    )}
                   </div>
                   
-                  {(inlineError.toLowerCase().includes("key") || inlineError.toLowerCase().includes("auth")) && (
+                  {errorPresentation?.action === "configure_provider" && (
                     <Button 
                       size="sm" 
                       variant="outline" 
@@ -734,11 +774,11 @@ export function AssistantMessage({
                     </Button>
                   )}
                 </div>
-              </motion.div>
+              </div>
             )}
 
             {message.artifact?.type === "openui" && (
-              <div className="min-w-0 overflow-visible rounded-lg border border-border bg-card p-3">
+              <div className="min-w-0 overflow-visible rounded-md border border-border bg-card p-2">
                 <Suspense fallback={<CardFallback />}>
                   <OpenUIRenderer
                     content={message.artifact.content}
@@ -751,7 +791,7 @@ export function AssistantMessage({
 
             {message.artifact && message.artifact.type !== "openui" && (
               <div 
-                className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 cursor-pointer hover:bg-muted transition-all group/art"
+                className="flex items-center gap-3 rounded-md border border-border bg-card p-3 cursor-pointer hover:bg-muted transition-all group/art"
                 onClick={() => onOpenArtifact(message.artifact!)}
               >
                 <div className={cn(
@@ -774,7 +814,7 @@ export function AssistantMessage({
           </div>
 
             {showMessageActions && (
-            <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity mt-1.5">
+            <div className="hidden items-center gap-1 group-hover:flex mt-1">
               <Button
                 size="sm"
                 variant="ghost"
@@ -785,7 +825,7 @@ export function AssistantMessage({
                 {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
                 Copy
               </Button>
-              {onRetry && message.status === "failed" && (
+              {onRetry && message.status === "failed" && errorPresentation?.retryable !== false && (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -797,7 +837,7 @@ export function AssistantMessage({
                   Retry
                 </Button>
               )}
-              {onRegenerate && message.status === "sent" && (
+              {onRegenerate && (message.status === "sent" || message.status === "cancelled") && (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -813,7 +853,7 @@ export function AssistantMessage({
           )}
 
           {(message.metadata as any)?.stopReason && (message.metadata as any).stopReason !== "complete" && (
-            <div className="mt-2">
+            <div className="mt-1">
               <Button
                 size="sm"
                 variant="outline"
@@ -831,7 +871,7 @@ export function AssistantMessage({
             </div>
           )}
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }

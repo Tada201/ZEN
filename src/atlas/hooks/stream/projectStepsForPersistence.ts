@@ -97,6 +97,7 @@ function compactToolCallInput(input: ToolCall["input"]): Record<string, unknown>
  */
 const ERROR_SUMMARY_CAP = 280;
 const TERMINAL_OUTPUT_CAP = 12_000;
+const OUTPUT_PREVIEW_CAP = 480;
 const SECRET_PATTERN = /(api[_-]?key|authorization|bearer|credential|password|secret|token)[\s:=]+\S+/gi;
 // Also scrub JSON-quoted secrets ("api_key": "sk-...") that a failing tool
 // may echo back in an error body. Handles both the quoted-key form and the
@@ -135,6 +136,15 @@ function redactTerminalOutput(raw: string): string {
   return `${redacted.slice(0, TERMINAL_OUTPUT_CAP - 1)}…`;
 }
 
+function outputPreview(raw: string): string | undefined {
+  if (!raw) return undefined;
+  const redacted = redactTerminalOutput(raw).replace(/\s+/g, " ").trim();
+  if (!redacted) return undefined;
+  return redacted.length <= OUTPUT_PREVIEW_CAP
+    ? redacted
+    : `${redacted.slice(0, OUTPUT_PREVIEW_CAP - 1)}…`;
+}
+
 function compactToolCall(toolCall: ToolCall): ToolCall {
   // Error-state tools keep a short safe summary. Completed shell tools keep a
   // larger bounded transcript because their expanded terminal card is a
@@ -153,10 +163,14 @@ function compactToolCall(toolCall: ToolCall): ToolCall {
     status: toolCall.status,
     input: compactToolCallInput(toolCall.input),
     output: persistedOutput,
+    outputPreview: outputPreview(toolCall.outputPreview || toolCall.output),
     durationMs: toolCall.durationMs,
     runId: toolCall.runId,
     messageId: toolCall.messageId,
     parentAgentId: toolCall.parentAgentId,
+    parentToolCallId: toolCall.parentToolCallId,
+    sequence: toolCall.sequence,
+    phase: toolCall.phase,
     executionId: toolCall.executionId,
     toolBatchId: toolCall.toolBatchId,
     agentId: toolCall.agentId,
@@ -185,6 +199,9 @@ function compactMetadata(metadata: ActionMeta | undefined): ActionMeta | undefin
     "runId",
     "messageId",
     "parentAgentId",
+    "parentToolCallId",
+    "sequence",
+    "phase",
     "executionId",
     "batchId",
     "toolBatchId",
@@ -209,6 +226,8 @@ function compactMetadata(metadata: ActionMeta | undefined): ActionMeta | undefin
     "resultSummary",
     "error",
     "recoverable",
+    "traceVersion",
+    "traceStatus",
     "progressPercent",
     "status",
   ];
@@ -301,7 +320,9 @@ function compactSubagent(subagent: SubagentStepData | undefined): SubagentStepDa
     error: subagent.error ? redactErrorSummary(subagent.error) : subagent.error,
     durationMs: subagent.durationMs,
     timestamp: subagent.timestamp,
-    // childToolCallIds dropped — child work is not persisted in the parent.
+    // Preserve explicit ownership so nested delegation can be reconstructed
+    // without relying on legacy trace-id inference after reload.
+    childToolCallIds: [...new Set(subagent.childToolCallIds || [])],
   };
 }
 

@@ -69,7 +69,7 @@ export function CardShell({
   const shell = (
     <div
       className={cn(
-        "w-full rounded-2xl border border-border bg-card shadow-lg overflow-hidden",
+        "genui-card-surface w-full max-w-none min-w-0 rounded-2xl border border-border bg-card shadow-lg overflow-hidden",
         padded && "p-5",
         className,
       )}

@@ -1,5 +1,5 @@
-import React, { memo, useRef } from 'react';
-import { Plus, Paperclip, Camera, ImageIcon, Lightbulb, Compass, Globe, Layout } from 'lucide-react';
+import React, { memo, useEffect, useId, useRef } from 'react';
+import { Plus, Paperclip, ImageIcon, Lightbulb, Compass, Globe, Layout } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { motionDurations, motionEasings, useReducedMotion } from '@/lib/motion';
@@ -28,129 +28,184 @@ interface PlusActionMenuProps {
 }
 
 export const PlusActionMenu = memo(({
-  isOpen, setIsOpen,
+  isOpen,
+  setIsOpen,
   onFileSelect,
-  pinnedActions, togglePin,
-  supportsReasoning, isThinking, setIsThinking,
-  isDeepResearch, setIsDeepResearch,
-  isWebSearch, setIsWebSearch,
-  generativeUI, setGenerativeUI,
+  pinnedActions,
+  togglePin,
+  supportsReasoning,
+  isThinking,
+  setIsThinking,
+  isDeepResearch,
+  setIsDeepResearch,
+  isWebSearch,
+  setIsWebSearch,
+  generativeUI,
+  setGenerativeUI,
   onOpenSkills,
+  supportsImageGen = false,
   isImageGenEnabled,
   setIsImageGenEnabled,
   compact = false,
 }: PlusActionMenuProps) => {
   const reducedMotion = useReducedMotion();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const wasOpenRef = useRef(false);
+  const menuId = `composer-add-menu-${useId().replace(/:/g, '')}`;
+
+  useEffect(() => {
+    if (isOpen) {
+      wasOpenRef.current = true;
+      requestAnimationFrame(() => {
+        menuRef.current
+          ?.querySelector<HTMLButtonElement>('[data-composer-action="true"]')
+          ?.focus();
+      });
+    } else if (wasOpenRef.current) {
+      wasOpenRef.current = false;
+      triggerRef.current?.focus();
+    }
+  }, [isOpen]);
+
+  const handleMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const items = Array.from(
+      menuRef.current?.querySelectorAll<HTMLButtonElement>('[data-composer-action="true"]') ?? [],
+    ).filter((item) => !item.disabled);
+    if (items.length === 0) return;
+
+    const currentIndex = Math.max(0, items.indexOf(document.activeElement as HTMLButtonElement));
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      items[(currentIndex + 1) % items.length]?.focus();
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      items[(currentIndex - 1 + items.length) % items.length]?.focus();
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      items[0]?.focus();
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      items[items.length - 1]?.focus();
+    } else if (event.key === 'Escape' || event.key === 'Tab') {
+      event.preventDefault();
+      setIsOpen(false);
+    }
+  };
 
   return (
     <div className="relative">
-      <input 
-        type="file" 
-        multiple 
-        className="hidden" 
-        ref={fileInputRef} 
-        onChange={onFileSelect} 
+      <input
+        type="file"
+        multiple
+        className="hidden"
+        ref={fileInputRef}
+        onChange={onFileSelect}
         accept="image/*,.txt,.md,.json,.js,.ts,.tsx,.jsx,.html,.css,.csv,.xml,.yaml,.yml,.toml,.py,.rs,.go,.c,.cpp,.h"
       />
-      <button 
+      <button
+        ref={triggerRef}
         onClick={() => setIsOpen(!isOpen)}
         type="button"
-        aria-label={isOpen ? "Close add menu" : "Open add menu"}
-        title={isOpen ? "Close add menu" : "Open add menu"}
+        aria-label={isOpen ? 'Close add menu' : 'Open add menu'}
+        title={isOpen ? 'Close add menu' : 'Open add menu'}
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
+        aria-controls={menuId}
         className={cn(
-          compact
-            ? "p-1 rounded-md transition-all border flex items-center justify-center"
-            : "mt-0.5 p-1.5 rounded-md transition-all border flex items-center justify-center",
-          isOpen 
-            ? "bg-muted dark:bg-muted border-border dark:border-border" 
-            : "bg-transparent border-transparent hover:bg-muted dark:hover:bg-muted text-muted-foreground"
+          'composer-control composer-control--icon border',
+          compact ? 'p-0.5' : 'mt-0.5 p-1',
+          isOpen ? 'composer-control--active' : 'border-transparent bg-transparent',
         )}
       >
-        <Plus className={cn(compact ? "w-3.5 h-3.5" : "w-4 h-4", "transition-transform duration-200", isOpen && "rotate-45")} />
+        <Plus
+          aria-hidden="true"
+          className={cn(compact ? 'w-3.5 h-3.5' : 'w-4 h-4')}
+        />
       </button>
 
       <AnimatePresence>
         {isOpen && (
           <>
-            <div className="fixed inset-0 z-20" onClick={() => setIsOpen(false)} />
-            <motion.div 
-              initial={reducedMotion ? false : { opacity: 0, y: 10, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={reducedMotion ? undefined : { opacity: 0, y: 10, scale: 0.98 }}
+            <div className="fixed inset-0 z-20" onClick={() => setIsOpen(false)} aria-hidden="true" />
+            <motion.div
+              ref={menuRef}
+              initial={reducedMotion ? false : { opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reducedMotion ? undefined : { opacity: 0, y: 6 }}
               transition={reducedMotion ? { duration: 0 } : {
                 duration: motionDurations.fast,
                 ease: motionEasings.standard,
               }}
-              className="absolute bottom-full left-0 mb-2 w-56 bg-card dark:bg-muted border border-border dark:border-border rounded-xl shadow-2xl z-30 p-1.5 text-foreground/80 dark:text-foreground"
+              id={menuId}
+              role="dialog"
+              aria-label="Add content and capabilities"
+              onKeyDown={handleMenuKeyDown}
+              className="composer-popover composer-popover--bounded absolute bottom-full left-0 z-30 mb-1 p-1"
             >
               <div className="space-y-0.5">
-                <div className="px-3 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Add Content</div>
+                <div className="composer-popover-header px-2 py-1 uppercase">Add Content</div>
                 <MenuItem icon={Paperclip} label="Photos & Files" onClick={() => fileInputRef.current?.click()} />
-                <MenuItem icon={Camera} label="Screenshot" />
-                <MenuItem 
-                  icon={ImageIcon} 
-                  label="Create Image" 
-                  active={isImageGenEnabled}
-                  onClick={() => {
-                    if (setIsImageGenEnabled) {
-                      setIsImageGenEnabled(!isImageGenEnabled);
-                    }
-                    setIsOpen(false);
-                  }}
-                />
+                {supportsImageGen && (
+                  <MenuItem
+                    icon={ImageIcon}
+                    label="Create Image"
+                    active={isImageGenEnabled}
+                    onClick={() => {
+                      setIsImageGenEnabled?.(!isImageGenEnabled);
+                      setIsOpen(false);
+                    }}
+                  />
+                )}
 
-                <div className="h-px bg-muted dark:bg-muted my-1 mx-2" />
-                
-                <div className="px-3 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Capabilities</div>
-                
+                <div className="mx-1.5 my-0.5 h-px bg-border" />
+
+                <div className="composer-popover-header px-2 py-1 uppercase">Capabilities</div>
                 {!pinnedActions.includes('thinking') && supportsReasoning && (
-                  <MenuItem 
-                    icon={Lightbulb} 
-                    label="Thinking" 
+                  <MenuItem
+                    icon={Lightbulb}
+                    label="Thinking"
                     active={isThinking}
                     onPin={() => togglePin('thinking')}
                     onClick={() => { setIsThinking(!isThinking); setIsOpen(false); }}
                   />
                 )}
-                
                 {!pinnedActions.includes('research') && (
-                  <MenuItem 
-                    icon={Compass} 
-                    label="Deep Research" 
+                  <MenuItem
+                    icon={Compass}
+                    label="Deep Research"
                     active={isDeepResearch}
                     onPin={() => togglePin('research')}
                     onClick={() => { setIsDeepResearch(!isDeepResearch); setIsOpen(false); }}
                   />
                 )}
-                
                 {!pinnedActions.includes('search') && (
-                  <MenuItem 
-                    icon={Globe} 
-                    label="Web Search" 
+                  <MenuItem
+                    icon={Globe}
+                    label="Web Search"
                     active={isWebSearch}
                     onPin={() => togglePin('search')}
-                    onClick={() => { setIsWebSearch(!isWebSearch); setIsOpen(false); }} 
+                    onClick={() => { setIsWebSearch(!isWebSearch); setIsOpen(false); }}
                   />
                 )}
-
                 {!pinnedActions.includes('genui') && (
-                  <MenuItem 
-                    icon={Layout} 
-                    label="Generative UI" 
+                  <MenuItem
+                    icon={Layout}
+                    label="Generative UI"
                     active={generativeUI}
                     onPin={() => togglePin('genui')}
-                    onClick={() => { setGenerativeUI(!generativeUI); setIsOpen(false); }} 
+                    onClick={() => { setGenerativeUI(!generativeUI); setIsOpen(false); }}
                   />
                 )}
-                
-                <MenuItem 
-                  icon={Layout} 
-                  label="Manage Skills" 
-                  onClick={() => { onOpenSkills?.(); setIsOpen(false); }} 
-                />
-
-                <div className="h-px bg-muted dark:bg-muted my-1 mx-2" />
+                {onOpenSkills && (
+                  <MenuItem
+                    icon={Layout}
+                    label="Manage Skills"
+                    onClick={() => { onOpenSkills(); setIsOpen(false); }}
+                  />
+                )}
+                <div className="mx-1.5 my-0.5 h-px bg-border" />
               </div>
             </motion.div>
           </>

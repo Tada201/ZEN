@@ -159,22 +159,15 @@ pub fn ttl_for_tool(tool_name: &str) -> Option<u64> {
         "calculator" => Some(3600),
         // System metrics — short TTL (30s, values change over time)
         "system_metrics" | "get_system_metrics" => Some(30),
-        // Geocoding — medium TTL (5 min)
-        "geocode_search" | "reverse_geocode" => Some(300),
-        // Weather — medium TTL (10 min)
-        "get_weather" => Some(600),
-        // Live tactical feeds — short TTL (60s)
-        "get_earthquakes" | "get_military_aircraft" => Some(60),
+        // Weather is not an agent tool; current information uses web_search.
+        // Legacy map and tactical feed adapters are intentionally not cached;
+        // they are retired until the unified `world_map` tool exists.
         // External web reads — short TTL (5 min)
         "web_search" | "web_fetch" => Some(300),
         // Local document queries — short TTL (60s, files may change)
         "list_documents" | "read_document_content" | "grep_documents" => Some(60),
-        // Vector search over local index — medium TTL (5 min)
-        "vector_search" => Some(300),
-        // Routing — medium TTL (10 min)
-        "calculate_route" => Some(600),
         // Everything else: not cacheable. Mutating tools (run_command,
-        // write_file, edit_file, spawn_agent, handoff_to_agent,
+        // write_file, edit_file, spawn_agent,
         // generate_image, write_to_memory, set_workspace_folder, …) fall
         // through to this branch and must invalidate the cache after
         // executing.

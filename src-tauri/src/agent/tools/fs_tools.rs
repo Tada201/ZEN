@@ -20,8 +20,8 @@ impl AgentTool for ListDocumentsTool {
     }
 
     fn description(&self) -> &str {
-        "Lists all documents currently ingested and available in the local knowledge base. \
-         Use this to see what files are indexed before reading or searching them."
+        "Lists uploaded documents with their exact recorded file paths. Call this first when the relevant file path is unknown, then use read_document_content for authoritative contents. \
+         The returned file_path should be passed to read_document_content."
     }
 
     fn input_schema(&self) -> Value {
@@ -79,7 +79,7 @@ impl AgentTool for ReadDocumentTool {
     }
 
     fn description(&self) -> &str {
-        "Reads the raw text content of a specific file. Provide an absolute path, a relative path, or just the filename."
+        "Reads authoritative raw text from one uploaded or workspace file. Prefer the exact file_path returned by list_documents; absolute paths, workspace-relative paths, IDs, and exact filenames are accepted."
     }
 
     fn input_schema(&self) -> Value {
@@ -106,6 +106,9 @@ impl AgentTool for ReadDocumentTool {
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         let args: ReadDocumentArgs = serde_json::from_value(input)?;
+        if args.file_path.trim().is_empty() {
+            anyhow::bail!("file_path must not be empty");
+        }
         let state = app.state::<AppState>();
         let workspace = state
             .workspace_for_chat(&chat_id)
@@ -149,13 +152,20 @@ impl AgentTool for ReadDocumentTool {
 
         let target_path = crate::workspace::validate_workspace_path(&workspace, &target_path)
             .map_err(|e| anyhow::anyhow!("Workspace violation: {}", e))?;
+        let max_file_bytes = crate::tools::fs_tools::workspace_max_file_bytes(&state).await;
+        crate::tools::fs_tools::enforce_existing_file_size(&target_path, max_file_bytes)
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
 
         let content = tokio::fs::read_to_string(&target_path).await?;
 
         // Truncate to avoid context overflow
         let max_len = 24 * 1024;
         let final_text = if content.len() > max_len {
-            format!("{}... [TRUNCATED]", &content[..max_len])
+            format!(
+                "{}... [TRUNCATED]",
+                crate::tools::fs_tools::truncate_utf8(&content, max_len)
+            )
         } else {
             content
         };
@@ -183,7 +193,7 @@ impl AgentTool for GrepDocumentsTool {
     }
 
     fn description(&self) -> &str {
-        "Performs a keyword search across all indexed documents. Use this for precise substring matches."
+        "Searches indexed uploaded documents for an exact substring or keyword. Use this for discovery, then call read_document_content on each relevant returned file before summarizing or relying on its contents."
     }
 
     fn input_schema(&self) -> Value {
@@ -208,6 +218,9 @@ impl AgentTool for GrepDocumentsTool {
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         let args: GrepDocumentsArgs = serde_json::from_value(input)?;
+        if args.query.trim().is_empty() {
+            anyhow::bail!("query must not be empty");
+        }
         let state = app.state::<AppState>();
         let workspace = state
             .workspace_for_chat(&chat_id)
@@ -220,6 +233,7 @@ impl AgentTool for GrepDocumentsTool {
                 .map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?,
         )
         .await?;
+        let max_file_bytes = crate::tools::fs_tools::workspace_max_file_bytes(&state).await;
 
         let mut results = Vec::new();
         let query = if args.case_sensitive.unwrap_or(false) {
@@ -236,6 +250,13 @@ impl AgentTool for GrepDocumentsTool {
                     else {
                         continue;
                     };
+
+                    if crate::tools::fs_tools::enforce_existing_file_size(&path, max_file_bytes)
+                        .await
+                        .is_err()
+                    {
+                        continue;
+                    }
 
                     if let Ok(content) = tokio::fs::read_to_string(&path).await {
                         let search_content = if args.case_sensitive.unwrap_or(false) {
@@ -262,6 +283,7 @@ impl AgentTool for GrepDocumentsTool {
                             }
                             results.push(json!({
                                 "filename": doc.filename,
+                                "path": path.to_string_lossy(),
                                 "matches": matches
                             }));
                         }
@@ -318,7 +340,6 @@ impl AgentTool for WriteFileTool {
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         use crate::workspace::resolve_workspace_path;
-        use similar::{ChangeTag, TextDiff};
 
         let args: WriteFileArgs = serde_json::from_value(input)?;
 
@@ -347,45 +368,16 @@ impl AgentTool for WriteFileTool {
         // Write new content
         tokio::fs::write(&target_path, &args.content).await?;
 
-        // Generate diff if file existed
+        // Use the canonical diff emitter shared by direct and legacy file tools.
         let (change_type, diff, lines_added, lines_removed) =
             if let Some(original) = original_content {
-                let diff = TextDiff::from_lines(&original, &args.content);
-
-                let mut diff_lines = Vec::new();
-                let mut lines_added = 0;
-                let mut lines_removed = 0;
-
-                // Add file headers
-                diff_lines.push(format!("--- a/{}", target_path.display()));
-                diff_lines.push(format!("+++ b/{}", target_path.display()));
-
-                for change in diff.iter_all_changes() {
-                    match change.tag() {
-                        ChangeTag::Delete => {
-                            diff_lines.push(format!("-{}", change.value().trim_end()));
-                            lines_removed += 1;
-                        }
-                        ChangeTag::Insert => {
-                            diff_lines.push(format!("+{}", change.value().trim_end()));
-                            lines_added += 1;
-                        }
-                        ChangeTag::Equal => {
-                            diff_lines.push(format!(" {}", change.value().trim_end()));
-                        }
-                    }
-                }
-
-                (
-                    "modified".to_string(),
-                    Some(diff_lines.join("\n")),
-                    Some(lines_added),
-                    Some(lines_removed),
-                )
+                let (diff, added, removed) =
+                    crate::tools::fs_tools::unified_diff(&target_path, &original, &args.content);
+                ("modified".to_string(), Some(diff), Some(added), Some(removed))
             } else {
-                // New file
-                let lines_added = args.content.lines().count();
-                ("created".to_string(), None, Some(lines_added), Some(0))
+                let (diff, added, removed) =
+                    crate::tools::fs_tools::unified_diff(&target_path, "", &args.content);
+                ("created".to_string(), Some(diff), Some(added), Some(removed))
             };
 
         Ok(json!({

@@ -15,7 +15,7 @@ export function SportsCard({ data }: { data: any }) {
   const isFinal = status === 'Final' || status === 'final' || status === 'FT' || status === 'Finished';
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-lg w-full max-w-md">
+    <div className="genui-card-surface rounded-2xl border border-border bg-card p-5 shadow-lg w-full max-w-none min-w-0">
       {league && (
         <div className="flex items-center justify-between mb-3">
           <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{league}</span>

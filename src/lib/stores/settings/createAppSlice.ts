@@ -12,6 +12,8 @@ export interface AppSlice {
   isSyncing: boolean;
   /** Staged settings pending application (key-value pairs) */
   activeSettings: Partial<SettingsState>;
+  /** Original live values captured before the current staged edits. */
+  stagedOriginals: Partial<SettingsState>;
   /** Active workspace directory path */
   workspacePath: string;
   /** Enabled hooks map */
@@ -63,6 +65,7 @@ const NON_APPLICABLE_KEYS = new Set([
   "isDirty",
   "isSyncing",
   "activeSettings",
+  "stagedOriginals",
   "fetchingModels",
   "connectionStatuses",
   "powerStatus",
@@ -100,6 +103,7 @@ export const createAppSlice: StateCreator<SettingsState, [], [], AppSlice> = (se
   isDirty: false,
   isSyncing: false,
   activeSettings: {},
+  stagedOriginals: {},
   workspacePath: "",
   hooks: {},
   skills: {},
@@ -110,6 +114,7 @@ export const createAppSlice: StateCreator<SettingsState, [], [], AppSlice> = (se
       set((state) => ({
         ...keyOrUpdates,
         activeSettings: { ...state.activeSettings, ...keyOrUpdates },
+        stagedOriginals: captureOriginals(state, keyOrUpdates),
         isDirty: true,
       }));
       return;
@@ -118,6 +123,7 @@ export const createAppSlice: StateCreator<SettingsState, [], [], AppSlice> = (se
     set((state) => ({
       [keyOrUpdates]: value,
       activeSettings: { ...state.activeSettings, [keyOrUpdates]: value },
+      stagedOriginals: captureOriginals(state, { [keyOrUpdates]: value }),
       isDirty: true,
     }));
   }) as AppSlice["updateSetting"],
@@ -126,6 +132,7 @@ export const createAppSlice: StateCreator<SettingsState, [], [], AppSlice> = (se
     set((state) => ({
       ...updates,
       activeSettings: { ...state.activeSettings, ...updates },
+      stagedOriginals: captureOriginals(state, updates),
       isDirty: true,
     }));
   },
@@ -137,6 +144,7 @@ export const createAppSlice: StateCreator<SettingsState, [], [], AppSlice> = (se
       isHydrated: true,
       isDirty: false,
       activeSettings: {},
+      stagedOriginals: {},
     }));
   },
 
@@ -168,6 +176,7 @@ export const createAppSlice: StateCreator<SettingsState, [], [], AppSlice> = (se
       ...(flush as Partial<SettingsState>),
       isDirty: false,
       activeSettings: {},
+      stagedOriginals: {},
       isSyncing: true,
     }));
 
@@ -221,9 +230,23 @@ export const createAppSlice: StateCreator<SettingsState, [], [], AppSlice> = (se
   },
 
   discardChanges: () => {
-    set({
+    set((state) => ({
+      ...state.stagedOriginals,
       activeSettings: {},
+      stagedOriginals: {},
       isDirty: false,
-    });
+    }));
   },
 });
+
+function captureOriginals(
+  state: SettingsState,
+  updates: Partial<SettingsState>,
+): Partial<SettingsState> {
+  const originals = { ...state.stagedOriginals } as Partial<SettingsState>;
+  for (const key of Object.keys(updates) as Array<keyof SettingsState>) {
+    if (NON_APPLICABLE_KEYS.has(key as string) || key in originals) continue;
+    (originals as Record<string, unknown>)[key as string] = state[key] as unknown;
+  }
+  return originals;
+}

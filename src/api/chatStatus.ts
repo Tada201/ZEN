@@ -15,7 +15,6 @@ export const CHAT_STATUS_PHASES = {
   ToolModeRetry: "tool_mode_retry",
   ModelEscalating: "model_escalating",
   ModelEscalated: "model_escalated",
-  ProviderReady: "provider_ready",
   ProviderMissing: "provider_missing",
   Done: "done",
   Error: "error",

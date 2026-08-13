@@ -35,8 +35,8 @@ export const CARD_CATALOG: CardTypeSchema[] = [
     aliases: ["financial"],
     description: "Stock or financial instrument quote",
     fields: {
-      symbol: "Ticker symbol (e.g., AAPL)",
-      name: "Company name",
+      ticker: "Ticker symbol (e.g., AAPL)",
+      companyName: "Company name",
       price: "Current price",
       change: "Price change amount",
       changePercent: "Price change percentage",
@@ -67,13 +67,17 @@ export const CARD_CATALOG: CardTypeSchema[] = [
     fields: {
       airline: "Airline name",
       flightNumber: "Flight number",
-      departure: "Departure city/code",
-      arrival: "Arrival city/code",
+      departureCode: "Departure airport code",
+      departureCity: "Departure city",
+      arrivalCode: "Arrival airport code",
+      arrivalCity: "Arrival city",
       departureTime: "Departure time",
       arrivalTime: "Arrival time",
       duration: "Flight duration",
-      price: "Ticket price",
       status: "Flight status (On Time, Delayed, etc.)",
+      gate: "Optional gate",
+      seat: "Optional seat",
+      terminal: "Optional terminal",
     },
   },
   {
@@ -112,7 +116,8 @@ export const CARD_CATALOG: CardTypeSchema[] = [
       rating: "Rating (PG, R, etc.) or score",
       genre: "Genre",
       runtime: "Runtime (e.g., 2h 15m)",
-      description: "Short synopsis",
+      synopsis: "Short synopsis",
+      genres: "Optional array of genre strings",
     },
   },
   {
@@ -213,7 +218,7 @@ export const CARD_CATALOG: CardTypeSchema[] = [
   },
   {
     type: "status",
-    aliases: ["alert", "notification", "event"],
+    aliases: ["alert", "notification"],
     description: "Status/alert card with icon, status badge, message, and optional detail fields",
     fields: {
       title: "Status title (Deploy, PR, Alert, etc.)",
@@ -491,12 +496,16 @@ export const CARD_CATALOG: CardTypeSchema[] = [
 /**
  * Build the premium cards section for a system prompt.
  */
-export function buildCardCatalogPrompt(): string {
+export function buildCardCatalogPrompt(options: { format?: "tags" | "openui" } = {}): string {
+  const format = options.format || "tags";
+  const outputGuidance = format === "openui"
+    ? "The following cards are design references for compact, scannable information architecture. In OpenUI canvas output, do not emit `<card>` tags; use the OpenUI primitives and the single `root` assignment contract."
+    : "Format: <card>{\"type\": \"...\", \"data\": {...}}</card>";
   let prompt = `
 ## PREMIUM RICH CARDS
 
-You can display structured data as rich visual cards in the chat UI. 
-Format: <card>{"type": "...", "data": {...}}</card>
+You can display structured data as rich visual cards in the chat UI.
+${outputGuidance}
 
 Available card types:
 
@@ -512,7 +521,9 @@ Available card types:
     prompt += "\n";
   }
 
-  prompt += `When you encounter data that fits a card type, output it as a <card> block.
+  prompt += format === "openui"
+    ? `Use these field names and density conventions when composing an equivalent OpenUI surface. Prefer full-width responsive composition, concise labels, and progressive disclosure for long content.`
+    : `When you encounter data that fits a card type, output it as a <card> block.
 The card renders inline in the chat. Use it to make data visual and scannable.
 Do NOT wrap cards in markdown code fences unless the user asks for the raw JSON.`;
 

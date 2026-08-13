@@ -1,5 +1,4 @@
-import { useState, useEffect, useMemo, memo, useCallback } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useMemo, memo, useCallback, useId } from "react";
 import { cn } from "@/lib/utils/style";
 import { IS_TAURI } from "@/api";
 
@@ -10,10 +9,9 @@ import { TaskDrawer } from "./chat/input/TaskDrawer";
 import { SuggestedPromptStrip } from "./chat/input/SuggestedPromptStrip";
 import { SlashCommandPopover } from "./chat/input/SlashCommandPopover";
 import { useSlashCommand } from "./chat/input/useSlashCommand";
-import type { PremiumChatInputProps } from "./chat/input/PremiumChatInputTypes";
+import type { ComposerLayoutMode, PremiumChatInputProps } from "./chat/input/PremiumChatInputTypes";
 import { fileToAttachment } from "./chat/input/fileAttachments";
 import { useRenderLogger } from "@/hooks/useRenderLogger";
-import { motionDurations, motionEasings } from "@/lib/motion";
 
 import { useAttachments } from "./AttachmentPills";
 import {
@@ -57,6 +55,9 @@ export const PremiumChatInput = memo(
     variant,
     onSend,
     onAbort,
+    onPause,
+    onResume,
+    isPaused = false,
     isLoading,
     models,
     selectedModelId,
@@ -74,6 +75,7 @@ export const PremiumChatInput = memo(
   }: PremiumChatInputProps) => {
     useRenderLogger("PremiumChatInput", { activeChatId, isLoading });
     const isWelcome = variant === "welcome";
+    const slashListboxId = `composer-slash-listbox-${useId().replace(/:/g, "")}`;
 
     // ── Message + mode toggles + auto-resize ──
     const [internalMessage, setInternalMessage] = useState("");
@@ -94,10 +96,25 @@ export const PremiumChatInput = memo(
       message,
       isSidebar,
     });
+    const layoutMode: ComposerLayoutMode = isWelcome
+      ? "welcome"
+      : isSidebar
+        ? "sidebar"
+        : isCompact
+          ? "narrow"
+          : "default";
 
     // ── Local UI state ──
     const [selectedModelOpen, setSelectedModelOpen] = useState(false);
     const [isPlusMenuOpen, setIsPlusMenuOpen] = useState(false);
+    const setPlusMenuOpen = useCallback((open: boolean) => {
+      setIsPlusMenuOpen(open);
+      if (open) setSelectedModelOpen(false);
+    }, []);
+    const setModelMenuOpen = useCallback((open: boolean) => {
+      setSelectedModelOpen(open);
+      if (open) setIsPlusMenuOpen(false);
+    }, []);
     const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
     const [pinnedActions, togglePin] = usePinnedActions();
     const {
@@ -108,7 +125,10 @@ export const PremiumChatInput = memo(
 
     // ── Slash command popover state ──
     const slash = useSlashCommand(message);
-    const slashIsPopoverOpen = slash.isActive && slash.suggestions.length > 0;
+    const slashIsPopoverOpen = slash.isActive
+      && slash.suggestions.length > 0
+      && !isPlusMenuOpen
+      && !selectedModelOpen;
     useEffect(() => {
       setSlashSelectedIndex(0);
     }, [slash.query, slash.isActive]);
@@ -139,7 +159,26 @@ export const PremiumChatInput = memo(
       supportsReasoning,
       reasoningConfigType,
     } = useReasoningCapabilities(models, selectedModelId, selectedProvider);
+    const supportsImageGen = Boolean(
+      selectedModelInfo?.available && selectedModelInfo.capabilities.includes("image-gen"),
+    );
     useAutoDisableThinking(supportsReasoning, isThinking, setIsThinking);
+    useEffect(() => {
+      if (!supportsImageGen && isImageGenEnabled) setIsImageGenEnabled(false);
+    }, [isImageGenEnabled, setIsImageGenEnabled, supportsImageGen]);
+
+    // Persisted pins can outlive a provider/model capability change. Filter
+    // them at the composer boundary so unsupported actions disappear cleanly
+    // instead of leaving an empty rail or hiding the action from the add menu.
+    const visiblePinnedActions = useMemo(
+      () => pinnedActions.filter((actionId) =>
+        actionId === "search" ||
+        actionId === "research" ||
+        actionId === "genui" ||
+        (actionId === "thinking" && supportsReasoning),
+      ),
+      [pinnedActions, supportsReasoning],
+    );
     // ── Slash apply (extracted hook) ──
     const applySlashSuggestion = useSlashApply(setMessage, textareaRef);
 
@@ -153,13 +192,15 @@ export const PremiumChatInput = memo(
         message,
         selectedFiles,
         isLoading,
+        isPaused,
         onAbort,
+        onResume,
         selectedModelId,
         selectedProvider,
         selectedModelInfo,
         isWebSearch,
         isDeepResearch,
-        isImageGenEnabled,
+        isImageGenEnabled: supportsImageGen && isImageGenEnabled,
         internalGenerativeUI,
         supportsReasoning,
         reasoningConfigType,
@@ -170,9 +211,9 @@ export const PremiumChatInput = memo(
         resetFiles: clearFiles,
       }),
       [
-        message, selectedFiles, isLoading, onAbort,
+        message, selectedFiles, isLoading, isPaused, onAbort, onResume,
         selectedModelId, selectedProvider, selectedModelInfo,
-        isWebSearch, isDeepResearch, isImageGenEnabled,
+        isWebSearch, isDeepResearch, isImageGenEnabled, supportsImageGen,
         internalGenerativeUI, supportsReasoning, reasoningConfigType,
         buildThinkingPayload, onSend,
         convertFiles, resetMessage, clearFiles,
@@ -186,9 +227,9 @@ export const PremiumChatInput = memo(
     const textAreaProps = useMemo<ChatInputTextAreaBlockProps>(
       () => ({
         isPlusMenuOpen,
-        setIsPlusMenuOpen,
+        setIsPlusMenuOpen: setPlusMenuOpen,
         handleFileChange,
-        pinnedActions,
+        pinnedActions: visiblePinnedActions,
         togglePin,
         supportsReasoning,
         isThinking,
@@ -202,7 +243,8 @@ export const PremiumChatInput = memo(
         onOpenSkills,
         isImageGenEnabled,
         setIsImageGenEnabled,
-        variant,
+        supportsImageGen,
+        layoutMode,
         textareaRef,
         value: message,
         onChange: setMessage,
@@ -210,36 +252,36 @@ export const PremiumChatInput = memo(
         readOnly,
       slashIsPopoverOpen,
         slashSelectedIndex,
+        slashListboxId,
         setSlashSelectedIndex,
         slashSuggestions: slash.suggestions,
         applySlashSuggestion,
       }),
       [
-        isPlusMenuOpen, setIsPlusMenuOpen, handleFileChange,
-        pinnedActions, togglePin, supportsReasoning,
+        isPlusMenuOpen, setPlusMenuOpen, handleFileChange,
+        visiblePinnedActions, togglePin, supportsReasoning,
         isThinking, setIsThinking, isDeepResearch, setIsDeepResearch,
         isWebSearch, setIsWebSearch,
         internalGenerativeUI, setGenerativeUIInternal,
-        onOpenSkills, isImageGenEnabled, setIsImageGenEnabled,
-        variant, readOnly,
+        onOpenSkills, isImageGenEnabled, setIsImageGenEnabled, supportsImageGen,
+        layoutMode, readOnly,
         textareaRef, message, setMessage,
-        handleSend, slashIsPopoverOpen, slashSelectedIndex,
+        handleSend, slashIsPopoverOpen, slashSelectedIndex, slashListboxId,
         setSlashSelectedIndex, slash.suggestions, applySlashSuggestion,
       ],
     );
 
     const footerProps = useMemo<ChatInputFooterProps>(
       () => ({
-        isCompact,
-        isSidebar,
+        layoutMode,
         selectedModelOpen,
-        setSelectedModelOpen,
+        setSelectedModelOpen: setModelMenuOpen,
         models,
         selectedModelId,
         selectedProvider,
         onSelectModel,
         onOpenModelSelector,
-        pinnedActions,
+        pinnedActions: visiblePinnedActions,
         togglePin,
         supportsReasoning,
         isThinking,
@@ -255,13 +297,17 @@ export const PremiumChatInput = memo(
         setIsDeepResearch,
         generativeUI: internalGenerativeUI,
         setGenerativeUI: setGenerativeUIInternal,
-        variant,
         isPlusMenuOpen,
-        setIsPlusMenuOpen,
+        setIsPlusMenuOpen: setPlusMenuOpen,
         handleFileChange,
         onOpenSkills,
         isImageGenEnabled,
         setIsImageGenEnabled,
+        supportsImageGen,
+        onAbort,
+        onPause,
+        onResume,
+        isPaused,
         // `PremiumChatInputProps.activeChatId` is `string | null | undefined`;
         // `ChatInputFooterProps.activeChatId` is `string | undefined`. Coerce
         // the source null into undefined so footer's optional field stays in
@@ -273,68 +319,64 @@ export const PremiumChatInput = memo(
         hasContent: message.trim().length > 0 || selectedFiles.length > 0,
       }),
       [
-        isCompact, isSidebar, selectedModelOpen, setSelectedModelOpen,
+        layoutMode, selectedModelOpen, setModelMenuOpen,
         models, selectedModelId, selectedProvider,
         onSelectModel, onOpenModelSelector,
-        pinnedActions, togglePin, supportsReasoning,
+        visiblePinnedActions, togglePin, supportsReasoning,
         isThinking, setIsThinking, reasoningConfigType,
         thinkingEffort, setThinkingEffort, thinkingBudget, setThinkingBudget,
         isWebSearch, setIsWebSearch, isDeepResearch, setIsDeepResearch,
         internalGenerativeUI, setGenerativeUIInternal,
-        variant, isPlusMenuOpen, setIsPlusMenuOpen, handleFileChange,
-        onOpenSkills, isImageGenEnabled, setIsImageGenEnabled,
+        isPlusMenuOpen, setPlusMenuOpen, handleFileChange,
+        onOpenSkills, isImageGenEnabled, setIsImageGenEnabled, supportsImageGen,
+        onAbort, onPause, onResume, isPaused,
         activeChatId, readOnly, handleSend, isLoading, message, selectedFiles.length,
       ],
     );
 
     return (
-      <div className="flex flex-col gap-2.5 w-full relative">
+      <div className="flex flex-col gap-1.5 w-full relative">
         {!IS_TAURI && !readOnly && (
           <SuggestedPromptStrip
             isLoading={isLoading}
             onSelect={handleSuggestedClick}
           />
         )}
-        <motion.div
+        {/* The composer owns live textarea and optional-row geometry. Layout
+            projection is intentionally disabled: Motion's transform-based
+            layout animation would visually animate every wrap/height change,
+            competing with the resize observer and moving the submit target. */}
+        <div
           ref={containerRef}
-          layout
-          transition={{
-            layout: { duration: motionDurations.shared, ease: motionEasings.shared },
-            default: { duration: 0.42, ease: [0.22, 1, 0.36, 1] },
-          }}
+          data-layout-mode={layoutMode}
           className={cn(
-            "w-full relative overflow-visible transition-all duration-200",
-            isWelcome
-              ? "rounded-b-xl border border-border bg-card shadow-sm"
-              : "rounded-2xl border border-neutral-800 bg-neutral-950 shadow-2xl",
+            "composer-shell relative w-full overflow-visible",
+            isWelcome && "composer-shell--welcome",
             className,
-            isLoading &&
-              "ring-1 ring-primary/40 shadow-[0_0_15px_-3px_rgba(var(--primary-rgb),0.1)]",
+            isLoading && "composer-shell--loading",
           )}
         >
           <SlashCommandPopover
             isOpen={!readOnly && slashIsPopoverOpen}
             suggestions={slash.suggestions}
             selectedIndex={slashSelectedIndex}
+            listboxId={slashListboxId}
             onSelect={applySlashSuggestion}
             onHover={setSlashSelectedIndex}
           />
-          {!readOnly && visibleTasks.length > 0 && (
+          {!readOnly && visibleTasks.length > 0 && !slashIsPopoverOpen && !isPlusMenuOpen && !selectedModelOpen && (
             <TaskDrawer
               tasks={visibleTasks}
               isOpen={isTaskDrawerOpen}
               onToggle={() => setIsTaskDrawerOpen(!isTaskDrawerOpen)}
             />
           )}
-          {isLoading && !isWelcome && (
-            <div className="absolute inset-x-4 -top-px h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent animate-shimmer-slide z-10" />
-          )}
           <div className="flex flex-col">
-            {isSidebar && !readOnly && (
-              <div className="px-3 pt-2 flex items-center justify-between border-b border-border/10">
+            {layoutMode === "sidebar" && !readOnly && (
+              <div className="composer-toolbar px-2 pt-1 flex items-center justify-between border-b">
                 <ModelSearchDropdown
                   isOpen={selectedModelOpen}
-                  setIsOpen={setSelectedModelOpen}
+                  setIsOpen={setModelMenuOpen}
                   models={models}
                   selectedModelId={selectedModelId}
                   selectedProvider={selectedProvider}
@@ -345,18 +387,10 @@ export const PremiumChatInput = memo(
               </div>
             )}
             {!readOnly && <ActionPills
-              generativeUI={internalGenerativeUI}
-              setGenerativeUI={setGenerativeUIInternal}
-              isThinking={isThinking}
-              setIsThinking={setIsThinking}
-              isDeepResearch={isDeepResearch}
-              setIsDeepResearch={setIsDeepResearch}
-              isWebSearch={isWebSearch}
-              setIsWebSearch={setIsWebSearch}
               selectedFiles={selectedFiles}
               removeFile={removeFile}
             />}
-            {!readOnly && <div className="px-3 pt-2">
+            {!readOnly && <div className="px-2 pt-1">
               <ImagePresetStrip
                 isImageGenEnabled={isImageGenEnabled}
                 onSelectPreset={(presetPrompt: string) => {
@@ -371,7 +405,7 @@ export const PremiumChatInput = memo(
             <ChatInputTextAreaBlock {...textAreaProps} />
             <ChatInputFooter {...footerProps} />
           </div>
-        </motion.div>
+        </div>
       </div>
     );
   },

@@ -7,13 +7,17 @@ const redactionSource = readFileSync(
   new URL("../src/atlas/components/chat/tool/toolTextRedaction.ts", import.meta.url),
   "utf8",
 );
+const diffParserSource = readFileSync(
+  new URL("../src/atlas/components/chat/tool/parseUnifiedDiff.ts", import.meta.url),
+  "utf8",
+);
 // Strip the redaction import regardless of CRLF/LF line endings, then prepend
 // the redaction source so the concatenated module declares it exactly once.
 const previewSource = readFileSync(sourcePath, "utf8").replace(
   /^import\s*\{\s*redactToolText\s*\}\s*from\s*["']\.\/toolTextRedaction["'];?\s*\r?\n/m,
   "",
 );
-const source = `${redactionSource}\n${previewSource}`;
+const source = `${redactionSource}\n${previewSource}\n${diffParserSource}`;
 const transpiled = ts.transpileModule(source, {
   compilerOptions: {
     module: ts.ModuleKind.ES2022,
@@ -24,7 +28,7 @@ const transpiled = ts.transpileModule(source, {
 });
 
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(transpiled.outputText).toString("base64")}`;
-const { buildToolOutputPreview } = await import(moduleUrl);
+const { buildToolOutputPreview, parseUnifiedDiff } = await import(moduleUrl);
 
 const search = buildToolOutputPreview(JSON.stringify({
   status: "success",
@@ -94,6 +98,37 @@ assert.equal(normalizedCommand.exitCode, "0", "nested exitCode should be normali
 assert(normalizedCommand.stdout.includes("npm run build"), "nested stdout should be extracted");
 assert.equal(normalizedCommand.files.length, 1, "nested changedFiles should be extracted");
 assert.equal(normalizedCommand.summary, "Build passed", "successful build output should produce a scannable collapsed summary");
+
+const patchedFiles = buildToolOutputPreview(JSON.stringify({
+  output: {
+    success: true,
+    results: [
+      {
+        file_path: "src/new.ts",
+        change_type: "added",
+        lines_added: 2,
+        lines_removed: 0,
+        diff: "--- a/src/new.ts\n+++ b/src/new.ts\n@@ -0,0 +1,2 @@\n+export const answer = 42;\n+",
+      },
+      {
+        file_path: "src/old.ts",
+        change_type: "deleted",
+        lines_added: 0,
+        lines_removed: 1,
+        diff: "--- a/src/old.ts\n+++ b/src/old.ts\n@@ -1 +0,0 @@\n-export const answer = 0;\n",
+      },
+    ],
+  },
+}));
+assert.equal(patchedFiles.files.length, 2, "apply_patch result envelopes should expose every changed file");
+assert.equal(patchedFiles.files[0].changeType, "created", "added patch entries should normalize to created");
+assert.equal(patchedFiles.files[1].changeType, "deleted", "deleted patch entries should remain deleted");
+assert(patchedFiles.files[0].diff.includes("export const answer"), "nested patch file diffs should remain available");
+
+const parsedDiff = parseUnifiedDiff(patchedFiles.files[0].diff);
+assert.equal(parsedDiff.hunks.length, 1, "standard unified diff should produce one hunk");
+assert.equal(parsedDiff.additions, 2, "diff additions should count only added lines");
+assert.equal(parsedDiff.deletions, 0, "diff deletions should count only removed lines");
 
 const singleFileChange = buildToolOutputPreview(JSON.stringify({
   change_type: "created",

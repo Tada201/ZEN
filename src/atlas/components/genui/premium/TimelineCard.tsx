@@ -17,7 +17,7 @@ export function TimelineCard({ data }: { data: TimelineData }) {
   const events = data.events || [];
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-lg">
+    <div className="genui-card-surface w-full max-w-none min-w-0 rounded-2xl border border-border bg-card p-5 shadow-lg">
       <h3 className="text-sm font-semibold text-primary-foreground mb-4 tracking-tight">{title}</h3>
 
       <div className="relative pl-6 space-y-5 before:absolute before:left-2 before:top-1.5 before:h-[calc(100%-14px)] before:w-px before:bg-muted">

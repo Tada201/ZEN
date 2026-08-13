@@ -139,7 +139,7 @@ export const TTSConfig = memo(() => {
                 {isPiper && (
                     <>
                         {/* Inline Piper voice downloader */}
-                        <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3">
+                        <div className="flex flex-col gap-3 rounded-xl border border-border bg-background px-4 py-3">
                             <div className="flex items-center gap-2 text-[11px] font-bold text-foreground">
                                 <Volume2 size={12} className="text-[#a855f7]" />
                                 <span className="uppercase tracking-wider">Download Piper Voice</span>
@@ -180,7 +180,7 @@ export const TTSConfig = memo(() => {
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
                                 {statusBadge}
-                                <span className="text-[10px] text-muted-foreground/70">
+                                <span className="text-[10px] text-muted-foreground">
                                     {PIPER_VOICES.find((v) => v.value === selectedVoice)?.description}
                                 </span>
                             </div>

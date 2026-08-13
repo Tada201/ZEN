@@ -28,15 +28,18 @@ export const ThinkingConfig = ({
   const isGoogle = provider?.toLowerCase() === 'google' || provider?.toLowerCase() === 'gemini';
   const effortLabel = isGoogle ? "Thinking Level" : "Reasoning Effort";
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Brain className="w-4 h-4 text-warning" />
-          <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground/70 dark:text-muted-foreground">Reasoning Config</span>
+          <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Reasoning Config</span>
         </div>
-        <div 
+        <button
+          type="button"
           onClick={() => setIsThinking(!isThinking)}
-          className="flex items-center gap-2 cursor-pointer group"
+          aria-pressed={isThinking}
+          aria-label={isThinking ? "Disable reasoning" : "Enable reasoning"}
+          className="flex items-center gap-2 cursor-pointer group rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span className={cn(
             "text-[10px] font-bold uppercase tracking-widest transition-colors",
@@ -45,18 +48,19 @@ export const ThinkingConfig = ({
             {isThinking ? "Active" : "Off"}
           </span>
           <div className={cn(
-            "w-8 h-4.5 rounded-full p-0.5 transition-all duration-300 relative",
-            isThinking ? "bg-warning shadow-[0_0_10px_-2px_hsl(var(--primary) / 0.5)]" : "bg-muted dark:bg-muted"
+            "composer-control relative h-5 w-8 rounded-full p-0.5 transition-colors duration-200",
+            isThinking ? "bg-warning text-warning-foreground" : "bg-muted"
           )}>
             <div className={cn(
-              "w-3.5 h-3.5 rounded-full bg-card shadow-sm transition-transform duration-300 ease-spring",
+              "h-3.5 w-3.5 rounded-full bg-card shadow-sm transition-transform duration-200 ease-out",
               isThinking ? "translate-x-3.5" : "translate-x-0"
             )} />
           </div>
-        </div>
+        </button>
       </div>
 
-      <div className={cn("space-y-4 transition-opacity", !isThinking && "opacity-50 pointer-events-none")}>
+      <div className={cn("space-y-3 transition-opacity", !isThinking && "opacity-50 pointer-events-none")}>
+
         {/* Effort Selection - OpenAI Style */}
         {reasoningConfigType === 'effort' && (
           <div className="space-y-2">
@@ -73,21 +77,21 @@ export const ThinkingConfig = ({
                   setIsThinking(true);
                 }
               }}
-              className="justify-start w-full bg-muted dark:bg-muted p-1 rounded-lg border border-border dark:border-border"
+              className="justify-start w-full rounded-md border border-border bg-muted p-0.5"
             >
-              <ToggleGroupItem value="low" className="flex-1 text-[11px] h-7 data-[state=on]:bg-card dark:data-[state=on]:bg-muted data-[state=on]:shadow-sm">Low</ToggleGroupItem>
-              <ToggleGroupItem value="medium" className="flex-1 text-[11px] h-7 data-[state=on]:bg-card dark:data-[state=on]:bg-muted data-[state=on]:shadow-sm">Medium</ToggleGroupItem>
-              <ToggleGroupItem value="high" className="flex-1 text-[11px] h-7 data-[state=on]:bg-card dark:data-[state=on]:bg-muted data-[state=on]:shadow-sm">High</ToggleGroupItem>
+              <ToggleGroupItem value="low" className="composer-control h-7 min-h-0 flex-1 text-[11px] data-[state=on]:bg-card data-[state=on]:shadow-sm">Low</ToggleGroupItem>
+              <ToggleGroupItem value="medium" className="composer-control h-7 min-h-0 flex-1 text-[11px] data-[state=on]:bg-card data-[state=on]:shadow-sm">Medium</ToggleGroupItem>
+              <ToggleGroupItem value="high" className="composer-control h-7 min-h-0 flex-1 text-[11px] data-[state=on]:bg-card data-[state=on]:shadow-sm">High</ToggleGroupItem>
             </ToggleGroup>
           </div>
         )}
 
         {/* Token Budget - Anthropic Style */}
         {reasoningConfigType === 'budget' && (
-          <div className="space-y-3 pt-2">
+          <div className="space-y-2 pt-1">
             <div className="flex justify-between text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
               <span>Thinking Budget</span>
-              <span className="text-muted-foreground/70 dark:text-foreground">{thinkingBudget.toLocaleString()} tokens</span>
+              <span className="text-foreground">{thinkingBudget.toLocaleString()} tokens</span>
             </div>
             <Slider 
               value={[thinkingBudget]} 
@@ -110,7 +114,7 @@ export const ThinkingConfig = ({
 
         {/* Fallback/Generic message for reasoning models without tunable params in UI */}
         {reasoningConfigType === 'none' && (
-          <div className="text-[10px] text-muted-foreground italic text-center py-2 px-4 bg-muted dark:bg-muted/60 rounded-lg">
+          <div className="composer-meta rounded-md bg-muted px-2.5 py-1.5 text-center text-[10px] italic">
             This model supports reasoning natively. Enabling it ensures the assistant uses its deep thinking capabilities for your request.
           </div>
         )}

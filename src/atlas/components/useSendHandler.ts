@@ -19,14 +19,13 @@
  * Keeping that conversion out of the hook preserves the existing chat
  * pipeline semantics byte-for-byte.
  *
- * `selectedPrompt` lived in the composer for an unused PromptPicker
- * integration; it is retained inside this hook as a no-op state slot
- * so a future wiring can drop in without re-touching the caller.
+ * Prompt selection is intentionally not owned here; suggested prompts
+ * dispatch through the same send context without introducing a second
+ * composer state field.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import type { Attachment } from "./chat/types";
-import type { PromptDefinition } from "./chat/promptRegistry";
 import type { ThinkingPayload } from "./chat/input/PremiumChatInputTypes";
 
 export interface UseSendHandlerCtx {
@@ -39,7 +38,9 @@ export interface UseSendHandlerCtx {
    * the hook treats `undefined` as "not loading" (no abort, no guard).
    */
   isLoading?: boolean;
+  isPaused?: boolean;
   onAbort?: () => void;
+  onResume?: () => void;
   /** Composer-driven selectors. */
   selectedModelId?: string;
   selectedProvider?: string;
@@ -78,12 +79,6 @@ export interface UseSendHandlerCtx {
 }
 
 export interface UseSendHandlerResult {
-  /**
-   * Currently unused — preserved so a future PromptPicker integration
-   * can wire it without touching the caller.
-   */
-  selectedPrompt: PromptDefinition | null;
-  setSelectedPrompt: (val: PromptDefinition | null) => void;
   /** Wired to `<button onClick>` and used after a successful send. */
   handleSend: () => Promise<void>;
   /** Wired to `<SuggestedPromptStrip onSelect>`. */
@@ -91,11 +86,13 @@ export interface UseSendHandlerResult {
 }
 
 export function useSendHandler(ctx: UseSendHandlerCtx): UseSendHandlerResult {
-  const [selectedPrompt, setSelectedPrompt] = useState<PromptDefinition | null>(null);
-
   const handleSend = useCallback(async () => {
     if (ctx.isLoading) {
-      ctx.onAbort?.();
+      if (ctx.isPaused) {
+        ctx.onResume?.();
+      } else {
+        ctx.onAbort?.();
+      }
       return;
     }
     if (!ctx.message.trim() && ctx.selectedFiles.length === 0) return;
@@ -122,7 +119,6 @@ export function useSendHandler(ctx: UseSendHandlerCtx): UseSendHandlerResult {
 
     ctx.resetMessage();
     ctx.resetFiles();
-    setSelectedPrompt(null);
   }, [
     ctx,
   ]);
@@ -150,7 +146,7 @@ export function useSendHandler(ctx: UseSendHandlerCtx): UseSendHandlerResult {
     [ctx],
   );
 
-  return { selectedPrompt, setSelectedPrompt, handleSend, handleSuggestedClick };
+  return { handleSend, handleSuggestedClick };
 }
 
 export default useSendHandler;

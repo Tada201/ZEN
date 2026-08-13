@@ -2,12 +2,12 @@ import type { ReactNode } from "react";
 
 export function Panel({ label, action, children }: { label: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <div className="overflow-hidden rounded-md border border-border bg-card/70">
-      <div className="flex min-h-7 items-center justify-between gap-2 border-b border-border bg-muted/60 px-2.5 py-1">
+    <div className="overflow-hidden rounded-md border border-border bg-card">
+      <div className="flex min-h-7 items-center justify-between gap-2 border-b border-border bg-muted px-2.5 py-1">
         <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</span>
         {action}
       </div>
-      <div className="bg-background/30 px-2.5 py-2">{children}</div>
+      <div className="bg-background px-2.5 py-2">{children}</div>
     </div>
   );
 }

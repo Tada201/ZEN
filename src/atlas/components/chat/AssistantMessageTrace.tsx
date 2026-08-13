@@ -135,27 +135,9 @@ export function getActionPresentation(step: Step) {
   }
   if (kind === "chat_status") {
     const tools = Array.isArray(step.metadata?.tools) ? step.metadata.tools : [];
-    if (phase === CHAT_STATUS_PHASES.ToolCallReady) {
-      const preview = step.metadata?.toolCallPreview;
-      const args = preview?.argumentsPreview;
-      const detail = args ? redactTracePreview(args, 180) : step.content || step.metadata?.message;
-      return {
-        Icon: Wrench,
-        label: `${preview?.toolName ? humanizeToolName(preview.toolName) : "Tool call"} ready`,
-        detail,
-        iconClass: "text-success",
-      };
-    }
-    if (phase === CHAT_STATUS_PHASES.ToolCallStreaming) {
-      const preview = step.metadata?.toolCallPreview;
-      const args = redactTracePreview(preview?.argumentsPreview, 180);
-      return {
-        Icon: Wrench,
-        label: `Preparing ${preview?.toolName ? humanizeToolName(preview.toolName) : "tool call"}`,
-        detail: args || step.content || step.metadata?.message,
-        iconClass: "text-primary",
-      };
-    }
+    // ToolCallStreaming / ToolCallReady preview phases are dropped in
+    // groupAssistantSteps (isSuppressedToolPreviewStatus): the tool card already
+    // shows which tool runs, so its transient "Preparing"/"ready" status is noise.
     if (phase === CHAT_STATUS_PHASES.ToolBatchPlanned) {
       return {
         Icon: Wrench,
@@ -172,15 +154,6 @@ export function getActionPresentation(step: Step) {
         iconClass: "text-primary",
       };
     }
-    if (phase === CHAT_STATUS_PHASES.ProviderReady) {
-      const providerDetail = [step.metadata?.provider, step.metadata?.model].filter(Boolean).join(" / ");
-      return {
-        Icon: CircleDot,
-        label: "Provider ready",
-        detail: providerDetail || step.content || step.metadata?.message,
-        iconClass,
-      };
-    }
     const phaseLabel = phase ? phase.replace(/_/g, " ") : undefined;
     return {
       Icon: status === "running" ? Loader2 : CircleDot,
@@ -193,7 +166,7 @@ export function getActionPresentation(step: Step) {
     const result = step.metadata?.toolResult;
     return {
       Icon: isError ? XCircle : CheckCircle2,
-      label: `${result?.toolName || "Tool"} ${isError ? "failed" : "completed"}`,
+      label: `${result?.toolName ? humanizeToolName(result.toolName) : "Tool"} ${isError ? "failed" : "completed"}`,
       detail: result?.contentSummary || step.content,
       iconClass,
     };
@@ -293,7 +266,7 @@ export function AgentActionStepInner({ step, isStreaming }: { step: Step; isStre
     <div className="font-sans">
       <div className="flex min-h-8 items-start gap-2 rounded-md px-1 py-1 transition-colors duration-200 hover:bg-muted">
         <div className={cn("mt-[3px] flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground", presentation.iconClass)}>
-          <Icon className={cn("h-3.5 w-3.5", isRunning && "animate-spin")} />
+          <Icon className={cn("h-3.5 w-3.5", isRunning && "animate-spin", isRunning && "motion-reduce:animate-none")} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
@@ -390,7 +363,7 @@ function InlineApprovalControls({ approval, metadata }: { approval: ApprovalRequ
   ].filter(Boolean).join(" ");
 
   return (
-    <div className="mt-3 rounded-lg border border-warning bg-muted p-2" role="status" aria-label={`Approval required for ${toolName}`}>
+    <div className="approval-card-attention mt-3 rounded-lg border border-warning bg-muted p-2" role="status" aria-label={`Approval required for ${toolName}`}>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-warning">Awaiting approval</span>
         <span className="min-w-0 flex-1 text-[11px] leading-5 text-foreground">
@@ -443,7 +416,7 @@ function InlineApprovalControls({ approval, metadata }: { approval: ApprovalRequ
           className="h-7 bg-warning px-3 text-[11px] text-warning-foreground hover:bg-warning/90"
           onClick={() => resolveToolApproval(toolCallId, true)}
         >
-          Approve
+          Approve once
         </Button>
         <Button
           size="sm"
@@ -451,7 +424,7 @@ function InlineApprovalControls({ approval, metadata }: { approval: ApprovalRequ
           className="h-7 bg-muted px-3 text-[11px] text-foreground hover:bg-muted"
           onClick={() => resolveToolApproval(toolCallId, true, true)}
         >
-          Always allow exact
+          Remember exact
         </Button>
       </div>
     </div>

@@ -171,12 +171,14 @@ function FileEditDetail({
 
       <div className="flex flex-col gap-2">
         {outputPreview.files.map((file) => (
-          <FileChangeCard
-            key={file.path}
-            file={file}
-            defaultOpen={false}
-            onOpenArtifact={onOpenArtifact}
-          />
+          <div key={file.path}>
+            {/* A single-file edit is the common case; multi-file patches stay compact. */}
+            <FileChangeCard
+              file={file}
+              defaultOpen={outputPreview.files.length === 1}
+              onOpenArtifact={onOpenArtifact}
+            />
+          </div>
         ))}
       </div>
     </div>
@@ -185,7 +187,8 @@ function FileEditDetail({
 
 export function ToolDetailView({ toolCall, outputPreview, onViewArtifact }: ToolDetailViewProps) {
   const input = useMemo(() => toToolInputRecord(toolCall.input), [toolCall.input]);
-  const parsedOutput = useMemo(() => parseOutput(toolCall.output || ""), [toolCall.output]);
+  const parsedOutputSource = toolCall.output || toolCall.outputPreview || "";
+  const parsedOutput = useMemo(() => parseOutput(parsedOutputSource), [parsedOutputSource]);
 
   return (
     <ErrorBoundary
@@ -220,7 +223,7 @@ function ToolDetailViewInner({
   parsedOutput,
 }: ToolDetailViewInnerProps) {
   // Custom identity renderers get first shot at rendering.
-  const renderer = getToolRenderer(toolCall.name);
+  const renderer = getToolRenderer(toolCall.name, input);
   const custom = renderer
     ? renderer.render({ input, output: parsedOutput, outputPreview, toolCall })
     : null;

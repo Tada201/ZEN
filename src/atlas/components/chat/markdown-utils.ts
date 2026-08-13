@@ -8,18 +8,34 @@
 
 export interface MarkdownBlock {
   id: string;
-  type: 'text' | 'code' | 'thought';
+  type: 'text' | 'code' | 'thought' | 'details';
   content: string;
   language?: string;
+  summary?: string;
+  initiallyOpen?: boolean;
   isComplete: boolean;
   index: number;
+}
+
+const DETAILS_OPEN = /^ {0,3}<details(?:[ \t]+open)?[ \t]*>[ \t]*$/i;
+const DETAILS_CLOSE = /^ {0,3}<\/details>[ \t]*$/i;
+const DETAILS_SUMMARY = /^ {0,3}<summary>([\s\S]*?)<\/summary>[ \t]*$/i;
+
+function sanitizeDetailsSummary(value: string): string {
+  const plain = value
+    .replace(/<[^>]*>/g, "")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return plain.slice(0, 160) || "More details";
 }
 
 function isStructurallyComplete(type: MarkdownBlock['type'], content: string): boolean {
   const trimmed = content.trim();
   if (type === 'code') {
-    const match = trimmed.match(/^(```+)[\s\S]*\1$/);
-    return !!match;
+    const opening = trimmed.match(/^(`{3,}|~{3,})/);
+    const lines = trimmed.split('\n');
+    return Boolean(opening && isClosingFence(lines[lines.length - 1], opening[1]));
   }
   if (type === 'thought') {
     return /^<(?:thought|think)>/i.test(trimmed) && /<\/(?:thought|think)>$/i.test(trimmed);
@@ -36,14 +52,76 @@ export function splitMarkdownIntoBlocks(content: string, isStreaming: boolean): 
   let currentBlock: string[] = [];
   let inCodeBlock = false;
   let inThoughtBlock = false;
+  let inDetailsBlock = false;
+  let detailsDepth = 0;
+  let detailsSummary = "More details";
+  let detailsSummarySeen = false;
+  let detailsInitiallyOpen = false;
+  let detailsContent: string[] = [];
+  let detailsCodeFence = '';
   let codeFence = '';
   let codeLanguage = '';
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    // 1. Detect Code Blocks
-    const codeMatch = line.match(/^(```+)([^\s`]*)/);
+    // Details own their body until the matching close tag. Track nested code
+    // fences here so a literal </details> in a code example cannot terminate
+    // the disclosure early.
+    if (inDetailsBlock) {
+      const detailCodeMatch = line.match(/^ {0,3}(`{3,}|~{3,})/);
+      if (detailsCodeFence) {
+        detailsContent.push(line);
+        if (isClosingFence(line, detailsCodeFence)) detailsCodeFence = '';
+        continue;
+      }
+      if (detailCodeMatch) {
+        detailsCodeFence = detailCodeMatch[1];
+        detailsContent.push(line);
+        continue;
+      }
+      if (DETAILS_OPEN.test(line)) {
+        detailsDepth += 1;
+        detailsContent.push(line);
+        continue;
+      }
+      if (DETAILS_CLOSE.test(line)) {
+        detailsDepth -= 1;
+        if (detailsDepth > 0) {
+          detailsContent.push(line);
+          continue;
+        }
+        blocks.push(createBlock(
+          'details',
+          detailsContent.join('\n').trim(),
+          true,
+          blocks.length,
+          undefined,
+          detailsSummary,
+          detailsInitiallyOpen,
+        ));
+        inDetailsBlock = false;
+        detailsDepth = 0;
+        detailsCodeFence = '';
+        detailsContent = [];
+        continue;
+      }
+      if (!detailsSummarySeen) {
+        const summaryMatch = line.match(DETAILS_SUMMARY);
+        if (summaryMatch) {
+          detailsSummary = sanitizeDetailsSummary(summaryMatch[1]);
+          detailsSummarySeen = true;
+          continue;
+        }
+        if (line.trim()) detailsSummarySeen = true;
+      }
+      detailsContent.push(line);
+      continue;
+    }
+
+    // 1. Detect fenced code blocks. GFM accepts both backtick and tilde
+    // fences, with up to three spaces of indentation.
+    const codeMatch = line.match(/^ {0,3}(`{3,}|~{3,})([^\s`~]*)[ \t]*$/);
     if (codeMatch && !inThoughtBlock) {
       if (!inCodeBlock) {
         // Close current text block
@@ -56,7 +134,9 @@ export function splitMarkdownIntoBlocks(content: string, isStreaming: boolean): 
         codeLanguage = codeMatch[2];
         currentBlock.push(line);
         continue;
-      } else if (line.startsWith(codeFence)) {
+      }
+
+      if (isClosingFence(line, codeFence)) {
         if (isStreaming && shouldDeferStreamingFenceClose(codeLanguage, currentBlock, lines, i)) {
           currentBlock.push(line);
           continue;
@@ -73,8 +153,31 @@ export function splitMarkdownIntoBlocks(content: string, isStreaming: boolean): 
       }
     }
 
-    // 2. Detect Thought Blocks
-    if (/<(?:thought|think)>/i.test(line) && !inCodeBlock) {
+    // 2. Detect the constrained details extension outside code. We accept only
+    // <details>, optional `open`, a plain <summary>, and </details>; all other
+    // attributes/tags stay ordinary text and are never rendered as HTML.
+    const detailsOpenMatch = line.match(DETAILS_OPEN);
+    if (detailsOpenMatch && !inCodeBlock && !inThoughtBlock) {
+      if (inDetailsBlock) {
+        detailsDepth += 1;
+        detailsContent.push(line);
+        continue;
+      }
+      if (currentBlock.length > 0) {
+        blocks.push(createBlock('text', currentBlock.join('\n'), true, blocks.length));
+        currentBlock = [];
+      }
+      inDetailsBlock = true;
+      detailsDepth = 1;
+      detailsInitiallyOpen = /<details[ \t]+open/i.test(line);
+      detailsSummary = "More details";
+      detailsSummarySeen = false;
+      detailsContent = [];
+      continue;
+    }
+
+    // 3. Detect Thought Blocks
+    if (/<(?:thought|think)>/i.test(line) && !inCodeBlock && !inDetailsBlock) {
       if (currentBlock.length > 0) {
         blocks.push(createBlock('text', currentBlock.join('\n'), true, blocks.length));
         currentBlock = [];
@@ -93,7 +196,21 @@ export function splitMarkdownIntoBlocks(content: string, isStreaming: boolean): 
     currentBlock.push(line);
   }
 
-  // Handle the active (streaming) block
+  // Handle the active (streaming) block. An unfinished disclosure still
+  // renders safely as an open-ended details block while tokens arrive.
+  if (inDetailsBlock) {
+    blocks.push(createBlock(
+      'details',
+      detailsContent.join('\n').trim(),
+      false,
+      blocks.length,
+      undefined,
+      detailsSummary,
+      detailsInitiallyOpen,
+    ));
+    return blocks;
+  }
+
   if (currentBlock.length > 0) {
     let type: MarkdownBlock['type'] = 'text';
     if (inCodeBlock) {
@@ -101,13 +218,12 @@ export function splitMarkdownIntoBlocks(content: string, isStreaming: boolean): 
       // If we have a language from an unclosed fence, attach it
       if (codeLanguage) {
         // Ensure the opening fence is in the content
-        if (!currentBlock[0] || !currentBlock[0].startsWith('```')) {
-          currentBlock.unshift('```' + codeLanguage);
+        if (!currentBlock[0] || !/^ {0,3}[`~]{3,}/.test(currentBlock[0])) {
+          currentBlock.unshift(codeFence + codeLanguage);
         }
       }
     }
     if (inThoughtBlock) type = 'thought';
-
     // For streaming code blocks, auto-close the fence for parser stability.
     // Skip OpenUI blocks — their parser handles incomplete streaming code natively
     // and auto-closing injects corrupting ``` characters into the DSL.
@@ -126,6 +242,12 @@ export function splitMarkdownIntoBlocks(content: string, isStreaming: boolean): 
   }
 
   return blocks;
+}
+
+function isClosingFence(line: string, openingFence: string): boolean {
+  const match = line.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/);
+  if (!match) return false;
+  return match[1][0] === openingFence[0] && match[1].length >= openingFence.length;
 }
 
 function shouldDeferStreamingFenceClose(
@@ -174,7 +296,7 @@ function hasDanglingXmlTail(lines: string[], fenceLineIndex: number): boolean {
     .trim();
 
   if (!lookahead) return false;
-  if (lookahead.startsWith('```')) return false;
+  if (/^[`~]{3,}/.test(lookahead)) return false;
 
   return /^<\/?[a-z][\w:-]*(\s|>|\/>)/i.test(lookahead)
     || /^<\/[a-z][\w:-]*>/i.test(lookahead);
@@ -186,12 +308,16 @@ function createBlock(
   isComplete: boolean,
   blockIndex: number,
   language?: string,
+  summary?: string,
+  initiallyOpen?: boolean,
 ): MarkdownBlock {
   return {
     id: `${type}-${blockIndex}`,
     type,
     content,
     language,
+    summary,
+    initiallyOpen,
     isComplete,
     index: blockIndex,
   };

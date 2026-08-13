@@ -13,6 +13,7 @@ export type ExecutionStatus =
   | "running"
   | "completed"
   | "error"
+  | "interrupted"
   | "awaiting_approval";
 
 interface ExecutionRowProps {
@@ -37,6 +38,7 @@ const STATUS_ICONS: Record<ExecutionStatus, LucideIcon> = {
   running: Loader2,
   completed: CheckCircle2,
   error: XCircle,
+  interrupted: XCircle,
   awaiting_approval: ShieldAlert,
 };
 
@@ -58,6 +60,7 @@ const STATUS_ICON_CLASS: Record<ExecutionStatus, string> = {
   running: "text-primary animate-spin",
   completed: "text-success",
   error: "text-destructive",
+  interrupted: "text-warning",
   awaiting_approval: "text-warning",
 };
 
@@ -65,6 +68,7 @@ export function getExecutionStatusLabel(status: ExecutionStatus) {
   if (status === "awaiting_approval") return "Needs approval";
   if (status === "completed") return "Complete";
   if (status === "error") return "Failed";
+  if (status === "interrupted") return "Interrupted";
   return "Running";
 }
 
@@ -154,12 +158,12 @@ export function ExecutionRow({
           )}
         />
       )}
-      <span className="execution-row-copy min-w-0 flex-1 py-1.5 pl-0.5">
-        <span className="execution-row-title block min-w-0 truncate text-[12px] font-medium leading-5 text-foreground">
+      <span className="execution-row-copy min-w-0 flex-1 items-baseline gap-2 py-1.5 pl-0.5">
+        <span className="execution-row-title min-w-0 truncate text-[12px] font-medium leading-5 text-foreground">
           {title}
         </span>
         {subtitle && (
-          <span className="execution-row-subtitle block min-w-0 truncate text-[11px] leading-4 text-muted-foreground">
+          <span className="execution-row-subtitle min-w-0 truncate text-[11px] leading-4 text-muted-foreground">
             {subtitle}
           </span>
         )}
@@ -170,6 +174,21 @@ export function ExecutionRow({
       {duration && (
         <span className="execution-row-meta shrink-0 text-[11px] text-muted-foreground tabular-nums">
           {duration}
+        </span>
+      )}
+
+      {(variant === "ledger" || status !== "completed") && (
+        <span
+          className={cn(
+            "execution-row-status shrink-0 text-[11px]",
+            status === "running" && "text-primary",
+            status === "awaiting_approval" && "text-warning",
+            status === "error" && "text-destructive",
+            status === "interrupted" && "text-warning",
+            status === "completed" && "text-success",
+          )}
+        >
+          {resolvedStatusLabel}
         </span>
       )}
 
@@ -225,12 +244,12 @@ function ExecutionRowContent({
           )}
         />
       )}
-      <span className="execution-row-copy min-w-0 flex-1 py-1.5 pl-0.5">
-        <span className="execution-row-title block min-w-0 truncate text-[12px] font-medium leading-5 text-foreground">
+      <span className="execution-row-copy min-w-0 flex-1 items-baseline gap-2 py-1.5 pl-0.5">
+        <span className="execution-row-title min-w-0 truncate text-[12px] font-medium leading-5 text-foreground">
           {title}
         </span>
         {subtitle && (
-          <span className="execution-row-subtitle block min-w-0 truncate text-[11px] leading-4 text-muted-foreground">
+          <span className="execution-row-subtitle min-w-0 truncate text-[11px] leading-4 text-muted-foreground">
             {subtitle}
           </span>
         )}
@@ -241,6 +260,21 @@ function ExecutionRowContent({
       {duration && (
         <span className="execution-row-meta shrink-0 text-[11px] text-muted-foreground tabular-nums">
           {duration}
+        </span>
+      )}
+
+      {(variant === "ledger" || status !== "completed") && (
+        <span
+          className={cn(
+            "execution-row-status shrink-0 text-[11px]",
+            status === "running" && "text-primary",
+            status === "awaiting_approval" && "text-warning",
+            status === "error" && "text-destructive",
+            status === "interrupted" && "text-warning",
+            status === "completed" && "text-success",
+          )}
+        >
+          {resolvedStatusLabel}
         </span>
       )}
 

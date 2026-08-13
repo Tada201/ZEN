@@ -231,7 +231,7 @@ export function WorkspaceContextHeader({
           </button>
 
           {/* Keep the status trigger at the outer edge of the app header. */}
-          <RunStatusPopover />
+          <RunStatusPopover messages={messages} isStreaming={isStreaming} />
         </div>
       </WorkbenchHeaderCore>
 

@@ -125,8 +125,8 @@ export function DependenciesSettings() {
         ))}
       </div>
 
-      <div className="rounded-xl border border-border/70 bg-background/40">
-        <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+      <div className="rounded-xl border border-border bg-card">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
             <WorkbenchIcon name="lucide:terminal-square" size={15} className="text-primary" />
             <span className="text-xs font-bold uppercase tracking-[0.16em] text-foreground">Install Console</span>
@@ -141,7 +141,7 @@ export function DependenciesSettings() {
           ) : (
             logs.map((log) => (
               <div key={log.id} className={levelClass[log.level]}>
-                <span className="text-muted-foreground/70">[{log.level.toUpperCase()}]</span> {log.message}
+                <span className="text-muted-foreground">[{log.level.toUpperCase()}]</span> {log.message}
               </div>
             ))
           )}
@@ -153,7 +153,7 @@ export function DependenciesSettings() {
 
 function SummaryCard({ label, value, tone }: { label: string; value: number; tone: "ok" | "warn" | "info" }) {
   return (
-    <div className="rounded-xl border border-border/70 bg-card/40 p-4">
+    <div className="rounded-xl border border-border bg-card p-4">
       <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{label}</div>
       <div className={cn("mt-2 text-2xl font-bold", tone === "ok" && "text-success", tone === "warn" && "text-warning", tone === "info" && "text-foreground")}>{value}</div>
     </div>
@@ -162,7 +162,7 @@ function SummaryCard({ label, value, tone }: { label: string; value: number; ton
 
 function DependencyRow({ item, onDownload }: { item: DependencyStatus; onDownload: () => void }) {
   return (
-    <div className="rounded-xl border border-border/70 bg-card/35 p-4">
+    <div className="rounded-xl border border-border bg-card p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -180,7 +180,7 @@ function DependencyRow({ item, onDownload }: { item: DependencyStatus; onDownloa
           <div className="text-sm text-foreground">{item.feature}</div>
           <div className="text-xs text-muted-foreground">{item.notes}</div>
           {(item.version || item.detectedPath || item.installCommand) && (
-            <div className="space-y-1 rounded-lg border border-border bg-background/25 p-2 font-mono text-[11px] text-muted-foreground">
+            <div className="space-y-1 rounded-lg border border-border bg-background p-2 font-mono text-[11px] text-muted-foreground">
               {item.version && <div>version: {item.version}</div>}
               {item.detectedPath && <div>path: {item.detectedPath}</div>}
               {item.installCommand && <div>install: {item.installCommand}</div>}

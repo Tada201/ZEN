@@ -12,7 +12,7 @@ const globalListenerSource = readFileSync(new URL("../src/atlas/hooks/useGlobalS
 // Only tabs with real panel implementations in RightPanel should be
 // visible in the right-rail feature registry.  analytics, workflows,
 // memory, and space were removed because they had no render branches.
-const IMPLEMENTED_TABS = ["metrics", "approvals", "artifacts", "agents", "drawing", "terminal", "map"];
+const IMPLEMENTED_TABS = ["metrics", "approvals", "artifacts", "agents", "drawing", "terminal", "map", "browser"];
 
 for (const tab of IMPLEMENTED_TABS) {
   assert(
@@ -66,6 +66,12 @@ assert(
     rightPanelSource.includes("visibleActiveRightTab === 'approvals'"),
   "RightPanel should mount the unified Approval Center tab",
 );
+assert(
+  featuresSource.includes('rightPanelTabId: "browser"') &&
+    rightPanelSource.includes("BrowserPreview") &&
+    rightPanelSource.includes("case 'browser':"),
+  "RightPanel should expose the secure Browser Preview workbench view",
+);
 
 assert(
   rightPanelSource.includes("workbenchApi.listTabs(activeChatId)") &&
@@ -73,6 +79,12 @@ assert(
     rightPanelSource.includes("workbenchApi.deleteTab(activeChatId, tabId)") &&
     rightPanelSource.includes("crypto.randomUUID()"),
   "right-panel tabs must restore per chat, persist order, delete closed tabs, and create unique terminal sessions",
+);
+assert(
+  rightPanelSource.includes(': "");') &&
+    rightPanelSource.includes('const visibleActiveRightTab = activeRightTab === ""') &&
+    rightPanelSource.includes("if (!activeRightTab) return;"),
+  "closing the final right-panel tab must preserve an empty layout instead of selecting System Metrics",
 );
 
 assert(

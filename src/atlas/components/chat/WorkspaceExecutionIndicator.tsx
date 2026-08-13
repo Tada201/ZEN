@@ -1,4 +1,4 @@
-import { AlertCircle, Check, Circle, Loader2, ShieldAlert } from "lucide-react";
+import { AlertCircle, Check, Circle, Loader2, Pause, ShieldAlert } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { Message } from "./types";
@@ -22,14 +22,16 @@ export function WorkspaceExecutionIndicator({
   const status = deriveWorkspaceExecutionStatus(messages, isStreaming);
   const reducedMotion = useReducedMotion();
   if (hideWhenIdle && status.kind === "idle") return null;
-  const isActionable = status.kind === "approval" || status.kind === "running" || status.kind === "error";
+  const isActionable = status.kind === "approval" || status.kind === "running" || status.kind === "paused" || status.kind === "review" || status.kind === "error";
   const Icon = status.kind === "approval"
     ? ShieldAlert
     : status.kind === "running"
       ? Loader2
-      : status.kind === "error"
-        ? AlertCircle
-        : status.kind === "completed"
+      : status.kind === "paused"
+        ? Pause
+        : status.kind === "review" || status.kind === "error"
+          ? AlertCircle
+          : status.kind === "completed"
           ? Check
           : Circle;
   const openPanel = status.kind === "approval" ? onOpenApprovals : onOpenAgents;

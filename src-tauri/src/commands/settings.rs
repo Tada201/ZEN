@@ -11,6 +11,12 @@ use tauri::{Manager, State};
 #[serde(rename_all = "camelCase")]
 pub struct ProviderCatalogEntry {
     pub id: String,
+    pub display_name: String,
+    pub description: String,
+    pub category: String,
+    pub requires_key: bool,
+    pub api_key_key: Option<String>,
+    pub base_url_key: String,
     pub default_base_url: String,
     pub base_url: String,
     pub is_local: bool,
@@ -110,6 +116,12 @@ pub async fn get_provider_catalog(state: State<'_, AppState>) -> ZenResult<Vec<P
 
         entries.push(ProviderCatalogEntry {
             id: provider_id.to_string(),
+            display_name: meta.display_name.to_string(),
+            description: meta.description.to_string(),
+            category: meta.category.to_string(),
+            requires_key: meta.api_key_key.is_some(),
+            api_key_key: meta.api_key_key.map(str::to_string),
+            base_url_key: format!("{}_base_url", provider_id),
             default_base_url: meta.default_base_url.to_string(),
             base_url,
             is_local,
@@ -139,6 +151,19 @@ pub async fn get_provider_catalog(state: State<'_, AppState>) -> ZenResult<Vec<P
                     .unwrap_or(false);
                 entries.push(ProviderCatalogEntry {
                     id: id.to_string(),
+                    display_name: provider
+                        .get("displayName")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or(id)
+                        .to_string(),
+                    description: "OpenAI-compatible custom connection.".to_string(),
+                    category: "custom".to_string(),
+                    requires_key: provider
+                        .get("requiresKey")
+                        .and_then(|value| value.as_bool())
+                        .unwrap_or(false),
+                    api_key_key: Some(format!("{}_api_key", id)),
+                    base_url_key: format!("{}_base_url", id),
                     default_base_url: base_url.clone(),
                     base_url,
                     is_local: false,
@@ -203,10 +228,24 @@ pub async fn set_setting(state: State<'_, AppState>, key: String, value: String)
 }
 
 async fn custom_provider_ids(state: &AppState) -> Vec<String> {
-    let Ok(Some(raw)) = state.settings_manager.get("custom_providers").await else { return Vec::new(); };
-    serde_json::from_str::<serde_json::Value>(&raw)
-        .ok()
-        .and_then(|value| value.as_object().cloned())
+    let Ok(Some(raw)) = state.settings_manager.get("custom_providers").await else {
+        return Vec::new();
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return Vec::new();
+    };
+
+    if let Some(providers) = value.as_array() {
+        return providers
+            .iter()
+            .filter_map(|provider| provider.get("id").and_then(|id| id.as_str()))
+            .map(ToOwned::to_owned)
+            .collect();
+    }
+
+    // Accept the legacy object shape so reset remains safe for older installs.
+    value
+        .as_object()
         .map(|providers| providers.keys().cloned().collect())
         .unwrap_or_default()
 }

@@ -1,11 +1,4 @@
 import { z } from "zod";
-import {
-  VOICE_DISPLAY_AGENT_DEFAULT_COMPACT_THRESHOLD,
-  VOICE_DISPLAY_AGENT_DEFAULT_CONTEXT_TOKENS,
-  VOICE_DISPLAY_AGENT_DEFAULT_MAX_TURNS,
-  VOICE_DISPLAY_AGENT_DEFAULT_PROMPT,
-} from "./voiceDefaults";
-
 export const SettingsSchema = z.object({
   // ─── Interface ───────────────────────────────────────────────────────────
   themeId: z.string().default("default-dark"),
@@ -62,13 +55,8 @@ export const SettingsSchema = z.object({
   sttModel: z.string().default("base"),
   selectedMic: z.string().default(""),
   systemSoundsEnabled: z.boolean().default(true),
-  voiceDisplayAgentEnabled: z.boolean().default(true),
+  // The automatic voice display agent is model-configurable from Settings → Agents.
   voiceDisplayAgentModel: z.string().default(""),
-  voiceDisplayAgentContextTokens: z.number().min(4096).max(1048576).default(VOICE_DISPLAY_AGENT_DEFAULT_CONTEXT_TOKENS),
-  voiceDisplayAgentMaxTurns: z.number().min(1).max(50).default(VOICE_DISPLAY_AGENT_DEFAULT_MAX_TURNS),
-  voiceDisplayAgentAutoCompactEnabled: z.boolean().default(true),
-  voiceDisplayAgentCompactThreshold: z.number().min(50).max(95).default(VOICE_DISPLAY_AGENT_DEFAULT_COMPACT_THRESHOLD),
-  voiceDisplayAgentPrompt: z.string().default(VOICE_DISPLAY_AGENT_DEFAULT_PROMPT),
 
   // ─── Chat & AI ───────────────────────────────────────────────────────────
   activeProvider: z.string().default("ollama"),
@@ -78,6 +66,7 @@ export const SettingsSchema = z.object({
   maxTokens: z.number().min(1).max(128000).default(4096),
   reasoningEnabled: z.boolean().default(false),
   reasoningEffort: z.enum(["low", "medium", "high"]).default("medium"),
+  reasoningDisclosureDensity: z.enum(["compact", "balanced", "detailed"]).default("balanced"),
   streamingEnabled: z.boolean().default(true),
   streamSpeed: z.number().min(0).max(1).default(0.5),
   thinkingMode: z.boolean().default(false),

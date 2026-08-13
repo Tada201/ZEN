@@ -14,10 +14,6 @@ const ENGINES = [
         name: 'Web Speech', availability: 'Device-dependent', performance: 'Excellent',
         quality: 'Device-dependent', languages: 'Platform-dependent', privacy: 'May use cloud', bestFor: 'Zero-install voice commands',
     },
-    {
-        name: 'OS Native', availability: 'Planned', performance: 'Good',
-        quality: 'Platform-dependent', languages: 'Installed OS packs', privacy: 'Platform-dependent', bestFor: 'System-integrated fallback',
-    },
 ] as const;
 
 function DetectionCell({ ok, label }: { ok: boolean; label: string }) {
@@ -34,14 +30,14 @@ function DetectionCell({ ok, label }: { ok: boolean; label: string }) {
 
 export function WebSpeechDetectionTable({ capability }: { capability: WebSpeechCapability }) {
     return (
-        <div className="overflow-hidden rounded-lg border border-border bg-card/60">
+        <div className="overflow-hidden rounded-lg border border-border bg-background">
             <div className="flex items-center justify-between border-b border-border px-3 py-2">
                 <span className="text-[11px] font-semibold text-foreground">Current device compatibility</span>
                 <span className={capability.supported ? 'text-[10px] font-bold text-success' : 'text-[10px] font-bold text-warning'}>
                     {capability.supported ? 'READY' : 'NOT AVAILABLE'}
                 </span>
             </div>
-            <div className="divide-y divide-white/[0.06] px-3">
+            <div className="divide-y divide-border px-3">
                 <DetectionCell ok={capability.recognitionApi} label="SpeechRecognition API" />
                 <DetectionCell ok={capability.microphoneApi} label="Microphone capture" />
                 <DetectionCell ok={capability.secureContext} label="Secure application context" />
@@ -58,12 +54,12 @@ export function STTCapabilityTable() {
     return (
         <div className="overflow-x-auto rounded-lg border border-border">
             <table className="w-full min-w-[760px] border-collapse text-left text-[11px]">
-                <thead className="bg-card/80 text-muted-foreground">
+                <thead className="bg-muted text-muted-foreground">
                     <tr>{['Engine', 'Status', 'Speed', 'Quality', 'Languages', 'Privacy', 'Best for'].map((label) => (
                         <th key={label} className="border-b border-border px-3 py-2 font-semibold">{label}</th>
                     ))}</tr>
                 </thead>
-                <tbody className="divide-y divide-white/[0.06]">
+                <tbody className="divide-y divide-border">
                     {ENGINES.map((engine) => (
                         <tr key={engine.name} className="text-foreground">
                             <td className="px-3 py-2 font-semibold text-foreground">{engine.name}</td>

@@ -27,6 +27,8 @@ const component = readFileSync(
   new URL("../src/atlas/components/workspace/BrowserPreview.tsx", import.meta.url),
   "utf8",
 );
+const tauriConfig = readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8");
+assert(tauriConfig.includes("frame-src 'self' http: https:;"));
 assert(component.includes("normalizeBrowserPreviewUrl(initialUrl)"));
 assert(component.includes("const formattedUrl = normalizeBrowserPreviewUrl(newUrl)"));
 assert(component.includes('sandbox="allow-forms allow-scripts"'));

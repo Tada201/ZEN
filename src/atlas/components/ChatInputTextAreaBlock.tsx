@@ -1,4 +1,5 @@
 import type { SlashSuggestion } from "./chat/input/useSlashCommand";
+import type { ComposerLayoutMode } from "./chat/input/PremiumChatInputTypes";
 import { PlusActionMenu } from "./chat/input/PlusActionMenu";
 import { cn } from "@/lib/utils/style";
 
@@ -35,6 +36,7 @@ export interface ChatInputTextAreaBlockProps {
   onOpenSkills?: () => void;
   isImageGenEnabled: boolean;
   setIsImageGenEnabled: (v: boolean) => void;
+  supportsImageGen: boolean;
   // Textarea
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   value: string;
@@ -43,10 +45,11 @@ export interface ChatInputTextAreaBlockProps {
   // Slash popover state
   slashIsPopoverOpen: boolean;
   slashSelectedIndex: number;
+  slashListboxId: string;
   setSlashSelectedIndex: React.Dispatch<React.SetStateAction<number>>;
   slashSuggestions: SlashSuggestion[];
   applySlashSuggestion: (s: SlashSuggestion) => void;
-  variant?: "default" | "welcome";
+  layoutMode: ComposerLayoutMode;
   readOnly?: boolean;
 }
 
@@ -68,19 +71,21 @@ export const ChatInputTextAreaBlock = ({
   onOpenSkills,
   isImageGenEnabled,
   setIsImageGenEnabled,
+  supportsImageGen,
   textareaRef,
   value,
   onChange,
   onSend,
   slashIsPopoverOpen,
   slashSelectedIndex,
+  slashListboxId,
   setSlashSelectedIndex,
   slashSuggestions,
   applySlashSuggestion,
-  variant = "default",
+  layoutMode,
   readOnly = false,
 }: ChatInputTextAreaBlockProps) => {
-  const isWelcome = variant === "welcome";
+  const isWelcome = layoutMode === "welcome";
 
   const textarea = (
     <textarea
@@ -136,10 +141,14 @@ export const ChatInputTextAreaBlock = ({
       }}
       placeholder={readOnly ? "Archived transcript — unarchive to continue" : "Ask anything... (type / for commands)"}
       aria-label="Message"
+      aria-controls={slashIsPopoverOpen ? slashListboxId : undefined}
+      aria-expanded={slashIsPopoverOpen ? true : undefined}
+      aria-activedescendant={slashIsPopoverOpen ? `${slashListboxId}-option-${slashSelectedIndex}` : undefined}
+      aria-autocomplete={slashIsPopoverOpen ? "list" : undefined}
       rows={1}
       className={cn(
-        "w-full bg-transparent border-none focus:ring-0 focus:outline-none outline-none ring-0 resize-none py-1 text-foreground dark:text-foreground placeholder:text-muted-foreground dark:placeholder:text-muted-foreground shadow-none",
-        isWelcome ? "text-[14px]" : "text-[15px]",
+        "composer-editor py-1 shadow-none focus:ring-0",
+        isWelcome ? "text-[13px]" : "text-[14px]",
         readOnly && "cursor-not-allowed opacity-70",
       )}
       aria-readonly={readOnly || undefined}
@@ -149,8 +158,8 @@ export const ChatInputTextAreaBlock = ({
   return (
     <div
       className={cn(
-        "flex gap-2",
-        isWelcome ? "items-center px-2 pt-1.5 pb-1" : "items-start p-3",
+        "composer-editor-row",
+        isWelcome && "composer-editor-row--welcome",
       )}
     >
       {!isWelcome && !readOnly && (
@@ -172,14 +181,15 @@ export const ChatInputTextAreaBlock = ({
           onOpenSkills={onOpenSkills}
           isImageGenEnabled={isImageGenEnabled}
           setIsImageGenEnabled={setIsImageGenEnabled}
+          supportsImageGen={supportsImageGen}
         />
       )}
       {isWelcome ? (
-        <div className="flex min-h-[32px] flex-1 items-center px-1 py-0.5">
+        <div className="flex min-h-[30px] min-w-0 flex-1 items-center px-1 py-0.5">
           {textarea}
         </div>
       ) : (
-        <div className="flex min-h-[38px] flex-1 items-center">{textarea}</div>
+        <div className="flex min-h-[34px] min-w-0 flex-1 items-center">{textarea}</div>
       )}
     </div>
   );

@@ -8,6 +8,7 @@ import type { Message, ToolCall } from "../../components/chat/types";
 import { focusActiveAgentsPanel } from "./agentPanelFocus";
 import { findWritableAssistantIndex } from "./messageTarget";
 import { persistExecutionCheckpointForEvent } from "./persistExecutionCheckpoint";
+import { normalizeExecutionPhase } from "@/atlas/agentRuntime/executionTrace";
 
 interface UseToolEventsProps {
   resetHeartbeatTimeout: (chatId: string) => void;
@@ -24,6 +25,11 @@ type ToolEventMetaPayload = {
   parentAgent?: string;
   parent_agent_id?: string;
   parentAgentId?: string;
+  parent_tool_call_id?: string;
+  parentToolCallId?: string;
+  sequence?: number;
+  timestamp?: string;
+  phase?: string;
   execution_id?: string;
   executionId?: string;
   agent_id?: string;
@@ -72,6 +78,10 @@ function getToolEventMeta(payload: ToolEventMetaPayload) {
     runId: payload.run_id || payload.runId,
     messageId: payload.message_id || payload.messageId,
     parentAgentId: payload.parent_agent_id || payload.parentAgentId || payload.parent_agent || payload.parentAgent,
+    parentToolCallId: payload.parent_tool_call_id || payload.parentToolCallId,
+    sequence: payload.sequence,
+    phase: payload.phase ? normalizeExecutionPhase(payload.phase, undefined) : undefined,
+    startTime: payload.timestamp ? Date.parse(payload.timestamp) : undefined,
     executionId: payload.execution_id || payload.executionId,
     agentId: payload.agent_id,
     agentName: payload.agent_name,
@@ -85,6 +95,25 @@ function getToolEventMeta(payload: ToolEventMetaPayload) {
 export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
   const unlistenRefs = useRef<UnlistenFn[]>([]);
   const toolChatIdsRef = useRef<Map<string, string>>(new Map());
+  const pendingMessageUpdatesRef = useRef<Map<string, Array<(messages: Message[]) => Message[]>>>(new Map());
+  const updateFrameRef = useRef<number | null>(null);
+
+  const flushMessageUpdates = () => {
+    updateFrameRef.current = null;
+    const pending = pendingMessageUpdatesRef.current;
+    pendingMessageUpdatesRef.current = new Map();
+    pending.forEach((updates, chatId) => {
+      if (updates.length === 0) return;
+      useChatStore.getState().setSessionMessages(chatId, (messages) => updates.reduce((next, update) => update(next), messages));
+    });
+  };
+
+  const queueMessageUpdate = (chatId: string, update: (messages: Message[]) => Message[]) => {
+    const updates = pendingMessageUpdatesRef.current.get(chatId) || [];
+    updates.push(update);
+    pendingMessageUpdatesRef.current.set(chatId, updates);
+    if (updateFrameRef.current === null) updateFrameRef.current = requestAnimationFrame(flushMessageUpdates);
+  };
 
   useEffect(() => {
     const setupListeners = async () => {
@@ -108,7 +137,7 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
           undefined,
           getToolEventMeta(event.payload),
         );
-        useChatStore.getState().setSessionMessages(chatId, (prev) => upsertTool(prev, chatId, tool));
+        queueMessageUpdate(chatId, (prev) => upsertTool(prev, chatId, tool));
         persistExecutionCheckpointForEvent({
           chatId,
           messageId: event.payload.message_id || event.payload.messageId,
@@ -132,7 +161,7 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
           undefined,
           getToolEventMeta(event.payload),
         );
-        useChatStore.getState().setSessionMessages(chatId, (prev) => upsertTool(prev, chatId, tool));
+        queueMessageUpdate(chatId, (prev) => upsertTool(prev, chatId, tool));
         persistExecutionCheckpointForEvent({
           chatId,
           messageId: event.payload.message_id || event.payload.messageId,
@@ -156,7 +185,7 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
           undefined,
           getToolEventMeta(event.payload),
         );
-        useChatStore.getState().setSessionMessages(chatId, (prev) => {
+        queueMessageUpdate(chatId, (prev) => {
           const next = upsertTool(prev, chatId, tool);
 
           // Auto-inject image markdown when generate_image completes successfully
@@ -215,7 +244,7 @@ export function useToolEvents({ resetHeartbeatTimeout }: UseToolEventsProps) {
           undefined,
           getToolEventMeta(event.payload),
         );
-        useChatStore.getState().setSessionMessages(chatId, (prev) => upsertTool(prev, chatId, tool));
+        queueMessageUpdate(chatId, (prev) => upsertTool(prev, chatId, tool));
         persistExecutionCheckpointForEvent({
           chatId,
           messageId: event.payload.message_id || event.payload.messageId,

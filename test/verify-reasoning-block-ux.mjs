@@ -13,9 +13,10 @@ const groupingSource = readFileSync(
 assert(
   source.includes("Collapse reasoning details") &&
     source.includes("Expand reasoning details") &&
-    source.includes("min-h-8") &&
+    source.includes("execution-reasoning-summary") &&
+    source.includes("min-h-7") &&
     source.includes("Preparing the answer"),
-  "reasoning block should render as an accessible compact capsule in collapsed state",
+  "reasoning block should render as an accessible one-line summary in collapsed state",
 );
 
 assert(
@@ -31,8 +32,12 @@ assert(
   source.includes("normalizeMathMarkdown") &&
     source.includes("remarkMath") &&
     source.includes("rehypeKatex") &&
-    source.includes("img: () => null"),
-  "reasoning block should retain math rendering while suppressing images",
+    source.includes("img: () => null") &&
+    source.includes("reasoning-markdown") &&
+    source.includes("h1:") &&
+    source.includes("pre:") &&
+    source.includes("safeHref"),
+  "reasoning block should retain safe math rendering and structured markdown formatting",
 );
 
 assert(

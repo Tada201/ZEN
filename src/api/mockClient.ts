@@ -12,6 +12,7 @@ const KEY_CHATS = `${STORAGE_PREFIX}chats`;
 const KEY_MESSAGES = `${STORAGE_PREFIX}messages`;
 const KEY_FOLDERS = `${STORAGE_PREFIX}folders`;
 const KEY_SETTINGS = `${STORAGE_PREFIX}settings`;
+const KEY_AGENTS = `${STORAGE_PREFIX}agents`;
 
 // Simulated state with localStorage persistence
 function loadData<T>(key: string, defaultValue: T): T {
@@ -144,6 +145,31 @@ let chats = loadData(KEY_CHATS, defaultChats);
 let messages = loadData(KEY_MESSAGES, defaultMessages);
 let folders = loadData(KEY_FOLDERS, defaultFolders);
 let settings = loadData(KEY_SETTINGS, defaultSettings);
+let agents = loadData<any[]>(KEY_AGENTS, []);
+
+const mockVoiceDisplayAgent = {
+  id: "voice_display",
+  name: "ZEN-DISPLAY",
+  description: "Automatic voice-mode render-only board agent",
+  instructions: "",
+  tool_ids: ["manage_board"],
+  tool_count: 1,
+  model_override: null,
+  model_provider: null,
+  max_iterations: 3,
+  context_window: 131072,
+  max_messages_in_memory: 20,
+  model_tier: "Local",
+  color: "blue",
+  user_invocable: false,
+  model_invocable: true,
+  allow_nested_delegation: false,
+  allowed_agent_ids: [],
+  inject_agents_md: false,
+  is_builtin: true,
+  user_editable: false,
+  config_mode: "model_only",
+};
 
 // Registry of commands
 const mockCommands: Record<string, (args: any) => any> = {
@@ -196,6 +222,19 @@ const mockCommands: Record<string, (args: any) => any> = {
   get_messages: ({ chatId }: { chatId: string }) => {
     return messages.filter(m => m.chatId === chatId);
   },
+  list_execution_traces: () => [],
+  get_execution_trace: () => null,
+  upsert_execution_trace: () => ({
+    traceId: "trace-mock",
+    chatId: "chat-1",
+    messageId: "msg-mock",
+    traceVersion: 2,
+    status: "checkpoint",
+    updatedAt: new Date().toISOString(),
+    eventCount: 0,
+    nodes: [],
+    steps: [],
+  }),
   get_messages_page: ({ chatId, limit = 50, offset = 0 }: { chatId: string; limit: number; offset: number }) => {
     const chatMsgs = messages.filter(m => m.chatId === chatId);
     return {
@@ -394,7 +433,53 @@ const mockCommands: Record<string, (args: any) => any> = {
   rollback_session: () => ({}),
 
   // Agents
-  list_agents: () => [],
+  list_agents: () => {
+    const selection = settings.voiceDisplayAgentModel || "";
+    const [provider, ...modelParts] = selection.split("::");
+    const model = modelParts.length > 0 ? modelParts.join("::") : selection;
+    return [
+      { ...mockVoiceDisplayAgent, model_override: model || null, model_provider: modelParts.length > 0 ? provider : null },
+      ...agents.filter((agent) => agent.id !== mockVoiceDisplayAgent.id),
+    ];
+  },
+  create_agent: ({ profile }: { profile: any }) => {
+    const agent = {
+      ...profile,
+      description: profile.description || "",
+      model_tier: "Local",
+      tool_count: profile.tool_ids?.length || 0,
+      is_builtin: false,
+      user_editable: true,
+      config_mode: "full",
+    };
+    agents = [...agents, agent];
+    saveData(KEY_AGENTS, agents);
+    return agent;
+  },
+  update_agent: ({ profile }: { profile: any }) => {
+    const agent = {
+      ...profile,
+      description: profile.description || "",
+      model_tier: "Local",
+      tool_count: profile.tool_ids?.length || 0,
+      is_builtin: false,
+      user_editable: true,
+      config_mode: "full",
+    };
+    agents = agents.map((current) => current.id === agent.id ? agent : current);
+    saveData(KEY_AGENTS, agents);
+    return agent;
+  },
+  delete_agent: ({ agentId }: { agentId: string }) => {
+    const previousLength = agents.length;
+    agents = agents.filter((agent) => agent.id !== agentId);
+    saveData(KEY_AGENTS, agents);
+    return agents.length !== previousLength;
+  },
+  set_voice_display_model: ({ model }: { model: string | null }) => {
+    settings.voiceDisplayAgentModel = model || "";
+    saveData(KEY_SETTINGS, settings);
+  },
   get_agent_config: () => ({}),
 
   // Tags
@@ -412,7 +497,9 @@ const mockCommands: Record<string, (args: any) => any> = {
     saveData(KEY_CHATS, chats);
     saveData(KEY_MESSAGES, messages);
   },
-  abort_chat: () => {},
+  abort_chat: () => true,
+  pause_chat: () => true,
+  continue_chat: () => true,
 
   // Tools extras
   run_tool_command: () => ({}),
@@ -451,15 +538,6 @@ const mockCommands: Record<string, (args: any) => any> = {
       phase: "persisted",
       iteration: 0,
     });
-    mockEmit("chat:status", {
-      chat_id: req.chatId,
-      message: "Provider ready: mock",
-      phase: "provider_ready",
-      provider: req.provider || "mock",
-      model: req.model || "mock-model",
-      iteration: 0,
-    });
-
     // Trigger mock stream
     setTimeout(() => {
       mockEmit("chat:status", {

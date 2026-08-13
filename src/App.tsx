@@ -13,10 +13,24 @@ import { useAppInit } from "./hooks/useAppInit";
 
 import { WorkspaceApp } from "./atlas/sections/WorkspaceSection";
 import { EXECUTION_DISCLOSURE_HARNESS_QUERY } from "./atlas/components/chat/executionDisclosureHarnessContract";
+import { REASONING_BLOCK_PREVIEW_QUERY } from "./atlas/components/chat/reasoningBlockPreviewContract";
+import { PREMIUM_CHAT_INPUT_FIXTURE_QUERY } from "./atlas/components/chat/premiumChatInputFixtureContract";
+
+const ReasoningBlockPreview = lazy(() =>
+  import("./atlas/components/chat/ReasoningBlockPreview").then((module) => ({
+    default: module.ReasoningBlockPreview,
+  })),
+);
 
 const ExecutionDisclosureHarness = lazy(() =>
   import("./atlas/components/chat/ExecutionDisclosureHarness").then((module) => ({
     default: module.ExecutionDisclosureHarness,
+  })),
+);
+
+const PremiumChatInputFixture = lazy(() =>
+  import("./atlas/components/chat/PremiumChatInputFixture").then((module) => ({
+    default: module.PremiumChatInputFixture,
   })),
 );
 
@@ -117,11 +131,33 @@ function App() {
   const executionDisclosureHarnessRequested = import.meta.env.DEV
     && typeof window !== "undefined"
     && window.location.search.includes(EXECUTION_DISCLOSURE_HARNESS_QUERY);
+  const reasoningBlockPreviewRequested = import.meta.env.DEV
+    && typeof window !== "undefined"
+    && window.location.search.includes(REASONING_BLOCK_PREVIEW_QUERY);
+  const premiumChatInputFixtureRequested = import.meta.env.DEV
+    && typeof window !== "undefined"
+    && window.location.search.includes(PREMIUM_CHAT_INPUT_FIXTURE_QUERY);
+
+  if (reasoningBlockPreviewRequested) {
+    return (
+      <Suspense fallback={<div className="fixed inset-0 bg-background" />}>
+        <ReasoningBlockPreview />
+      </Suspense>
+    );
+  }
 
   if (executionDisclosureHarnessRequested) {
     return (
       <Suspense fallback={<div className="fixed inset-0 bg-background" />}>
         <ExecutionDisclosureHarness />
+      </Suspense>
+    );
+  }
+
+  if (premiumChatInputFixtureRequested) {
+    return (
+      <Suspense fallback={<div className="fixed inset-0 bg-background" />}>
+        <PremiumChatInputFixture />
       </Suspense>
     );
   }

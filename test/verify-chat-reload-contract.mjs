@@ -57,6 +57,46 @@ assert.equal(completedNormalized.steps[0].toolCall.status, "completed", "rehydra
 assert.equal(completedNormalized.steps[1].type, "text", "second rehydrated step should be the answer text");
 assert.equal(completedNormalized.content, "Here is the final answer.", "rehydrated content should match the persisted answer");
 
+// Regression: a persisted timeline must remain source ordered. The final
+// message-level `content` and `toolCalls` summaries are not chronological
+// containers; rendering them as the fallback would hoist reasoning and every
+// tool ahead of the prose that was emitted between them.
+const interleavedMessagePayload = {
+  id: "backend-interleaved-1",
+  chatId: "chat-1",
+  role: "assistant",
+  content: "Final response.",
+  reasoning: "legacy summary that must not replace the ordered steps",
+  model: "test",
+  createdAt: Date.now(),
+  isComplete: 1,
+  kind: "chat",
+  stepsJson: JSON.stringify([
+    { type: "reasoning", content: "First inspect the request.", sequence: 1 },
+    { type: "tool-call", sequence: 2, toolCall: { id: "ordered-tool-1", name: "read_file", status: "completed", input: { path: "a.ts" }, output: "read a" } },
+    { type: "text", content: "I found the relevant file.", sequence: 3 },
+    { type: "tool-call", sequence: 4, toolCall: { id: "ordered-tool-2", name: "run_command", status: "completed", input: { command: "npm test" }, output: "passed" } },
+    { type: "reasoning", content: "Now validate the result.", sequence: 5 },
+    { type: "text", content: "Final response.", sequence: 6 },
+  ]),
+};
+const interleavedNormalized = normalizeVercelMessage(interleavedMessagePayload);
+assert.deepEqual(
+  interleavedNormalized.steps.map((step) => step.type),
+  ["reasoning", "tool-call", "text", "tool-call", "reasoning", "text"],
+  "reload must preserve the persisted reasoning/tool/text order",
+);
+assert.deepEqual(
+  interleavedNormalized.steps.filter((step) => step.type === "tool-call").map((step) => step.toolCall.id),
+  ["ordered-tool-1", "ordered-tool-2"],
+  "reload must not move or duplicate tool cards while preserving the timeline",
+);
+assert.equal(
+  interleavedNormalized.steps[2].content,
+  "I found the relevant file.",
+  "text between tools must remain in its original timeline position",
+);
+
 // The gate itself: source-level assertion that completed execution history
 // remains visible after the live stream and after backend hydration.
 const assistantSource = readFileSync(
@@ -172,8 +212,8 @@ assert.ok(
   "chat:done handler must NOT call updateMessageSteps with the optimistic assistantIdBeforeFinalize",
 );
 assert.ok(
-  useChatChunkSource.includes("messageId: event.payload.message_id || undefined") &&
-    useChatChunkSource.includes("findWritableAssistantIndex(prev, chatId, buf.messageId)"),
+  (useChatChunkSource.includes("messageId: event.payload.message_id || undefined") || useChatChunkSource.includes("messageId, event.payload.messageId")) &&
+    useChatChunkSource.includes("findWritableAssistantIndex(prev, chatId, buf.messageId)") || useChatChunkSource.includes("findWritableAssistantIndex(prev, record.chatId, record.messageId)"),
   "stream chunks must retain backend message_id while flushing so late reasoning stays on the owning assistant",
 );
 assert.ok(

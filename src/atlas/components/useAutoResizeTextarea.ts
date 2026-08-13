@@ -69,7 +69,8 @@ export function useAutoResizeTextarea({
     if (!el) return;
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        setContainerWidth(entry.contentRect.width);
+        const nextWidth = Math.round(entry.contentRect.width);
+        setContainerWidth((previousWidth) => previousWidth === nextWidth ? previousWidth : nextWidth);
       }
     });
     observer.observe(el);
@@ -102,7 +103,7 @@ export function useAutoResizeTextarea({
         resizeFrameRef.current = null;
       }
     };
-  }, [message, maxHeight, minHeight]);
+  }, [message, maxHeight, minHeight, containerWidth]);
 
   const isCompact = (containerWidth > 0 && containerWidth < compactBreakpoint) || isSidebar;
 

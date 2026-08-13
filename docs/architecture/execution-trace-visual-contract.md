@@ -157,7 +157,8 @@ Use existing semantic tokens and shared primitives rather than introducing a sec
 2. The final persisted timeline uses the backend assistant `message_id` from `chat:done`; optimistic IDs are never used for durable updates.
 3. Tool and subagent identity uses stable backend IDs (`tool_call_id`, `trace_id`, `spawn_id`, and related run/batch IDs).
 4. The same persisted steps must produce the same grouping, status, summary, and **default** disclosure behavior before and after reload. User-toggled expansion is currently ephemeral unless a later persistence slice explicitly stores it.
-5. Completed low-value groups remain hidden after the answer and on reload unless the persisted `revealCompletedToolHistory` preference intentionally opts into historical visibility.
+5. Reasoning disclosures use the persisted `reasoningDisclosureDensity` preference: `compact` and `balanced` remain summary-first, while `detailed` opens unspecified completed blocks; explicit caller defaults and user toggles always win.
+6. Completed low-value groups remain hidden after the answer and on reload unless the persisted `revealCompletedToolHistory` preference intentionally opts into historical visibility.
 6. Duplicate tool calls from steps and legacy fields are merged by stable ID.
 7. Persisted steps remain bounded and serializable; full output, base64 assets, and child transcripts belong in their dedicated surfaces.
 8. If a branch cannot supply a real backend message ID, it must not pretend that its timeline is durably persisted.

@@ -5,7 +5,7 @@ export function ComparisonCard({ data }: { data: any }) {
   const items = data.items || data.options || [];
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-lg w-full">
+    <div className="genui-card-surface rounded-2xl border border-border bg-card p-5 shadow-lg w-full max-w-none min-w-0">
       {title && (
         <h4 className="text-xs font-bold text-primary-foreground uppercase tracking-widest mb-4">{title}</h4>
       )}

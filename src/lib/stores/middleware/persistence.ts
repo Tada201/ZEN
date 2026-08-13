@@ -25,6 +25,7 @@ const TRANSIENT_KEYS = new Set([
   "isHydrated",
   "isDirty",
   "activeSettings",
+  "stagedOriginals",
   "availableModels",
   "availableModelsByProvider",
   "fetchingModels",

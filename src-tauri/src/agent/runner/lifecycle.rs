@@ -8,6 +8,7 @@ use crate::tools::manager::ToolManager;
 use crate::tools::GlobalToolRegistry;
 use sqlx::SqlitePool;
 use std::collections::{HashSet, VecDeque};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tauri::AppHandle;
 
@@ -37,6 +38,13 @@ pub struct Runner {
     /// mutability because `run()` borrows `&self`; child runners get a fresh
     /// slot so each sub-agent run traces independently.
     pub(super) trace_id: Arc<std::sync::RwLock<Option<String>>>,
+    /// Stable parent tool call for child-agent execution events. Root runs do
+    /// not have a parent; child runners inherit the spawn/delegation call id.
+    pub(super) parent_tool_call_id: Arc<std::sync::RwLock<Option<String>>>,
+    /// Monotonic sequence for lifecycle events in this run.
+    pub(super) event_sequence: Arc<AtomicU64>,
+    /// Child tool ids collected by a spawned runner for its completion summary.
+    pub(super) child_tool_call_ids: Arc<tokio::sync::Mutex<Vec<String>>>,
     /// Optional shared inbox for parent→child message injection. When set,
     /// the runner drains any queued `ChatMessage`s into its conversation at
     /// the start of each iteration, allowing a parent agent/orchestrator to
@@ -64,6 +72,9 @@ impl Clone for Runner {
             // run (see `send.rs`, which clones for the spawned task), so they
             // must observe the same trace_id `run()` sets.
             trace_id: self.trace_id.clone(),
+            parent_tool_call_id: self.parent_tool_call_id.clone(),
+            event_sequence: self.event_sequence.clone(),
+            child_tool_call_ids: self.child_tool_call_ids.clone(),
             message_inbox: self.message_inbox.clone(),
         }
     }
@@ -96,6 +107,9 @@ impl Runner {
             on_event: None,
             memory_scope: None,
             trace_id: Arc::new(std::sync::RwLock::new(None)),
+            parent_tool_call_id: Arc::new(std::sync::RwLock::new(None)),
+            event_sequence: Arc::new(AtomicU64::new(0)),
+            child_tool_call_ids: Arc::new(tokio::sync::Mutex::new(Vec::new())),
             message_inbox: None,
         }
     }
@@ -207,6 +221,41 @@ impl Runner {
         self
     }
 
+    /// Associate this runner's tool events with the parent spawn/delegation
+    /// call that owns the child execution.
+    pub fn with_parent_tool_call_id(self, parent_tool_call_id: Option<String>) -> Self {
+        if let Ok(mut slot) = self.parent_tool_call_id.write() {
+            *slot = parent_tool_call_id;
+        }
+        self
+    }
+
+    pub fn with_child_tool_call_ids(
+        mut self,
+        child_tool_call_ids: Arc<tokio::sync::Mutex<Vec<String>>>,
+    ) -> Self {
+        self.child_tool_call_ids = child_tool_call_ids;
+        self
+    }
+
+    pub(super) fn parent_tool_call_id(&self) -> Option<String> {
+        self.parent_tool_call_id.read().ok().and_then(|slot| slot.clone())
+    }
+
+    pub(super) fn next_event_sequence(&self) -> u64 {
+        self.event_sequence.fetch_add(1, Ordering::Relaxed)
+    }
+
+    pub(super) async fn record_child_tool_call_id(&self, tool_call_id: String) {
+        if self.depth == 0 || tool_call_id.is_empty() {
+            return;
+        }
+        let mut ids = self.child_tool_call_ids.lock().await;
+        if !ids.iter().any(|id| id == &tool_call_id) {
+            ids.push(tool_call_id);
+        }
+    }
+
     pub(super) fn emit(&self, event: AgentEvent) {
         event.emit_via(&self.app, &self.on_event);
     }
@@ -258,6 +307,9 @@ impl Runner {
             // Fresh slot: a child sub-agent run gets its own trace_id when its
             // `run()` fires, so its events don't inherit the parent's trace.
             trace_id: Arc::new(std::sync::RwLock::new(None)),
+            parent_tool_call_id: Arc::new(std::sync::RwLock::new(None)),
+            event_sequence: Arc::new(AtomicU64::new(0)),
+            child_tool_call_ids: Arc::new(tokio::sync::Mutex::new(Vec::new())),
             // Children get their own inbox (if any) via with_message_inbox;
             // do not inherit the parent's inbox.
             message_inbox: None,

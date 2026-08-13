@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from 'react';
+import { memo, useMemo, type CSSProperties } from 'react';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { toAssetUrl } from '@/lib/utils/assetUrl';
 import { callCommand } from '@/api/tauriClient';
@@ -55,7 +55,7 @@ function getVideoDisplayStyle(fit: string): Pick<CSSProperties, "objectFit"> {
  * WorkspaceBackground - A modular background component that renders solid backdrops,
  * custom vignette grids, and the user's custom blurred wallpaper dynamically.
  */
-export function WorkspaceBackground() {
+export const WorkspaceBackground = memo(function WorkspaceBackground() {
   const backgroundImageUrl = useSettingsStore(s => s.backgroundImageUrl ?? "");
   const backgroundOpacity = useSettingsStore(s => s.backgroundOpacity ?? 0.15);
   const backgroundBlur = useSettingsStore(s => s.backgroundBlur ?? 0);
@@ -103,7 +103,7 @@ export function WorkspaceBackground() {
       {/* User Custom Wallpaper */}
       {resolvedUrl && videoBackground && (
         <video
-          className="absolute inset-0 h-full w-full transition-all duration-500 ease-in-out [will-change:transform,opacity,filter]"
+          className="absolute inset-0 h-full w-full transition-all duration-500 ease-in-out"
           src={resolvedUrl}
           autoPlay
           muted
@@ -114,25 +114,27 @@ export function WorkspaceBackground() {
             ...videoStyle,
             opacity: backgroundOpacity,
             filter: backgroundBlur > 0 ? `blur(${backgroundBlur}px)` : 'none',
-            // Scale and translate3d to force dedicated GPU composite layer isolation and eliminate edge bleeds
-            transform: backgroundBlur > 0 ? 'scale(1.03) translate3d(0,0,0)' : 'scale(1.01) translate3d(0,0,0)',
+            // Keep a small scale to hide blur edge bleed without permanently
+            // promoting the full viewport to a GPU layer.
+            transform: backgroundBlur > 0 ? 'scale(1.03)' : 'scale(1.01)',
           }}
         />
       )}
 
       {resolvedUrl && !videoBackground && (
         <div
-          className="absolute inset-0 bg-center transition-all duration-500 ease-in-out [will-change:transform,opacity,filter]"
+          className="absolute inset-0 bg-center transition-all duration-500 ease-in-out"
           style={{
             backgroundImage: `url("${cssUrl}")`,
             ...displayStyle,
             opacity: backgroundOpacity,
             filter: backgroundBlur > 0 ? `blur(${backgroundBlur}px)` : 'none',
-            // Scale and translate3d to force dedicated GPU composite layer isolation and eliminate edge bleeds
-            transform: backgroundBlur > 0 ? 'scale(1.03) translate3d(0,0,0)' : 'scale(1.01) translate3d(0,0,0)',
+            // Keep a small scale to hide blur edge bleed without permanently
+            // promoting the full viewport to a GPU layer.
+            transform: backgroundBlur > 0 ? 'scale(1.03)' : 'scale(1.01)',
           }}
         />
       )}
     </div>
   );
-}
+});

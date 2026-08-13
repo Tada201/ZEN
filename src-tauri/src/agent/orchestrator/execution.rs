@@ -89,10 +89,9 @@ impl Orchestrator {
         let mut agent = self
             .agent_registry
             .get(agent_id)
-            .cloned()
             .or_else(|| {
                 // Fallback to generalist if agent not found
-                self.agent_registry.get("generalist").cloned()
+                self.agent_registry.get("generalist")
             })
             .ok_or_else(|| anyhow::anyhow!("Agent '{}' not found", agent_id))?;
 

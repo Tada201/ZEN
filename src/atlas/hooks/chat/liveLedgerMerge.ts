@@ -27,6 +27,7 @@ export function mergeLiveToolState(fetched: Message, existing?: Message): Messag
       ...tool,
       status: live.status || tool.status,
       output: live.output || tool.output || "",
+      outputPreview: live.outputPreview || tool.outputPreview,
       durationMs: live.durationMs ?? tool.durationMs,
       attempts: live.attempts || tool.attempts,
       startTime: live.startTime ?? tool.startTime,

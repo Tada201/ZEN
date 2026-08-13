@@ -60,39 +60,13 @@ impl Runner {
                 }),
             );
             let state = app.state::<AppState>();
-            let context_tokens = read_usize_setting(
-                &state,
-                "voiceDisplayAgentContextTokens",
-                DEFAULT_CONTEXT_TOKENS,
-                4_096,
-                1_048_576,
-            )
-            .await;
-            let max_turns = read_usize_setting(
-                &state,
-                "voiceDisplayAgentMaxTurns",
-                DEFAULT_MAX_TURNS,
-                1,
-                50,
-            )
-            .await;
-            let compact_threshold = read_usize_setting(
-                &state,
-                "voiceDisplayAgentCompactThreshold",
-                DEFAULT_COMPACT_THRESHOLD,
-                50,
-                95,
-            )
-            .await;
-            let auto_compact =
-                read_bool_setting(&state, "voiceDisplayAgentAutoCompactEnabled", true).await;
-            let custom_prompt = state
-                .settings_manager
-                .get("voiceDisplayAgentPrompt")
-                .await
-                .ok()
-                .flatten()
-                .filter(|value| !value.trim().is_empty());
+            // Voice display is intentionally a fixed-purpose built-in. Its
+            // only user-configurable field is the selected model; prompt,
+            // tools, context, and turn limits are immutable safety policy.
+            let context_tokens = DEFAULT_CONTEXT_TOKENS;
+            let max_turns = DEFAULT_MAX_TURNS;
+            let compact_threshold = DEFAULT_COMPACT_THRESHOLD;
+            let auto_compact = true;
 
             let selected_model = configured_model
                 .filter(|value| !value.trim().is_empty())
@@ -143,10 +117,7 @@ impl Runner {
                 .filter(|context| !context.trim().is_empty())
                 .unwrap_or("{\"version\":1,\"board\":null,\"widgets\":[]}");
             let task = format!(
-                "{}\n\nThe ORIGINAL USER REQUEST is authoritative and must be handled completely. You MUST execute manage_board at least once. A prose-only response is a failure. Render any requested visual, drawing, board clear, replacement, or edit with manage_board, then stop. The main-agent response is supporting context only and may be a short spoken wait message. Recent tool evidence contains data found by the main pipeline and may include URLs. Do not output prose.\n\nBOARD EDITING RULES:\n- CURRENT BOARD MANIFEST lists stable widget IDs, coordinates, occupied cells, and pixel cost.\n- The board is a zero-based 4x4 grid: cells 0..15, row=floor(cell/4), column=cell%4.\n- Widget IDs identify objects. Always update, remove, or focus using the exact existing widget ID, never a cell number.\n- For a new object, call add and choose free cells from occupiedCells.\n- Use set when the user says delete/clear/replace the old board and requests new content in the same turn.\n- For YouTube or video requests, use a video block with the exact safe URL from RECENT TOOL EVIDENCE. Never invent a URL.\n- When the user asks to show, open, or enable their camera, add or update a block with kind camera. The widget asks the user for permission; never claim the camera is already active.\n- Use cell or row+column with col_span and row_span from 1..4. Never cross row or column 3.\n\nCURRENT BOARD MANIFEST:\n{}\n\nORIGINAL USER REQUEST:\n{}\n\nMAIN AGENT RESPONSE:\n{}\n\nRECENT TOOL EVIDENCE:\n{}",
-                custom_prompt.unwrap_or_else(|| {
-                    "Use only the supplied original request and supporting response. Do not browse or infer missing facts.".to_string()
-                }),
+                "The ORIGINAL USER REQUEST is authoritative and must be handled completely. You MUST execute manage_board at least once. A prose-only response is a failure. Render any requested visual, drawing, board clear, replacement, or edit with manage_board, then stop. The main-agent response is supporting context only and may be a short spoken wait message. Recent tool evidence contains data found by the main pipeline and may include URLs. Do not output prose.\n\nBOARD EDITING RULES:\n- CURRENT BOARD MANIFEST lists stable widget IDs, coordinates, occupied cells, and pixel cost.\n- The board is a zero-based 4x4 grid: cells 0..15, row=floor(cell/4), column=cell%4.\n- Widget IDs identify objects. Always update, remove, or focus using the exact existing widget ID, never a cell number.\n- For a new object, call add and choose free cells from occupiedCells.\n- Use set when the user says delete/clear/replace the old board and requests new content in the same turn.\n- For YouTube or video requests, use a video block with the exact safe URL from RECENT TOOL EVIDENCE. Never invent a URL.\n- When the user asks to show, open, or enable their camera, add or update a block with kind camera. The widget asks the user for permission; never claim the camera is already active.\n- Use cell or row+column with col_span and row_span from 1..4. Never cross row or column 3.\n\nCURRENT BOARD MANIFEST:\n{}\n\nORIGINAL USER REQUEST:\n{}\n\nMAIN AGENT RESPONSE:\n{}\n\nRECENT TOOL EVIDENCE:\n{}",
                 board_context,
                 user_request,
                 response,
@@ -795,31 +766,3 @@ fn simple_shape_svg(shape: &str) -> Option<String> {
 #[path = "voice_display_tests.rs"]
 mod tests;
 
-async fn read_usize_setting(
-    state: &AppState,
-    key: &str,
-    default: usize,
-    min: usize,
-    max: usize,
-) -> usize {
-    state
-        .settings_manager
-        .get(key)
-        .await
-        .ok()
-        .flatten()
-        .and_then(|value| value.parse::<usize>().ok())
-        .unwrap_or(default)
-        .clamp(min, max)
-}
-
-async fn read_bool_setting(state: &AppState, key: &str, default: bool) -> bool {
-    state
-        .settings_manager
-        .get(key)
-        .await
-        .ok()
-        .flatten()
-        .map(|value| value == "true")
-        .unwrap_or(default)
-}

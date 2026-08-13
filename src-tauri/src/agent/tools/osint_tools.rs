@@ -1,3 +1,6 @@
+//! Retired OSINT feed adapters kept source-only for the future unified
+//! `world_map` tool. They are intentionally not registered or agent-visible.
+
 use crate::agent::tools::AgentTool;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -96,90 +99,8 @@ impl AgentTool for EarthquakeTool {
     }
 }
 
-/// Fetch weather at a coordinate
-pub struct WeatherTool;
-
-#[async_trait]
-impl AgentTool for WeatherTool {
-    fn id(&self) -> &str {
-        "get_weather"
-    }
-
-    fn description(&self) -> &str {
-        "Get current weather conditions at a specific latitude/longitude coordinate."
-    }
-
-    fn input_schema(&self) -> Value {
-        json!({
-            "type": "object",
-            "properties": {
-                "lat": { "type": "number", "description": "Latitude" },
-                "lon": { "type": "number", "description": "Longitude" }
-            },
-            "required": ["lat", "lon"]
-        })
-    }
-
-    async fn run(
-        &self,
-        _app: AppHandle,
-        _chat_id: String,
-        input: Value,
-        _depth: u32,
-        _allowed_tools: Option<
-            std::sync::Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>,
-        >,
-        _token: tokio_util::sync::CancellationToken,
-    ) -> Result<Value> {
-        let lat = input
-            .get("lat")
-            .and_then(|v| v.as_f64())
-            .ok_or_else(|| anyhow!("lat required"))?;
-        let lon = input
-            .get("lon")
-            .and_then(|v| v.as_f64())
-            .ok_or_else(|| anyhow!("lon required"))?;
-
-        let weather = crate::services::gtsm::weather::fetch_weather(lat, lon)
-            .await
-            .map_err(|e| anyhow!("Weather fetch failed: {}", e))?;
-
-        // Build narrative summary from weather data
-        let summary = {
-            let temp = weather.temperature;
-            let wind = weather.wind_speed;
-            let humidity = weather.humidity;
-            let conditions = &weather.description;
-            let precip = weather.precipitation;
-
-            let wind_desc = if wind < 5.0 {
-                "calm winds".to_string()
-            } else if wind < 20.0 {
-                format!("wind at {} km/h", wind)
-            } else if wind < 40.0 {
-                format!("strong winds at {} km/h", wind)
-            } else {
-                format!("high wind warning: {} km/h", wind)
-            };
-
-            let precip_desc = if precip > 0.0 {
-                format!("precipitation: {} mm", precip)
-            } else {
-                "no precipitation".to_string()
-            };
-
-            format!(
-                "Current conditions at ({:.4}, {:.4}): {}, {}°C, {}% humidity, {}. {}",
-                lat, lon, conditions, temp, humidity as i32, wind_desc, precip_desc
-            )
-        };
-
-        Ok(json!({
-            "summary": summary,
-            "data": weather,
-        }))
-    }
-}
+// Weather lookup is intentionally not an agent tool. Current weather should
+// use `web_search` until a canonical information tool is defined.
 
 /// Fetch military aircraft positions
 pub struct MilitaryTrackingTool;

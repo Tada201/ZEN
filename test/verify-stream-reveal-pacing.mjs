@@ -10,9 +10,9 @@ assert(
 );
 
 assert(
-  smoothMarkdown.includes("hasPartialStreamingReveal") &&
-    smoothMarkdown.includes("keep revealing the remaining provider burst") &&
-    smoothMarkdown.indexOf("hasPartialStreamingReveal") < smoothMarkdown.indexOf("setDisplayedContent(content);"),
+  smoothMarkdown.includes("complete canonical answer must still pass through the reveal queue") &&
+    smoothMarkdown.includes("targetContentRef.current = content") &&
+    smoothMarkdown.includes("requestAnimationFrame(reveal)"),
   "SmoothMarkdown should not jump to the final answer when chat:done arrives with pending visible text",
 );
 

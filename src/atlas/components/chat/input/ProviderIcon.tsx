@@ -2,10 +2,13 @@ import { Icon } from '@iconify/react';
 import { cn } from '@/lib/utils';
 
 export function getProviderIconInfo(provider: string) {
-  switch (provider.toLowerCase()) {
+  const normalizedProvider = provider.trim().toLowerCase().replace(/[_\s-]+/g, '');
+  switch (normalizedProvider) {
     case 'openai': return { icon: "simple-icons:openai", color: 'text-emerald-500' };
     case 'anthropic': return { icon: "simple-icons:anthropic", color: 'text-orange-500' };
-    case 'google': return { icon: "logos:google-gemini", color: 'text-primary' };
+    case 'google':
+    case 'gemini':
+    case 'googlegemini': return { icon: "logos:google-gemini", color: 'text-primary' };
     case 'groq': return { icon: "simple-icons:groq", color: 'text-orange-400' };
     case 'xai': return { icon: "simple-icons:x", color: 'text-foreground dark:text-foreground' };
     case 'mistral': return { icon: "simple-icons:mistral", color: 'text-warning' };
@@ -21,5 +24,5 @@ export function getProviderIconInfo(provider: string) {
 
 export function ProviderIcon({ provider, className }: { provider: string, className?: string }) {
   const info = getProviderIconInfo(provider);
-  return <Icon icon={info.icon} className={cn(className, info.color)} />;
+  return <Icon aria-hidden="true" icon={info.icon} className={cn("inline-block shrink-0", className, info.color)} />;
 }

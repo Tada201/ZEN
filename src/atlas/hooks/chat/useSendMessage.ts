@@ -90,12 +90,9 @@ export function useSendMessage(
       attachments: data.attachments,
     });
 
-    try {
-      await chatApi.abortChat(targetSessionId);
-    } catch {
-      // No active stream to abort — safe to continue.
-    }
-
+    // Publish the optimistic turn before any abort IPC so a newly activated
+    // welcome-to-chat scene mounts with visible content instead of an empty
+    // timeline. A fresh session cannot have an active stream, so skip abort.
     setSessionMessages(targetSessionId, (prev: Message[]) => [
       ...supersedeStaleSendingAssistants(prev),
       userMessage,
@@ -104,6 +101,14 @@ export function useSendMessage(
 
     useChatStore.getState().setActiveAssistantForChat(targetSessionId, assistantMessage.id);
     useChatStore.getState().setStreamingForChat(targetSessionId, true);
+
+    if (!isFreshSession) {
+      try {
+        await chatApi.abortChat(targetSessionId);
+      } catch {
+        // No active stream to abort — safe to continue.
+      }
+    }
 
     try {
       let systemPrompt: string | null = null;

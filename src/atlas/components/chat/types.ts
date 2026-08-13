@@ -1,6 +1,7 @@
 /* ── Types ─────────────────────────────────────────────────── */
 
 import { stripToolProtocolText } from "@/atlas/lib/toolProtocolText";
+import { projectCanonicalMessageParts } from "@/atlas/agentRuntime/messageProjection";
 
 export type MessageKind =
   | 'text'
@@ -94,6 +95,9 @@ export interface ActionMeta {
   runId?: string;
   messageId?: string;
   parentAgentId?: string;
+  parentToolCallId?: string;
+  traceId?: string;
+  sequence?: number;
   executionId?: string;
   batchId?: string;
   toolBatchId?: string;
@@ -138,7 +142,16 @@ export interface ActionMeta {
   };
   resultSummary?: string;
   error?: string;
+  errorCategory?: import("@/atlas/agentRuntime/executionError").ExecutionErrorCategory;
+  errorAction?: import("@/atlas/agentRuntime/executionError").ExecutionRecoveryAction;
+  errorActionLabel?: string;
+  errorTechnicalDetails?: string;
+  errorRetryable?: boolean;
   recoverable?: boolean;
+  traceVersion?: number;
+  traceStatus?: string;
+  tracePersistence?: "pending" | "saved" | "failed";
+  tracePersistenceError?: string;
   agentStream?: {
     content: string;
     type?: "text" | "thought" | string;
@@ -241,6 +254,8 @@ export type ToolCall = {
   recoveryState?: "stale";
   input: Record<string, unknown> | string;
   output: string;
+  /** Bounded, redacted result summary safe for trace storage and diagnostics. */
+  outputPreview?: string;
   durationMs?: number;
   runId?: string;
   messageId?: string;
@@ -257,6 +272,9 @@ export type ToolCall = {
   agentName?: string;
   iteration?: number;
   traceId?: string;
+  parentToolCallId?: string;
+  sequence?: number;
+  phase?: string;
   batchId?: string;
   retries?: number;
   startTime?: number;
@@ -293,13 +311,28 @@ export interface ToolInvocation {
 
 export type ExecutionEventStatus = "pending" | "running" | "completed" | "error" | "cancelled";
 
+export type ExecutionTracePhase =
+  | "queued"
+  | "planning"
+  | "tool_announced"
+  | "tool_running"
+  | "waiting_for_approval"
+  | "streaming"
+  | "draining"
+  | "completed"
+  | "interrupted"
+  | "errored"
+  | "cancelled"
+  | "escalating"
+  | "waiting_for_input";
+
 export interface SubagentStepData {
   spawnId: string;
   parentToolCallId?: string;
   agentId: string;
   agentName: string;
   task: string;
-  status: "running" | "completed" | "failed" | "cancelled";
+  status: "running" | "completed" | "failed" | "cancelled" | "incomplete" | "uncertain";
   recoveryState?: "stale";
   resultSummary?: string;
   error?: string;
@@ -318,6 +351,8 @@ export type Step = {
   recoveryState?: "stale";
   metadata?: ActionMeta;
   timestamp?: number;
+  sequence?: number;
+  phase?: ExecutionTracePhase;
   eventId?: string;
 };
 
@@ -343,7 +378,7 @@ export type Message = {
   webSearch?: boolean;
   thinking?: ThinkingConfig;
   deepResearch?: boolean;
-  status?: "sending" | "sent" | "failed" | "cancelled";
+  status?: "sending" | "sent" | "failed" | "cancelled" | "paused";
   /** Durable history was recovered after an interrupted live execution. */
   recoveryState?: "recovered";
   error?: string;
@@ -361,10 +396,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function toAttachmentArray(value: unknown): Attachment[] {
   return Array.isArray(value) ? value as Attachment[] : [];
-}
-
-function toToolCallArray(value: unknown): ToolCall[] {
-  return Array.isArray(value) ? value as ToolCall[] : [];
 }
 
 /**
@@ -441,6 +472,19 @@ export function extractInlineThoughtBlocks(content: string): { content: string; 
   };
 }
 
+function parsePersistedSteps(value: unknown): unknown[] | undefined {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed;
+    if (isRecord(parsed) && Array.isArray(parsed.steps)) return parsed.steps;
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
 export function normalizeVercelMessage(msg: unknown): Message {
   if (!isRecord(msg)) return msg as Message;
 
@@ -449,17 +493,28 @@ export function normalizeVercelMessage(msg: unknown): Message {
     : "assistant";
   const rawContent = typeof msg.content === "string" ? msg.content : "";
 
+  const canonicalParts = projectCanonicalMessageParts({
+    content: rawContent,
+    reasoning: typeof msg.reasoning === "string" ? msg.reasoning : undefined,
+    steps: parsePersistedSteps(msg.stepsJson) || parsePersistedSteps(msg.steps),
+    toolCalls: msg.toolCalls,
+    toolInvocations: msg.toolInvocations,
+  });
+
   // Prefer the persisted execution timeline if the backend saved one.
   // This keeps tool-call ordering, chat-status steps, subagent lanes and
   // other transient UI state identical before and after reload.
   let normalizedSteps: Step[] | undefined;
   if (typeof msg.stepsJson === "string" && msg.stepsJson.trim()) {
     try {
-      const parsed = JSON.parse(msg.stepsJson) as unknown;
-      if (Array.isArray(parsed)) {
-        normalizedSteps = parsed.map((step) => role === "assistant" && step?.type === "text"
-          ? { ...step, content: stripToolProtocolText(step.content || "") }
-          : step) as Step[];
+      const parsedSteps = parsePersistedSteps(msg.stepsJson);
+      if (parsedSteps) {
+        normalizedSteps = parsedSteps.map((step) => {
+          if (!isRecord(step)) return step;
+          return role === "assistant" && step.type === "text"
+            ? { ...step, content: stripToolProtocolText(String(step.content || "")) }
+            : step;
+        }) as Step[];
       }
     } catch {
       // Fall through to legacy reconstruction if the JSON is corrupt.
@@ -477,10 +532,10 @@ export function normalizeVercelMessage(msg: unknown): Message {
     id: typeof msg.id === "string" ? msg.id : `message-${Date.now()}`,
     sessionId: typeof msg.sessionId === "string" ? msg.sessionId : "",
     role,
-    content: role === "assistant" ? stripToolProtocolText(rawContent) : rawContent,
-    reasoning: typeof msg.reasoning === "string" ? msg.reasoning : undefined,
+    content: role === "assistant" ? canonicalParts.content : rawContent,
+    reasoning: canonicalParts.reasoning,
     attachments: toAttachmentArray(msg.attachments),
-    toolCalls: toToolCallArray(msg.toolCalls),
+    toolCalls: canonicalParts.toolCalls as ToolCall[],
     artifact: isRecord(msg.artifact) ? msg.artifact as ArtifactData : null,
     createdAt: typeof msg.createdAt === "number" ? msg.createdAt : Date.now(),
     model: typeof msg.model === "string" ? msg.model : undefined,
@@ -496,7 +551,15 @@ export function normalizeVercelMessage(msg: unknown): Message {
     metadata: isRecord(msg.metadata) ? msg.metadata as ActionMeta : undefined,
     toolInvocations: toToolInvocationArray(msg.toolInvocations),
     stepsJson: typeof msg.stepsJson === "string" ? msg.stepsJson : undefined,
-    steps: normalizedSteps,
+    // `stepsJson`/`steps` is the chronological source of truth. The
+    // canonical projection is only a compatibility fallback for legacy rows
+    // that never stored an ordered timeline. Previously this always used
+    // `canonicalParts.steps`, which rebuilt every legacy-shaped message as
+    // reasoning → all tools → final text and silently discarded the persisted
+    // interleaving (reasoning → tool → text → tool → response).
+    steps: (normalizedSteps && normalizedSteps.length > 0
+      ? normalizedSteps
+      : canonicalParts.steps) as Step[],
   };
 
   // Restore toolCalls from persisted steps so subagent child tools (which

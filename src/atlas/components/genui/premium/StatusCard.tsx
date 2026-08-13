@@ -50,7 +50,7 @@ export function StatusCard({ data }: { data: any }) {
   const colorClass = STATUS_COLORS[status] || STATUS_COLORS.info;
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-lg w-full max-w-md">
+    <div className="genui-card-surface rounded-2xl border border-border bg-card p-5 shadow-lg w-full max-w-none min-w-0">
       <div className="flex items-start gap-3 mb-3">
         <div className={`p-2 rounded-xl border ${colorClass}`}>
           <Icon size={16} />

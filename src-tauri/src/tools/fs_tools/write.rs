@@ -117,7 +117,9 @@ impl Tool for WriteFileTool {
                     unified_diff(&target_path, &original, &args.content);
                 ("modified", Some(diff), lines_added, lines_removed)
             } else {
-                ("created", None, args.content.lines().count(), 0)
+                let (diff, lines_added, lines_removed) =
+                    unified_diff(&target_path, "", &args.content);
+                ("created", Some(diff), lines_added, lines_removed)
             };
 
         Ok(ToolOutput {

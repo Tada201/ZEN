@@ -405,7 +405,7 @@ impl Runner {
                                     cloud_config.display_name
                                 ),
                                 iteration: Some(0),
-                                phase: Some(ChatStatusPhase::PROVIDER_READY.to_string()),
+                                phase: Some(ChatStatusPhase::MODEL_ESCALATED.to_string()),
                                 metadata: Some(json!({
                                     "provider": cloud_config.display_name,
                                 })),
@@ -551,6 +551,7 @@ impl Runner {
         let on_event_clone = self.on_event.clone();
         let chat_id_clone = chat_id.to_string();
         let agent_stream_clone = agent_stream.clone();
+        let spawn_id_clone = self.trace_id();
         let early_runner = self.clone();
         let early_tools_clone = early_tools.clone();
         // Depth-0 only the parent is allowed to emit to the live UI
@@ -842,6 +843,7 @@ impl Runner {
                         if let Some((agent_id, agent_name)) = agent_stream_clone.as_ref() {
                             AgentEvent::AgentChunk(AgentChunkPayload {
                                 chat_id: chat_id_clone.clone(),
+                                spawn_id: spawn_id_clone.clone(),
                                 agent_id: agent_id.clone(),
                                 agent_name: agent_name.clone(),
                                 delta: chunk_text.clone(),

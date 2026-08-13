@@ -176,14 +176,12 @@ export function IntelligenceSettings({ settings, onUpdate }: IntelligenceSetting
       <SettingsSection title="Embeddings" icon="lucide:brain" description="Document vectorization settings">
         <SettingsRow
           label="Embedding Model"
-          description="Coming soon — vector embedding models are not yet selectable. Default is configured internally."
+          description="The active embedding model is selected by the runtime."
           control={
-            <WorkbenchSelect
-              value="nomic"
-              options={[{ value: "nomic", label: "No model available", disabled: true }]}
-              width={140}
-              className="opacity-50 pointer-events-none"
-            />
+            <div className="flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs text-muted-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
+              Runtime managed
+            </div>
           }
           icon="lucide:database"
         />

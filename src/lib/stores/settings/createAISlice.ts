@@ -10,6 +10,7 @@ export interface AiSlice {
   maxTokens: number;
   reasoningEnabled: boolean;
   reasoningEffort: "low" | "medium" | "high";
+  reasoningDisclosureDensity: "compact" | "balanced" | "detailed";
   streamingEnabled: boolean;
   streamSpeed: number;
   thinkingMode: boolean;
@@ -37,6 +38,10 @@ export interface AiSlice {
   gpuAcceleration: boolean;
   thinkingBudget: number;
   streamingSpeed: "instant" | "typewriter";
+  titleMakerEnabled: boolean;
+  titleMakerModel: string;
+  titleMakerProvider: string;
+  titleMakerPrompt: string;
   personalityPreset: string;
   voiceInstructions: string;
   minScore: number;
@@ -68,6 +73,7 @@ export const createAISlice: StateCreator<SettingsState, [], [], AiSlice> = (set,
   providerParams: {},
   reasoningEnabled: false,
   reasoningEffort: "medium",
+  reasoningDisclosureDensity: "balanced",
   streamingEnabled: true,
   streamSpeed: 0.5,
   thinkingMode: false,
@@ -95,6 +101,10 @@ export const createAISlice: StateCreator<SettingsState, [], [], AiSlice> = (set,
   gpuAcceleration: true,
   thinkingBudget: 4096,
   streamingSpeed: "instant",
+  titleMakerEnabled: true,
+  titleMakerModel: "",
+  titleMakerProvider: "",
+  titleMakerPrompt: "",
   personalityPreset: "neutral",
   voiceInstructions: "",
   minScore: 0.5,
@@ -104,20 +114,25 @@ export const createAISlice: StateCreator<SettingsState, [], [], AiSlice> = (set,
   chatPlugins: { ...DEFAULT_CHAT_PLUGINS },
 
   switchModel: async (provider: string, model?: string) => {
-    // Direct set() so activeProvider/activeModel update immediately
-    set({ activeProvider: provider });
-    if (model) {
-      set({ activeModel: model });
-    }
+    // Provider and model are one selection. Never leave a model from the
+    // previous provider active while the provider picker is changing.
+    const providerModels = get().availableModelsByProvider[provider] || [];
+    const currentModel = get().activeModel;
+    const nextModel = model !== undefined
+      ? model
+      : providerModels.some(candidate => candidate.id === currentModel)
+        ? currentModel
+        : providerModels[0]?.id || '';
+
+    // Direct set() keeps the chat picker responsive while persistence runs.
+    set({ activeProvider: provider, activeModel: nextModel });
 
     // Persist changes to SQLite backend (best-effort)
     try {
       const updates: Record<string, string> = {
         active_provider: provider,
+        active_model: nextModel,
       };
-      if (model) {
-        updates.active_model = model;
-      }
       await settingsApi.setSettings(updates);
     } catch (e) {
       console.warn("[AISlice] Failed to persist active model/provider to SQLite:", e);

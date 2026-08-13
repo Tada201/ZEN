@@ -2,7 +2,7 @@ import { MapPin, Clock } from 'lucide-react';
 
 export function EventCard({ data }: { data: any }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-lg max-w-md flex gap-4">
+    <div className="genui-card-surface w-full max-w-none min-w-0 rounded-2xl border border-border bg-card p-5 shadow-lg flex gap-4">
       <div className="flex-none flex flex-col items-center justify-center bg-primary/10 border border-primary rounded-2xl w-14 h-16">
         <span className="text-[10px] font-black text-primary uppercase tracking-widest">{data.month || 'DEC'}</span>
         <span className="text-2xl font-black text-primary-foreground tracking-tighter leading-none mt-0.5">{data.day || '01'}</span>

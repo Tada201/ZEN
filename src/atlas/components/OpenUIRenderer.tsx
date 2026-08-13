@@ -59,6 +59,7 @@ export function OpenUIRenderer({
 }: OpenUIRendererProps) {
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview");
   const [renderErrors, setRenderErrors] = useState<any[]>([]);
+  const hasStableSurface = !isStreaming && Boolean(content.trim());
 
   // Clear errors when content changes (essential for HMR and Retries)
   useEffect(() => {
@@ -171,15 +172,15 @@ export function OpenUIRenderer({
               <div className="space-y-6">
                 {extractedCode ? (
                   <div className="relative min-h-[100px] overflow-x-auto w-full max-w-full rounded-xl bg-card/95 border border-border/45 p-5 shadow-lg backdrop-blur-sm">
-                    <Renderer
+                    {hasStableSurface ? <Renderer
                       response={extractedCode}
                       library={extendedLibrary}
-                      isStreaming={isStreaming}
+                      isStreaming={false}
                       toolProvider={toolProvider}
                       onAction={onAction}
                       queryLoader={<QueryLoader />}
                       onError={(errors) => setRenderErrors(errors)}
-                    />
+                    /> : <div className="flex items-center gap-3 py-4 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin text-primary" /><span className="text-xs font-medium">Building interface...</span></div>}
                     {/* Fallback indicator if nothing is rendered after a delay */}
                     {!isStreaming && renderErrors.length === 0 && (
                       <div className="absolute inset-0 -z-10 flex items-center justify-center text-muted-foreground/20 italic text-[10px]">

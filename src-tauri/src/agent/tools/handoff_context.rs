@@ -157,10 +157,10 @@ pub fn render_handoff_prompt(handoff: &HandoffContext) -> String {
     prompt.push_str("4. Base your work on the task, success criteria, and constraints above\n");
     if handoff.allow_delegation {
         prompt.push_str(
-            "5. If you need to hand off to another specialist, use handoff_to_agent\n",
+            "5. Do not delegate further work; the parent agent owns delegation through spawn_agent\n",
         );
     } else {
-        prompt.push_str("5. Do not spawn or hand off to other agents; complete this task directly\n");
+        prompt.push_str("5. Do not spawn or delegate to other agents; complete this task directly\n");
     }
 
     prompt
@@ -222,7 +222,7 @@ mod tests {
 
         assert!(!handoff.allow_delegation);
         let prompt = render_handoff_prompt(&handoff);
-        assert!(prompt.contains("Do not spawn or hand off"));
+        assert!(prompt.contains("Do not spawn or delegate"));
     }
 
     #[test]

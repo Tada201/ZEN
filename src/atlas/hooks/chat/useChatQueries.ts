@@ -10,7 +10,10 @@ import { useUIStore, setActiveSessionId as setUISessionId } from "@/lib/stores/u
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import { useShallow } from "zustand/react/shallow";
 import type { ModelInfo } from "@/lib/types/provider";
-import { Session, Message, ChatFolder, ToolCall, Step, extractInlineThoughtBlocks, mergeToolCallsFromSteps } from "../../components/chat/types";
+import { Session, Message, ChatFolder, Step } from "../../components/chat/types";
+import { projectCanonicalMessageParts } from "@/atlas/agentRuntime/messageProjection";
+import { projectNormalizedTraceToMessage } from "@/atlas/agentRuntime/executionTrace";
+import { upsertScopedSubagentFromStep, flushScopedSubagentNotifications, clearScopedSubagents } from "@/atlas/agentRuntime/scopedSubagentStore";
 import { type Model } from "../../components/ModelSettingsContent";
 import { findLiveAssistantForFetched, mergeLiveToolState } from "./liveLedgerMerge";
 import { coalesceTimelineMessages } from "./chatTimelineReplay";
@@ -76,18 +79,19 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
       console.error("Failed to parse metadata JSON:", e);
     }
   }
-  let parsedToolCalls: ToolCall[] = [];
-  if (msg.toolCalls) {
-    if (Array.isArray(msg.toolCalls)) {
-      parsedToolCalls = msg.toolCalls;
-    } else {
-      try {
-        parsedToolCalls = JSON.parse(msg.toolCalls);
-      } catch (e) {
-        console.error("Failed to parse tool calls JSON:", e);
-      }
+  const parseArray = (value: unknown): unknown[] => {
+    if (Array.isArray(value)) return value;
+    if (typeof value !== "string" || !value.trim()) return [];
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && typeof parsed === "object" && Array.isArray(parsed.steps)) return parsed.steps;
+      return [];
+    } catch (e) {
+      console.error("Failed to parse message array JSON:", e);
+      return [];
     }
-  }
+  };
 
   let reasoning = "";
   if (msg.reasoningDetails) {
@@ -105,51 +109,36 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
   }
 
   let finalContent = msg.content || "";
-  if (!reasoning && finalContent) {
-    const extracted = extractInlineThoughtBlocks(finalContent);
-    reasoning = extracted.reasoning;
-    finalContent = extracted.content;
-  }
 
-  let parsedSteps: Step[] = [];
-  // Prefer the persisted execution timeline (stepsJson) kept in the DB.
-  // The backend writes this via chat:done → updateMessageSteps.
-  // On reload, msg.stepsJson is a JSON string; the legacy msg.steps
-  // property does not exist on BackendMessage and should not be used.
-  // Fall back to metadata.executionSteps only for old messages that
-  // predate the steps_json column.
   const rawSteps = msg.stepsJson ?? parsedMetadata?.executionSteps;
-  if (rawSteps) {
-    if (Array.isArray(rawSteps)) {
-      parsedSteps = rawSteps;
-    } else {
-      try {
-        parsedSteps = JSON.parse(rawSteps);
-      } catch (e) {
-        console.error("Failed to parse message steps JSON:", e);
+  if (typeof msg.stepsJson === "string") {
+    try {
+      const parsedTrace = JSON.parse(msg.stepsJson);
+      if (parsedTrace && typeof parsedTrace === "object" && !Array.isArray(parsedTrace)) {
+        parsedMetadata = {
+          ...(parsedMetadata || {}),
+          traceVersion: parsedTrace.trace_version,
+          traceStatus: parsedTrace.trace_status,
+        };
       }
+    } catch {
+      // The canonical projection below will fall back to legacy steps.
     }
   }
+  const canonicalParts = projectCanonicalMessageParts({
+    content: finalContent,
+    reasoning: reasoning || undefined,
+    steps: parseArray(rawSteps),
+    toolCalls: parseArray(msg.toolCalls),
+  });
+  finalContent = canonicalParts.content;
+  reasoning = canonicalParts.reasoning || "";
+  const steps = canonicalParts.steps as Step[];
+  // Silently populate scoped subagent records during bulk hydration;
+  // the caller must call flushScopedSubagentNotifications() once after mapping.
+  steps.forEach((step) => upsertScopedSubagentFromStep(msg.chatId, step, true));
+  const parsedToolCalls = canonicalParts.toolCalls;
 
-  const steps: Step[] = parsedSteps.length > 0 ? parsedSteps : [];
-  // `steps_json` is the durable chronological ledger. Reattach step-only
-  // tools here as well as in normalizeVercelMessage because this mapper is the
-  // actual SQLite history path used by useChatQueries. Without this boundary
-  // reconstruction, reloaded subagent child tools disappear from the card.
-  parsedToolCalls = mergeToolCallsFromSteps(parsedToolCalls, steps);
-  if (steps.length === 0) {
-    if (reasoning) {
-      steps.push({ type: "reasoning", content: reasoning });
-    }
-    if (parsedToolCalls.length > 0) {
-      parsedToolCalls.forEach((toolCall) => {
-        steps.push({ type: "tool-call", toolCall });
-      });
-    }
-    if (finalContent) {
-      steps.push({ type: "text", content: finalContent });
-    }
-  }
 
   let parsedAttachments = [];
   if (msg.attachments) {
@@ -186,7 +175,7 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
     content: finalContent,
     reasoning: reasoning || undefined,
     attachments: parsedAttachments,
-    toolCalls: parsedToolCalls,
+    toolCalls: parsedToolCalls as Message["toolCalls"],
     steps,
     stepsJson: msg.stepsJson,
     createdAt: new Date(msg.createdAt).getTime(),
@@ -463,8 +452,39 @@ export function useChatQueries() {
     queryKey: ["messages", currentSessionId],
     queryFn: async () => {
       if (!currentSessionId) return [];
-      const page = await chatApi.listMessagesPage(currentSessionId, 500, 0);
-      return coalesceTimelineMessages(page.items.map(mapDbMessageToMessage));
+      const [page, normalizedTraces] = await Promise.all([
+        chatApi.listMessagesPage(currentSessionId, 500, 0),
+        chatApi.listExecutionTraces(currentSessionId).catch(() => []),
+      ]);
+      const traceByMessageId = new Map<string, (typeof normalizedTraces)[number]>();
+      for (const trace of normalizedTraces) {
+        if (!trace.messageId) continue;
+        const current = traceByMessageId.get(trace.messageId);
+        const nextUpdatedAt = Date.parse(trace.updatedAt || "") || 0;
+        const currentUpdatedAt = current ? Date.parse(current.updatedAt || "") || 0 : -1;
+        // A malformed backend response can contain more than one trace for a
+        // message. Prefer the newest version/timestamp deterministically
+        // instead of letting array order decide which execution is rendered.
+        if (
+          !current ||
+          trace.traceVersion > current.traceVersion ||
+          (trace.traceVersion === current.traceVersion && nextUpdatedAt >= currentUpdatedAt)
+        ) {
+          traceByMessageId.set(trace.messageId, trace);
+        }
+      }
+      // Normalized v2 nodes are the authority for new traces. Legacy
+      // `steps_json` is read only when a trace has no node rows or is absent.
+      // Projecting nodes after the ordinary message mapper keeps old/imported
+      // sessions compatible without making steps_json authoritative again.
+      const messages = coalesceTimelineMessages(page.items.map((item) => {
+        const message = mapDbMessageToMessage(item);
+        const trace = traceByMessageId.get(item.id);
+        if (!trace || trace.traceVersion < 2 || !Array.isArray(trace.nodes) || trace.nodes.length === 0) return message;
+        return projectNormalizedTraceToMessage(message, trace);
+      }));
+      flushScopedSubagentNotifications();
+      return messages;
     },
     enabled: !!currentSessionId,
   });
@@ -663,6 +683,7 @@ export function useChatQueries() {
       } else {
         // Inactive chat — safe to purge its full runtime footprint.
         chatStore.clearSessionRuntime(prev);
+        clearScopedSubagents(prev);
       }
 
       useTaskStore.getState().setActiveChatId(currentSessionId);

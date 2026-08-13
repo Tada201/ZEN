@@ -24,12 +24,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 // Lazy load heavy components to prevent main thread blocking and high INP
 const SystemDiagnostics = React.lazy(() => import("@/components/shared/SystemDiagnostics").then(m => ({ default: m.SystemDiagnostics })));
+const RunInspector = React.lazy(() => import("./right-panel/RunInspector").then(m => ({ default: m.RunInspector })));
 const XTermPanel = React.lazy(() => import("@/components/Zen/XTermPanel").then(m => ({ default: m.XTermPanel })));
 const CesiumCanvas = React.lazy(() => import("@/components/workbench/MapContainer").then(m => ({ default: m.CesiumCanvas })));
 const ArtifactPanel = React.lazy(() => import("@/components/shared/ArtifactPanel").then(m => ({ default: m.ArtifactPanel })));
 const OrchestratorPanel = React.lazy(() => import("./right-panel/OrchestratorPanel").then(m => ({ default: m.OrchestratorPanel })));
 const ApprovalCenter = React.lazy(() => import("./chat/right-panel/ApprovalCenter").then(m => ({ default: m.ApprovalCenter })));
 const InteractiveDrawingCanvas = React.lazy(() => import("@/components/widgets/workbench/InteractiveDrawingCanvas"));
+const BrowserPreview = React.lazy(() => import("./workspace/BrowserPreview").then(m => ({ default: m.BrowserPreview })));
 
 const LoadingFallback = () => {
   const reducedMotion = useReducedMotion();
@@ -71,6 +73,7 @@ const MathGraphPlaceholder = () => (
  */
 export function RightPanel() {
   const { activeRightTab, setActiveRightTab, setRightPanelOpen, operationalParams, rightPanelCanvasMode, setRightPanelCanvasMode, activeChatId } = useUIStore();
+  const browserPreviewUrl = useUIStore((state) => activeChatId ? state.browserPreviewUrlByChat[activeChatId] : undefined);
   const pendingApprovalCount = useChatStore((state) => countPendingApprovals(state.sessionMessages));
   const workbenchViews = React.useMemo(() => getVisibleWorkbenchViews(), []);
   const [orderedTabIds, setOrderedTabIds] = React.useState<string[]>([]);
@@ -190,7 +193,11 @@ export function RightPanel() {
     setOrderedTabIds(next);
     if (activeRightTab === tabId) {
       const nextActive = next[Math.max(0, Math.min(index - 1, next.length - 1))];
-      setActiveRightTab(nextActive ? getBaseViewId(nextActive) === "terminal" ? nextActive : getBaseViewId(nextActive) : "metrics");
+      // Closing the final tab leaves the workbench in its explicit empty
+      // layout state. Do not silently select System Metrics as a replacement;
+      // otherwise the metrics view appears impossible to close and reopening
+      // the panel resurrects it as the active tab.
+      setActiveRightTab(nextActive ? getBaseViewId(nextActive) === "terminal" ? nextActive : getBaseViewId(nextActive) : "");
     }
     if (activeChatId) void workbenchApi.deleteTab(activeChatId, tabId).catch(() => undefined);
     persistOrder(next);
@@ -213,23 +220,42 @@ export function RightPanel() {
     // Terminal PTY lifecycle (spawn on mount, kill on unmount) is owned by
     // XTermPanel; the workbench tab id doubles as its session key.
   };
+  // Navigation from compact surfaces (status, cards, shortcuts) must survive
+  // custom tab ordering. A focused view may not exist in the saved layout yet;
+  // restore it into the layout before rendering the chooser, otherwise the
+  // navigation action appears to do nothing.
+  React.useEffect(() => {
+    if (!layoutInitialized) return;
+    const baseViewId = getBaseViewId(activeRightTab);
+    if (baseViewId === "terminal" || !isWorkbenchViewVisible(baseViewId)) return;
+    if (orderedTabIds.some((tabId) => getBaseViewId(tabId) === baseViewId)) return;
+    const next = [...orderedTabIds, baseViewId];
+    setOrderedTabIds(next);
+    persistOrder(next);
+  }, [activeRightTab, getBaseViewId, isWorkbenchViewVisible, layoutInitialized, orderedTabIds, persistOrder]);
+
   const { mapMode, setMapMode } = useGTSMStore();
   const reducedMotion = useReducedMotion();
   const [mapActivated, setMapActivated] = React.useState(false);
   const [mapClosing, setMapClosing] = React.useState(false);
 
   const activeViewId = getBaseViewId(activeRightTab);
-  const visibleActiveRightTab = isWorkbenchViewVisible(activeViewId)
-    ? activeViewId
-    : getDefaultWorkbenchView().id;
+  const visibleActiveRightTab = activeRightTab === ""
+    ? ""
+    : isWorkbenchViewVisible(activeViewId)
+      ? activeViewId
+      : getDefaultWorkbenchView().id;
 
-  const activeWorkbenchView = getWorkbenchView(visibleActiveRightTab);
+  const activeWorkbenchView = visibleActiveRightTab ? getWorkbenchView(visibleActiveRightTab) : undefined;
 
   React.useEffect(() => {
+    // An empty active tab is intentional after the user closes the final tab;
+    // keep the chooser visible instead of normalizing back to System Metrics.
+    if (!activeRightTab) return;
     if (activeViewId !== visibleActiveRightTab) {
       setActiveRightTab(visibleActiveRightTab);
     }
-  }, [activeViewId, setActiveRightTab, visibleActiveRightTab]);
+  }, [activeRightTab, activeViewId, setActiveRightTab, visibleActiveRightTab]);
 
   // Terminal panels stay mounted even when another workbench view is active.
   // Each workbench tab maps 1:1 to a PTY; unmounting on view switch would kill
@@ -285,6 +311,8 @@ export function RightPanel() {
             <SystemDiagnostics />
           </div>
         );
+      case 'inspector':
+        return <RunInspector />;
       case 'approvals':
         return <ApprovalCenter />;
       case 'artifacts':
@@ -301,6 +329,15 @@ export function RightPanel() {
               {rightPanelCanvasMode === 'draw' ? <InteractiveDrawingCanvas /> : <MathGraphPlaceholder />}
             </div>
           </div>
+        );
+      case 'browser':
+        return (
+          <BrowserPreview
+            initialUrl={browserPreviewUrl}
+            onUrlChange={(url) => {
+              if (activeChatId) useUIStore.getState().setBrowserPreviewUrl(activeChatId, url);
+            }}
+          />
         );
       case 'map':
         return null;
@@ -319,7 +356,8 @@ export function RightPanel() {
     }
   };
 
-  const hasActiveTab = orderedTabList.some((tab) => tab.id === activeRightTab);
+  const hasActiveTab = orderedTabList.some((tab) => tab.id === activeRightTab)
+    || (activeRightTab === "inspector" && layoutInitialized);
   const showTabChooser = orderedTabList.length === 0 || !hasActiveTab;
 
   return (
@@ -517,7 +555,7 @@ export function RightPanel() {
               <span className="truncate max-w-[180px]">Target: {operationalParams?.label || "Active Search"}</span>
             </div>
           </div>
-        ) : visibleActiveRightTab === 'drawing' || visibleActiveRightTab === 'approvals' || visibleActiveRightTab === 'agents' || visibleActiveRightTab === 'terminal' || visibleActiveRightTab === 'artifacts' ? (
+        ) : visibleActiveRightTab === 'drawing' || visibleActiveRightTab === 'approvals' || visibleActiveRightTab === 'agents' || visibleActiveRightTab === 'terminal' || visibleActiveRightTab === 'artifacts' || visibleActiveRightTab === 'browser' ? (
           <div className="flex-grow flex-1 relative overflow-hidden bg-background flex flex-col">
             <AnimatePresence mode="wait">
               <motion.div

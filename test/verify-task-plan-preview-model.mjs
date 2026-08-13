@@ -3,7 +3,14 @@ import { strict as assert } from "node:assert";
 import ts from "typescript";
 
 const sourcePath = new URL("../src/atlas/components/chat/taskPlanPreviewModel.ts", import.meta.url);
-const source = readFileSync(sourcePath, "utf8");
+let source = readFileSync(sourcePath, "utf8");
+// The lightweight data-URL loader intentionally has no Vite alias resolver;
+// provide the already-tested pure helper inline so this model test exercises
+// behavior rather than the production module graph.
+source = source.replace(
+  'import { normalizeTaskDisplayStatus, type TaskDisplayStatus } from "@/lib/tasks/taskStatus";\n',
+  'const normalizeTaskDisplayStatus = (value) => { if (["running", "in_progress", "in-progress", "started", "active"].includes(value)) return "running"; if (["completed", "complete", "success", "done"].includes(value)) return "completed"; if (["error", "failed", "failure"].includes(value)) return "error"; if (["cancelled", "canceled"].includes(value)) return "cancelled"; return "pending"; };\n',
+);
 const transpiled = ts.transpileModule(source, {
   compilerOptions: {
     module: ts.ModuleKind.ES2022,

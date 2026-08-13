@@ -247,10 +247,10 @@ export const ContextViewerBadge = memo(function ContextViewerBadge({
         side="top"
         align="end"
         sideOffset={8}
-        className="w-64 p-3 space-y-3"
+        className="w-64 p-2.5 space-y-2"
       >
         {/* Header: total usage against the window */}
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           <div className="flex items-baseline justify-between gap-2">
             <span className="text-[10px] uppercase tracking-widest font-black text-muted-foreground">
               Context Window
@@ -282,7 +282,7 @@ export const ContextViewerBadge = memo(function ContextViewerBadge({
 
         {/* Extra stats: headroom, iteration, section counts, soft cap */}
         {stats && (
-          <div className="grid grid-cols-2 gap-x-3 gap-y-2 border-t border-border/40 pt-2.5">
+          <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 border-t border-border/40 pt-2">
             <Stat
               label="Free"
               value={formatTokens(stats.free)}
@@ -332,11 +332,11 @@ export const ContextViewerBadge = memo(function ContextViewerBadge({
 
         {/* Composition: what each layer contributes to the window */}
         {composition.length > 0 ? (
-          <div className="space-y-1.5 border-t border-border/40 pt-2.5">
+          <div className="space-y-1 border-t border-border/40 pt-2">
             <span className="text-[10px] uppercase tracking-widest font-black text-muted-foreground">
               Composition
             </span>
-            <ul className="space-y-1.5">
+            <ul className="space-y-1">
               {composition.map((row) => (
                 <li key={row.category} className="space-y-1">
                   <div className="flex items-center gap-1.5 text-[11px]">

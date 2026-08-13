@@ -21,14 +21,15 @@ impl Tool for ListDocumentsTool {
     }
 
     fn description(&self) -> &str {
-        "Lists all documents currently ingested and available in the local knowledge base."
+        "Lists uploaded documents with their exact recorded file paths. Call this first when the relevant file path is unknown, then use read_document_content for authoritative contents."
     }
 
     fn parameters_schema(&self) -> serde_json::Value {
         json!({
             "type": "object",
             "properties": {},
-            "required": []
+            "required": [],
+            "additionalProperties": false
         })
     }
 
@@ -87,7 +88,7 @@ impl Tool for ReadDocumentTool {
     }
 
     fn description(&self) -> &str {
-        "Reads the raw text content of a specific file. Provide an absolute path, a relative path, or just the filename."
+        "Reads authoritative raw text from one uploaded or workspace file. Prefer the exact file_path returned by list_documents; absolute paths, workspace-relative paths, IDs, and exact filenames are accepted."
     }
 
     fn parameters_schema(&self) -> serde_json::Value {
@@ -99,7 +100,8 @@ impl Tool for ReadDocumentTool {
                     "description": "Path to the file or just the filename"
                 }
             },
-            "required": ["file_path"]
+            "required": ["file_path"],
+            "additionalProperties": false
         })
     }
 
@@ -121,6 +123,11 @@ impl Tool for ReadDocumentTool {
             serde_json::from_value(args).map_err(|e| ToolError::InvalidArguments {
                 details: format!("Invalid arguments: {}", e),
             })?;
+        if parsed_args.file_path.trim().is_empty() {
+            return Err(ToolError::InvalidArguments {
+                details: "file_path must not be empty".to_string(),
+            });
+        }
 
         let state = app.state::<AppState>();
         let workspace = state
@@ -194,7 +201,7 @@ impl Tool for ReadDocumentTool {
         let final_text = if content.len() > max_len {
             format!(
                 "{}... [TRUNCATED - Content exceeded 32KB limit]",
-                &content[..max_len]
+                super::truncate_utf8(&content, max_len)
             )
         } else {
             content
@@ -226,7 +233,7 @@ impl Tool for GrepDocumentsTool {
     }
 
     fn description(&self) -> &str {
-        "Performs a text-based search (grep) for a substring query across all documents in the workspace. Use this to find specific keywords or patterns in the codebase/linked documents when vector search is unavailable or imprecise."
+        "Searches indexed uploaded documents for an exact substring or keyword. Use this for discovery, then read each relevant returned file with read_document_content before summarizing or relying on its contents."
     }
 
     fn parameters_schema(&self) -> serde_json::Value {
@@ -242,7 +249,8 @@ impl Tool for GrepDocumentsTool {
                     "description": "Whether the search should be case sensitive (default: false)"
                 }
             },
-            "required": ["query"]
+            "required": ["query"],
+            "additionalProperties": false
         })
     }
 
@@ -264,6 +272,11 @@ impl Tool for GrepDocumentsTool {
             serde_json::from_value(args).map_err(|e| ToolError::InvalidArguments {
                 details: format!("Invalid arguments: {}", e),
             })?;
+        if parsed_args.query.trim().is_empty() {
+            return Err(ToolError::InvalidArguments {
+                details: "query must not be empty".to_string(),
+            });
+        }
 
         let state = app.state::<AppState>();
         let workspace = state

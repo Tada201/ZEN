@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { Message } from "./types";
@@ -19,12 +19,14 @@ function messageNode(id: string) {
   return document.getElementById(anchorId(id));
 }
 
-export function ChatTimelineScrubber({
+function ChatTimelineScrubberInner({
   messages,
   scrollAreaRef,
+  onMissingTarget,
 }: {
   messages: Message[];
   scrollAreaRef: RefObject<HTMLDivElement | null>;
+  onMissingTarget?: (messageId: string) => void;
 }) {
   const ticks = useMemo(() => scrubberTicks(messages), [messages]);
   const reducedMotion = useReducedMotion();
@@ -83,12 +85,16 @@ export function ChatTimelineScrubber({
 
   const jump = useCallback((index: number, smooth = true) => {
     const tick = ticks[index];
-    const node = tick ? messageNode(tick.id) : null;
-    if (!node) return;
+    if (!tick) return;
+    const node = messageNode(tick.id);
+    if (!node) {
+      onMissingTarget?.(tick.id);
+      return;
+    }
     node.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" });
     node.classList.add("chat-scrub-target");
     window.setTimeout(() => node.classList.remove("chat-scrub-target"), 900);
-  }, [ticks]);
+  }, [onMissingTarget, ticks]);
 
   const scrubTo = useCallback((clientY: number) => {
     const rail = railRef.current;
@@ -106,11 +112,8 @@ export function ChatTimelineScrubber({
   const preview: ChatScrubberTick | null = hoverIndex === null ? null : ticks[hoverIndex] || null;
 
   return (
-    <motion.nav
-      initial={reducedMotion ? false : { opacity: 0, x: -4 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.standard, ease: motionEasings.standard }}
-      className={cn("relative z-10 mx-2 hidden w-7 shrink-0 self-center py-2 sm:mx-3 sm:flex", dragging && "cursor-grabbing")}
+    <nav
+      className={cn("absolute inset-y-0 left-0 z-10 mx-2 hidden h-full w-7 shrink-0 items-center py-2 sm:mx-3 sm:flex", dragging && "cursor-grabbing")}
       aria-label={`Conversation minimap, ${ticks.length} message${ticks.length === 1 ? "" : "s"}`}
       onMouseLeave={() => { if (!dragging) showPreview(null); }}
     >
@@ -201,6 +204,22 @@ export function ChatTimelineScrubber({
         </motion.div>
         )}
       </AnimatePresence>
-    </motion.nav>
+    </nav>
   );
 }
+
+function areTimelinePropsEqual(
+  previous: { messages: Message[]; scrollAreaRef: RefObject<HTMLDivElement | null>; onMissingTarget?: (messageId: string) => void },
+  next: { messages: Message[]; scrollAreaRef: RefObject<HTMLDivElement | null>; onMissingTarget?: (messageId: string) => void },
+) {
+  if (previous.scrollAreaRef !== next.scrollAreaRef || previous.onMissingTarget !== next.onMissingTarget || previous.messages.length !== next.messages.length) return false;
+  return previous.messages.every((message, index) => {
+    const nextMessage = next.messages[index];
+    return message.id === nextMessage?.id
+      && message.role === nextMessage?.role
+      && message.kind === nextMessage?.kind
+      && message.status === nextMessage?.status;
+  });
+}
+
+export const ChatTimelineScrubber = memo(ChatTimelineScrubberInner, areTimelinePropsEqual);

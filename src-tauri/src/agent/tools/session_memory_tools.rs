@@ -1,3 +1,6 @@
+//! Retained for a future session-memory redesign only. These tools are not
+//! registered, discoverable, or present in any active agent allowlist.
+
 use crate::agent::tools::AgentTool;
 use crate::commands::AppState;
 use crate::rag::session_memory::create_memory_entry;

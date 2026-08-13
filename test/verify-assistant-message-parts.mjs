@@ -3,6 +3,7 @@ import { strict as assert } from "node:assert";
 import ts from "typescript";
 
 const sourcePath = new URL("../src/atlas/components/chat/assistantMessageParts.ts", import.meta.url);
+const reasoningSectionsSourcePath = new URL("../src/atlas/components/chat/reasoningSections.ts", import.meta.url);
 const parserSourcePath = new URL("../src/atlas/components/chat/assistantCardParser.ts", import.meta.url);
 const parserSource = readFileSync(parserSourcePath, "utf8")
   .replace(/export interface ParsedCard \{[\s\S]*?\n\}/, "")
@@ -13,9 +14,11 @@ const parserSource = readFileSync(parserSourcePath, "utf8")
 // crashed with "Identifier 'parseCardTags' has already been declared".
 const stripImport = /import\s*\{[^}]*?\bparseCardTags\b[^}]*?\}\s*from\s*["'][^"']+["'];?/g;
 const stripExport = /export\s*\{[^}]*?\bparseCardTags\b[^}]*?\}\s*from\s*["'][^"']+["'];?/g;
-const source = `${parserSource}\n${readFileSync(sourcePath, "utf8")
+const reasoningSectionsSource = readFileSync(reasoningSectionsSourcePath, "utf8");
+const source = `${parserSource}\n${reasoningSectionsSource}\n${readFileSync(sourcePath, "utf8")
   .replace(stripImport, "")
-  .replace(stripExport, "")}`.replace(
+  .replace(stripExport, "")
+  .replace(/import\s*\{\s*splitReasoningSections(?:,\s*type\s+ReasoningSection)?\s*\}\s*from\s*["'][^"']+["'];?/g, "")}`.replace(
   'import { CHAT_STATUS_PHASES } from "@/api/chatStatus";',
   `const CHAT_STATUS_PHASES = {
     AgentStreaming: "agent_streaming",
@@ -44,6 +47,7 @@ const {
   parseCardTags,
   parentWorkingStatusLabel,
   selectParentWorkingStatus,
+  splitReasoningSections,
   toolResultMetaToOutput,
 } = await import(moduleUrl);
 
@@ -56,6 +60,10 @@ const typesSource = readFileSync(typesSourcePath, "utf8")
   .replace(
     'import { stripToolProtocolText } from "@/atlas/lib/toolProtocolText";',
     'const stripToolProtocolText = (text) => text;',
+  )
+  .replace(
+    'import { projectCanonicalMessageParts } from "@/atlas/agentRuntime/messageProjection";',
+    'const projectCanonicalMessageParts = (m) => ({ content: m.content ?? "", reasoning: m.reasoning, steps: m.steps, toolCalls: m.toolCalls });',
   );
 const transpiledTypes = ts.transpileModule(typesSource, {
   compilerOptions: {
@@ -250,6 +258,30 @@ assert.equal(partiallyOpenCardAcrossFragments[0].orderedCards.length, 1, "split-
 assert.equal(partiallyOpenCardAcrossFragments[0].orderedCards[0].card.type, "X", "split-card type should be the parsed JSON card type");
 assert.equal(partiallyOpenCardAcrossFragments[0].orderedCards[0].position, 2, "split-card orderedCards position should be the marker offset (2 = position of %%CARD_0%% in 'A %%CARD_0%% B')");
 
+const titledSections = splitReasoningSections("Inspect the existing stream and constraints.");
+assert.equal(titledSections.length, 1, "a reasoning payload should produce one readable section");
+assert.equal(titledSections[0].title, "Context", "context-oriented reasoning should receive a useful title");
+
+const explicitSections = splitReasoningSections("## Plan\n\n1. Keep the stream stable.\n\n## Verify\n\nRun the focused checks.");
+assert.deepEqual(explicitSections.map((section) => section.title), ["Plan", "Verify"], "explicit reasoning headings should become section titles");
+
+const interleavedReasoningSteps = groupAssistantSteps([
+  { type: "reasoning", content: "Inspect the existing stream and constraints." },
+  { type: "action", kind: "chat_status", content: "Provider update", status: "running", metadata: { phase: "agent_streaming" } },
+  { type: "reasoning", content: "Plan the smallest safe grouping change." },
+  { type: "action", kind: "orchestrator_progress", content: "Still working", status: "running" },
+  { type: "reasoning", content: "Verify the result with focused tests." },
+]);
+const groupedInterleavedReasoning = interleavedReasoningSteps.find((step) => step.type === "reasoning");
+assert(groupedInterleavedReasoning, "interleaved reasoning should remain a reasoning step alongside status updates");
+assert.equal(groupedInterleavedReasoning.reasoningSections.length, 3, "interleaved thought chunks should become titled sections");
+assert.deepEqual(
+  groupedInterleavedReasoning.reasoningSections.map((section) => section.title),
+  ["Context", "Approach", "Validation"],
+  "section titles should reflect the purpose of each interleaved thought chunk",
+);
+assert(groupedInterleavedReasoning.content.includes("Inspect the existing stream") && groupedInterleavedReasoning.content.includes("Verify the result"), "merged reasoning should preserve every thought chunk");
+
 const multiThought = extractInlineThoughtBlocks("A <think>first</think> B <thought>second</thought> C");
 assert.equal(multiThought.reasoning, "first\n\nsecond", "all closed think/thought blocks should be preserved");
 assert.equal(multiThought.content, "A  B  C", "all closed think/thought blocks should be removed from visible content");
@@ -261,8 +293,8 @@ assert.equal(openThought.reasoning, "still streaming", "open think tag should pr
 const steps = groupAssistantSteps([
   { type: "action", kind: "chat_status", content: "Planning tools", status: "running" },
   { type: "action", kind: "tool_call", content: "hidden duplicate", status: "running" },
-  { type: "tool-call", toolCall: { id: "tool-1", name: "read_file", status: "running", input: { path: "a" }, output: "" } },
-  { type: "tool-call", toolCall: { id: "tool-2", name: "web_search", status: "running", input: { query: "b" }, output: "" } },
+  { type: "tool-call", toolCall: { id: "tool-1", name: "read_file", status: "running", input: { path: "a" }, output: "", batchId: "batch-initial" } },
+  { type: "tool-call", toolCall: { id: "tool-2", name: "web_search", status: "running", input: { query: "b" }, output: "", batchId: "batch-initial" } },
   { type: "text", content: "Answer " },
   { type: "text", content: "stream" },
 ]);
@@ -353,9 +385,9 @@ assert.equal(mergedAgentLifecycleSteps[0].metadata.spawn.durationMs, 600, "merge
 
 const interleavedToolSteps = groupAssistantSteps([
   { type: "action", kind: "chat_status", content: "Parallel batch planned", status: "running", metadata: { phase: "tool_batch_planned", parallel: true } },
-  { type: "tool-call", toolCall: { id: "tool-a", name: "read_file", status: "running", input: { path: "a" }, output: "", startTime: 1000 } },
+  { type: "tool-call", toolCall: { id: "tool-a", name: "read_file", status: "running", input: { path: "a" }, output: "", startTime: 1000, batchId: "batch-interleaved" } },
   { type: "action", kind: "chat_status", content: "Waiting for tools", status: "running", metadata: { phase: "tool_batch_running" } },
-  { type: "tool-call", toolCall: { id: "tool-b", name: "web_search", status: "running", input: { query: "b" }, output: "", startTime: 1200 } },
+  { type: "tool-call", toolCall: { id: "tool-b", name: "web_search", status: "running", input: { query: "b" }, output: "", startTime: 1200, batchId: "batch-interleaved" } },
 ]);
 assert.equal(interleavedToolSteps.length, 3, "status rows should not split one parallel tool batch");
 assert.equal(interleavedToolSteps[1].type, "tool-group", "first tool should create a visible batch");
@@ -370,6 +402,25 @@ assert.equal(separatedToolSteps.length, 3, "answer text should split separate to
 assert.equal(separatedToolSteps[0].type, "tool-group", "first tool phase should remain visible");
 assert.equal(separatedToolSteps[2].type, "tool-group", "second tool phase should remain visible");
 
+const interleavedReasoningToolTextSteps = groupAssistantSteps([
+  { type: "reasoning", content: "Choose the relevant files." },
+  { type: "tool-call", toolCall: { id: "ordered-a", name: "read_file", status: "completed", input: { path: "a.ts" }, output: "a" } },
+  { type: "text", content: "I found the first result." },
+  { type: "tool-call", toolCall: { id: "ordered-b", name: "run_command", status: "completed", input: { command: "npm test" }, output: "passed" } },
+  { type: "reasoning", content: "Validate the second result." },
+  { type: "text", content: "The checks passed." },
+]);
+assert.deepEqual(
+  interleavedReasoningToolTextSteps.map((step) => step.type),
+  ["reasoning", "tool-group", "text", "tool-group", "reasoning", "text"],
+  "reasoning, tools, and prose must remain in source order instead of being hoisted into one leading batch",
+);
+assert.deepEqual(
+  interleavedReasoningToolTextSteps.filter((step) => step.type === "tool-group").map((step) => step.toolCalls[0].id),
+  ["ordered-a", "ordered-b"],
+  "separated tool phases must retain their original order",
+);
+
 const contiguousFarApartToolSteps = groupAssistantSteps([
   { type: "tool-call", toolCall: { id: "tool-e", name: "web_search", status: "completed", input: { query: "weather ho chi minh" }, output: "{}", startTime: 1000 } },
   { type: "action", kind: "chat_status", content: "Searching again", status: "running", metadata: { phase: "tool_batch_running" } },
@@ -378,8 +429,8 @@ const contiguousFarApartToolSteps = groupAssistantSteps([
   { type: "tool-call", toolCall: { id: "tool-g", name: "web_search", status: "completed", input: { query: "weather route ho chi minh to vung tau" }, output: "{}", startTime: 18000 } },
 ]);
 const contiguousFarApartVisibleGroups = contiguousFarApartToolSteps.filter((step) => step.type === "tool-group");
-assert.equal(contiguousFarApartVisibleGroups.length, 1, "hidden status updates should not split a contiguous tool-only stretch");
-assert.equal(contiguousFarApartVisibleGroups[0].toolCalls.length, 3, "far-apart tools without visible commentary should collapse into one batch");
+assert.equal(contiguousFarApartVisibleGroups.length, 3, "tools without an explicit batch identity must remain separate timeline rows");
+assert(contiguousFarApartVisibleGroups.every((step) => step.toolCalls.length === 1), "missing batch identity must never create an inferred multi-tool batch");
 
 const explicitBatchToolSteps = groupAssistantSteps([
   { type: "tool-call", toolCall: { id: "batch-tool-a", name: "read_file", status: "running", input: { path: "a" }, output: "", startTime: 1000, batchId: "batch-1" } },

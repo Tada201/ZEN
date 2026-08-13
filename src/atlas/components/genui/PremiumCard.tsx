@@ -82,7 +82,7 @@ function PremiumCardBody({ type, data }: CardProps) {
   // Specialized inline layouts
   if (t === 'map') {
     return (
-      <div className="w-full p-1 rounded-2xl border border-border bg-card overflow-hidden shadow-lg">
+      <div className="genui-card-surface w-full max-w-none min-w-0 p-1 rounded-2xl border border-border bg-card overflow-hidden shadow-lg">
         <MapComponent
           latitude={data.latitude ?? data.lat ?? 0}
           longitude={data.longitude ?? data.lng ?? data.long ?? 0}
@@ -254,7 +254,7 @@ function PremiumCardBody({ type, data }: CardProps) {
     return <ComparisonCard data={data} />;
   }
 
-  if (t === 'status' || t === 'alert' || t === 'notification' || t === 'event') {
+  if (t === 'status' || t === 'alert' || t === 'notification') {
     return <StatusCard data={data} />;
   }
 
@@ -282,7 +282,7 @@ function PremiumCardBody({ type, data }: CardProps) {
  */
 export function PremiumCard(props: CardProps) {
   return (
-    <CardMotion className="w-full">
+    <CardMotion className="genui-card-host w-full min-w-0">
       <PremiumCardBody {...props} />
     </CardMotion>
   );

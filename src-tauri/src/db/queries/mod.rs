@@ -10,6 +10,8 @@ pub mod clarification;
 pub use clarification::*;
 pub mod documents;
 pub use documents::*;
+pub mod execution_trace;
+pub use execution_trace::*;
 pub mod graphs;
 pub use graphs::*;
 pub mod gtsm;

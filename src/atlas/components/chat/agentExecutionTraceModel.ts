@@ -62,7 +62,7 @@ export type ToolExecutionBatchLane = {
 };
 
 function isRunningTool(toolCall: ToolCall) {
-  return toolCall.status === "running";
+  return toolCall.status === "running" && toolCall.recoveryState !== "stale";
 }
 
 function isAwaitingApprovalTool(toolCall: ToolCall) {

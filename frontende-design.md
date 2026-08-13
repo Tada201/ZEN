@@ -85,3 +85,98 @@ should feel like a calm progress ledger:
 - For successful work, collapse detail aggressively. Surface artifacts, changed
   files, search result summaries, and test/build outcomes only when they help
   the user decide what to do next.
+
+## Premium density and typography contract
+
+Zen must feel premium through restraint, not decoration. The premium quality
+comes from typography, spacing, and silence — not from glow, gradient, or
+animation volume.
+
+### Reading width and line height
+
+Assistant message prose must be constrained for reading comfort:
+
+- **Max prose width:** 68–72ch. Never stretch assistant text to full viewport.
+- **Prose line-height:** 1.6 (generous — users evaluate and trust this content).
+- **Code block line-height:** 1.4 (tighter — developers scan code vertically).
+- **UI labels / captions:** 1.2–1.3 (compact — information density).
+- **Paragraph spacing:** at least 0.75em between paragraphs in assistant prose.
+
+These values create editorial-quality readability without explicit "article"
+styling. The typography should make the assistant's output feel considered and
+worth reading — not dumped into a container.
+
+### Density modes
+
+Zen uses two density modes within a single chat surface:
+
+| Surface | Density | Spacing | Line-height |
+|---|---|---|---|
+| Assistant prose | Generous | Comfortable margins, 68ch max | 1.6 |
+| Tool execution rows | Compact | Tight rows, monospace data | 1.3 |
+| Status / phase badges | Minimal | Single line, dim text | 1.2 |
+| Code blocks | Reading-compact | Moderate padding, full width | 1.4 |
+
+The contrast between generous prose and compact execution creates visual
+hierarchy without decoration. Prose breathes; execution is dense and efficient.
+
+### Silence as design
+
+The premium aesthetic is defined by what is *not* on screen:
+
+- **Idle = invisible.** Hover/focus action controls (copy, regenerate, retry)
+  must take zero layout room when idle. Use `display: none` with a coordinated
+  enter transition — not `opacity: 0` reserving space.
+- **No decorative borders on message bubbles.** Separation between messages
+  comes from vertical spacing and a subtle background tint difference, not
+  visible border strokes.
+- **Glyph gutters over card chrome for tool rows.** A leading icon (`▸`, `│`,
+  `✓`, `⚠`) in an accent color marks a tool row's state. Full surrounding
+  card borders are reserved for approval gates and expanded disclosures.
+- **One hairline rule between sections** (e.g., between the chat timeline and
+  the composer) rather than heavy borders or shadow separation.
+
+### One motion per state
+
+Premium motion is singular and brief:
+
+- Each component gets **one** transition per state change (120–180ms ease-out).
+  If something fades in, do not also scale it. If it slides, do not also fade.
+- Message mount: a single subtle vertical reveal (4–8px) + opacity.
+- Tool card expand/collapse: height + opacity as one coordinated transition.
+- Streaming: no motion at all. Text appends silently. The trailing CSS cursor
+  is the only visual indicator of activity.
+- Decorative animation (pulse, bounce, shake, glow cycles) is never permitted
+  on primary content surfaces during normal operation.
+
+### Semantic color budget
+
+Zen's palette must carry meaning, not decoration:
+
+| Color role | Usage | Where |
+|---|---|---|
+| Primary accent | AI-generated content markers, send button, active focus | Sparingly |
+| Success (green) | Completed status, passed tests, successful tools | Status only |
+| Error (red) | Failed state, inline errors, destructive warnings | Errors only |
+| Warning (amber) | Approval needed, interrupted state, pending review | Gating only |
+| Muted foreground | Secondary text, timestamps, collapsed tool summaries | Everywhere quiet |
+| Neutral running | In-progress work (spinners, phase labels) | During execution |
+
+Rules:
+- Never use accent color for decoration (background washes, gradient fills).
+- Never introduce a color that doesn't correspond to a semantic role above.
+- If removing a color from an element loses no information, remove it.
+- The chat surface should read clearly in grayscale — color is confirmation,
+  not the only signal.
+
+### The premium test
+
+Before shipping a chat UI surface, apply this checklist:
+
+- [ ] Can I remove an element without losing function? If yes, remove it.
+- [ ] Is there only one transition happening per state change?
+- [ ] Do idle messages have zero chrome (no visible buttons, badges, or borders)?
+- [ ] Does assistant prose respect the 68ch / 1.6 line-height contract?
+- [ ] Are tool rows visually denser than prose without feeling cramped?
+- [ ] Does the surface read clearly with animations disabled?
+- [ ] Is the accent color used fewer than 5 times on the visible viewport?

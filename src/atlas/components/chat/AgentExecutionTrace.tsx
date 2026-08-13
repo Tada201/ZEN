@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, memo } from "react";
-import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { ArtifactData, Step, ToolCall } from "./types";
 import { ToolCallCard, humanizeToolAction } from "./ToolCallCard";
@@ -18,7 +17,6 @@ import {
   toggleDisclosure,
   transitionDisclosure,
 } from "./executionDisclosure";
-import { executionCardMotion, motionDurations, motionEasings, useReducedMotion } from "@/lib/motion";
 
 function compactToolDisplayName(tool: ToolCall): string {
   const name = tool.name.toLowerCase();
@@ -63,13 +61,19 @@ function singleToolActionLine(tool: ToolCall): string {
 }
 
 function mergeTraceToolCall(existing: ToolCall, incoming: ToolCall): ToolCall {
-  const keepTerminalStatus = (existing.status === "completed" || existing.status === "error") && incoming.status === "running";
+  const incomingTime = incoming.lastUpdatedAt ?? incoming.completedAt;
+  const existingTime = existing.lastUpdatedAt ?? existing.completedAt;
+  const keepTerminalStatus = (existing.status === "completed" || existing.status === "error") && (
+    incoming.status === "running" ||
+    ((incoming.status === "completed" || incoming.status === "error") && (incomingTime === undefined || (existingTime !== undefined && incomingTime < existingTime)))
+  );
   return {
     ...existing,
     ...incoming,
     status: keepTerminalStatus ? existing.status : incoming.status,
     input: isEmptyObject(incoming.input) ? existing.input : incoming.input ?? existing.input,
     output: incoming.output || existing.output,
+    outputPreview: incoming.outputPreview || existing.outputPreview,
     durationMs: incoming.durationMs ?? existing.durationMs,
     approvalContext: incoming.approvalContext || existing.approvalContext,
     runId: incoming.runId || existing.runId,
@@ -88,10 +92,12 @@ function mergeTraceToolCall(existing: ToolCall, incoming: ToolCall): ToolCall {
 }
 
 function getGroupStatus(toolCalls: ToolCall[]): ExecutionStatus {
-  // Human-attention states win over background activity. A running sibling
-  // must not hide an approval request or a failure in the group header.
+  // Human-attention states win over background activity. A recovered tool is
+  // no longer running: it is an interrupted trace that must not advertise a
+  // live spinner after reload.
   if (toolCalls.some((tool) => tool.status === "awaiting_approval")) return "awaiting_approval";
   if (toolCalls.some((tool) => tool.status === "error")) return "error";
+  if (toolCalls.some((tool) => tool.recoveryState === "stale")) return "interrupted";
   if (toolCalls.some((tool) => tool.status === "running")) return "running";
   return "completed";
 }
@@ -114,7 +120,9 @@ function getGroupDuration(toolCalls: ToolCall[]): number | undefined {
   return durations.length > 0 ? Math.max(...durations) : undefined;
 }
 
-function dedupeTraceToolCalls(toolCalls: ToolCall[]) {
+export function dedupeTraceToolCalls(toolCalls: ToolCall[]) {
+  // Retained for legacy imports during migration; canonical live records are
+  // already merged before reaching this renderer.
   const byId = new Map<string, ToolCall>();
   const orderedIds: string[] = [];
 
@@ -136,6 +144,7 @@ export function AgentExecutionTrace({
   toolCalls,
   executionSteps,
   sessionId,
+  messageId,
   onOpenArtifact,
   preferCompact = false,
   bare = false,
@@ -143,6 +152,7 @@ export function AgentExecutionTrace({
   toolCalls: ToolCall[];
   executionSteps?: Step[];
   sessionId?: string;
+  messageId?: string;
   onOpenArtifact: (a: ArtifactData) => void;
   preferCompact?: boolean;
   /**
@@ -154,20 +164,22 @@ export function AgentExecutionTrace({
    */
   bare?: boolean;
 }) {
-  const reducedMotion = useReducedMotion();
-  const normalizedToolCalls = useMemo(() => dedupeTraceToolCalls(toolCalls).filter(isToolVisibleInChat), [toolCalls]);
+  // Tool identity and merge semantics are owned by the stream reducer. The
+  // renderer only filters hidden protocol tools and preserves canonical order.
+  const normalizedToolCalls = useMemo(() => toolCalls.filter(isToolVisibleInChat), [toolCalls]);
   const trace = useMemo(() => buildAgentExecutionTraceModel(normalizedToolCalls, executionSteps), [normalizedToolCalls, executionSteps]);
   const importantToolCalls = useMemo(
-    () => normalizedToolCalls.filter((tool) => tool.status === "awaiting_approval" || tool.status === "error"),
+    () => normalizedToolCalls.filter((tool) =>
+      tool.status === "awaiting_approval" ||
+      tool.status === "error" ||
+      tool.recoveryState === "stale",
+    ),
     [normalizedToolCalls],
   );
-  // `trace.active` = runningCount > 0 || approvalCount > 0, so
-  // `trace.active || importantToolCalls.length > 0` covers running, approval,
-  // and error — matching the old ExecutionGroup default-open behavior.
-  const compactToolCalls = preferCompact ? importantToolCalls : normalizedToolCalls;
-  const renderedToolCalls = preferCompact
-    ? normalizedToolCalls.filter((tool) => compactToolCalls.includes(tool) || tool.status === "running")
-    : compactToolCalls;
+  // Approval/error tools are the "attention" set that forces the group open.
+  // The body itself always renders the full `normalizedToolCalls` list so a
+  // completed tool stays expandable to its input/output detail — matching the
+  // Codex replica where every tool block can be opened, not just live ones.
   const shouldDefaultOpen = preferCompact
     ? trace.active || importantToolCalls.length > 0
     : trace.active || trace.errorCount > 0 || trace.approvalCount > 0;
@@ -219,17 +231,26 @@ export function AgentExecutionTrace({
     if (groupStatus === "error") {
       return `${normalizedToolCalls.length} tools · ${trace.errorCount} failed`;
     }
+    if (groupStatus === "interrupted") {
+      return `${normalizedToolCalls.length} tools · interrupted`;
+    }
     return `${normalizedToolCalls.length} actions`;
   }, [normalizedToolCalls, groupStatus, trace.errorCount]);
 
   const summarySubtitle = useMemo(() => {
     const parts: string[] = [];
     if (groupStatus === "completed") {
+      parts.push(`${normalizedToolCalls.length}/${normalizedToolCalls.length} complete`);
       if (trace.resultSummary) parts.push(trace.resultSummary);
     } else if (groupStatus === "error") {
+      parts.push(`${trace.completedCount}/${normalizedToolCalls.length} complete`);
       if (trace.resultSummary) parts.push(trace.resultSummary);
-      else parts.push(`${trace.completedCount} completed`);
+      else parts.push(`${trace.errorCount} failed`);
+    } else if (groupStatus === "interrupted") {
+      parts.push(`${trace.completedCount}/${normalizedToolCalls.length} complete`);
+      parts.push("Interrupted after reload");
     } else {
+      parts.push(`${trace.completedCount}/${normalizedToolCalls.length} complete`);
       if (trace.runningCount > 0) parts.push(`${trace.runningCount} running`);
       if (trace.approvalCount > 0) parts.push(`${trace.approvalCount} waiting`);
       if (trace.errorCount > 0) parts.push(`${trace.errorCount} failed`);
@@ -246,6 +267,8 @@ export function AgentExecutionTrace({
       ? `${headerLabel}. Needs approval.`
       : groupStatus === "error"
         ? `${headerLabel}. Failed.`
+        : groupStatus === "interrupted"
+          ? `${headerLabel}. Interrupted after reload.`
           : groupStatus === "completed"
             ? `${headerLabel}. Complete.`
             : headerLabel;
@@ -262,6 +285,30 @@ export function AgentExecutionTrace({
 
   if (normalizedToolCalls.length === 0) return null;
 
+  // Single-tool case: render the ToolCallCard as THE block, with no outer
+  // group FoldOutCard/ExecutionRow around it. Wrapping one tool in the group
+  // header produced a double-nested disclosure — the outer chevron revealed a
+  // second, still-collapsed identical header, so input/output detail sat two
+  // clicks deep and the card felt unexpandable. Codex renders each tool as one
+  // block with one chevron that opens straight to the detail; this matches it.
+  if (!bare && normalizedToolCalls.length === 1) {
+    const only = normalizedToolCalls[0];
+    return (
+      <div className="execution-trace min-w-0" aria-label={traceAriaLabel}>
+        <ToolCallCard
+          toolCall={only}
+          className="w-full min-w-0"
+          chatId={sessionId}
+          messageId={messageId}
+          onViewArtifact={onOpenArtifact}
+          onCancel={() => resolveToolApproval(only.id, false)}
+          onRetry={() => resolveToolApproval(only.id, true)}
+          streamingPreview={streamingPreviews.get(only.id) || undefined}
+        />
+      </div>
+    );
+  }
+
   // `bare` mode: render only the inner tool-row rail without the surrounding
   // FoldOutCard + ExecutionRow header. The parent (SubagentExecutionCard)
   // owns the single foldout/summary chrome, so we avoid the double-header
@@ -270,17 +317,11 @@ export function AgentExecutionTrace({
     return (
       <div className="execution-tool-rail relative pl-4 before:absolute before:left-[5px] before:top-1 before:h-[calc(100%-8px)] before:w-px before:bg-border flex flex-col gap-1.5">
         {normalizedToolCalls.map((tc, idx) => (
-          <motion.div
+          <div
             key={tc.id || tc.runId || idx}
-            initial={reducedMotion ? false : executionCardMotion.initial}
-            animate={executionCardMotion.animate}
-            transition={reducedMotion ? { duration: 0 } : {
-              duration: motionDurations.fast,
-              ease: motionEasings.standard,
-            }}
           >
-            <ToolTraceRow toolCall={tc} sessionId={sessionId} onOpenArtifact={onOpenArtifact} streamingPreview={streamingPreviews.get(tc.id) || undefined} />
-          </motion.div>
+            <ToolTraceRow toolCall={tc} sessionId={sessionId} messageId={messageId} onOpenArtifact={onOpenArtifact} streamingPreview={streamingPreviews.get(tc.id) || undefined} />
+          </div>
         ))}
       </div>
     );
@@ -360,18 +401,12 @@ export function AgentExecutionTrace({
             </div>
           )}
           <div className="execution-tool-rail relative pl-4 before:absolute before:left-[5px] before:top-1 before:h-[calc(100%-8px)] before:w-px before:bg-border flex flex-col gap-1.5">
-            {renderedToolCalls.map((tc, idx) => (
-              <motion.div
+            {normalizedToolCalls.map((tc, idx) => (
+              <div
                 key={tc.id || tc.runId || idx}
-                initial={reducedMotion ? false : executionCardMotion.initial}
-                animate={executionCardMotion.animate}
-                transition={reducedMotion ? { duration: 0 } : {
-                  duration: motionDurations.fast,
-                  ease: motionEasings.standard,
-                }}
               >
-                <ToolTraceRow toolCall={tc} sessionId={sessionId} onOpenArtifact={onOpenArtifact} streamingPreview={streamingPreviews.get(tc.id) || undefined} />
-              </motion.div>
+                <ToolTraceRow toolCall={tc} sessionId={sessionId} messageId={messageId} onOpenArtifact={onOpenArtifact} streamingPreview={streamingPreviews.get(tc.id) || undefined} />
+              </div>
             ))}
       </div>
       </FoldOutCardContent>
@@ -383,11 +418,13 @@ export function AgentExecutionTrace({
 function ToolTraceRowInner({
   toolCall,
   sessionId,
+  messageId,
   onOpenArtifact,
   streamingPreview,
 }: {
   toolCall: ToolCall;
   sessionId?: string;
+  messageId?: string;
   onOpenArtifact: (a: ArtifactData) => void;
   streamingPreview?: string;
 }) {
@@ -397,13 +434,15 @@ function ToolTraceRowInner({
         <span
           className={cn(
             "h-1.5 w-1.5 rounded-full transition-colors duration-200",
-            toolCall.status === "awaiting_approval"
+            toolCall.recoveryState === "stale"
               ? "bg-warning"
-              : toolCall.status === "running"
-                ? "bg-primary"
-              : toolCall.status === "error"
-                ? "bg-destructive"
-                : "bg-success",
+              : toolCall.status === "awaiting_approval"
+                ? "bg-warning"
+                : toolCall.status === "running"
+                  ? "bg-primary"
+                : toolCall.status === "error"
+                  ? "bg-destructive"
+                  : "bg-success",
           )}
         />
       </span>
@@ -412,6 +451,7 @@ function ToolTraceRowInner({
         className="w-full min-w-0"
         ledgerRow
         chatId={sessionId}
+        messageId={messageId}
         onViewArtifact={onOpenArtifact}
         onCancel={() => resolveToolApproval(toolCall.id, false)}
         onRetry={() => resolveToolApproval(toolCall.id, true)}

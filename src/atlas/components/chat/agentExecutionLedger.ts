@@ -64,6 +64,7 @@ function statusFromStep(step: Step): ExecutionStatus {
 }
 
 function statusFromTool(tool: ToolCall): ExecutionStatus {
+  if (tool.recoveryState === "stale") return "cancelled";
   if (tool.status === "completed" || tool.status === "error") return tool.status;
   return "running";
 }
@@ -183,7 +184,10 @@ export function buildExecutionLedger({
   const ledgerAgents = Array.from(agents.values());
   const terminalAgents = ledgerAgents.filter((agent) => agent.id !== "main");
   const lifecycleAgents = terminalAgents.filter((agent) => lifecycleAgentIds.has(agent.id));
-  const runningTools = toolCalls.filter((tool) => tool.status === "running" || tool.status === "awaiting_approval").length;
+  const runningTools = toolCalls.filter((tool) =>
+    tool.recoveryState !== "stale" &&
+    (tool.status === "running" || tool.status === "awaiting_approval"),
+  ).length;
   const errorTools = toolCalls.filter((tool) => tool.status === "error").length;
   const completedTools = toolCalls.filter((tool) => tool.status === "completed").length;
 

@@ -16,6 +16,9 @@ use crate::agent::tools::handoff_context::{
 };
 use crate::agent::tools::ToolRegistry;
 use crate::agent::types::{Agent, AgentRegistry};
+
+/// Internal marker carried in a runner's tool ceiling; never exposed in tool schemas.
+pub(crate) const ALLOWED_CHILD_AGENT_PREFIX: &str = "__zen_allowed_child_agent:";
 use crate::commands::AppState;
 use crate::db::models::ChatMessage;
 use crate::tools::GlobalToolRegistry;
@@ -24,9 +27,13 @@ use crate::tools::GlobalToolRegistry;
 pub(crate) struct ResolvedAgent {
     pub agent: Agent,
     pub model: String,
+    pub model_provider: Option<String>,
     pub effective_max_steps: usize,
     pub effective_context_window: Option<usize>,
     pub effective_max_messages: Option<usize>,
+    pub allow_nested_delegation: bool,
+    pub inject_agents_md: bool,
+    pub allowed_agent_ids: Vec<String>,
 }
 
 /// Resolve which model and iteration limit to use for a given agent.
@@ -38,17 +45,23 @@ pub(crate) fn resolve_agent(
     explicit_model: Option<&str>,
     explicit_max_steps: Option<u64>,
 ) -> Result<ResolvedAgent> {
-    let agent = agent_registry.get(agent_id).cloned().ok_or_else(|| {
+    let profile = agent_registry.get_profile(agent_id).ok_or_else(|| {
         anyhow::anyhow!(
             "Agent '{}' not found. Available: {:?}",
             agent_id,
-            agent_registry
-                .list()
-                .iter()
-                .map(|a| &a.id)
-                .collect::<Vec<_>>()
+            agent_registry.list().into_iter().map(|a| a.id).collect::<Vec<_>>()
         )
     })?;
+    if !profile.model_invocable {
+        anyhow::bail!("Agent '{}' is not available for model invocation", agent_id);
+    }
+    let allowed_agent_ids = profile.allowed_agent_ids.clone();
+    let model_provider = if explicit_model.is_some() {
+        None
+    } else {
+        profile.model_provider.clone()
+    };
+    let agent = profile.agent;
 
     let model = if let Some(m) = explicit_model {
         m.to_string()
@@ -68,9 +81,13 @@ pub(crate) fn resolve_agent(
     Ok(ResolvedAgent {
         agent,
         model,
+        model_provider,
         effective_max_steps,
         effective_context_window,
         effective_max_messages,
+        allow_nested_delegation: profile.allow_nested_delegation,
+        inject_agents_md: profile.inject_agents_md,
+        allowed_agent_ids,
     })
 }
 
@@ -108,7 +125,7 @@ pub(crate) fn resolve_adhoc_agent(
         caller_tool_ids.to_vec()
     }
     .into_iter()
-    .filter(|t| t != "spawn_agent" && t != "handoff_to_agent")
+    .filter(|t| t != "spawn_agent")
     .collect();
 
     let tool_ids = if requested_tools.is_empty() {
@@ -142,9 +159,13 @@ pub(crate) fn resolve_adhoc_agent(
     Ok(ResolvedAgent {
         agent,
         model,
+        model_provider: None,
         effective_max_steps,
         effective_context_window: None,
         effective_max_messages: None,
+        allow_nested_delegation: false,
+        inject_agents_md: false,
+        allowed_agent_ids: Vec::new(),
     })
 }
 
@@ -225,18 +246,55 @@ pub(crate) fn build_child_runner(params: ChildRunnerParams<'_>) -> Result<Runner
         runner = runner.with_max_messages_in_memory(max_msgs);
     }
 
-    if let Some(allowed) = allowed_tools {
-        runner = runner.with_allowed_tools(allowed);
-    } else if !resolved.agent.tool_ids.is_empty() {
-        runner = runner.with_allowed_tools(Arc::new(tokio::sync::Mutex::new(
-            resolved.agent.tool_ids.iter().cloned().collect(),
-        )));
+    let inherited_tools = allowed_tools
+        .as_ref()
+        .and_then(|allowed| allowed.try_lock().ok().map(|guard| guard.iter().cloned().collect::<std::collections::HashSet<_>>()));
+    let configured_tools: std::collections::HashSet<String> = resolved.agent.tool_ids.iter().cloned().collect();
+    let mut effective_tools = match inherited_tools {
+        // An empty root ceiling means "use the profile's configured tools".
+        Some(inherited) if !inherited.is_empty() => inherited
+            .into_iter()
+            .filter(|tool| configured_tools.contains(tool))
+            .collect(),
+        _ => configured_tools,
+    };
+    if !resolved.allow_nested_delegation || resolved.allowed_agent_ids.is_empty() {
+        effective_tools.remove("spawn_agent");
+    } else {
+        effective_tools.extend(
+            resolved
+                .allowed_agent_ids
+                .iter()
+                .map(|id| format!("{}{}", ALLOWED_CHILD_AGENT_PREFIX, id)),
+        );
     }
+    runner = runner.with_allowed_tools(Arc::new(tokio::sync::Mutex::new(effective_tools)));
 
     Ok(runner)
 }
 
 /// Generate a unique memory scope ID for a subagent task.
+/// Add the workspace-root AGENTS.md to a profile only when the user enabled
+/// instruction injection. The file is bounded and read by the backend so the
+/// frontend never reads arbitrary workspace paths.
+pub(crate) async fn inject_workspace_agents_md(app: &AppHandle, resolved: &mut ResolvedAgent) {
+    if !resolved.inject_agents_md {
+        return;
+    }
+    let state = app.state::<AppState>();
+    let workspace = state.workspace_folder.read().await.clone();
+    let path = workspace.join("AGENTS.md");
+    let Ok(content) = tokio::fs::read_to_string(path).await else {
+        return;
+    };
+    let content = content.trim();
+    if content.is_empty() {
+        return;
+    }
+    let bounded = content.chars().take(32_000).collect::<String>();
+    resolved.agent.instructions = format!("{}\n\n## Workspace AGENTS.md\n{}", resolved.agent.instructions, bounded);
+}
+
 pub(crate) fn subagent_memory_scope(agent_id: &str, task: &str) -> String {
     use sha2::{Digest, Sha256};
     let task_hash = {
@@ -267,7 +325,7 @@ mod tests {
     use super::*;
 
     fn registry_with_generalist() -> AgentRegistry {
-        let mut reg = AgentRegistry::new();
+        let reg = AgentRegistry::new();
         reg.register(Agent {
             id: "generalist".to_string(),
             name: "ZEN".to_string(),
@@ -277,7 +335,6 @@ mod tests {
                 "write_file".to_string(),
                 "run_command".to_string(),
                 "spawn_agent".to_string(),
-                "handoff_to_agent".to_string(),
             ],
             model_override: None,
             max_iterations: None,
@@ -303,10 +360,6 @@ mod tests {
         assert!(resolved.agent.tool_ids.contains(&"web_search".to_string()));
         assert!(resolved.agent.tool_ids.contains(&"write_file".to_string()));
         assert!(!resolved.agent.tool_ids.contains(&"spawn_agent".to_string()));
-        assert!(!resolved
-            .agent
-            .tool_ids
-            .contains(&"handoff_to_agent".to_string()));
     }
 
     #[test]

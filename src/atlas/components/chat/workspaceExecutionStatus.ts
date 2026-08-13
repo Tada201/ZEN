@@ -1,7 +1,7 @@
 import type { Message } from "./types";
 import { collectMessageToolCalls } from "./messageToolCallModel";
 
-export type WorkspaceExecutionStatusKind = "idle" | "running" | "approval" | "error" | "completed";
+export type WorkspaceExecutionStatusKind = "idle" | "running" | "paused" | "approval" | "review" | "error" | "completed";
 
 export interface WorkspaceExecutionStatus {
   kind: WorkspaceExecutionStatusKind;
@@ -34,6 +34,9 @@ export function deriveWorkspaceExecutionStatus(
   const toolCalls = currentTurnToolCalls(turnMessages);
   const pendingApprovalCount = toolCalls.filter((tool) => tool.status === "awaiting_approval").length;
   const activeToolCount = toolCalls.filter((tool) => tool.status === "running").length;
+  const subagentSteps = turnMessages.flatMap((message) => message.steps || []).filter((step) => step.type === "subagent");
+  const failedSubagentCount = subagentSteps.filter((step) => step.subagent?.status === "failed").length;
+  const reviewSubagentCount = subagentSteps.filter((step) => ["incomplete", "uncertain", "stale"].includes(step.subagent?.status || "")).length;
   let lastAssistant: Message | undefined;
   for (let index = turnMessages.length - 1; index >= 0; index -= 1) {
     if (turnMessages[index]?.role === "assistant") {
@@ -44,7 +47,7 @@ export function deriveWorkspaceExecutionStatus(
   const hasExecution = toolCalls.length > 0 || turnMessages.some((message) =>
     message.steps?.some((step) => step.type !== "text"),
   );
-  const hasError = Boolean(lastAssistant?.status === "failed" || toolCalls.some((tool) => tool.status === "error"));
+  const hasError = Boolean(lastAssistant?.status === "failed" || toolCalls.some((tool) => tool.status === "error") || failedSubagentCount > 0);
 
   if (pendingApprovalCount > 0) {
     return {
@@ -60,7 +63,27 @@ export function deriveWorkspaceExecutionStatus(
     return {
       kind: "error",
       label: "Failed",
-      detail: "Review the latest run",
+      detail: failedSubagentCount > 0 ? "Review delegated work" : "Review the latest run",
+      activeToolCount,
+      pendingApprovalCount,
+    };
+  }
+
+  if (reviewSubagentCount > 0) {
+    return {
+      kind: "review",
+      label: "Needs review",
+      detail: "Review delegated work",
+      activeToolCount,
+      pendingApprovalCount,
+    };
+  }
+
+  if (lastAssistant?.status === "paused") {
+    return {
+      kind: "paused",
+      label: "Paused",
+      detail: "Response paused",
       activeToolCount,
       pendingApprovalCount,
     };

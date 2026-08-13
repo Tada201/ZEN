@@ -218,12 +218,16 @@ not an optional polish pass. When creating or changing a component or feature:
 - Streaming content is the exception to per-update animation: do not animate
   every token or delta. Animate the message/card mount and meaningful state
   changes, then let the content stream steadily inside the stable surface.
+  Exception: a single lightweight trailing cursor or caret at the active
+  streaming edge is permitted (CSS-only, no React re-renders for blink).
 - New lazy-loaded surfaces, overlays, menus, cards, tool rows, side panels,
   composer modes, and empty/loading states must participate in the same motion
   choreography instead of introducing one-off CSS animation classes.
 - Motion must be controlled by Zen's user-owned animation preference and shared
-  tokens. Do not read the operating system reduced-motion preference directly,
-  and do not create a second motion policy.
+  tokens. Respect the OS `prefers-reduced-motion` setting as the default when
+  the user has not explicitly configured the in-app preference; the in-app
+  toggle overrides the OS setting once set. Do not create a second parallel
+  motion policy or read additional OS media queries beyond reduced-motion.
 - Before shipping, inspect the full transition path at normal, loading, error,
   empty, reload, narrow-layout, and animation-disabled states. A component is
   not motion-complete if it looks smooth in isolation but causes a neighboring
@@ -268,19 +272,26 @@ All frontend API wrappers must define request and response types.
 
 ### Chat Timeline Rendering
 
-The chat timeline must not become a raw execution log.
+The chat timeline must not become a raw execution log, but it must remain an
+honest progress surface that answers "what is the agent doing now?" at a glance.
 
 - Render tool calls, agent actions, and subagent work as concise summaries by
-  default.
+  default. Show a brief tool-announce intent (verb + target) when a tool begins,
+  and a one-line outcome when it completes.
+- Agent phase indicators (Thinking, Searching, Editing, Waiting for approval,
+  Done) are always permitted in the timeline as lightweight status rows or
+  badges. These are not execution noise — they are user-facing progress.
 - Do not display raw internal JSON, full tool arguments, provider payloads,
   prompt bodies, stdout/stderr dumps, stack traces, event metadata, or full
   subagent transcripts in the normal timeline.
 - Put technical payloads behind an explicit diagnostic disclosure only when
   useful for failures, approvals, or audits.
 - Keep approvals and errors visible and actionable in user language.
-- Hide successful completed tool cards from the main timeline after chat
-  completion and on reload; persisted tool data is for audit/details surfaces,
-  not a trailing chat card.
+- After chat completion and on reload, collapse successful completed tool cards
+  to a single-line summary (verb + target + status) in the timeline. Full tool
+  output belongs behind an explicit disclosure. Do not leave expanded tool cards
+  trailing below the final answer, but do preserve a visible collapsed summary
+  so users can audit what the agent did without opening a separate surface.
 - Group parallel/multi-tool execution into one compact execution row unless the
   user expands details.
 - Subagent output belongs in a delegation summary or dedicated agents panel; it

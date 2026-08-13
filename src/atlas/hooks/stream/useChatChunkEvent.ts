@@ -18,7 +18,11 @@ import {
   type ChunkBuffer,
 } from "./chatChunkBuffer";
 import { reconcileStrayToolLedgers } from "./strayToolLedger";
-import { persistExecutionCheckpointForEvent } from "./persistExecutionCheckpoint";
+import { persistExecutionCheckpointForEvent, flushPendingCheckpoints } from "./persistExecutionCheckpoint";
+import { createAgentRuntimeBridge } from "@/atlas/agentRuntime/runtimeBridge";
+import { normalizeChatDeltaEvent, normalizeChatDoneEvent } from "@/atlas/agentRuntime/normalizeEvent";
+import { mergeRuntimeTextPartsIntoSteps, type AgentTurnRecord } from "@/atlas/agentRuntime/types";
+import { presentExecutionError } from "@/atlas/agentRuntime/executionError";
 
 interface UseChatChunkEventProps {
   resetHeartbeatTimeout: (chatId: string) => void;
@@ -36,9 +40,45 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
   // Entries are namespaced by chat id and backend message id so concurrent
   // streams cannot consume one another's first delta.
   const firstChunkDeltas = useRef<Record<string, ChunkBuffer>>({});
+  const runtimeFirstDeltasRef = useRef<Record<string, string>>({});
   // firstChunkDeltas.current[chatId] is the chat-owned namespace prefix;
   // chunkTrackingKey adds the persisted message identity within that chat.
   const researchCompletionTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
+  const runtimeBridgeRef = useRef<ReturnType<typeof createAgentRuntimeBridge> | null>(null);
+
+  if (runtimeBridgeRef.current === null) {
+    runtimeBridgeRef.current = createAgentRuntimeBridge((record: AgentTurnRecord) => {
+      const textParts = record.parts.filter((part) => part.type === "text" || part.type === "reasoning");
+      if (textParts.length === 0) return;
+      useChatStore.getState().setSessionMessages(record.chatId, (prev: Message[]) => {
+        const assistantIdx = findWritableAssistantIndex(prev, record.chatId, record.messageId);
+        if (assistantIdx === -1) return prev;
+        const current = prev[assistantIdx];
+        const next = [...prev];
+        const text = record.parts.find((part) => part.type === "text");
+        const reasoning = record.parts
+          .filter((part) => part.type === "reasoning")
+          .map((part) => part.visibleText)
+          .join("");
+        next[assistantIdx] = {
+          ...current,
+          content: text?.visibleText || current.content,
+          reasoning: reasoning || current.reasoning,
+          // Keep the canonical runtime reveal visible inside the same ordered
+          // timeline as tool/action steps. Previously this callback updated
+          // only message-level content/reasoning, so live thinking disappeared
+          // until chat:done and finalization appended one text block after all
+          // tools. Runtime-owned steps are replaced per frame while execution
+          // steps remain ordered by their backend sequence.
+          steps: mergeRuntimeTextPartsIntoSteps(record.parts, current.steps),
+          isThinking: record.status === "running" && Boolean(reasoning),
+        };
+        return next;
+      });
+    });
+  }
+
+  const runtimeBridge = runtimeBridgeRef.current;
 
   const flushAllChunkBuffers = useCallback(() => {
     const buffers = chunkBuffersRef.current;
@@ -74,6 +114,12 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
       delete buffers[chatId];
       delete bufferKeys[chatId];
 
+      // Text/reasoning visibility is now owned by the canonical runtime
+      // scheduler. Keep the legacy buffer only for protocol/inline-think
+      // compatibility until those parts migrate; never apply the same raw
+      // delta to the message a second time.
+      if (runtimeBridge && (chunkType === "text" || chunkType === "thought")) continue;
+
       setSessionMessages(chatId, (prev: Message[]) => {
         const assistantIdx = findWritableAssistantIndex(prev, chatId, buf.messageId);
         if (assistantIdx === -1) return prev;
@@ -89,6 +135,15 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
 
   useEffect(() => {
     let didCancel = false;
+
+    // A hard WebView2 close fires `pagehide` without unmounting React, so the
+    // cleanup below never runs. Flush the debounced tool-timeline checkpoints
+    // synchronously here so the durable ledger survives an abrupt reload/close.
+    const handlePageHide = () => {
+      flushAllChunkBuffers();
+      flushPendingCheckpoints();
+    };
+    window.addEventListener("pagehide", handlePageHide);
 
     const setupListeners = async () => {
       unlistenRefs.current.forEach(u => u());
@@ -127,11 +182,11 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
           messageId: streamMessageId,
         };
 
-        // Immediately merge the first delta into chat state — no buffering
-        applyBufferedDeltaToChat(chatId, delta, chunkType, {
-          isThinking: chunkType === "thought",
-          messageId: event.payload.message_id || undefined,
-        });
+        const normalized = normalizeChatDeltaEvent(
+          event.payload as unknown as Record<string, unknown>,
+          chunkType === "thought" ? "reasoning-delta" : "text-delta",
+        );
+        if (normalized) runtimeBridge?.dispatch(normalized);
 
         ttftMark(chatId, 'firstChunk');
         requestAnimationFrame(() => {
@@ -168,7 +223,18 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
           applyBufferedDeltaToChat(chatId, oldDelta, oldType, { messageId: existing.messageId });
         }
 
-        // Accumulate into buffer
+        const normalized = normalizeChatDeltaEvent(
+          event.payload as unknown as Record<string, unknown>,
+          incomingType === "thought" ? "reasoning-delta" : "text-delta",
+        );
+        if (normalized) {
+          const firstKey = chunkTrackingKey(chatId, streamMessageId);
+          const firstDelta = runtimeFirstDeltasRef.current[firstKey];
+          if (firstDelta !== delta) runtimeBridge?.dispatch(normalized);
+        }
+
+        // Accumulate into legacy compatibility buffer for tool-protocol and
+        // inline-think parsing until those channels migrate to AgentPart.
         chunkBuffersRef.current[chatId] = {
           delta: (canAppendToExisting ? existing.delta : "") + delta,
           type: incomingType,
@@ -178,9 +244,15 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
 
         if (isFirstChunk) {
           markFirstChunkTypeSent(chatId, incomingType, streamMessageId);
+          runtimeFirstDeltasRef.current[chunkTrackingKey(chatId, streamMessageId)] = delta;
           ttftMark(chatId, 'firstChunk');
-          flushAllChunkBuffers();
 
+          requestAnimationFrame(() => {
+            ttftMark(chatId, 'firstRender');
+          });
+        }
+
+        if (isFirstChunk) {
           requestAnimationFrame(() => {
             ttftMark(chatId, 'firstRender');
           });
@@ -194,6 +266,9 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         if (!chatId) return;
 
         clearHeartbeatTimeout(chatId);
+
+        const normalizedDone = normalizeChatDoneEvent(event.payload as unknown as Record<string, unknown>);
+        if (normalizedDone) runtimeBridge?.dispatch(normalizedDone);
         
         // Ensure any pending chunks are flushed before finalization. The
         // flush consumes and clears the buffer, so never read that buffer
@@ -320,7 +395,13 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         // full output, base64 blobs, and subagent transcripts are excluded so
         // the DB row stays small and well under the 2 MB backend cap.
         const backendAssistantId = event.payload.message_id;
-        if (backendAssistantId && assistantIdBeforeFinalize && backendAssistantId !== assistantIdBeforeFinalize) {
+        // Reconcile whenever a backend id is known — even if the assistant was
+        // already remapped to it by an earlier chat:message. Gating on
+        // `backendAssistantId !== assistantIdBeforeFinalize` skipped the merge
+        // in exactly that case, stranding orphan tool-ledger rows that then
+        // vanished on reload. reconcileStrayToolLedgers is a no-op when there
+        // are no matching strays, so running it unconditionally is safe.
+        if (backendAssistantId && assistantIdBeforeFinalize) {
           useChatStore.getState().setSessionMessages(chatId, (prev) =>
             reconcileStrayToolLedgers(prev, assistantIdBeforeFinalize, backendAssistantId),
           );
@@ -331,7 +412,12 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         // MUST skip persistence here rather than fabricating an optimistic ID
         // (persisting with a fake ID would attach steps to the wrong DB row).
         if (backendAssistantId) {
-          persistExecutionCheckpointForEvent({ chatId, messageId: backendAssistantId, flush: true });
+          persistExecutionCheckpointForEvent({
+            chatId,
+            messageId: backendAssistantId,
+            flush: true,
+            traceStatus: isCancelled ? "cancelled" : "completed",
+          });
         }
 
         // Stop streaming after setSessionMessages unless we're in a
@@ -392,6 +478,11 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
 
         const recoverable = event.payload.recoverable === true;
         const errorMessage = event.payload.error || "The model stream stopped before returning output.";
+        const errorPresentation = presentExecutionError(errorMessage, {
+          context: "transport",
+          recoverable,
+        });
+        const displayError = errorPresentation.summary;
 
         clearHeartbeatTimeout(chatId);
         clearChunkTrackingForChat(chatId, chunkBuffersRef.current, firstChunkDeltas.current);
@@ -405,14 +496,33 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
           if (prev[assistantIdx].status !== "sending") return prev;
 
           const next = [...prev];
-          next[assistantIdx] = markMessageAsFailed(next[assistantIdx], errorMessage, recoverable);
+          const failedMessage = markMessageAsFailed(next[assistantIdx], displayError, recoverable);
+          next[assistantIdx] = {
+            ...failedMessage,
+            metadata: {
+              ...failedMessage.metadata,
+              errorCategory: errorPresentation.category,
+              errorAction: errorPresentation.action,
+              errorActionLabel: errorPresentation.actionLabel,
+              errorTechnicalDetails: errorPresentation.technicalDetails,
+              errorRetryable: errorPresentation.retryable,
+            },
+          };
           appliedToSendingAssistant = true;
           return next;
         });
         useChatStore.getState().setStreamingForChat(chatId, false);
         useChatStore.getState().setActiveAssistantForChat(chatId, null);
+        if (appliedToSendingAssistant) {
+          persistExecutionCheckpointForEvent({
+            chatId,
+            messageId: activeAssistantId,
+            flush: true,
+            traceStatus: recoverable ? "interrupted" : "failed",
+          });
+        }
         if (appliedToSendingAssistant && !recoverable) {
-          toast.error(errorMessage);
+          toast.error(errorPresentation.summary);
         }
       });
 
@@ -446,6 +556,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
 
     return () => {
       didCancel = true;
+      window.removeEventListener("pagehide", handlePageHide);
       unlistenRefs.current.forEach(u => u());
       unlistenRefs.current = [];
       if (chunkRafRef.current) {
@@ -456,6 +567,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
       Object.values(researchCompletionTimersRef.current).forEach(clearTimeout);
       researchCompletionTimersRef.current = {};
       flushAllChunkBuffers();
+      flushPendingCheckpoints();
     };
   }, [queryClient, flushAllChunkBuffers, resetHeartbeatTimeout, clearHeartbeatTimeout]);
 }

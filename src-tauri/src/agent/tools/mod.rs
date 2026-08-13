@@ -1,11 +1,8 @@
 pub mod child_runner;
 pub mod handoff_context;
-pub mod delegate_to_agent;
 pub mod drawing_tools;
 pub mod fs_tools;
-pub mod geofence_tools;
 pub mod graph_session;
-pub mod handoff_tools;
 pub mod manage_board;
 pub mod map_tools;
 pub mod osint_tools;

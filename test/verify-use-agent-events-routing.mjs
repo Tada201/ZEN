@@ -22,11 +22,11 @@ for (const eventName of ["orchestrator:progress", "chat:status", "chat:research-
 }
 
 assert(
-  source.includes('appendActionStep(chatId, { ...payload, chat_id: chatId }, "orchestrator_progress")'),
+  (source.includes('appendActionStep(chatId, { ...payload, chat_id: chatId }, "orchestrator_progress")') || source.includes('appendLifecycleStep(chatId, { ...payload, chat_id: chatId }, "orchestrator_progress")')),
   "orchestrator progress should stamp resolved chat_id before appending",
 );
 assert(
-  source.includes('appendActionStep(chatId, { ...payload, chat_id: chatId } as AgentActionEventPayload, "chat_status")'),
+  (source.includes('appendActionStep(chatId, { ...payload, chat_id: chatId } as AgentActionEventPayload, "chat_status")') || source.includes('appendLifecycleStep(chatId, { ...payload, chat_id: chatId } as AgentActionEventPayload, "chat_status")')),
   "chat status should stamp resolved chat_id before appending",
 );
 const chatMessageIndex = source.indexOf('listenAppEvent("chat:message"');
@@ -39,7 +39,7 @@ assert(
   "chat:message should route inline action messages by active stream while preserving direct-only routing for normal messages",
 );
 assert(
-  chatMessageBlock.includes("appendActionStep(chatId, { ...payload, chat_id: chatId }, kind)"),
+  (chatMessageBlock.includes("appendActionStep(chatId, { ...payload, chat_id: chatId }, kind)") || chatMessageBlock.includes("appendLifecycleStep(chatId, { ...payload, chat_id: chatId }, kind)")),
   "chat:message inline actions should stamp resolved chat_id before appending",
 );
 

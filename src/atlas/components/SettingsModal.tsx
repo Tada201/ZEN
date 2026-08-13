@@ -25,7 +25,9 @@ import { useZenTheme } from "../providers/ZenThemeProvider";
 import { normalizeThemeId, THEME_PRESETS } from "../theme";
 import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 import { SettingsSidebar } from "./SettingsSidebar";
-import { normalizeSettingsTab, type TabId } from "./settingsNavigation";
+import { SettingsOverview } from "@/components/settings/SettingsOverview";
+import { normalizeSettingsTab, VISIBLE_TAB_GROUPS, type TabId } from "./settingsNavigation";
+import { motionDurations, motionEasings, useReducedMotion } from "@/lib/motion";
 
 export type { TabId } from "./settingsNavigation";
 
@@ -55,8 +57,9 @@ const HooksSettings = React.lazy(() => import("@/components/settings/Tabs/plugin
 
 function SettingsTabFallback() {
   return (
-    <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-border bg-muted/30">
+    <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-border bg-card">
       <WorkbenchIcon name="lucide:loader-2" className="h-5 w-5 animate-spin text-primary" />
+      <span className="ml-2 text-sm text-muted-foreground">Loading settings…</span>
     </div>
   );
 }
@@ -78,7 +81,7 @@ export function SettingsModal({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!left-0 !top-0 !h-screen !max-h-none !w-screen !max-w-none !translate-x-0 !translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-background p-0 shadow-2xl focus:outline-none focus-visible:outline-none data-[state=closed]:slide-out-to-bottom-2 data-[state=open]:slide-in-from-bottom-2">
+      <DialogContent className="!left-0 !top-11 !h-[calc(100vh-2.75rem)] !max-h-none !w-screen !max-w-none !translate-x-0 !translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-background p-0 shadow-none focus:outline-none focus-visible:outline-none data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0">
         <DialogTitle className="sr-only">Settings</DialogTitle>
         <DialogDescription className="sr-only">Configure application preferences.</DialogDescription>
         <SettingsContent
@@ -98,8 +101,11 @@ export function SettingsContent({
   onClose?: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<TabId>(() => normalizeSettingsTab(initialTab));
+  const activeTabLabel = useMemo(
+    () => VISIBLE_TAB_GROUPS.flatMap((group) => group.tabs).find((tab) => tab.id === activeTab)?.label ?? "Settings",
+    [activeTab],
+  );
 
-  // Sync activeTab when initialTab changes (user clicks different settings button)
   useEffect(() => {
     setActiveTab(normalizeSettingsTab(initialTab));
   }, [initialTab]);
@@ -112,6 +118,7 @@ export function SettingsContent({
   const applyChanges = useSettingsStore(s => s.applyChanges);
   const discardChanges = useSettingsStore(s => s.discardChanges);
   const animationsEnabled = useSettingsStore(s => s.animationsEnabled);
+  const reducedMotion = useReducedMotion();
   const pendingChangeCount = useSettingsStore(s => Object.keys(s.activeSettings).length);
 
   const settingsRecord = useSettingsStore(useShallow(storeToSettingsRecord));
@@ -221,60 +228,66 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
     );
   }
 
-  // ── Render ──────────────────────────────────────────────────────
-
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-background md:flex-row">
-      <header className="absolute inset-x-0 top-0 z-20 flex h-14 items-center justify-between border-b border-border/60 bg-background/90 px-4 backdrop-blur-xl md:pl-[17rem] md:pr-8">
+      <header className="absolute inset-x-0 top-0 z-20 flex h-14 items-center justify-between border-b border-border bg-background px-4 md:pl-[18.5rem] md:pr-8">
         <div className="flex min-w-0 items-center gap-3">
-          <WorkbenchIcon name="lucide:settings-2" size={16} className="shrink-0 text-primary" />
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <WorkbenchIcon name="lucide:settings-2" size={16} />
+          </span>
           <div className="min-w-0">
-            <h1 className="truncate text-sm font-semibold text-foreground">Settings</h1>
-            <p className="hidden text-[11px] text-muted-foreground sm:block">Configure Zen across providers, models, and workspaces.</p>
+            <h1 className="truncate text-sm font-semibold text-foreground">{activeTabLabel}</h1>
+            <p className="hidden text-[11px] text-muted-foreground sm:block">Preferences, safety, and workspace controls</p>
           </div>
         </div>
-        <button type="button" onClick={onClose} className="flex h-8 items-center gap-2 rounded-md border border-border/70 px-3 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+        <button type="button" onClick={handleCancel} className="flex h-8 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-medium text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/40">
           <WorkbenchIcon name="lucide:arrow-left" size={13} />
-          Back to workspace
+          {pendingChangeCount > 0 ? "Discard & return" : "Back to workspace"}
         </button>
       </header>
       <SettingsSidebar activeTab={activeTab} onSelectTab={setActiveTab} />
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden bg-background">
+      <div className="flex-1 flex h-full flex-col overflow-hidden bg-background">
         <ScrollArea className="flex-1 pt-14">
-          <div className="mx-auto w-full max-w-7xl space-y-6 p-5 md:p-10 lg:p-12">
+          <div className="mx-auto w-full max-w-5xl space-y-5 p-4 md:p-6 lg:p-8">
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeTab}
-                initial={{ opacity: 0, x: 5 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -5 }}
-                transition={{ duration: 0.15 }}
-                className="space-y-8"
+                initial={reducedMotion ? false : { opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reducedMotion ? undefined : { opacity: 0, y: -4 }}
+                transition={{ duration: reducedMotion ? 0 : motionDurations.fast, ease: motionEasings.standard }}
+                className="space-y-5"
               >
                 <React.Suspense fallback={<SettingsTabFallback />}>
                 {activeTab === "general" && (
-                  <section className="space-y-6">
+                  <section className="space-y-5">
                     <div className="space-y-1">
                       <h3 className="text-lg font-bold tracking-tight text-foreground">General</h3>
                       <p className="text-[13px] text-muted-foreground">Manage workspace and UI preferences.</p>
                     </div>
 
-                    <div className="space-y-4">
-                      <div className="space-y-2">
+                    <SettingsOverview
+                      workspace={settings["workspace.root"] || "Not selected"}
+                      theme={activeThemeValue === "system" ? "System" : activeThemeValue === "light" ? "Light" : "Dark"}
+                      motion={animationsEnabled ? "Enabled" : "Reduced"}
+                      preferences={pendingChangeCount > 0 ? "Changes pending" : "Up to date"}
+                    />
+
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
                         <Label className="text-[13px] font-bold text-foreground">Workspace Root</Label>
                         <FolderBrowser
                           value={settings["workspace.root"] || ""}
                           onChange={(path) => handleUpdate("workspace.root", path)}
                         />
-                        <p className="text-[10px] text-muted-foreground/70">
+                        <p className="text-[10px] text-muted-foreground">
                           File tools apply this folder after settings are saved.
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-2 pt-2 lg:grid-cols-2">
-                        <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30">
+                      <div className="grid grid-cols-1 divide-y divide-border/70 border-y border-border/70 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+                        <div className="flex items-center justify-between py-3 lg:pr-6">
                           <Label className="text-[13px] font-medium text-foreground">Interface Theme</Label>
                           <Select
                             value={activeThemeValue}
@@ -291,7 +304,7 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
                           </Select>
                         </div>
 
-                        <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30">
+                        <div className="flex items-center justify-between py-3 lg:pl-6">
                           <div className="space-y-0.5">
                             <Label className="text-[13px] font-medium text-foreground">Interface Animations</Label>
                             <p className="text-[10px] text-muted-foreground">Shimmer, pulses and transitions</p>
@@ -303,7 +316,7 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
                           />
                         </div>
 
-                        <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border bg-muted/30">
+                        <div className="flex items-center justify-between gap-3 py-3 lg:pr-6">
                           <div className="space-y-0.5">
                             <Label className="text-[13px] font-medium text-foreground">Welcome Page</Label>
                             <p className="text-[10px] text-muted-foreground">Choose the welcome page background</p>
@@ -324,7 +337,7 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
                           </Select>
                         </div>
 
-                         <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30">
+                         <div className="flex items-center justify-between py-3 lg:pl-6">
                            <Label className="text-[13px] font-medium text-foreground">Compact Mode</Label>
                            <Switch
                              checked={settings["ui.compact-mode"] === "true"}
@@ -363,14 +376,14 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
                       <p className="text-[13px] text-muted-foreground">Configure agent skills and advanced behavior.</p>
                     </div>
                     <SkillsSettingsContent settings={settings} onUpdate={handleUpdate} />
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-muted/40 border border-border">
+                    <div className="flex items-center justify-between border-y border-border/70 py-3">
                       <span className="text-[11px] font-bold text-muted-foreground">Show advanced agent behavior</span>
                       <Switch checked={showAdvanced} onCheckedChange={setShowAdvanced} className="scale-75" />
                     </div>
 
                     {showAdvanced && (
                       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 pt-2">
-                         <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30">
+                         <div className="flex items-center justify-between border-y border-border/70 py-3">
                             <Label className="text-[13px] font-medium text-foreground">Max Reasoning Steps</Label>
                             <Input
                               type="number" className="w-16 h-8 text-xs text-center bg-background"
@@ -456,12 +469,11 @@ function parseToolPermissionKey(key: string): { toolId: string; subKey: string }
           </div>
         </ScrollArea>
 
-        {/* Footer Actions */}
-        <div className="flex min-h-14 items-center justify-between gap-3 border-t border-border/60 bg-background px-4 py-3 md:px-6">
+        <div className="flex min-h-16 items-center justify-between gap-3 border-t border-border bg-card px-4 py-3 md:px-6">
           <div className="min-w-0 text-xs text-muted-foreground" aria-live="polite">
             {pendingChangeCount > 0
-              ? `${pendingChangeCount} unsaved ${pendingChangeCount === 1 ? "change" : "changes"}`
-              : "All changes saved"}
+              ? `${pendingChangeCount} change${pendingChangeCount === 1 ? "" : "s"} ready to save`
+              : "Changes save when you choose Save changes"}
           </div>
           <div className="flex shrink-0 items-center gap-2">
           <Button variant="ghost" className="h-8 text-[11px] px-3 text-muted-foreground hover:text-foreground" onClick={handleCancel}>

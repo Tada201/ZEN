@@ -4,6 +4,7 @@
 //! runner execution.
 
 use serde_json::json;
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
@@ -19,6 +20,21 @@ use super::helpers::{
     deep_research_warranted, default_tool_intent_ids, default_yolo_tool_ids, has_tool_intent,
     persist_sync_send_failure, should_use_orchestrator, ThinkingConfig,
 };
+
+/// Invariant output rules appended to every assistant prompt, including custom
+/// replacement prompts. Rendering and timeline correctness must not depend on
+/// a user's optional persona prompt remembering the transport contract.
+const DETERMINISTIC_MESSAGE_RENDERING_CONTRACT: &str = r#"
+
+## Deterministic Message and Timeline Contract
+- Produce one assistant response stream. Do not emit internal event envelopes, `steps_json`, lifecycle records, fake tool results, or renderer instructions as user-facing content.
+- Keep the response chronological: explain the current step, request or run the relevant tool, then describe only the result that has actually returned. Never place a later result before the tool that produced it, and never merge separate execution iterations into one narrative batch.
+- Tools that belong to one explicitly parallel execution batch may be requested together. Sequential tool calls are separate execution units; do not claim they were parallel or completed together.
+- Preserve normal Markdown. Close every fenced block, use one language tag, and never nest or concatenate fences. Keep `chart` blocks as raw valid JSON, `mermaid` blocks as valid Mermaid, `tree` blocks as plain indented paths, and `openui` blocks as valid OpenUI DSL only when that capability is enabled.
+- Do not put prose, Markdown headings, comments, or trailing commas inside raw JSON blocks. Do not emit raw HTML/React tags or XML-like control tags in the answer. Use the supported `<card>{...}</card>` form only when a rich card is appropriate and keep its JSON complete.
+- Keep tool arguments and tool output in the tool protocol. In the assistant answer, use concise Markdown summaries and link each claim to the immediately preceding completed step. If a tool fails, state the failure and recovery action instead of inventing a successful result.
+- Do not repeat the same answer in both a streamed fragment and a final summary. The final response may reconcile earlier fragments, but must not reorder or duplicate their meaning.
+"#;
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
@@ -171,18 +187,6 @@ pub async fn send_message(
         resolved_provider = %resolved_provider_name,
         "Retrieved provider, chat history, and settings in parallel"
     );
-    let _ = app.emit(
-        "chat:status",
-        json!({
-            "chat_id": chat_id.clone(),
-            "message": format!("Provider ready: {}", resolved_provider_name),
-            "phase": "provider_ready",
-            "provider": resolved_provider_name.clone(),
-            "model": active_model.clone(),
-            "iteration": 0
-        }),
-    );
-
     // 3. Prepare config
     let mut config = ChatRequestConfig {
         temperature,
@@ -208,6 +212,7 @@ pub async fn send_message(
 
     // Register cancellation token — cancel any in-flight stream for this chat first.
     let cancel_tokens = state.chat_cancellation_tokens.clone();
+    let pause_controls = state.chat_pause_controls.clone();
     {
         let mut tokens = cancel_tokens.lock().await;
         if let Some(old_token) = tokens.remove(&chat_id) {
@@ -215,6 +220,13 @@ pub async fn send_message(
             info!(chat_id = %chat_id, "Cancelled previous in-flight chat stream");
         }
         tokens.insert(chat_id.clone(), token.clone());
+    }
+    {
+        let mut controls = pause_controls.lock().await;
+        if let Some(old_control) = controls.remove(&chat_id) {
+            old_control.resume();
+        }
+        controls.insert(chat_id.clone(), Arc::new(crate::commands::ChatPauseControl::new()));
     }
 
     // 4. Convert history to ChatMessage format
@@ -348,6 +360,13 @@ Always use these specialized code blocks for visual scenarios:
         _ => base_instructions,
     };
 
+    // This is an invariant transport/rendering contract, not a persona
+    // preference. Append it after custom instructions so replace-mode prompts
+    // cannot accidentally disable deterministic Markdown and timeline output.
+    if !instructions.contains("## Deterministic Message and Timeline Contract") {
+        instructions.push_str(DETERMINISTIC_MESSAGE_RENDERING_CONTRACT);
+    }
+
     let generative_ui_addendum = if replace_system_prompt {
         None
     } else if generative_ui.unwrap_or(false) {
@@ -375,24 +394,9 @@ Always use these specialized code blocks for visual scenarios:
 
     // Detect voice mode and read display agent settings
     let is_voice_mode = replace_system_prompt;
-    let display_agent_enabled = if is_voice_mode {
-        state
-            .settings_manager
-            .get("voiceDisplayAgentEnabled")
-            .await
-            .ok()
-            .flatten()
-            .or(state
-                .settings_manager
-                .get("voice_display_agent_enabled")
-                .await
-                .ok()
-                .flatten())
-            .map(|v| v == "true")
-            .unwrap_or(true)
-    } else {
-        false
-    };
+    // Voice display is a built-in automatic subagent. It is always enabled
+    // for voice turns; its settings surface only selects the model.
+    let display_agent_enabled = is_voice_mode;
     let display_agent_selection = if is_voice_mode {
         state
             .settings_manager
@@ -469,6 +473,7 @@ Always use these specialized code blocks for visual scenarios:
         let content_inner = content.clone();
         let provider_clone = llm_provider.clone();
         let cancel_tokens_clone = cancel_tokens.clone();
+        let pause_controls_clone = pause_controls.clone();
         let db_clone = db.clone();
         let parse_limit = |value: Option<String>, default: usize, min: usize, max: usize| {
             value
@@ -545,6 +550,7 @@ Always use these specialized code blocks for visual scenarios:
 
             let mut tokens = cancel_tokens_clone.lock().await;
             tokens.remove(&chat_id_inner);
+            pause_controls_clone.lock().await.remove(&chat_id_inner);
         });
         return Ok(());
     }
@@ -573,6 +579,7 @@ Always use these specialized code blocks for visual scenarios:
                     }),
                 );
                 let cancel_tokens_clone = cancel_tokens.clone();
+                let pause_controls_clone = pause_controls.clone();
                 let app_error = app.clone();
                 let token_for_error = token_clone.clone();
                 tokio::spawn(async move {
@@ -597,6 +604,7 @@ Always use these specialized code blocks for visual scenarios:
                         .await;
                     let mut tokens = cancel_tokens_clone.lock().await;
                     tokens.remove(&chat_id_inner);
+                    pause_controls_clone.lock().await.remove(&chat_id_inner);
                     if let Err(e) = &result {
                         tracing::error!("Orchestrator error: {:?}", e);
                         if token_for_error.is_cancelled() {
@@ -677,6 +685,7 @@ Always use these specialized code blocks for visual scenarios:
     };
 
     let cancel_tokens_runner = cancel_tokens.clone();
+    let pause_controls_runner = pause_controls.clone();
     let app_error = app.clone();
     let token_for_error = token.clone();
     tokio::spawn(async move {
@@ -693,6 +702,7 @@ Always use these specialized code blocks for visual scenarios:
             .await;
         let mut tokens = cancel_tokens_runner.lock().await;
         tokens.remove(&chat_id_clone);
+        pause_controls_runner.lock().await.remove(&chat_id_clone);
         if let Err(e) = result {
             tracing::error!("Error in chat runner: {:?}", e);
             if token_for_error.is_cancelled() {

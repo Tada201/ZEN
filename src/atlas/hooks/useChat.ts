@@ -38,7 +38,7 @@ export function useChat() {
   const selectedModelId = storeActiveModel || "No Model";
   const selectedProvider = storeActiveProvider || "ollama";
 
-  const { isStreaming, abortStream } = useStreamingChat(currentSessionId);
+  const { isStreaming, abortStream, pauseStream, resumeStream } = useStreamingChat(currentSessionId);
 
   const mutations = useChatMutations({
     currentSessionId,
@@ -106,6 +106,8 @@ export function useChat() {
     handleImportSession,
     handleSendMessage,
     abortStream,
+    pauseStream,
+    resumeStream,
     ...mutations,
   };
 }

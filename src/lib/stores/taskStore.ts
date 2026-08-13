@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { listenAppEvent, type TaskEventPayload } from '@/api/events';
+import { normalizeTaskDisplayStatus, normalizeTaskText } from '@/lib/tasks/taskStatus';
 
 // ─── Types ───
 
@@ -41,16 +42,31 @@ export interface TaskState {
 }
 
 function normalizeTask(payload: TaskEventPayload): Task {
+  const normalizedStatus = normalizeTaskDisplayStatus(payload.status);
   return {
-    id: payload.id || payload.taskId || payload.task_id || '',
-    description: payload.description || '',
-    assignedTo: payload.assignedTo || payload.assigned_to || 'ZEN',
-    status: (payload.status as Task['status']) || 'pending',
-    progress: payload.progress || 0,
-    error: payload.error,
-    chatId: payload.chatId || payload.chat_id || '',
-    createdAt: payload.createdAt || payload.created_at || Date.now(),
-    updatedAt: payload.updatedAt || payload.updated_at || Date.now(),
+    id: normalizeTaskText(payload.id || payload.taskId || payload.task_id),
+    description: normalizeTaskText(payload.description),
+    assignedTo: normalizeTaskText(payload.assignedTo || payload.assigned_to, 'ZEN'),
+    // Keep the store's legacy vocabulary for existing consumers while mapping
+    // malformed/unknown backend values to a safe pending state.
+    status: normalizedStatus === 'running'
+      ? 'in-progress'
+      : normalizedStatus === 'completed'
+        ? 'completed'
+        : normalizedStatus === 'error'
+          ? 'failed'
+          : 'pending',
+    progress: typeof payload.progress === 'number' && Number.isFinite(payload.progress)
+      ? Math.max(0, Math.min(100, payload.progress))
+      : 0,
+    error: normalizeTaskText(payload.error) || undefined,
+    chatId: normalizeTaskText(payload.chatId || payload.chat_id),
+    createdAt: typeof (payload.createdAt || payload.created_at) === 'number'
+      ? Number(payload.createdAt || payload.created_at)
+      : Date.now(),
+    updatedAt: typeof (payload.updatedAt || payload.updated_at) === 'number'
+      ? Number(payload.updatedAt || payload.updated_at)
+      : Date.now(),
   };
 }
 

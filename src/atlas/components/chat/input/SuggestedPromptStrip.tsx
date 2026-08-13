@@ -21,6 +21,11 @@ export function SuggestedPromptStrip({
   isLoading?: boolean;
   onSelect: (prompt: string) => void;
 }) {
+  // These prompts exercise local mock flows and are prototype tooling, not
+  // production product suggestions. Keep them available in web development
+  // for the fixture, but never expose them in a production build.
+  if (!import.meta.env.DEV) return null;
+
   const reducedMotion = useReducedMotion();
 
   return (
@@ -28,7 +33,7 @@ export function SuggestedPromptStrip({
       initial={reducedMotion ? false : { opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
-      className="flex flex-wrap gap-2 px-1 pb-1"
+      className="flex flex-wrap gap-1.5 px-1 pb-0.5"
     >
       {SUGGESTED_PROMPTS.map((item) => (
         <button
@@ -36,9 +41,9 @@ export function SuggestedPromptStrip({
           onClick={() => onSelect(item.prompt)}
           disabled={isLoading}
           aria-label={item.label}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium bg-muted/80 dark:bg-muted/60 border border-border/40 dark:border-border/60 hover:bg-muted dark:hover:bg-indigo-950/20 hover:border-border dark:hover:border-primary/30 text-muted-foreground/70 dark:text-muted-foreground hover:text-foreground dark:hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 active:scale-95 shadow-[0_1px_2px_hsl(var(--background) / 0.01)]"
+          className="composer-chip px-2 py-1 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <span className="text-[12px] font-semibold leading-none">{item.icon}</span>
+          <span className="text-[12px] font-semibold leading-none text-primary">{item.icon}</span>
           <div className="flex flex-col items-start leading-tight">
             <span className="font-semibold">{item.label}</span>
             <span className="text-[11px] text-muted-foreground dark:text-muted-foreground font-normal">{item.description}</span>

@@ -1,11 +1,12 @@
 import type { Step } from "./types";
+import { normalizeTaskDisplayStatus, type TaskDisplayStatus } from "@/lib/tasks/taskStatus";
 
 type ActionTaskPreview = NonNullable<NonNullable<Step["metadata"]>["tasks"]>[number];
 
 export type NormalizedTaskPreview = {
   id: string;
   label: string;
-  status: "pending" | "running" | "completed" | "error" | "cancelled";
+  status: TaskDisplayStatus;
   assignee?: string;
 };
 
@@ -37,13 +38,6 @@ function readTaskLabel(task: ActionTaskPreview, id: string) {
   return compactText(task.description || task.title || task.name || task.task || id, id);
 }
 
-function normalizeTaskStatus(status: unknown): NormalizedTaskPreview["status"] {
-  if (status === "running" || status === "in_progress" || status === "in-progress" || status === "started" || status === "active") return "running";
-  if (status === "completed" || status === "complete" || status === "success" || status === "done") return "completed";
-  if (status === "error" || status === "failed" || status === "failure") return "error";
-  if (status === "cancelled" || status === "canceled") return "cancelled";
-  return "pending";
-}
 
 function readTaskAssignee(task: ActionTaskPreview) {
   return compactText(task.assignedTo || task.assigned_to || task.agentName || task.agent_name || task.agentId || task.agent_id);
@@ -54,7 +48,7 @@ function normalizeTask(task: ActionTaskPreview, index: number): NormalizedTaskPr
   return {
     id,
     label: readTaskLabel(task, id),
-    status: normalizeTaskStatus(task.status),
+    status: normalizeTaskDisplayStatus(task.status),
     assignee: readTaskAssignee(task) || undefined,
   };
 }

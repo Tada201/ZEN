@@ -26,9 +26,9 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{Mutex, Notify, RwLock};
 use tokio_util::sync::CancellationToken;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 use crate::db::models::ChatMessage;
 
@@ -270,6 +270,76 @@ impl Default for SetupFlags {
     }
 }
 
+/// Cooperative pause gate for one active chat execution.
+///
+/// Pausing never cancels the request or discards approvals/checkpoints. Runners
+/// observe this gate at safe iteration/tool boundaries and wait until the
+/// matching continue command releases them.
+pub struct ChatPauseControl {
+    paused: std::sync::atomic::AtomicBool,
+    notify: Notify,
+}
+
+impl ChatPauseControl {
+    pub fn new() -> Self {
+        Self {
+            paused: std::sync::atomic::AtomicBool::new(false),
+            notify: Notify::new(),
+        }
+    }
+
+    pub fn pause(&self) {
+        self.paused.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn resume(&self) {
+        self.paused.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.notify.notify_waiters();
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.paused.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+}
+
+impl Default for ChatPauseControl {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Wait at a cooperative execution boundary without cancelling the active run.
+/// Returns false only when Stop/cancellation wins while the run is paused.
+pub async fn wait_for_chat_resume(
+    app: &tauri::AppHandle,
+    chat_id: &str,
+    token: &CancellationToken,
+) -> bool {
+    let control = if let Some(state) = app.try_state::<AppState>() {
+        state.chat_pause_controls.lock().await.get(chat_id).cloned()
+    } else {
+        None
+    };
+
+    let Some(control) = control else {
+        return !token.is_cancelled();
+    };
+
+    while control.is_paused() && !token.is_cancelled() {
+        let notified = control.notify.notified();
+        if !control.is_paused() {
+            break;
+        }
+        tokio::select! {
+            _ = notified => {}
+            _ = token.cancelled() => return false,
+        }
+    }
+
+    !token.is_cancelled()
+}
+
 #[allow(clippy::type_complexity)]
 pub struct AppState {
     pub db: InitState<SqlitePool>,
@@ -291,6 +361,7 @@ pub struct AppState {
     pub secret_manager: Arc<SecretService>,
     pub security: Arc<SecurityService>,
     pub chat_cancellation_tokens: Arc<tokio::sync::Mutex<HashMap<String, CancellationToken>>>,
+    pub chat_pause_controls: Arc<tokio::sync::Mutex<HashMap<String, Arc<ChatPauseControl>>>>,
     pub rag: InitState<Arc<dyn crate::rag::VectorStore>>,
     pub conversation_store: InitState<Arc<crate::rag::conversation_store::ConversationStore>>,
     pub workspace_folder: Arc<RwLock<PathBuf>>,
@@ -376,7 +447,7 @@ impl AppState {
         let tool_registry_v2 = Arc::new(RwLock::new(crate::tools::init_tool_registry(
             crate::tools::permission::ToolPermissions::default(),
         )));
-        let mut agent_registry_inner = AgentRegistry::new();
+        let agent_registry_inner = AgentRegistry::new();
         let mut paths_to_try = vec![
             std::path::PathBuf::from("resources/agents"),
             std::path::PathBuf::from("src-tauri/resources/agents"),
@@ -397,6 +468,13 @@ impl AppState {
         for path in paths_to_try {
             if path.exists() && path.is_dir() && agent_registry_inner.load_from_dir(&path) > 0 {
                 break;
+            }
+        }
+        agent_registry_inner.mark_loaded_as_builtin();
+        if let Some(config_dir) = dirs::config_dir() {
+            let user_agent_dir = config_dir.join("zen").join("agents");
+            if let Err(error) = agent_registry_inner.configure_user_dir(user_agent_dir) {
+                tracing::warn!(error = %error, "User agent configuration could not be initialized");
             }
         }
         let agent_registry = Arc::new(agent_registry_inner);
@@ -480,6 +558,7 @@ impl AppState {
             secret_manager: secret_manager.clone(),
             security,
             chat_cancellation_tokens: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            chat_pause_controls: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             rag: InitState::new(),
             conversation_store: InitState::new(),
             workspace_folder: workspace_folder_arc.clone(),

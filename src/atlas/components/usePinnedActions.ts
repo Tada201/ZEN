@@ -34,7 +34,12 @@ export function usePinnedActions(): readonly [
   const [pinned, setPinned] = useState<string[]>(safeReadLs);
 
   useEffect(() => {
-    localStorage.setItem(LS_KEY, JSON.stringify(pinned));
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify(pinned));
+    } catch {
+      // Private browsing, disabled storage, or quota exhaustion must not
+      // break the composer; the current session still owns the pins.
+    }
   }, [pinned]);
 
   const toggle = useCallback((id: string) => {

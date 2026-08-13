@@ -64,7 +64,7 @@ export function TranslationCard({ data }: { data: TranslationData }) {
   };
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-lg flex flex-col">
+    <div className="genui-card-surface w-full max-w-none min-w-0 rounded-2xl border border-border bg-card p-5 shadow-lg flex flex-col">
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">

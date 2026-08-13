@@ -100,6 +100,47 @@ const MAX_STEPS_JSON_SIZE: usize = 2 * 1024 * 1024; // 2 MB
 
 const STEPS_JSON_SIZE_ERROR: &str = "steps_json exceeds maximum allowed size (2 MB)";
 const STEPS_JSON_INVALID_ERROR: &str = "steps_json must be valid JSON";
+const EXECUTION_TRACE_VERSION: u64 = 2;
+
+/// Wrap a compact frontend timeline in a backend-authored checkpoint envelope.
+/// The backend owns the version, status, and persistence timestamp while the
+/// redacted `steps` projection remains compatible with older history readers.
+pub fn normalize_trace_checkpoint(
+    steps_json: &str,
+    trace_status: Option<&str>,
+) -> crate::error::ZenResult<String> {
+    validate_steps_json(steps_json)?;
+    let value: serde_json::Value = serde_json::from_str(steps_json).map_err(|_| {
+        crate::error::ZenError::Custom(STEPS_JSON_INVALID_ERROR.to_string())
+    })?;
+    let steps = match value {
+        serde_json::Value::Array(steps) => steps,
+        serde_json::Value::Object(object) => object
+            .get("steps")
+            .and_then(serde_json::Value::as_array)
+            .cloned()
+            .ok_or_else(|| crate::error::ZenError::Custom(STEPS_JSON_INVALID_ERROR.to_string()))?,
+        _ => return Err(crate::error::ZenError::Custom(STEPS_JSON_INVALID_ERROR.to_string())),
+    };
+    let status = match trace_status.unwrap_or("checkpoint") {
+        "running" | "completed" | "cancelled" | "failed" | "interrupted" | "checkpoint" => {
+            trace_status.unwrap_or("checkpoint")
+        }
+        _ => "checkpoint",
+    };
+    let envelope = serde_json::json!({
+        "trace_version": EXECUTION_TRACE_VERSION,
+        "trace_status": status,
+        "saved_at": chrono::Utc::now().to_rfc3339(),
+        "steps": steps,
+    });
+    let serialized = serde_json::to_string(&envelope)
+        .map_err(|_| crate::error::ZenError::Custom(STEPS_JSON_INVALID_ERROR.to_string()))?;
+    if serialized.len() > MAX_STEPS_JSON_SIZE {
+        return Err(crate::error::ZenError::Custom(STEPS_JSON_SIZE_ERROR.to_string()));
+    }
+    Ok(serialized)
+}
 
 /// Validate that `steps_json` is acceptable to persist.
 ///
@@ -148,11 +189,12 @@ pub async fn update_message_steps(
     chat_id: String,
     message_id: String,
     steps_json: String,
+    trace_status: Option<String>,
 ) -> ZenResult<()> {
-    validate_steps_json(&steps_json)?;
+    let checkpoint = normalize_trace_checkpoint(&steps_json, trace_status.as_deref())?;
 
     let db = state.db().await?;
-    queries::update_message_steps(&db, &chat_id, &message_id, &steps_json).await?;
+    queries::update_message_steps(&db, &chat_id, &message_id, &checkpoint).await?;
     Ok(())
 }
 
@@ -184,6 +226,21 @@ mod tests {
     #[test]
     fn validate_steps_json_accepts_empty_array() {
         assert!(validate_steps_json("[]").is_ok());
+    }
+
+    #[test]
+    fn normalize_trace_checkpoint_adds_backend_metadata() {
+        let checkpoint = normalize_trace_checkpoint("[{\"type\":\"text\",\"content\":\"ok\"}]", Some("completed")).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&checkpoint).unwrap();
+        assert_eq!(value["trace_version"], EXECUTION_TRACE_VERSION);
+        assert_eq!(value["trace_status"], "completed");
+        assert!(value["saved_at"].is_string());
+        assert!(value["steps"].is_array());
+    }
+
+    #[test]
+    fn normalize_trace_checkpoint_rejects_object_without_steps() {
+        assert!(normalize_trace_checkpoint("{\"trace_status\":\"running\"}", None).is_err());
     }
 }
 

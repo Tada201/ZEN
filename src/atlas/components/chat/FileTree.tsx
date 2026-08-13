@@ -71,7 +71,7 @@ const TreeItem = ({ node }: TreeItemProps) => {
     <div className="select-none">
       <div 
         className={cn(
-          "flex items-center gap-2 py-1 px-2 rounded-md hover:bg-muted transition-colors cursor-pointer group",
+          "flex items-center gap-1.5 py-0.5 px-1.5 rounded-md hover:bg-muted transition-colors cursor-pointer group",
           node.type === "dir" ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground"
         )}
         onClick={() => node.type === "dir" && setIsOpen(!isOpen)}
@@ -92,7 +92,7 @@ const TreeItem = ({ node }: TreeItemProps) => {
       </div>
 
       {node.type === "dir" && isOpen && node.children && (
-        <div className="ml-4 border-l border-border pl-2 mt-0.5">
+        <div className="ml-3 border-l border-border pl-1.5 mt-0.5">
           {node.children.map((child, i) => (
             <TreeItem key={i} node={child} />
           ))}
@@ -106,18 +106,18 @@ export const FileTree = ({ content }: { content: string }) => {
   const nodes = React.useMemo(() => parseTree(content), [content]);
 
   return (
-    <div className="my-6 rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted">
+    <div className="my-3 rounded-lg border border-border bg-card shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-muted">
         <div className="flex items-center gap-2">
           <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
           <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Workspace Tree</span>
         </div>
       </div>
-      <div className="p-3 font-mono">
+      <div className="p-2 font-mono">
         {nodes.length > 0 ? (
           nodes.map((node, i) => <TreeItem key={i} node={node} />)
         ) : (
-          <div className="text-[12px] text-muted-foreground italic px-2 py-4">
+          <div className="text-[12px] text-muted-foreground italic px-1.5 py-3">
             Invalid tree format
           </div>
         )}

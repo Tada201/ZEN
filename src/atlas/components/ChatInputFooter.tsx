@@ -1,8 +1,8 @@
-import { ArrowUp, Mic } from "lucide-react";
+import { ArrowUp, Mic, Pause, Play, Square } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils/style";
 import { useUIStore } from "@/lib/stores/useUIStore";
-import type { PremiumChatInputProps } from "./chat/input/PremiumChatInputTypes";
+import type { ComposerLayoutMode, PremiumChatInputProps } from "./chat/input/PremiumChatInputTypes";
 import type { ThinkingEffortLevel } from "./useChatInputModes";
 import { ModelSearchDropdown } from "./chat/input/ModelSearchDropdown";
 import { PinnedActionBar } from "./chat/input/PinnedActionBar";
@@ -33,10 +33,7 @@ import { motionDurations, motionEasings, useReducedMotion } from "@/lib/motion";
 type ReasoningConfigTypeLiteral = "none" | "effort" | "budget";
 
 export interface ChatInputFooterProps {
-  isCompact: boolean;
-  isSidebar?: boolean;
-  /** "welcome" selects a tighter footer for the workspace setup surface. */
-  variant?: "default" | "welcome";
+  layoutMode: ComposerLayoutMode;
   // Welcome-only add-context menu wiring
   isPlusMenuOpen?: boolean;
   setIsPlusMenuOpen?: (open: boolean) => void;
@@ -44,6 +41,7 @@ export interface ChatInputFooterProps {
   onOpenSkills?: () => void;
   isImageGenEnabled?: boolean;
   setIsImageGenEnabled?: (value: boolean) => void;
+  supportsImageGen?: boolean;
   // Inline-model picker (only when !isSidebar)
   selectedModelOpen: boolean;
   setSelectedModelOpen: (open: boolean) => void;
@@ -73,12 +71,19 @@ export interface ChatInputFooterProps {
   activeChatId?: string;
   readOnly?: boolean;
   onSend: () => void;
+  onAbort?: () => void;
+  onPause?: () => void;
+  onResume?: () => void;
+  isPaused?: boolean;
   isLoading?: boolean;
   hasContent: boolean;
 }
 
 export const ChatInputFooter = (props: ChatInputFooterProps) => {
   const reducedMotion = useReducedMotion();
+  const isWelcome = props.layoutMode === "welcome";
+  const isCompact = props.layoutMode === "sidebar" || props.layoutMode === "narrow";
+  const isSidebar = props.layoutMode === "sidebar";
   const handleMicClick = () => {
     const state = useUIStore.getState();
     if (state.voiceModeOpen) {
@@ -91,8 +96,8 @@ export const ChatInputFooter = (props: ChatInputFooterProps) => {
   if (props.readOnly) {
     return (
       <div className={cn(
-        "flex items-center border-t border-border/60 px-3 py-2 text-[11px] text-muted-foreground",
-        props.variant === "welcome" && "px-2 py-1.5",
+        "composer-toolbar flex items-center border-t px-2 py-1.5 text-[11px]",
+        isWelcome && "px-2 py-1",
       )}>
         <span>Archived transcript · read-only</span>
       </div>
@@ -102,12 +107,12 @@ export const ChatInputFooter = (props: ChatInputFooterProps) => {
   return (
     <div
       className={cn(
-        "flex items-center justify-between bg-transparent gap-1.5 flex-wrap",
-        props.variant === "welcome" ? "border-t border-border px-2 py-1.5" : "px-3 py-2",
+        "composer-toolbar grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 bg-transparent",
+        isWelcome ? "border-t border-border px-2 py-1" : "px-2 py-1.5",
       )}
     >
-      <div className="flex items-center gap-1 overflow-visible flex-wrap">
-        {props.variant === "welcome" && props.setIsPlusMenuOpen && props.handleFileChange && (
+      <div className="composer-action-rail flex min-w-0 items-center gap-0.5 overflow-visible">
+        {isWelcome && props.setIsPlusMenuOpen && props.handleFileChange && (
           <PlusActionMenu
             isOpen={props.isPlusMenuOpen ?? false}
             setIsOpen={props.setIsPlusMenuOpen}
@@ -126,10 +131,11 @@ export const ChatInputFooter = (props: ChatInputFooterProps) => {
             onOpenSkills={props.onOpenSkills}
             isImageGenEnabled={props.isImageGenEnabled}
             setIsImageGenEnabled={props.setIsImageGenEnabled}
+            supportsImageGen={props.supportsImageGen}
             compact
           />
         )}
-        {!props.isSidebar && (
+        {!isSidebar && (
           <ModelSearchDropdown
             isOpen={props.selectedModelOpen}
             setIsOpen={props.setSelectedModelOpen}
@@ -138,7 +144,7 @@ export const ChatInputFooter = (props: ChatInputFooterProps) => {
             selectedProvider={props.selectedProvider}
             onSelectModel={props.onSelectModel}
             onOpenModelSelector={props.onOpenModelSelector}
-            isCompact={props.isCompact}
+            isCompact={isCompact}
           />
         )}
         <PermissionModeMenu />
@@ -160,53 +166,88 @@ export const ChatInputFooter = (props: ChatInputFooterProps) => {
           generativeUI={props.generativeUI}
           setGenerativeUI={props.setGenerativeUI}
           provider={props.selectedProvider}
-          isCompact={props.isCompact}
+          isCompact={isCompact}
         />
       </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="composer-fixed-actions flex shrink-0 items-center gap-1.5">
         <ContextTrigger chatId={props.activeChatId} />
         <button
           onClick={handleMicClick}
           type="button"
           className={cn(
-            "p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted flex items-center justify-center",
-            props.variant === "welcome" ? "rounded-md transition-colors" : "rounded-full transition-all duration-200",
+            "composer-control composer-control--icon p-1.5",
+            isWelcome ? "rounded-md" : "rounded-full",
           )}
           aria-label="Open Voice Mode"
           title="Open Voice Mode"
         >
           <Mic className="w-4 h-4" />
         </button>
+        {props.isLoading && !props.isPaused && props.onPause && (
+          <button
+            onClick={props.onPause}
+            type="button"
+            className="flex items-center justify-center gap-1 rounded-md border border-warning px-1.5 py-1 text-[11px] font-medium text-warning hover:bg-warning/10"
+            aria-label="Pause response at the next safe boundary"
+            title="Pause at the next safe execution boundary"
+          >
+            <Pause className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="composer-footer-action-label">Pause</span>
+          </button>
+        )}
+        {props.isLoading && props.isPaused && props.onAbort && (
+          <button
+            onClick={props.onAbort}
+            type="button"
+            className="flex items-center justify-center gap-1 rounded-md border border-destructive px-1.5 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/10"
+            aria-label="Stop paused response"
+            title="Stop this response and keep the partial work"
+          >
+            <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+            <span className="composer-footer-action-label">Stop</span>
+          </button>
+        )}
         <button
           onClick={() => void props.onSend()}
           type="button"
           disabled={!props.hasContent && !props.isLoading}
-          aria-label={props.isLoading ? "Stop response" : "Send message"}
+          aria-label={props.isPaused ? "Resume response" : props.isLoading ? "Stop response" : "Send message"}
+          title={props.isPaused ? "Resume the paused response" : props.isLoading ? "Stop response" : "Send message"}
           className={cn(
-            "relative p-1.5",
-            props.variant === "welcome" ? "rounded-md transition-colors" : "rounded-full transition-all duration-300",
+            "composer-submit relative p-1",
+            isWelcome ? "rounded-md" : "rounded-full",
             props.isLoading
-              ? props.variant === "welcome"
-                ? "bg-rose-500 text-foreground hover:bg-rose-600"
-                : "bg-rose-500 text-foreground shadow-lg shadow-rose-500/20 hover:bg-rose-600"
+              ? props.isPaused
+                ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                : isWelcome
+                  ? "bg-rose-500 text-foreground hover:bg-rose-600"
+                  : "bg-rose-500 text-foreground shadow-lg shadow-rose-500/20 hover:bg-rose-600"
               : props.hasContent
-                ? props.variant === "welcome"
+                ? isWelcome
                   ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                  : "bg-primary text-primary-foreground shadow-sm hover:scale-105 active:scale-95"
+                  : "bg-primary text-primary-foreground shadow-sm"
                 : "bg-muted text-muted-foreground cursor-not-allowed",
           )}
         >
-          {props.isLoading && props.variant !== "welcome" && (
-            <span className="absolute inset-0 rounded-full animate-ping bg-rose-400/30" />
-          )}
           <AnimatePresence initial={false} mode="wait">
-            {props.isLoading ? (
+            {props.isPaused ? (
+              <motion.span
+                key="resume"
+                initial={reducedMotion ? false : { opacity: 0, y: 2 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reducedMotion ? undefined : { opacity: 0, y: -2 }}
+                transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
+                className="inline-flex"
+              >
+                <Play className="h-4 w-4 fill-current" />
+              </motion.span>
+            ) : props.isLoading ? (
               <motion.div
                 key="stop"
-                initial={reducedMotion ? false : { opacity: 0, scale: 0.75 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={reducedMotion ? undefined : { opacity: 0, scale: 0.75 }}
+                initial={reducedMotion ? false : { opacity: 0, y: 2 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reducedMotion ? undefined : { opacity: 0, y: -2 }}
                 transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
                 className="relative h-4 w-4 rounded-[2px] bg-current"
               />

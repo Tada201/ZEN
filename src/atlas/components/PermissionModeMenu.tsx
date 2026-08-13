@@ -87,12 +87,12 @@ export const PermissionModeMenu = () => {
           aria-label={`Execution mode: ${info.label}. Open mode options`}
           aria-haspopup="menu"
           className={cn(
-            "flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs cursor-pointer transition-colors select-none hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "composer-permission-trigger composer-control min-h-[30px] cursor-pointer border border-border px-2 py-0.5 text-[11px] select-none focus-visible:outline-none",
             SAFETY_MODE_TONE_CLASSES[info.tone],
           )}
         >
           <ActiveIcon className="h-3.5 w-3.5" aria-hidden="true" />
-          <span className="max-w-28 truncate">{info.label}</span>
+          <span className="composer-permission-label max-w-28 truncate">{info.label}</span>
           <span className="sr-only">Current execution mode</span>
           <ChevronDown className="h-3 w-3 opacity-60" aria-hidden="true" />
         </button>
@@ -100,7 +100,7 @@ export const PermissionModeMenu = () => {
       <DropdownMenuContent
         align="start"
         aria-label="Execution mode options"
-        className="z-30 w-64 rounded-xl border border-border bg-card p-1 shadow-2xl"
+        className="composer-popover z-30 w-64 p-1"
       >
         {SAFETY_MODE_DEFINITIONS.map((mode) => {
           const Icon = MODE_ICONS[mode.id];
@@ -111,11 +111,11 @@ export const PermissionModeMenu = () => {
               aria-current={selected ? "true" : undefined}
               onClick={() => handleSelectPermissionMode(mode.id)}
               className={cn(
-                "flex flex-col items-start gap-0.5 rounded-lg px-3 py-2 text-left text-foreground transition-colors focus:bg-muted",
+                "composer-menu-item flex-col items-start gap-0.5 rounded-md px-2.5 py-1.5 text-left transition-colors",
                 selected ? "bg-muted" : "hover:bg-muted",
               )}
             >
-              <div className={cn("flex items-center gap-2 text-xs font-semibold", SAFETY_MODE_TONE_CLASSES[mode.tone])}>
+              <div className={cn("flex items-center gap-1.5 text-xs font-semibold", SAFETY_MODE_TONE_CLASSES[mode.tone])}>
                 <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                 {mode.label}
               </div>

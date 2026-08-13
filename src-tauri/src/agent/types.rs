@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
-use std::path::Path;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
+use std::sync::RwLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Agent {
@@ -53,8 +54,72 @@ impl ModelTier {
     }
 }
 
+/// Controls which parts of a built-in profile are configurable in the UI.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentConfigMode {
+    Full,
+    ModelOnly,
+    ReadOnly,
+}
+
+impl Default for AgentConfigMode {
+    fn default() -> Self {
+        Self::Full
+    }
+}
+
+/// Persisted profile fields that extend the runtime Agent without forcing every
+/// internal test/runner construction to know about UI and delegation policy.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentProfile {
+    #[serde(flatten)]
+    pub agent: Agent,
+    #[serde(default)]
+    pub color: Option<String>,
+    /// Provider paired with the selected model override. None inherits the parent provider.
+    #[serde(default)]
+    pub model_provider: Option<String>,
+    #[serde(default = "default_true")]
+    pub user_invocable: bool,
+    #[serde(default = "default_true")]
+    pub model_invocable: bool,
+    #[serde(default)]
+    pub allow_nested_delegation: bool,
+    #[serde(default)]
+    pub allowed_agent_ids: Vec<String>,
+    #[serde(default)]
+    pub inject_agents_md: bool,
+    /// UI configuration scope. Runtime behavior remains owned by the profile.
+    #[serde(default)]
+    pub config_mode: AgentConfigMode,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl From<Agent> for AgentProfile {
+    fn from(agent: Agent) -> Self {
+        Self {
+            agent,
+            color: None,
+            model_provider: None,
+            user_invocable: true,
+            model_invocable: true,
+            allow_nested_delegation: false,
+            allowed_agent_ids: Vec::new(),
+            inject_agents_md: false,
+            config_mode: AgentConfigMode::Full,
+        }
+    }
+}
+
 pub struct AgentRegistry {
-    agents: HashMap<String, Agent>,
+    agents: RwLock<HashMap<String, Agent>>,
+    profiles: RwLock<HashMap<String, AgentProfile>>,
+    builtin_ids: RwLock<HashSet<String>>,
+    user_dir: RwLock<Option<PathBuf>>,
 }
 
 impl Default for AgentRegistry {
@@ -66,63 +131,199 @@ impl Default for AgentRegistry {
 impl AgentRegistry {
     pub fn new() -> Self {
         Self {
-            agents: HashMap::new(),
+            agents: RwLock::new(HashMap::new()),
+            profiles: RwLock::new(HashMap::new()),
+            builtin_ids: RwLock::new(HashSet::new()),
+            user_dir: RwLock::new(None),
         }
     }
 
-    pub fn register(&mut self, agent: Agent) {
-        self.agents.insert(agent.id.clone(), agent);
+    pub fn register(&self, agent: Agent) {
+        self.register_profile(AgentProfile::from(agent));
     }
 
-    pub fn get(&self, id: &str) -> Option<&Agent> {
-        self.agents.get(id)
+    pub fn register_profile(&self, profile: AgentProfile) {
+        let id = profile.agent.id.clone();
+        if let Ok(mut agents) = self.agents.write() {
+            agents.insert(id.clone(), profile.agent.clone());
+        }
+        if let Ok(mut profiles) = self.profiles.write() {
+            profiles.insert(id, profile);
+        }
     }
 
-    /// List all registered agents (for frontend display).
-    pub fn list(&self) -> Vec<&Agent> {
-        self.agents.values().collect()
+    pub fn get(&self, id: &str) -> Option<Agent> {
+        self.agents.read().ok()?.get(id).cloned()
     }
 
-    /// Load agent definitions from a directory of JSON files.
-    /// Each file should contain a single Agent JSON object.
-    pub fn load_from_dir(&mut self, dir: &Path) -> usize {
+    pub fn get_profile(&self, id: &str) -> Option<AgentProfile> {
+        self.profiles.read().ok()?.get(id).cloned()
+    }
+
+    /// List all registered agents (for execution and prompt construction).
+    pub fn list(&self) -> Vec<Agent> {
+        let mut agents: Vec<Agent> = self.agents.read().map(|guard| guard.values().cloned().collect()).unwrap_or_default();
+        agents.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        agents
+    }
+
+    pub fn list_profiles(&self) -> Vec<AgentProfile> {
+        let mut profiles: Vec<AgentProfile> = self.profiles.read().map(|guard| guard.values().cloned().collect()).unwrap_or_default();
+        profiles.sort_by(|a, b| a.agent.name.to_lowercase().cmp(&b.agent.name.to_lowercase()));
+        profiles
+    }
+
+    pub fn mark_loaded_as_builtin(&self) {
+        let ids = self.list().into_iter().map(|agent| agent.id).collect::<HashSet<_>>();
+        if let Ok(mut builtins) = self.builtin_ids.write() {
+            builtins.extend(ids);
+        }
+    }
+
+    pub fn is_builtin(&self, id: &str) -> bool {
+        self.builtin_ids.read().map(|ids| ids.contains(id)).unwrap_or(false)
+    }
+
+    pub fn configure_user_dir(&self, dir: PathBuf) -> Result<usize, String> {
+        std::fs::create_dir_all(&dir).map_err(|error| format!("Could not create agent config directory: {error}"))?;
+        if let Ok(mut user_dir) = self.user_dir.write() {
+            *user_dir = Some(dir.clone());
+        }
+        Ok(self.load_user_dir(&dir))
+    }
+
+    fn validate_profile(&self, profile: &AgentProfile) -> Result<(), String> {
+        let id = profile.agent.id.trim();
+        if id.is_empty() || id.len() > 64 || !id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_') {
+            return Err("Agent ID must contain only letters, numbers, hyphens, or underscores.".to_string());
+        }
+        if profile.agent.name.trim().is_empty() || profile.agent.name.chars().count() > 80 {
+            return Err("Agent name is required and must be 80 characters or fewer.".to_string());
+        }
+        if profile.agent.instructions.trim().is_empty() || profile.agent.instructions.len() > 50_000 {
+            return Err("System instructions are required and must be 50,000 characters or fewer.".to_string());
+        }
+        if profile.agent.description.as_deref().unwrap_or("").chars().count() > 240 {
+            return Err("Description must be 240 characters or fewer.".to_string());
+        }
+        if profile.model_provider.as_deref().is_some_and(|provider| {
+            provider.trim().is_empty()
+                || provider.len() > 80
+                || !provider.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+        }) {
+            return Err("Model provider contains unsupported characters.".to_string());
+        }
+        if profile.model_provider.is_some() && profile.agent.model_override.is_none() {
+            return Err("A model provider requires a selected model.".to_string());
+        }
+        if profile.agent.tool_ids.is_empty() || profile.agent.tool_ids.len() > 128 || profile.agent.tool_ids.iter().any(|tool| tool.trim().is_empty() || tool.len() > 120) {
+            return Err("Select at least one allowed tool.".to_string());
+        }
+        if profile.agent.max_iterations.is_some_and(|value| !(1..=100).contains(&value)) {
+            return Err("Maximum iterations must be between 1 and 100.".to_string());
+        }
+        if profile.agent.context_window.is_some_and(|value| !(1_024..=2_000_000).contains(&value)) {
+            return Err("Context window must be between 1,024 and 2,000,000 tokens.".to_string());
+        }
+        if profile.agent.max_messages_in_memory.is_some_and(|value| !(1..=2_000).contains(&value)) {
+            return Err("Maximum messages must be between 1 and 2,000.".to_string());
+        }
+        if profile.color.as_deref().is_some_and(|color| !matches!(color, "slate" | "blue" | "violet" | "emerald" | "amber" | "rose")) {
+            return Err("Unsupported agent color.".to_string());
+        }
+        if profile.allowed_agent_ids.iter().any(|id| id == &profile.agent.id || id.trim().is_empty()) {
+            return Err("An agent cannot allow itself as a child agent.".to_string());
+        }
+        if profile.allowed_agent_ids.iter().any(|id| self.get_profile(id).is_none()) {
+            return Err("Allowed child agents must refer to existing agent profiles.".to_string());
+        }
+        Ok(())
+    }
+
+    fn user_path(&self, id: &str) -> Result<PathBuf, String> {
+        if id.is_empty() || !id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_') {
+            return Err("Invalid agent ID.".to_string());
+        }
+        self.user_dir.read().ok().and_then(|dir| dir.clone()).map(|dir| dir.join(format!("{id}.json"))).ok_or_else(|| "User agent storage is not initialized.".to_string())
+    }
+
+    pub fn save_user_profile(&self, profile: AgentProfile) -> Result<AgentProfile, String> {
+        self.validate_profile(&profile)?;
+        if self.is_builtin(&profile.agent.id) {
+            return Err("Built-in agents cannot be edited.".to_string());
+        }
+        let path = self.user_path(&profile.agent.id)?;
+        let content = serde_json::to_string_pretty(&profile).map_err(|error| format!("Could not serialize agent: {error}"))?;
+        std::fs::write(&path, content).map_err(|error| format!("Could not save agent: {error}"))?;
+        self.register_profile(profile.clone());
+        Ok(profile)
+    }
+
+    pub fn delete_user_profile(&self, id: &str) -> Result<bool, String> {
+        if self.is_builtin(id) {
+            return Err("Built-in agents cannot be deleted.".to_string());
+        }
+        if self.profiles
+            .read()
+            .map(|profiles| profiles.values().any(|profile| profile.allowed_agent_ids.iter().any(|child_id| child_id == id)))
+            .unwrap_or(false)
+        {
+            return Err("This agent is still allowed as a child by another profile. Remove that delegation link first.".to_string());
+        }
+        let path = self.user_path(id)?;
+        let existed = path.exists();
+        if existed {
+            std::fs::remove_file(&path).map_err(|error| format!("Could not delete agent: {error}"))?;
+        }
+        if let Ok(mut agents) = self.agents.write() {
+            agents.remove(id);
+        }
+        if let Ok(mut profiles) = self.profiles.write() {
+            profiles.remove(id);
+        }
+        Ok(existed)
+    }
+
+    /// Load built-in agent definitions from a directory of JSON files.
+    pub fn load_from_dir(&self, dir: &Path) -> usize {
+        self.load_dir(dir, false)
+    }
+
+    fn load_user_dir(&self, dir: &Path) -> usize {
+        self.load_dir(dir, true)
+    }
+
+    fn load_dir(&self, dir: &Path, user: bool) -> usize {
         let mut count = 0;
         if !dir.exists() || !dir.is_dir() {
             tracing::debug!("Agent config directory does not exist: {:?}", dir);
             return 0;
         }
-
         let entries = match std::fs::read_dir(dir) {
-            Ok(e) => e,
-            Err(e) => {
-                tracing::warn!("Failed to read agent config directory {:?}: {}", dir, e);
+            Ok(entries) => entries,
+            Err(error) => {
+                tracing::warn!("Failed to read agent config directory {:?}: {}", dir, error);
                 return 0;
             }
         };
-
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            if path.extension().and_then(|extension| extension.to_str()) != Some("json") {
                 continue;
             }
-
-            match std::fs::read_to_string(&path) {
-                Ok(content) => match serde_json::from_str::<Agent>(&content) {
-                    Ok(agent) => {
-                        tracing::info!("Loaded agent config '{}' from {:?}", agent.id, path);
-                        self.register(agent);
-                        count += 1;
+            match std::fs::read_to_string(&path).ok().and_then(|content| serde_json::from_str::<AgentProfile>(&content).ok()) {
+                Some(profile) => {
+                    if user && self.is_builtin(&profile.agent.id) {
+                        tracing::warn!("Ignoring user agent '{}' because it conflicts with a built-in agent", profile.agent.id);
+                        continue;
                     }
-                    Err(e) => {
-                        tracing::warn!("Failed to parse agent config {:?}: {}", path, e);
-                    }
-                },
-                Err(e) => {
-                    tracing::warn!("Failed to read agent config {:?}: {}", path, e);
+                    tracing::info!("Loaded {} agent config '{}' from {:?}", if user { "user" } else { "built-in" }, profile.agent.id, path);
+                    self.register_profile(profile);
+                    count += 1;
                 }
+                None => tracing::warn!("Failed to parse agent config {:?}", path),
             }
         }
-
         count
     }
 }

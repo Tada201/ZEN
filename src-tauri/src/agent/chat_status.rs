@@ -12,6 +12,5 @@ impl ChatStatusPhase {
     pub const TOOL_MODE_RETRY: &'static str = "tool_mode_retry";
     pub const MODEL_ESCALATING: &'static str = "model_escalating";
     pub const MODEL_ESCALATED: &'static str = "model_escalated";
-    pub const PROVIDER_READY: &'static str = "provider_ready";
     pub const PROVIDER_MISSING: &'static str = "provider_missing";
 }

@@ -18,7 +18,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::RwLock;
 
-use self::operational_map::ActivateOperationalMapTool;
+// `operational_map` remains source-only until the unified world-map feature is ready.
 use self::permission::{PermissionDecision, RiskLevel, ToolPermissions};
 use self::sys_metrics::SystemMetricsTool;
 use self::terminal_tools::RunCommandTool;
@@ -565,17 +565,10 @@ pub fn default_tool_risk(id: &str) -> RiskLevel {
     match id {
         "run_command" | "terminal" => RiskLevel::Critical,
         "web_fetch" | "write_file" | "edit_file" | "apply_patch" | "spawn_agent"
-        | "delegate_to_agent" | "file_write" => RiskLevel::High,
-        "web_search"
-        | "read_document_content"
-        | "geocode_search"
-        | "reverse_geocode"
-        | "create_geofence"
-        | "calculate_route"
-        | "draw"
-        | "activate_3d_globe"
-        | "handoff_to_agent"
-        | "generate_image" => RiskLevel::Medium,
+        | "file_write" => RiskLevel::High,
+        "web_search" | "read_document_content" | "draw" | "generate_image" => {
+            RiskLevel::Medium
+        }
         _ => RiskLevel::Low,
     }
 }
@@ -583,17 +576,22 @@ pub fn default_tool_risk(id: &str) -> RiskLevel {
 pub fn init_tool_registry(permissions: ToolPermissions) -> ToolRegistry {
     let mut registry = ToolRegistry::with_permissions(permissions);
 
-    // Register built-in tools
+    // Register built-in tools. The operational-map adapter is intentionally
+    // disabled until the future unified world-map surface is ready.
     registry.register(Arc::new(self::calculator::CalculatorTool));
     registry.register(Arc::new(SystemMetricsTool));
     registry.register(Arc::new(WebFetchTool));
     registry.register(Arc::new(crate::search::WebSearchTool));
-    registry.register(Arc::new(ActivateOperationalMapTool));
+    // registry.register(Arc::new(ActivateOperationalMapTool)); // Disabled future feature.
     registry.register(Arc::new(RunCommandTool));
     registry.register(Arc::new(self::image_tool::ImageGenerationTool));
 
-    // Register File System / RAG tools
-    registry.register(Arc::new(fs_tools::VectorSearchTool));
+    // Future world-map work will replace the separate 2D/3D map tools with one
+    // canonical tool. Do not expose either legacy map adapter in the meantime.
+
+    // Register deterministic local-document tools. These read the uploaded file
+    // at its recorded workspace path; semantic/vector search is intentionally
+    // retired until it can provide a reliable, tested replacement.
     registry.register(Arc::new(fs_tools::ListDocumentsTool));
     registry.register(Arc::new(fs_tools::ReadDocumentTool));
     registry.register(Arc::new(fs_tools::GrepDocumentsTool));
@@ -604,34 +602,19 @@ pub fn init_tool_registry(permissions: ToolPermissions) -> ToolRegistry {
     for tool_id in [
         "tools_search",
         "list_tools",
-        "guidance",
         "write_todos",
-        "vector_search",
         "read_document_content",
         "run_command",
         "system_metrics",
         "get_system_metrics",
-        "calculate_route",
-        "geocode_search",
-        "reverse_geocode",
-        "create_geofence",
-        "get_weather",
-        "get_earthquakes",
-        "get_military_aircraft",
         "draw",
-        "activate_3d_globe",
         "list_documents",
         "grep_documents",
         "write_file",
         "edit_file",
         "apply_patch",
-        "activate_2d_operational_map",
         "graph_session",
-        "write_to_memory",
-        "search_session_memory",
-        "get_memory_stats",
         "spawn_agent",
-        "handoff_to_agent",
         "generate_image",
     ] {
         registry.register_known_tool(tool_id, default_tool_risk(tool_id));

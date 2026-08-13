@@ -9,7 +9,7 @@ export function StockCard({ data }: { data: any }) {
   const isUp = (!isNaN(changeVal) ? changeVal : 0) >= 0;
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-lg max-w-md">
+    <div className="genui-card-surface w-full max-w-none min-w-0 rounded-2xl border border-border bg-card p-5 shadow-lg">
       <div className="flex items-center justify-between mb-3">
         <div>
           <h4 className="text-lg font-bold tracking-tight text-primary-foreground">{data.ticker || 'TICKER'}</h4>

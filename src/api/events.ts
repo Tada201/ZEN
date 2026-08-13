@@ -24,6 +24,11 @@ export interface ToolStartEventPayload {
   toolBatchId?: string;
   trace_id?: string;
   traceId?: string;
+  parent_tool_call_id?: string;
+  parentToolCallId?: string;
+  sequence?: number;
+  timestamp?: string;
+  phase?: string;
   tool_call_id: string;
   tool_name: string;
   arguments: ToolCall["input"];
@@ -51,6 +56,11 @@ export interface ToolCompleteEventPayload {
   toolBatchId?: string;
   trace_id?: string;
   traceId?: string;
+  parent_tool_call_id?: string;
+  parentToolCallId?: string;
+  sequence?: number;
+  timestamp?: string;
+  phase?: string;
   tool_call_id: string;
   tool_name: string;
   status: string;
@@ -80,6 +90,11 @@ export interface ToolAuthorizationRequestEventPayload {
   toolBatchId?: string;
   trace_id?: string;
   traceId?: string;
+  parent_tool_call_id?: string;
+  parentToolCallId?: string;
+  sequence?: number;
+  timestamp?: string;
+  phase?: string;
   tool_call_id: string;
   tool_name: string;
   arguments: ToolCall["input"];
@@ -107,6 +122,11 @@ export interface ToolAuthorizationTimeoutEventPayload {
   toolBatchId?: string;
   trace_id?: string;
   traceId?: string;
+  parent_tool_call_id?: string;
+  parentToolCallId?: string;
+  sequence?: number;
+  timestamp?: string;
+  phase?: string;
   tool_call_id: string;
   tool_name: string;
   arguments?: ToolCall["input"];
@@ -170,7 +190,7 @@ export interface SubagentStepEventPayload {
   agent_name: string;
   agentName?: string;
   task: string;
-  status: "running" | "completed" | "failed" | "cancelled";
+  status: "running" | "completed" | "failed" | "cancelled" | "incomplete" | "uncertain";
   result_summary?: string;
   resultSummary?: string;
   error?: string;
@@ -197,6 +217,8 @@ export interface ChatResearchStepEventPayload {
 export interface AgentChunkEventPayload {
   chat_id?: string | null;
   chatId?: string | null;
+  spawn_id?: string;
+  spawnId?: string;
   agent_id: string;
   agent_name?: string;
   agentName?: string;
@@ -245,6 +267,9 @@ export interface AgentActionEventPayload {
   chatId?: string | null;
   id?: string;
   timestamp?: string;
+  sequence?: number;
+  trace_id?: string;
+  traceId?: string;
   role?: Message["role"];
   kind?: MessageKind | string;
   content?: string;
@@ -257,6 +282,8 @@ export interface AgentActionEventPayload {
   status?: string;
   tool_name?: string;
   tool_call_id?: string;
+  parent_tool_call_id?: string;
+  parentToolCallId?: string;
   iteration?: string | number;
   run_id?: string;
   runId?: string;
@@ -267,6 +294,7 @@ export interface AgentActionEventPayload {
   execution_id?: string;
   executionId?: string;
   spawn_id?: string;
+  spawnId?: string;
   task_id?: string;
   taskId?: string;
   assigned_to?: string;

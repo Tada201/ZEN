@@ -1,6 +1,6 @@
 //! Lifecycle commands: bulk-archive, fork, abort, export, import.
 
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 use tracing::info;
 
 use crate::commands::AppState;
@@ -34,17 +34,89 @@ pub async fn fork_chat(
 }
 
 #[tauri::command]
-pub async fn abort_chat(state: State<'_, AppState>, chat_id: String) -> ZenResult<()> {
-    info!(chat_id = %chat_id, "Aborting chat runner/orchestrator stream requested by user");
-    let mut tokens = state.chat_cancellation_tokens.lock().await;
-    if let Some(token) = tokens.remove(&chat_id) {
-        token.cancel();
-        info!(chat_id = %chat_id, "Successfully cancelled active chat stream cancellation token");
+pub async fn pause_chat(app: AppHandle, state: State<'_, AppState>, chat_id: String) -> ZenResult<bool> {
+    let control = state.chat_pause_controls.lock().await.get(&chat_id).cloned();
+    let accepted = if let Some(control) = control {
+        control.pause();
+        let _ = app.emit("chat:status", serde_json::json!({
+            "chat_id": chat_id,
+            "message": "Paused at the next safe execution boundary",
+            "phase": "paused",
+            "iteration": 0,
+        }));
+        info!(chat_id = %chat_id, "Cooperative pause requested");
+        true
     } else {
-        info!(chat_id = %chat_id, "No active stream cancellation token found for chat");
-    }
-    Ok(())
+        info!(chat_id = %chat_id, "No active chat execution found to pause");
+        false
+    };
+    Ok(accepted)
 }
+
+#[tauri::command]
+pub async fn continue_chat(app: AppHandle, state: State<'_, AppState>, chat_id: String) -> ZenResult<bool> {
+    let control = state.chat_pause_controls.lock().await.get(&chat_id).cloned();
+    let accepted = if let Some(control) = control {
+        control.resume();
+        let _ = app.emit("chat:status", serde_json::json!({
+            "chat_id": chat_id,
+            "message": "Resuming execution",
+            "phase": "resumed",
+            "iteration": 0,
+        }));
+        info!(chat_id = %chat_id, "Cooperative resume requested");
+        true
+    } else {
+        info!(chat_id = %chat_id, "No active chat execution found to resume");
+        false
+    };
+    Ok(accepted)
+}
+
+#[tauri::command]
+pub async fn abort_chat(state: State<'_, AppState>, chat_id: String) -> ZenResult<bool> {
+  info!(chat_id = %chat_id, "Aborting chat runner/orchestrator stream requested by user");
+  if let Some(control) = state.chat_pause_controls.lock().await.remove(&chat_id) {
+    control.resume();
+  }
+  let mut tokens = state.chat_cancellation_tokens.lock().await;
+  let cancelled = if let Some(token) = tokens.remove(&chat_id) {
+    token.cancel();
+    info!(chat_id = %chat_id, "Successfully cancelled active chat stream cancellation token");
+    true
+  } else {
+    info!(chat_id = %chat_id, "No active stream cancellation token found for chat");
+    false
+  };
+  Ok(cancelled)
+}
+
+/// Cancel one delegated child without stopping the parent chat run.
+#[tauri::command]
+pub async fn cancel_subagent(
+  state: State<'_, AppState>,
+  chat_id: String,
+  spawn_id: String,
+) -> ZenResult<bool> {
+  if chat_id.trim().is_empty() || spawn_id.trim().is_empty() {
+    return Err(ZenError::Custom("A chat id and subagent id are required".to_string()));
+  }
+
+  let token = state
+    .subagent_cancellation_tokens
+    .lock()
+    .await
+    .remove(&spawn_id);
+  if let Some(token) = token {
+    token.cancel();
+    info!(chat_id = %chat_id, spawn_id = %spawn_id, "Cancelled delegated subagent");
+    Ok(true)
+  } else {
+    info!(chat_id = %chat_id, spawn_id = %spawn_id, "Subagent was already complete or unavailable");
+    Ok(false)
+  }
+}
+
 
 #[tauri::command]
 pub async fn export_chat(state: State<'_, AppState>, chat_id: String) -> ZenResult<ChatExport> {

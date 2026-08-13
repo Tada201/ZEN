@@ -131,5 +131,24 @@ const result8 = reconcileStrayToolLedgers(initial8, "opt-8", "backend-8");
 assert.equal(result8.length, 2, "failed assistant should not be reconciled (ledger stays)");
 assert.equal(result8[1].id, "opt-8", "failed assistant should keep its optimistic id");
 
+// 9. Backend-id strays: tools created before the assistant existed carry the
+// real backend message id (not the optimistic id). The reconcile must still
+// merge them, and must still merge after the assistant was already remapped to
+// that backend id by an earlier chat:message event.
+const initial9 = [makeLedger("t9", "backend-9"), makeAssistant("opt-9")];
+const result9 = reconcileStrayToolLedgers(initial9, "opt-9", "backend-9");
+assert.equal(result9.length, 1, "backend-id orphan ledger should be removed");
+assert.equal(result9[0].id, "backend-9", "assistant should take backend ID");
+assert.equal(result9[0].toolCalls.length, 1, "backend-id stray tool should be merged");
+assert.equal(result9[0].toolCalls[0].id, "t9", "merged backend-id tool should keep its id");
+
+// 10. Assistant already remapped to the backend id (chat:message ran first),
+// with an orphan ledger whose tool carries that backend id. reconcile must
+// find the assistant by backend id and absorb the stray.
+const initial10 = [makeLedger("t10", "backend-10"), makeAssistant("backend-10")];
+const result10 = reconcileStrayToolLedgers(initial10, "backend-10", "backend-10");
+assert.equal(result10.length, 1, "orphan ledger should merge even when opt id already equals backend id");
+assert.equal(result10[0].toolCalls.length, 1, "backend-id stray should merge into already-remapped assistant");
+
 await closeSourceModuleLoader();
 console.log("stray tool ledger reconciliation ok");

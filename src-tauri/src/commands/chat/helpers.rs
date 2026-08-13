@@ -65,6 +65,12 @@ pub(crate) fn has_tool_intent(content: &str) -> bool {
         "shell",
         "read file",
         "open file",
+        "read document",
+        "open document",
+        "uploaded file",
+        "uploaded document",
+        "local file",
+        "knowledge base",
         "write file",
         "edit file",
         "list files",
@@ -118,7 +124,6 @@ pub(crate) fn default_yolo_tool_ids() -> Vec<String> {
     [
         "web_search",
         "web_fetch",
-        "vector_search",
         "list_documents",
         "read_document_content",
         "grep_documents",
@@ -129,7 +134,6 @@ pub(crate) fn default_yolo_tool_ids() -> Vec<String> {
         "system_metrics",
         "get_system_metrics",
         "spawn_agent",
-        "handoff_to_agent",
         "generate_image",
     ]
     .into_iter()

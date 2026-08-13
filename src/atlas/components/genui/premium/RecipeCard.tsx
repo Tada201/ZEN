@@ -42,7 +42,7 @@ export function RecipeCard({ data }: { data: RecipeData }) {
   };
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-lg">
+    <div className="genui-card-surface w-full max-w-none min-w-0 rounded-2xl border border-border bg-card p-5 shadow-lg">
       <div className="flex justify-between items-start mb-4">
         <div>
           <span className="text-[10px] uppercase font-mono tracking-widest text-primary">{cuisine} Cuisine</span>

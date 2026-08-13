@@ -161,7 +161,7 @@ export const MCPSettings = memo((_props: { embedded?: boolean }) => {
     return (
       <SettingsCard
         title="Model Context Protocol (MCP)"
-        subtitle="Cognitive Extensibility"
+        subtitle="External connections"
         description="Manage external MCP server connections."
       >
         <div className="py-12 flex items-center justify-center">
@@ -176,7 +176,7 @@ export const MCPSettings = memo((_props: { embedded?: boolean }) => {
   return (
     <SettingsCard
       title="Model Context Protocol (MCP)"
-      subtitle="Cognitive Extensibility"
+      subtitle="External connections"
       description="Connect to external MCP servers to extend agent capabilities."
     >
       <div className="space-y-8">

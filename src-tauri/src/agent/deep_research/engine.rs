@@ -235,6 +235,9 @@ impl<'a> IterativeDeepResearcher<'a> {
         let mut consecutive_empty_rounds: usize = 0;
 
         for round_num in 1..=self.max_rounds {
+            if !crate::commands::wait_for_chat_resume(self.app, self.chat_id, self.token).await {
+                return Err("Research cancelled by user.".to_string());
+            }
             if self.cancelled() {
                 return Err("Research cancelled by user.".to_string());
             }

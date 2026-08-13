@@ -45,7 +45,7 @@ export function AgentStepCard({ data }: { data: AgentStepData }) {
   };
 
   return (
-    <CardShell padded={false} className="w-full max-w-md flex flex-col p-5">
+    <CardShell padded={false} className="w-full max-w-none flex flex-col p-5">
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center gap-2.5">
           <div className="p-1.5 rounded-lg border border-border bg-muted text-primary-foreground">

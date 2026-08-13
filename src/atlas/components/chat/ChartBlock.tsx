@@ -157,13 +157,13 @@ export function ChartBlock({ content, isStreaming }: ChartBlockProps) {
   };
 
   return (
-    <div className="my-6 p-6 bg-card/90 rounded-xl border border-border/40 shadow-sm overflow-hidden">
+    <div className="my-3 p-3 bg-card/90 rounded-lg border border-border/40 shadow-sm overflow-hidden">
       {title && (
-        <div className="mb-4 text-center font-bold text-sm text-foreground/80 tracking-tight">
+        <div className="mb-2 text-center font-bold text-sm text-foreground/80 tracking-tight">
           {title}
         </div>
       )}
-      <div className="h-[300px] w-full text-muted-foreground/70 dark:text-muted-foreground">
+      <div className="h-[240px] w-full text-muted-foreground/70 dark:text-muted-foreground">
         <ResponsiveContainer width="100%" height="100%">
           {renderChart()}
         </ResponsiveContainer>

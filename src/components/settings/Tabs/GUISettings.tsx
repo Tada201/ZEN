@@ -97,7 +97,7 @@ export function GUISettings({ settings, onUpdate }: GUISettingsProps) {
                 { value: "image", label: "Image" },
                 { value: "video", label: "Video" },
               ]}
-              className="h-9 w-full bg-muted/50 text-xs sm:w-[200px]"
+              className="h-9 w-full bg-background text-xs sm:w-[200px]"
             />
           }
           icon="lucide:file-video"
@@ -117,7 +117,7 @@ export function GUISettings({ settings, onUpdate }: GUISettingsProps) {
                 { value: "original", label: "Original size" },
                 { value: "tile", label: "Tile" },
               ]}
-              className="h-9 w-full bg-muted/50 text-xs sm:w-[200px]"
+              className="h-9 w-full bg-background text-xs sm:w-[200px]"
             />
           }
           icon="lucide:image"

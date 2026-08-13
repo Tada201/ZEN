@@ -1,5 +1,6 @@
 import type { Message, ToolCall } from "../../components/chat/types";
 import { useChatStore } from "@/lib/stores/useChatStore";
+import { rememberRecoveryTool } from "./strayToolLedger";
 
 function messageOwnsTool(message: Message, toolCallId: string) {
   return Boolean(
@@ -8,23 +9,33 @@ function messageOwnsTool(message: Message, toolCallId: string) {
   );
 }
 
-function messageMatchesToolMeta(message: Message, incoming: ToolCall) {
-  const messageMeta = message as Message & { runId?: string; messageId?: string };
-  if (incoming.messageId && (message.id === incoming.messageId || messageMeta.messageId === incoming.messageId)) {
-    return true;
-  }
-  if (incoming.runId && messageMeta.runId === incoming.runId) return true;
+function messageMatchesToolMessageId(message: Message, incoming: ToolCall) {
+  const messageMeta = message as Message & { messageId?: string };
+  if (!incoming.messageId) return false;
+  if (message.id === incoming.messageId || messageMeta.messageId === incoming.messageId) return true;
   return Boolean(
-    message.toolCalls?.some((tool) =>
-      (incoming.messageId && tool.messageId === incoming.messageId) ||
-      (incoming.runId && tool.runId === incoming.runId)
-    ) ||
+    message.toolCalls?.some((tool) => tool.messageId === incoming.messageId) ||
     message.steps?.some((step) => {
-      const metadata = step.metadata as { runId?: string; messageId?: string } | undefined;
-      return (
-        (incoming.messageId && metadata?.messageId === incoming.messageId) ||
-        (incoming.runId && metadata?.runId === incoming.runId)
-      );
+      const metadata = step.metadata as { messageId?: string } | undefined;
+      return metadata?.messageId === incoming.messageId;
+    })
+  );
+}
+
+// A `runId` match is a WEAK signal: `execution_run_id` is the chat id, so every
+// tool in the chat shares one runId across all turns. It must never outrank the
+// currently-streaming assistant, or a new turn's tool grafts onto a previous
+// finalized assistant that happens to hold same-runId tools. Callers apply this
+// only after the active-sending assistant has been ruled out.
+function messageMatchesToolRunId(message: Message, incoming: ToolCall) {
+  const messageMeta = message as Message & { runId?: string };
+  if (!incoming.runId) return false;
+  if (messageMeta.runId === incoming.runId) return true;
+  return Boolean(
+    message.toolCalls?.some((tool) => tool.runId === incoming.runId) ||
+    message.steps?.some((step) => {
+      const metadata = step.metadata as { runId?: string } | undefined;
+      return metadata?.runId === incoming.runId;
     })
   );
 }
@@ -32,14 +43,21 @@ function messageMatchesToolMeta(message: Message, incoming: ToolCall) {
 function findTargetMessageIndex(messages: Message[], incoming: ToolCall, chatId?: string): number {
   let activeAssistantIdx = -1;
   let latestAssistantIdx = -1;
+  let runIdMatchIdx = -1;
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
     if (messageOwnsTool(message, incoming.id)) {
       return i;
     }
-    if (message.role === "assistant" && messageMatchesToolMeta(message, incoming)) return i;
+    // An exact backend messageId match is authoritative — it names the row.
+    if (message.role === "assistant" && messageMatchesToolMessageId(message, incoming)) return i;
     if (activeAssistantIdx === -1 && message.role === "assistant" && message.status === "sending") {
       activeAssistantIdx = i;
+    }
+    // Weak runId match: remembered but deferred below the active assistant so a
+    // chat-wide runId cannot pull a new turn's tool onto an older turn.
+    if (runIdMatchIdx === -1 && message.role === "assistant" && messageMatchesToolRunId(message, incoming)) {
+      runIdMatchIdx = i;
     }
     if (latestAssistantIdx === -1 && message.role === "assistant") latestAssistantIdx = i;
   }
@@ -52,6 +70,21 @@ function findTargetMessageIndex(messages: Message[], incoming: ToolCall, chatId?
         (message) => message.id === activeAssistantId && message.role === "assistant",
       );
       if (activeAssistantIdx !== -1) return activeAssistantIdx;
+    }
+  }
+
+  // A weak runId match wins only after no assistant is actively streaming.
+  if (runIdMatchIdx !== -1) return runIdMatchIdx;
+
+  // The tool carries a backend messageId but no message currently owns it or
+  // matches its identity, and nothing is streaming. Attaching to the latest
+  // (already-finalized) assistant would graft a new turn's tool onto the
+  // previous turn's bubble. Keep it in the non-rendered recovery buffer until
+  // chat:done identifies the owning assistant row.
+  if (incoming.messageId && latestAssistantIdx !== -1) {
+    const latest = messages[latestAssistantIdx];
+    if (latest.status === "sent" || latest.status === "failed" || latest.status === "cancelled") {
+      return -1;
     }
   }
 
@@ -74,16 +107,20 @@ export function mergeToolCall(existing: ToolCall | undefined, incoming: ToolCall
     name: incoming.name === incoming.id ? existing.name : incoming.name,
     input: incomingInputIsEmptyObject ? existing.input : incoming.input ?? existing.input,
     output: incoming.output || existing.output,
+    outputPreview: incoming.outputPreview || existing.outputPreview,
     startTime: existing.startTime || incoming.startTime,
     approvalContext: incoming.approvalContext || existing.approvalContext,
     runId: incoming.runId || existing.runId,
     messageId: incoming.messageId || existing.messageId,
     parentAgentId: incoming.parentAgentId || existing.parentAgentId,
+    parentToolCallId: incoming.parentToolCallId || existing.parentToolCallId,
     executionId: incoming.executionId || existing.executionId,
     traceId: incoming.traceId || existing.traceId,
     agentId: incoming.agentId || existing.agentId,
     agentName: incoming.agentName || existing.agentName,
     iteration: incoming.iteration ?? existing.iteration,
+    sequence: incoming.sequence ?? existing.sequence,
+    phase: incoming.phase || existing.phase,
     batchId: incoming.batchId || existing.batchId,
     toolBatchId: incoming.toolBatchId || existing.toolBatchId,
     completedAt: incoming.completedAt ?? existing.completedAt,
@@ -92,23 +129,11 @@ export function mergeToolCall(existing: ToolCall | undefined, incoming: ToolCall
   };
 }
 
-export function upsertTool(prev: Message[], chatId: string, incoming: ToolCall, now = Date.now()): Message[] {
+export function upsertTool(prev: Message[], chatId: string, incoming: ToolCall, _now = Date.now()): Message[] {
   const targetIdx = findTargetMessageIndex(prev, incoming, chatId);
   if (targetIdx === -1) {
-    return [
-      ...prev,
-      {
-        id: `tool-ledger-${incoming.id}`,
-        sessionId: chatId,
-        role: "system",
-        content: "",
-        status: "sent",
-        kind: "system",
-        createdAt: now,
-        toolCalls: [incoming],
-        steps: [{ type: "tool-call", toolCall: incoming }],
-      } as Message,
-    ];
+    rememberRecoveryTool(incoming.messageId, incoming);
+    return prev;
   }
   const next = [...prev];
   const target = next[targetIdx];
@@ -116,10 +141,13 @@ export function upsertTool(prev: Message[], chatId: string, incoming: ToolCall, 
   const existingSteps = target.steps || [];
   const hasToolStep = existingSteps.some((step) => step.type === "tool-call" && step.toolCall?.id === incoming.id);
   const nextToolStep = { type: "tool-call" as const, toolCall: incoming };
-  const firstTextIndex = existingSteps.findIndex((step) => step.type === "text");
-  const stepsWithInsertedTool = firstTextIndex === -1
-    ? [...existingSteps, nextToolStep]
-    : [...existingSteps.slice(0, firstTextIndex), nextToolStep, ...existingSteps.slice(firstTextIndex)];
+  // Append the tool step in arrival order — never hoist it above earlier
+  // answer text. An agentic run interleaves iterations
+  // (tool → text → tool → text); splicing every new tool ahead of the FIRST
+  // text step clumped all tool cards above the prose and reversed the
+  // chronological trace. Codex renders each tool as a block at the point it
+  // fired, so arrival order is the correct order.
+  const stepsWithInsertedTool = [...existingSteps, nextToolStep];
   next[targetIdx] = {
     ...target,
     toolCalls: hasTool
@@ -147,16 +175,23 @@ export function makeToolCall(
   meta: Pick<
     ToolCall,
     | "approvalContext"
+    | "outputPreview"
     | "runId"
     | "messageId"
     | "parentAgentId"
+    | "parentToolCallId"
     | "executionId"
+    | "sequence"
+    | "phase"
     | "agentId"
     | "agentName"
     | "iteration"
     | "batchId"
     | "toolBatchId"
     | "traceId"
+    | "startTime"
+    | "completedAt"
+    | "lastUpdatedAt"
   > = {},
 ): ToolCall {
   return {
@@ -167,9 +202,9 @@ export function makeToolCall(
     output,
     durationMs,
     ...meta,
-    startTime: now,
-    completedAt: isTerminalToolStatus(status) ? now : undefined,
-    lastUpdatedAt: now,
+    startTime: meta.startTime ?? now,
+    completedAt: meta.completedAt ?? (isTerminalToolStatus(status) ? now : undefined),
+    lastUpdatedAt: meta.lastUpdatedAt ?? now,
     attempts: [{ status, durationMs, timestamp: now }],
   };
 }

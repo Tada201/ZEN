@@ -19,6 +19,7 @@ mod lifecycle;
 mod send;
 mod tags;
 mod title;
+mod trace;
 
 pub use archive::*;
 pub use crud::*;
@@ -28,3 +29,4 @@ pub use lifecycle::*;
 pub use send::*;
 pub use tags::*;
 pub use title::*;
+pub use trace::*;

@@ -135,7 +135,7 @@ export const DeepResearchSettings = memo(() => {
         />
       </SettingsSection>
 
-      <div className="flex gap-3 border-l-2 border-primary/50 bg-muted/30 px-4 py-3 text-[11px] leading-relaxed text-muted-foreground">
+      <div className="flex gap-3 border-l-2 border-primary/50 bg-background px-4 py-3 text-[11px] leading-relaxed text-muted-foreground">
         <WorkbenchIcon name="lucide:shield-check" size={15} className="mt-0.5 shrink-0 text-primary" />
         <span>
           Zen automatically retries transient provider failures, preserves partial findings, and stops active work when you cancel the research request.

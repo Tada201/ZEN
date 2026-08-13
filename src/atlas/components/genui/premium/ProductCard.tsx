@@ -2,7 +2,7 @@ import { ShoppingCart, Star } from 'lucide-react';
 
 export function ProductCard({ data }: { data: any }) {
   return (
-    <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-lg max-w-[260px] flex flex-col group hover:scale-[1.01] transition-transform duration-200">
+    <div className="genui-card-surface w-full max-w-none min-w-0 rounded-2xl border border-border bg-card overflow-hidden shadow-lg flex flex-col group hover:scale-[1.01] transition-transform duration-200">
       <div className="h-44 w-full bg-card flex items-center justify-center relative overflow-hidden">
         {data.image ? (
           <img src={data.image} alt={data.name} className="h-full w-full object-cover" />

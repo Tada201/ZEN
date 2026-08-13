@@ -12,6 +12,8 @@ import { ExecutionRow, getExecutionStatusLabel } from "./tool/ExecutionRow";
 import { classifyToolCategory } from "./tool/toolCategory";
 import { formatDuration } from "./tool/formatDuration";
 import { toToolInputRecord } from "./tool/toToolInputRecord";
+import { presentExecutionError } from "@/atlas/agentRuntime/executionError";
+import { useUIStore } from "@/lib/stores/useUIStore";
 
 interface ToolCallCardProps {
   toolCall: ToolCall;
@@ -22,6 +24,8 @@ interface ToolCallCardProps {
   defaultExpanded?: boolean;
   streamingPreview?: string;
   chatId?: string;
+  /** Parent assistant id used when legacy tool rows lack message ownership. */
+  messageId?: string;
   /** Render as a quiet row in the shared execution ledger. */
   ledgerRow?: boolean;
 }
@@ -89,16 +93,20 @@ function getInputTarget(input: Record<string, unknown>) {
  * helper drives the right-side `LogEntry` structured metadata summary.
  */
 export function humanizeToolAction(name: string, status: ToolCall["status"]) {
+  // Attention states must be explicit even when the tool family has a more
+  // specific verb. "Read file" with a red icon is ambiguous; "Failed read"
+  // tells the user what happened before they open technical details.
+  if (status === "awaiting_approval") return "Needs approval";
+  if (status === "error") return "Failed";
+
   const lower = name.toLowerCase();
-  const progressive = status === "running" || status === "awaiting_approval";
+  const progressive = status === "running";
   if (lower.includes("search") || lower.includes("web") || lower.includes("grep")) return progressive ? "Searching" : "Searched";
   if (lower.includes("read") || lower.includes("list") || lower.includes("open")) return progressive ? "Reading" : "Read";
   if (lower.includes("create")) return progressive ? "Creating" : "Created";
   if (lower.includes("edit") || lower.includes("patch")) return progressive ? "Editing" : "Updated";
   if (lower.includes("write")) return progressive ? "Writing" : "Updated";
   if (lower.includes("terminal") || lower.includes("shell") || lower.includes("command") || lower.includes("bash")) return progressive ? "Running" : "Ran";
-  if (status === "awaiting_approval") return "Needs approval";
-  if (status === "error") return "Failed";
   if (status === "completed") return "Completed";
   return "Working";
 }
@@ -112,30 +120,58 @@ export function ToolCallCard({
   onCancel,
   onRetry,
   chatId,
+  messageId,
   ledgerRow = false,
 }: ToolCallCardProps) {
   const { id, name, status, input, output, approvalContext, durationMs } = toolCall;
+  const openRunInspector = useUIStore((state) => state.openRunInspector);
   const isStale = toolCall.recoveryState === "stale";
-  const executionStatus = isStale ? "error" as const : status;
   const inputRecord = useMemo(() => toToolInputRecord(input), [input]);
-  const outputPreview = useMemo(() => buildToolOutputPreview(output || ""), [output]);
+  // Reloaded v2 traces may retain only the bounded canonical preview. Prefer
+  // the full live output when present, but keep the normalized preview as a
+  // safe fallback so category renderers remain useful after hydration.
+  const previewSource = output || toolCall.outputPreview || "";
+  const outputPreview = useMemo(() => buildToolOutputPreview(previewSource), [previewSource]);
+  const isOutputFailure = status !== "running"
+    && outputPreview.exitCode !== undefined
+    && outputPreview.exitCode !== "0";
+  // A failed child run is owned by the Agents panel. Keep the parent
+  // spawn-agent row as a quiet status summary instead of leaking the child's
+  // raw error into the main assistant message.
+  const isDelegatedSubagentFailure = name.toLowerCase().includes("spawn_agent")
+    && Boolean(outputPreview.errorMessage)
+    && /["']status["']\s*:\s*["'](?:failed|cancelled)["']/i.test(outputPreview.raw);
+  const effectiveStatus: ToolCall["status"] = isOutputFailure || isDelegatedSubagentFailure ? "error" : status;
+  const executionStatus = isStale ? "interrupted" as const : effectiveStatus;
+  const errorPresentation = effectiveStatus === "error" && !isDelegatedSubagentFailure
+    ? presentExecutionError(outputPreview.errorMessage || outputPreview.stderr || output || "Tool failed", { context: "tool" })
+    : null;
   const userToggledRef = useRef(false);
-  const hasPreview = Boolean(outputPreview.summary || outputPreview.results.length || outputPreview.files.length || outputPreview.artifact);
+  const hasPreview = !isDelegatedSubagentFailure && Boolean(
+    outputPreview.summary ||
+    outputPreview.errorMessage ||
+    outputPreview.stdout ||
+    outputPreview.stderr ||
+    outputPreview.content ||
+    outputPreview.results.length ||
+    outputPreview.files.length ||
+    outputPreview.artifact,
+  );
   // Running, approval, and error tool cards open by default so the user
   // sees work in progress and actionable states; completed background cards
   // collapse. `defaultExpanded` is an explicit override — when set (true or
   // false) it wins; otherwise `hasAction` decides.
-  const hasAction = !isStale && (status === "running" || status === "awaiting_approval" || status === "error");
+  const hasAction = isStale || effectiveStatus === "running" || effectiveStatus === "awaiting_approval" || effectiveStatus === "error";
   const [isExpanded, setIsExpanded] = useState(() => defaultExpanded ?? hasAction);
   const [isUndoing, setIsUndoing] = useState(false);
   const [isUndone, setIsUndone] = useState(false);
   const [checkpointAvailable, setCheckpointAvailable] = useState(false);
   const checkpoint = outputPreview.checkpoint;
   const category = useMemo(() => {
-    if (status === "awaiting_approval") return "approval";
-    if (status === "error") return "error";
+    if (effectiveStatus === "awaiting_approval") return "approval";
+    if (effectiveStatus === "error") return "error";
     return classifyToolCategory(name);
-  }, [status, name]);
+  }, [effectiveStatus, name]);
 
   useEffect(() => {
     if (!userToggledRef.current) {
@@ -146,7 +182,7 @@ export function ToolCallCard({
   useEffect(() => {
     let active = true;
     setCheckpointAvailable(false);
-    if (status !== "completed" || !chatId || !checkpoint?.available) {
+    if (status !== "completed" || isOutputFailure || !chatId || !checkpoint?.available) {
       return () => { active = false; };
     }
 
@@ -159,26 +195,30 @@ export function ToolCallCard({
       });
 
     return () => { active = false; };
-  }, [chatId, status, checkpoint?.available, checkpoint?.toolCallId]);
+  }, [chatId, status, isOutputFailure, checkpoint?.available, checkpoint?.toolCallId]);
 
   const target = getInputTarget(inputRecord);
   const fileTarget = target && /[/\\.]|\.(tsx?|rs|md|json|toml|ya?ml|css|html)$/i.test(target) ? splitPath(target).filename : "";
   const deltaLabel = useMemo(() => {
-    if (status !== "completed" || outputPreview.files.length !== 1) return "";
+    if (effectiveStatus !== "completed" || outputPreview.files.length !== 1) return "";
     const file = outputPreview.files[0];
     if (file.linesAdded === undefined && file.linesRemoved === undefined) return "";
     return `+${file.linesAdded || 0} −${file.linesRemoved || 0}`;
-  }, [status, outputPreview.files]);
+  }, [effectiveStatus, outputPreview.files]);
   const actionText = [
-    isStale ? "Interrupted" : humanizeToolAction(name, status),
+    isStale ? "Interrupted" : humanizeToolAction(name, effectiveStatus),
     fileTarget || humanizeToolName(name),
     deltaLabel,
   ].filter(Boolean).join(" ");
-  const summary = status === "running"
-    ? compactText(streamingPreview || target || "Working...")
-    : outputPreview.summary || target || humanizeToolName(name);
+  const summary = isStale
+    ? outputPreview.summary || target || "Interrupted before completion"
+    : isDelegatedSubagentFailure
+      ? "Subagent failed · See Agents panel"
+      : errorPresentation?.summary || (effectiveStatus === "running"
+      ? compactText(streamingPreview || target || "Working...")
+      : outputPreview.summary || target || humanizeToolName(name));
   const durationLabel = formatDuration(durationMs);
-  const canUndo = status === "completed" && Boolean(chatId && checkpoint?.available && checkpointAvailable) && !isUndone;
+  const canUndo = effectiveStatus === "completed" && !isOutputFailure && Boolean(chatId && checkpoint?.available && checkpointAvailable) && !isUndone;
 
   const handleUndo = async () => {
     if (!chatId || !checkpoint?.available || isUndoing || isUndone) return;
@@ -213,7 +253,7 @@ export function ToolCallCard({
         subtitle={summary}
         duration={durationLabel}
         expanded={isExpanded}
-        statusLabel={isStale ? "Interrupted" : getExecutionStatusLabel(executionStatus)}
+        statusLabel={isStale ? "Interrupted" : errorPresentation?.title || getExecutionStatusLabel(executionStatus)}
         variant={ledgerRow ? "ledger" : "card"}
         className={ledgerRow ? "execution-row--ledger" : undefined}
         onClick={() => { userToggledRef.current = true; setIsExpanded((prev) => !prev); }}
@@ -270,7 +310,13 @@ export function ToolCallCard({
             </div>
           )}
 
-          {status === "awaiting_approval" && (
+          {chatId && (effectiveStatus === "awaiting_approval" || effectiveStatus === "error" || isStale) && (
+            <div className="flex justify-end">
+              <button type="button" onClick={() => openRunInspector(chatId, toolCall.messageId || messageId, toolCall.id)} className="inline-flex h-7 items-center rounded-md border border-border bg-background px-2.5 text-[11px] font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">Inspect run</button>
+            </div>
+          )}
+
+          {effectiveStatus === "awaiting_approval" && (
             <div className="flex justify-end gap-2">
               <button type="button" className="inline-flex h-7 items-center justify-center rounded-md border border-border bg-transparent px-3 text-[11px] font-medium text-foreground transition-colors duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" onClick={() => onCancel?.(id)}>
                 Deny
@@ -281,7 +327,7 @@ export function ToolCallCard({
             </div>
           )}
 
-          {status === "error" && onRetry && (
+          {effectiveStatus === "error" && onRetry && (
             <div className="flex justify-end gap-2">
               <button type="button" className="inline-flex h-7 items-center gap-1.5 justify-center rounded-md border border-border bg-transparent px-3 text-[11px] font-medium text-foreground transition-colors duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" onClick={() => onRetry?.(id)}>
                 <RefreshCcw className="h-3 w-3" />

@@ -17,7 +17,7 @@ import { motionDurations, motionEasings, useReducedMotion } from "@/lib/motion";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { WelcomeBlackHoleBackground } from "./WelcomeBlackHoleBackground";
 import { WelcomeBlackHoleSvg } from "./WelcomeBlackHoleSvg";
-import { useWorkspaceTransitioning } from "./WorkspaceViewTransition";
+import { useWorkspaceLeavingWelcome, useWorkspaceTransitioning } from "./WorkspaceViewTransition";
 
 interface WorkspaceWelcomeProps {
   recentWorkspaces: string[];
@@ -55,6 +55,8 @@ export function WorkspaceWelcome({
   const reducedMotion = useReducedMotion();
   const configuredWorkspacePath = useSettingsStore((state) => state.workspacePath);
   const workspaceTransitioning = useWorkspaceTransitioning();
+  const leavingWelcome = useWorkspaceLeavingWelcome();
+  const pauseWelcomeBackground = workspaceTransitioning || leavingWelcome;
   const workspaceStatus = selectedWorkspace
     ? configuredWorkspacePath && formatWorkspacePath(selectedWorkspace) === formatWorkspacePath(configuredWorkspacePath)
       ? "Default workspace"
@@ -100,25 +102,18 @@ export function WorkspaceWelcome({
 
   let welcomeBackground: ReactNode = null;
   if (welcomePageQuality === "low") {
-    welcomeBackground = <WelcomeBlackHoleSvg paused={workspaceTransitioning} />;
+    welcomeBackground = <WelcomeBlackHoleSvg paused={pauseWelcomeBackground} />;
   } else if (welcomePageQuality === "high") {
-    welcomeBackground = <WelcomeBlackHoleBackground paused={workspaceTransitioning} />;
-  } else if (welcomePageQuality === "image") {
-    welcomeBackground = (
-      <img
-        src="/background.png"
-        alt=""
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover object-center"
-      />
-    );
+    welcomeBackground = <WelcomeBlackHoleBackground paused={pauseWelcomeBackground} />;
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col items-center justify-center overflow-hidden bg-background px-5 py-10 text-foreground">
+    <div className="relative flex h-full min-h-0 flex-col items-center justify-center overflow-hidden bg-transparent px-5 py-10 text-foreground">
       {/* Welcome background
-          non-interactive. The configured animated, still-image, or disabled
-          mode is mounted at the root so it spans the full viewport. */}
+          non-interactive. The configured SVG/Three.js layer is mounted above
+          the shared workspace wallpaper owned by WorkspaceViewTransition.
+          "Still · Image" and "Off · None" intentionally leave that shared
+          wallpaper visible without adding a second background. */}
       {welcomeBackground}
 
       <motion.main

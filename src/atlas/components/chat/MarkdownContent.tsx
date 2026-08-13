@@ -1,4 +1,4 @@
-import React, { Suspense, useMemo, memo } from "react";
+import React, { Suspense, useMemo, memo, useId } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { Components } from "react-markdown";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -9,9 +9,13 @@ import { CodeBlock } from "./CodeBlock";
 import { ReasoningBlock } from "./ReasoningBlock";
 import { FileTree } from "./FileTree";
 import { splitMarkdownIntoBlocks, type MarkdownBlock } from "./markdown-utils";
+import { prepareMarkdownFootnotes } from "./markdownFootnotes";
+import { MarkdownDetails } from "./MarkdownDetails";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import { useReducedMotion } from "@/lib/motion";
 import { isSafeGeneratedHref } from "@/lib/security/generatedLinks";
+import { normalizeBrowserPreviewUrl } from "@/lib/security/browserPreviewUrl";
+import { useUIStore } from "@/lib/stores/useUIStore";
 import { toAssetUrl } from "@/lib/utils/assetUrl";
 import {
   MarkdownErrorBoundary,
@@ -110,31 +114,49 @@ interface ReferenceItem {
   url: string;
 }
 
-function ReferencesGrid({ items }: { items: ReferenceItem[] }) {
+function ReferencesGrid({ items, onOpenLink }: { items: ReferenceItem[]; onOpenLink?: (url: string) => boolean }) {
   return (
-    <div className="my-6">
-      <h2 className="mb-3 text-xl font-semibold tracking-tight text-foreground/90">
+    <div className="my-3">
+      <h2 className="mb-2 text-lg font-semibold tracking-tight text-foreground">
         References
       </h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {items.map((ref) => (
-          <a
-            key={ref.number}
-            href={ref.url}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-start gap-2.5 rounded-lg border border-border bg-card px-3 py-2 text-[13px] leading-snug transition-all hover:border-border hover:bg-muted hover:shadow-sm"
-          >
-            <span className="mt-[1px] flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-              {ref.number}
-            </span>
-            <span className="flex-1 min-w-0">
-              <span className="block truncate text-foreground">{ref.title}</span>
-              <span className="block truncate text-[11px] text-muted-foreground">{ref.url}</span>
-            </span>
-            <ExternalLink className="mt-1 h-3 w-3 shrink-0 text-muted-foreground" />
-          </a>
-        ))}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {items.map((ref) => {
+          const safeHref = /^(https?:\/\/)/i.test(ref.url) && isSafeGeneratedHref(ref.url) ? ref.url : null;
+          const body = (
+            <>
+              <span className="mt-[1px] flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                {ref.number}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-foreground">{ref.title}</span>
+                <span className="block truncate text-[11px] text-muted-foreground">{ref.url}</span>
+              </span>
+              {safeHref && <ExternalLink className="mt-1 h-3 w-3 shrink-0 text-muted-foreground" />}
+            </>
+          );
+          const className = "flex items-start gap-2 rounded-md border border-border bg-card px-2 py-1.5 text-[13px] leading-snug transition-colors hover:bg-muted";
+
+          if (!safeHref) {
+            return <div key={ref.number} className={className}>{body}</div>;
+          }
+
+          return (
+            <a
+              key={ref.number}
+              href={safeHref}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(event) => {
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                if (onOpenLink?.(safeHref)) event.preventDefault();
+              }}
+              className={className}
+            >
+              {body}
+            </a>
+          );
+        })}
       </div>
     </div>
   );
@@ -146,36 +168,59 @@ function parseReferencesSection(content: string): {
   clean: string;
   items: ReferenceItem[] | null;
 } {
-  // Match ## References heading followed by a blank line and numbered list items
-  const refMatch = content.match(
-    /## References\n\n((?:\d+\.\s+[^\n]+(?:\n|$))+)/
-  );
-  if (!refMatch) return { clean: content, items: null };
+  // Parse line-by-line so a code sample containing "## References" is never
+  // mistaken for the assistant's references section. Normalize CRLF because
+  // persisted messages can come from Windows or provider payloads.
+  const lines = content.replace(/\r\n?/g, "\n").split("\n");
+  let inFence = false;
+  let fenceMarker = "";
+  let headingIndex = -1;
 
-  const items: ReferenceItem[] = refMatch[1]
-    .trim()
-    .split('\n')
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const fence = line.match(/^ {0,3}(`{3,}|~{3,})/);
+    if (fence) {
+      if (!inFence) {
+        inFence = true;
+        fenceMarker = fence[1];
+      } else if (fence[1][0] === fenceMarker[0] && fence[1].length >= fenceMarker.length) {
+        inFence = false;
+        fenceMarker = "";
+      }
+      continue;
+    }
+    if (!inFence && /^ {0,3}#{2,6}\s+References\s*$/i.test(line)) {
+      headingIndex = index;
+      break;
+    }
+  }
+
+  if (headingIndex < 0) return { clean: content, items: null };
+
+  let listIndex = headingIndex + 1;
+  while (listIndex < lines.length && !lines[listIndex].trim()) listIndex += 1;
+  const listLines: string[] = [];
+  while (listIndex < lines.length && /^\s*\d+\.\s+.+/.test(lines[listIndex])) {
+    listLines.push(lines[listIndex].trim());
+    listIndex += 1;
+  }
+  if (listLines.length === 0) return { clean: content, items: null };
+
+  const items = listLines
     .map((line) => {
       const numMatch = line.match(/^(\d+)\.\s+/);
       const number = numMatch ? parseInt(numMatch[1], 10) : 0;
-      const text = line.replace(/^\d+\.\s+/, '').trim();
-      const linkMatch = text.match(/^\[(.+?)\]\((.+?)\)$/);
-      if (linkMatch) {
-        return { number, title: linkMatch[1], url: linkMatch[2] };
-      }
-      // Fallback: use the whole text as both title and url
-      return { number, title: text, url: text };
+      const text = line.replace(/^\d+\.\s+/, "").trim();
+      const linkMatch = text.match(/^\[(.+?)\]\((.+)\)$/);
+      return linkMatch
+        ? { number, title: linkMatch[1], url: linkMatch[2] }
+        : { number, title: text, url: text };
     })
     .filter((item) => item.number > 0);
 
   if (items.length === 0) return { clean: content, items: null };
 
-  // Remove the references section from the content (heading + list)
-  const clean = content.replace(
-    /## References\n\n(?:\d+\.\s+[^\n]+(?:\n|$))+/,
-    ''
-  );
-
+  const clean = [...lines.slice(0, headingIndex), ...lines.slice(listIndex)].join("\n");
   return { clean, items };
 }
 
@@ -187,11 +232,11 @@ const SmoothMarkdown = React.lazy(() => import("./SmoothMarkdown").then(m => ({ 
 const RichBlockFallback = () => {
   const reducedMotion = useReducedMotion();
   return (<div
-    className={`my-6 h-24 rounded-xl border border-border bg-card ${reducedMotion ? "" : "animate-pulse"}`}
+    className={`my-3 h-20 rounded-lg border border-border bg-card ${reducedMotion ? "" : "animate-pulse"}`}
     aria-hidden="true"
   >
-    <div className="m-6 h-3 w-2/3 rounded-full bg-muted" />
-    <div className="mx-6 mt-3 h-3 w-1/2 rounded-full bg-muted" />
+    <div className="m-3 h-3 w-2/3 rounded-full bg-muted" />
+    <div className="mx-3 mt-2 h-3 w-1/2 rounded-full bg-muted" />
   </div>);
 };
 const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
@@ -207,6 +252,21 @@ const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
   onOpenArtifact?: (a: ArtifactData) => void;
   chatId?: string;
 }) {
+  const chatPlugins = useSettingsStore(useShallow(s => s.chatPlugins));
+  const streamingSpeed = useSettingsStore(s => s.streamingSpeed ?? 'instant');
+
+  if (block.type === 'details') {
+    return (
+      <MarkdownDetails
+        block={block}
+        isStreaming={isStreaming}
+        components={components}
+        chatPlugins={chatPlugins}
+        streamingSpeed={streamingSpeed}
+      />
+    );
+  }
+
   // Code blocks: render with specialized support outside ReactMarkdown
   if (block.type === 'code') {
     const codeStr = stripCodeFence(block.content);
@@ -215,7 +275,7 @@ const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
 
     if (lang === 'openui') {
       return (
-        <div className="my-6 overflow-visible">
+        <div className="my-3 overflow-visible">
           <Suspense fallback={<RichBlockFallback />}>
             <OpenUIRenderer content={codeStr} isStreaming={isStreaming} chatId={chatId} />
           </Suspense>
@@ -243,9 +303,6 @@ const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
       <CodeBlock language={lang || 'text'} code={codeStr} onOpenArtifact={onOpenArtifact} />
     );
   }
-
-  const chatPlugins = useSettingsStore(useShallow(s => s.chatPlugins));
-  const streamingSpeed = useSettingsStore(s => s.streamingSpeed ?? 'instant');
 
   // Text blocks: render through ReactMarkdown via SmoothMarkdown
   return (
@@ -284,6 +341,8 @@ export function MarkdownContent({
   onOpenArtifact?: (a: ArtifactData) => void;
   chatId?: string;
 }) {
+  const footnoteScope = useId().replace(/[^a-zA-Z0-9_-]/g, "-");
+
   // 1. Extract thought blocks (handles both native reasoning and inline tags).
   let thought: string | null = reasoning || null;
   let mainContent = content;
@@ -294,21 +353,31 @@ export function MarkdownContent({
     mainContent = extracted.content;
   }
 
-  // Short, plain streaming deltas do not need a markdown tree. Keep the
-  // heuristic deliberately strict so links, emphasis, code, and headings still
-  // use the normal renderer; the stable wrapper keeps the transition calm when
-  // the stream later becomes rich markdown.
+  // Plain streaming prose does not need a markdown tree. Keep the heuristic
+  // syntax-based instead of length-based: long ordinary answers should not
+  // re-parse through remark/rehype on every token. Rich markdown still takes
+  // the normal renderer as soon as it contains structural syntax.
   const isPlainShortText = Boolean(
     isStreaming &&
     mainContent.length <= 240 &&
     !/[#*_`\[\]|]/.test(mainContent) &&
+    !/(?:https?:\/\/|www\.)\S+/i.test(mainContent) &&
     !mainContent.includes("```"),
   );
 
-  // 2a. Parse & extract ## References section for compact grid rendering
+  // 2a. Rewrite footnotes before block splitting so references and their
+  // definitions stay in the same memoized Markdown pipeline as prose.
+  const preparedMainContent = useMemo(
+    () => prepareMarkdownFootnotes(mainContent, footnoteScope),
+    [footnoteScope, mainContent],
+  );
+
+  // 2b. Parse & extract ## References section for compact grid rendering
   const { clean: refStrippedContent, items: refItems } = useMemo(
-    () => isPlainShortText ? { clean: mainContent, items: null } : parseReferencesSection(mainContent),
-    [isPlainShortText, mainContent]
+    () => isPlainShortText
+      ? { clean: preparedMainContent.content, items: null }
+      : parseReferencesSection(preparedMainContent.content),
+    [isPlainShortText, preparedMainContent.content],
   );
 
   // 2b. Split main content into memoizable blocks (with references removed)
@@ -318,6 +387,17 @@ export function MarkdownContent({
   );
 
   // 3. Build stable components reference for markdown rendering
+  const openBrowserPreview = useUIStore((state) => state.openBrowserPreview);
+  const activeChatId = useUIStore((state) => state.activeChatId);
+  const openLinkInBrowserPreview = useCallback((href: string) => {
+    const previewChatId = chatId || activeChatId;
+    if (!previewChatId) return false;
+    const previewUrl = normalizeBrowserPreviewUrl(href);
+    if (!previewUrl || previewUrl === "about:blank") return false;
+    openBrowserPreview(previewChatId, previewUrl);
+    return true;
+  }, [activeChatId, chatId, openBrowserPreview]);
+
   const components: Components = useMemo(() => ({
     code({ className, children }) {
       const match = /language-([\w-]+)/.exec(className || "");
@@ -328,7 +408,7 @@ export function MarkdownContent({
         // as fallback for inline parsing edge cases
         if (lang === "openui") {
           return (
-            <div className="my-6 overflow-visible">
+            <div className="my-3 overflow-visible">
               <Suspense fallback={<RichBlockFallback />}>
                 <OpenUIRenderer content={codeStr} isStreaming={isStreaming} chatId={chatId} />
               </Suspense>
@@ -363,9 +443,52 @@ export function MarkdownContent({
       );
     },
     pre({ children }) {
-      return <div className="my-4">{children}</div>;
+      return <div className="my-2">{children}</div>;
     },
-    a({ href, children }) {
+    a({ href, title, children }) {
+      const footnotePrefix = `#${footnoteScope}-fn-`;
+      const isScopedFootnoteLink = typeof href === "string" && href.startsWith(footnotePrefix);
+      const footnoteTargetId = isScopedFootnoteLink ? href.slice(1) : "";
+
+      if (isScopedFootnoteLink && title === "footnote-target") {
+        return (
+          <span
+            id={footnoteTargetId}
+            tabIndex={-1}
+            className="markdown-footnote-target scroll-mt-20 outline-none"
+          />
+        );
+      }
+
+      if (isScopedFootnoteLink && title?.startsWith("footnote-ref:")) {
+        const referenceId = title.slice("footnote-ref:".length);
+        return (
+          <sup id={referenceId} tabIndex={-1} className="markdown-footnote-ref mx-0.5 align-super text-[10px] leading-none">
+            <a
+              href={href}
+              aria-label={`Footnote ${String(children)}`}
+              onClick={() => window.requestAnimationFrame(() => document.getElementById(footnoteTargetId)?.focus({ preventScroll: true }))}
+              className="rounded px-0.5 font-medium text-primary underline-offset-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {children}
+            </a>
+          </sup>
+        );
+      }
+
+      if (isScopedFootnoteLink && title === "footnote-backlink") {
+        return (
+          <a
+            href={href}
+            aria-label="Back to footnote reference"
+            onClick={() => window.requestAnimationFrame(() => document.getElementById(footnoteTargetId)?.focus({ preventScroll: true }))}
+            className="markdown-footnote-backlink mr-1 rounded px-1 text-[11px] font-medium text-primary no-underline hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {children}
+          </a>
+        );
+      }
+
       if (children && typeof children === 'string' && /^\d+$/.test(children)) {
         return (
           <span className="cite-pill">
@@ -375,31 +498,61 @@ export function MarkdownContent({
       }
       // YouTube link preview
       const ytId = parseYoutubeId(href || "");
-      if (ytId) { return <YoutubePreview videoId={ytId} />; }
+      if (ytId) { return <YoutubePreview videoId={ytId} onOpenLink={openLinkInBrowserPreview} />; }
       if (!isSafeGeneratedHref(href)) {
         return <span>{children}</span>;
       }
       return (
         <a href={href} target="_blank" rel="noreferrer"
+          onClick={(event) => {
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            if (href && openLinkInBrowserPreview(href)) event.preventDefault();
+          }}
           className="text-primary underline underline-offset-4 hover:text-primary/80 transition-colors">
           {children}
         </a>
       );
     },
-    h1: ({ children }) => <h1 className="mb-4 mt-8 text-2xl font-bold tracking-tight text-foreground">{children}</h1>,
-    h2: ({ children }) => <h2 className="mb-3 mt-6 text-xl font-semibold tracking-tight text-foreground">{children}</h2>,
-    h3: ({ children }) => <h3 className="mb-2 mt-5 text-lg font-semibold text-foreground">{children}</h3>,
-    h4: ({ children }) => <h4 className="mb-2 mt-4 text-base font-semibold text-foreground">{children}</h4>,
-    h5: ({ children }) => <h5 className="mb-2 mt-3 text-sm font-semibold text-muted-foreground">{children}</h5>,
-    h6: ({ children }) => <h6 className="mb-2 mt-2 text-xs font-semibold text-muted-foreground">{children}</h6>,
+    h1: ({ children }) => <h1 className="mb-3 mt-5 text-xl font-bold tracking-tight text-foreground">{children}</h1>,
+    h2: ({ children }) => <h2 className="mb-2 mt-4 text-lg font-semibold tracking-tight text-foreground">{children}</h2>,
+    h3: ({ children }) => {
+      const isFootnotesHeading = flattenChildren(children).trim().toLowerCase() === "footnotes";
+      return (
+        <h3 className={`mb-1.5 mt-3 text-base font-semibold text-foreground${isFootnotesHeading ? " markdown-footnotes-heading" : ""}`}>
+          {children}
+        </h3>
+      );
+    },
+    h4: ({ children }) => <h4 className="mb-1.5 mt-3 text-base font-semibold text-foreground">{children}</h4>,
+    h5: ({ children }) => <h5 className="mb-1 mt-2 text-sm font-semibold text-muted-foreground">{children}</h5>,
+    h6: ({ children }) => <h6 className="mb-1 mt-1.5 text-xs font-semibold text-muted-foreground">{children}</h6>,
     p: ({ children }) => {
       const galleryImages = extractImagesFromChildren(children);
       if (galleryImages) return <ImageGallery images={galleryImages} />;
       return <p className="mb-2 last:mb-0">{children}</p>;
     },
-    ul: ({ children }) => <ul className="mb-2 ml-6 list-disc space-y-1">{children}</ul>,
-    ol: ({ children }) => <ol className="mb-2 ml-6 list-decimal space-y-1">{children}</ol>,
-    li: ({ children }) => <li className="pl-1">{children}</li>,
+    ul: ({ children, className }) => {
+      const isTaskList = className?.includes("contains-task-list");
+      return <ul className={`mb-1.5 space-y-0.5 ${isTaskList ? "ml-0 list-none" : "ml-5 list-disc"}${className ? ` ${className}` : ""}`}>{children}</ul>;
+    },
+    ol: ({ children, className }) => <ol className={`mb-1.5 ml-5 list-decimal space-y-0.5${className ? ` ${className}` : ""}`}>{children}</ol>,
+    li: ({ children, className }) => {
+      const isTaskItem = className?.includes("task-list-item");
+      return <li className={`${isTaskItem ? "list-none" : "pl-0.5"}${className ? ` ${className}` : ""}`}>{children}</li>;
+    },
+    input: ({ checked, ...props }) => (
+      <input
+        {...props}
+        type="checkbox"
+        checked={Boolean(checked)}
+        readOnly
+        aria-label={checked ? "Completed task" : "Incomplete task"}
+        className="mr-2 align-[-2px] accent-primary"
+      />
+    ),
+    del: ({ children }) => <del className="text-muted-foreground">{children}</del>,
+    sup: ({ children }) => <sup className="text-[0.75em]">{children}</sup>,
+    sub: ({ children }) => <sub className="text-[0.75em]">{children}</sub>,
     img: ({ src, alt }) => {
       if (!src) return null;
       if (!isSafeGeneratedHref(src)) {
@@ -416,24 +569,24 @@ export function MarkdownContent({
 
         if (match) {
           const type = match[1].toUpperCase();
-          let colorClass = "border-primary/40 bg-primary/40 text-blue-950 dark:text-primary-foreground";
+          let colorClass = "border-primary bg-muted text-foreground";
           let icon = "ℹ️";
           let title = "Note";
 
-          if (type === "TIP") { colorClass = "border-green-500/40 bg-green-500/40 text-green-950 dark:text-green-100"; icon = "💡"; title = "Tip"; }
-          if (type === "IMPORTANT") { colorClass = "border-primary/40 bg-primary/40 text-purple-950 dark:text-purple-100"; icon = "✨"; title = "Important"; }
-          if (type === "WARNING") { colorClass = "border-warning/40 bg-warning/40 text-amber-950 dark:text-amber-100"; icon = "⚠️"; title = "Warning"; }
-          if (type === "CAUTION") { colorClass = "border-rose-500/40 bg-rose-500/40 text-rose-950 dark:text-rose-100"; icon = "🛑"; title = "Caution"; }
+          if (type === "TIP") { colorClass = "border-success bg-muted text-foreground"; icon = "💡"; title = "Tip"; }
+          if (type === "IMPORTANT") { colorClass = "border-primary bg-muted text-foreground"; icon = "✨"; title = "Important"; }
+          if (type === "WARNING") { colorClass = "border-warning bg-muted text-foreground"; icon = "⚠️"; title = "Warning"; }
+          if (type === "CAUTION") { colorClass = "border-destructive bg-muted text-foreground"; icon = "🛑"; title = "Caution"; }
 
         const cleanChildren = removeAlertTag(children);
 
         return (
-          <Alert className={`my-6 border-l-4 rounded-r-lg ${colorClass}`}>
+          <Alert className={`my-3 border-l-4 rounded-r-md ${colorClass}`}>
             <AlertTitle className="flex items-center gap-2 font-bold mb-1">
               <span>{icon}</span>
               <span>{title}</span>
             </AlertTitle>
-            <AlertDescription className="text-current opacity-90">
+            <AlertDescription className="text-current">
               {cleanChildren}
             </AlertDescription>
           </Alert>
@@ -441,13 +594,13 @@ export function MarkdownContent({
       }
 
       return (
-        <blockquote className="my-6 border-l-2 border-primary pl-4 italic text-muted-foreground bg-muted py-2 rounded-r-lg">
+        <blockquote className="my-3 border-l-2 border-primary pl-3 italic text-muted-foreground bg-muted py-1.5 rounded-r-md">
           {children}
         </blockquote>
       );
     },
     table: ({ children }) => (
-      <div className="my-6 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div className="my-3 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
         <ScrollArea className="w-full">
           <Table className="w-full text-[13px] border-collapse">{children}</Table>
         </ScrollArea>
@@ -459,18 +612,18 @@ export function MarkdownContent({
     th: ({ children }) => <TableHead>{children}</TableHead>,
     td: ({ children }) => <TableCell>{children}</TableCell>,
     strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-    hr: () => <hr className="my-8 border-border" />,
-  }), [onOpenArtifact, chatId, isStreaming]);
+    hr: () => <hr className="my-4 border-border" />,
+  }), [chatId, footnoteScope, isStreaming, onOpenArtifact, openLinkInBrowserPreview]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {thought && (
         <ReasoningBlock content={thought} isThinking={isThinking} />
       )}
       {isPlainShortText ? (
         <div className="whitespace-pre-wrap break-words text-foreground">{mainContent}</div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-3">
           {(blocks.length > 0 ? blocks : [{ id: "fallback-single-block", type: "text", content: refStrippedContent, isComplete: !isStreaming, index: 0 } as any]).map((block) => (
             <MemoizedMarkdownBlock
               key={block.id}
@@ -485,7 +638,7 @@ export function MarkdownContent({
       )}
       {/* Two-column References grid (always shown, even if blocks are empty) */}
       {refItems && refItems.length > 0 && (
-        <ReferencesGrid items={refItems} />
+        <ReferencesGrid items={refItems} onOpenLink={openLinkInBrowserPreview} />
       )}
       {!mainContent && isStreaming && (
         <div className="flex items-center gap-2 py-4" aria-live="polite">

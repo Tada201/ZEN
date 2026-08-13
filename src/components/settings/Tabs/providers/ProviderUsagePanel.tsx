@@ -64,8 +64,8 @@ export function ProviderUsagePanel({ models }: ProviderUsagePanelProps) {
     <section className="border-t border-border pt-6" aria-label="Model usage">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h4 className="text-sm font-semibold text-foreground">Local Usage</h4>
-          <p className="mt-1 text-xs text-muted-foreground">Completed responses recorded on this device for these model identifiers.</p>
+          <h4 className="text-sm font-semibold text-foreground">Usage on this device</h4>
+          <p className="mt-1 text-xs text-muted-foreground">Completed responses recorded locally for these model identifiers.</p>
         </div>
         <WorkbenchButton
           variant="ghost"
@@ -79,7 +79,7 @@ export function ProviderUsagePanel({ models }: ProviderUsagePanelProps) {
         </WorkbenchButton>
       </div>
 
-      <div className="mt-4 grid grid-cols-3 divide-x divide-white/[0.06] border-y border-border bg-muted/20">
+      <div className="mt-4 grid grid-cols-3 divide-x divide-border border-y border-border bg-background">
         <Metric label="Responses" value={formatCount(snapshot.totalRequests)} />
         <Metric label="Input Tokens" value={formatCount(snapshot.totalTokensIn)} />
         <Metric label="Output Tokens" value={formatCount(snapshot.totalTokensOut)} />

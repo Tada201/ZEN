@@ -7,7 +7,7 @@ export function DataRecordCard({ data }: { data: any }) {
   const fields = data.fields || data.rows || {};
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-lg w-full max-w-md">
+    <div className="genui-card-surface rounded-2xl border border-border bg-card p-5 shadow-lg w-full max-w-none min-w-0">
       <div className="flex items-center gap-3 mb-4">
         {avatar ? (
           <img src={avatar} alt="" className="w-10 h-10 rounded-full object-cover border border-border" />

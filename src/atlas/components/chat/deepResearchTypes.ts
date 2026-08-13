@@ -33,5 +33,4 @@ export interface DeepResearchRunMessageProps {
     isChatStreaming?: boolean;
     messages?: Message[];
     onContinueResearch?: (request: string) => void;
-    onAbort?: () => void;
 }

@@ -27,6 +27,12 @@ export interface ProviderInfo {
 
 export interface ProviderCatalogEntry {
     id: string;
+    displayName?: string;
+    description?: string;
+    category?: 'cloud' | 'local' | 'custom';
+    requiresKey?: boolean;
+    apiKeyKey?: string;
+    baseUrlKey?: string;
     defaultBaseUrl: string;
     baseUrl: string;
     isLocal: boolean;

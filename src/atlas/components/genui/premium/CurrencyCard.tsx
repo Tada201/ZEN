@@ -18,7 +18,7 @@ export function CurrencyCard({ data }: { data: CurrencyData }) {
   const updatedAt = data.updatedAt;
 
   return (
-    <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-lg">
+    <div className="genui-card-surface w-full max-w-none min-w-0 rounded-2xl border border-border bg-card p-5 shadow-lg">
       <div className="flex items-center justify-between mb-4">
         <span className="text-[10px] font-mono tracking-wider text-muted-foreground uppercase">Currency Converter</span>
         <TrendingUp className="w-4 h-4 text-emerald-400" />

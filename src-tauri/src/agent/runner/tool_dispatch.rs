@@ -228,6 +228,7 @@ impl Runner {
 
             let pipeline_call = effective_pipeline_call.as_ref().unwrap_or(pipeline_call);
             let tool_call = &pipeline_call.resolved;
+            self.record_child_tool_call_id(tool_call.id.clone()).await;
             self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
                 message: format!("Executing: {}", tool_call.name),
                 chat_id: chat_id.to_string(),
@@ -289,9 +290,13 @@ impl Runner {
                     tool_name: tool_call.name.clone(),
                     tool_call_id: tc_id.clone(),
                     arguments: tool_call.args.clone(),
+                    sequence: self.next_event_sequence(),
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    phase: "tool_running".to_string(),
                     trace_id: trace_id.clone(),
                     run_id: Some(run_id.clone()),
                     parent_agent_id: parent_agent_id.clone(),
+                    parent_tool_call_id: self.parent_tool_call_id(),
                     execution_id: Some(tc_id.clone()),
                     batch_id: Some(tool_batch_id.clone()),
                     tool_batch_id: Some(tool_batch_id.clone()),
@@ -384,9 +389,13 @@ impl Runner {
                         tool_name: tc_name.clone(),
                         tool_call_id: tc_id.clone(),
                         arguments: tc_args.clone(),
+                        sequence: self.next_event_sequence(),
+                        timestamp: chrono::Utc::now().to_rfc3339(),
+                        phase: "tool_running".to_string(),
                         trace_id: trace_id.clone(),
                         run_id: Some(run_id.clone()),
                         parent_agent_id: parent_agent_id.clone(),
+                        parent_tool_call_id: self.parent_tool_call_id(),
                         execution_id: Some(tc_id.clone()),
                         batch_id: Some(tool_batch_id.clone()),
                         tool_batch_id: Some(tool_batch_id.clone()),
@@ -561,6 +570,7 @@ impl Runner {
                                 let run_id_inner = run_id.clone();
                                 let trace_id_inner = trace_id.clone();
                                 let parent_agent_id_inner = parent_agent_id.clone();
+                                let parent_tool_call_id_inner = self.parent_tool_call_id();
                                 let tool_batch_id_inner = tool_batch_id.clone();
                                 let agent_id_inner = agent_id.to_string();
                                 let agent_name_inner = agent_name.to_string();
@@ -568,6 +578,7 @@ impl Runner {
                                 let depth = self.depth;
                                 let v2_tool_call_inner = v2_tool_call.clone();
                                 let assistant_message_id_for_approval = assistant_message_id.clone();
+                                let event_sequence = self.next_event_sequence();
 
                                 let handle = tokio::spawn(async move {
                                     let started_at = chrono::Utc::now();
@@ -642,9 +653,13 @@ impl Runner {
                                         tool_name: v2_tool_call_inner.name.clone(),
                                         tool_call_id: v2_tool_call_inner.id.clone(),
                                         arguments: v2_tool_call_inner.arguments.clone(),
+                                        sequence: event_sequence,
+                                        timestamp: chrono::Utc::now().to_rfc3339(),
+                                        phase: "tool_running".to_string(),
                                         trace_id: trace_id_inner,
                                         run_id: Some(run_id_inner),
                                         parent_agent_id: parent_agent_id_inner,
+                                        parent_tool_call_id: parent_tool_call_id_inner,
                                         execution_id: Some(v2_tool_call_inner.id.clone()),
                                         batch_id: Some(tool_batch_id_inner.clone()),
                                         tool_batch_id: Some(tool_batch_id_inner),
@@ -820,9 +835,13 @@ impl Runner {
                         tool_name: tc_name.clone(),
                         tool_call_id: tc_id.clone(),
                         arguments: tc_args.clone(),
+                        sequence: self.next_event_sequence(),
+                        timestamp: chrono::Utc::now().to_rfc3339(),
+                        phase: "tool_running".to_string(),
                         trace_id: trace_id.clone(),
                         run_id: Some(run_id.clone()),
                         parent_agent_id: parent_agent_id.clone(),
+                        parent_tool_call_id: self.parent_tool_call_id(),
                         execution_id: Some(tc_id.clone()),
                         batch_id: Some(tool_batch_id.clone()),
                         tool_batch_id: Some(tool_batch_id.clone()),
@@ -969,9 +988,13 @@ impl Runner {
         self.emit(AgentEvent::ToolComplete(ToolCompletePayload {
             tool_name: tool_name.to_string(),
             tool_call_id: result.tool_call_id.clone(),
+            sequence: self.next_event_sequence(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            phase: if result.is_error { "errored".to_string() } else { "completed".to_string() },
             trace_id: self.trace_id(),
             run_id: Some(self.execution_run_id(chat_id)),
             parent_agent_id: self.parent_agent_id(),
+            parent_tool_call_id: self.parent_tool_call_id(),
             execution_id: Some(result.tool_call_id.clone()),
             batch_id: Some(self.tool_batch_id(chat_id, agent_id, iteration)),
             tool_batch_id: Some(self.tool_batch_id(chat_id, agent_id, iteration)),

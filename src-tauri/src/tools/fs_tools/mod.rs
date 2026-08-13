@@ -1,7 +1,6 @@
 //! File-system + RAG tools.
 //!
 //! Layout:
-//!   `search`     — vector search over the RAG index.
 //!   `documents`  — list/read/grep ingested documents.
 //!   `write`      — write_file, edit_file, targeted-edit helpers, tests.
 //!   `patch`      — apply_patch (multi-file structured patch).
@@ -18,13 +17,25 @@ use crate::commands::AppState;
 
 mod documents;
 mod patch;
-mod search;
 mod write;
 
 pub use documents::{GrepDocumentsTool, ListDocumentsTool, ReadDocumentTool};
 pub use patch::ApplyPatchTool;
-pub use search::VectorSearchTool;
 pub use write::{execute_targeted_edit, EditFileTool, WriteFileTool};
+
+/// Truncate UTF-8 text without slicing through a multibyte character.
+pub(crate) fn truncate_utf8(text: &str, max_bytes: usize) -> &str {
+    if text.len() <= max_bytes {
+        return text;
+    }
+
+    text.char_indices()
+        .map(|(index, _)| index)
+        .take_while(|index| *index <= max_bytes)
+        .last()
+        .and_then(|index| text.get(..index))
+        .unwrap_or("")
+}
 
 /// Read a UTF-8 text file from disk. Binary files fail here on purpose — the
 /// tools that need to handle binaries should go through a different path.
@@ -108,22 +119,70 @@ pub(crate) fn unified_diff(path: &Path, old: &str, new: &str) -> (String, usize,
 
     diff_lines.push(format!("--- a/{}", path.display()));
     diff_lines.push(format!("+++ b/{}", path.display()));
+    let old_line_count = old.lines().count();
+    let new_line_count = new.lines().count();
+    let old_range = if old_line_count == 0 {
+        "0,0".to_string()
+    } else {
+        format!("1,{}", old_line_count)
+    };
+    let new_range = if new_line_count == 0 {
+        "0,0".to_string()
+    } else {
+        format!("1,{}", new_line_count)
+    };
+    diff_lines.push(format!("@@ -{} +{} @@", old_range, new_range));
 
     for change in diff.iter_all_changes() {
+        // Remove only the line terminator. `trim_end()` would corrupt
+        // meaningful trailing spaces in the preview.
+        let value = change.value().trim_end_matches(|character| character == 13 as char || character == 10 as char);
         match change.tag() {
             ChangeTag::Delete => {
-                diff_lines.push(format!("-{}", change.value().trim_end()));
+                diff_lines.push(format!("-{}", value));
                 lines_removed += 1;
             }
             ChangeTag::Insert => {
-                diff_lines.push(format!("+{}", change.value().trim_end()));
+                diff_lines.push(format!("+{}", value));
                 lines_added += 1;
             }
             ChangeTag::Equal => {
-                diff_lines.push(format!(" {}", change.value().trim_end()));
+                diff_lines.push(format!(" {}", value));
             }
         }
     }
 
     (diff_lines.join("\n"), lines_added, lines_removed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unified_diff;
+    use std::path::Path;
+
+    #[test]
+    fn emits_standard_hunk_and_preserves_trailing_spaces() {
+        let (diff, added, removed) = unified_diff(
+            Path::new("src/example.rs"),
+            "old  \n",
+            "new  \n",
+        );
+
+        assert!(diff.contains("@@ -1,1 +1,1 @@"));
+        assert!(diff.contains("-old  "));
+        assert!(diff.contains("+new  "));
+        assert_eq!(added, 1);
+        assert_eq!(removed, 1);
+    }
+
+    #[test]
+    fn emits_preview_for_created_and_deleted_files() {
+        let (created, added, removed) = unified_diff(Path::new("new.txt"), "", "hello\nworld\n");
+        assert!(created.contains("@@ -0,0 +1,2 @@"));
+        assert_eq!((added, removed), (2, 0));
+
+        let (deleted, added, removed) = unified_diff(Path::new("old.txt"), "hello\n", "");
+        assert!(deleted.contains("@@ -1,1 +0,0 @@"));
+        assert_eq!((added, removed), (0, 1));
+    }
 }

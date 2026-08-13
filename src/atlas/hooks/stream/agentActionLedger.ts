@@ -112,6 +112,8 @@ export function getActionEventId(payload: AgentActionEventPayload, kind: string)
     if (spawnId) return `agent:${spawnId}`;
   }
   if (kind === "agent_chunk") {
+    const spawnId = stringValue(payload.spawn_id, payload.spawnId);
+    if (spawnId) return `agent-chunk:${spawnId}`;
     const agentId = stringValue(payload.agent_id, payload.agent_name, payload.child_agent_id, payload.child_agent_name);
     return `agent-chunk:${payload.chat_id || payload.chatId || "active"}:${agentId || "agent"}`;
   }
@@ -299,6 +301,12 @@ export function normalizeMetadata(kind: string, payload: AgentActionEventPayload
   if (payload.iteration !== undefined) metadata.iteration = payload.iteration;
   const runId = stringValue(payload.run_id, payload.runId, metadata.runId, metadata.run_id);
   const messageId = stringValue(payload.message_id, payload.messageId, metadata.messageId, metadata.message_id);
+  const parentToolCallId = stringValue(
+    payload.parent_tool_call_id,
+    payload.parentToolCallId,
+    metadata.parentToolCallId,
+    metadata.parent_tool_call_id,
+  );
   const parentAgentId = stringValue(
     payload.parent_agent_id,
     payload.parentAgentId,
@@ -314,6 +322,9 @@ export function normalizeMetadata(kind: string, payload: AgentActionEventPayload
   const toolBatchId = stringValue(payload.tool_batch_id, payload.toolBatchId, metadata.toolBatchId, metadata.tool_batch_id);
   if (runId !== undefined) metadata.runId = runId;
   if (messageId !== undefined) metadata.messageId = messageId;
+  if (parentToolCallId !== undefined) metadata.parentToolCallId = parentToolCallId;
+  if (payload.trace_id || payload.traceId) metadata.traceId = payload.trace_id || payload.traceId;
+  if (payload.sequence !== undefined) metadata.sequence = payload.sequence;
   if (parentAgentId !== undefined) metadata.parentAgentId = parentAgentId;
   if (executionId !== undefined) metadata.executionId = executionId;
   if (batchId !== undefined) metadata.batchId = batchId;

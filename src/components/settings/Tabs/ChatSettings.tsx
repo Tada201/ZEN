@@ -17,57 +17,37 @@ const DEFAULT_TITLE_PROMPT =
   "Generate a concise, descriptive title (5 words or fewer, under 50 characters) for a chat session based on the user's first message. Output ONLY the title text — no quotes, punctuation, or explanation.";
 
 export function ChatSettings({ settings, onUpdate }: ChatSettingsProps) {
-  const activeProvider = useSettingsStore((s) => s.activeProvider);
-  const activeModel = useSettingsStore((s) => s.activeModel);
-  const availableModelsByProvider = useSettingsStore((s) => s.availableModelsByProvider);
-
-  // Build the cross-provider picker AND a parallel model-to-provider lookup.
-  // When the user picks a model we must persist BOTH identifiers: a model
-  // id alone is ambiguous across the fleet (e.g. `llama3.2:3b` could
-  // legitimately live under ollama OR nine_router). The Rust title-maker
-  // command reads `chat.title-maker-provider` and only falls back to
-  // `active_provider` when it is empty, so the selected provider must
-  // round-trip through persistence intact.
+  const activeModel = useSettingsStore((state) => state.activeModel);
+  const availableModelsByProvider = useSettingsStore((state) => state.availableModelsByProvider);
   const { titleModelOptions, modelProviderFor } = useMemo(() => {
     const seen = new Set<string>();
-    const flat: { value: string; label: string }[] = [];
-    const providerByModel = new Map<string, string>();
-    for (const [providerKey, models] of Object.entries(availableModelsByProvider)) {
-      const providerName =
-        providerOrder.find((p) => p.key === providerKey)?.name ?? providerKey;
-      for (const model of models) {
+    const models: Array<{ value: string; label: string }> = [];
+    const providers = new Map<string, string>();
+
+    for (const [providerKey, providerModels] of Object.entries(availableModelsByProvider)) {
+      const providerName = providerOrder.find((provider) => provider.key === providerKey)?.name ?? providerKey;
+      for (const model of providerModels) {
         const id = model.id || model.name || "";
         if (!id || seen.has(id)) continue;
         seen.add(id);
-        const label = providerName ? `${model.name || id} (${providerName})` : model.name || id;
-        flat.push({ value: id, label });
-        providerByModel.set(id, providerKey);
+        models.push({ value: id, label: `${model.name || id} (${providerName})` });
+        providers.set(id, providerKey);
       }
     }
-    flat.sort((a, b) => a.label.localeCompare(b.label));
-    const defaultEntry = activeModel
-      ? { value: "", label: `Use chat model (${activeModel})` }
-      : { value: "", label: "Use the current chat model" };
-    return {
-      titleModelOptions: [defaultEntry, ...flat],
-      // Empty string is an explicit signal: the user picked the default
-      // ("Use the current chat model") and the backend should fall back
-      // to active_provider / active_model. Returning "" for safety on
-      // unknown model ids too — never write a guessed provider name.
-      modelProviderFor: (modelId: string): string =>
-        (modelId && providerByModel.get(modelId)) || "",
-    };
-  }, [availableModelsByProvider, activeModel, activeProvider]);
 
-  // Atomic title-maker model+provider update. Picking "Use the current
-  // chat model" clears both fields so the backend falls back to
-  // active_provider / active_model. Picking a real model writes both
-  // fields from the same lookup so the picker and the persisted settings
-  // never disagree.
+    models.sort((left, right) => left.label.localeCompare(right.label));
+    return {
+      titleModelOptions: [
+        { value: "", label: activeModel ? `Use chat model (${activeModel})` : "Use the current chat model" },
+        ...models,
+      ],
+      modelProviderFor: (modelId: string) => (modelId ? providers.get(modelId) ?? "" : ""),
+    };
+  }, [activeModel, availableModelsByProvider]);
+
   const handleTitleMakerModelChange = (modelId: string) => {
-    const providerKey = modelProviderFor(modelId);
     onUpdate("chat.title-maker-model", modelId);
-    onUpdate("chat.title-maker-provider", providerKey);
+    onUpdate("chat.title-maker-provider", modelProviderFor(modelId));
   };
 
   return (
@@ -99,27 +79,27 @@ export function ChatSettings({ settings, onUpdate }: ChatSettingsProps) {
         />
 
         <div className="px-3 py-2 space-y-2">
-          <label className="text-[13px] font-medium text-foreground/80">System Instructions</label>
+          <label className="text-[13px] font-medium text-foreground">System Instructions</label>
           <WorkbenchTextArea
             value={settings["chat.system-instructions"] || ""}
             onChangeText={v => onUpdate("chat.system-instructions", v)}
             placeholder="Custom instructions for the AI assistant..."
-            className="min-h-[80px] text-xs bg-background/50"
+            className="min-h-[80px] text-xs bg-background"
           />
-          <p className="text-[10px] text-muted-foreground/60">
+          <p className="text-[10px] text-muted-foreground">
             These instructions are prepended to every conversation.
           </p>
         </div>
       </SettingsSection>
 
-      <SettingsSection title="Title Maker" icon="lucide:text-cursor-input" description="Auto-generate short session titles from the first user message">
+      <SettingsSection title="Session titles" icon="lucide:text-cursor-input" description="Automatically name new sessions from the first user message">
         <SettingsRow
-          label="Auto-generate Title"
-          description="Generate a short title (≤5 words, ≤50 chars) for new sessions based on the first user message"
+          label="Auto-generate titles"
+          description="Create a short title for each new session"
           control={
             <WorkbenchSwitch
               checked={settings["chat.title-maker-enabled"] !== "false"}
-              onCheckedChange={v => onUpdate("chat.title-maker-enabled", String(v))}
+              onCheckedChange={(value) => onUpdate("chat.title-maker-enabled", String(value))}
             />
           }
           icon="lucide:sparkles"
@@ -128,8 +108,8 @@ export function ChatSettings({ settings, onUpdate }: ChatSettingsProps) {
         {settings["chat.title-maker-enabled"] !== "false" && (
           <>
             <SettingsRow
-              label="Title Model"
-              description="Lightweight model used to generate the title. Defaults to the active chat model."
+              label="Title model"
+              description="Uses the current chat model by default"
               control={
                 <WorkbenchSelect
                   value={settings["chat.title-maker-model"] ?? ""}
@@ -141,21 +121,20 @@ export function ChatSettings({ settings, onUpdate }: ChatSettingsProps) {
               icon="lucide:cpu"
             />
             {titleModelOptions.length === 1 && (
-              <p className="text-[10px] text-muted-foreground/60 px-3">
-                No model list cached yet. Connect a provider in the Providers tab to populate available models.
+              <p className="px-3 py-2 text-[10px] text-muted-foreground">
+                Connect a provider to choose a separate title model.
               </p>
             )}
-
-            <div className="px-3 py-2 space-y-2">
-              <label className="text-[13px] font-medium text-foreground/80">Title System Prompt</label>
+            <div className="space-y-2 px-3 py-3">
+              <label className="text-[13px] font-medium text-foreground">Title instructions</label>
               <WorkbenchTextArea
                 value={settings["chat.title-maker-prompt"] ?? DEFAULT_TITLE_PROMPT}
-                onChangeText={v => onUpdate("chat.title-maker-prompt", v)}
+                onChangeText={(value) => onUpdate("chat.title-maker-prompt", value)}
                 placeholder={DEFAULT_TITLE_PROMPT}
-                className="min-h-[80px] text-xs bg-background/50"
+                className="min-h-[80px] text-xs bg-background"
               />
-              <p className="text-[10px] text-muted-foreground/60">
-                Leave default to keep titles concise. Output is automatically truncated to 50 characters.
+              <p className="text-[10px] text-muted-foreground">
+                Keep the output short and descriptive; titles are limited to 50 characters.
               </p>
             </div>
           </>
@@ -260,6 +239,24 @@ export function ChatSettings({ settings, onUpdate }: ChatSettingsProps) {
             />
           </>
         )}
+
+        <SettingsRow
+          label="Reasoning disclosure"
+          description="Choose how much reasoning detail is visible by default"
+          control={
+            <WorkbenchSelect
+              value={settings["chat.reasoning-disclosure-density"] || "balanced"}
+              onValueChange={v => onUpdate("chat.reasoning-disclosure-density", v)}
+              options={[
+                { value: "compact", label: "Compact" },
+                { value: "balanced", label: "Balanced" },
+                { value: "detailed", label: "Detailed" },
+              ]}
+              width={140}
+            />
+          }
+          icon="lucide:panels-top-left"
+        />
 
         <SettingsRow
           label="Prompt Caching"

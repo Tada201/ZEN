@@ -96,7 +96,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
               key={view}
               type="button"
               onClick={() => setHardwareView(view)}
-              className={`rounded px-2.5 py-1 text-[11px] font-medium ${hardwareView === view ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50"}`}
+              className={`rounded px-2.5 py-1 text-[11px] font-medium ${hardwareView === view ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted"}`}
             >
               {view === "overview" ? "Overview" : `GPU Devices (${hardware?.gpus.length ?? 0})`}
             </button>
@@ -130,12 +130,12 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
             },
           ].map(item => {
             return (
-              <div key={item.label} className="flex items-center gap-2.5 p-2.5 rounded-lg bg-muted/40 border border-border">
+              <div key={item.label} className="flex items-center gap-2.5 rounded-lg border border-border bg-background p-2.5">
                 <WorkbenchIcon name={item.icon} size={16} className="text-muted-foreground shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] font-medium text-muted-foreground">{item.label}</p>
                   <p className="truncate text-[13px] font-bold text-foreground">{item.value}</p>
-                  {item.detail && <p className="truncate text-[10px] text-muted-foreground/70">{item.detail}</p>}
+                  {item.detail && <p className="truncate text-[10px] text-muted-foreground">{item.detail}</p>}
                 </div>
               </div>
             );
@@ -143,11 +143,11 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
         </div> : (
           <div className="space-y-2 px-3 py-3">
             {(hardware?.gpus ?? []).map((gpu) => (
-              <div key={gpu.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5">
+              <div key={gpu.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-md border border-border bg-background px-3 py-2.5">
                 <div className="min-w-0">
                   <p className="truncate text-[12px] font-semibold text-foreground">{gpu.name}</p>
                   <p className="mt-0.5 text-[10px] text-muted-foreground">{gpu.vendor} · System #{gpu.system_index} · Backend #{gpu.backend_device_index}</p>
-                  <p className="mt-1 truncate font-mono text-[9px] text-muted-foreground/60" title={gpu.id}>{gpu.id}</p>
+                  <p className="mt-1 truncate font-mono text-[9px] text-muted-foreground" title={gpu.id}>{gpu.id}</p>
                 </div>
                 <div className="text-right text-[10px] text-muted-foreground">
                   <p>{gpu.vram_mb ? `${(gpu.vram_mb / 1024).toFixed(1)} GB VRAM` : "VRAM unknown"}</p>
@@ -161,13 +161,13 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
             )}
           </div>
         )}
-        <div className="mb-2 rounded-md border border-border/50 bg-muted/20 px-3 py-2">
+        <div className="mb-2 rounded-md border border-border bg-background px-3 py-2">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[11px] font-medium text-foreground/80">
+              <p className="text-[11px] font-medium text-foreground">
                 Detection source: sysinfo + platform GPU probe
               </p>
-              <p className="mt-0.5 text-[10px] leading-4 text-muted-foreground/70">
+              <p className="mt-0.5 text-[10px] leading-4 text-muted-foreground">
                 CPU, RAM, OS, and disks are queried from the OS. GPU/VRAM is best-effort and may be missing on restricted drivers or virtual adapters.
               </p>
               {hardwareError && <p className="mt-1 text-[10px] text-destructive">{hardwareError}</p>}
@@ -208,7 +208,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
       </SettingsSection>
 
         <SettingsSection title="Data & Backup" icon="lucide:archive" description="Export portable data without exposing secrets">
-          <div className="rounded-md border border-border bg-muted/20 px-3 py-3">
+          <div className="rounded-md border border-border bg-background px-3 py-3">
             <p className="text-[12px] font-medium text-foreground">Portable Zen backup</p>
             <p className="mt-1 text-[11px] text-muted-foreground">Chats, messages, and non-secret settings are saved to a verified .zenbackup file. API keys, databases, logs, runtimes, and workspace paths are excluded.</p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -332,7 +332,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
               <AlertDialogTitle>Restore this backup?</AlertDialogTitle>
               <AlertDialogDescription>This adds imported chats and messages while preserving existing data. API keys and workspace paths are not imported. You can restart Zen after restore if desired.</AlertDialogDescription>
             </AlertDialogHeader>
-            {restoreInfo && <div className="space-y-2 rounded-md border border-border bg-muted/20 px-3 py-3 text-[11px] text-muted-foreground"><p className="font-medium text-foreground">{restoreSource?.split(/[\\/]/).pop()}</p><p>Created: {new Date(restoreInfo.createdAt).toLocaleString()}</p><p>Zen {restoreInfo.appVersion} · Format v{restoreInfo.formatVersion} · {Math.round(restoreInfo.bytes / 1024)} KB</p><p>{restoreInfo.chatCount} chats · {restoreInfo.messageCount} messages · {restoreInfo.categories.join(" · ")}</p><p className="text-success">Secrets and workspace paths are excluded.</p></div>}
+            {restoreInfo && <div className="space-y-2 rounded-md border border-border bg-background px-3 py-3 text-[11px] text-muted-foreground"><p className="font-medium text-foreground">{restoreSource?.split(/[\\/]/).pop()}</p><p>Created: {new Date(restoreInfo.createdAt).toLocaleString()}</p><p>Zen {restoreInfo.appVersion} · Format v{restoreInfo.formatVersion} · {Math.round(restoreInfo.bytes / 1024)} KB</p><p>{restoreInfo.chatCount} chats · {restoreInfo.messageCount} messages · {restoreInfo.categories.join(" · ")}</p><p className="text-success">Secrets and workspace paths are excluded.</p></div>}
             {backupBusy && <Progress className="mt-2" />}
             {restoreError && <p className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">{restoreError}</p>}
             <AlertDialogFooter>
@@ -347,7 +347,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
             <AlertDialogFooter><AlertDialogCancel>Not now</AlertDialogCancel><AlertDialogAction onClick={() => void systemApi.relaunchApp()}>Restart Zen</AlertDialogAction></AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-        <div className="rounded-md border border-border bg-muted/20 px-3 py-3">
+        <div className="rounded-md border border-border bg-background px-3 py-3">
           <p className="text-[12px] font-medium text-foreground">Diagnostics</p>
           <p className="mt-1 text-[11px] text-muted-foreground">Export sanitized app status for troubleshooting. API keys, chats, databases, logs, and file paths are excluded.</p>
           <WorkbenchButton

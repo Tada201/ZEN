@@ -18,11 +18,19 @@ import { ProviderGallery } from './providers/ProviderGallery';
 import { ProviderUsagePanel } from './providers/ProviderUsagePanel';
 import { providersApi } from '@/api';
 
-const CATEGORIES = [
-    { id: 'cloud', label: 'Cloud Intelligence', providers: ['opencode', 'mimo', 'openai', 'anthropic', 'google', 'xai', 'mistral', 'groq', 'perplexity', 'deepseek', 'openrouter', 'together', 'kilocode', 'aihubmix'] },
-    { id: 'local', label: 'Local & Private', providers: ['ollama', 'lmstudio', 'nine_router'] },
-    { id: 'custom', label: 'Custom Nodes', providers: [] },
-];
+const CATEGORY_LABELS: Record<string, string> = {
+    cloud: 'Cloud Intelligence',
+    local: 'Local & Private',
+    custom: 'Custom providers',
+};
+
+function statusLabelForDetail(status: string): string {
+    if (status === 'active') return 'Connected';
+    if (status === 'failed') return 'Connection failed';
+    if (status === 'configured') return 'Configured';
+    if (status === 'disabled') return 'Disabled';
+    return 'Not configured';
+}
 
 export const ProvidersSettings = memo(() => {
     const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
@@ -82,34 +90,65 @@ export const ProvidersSettings = memo(() => {
 
     // Filtered categories and providers
     const filteredCategories = useMemo(() => {
-        return CATEGORIES.map(cat => {
-            let providers = [];
-            if (cat.id === 'custom') {
-                providers = customProviders.map(cp => ({
-                    id: cp.id,
-                    label: cp.displayName,
-                    icon: 'lucide:network',
-                    isCustom: true
-                }));
-            } else {
-                providers = providerOrder
-                    .filter(p => cat.providers.includes(p.key) || (cat.id === 'cloud' && !p.isLocal && !cat.providers.includes(p.key)))
-                    .map(p => ({
-                        id: p.key,
-                        label: p.name,
-                        icon: p.icon,
-                        isCustom: false
-                    }));
-            }
+        const runtimeProviders = providerCatalog.map(entry => {
+            const fallback = providerOrder.find(provider => provider.key === entry.id);
+            return {
+                id: entry.id,
+                label: entry.displayName || fallback?.name || entry.id,
+                description: entry.description || fallback?.description,
+                icon: fallback?.icon,
+                category: entry.category || fallback?.category || (entry.isLocal ? 'local' : 'cloud'),
+                isLocal: entry.isLocal,
+                configured: entry.configured,
+                apiKeyPresent: entry.apiKeyPresent,
+                isCustom: entry.category === 'custom',
+            };
+        });
+        const fallbackProviders = providerOrder.map(provider => ({
+            id: provider.key,
+            label: provider.name,
+            description: provider.description,
+            icon: provider.icon,
+            category: provider.category || (provider.isLocal ? 'local' : 'cloud'),
+            isLocal: provider.isLocal,
+            configured: false,
+            apiKeyPresent: false,
+            isCustom: false,
+        }));
+        const catalogProviders = providerCatalog.length > 0 ? runtimeProviders : fallbackProviders;
+        const knownIds = new Set(catalogProviders.map(provider => provider.id));
+        const customOnlyProviders = customProviders
+            .filter(provider => !knownIds.has(provider.id))
+            .map(provider => ({
+                id: provider.id,
+                label: provider.displayName,
+                description: 'OpenAI-compatible custom connection.',
+                icon: 'lucide:network',
+                category: 'custom',
+                isLocal: false,
+                configured: true,
+                apiKeyPresent: Boolean(provider.apiKey),
+                isCustom: true,
+            }));
+        const allProviders = [...catalogProviders, ...customOnlyProviders];
+        const categoryIds = Array.from(new Set(allProviders.map(provider => provider.category)));
+        return categoryIds.map(categoryId => {
+            const providers = allProviders
+                .filter(provider => provider.category === categoryId)
+                .map(({ category: _category, ...provider }) => provider);
 
             const filtered = providers.filter(p => 
                 p.label.toLowerCase().includes(searchQuery.toLowerCase()) || 
                 p.id.toLowerCase().includes(searchQuery.toLowerCase())
             );
 
-            return { ...cat, providers: filtered };
+            return {
+                id: categoryId,
+                label: CATEGORY_LABELS[categoryId] || `${categoryId[0]?.toUpperCase() || ''}${categoryId.slice(1)} Providers`,
+                providers: filtered,
+            };
         }).filter(cat => cat.providers.length > 0);
-    }, [searchQuery, customProviders]);
+    }, [providerCatalog, searchQuery, customProviders]);
 
     const handleProviderClick = useCallback((id: string) => {
         setSelectedProviderId(id);
@@ -171,7 +210,7 @@ export const ProvidersSettings = memo(() => {
                 providerType: 'custom',
                 baseUrl: addForm.baseUrl,
                 apiKey: addForm.apiKey,
-                displayName: addForm.displayName || 'Custom Node',
+                displayName: addForm.displayName || 'Custom provider',
                 headers,
             });
             const ok = models && models.length > 0;
@@ -253,7 +292,7 @@ export const ProvidersSettings = memo(() => {
                                 value={addForm.displayName}
                                 placeholder="e.g., Private Research Cluster"
                                 onChangeText={(val) => setAddForm(prev => ({ ...prev, displayName: val }))}
-                                className="h-11 bg-muted/40 border-border rounded-xl"
+                                className="h-11 bg-background border-border rounded-xl"
                             />
                         </div>
 
@@ -268,7 +307,7 @@ export const ProvidersSettings = memo(() => {
                             <p className="text-[11px] text-muted-foreground">Optional fallback when the endpoint does not expose /models.</p>
                         </div>
 
-                        <details className="rounded-md border border-border/60 bg-muted/10 p-3">
+                        <details className="rounded-md border border-border bg-background p-3">
                             <summary className="cursor-pointer text-[12px] font-medium text-foreground">Advanced headers</summary>
                             <textarea
                                 value={addForm.headersText}
@@ -284,7 +323,7 @@ export const ProvidersSettings = memo(() => {
                                 value={addForm.baseUrl}
                                 placeholder="https://api.domain.ai/v1"
                                 onChangeText={(val) => setAddForm(prev => ({ ...prev, baseUrl: val, validationError: null }))}
-                                className="h-11 font-mono text-xs bg-muted/40 border-border rounded-xl"
+                                className="h-11 font-mono text-xs bg-background border-border rounded-xl"
                             />
                         </div>
 
@@ -299,7 +338,7 @@ export const ProvidersSettings = memo(() => {
                                     value={addForm.apiKey}
                                     placeholder="sk-..."
                                     onChangeText={(val) => setAddForm(prev => ({ ...prev, apiKey: val }))}
-                                    className="h-11 font-mono text-xs bg-muted/40 border-border rounded-xl"
+                                    className="h-11 font-mono text-xs bg-background border-border rounded-xl"
                                 />
                             </form>
                         </div>
@@ -317,7 +356,7 @@ export const ProvidersSettings = memo(() => {
                                     className={cn(addForm.testStatus === 'testing' && "animate-spin")}
                                 />
                                 <span className="text-[10px] font-bold uppercase tracking-wider">
-                                    {addForm.testStatus === 'testing' ? 'Synchronizing Handshake...' : addForm.testStatus === 'success' ? 'Telemetry Established' : 'Connection Refused'}
+                                    {addForm.testStatus === 'testing' ? 'Testing connection…' : addForm.testStatus === 'success' ? 'Connection ready' : 'Connection failed'}
                                 </span>
                             </div>
                         )}
@@ -330,7 +369,7 @@ export const ProvidersSettings = memo(() => {
                         <div className="flex gap-3 mt-10">
                             <WorkbenchButton
                                 variant="secondary"
-                                className="flex-1 h-10 rounded-xl font-bold bg-muted/40 border-border"
+                                className="flex-1 h-10 rounded-xl font-bold bg-background border-border"
                                 onClick={handleAddFormTest}
                                 disabled={!addForm.baseUrl || addForm.testStatus === 'testing'}
                             >
@@ -342,7 +381,7 @@ export const ProvidersSettings = memo(() => {
                                 onClick={handleAddFormRegister}
                                 disabled={!addForm.displayName || !addForm.baseUrl || addForm.testStatus === 'testing'}
                             >
-                                Register Node
+                                Add provider
                             </WorkbenchButton>
                         </div>
                     </div>
@@ -354,7 +393,8 @@ export const ProvidersSettings = memo(() => {
     if (selectedProviderId) {
         const providerParams = allProviderParams[selectedProviderId] || {};
         const providerData = providerOrder.find(p => p.key === selectedProviderId) ||
-                           customProviders.find(cp => cp.id === selectedProviderId);
+                           customProviders.find(cp => cp.id === selectedProviderId) ||
+                           providerCatalog.find(provider => provider.id === selectedProviderId);
 
         if (!providerData) {
             // Selected provider was deleted; return to the gallery instead of
@@ -363,15 +403,17 @@ export const ProvidersSettings = memo(() => {
             return null;
         }
 
-        const isCustom = !providerOrder.find(p => p.key === selectedProviderId);
+        const runtimeProvider = providerCatalog.find(provider => provider.id === selectedProviderId);
+        const isCustom = Boolean(customProviders.find(provider => provider.id === selectedProviderId))
+            || runtimeProvider?.category === 'custom';
         const displayData = isCustom ? {
             name: (providerData as any).displayName ?? (providerData as any).name ?? 'Unknown provider',
             description: 'OpenAI-compatible custom connection.',
             category: 'custom'
         } : {
-            name: (providerData as any).name ?? (providerData as any).displayName ?? 'Unknown provider',
-            description: (providerData as any).description ?? 'Configure this provider connection and model catalog.',
-            category: (providerData as any).category ?? 'cloud'
+            name: (providerData as any).name ?? (providerData as any).displayName ?? runtimeProvider?.displayName ?? 'Unknown provider',
+            description: (providerData as any).description ?? runtimeProvider?.description ?? 'Configure this provider connection and model catalog.',
+            category: (providerData as any).category ?? runtimeProvider?.category ?? 'cloud'
         };
 
         return (
@@ -391,6 +433,24 @@ export const ProvidersSettings = memo(() => {
                     <div className="min-w-0">
                         <h3 className="text-base font-bold tracking-tight text-foreground truncate leading-tight">{displayData.name}</h3>
                         <p className="text-xs text-muted-foreground">{displayData.description}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                            <span className="rounded border border-border px-1.5 py-0.5 uppercase tracking-[0.08em]">
+                                {displayData.category}
+                            </span>
+                            {runtimeProvider?.baseUrl && (
+                                <span className="max-w-[34rem] truncate font-mono" title={runtimeProvider.baseUrl}>
+                                    {runtimeProvider.baseUrl}
+                                </span>
+                            )}
+                            <span className={cn(
+                                "rounded-full px-1.5 py-0.5",
+                                getProviderStatus(selectedProviderId) === 'active' && "bg-success/10 text-success",
+                                getProviderStatus(selectedProviderId) === 'failed' && "bg-destructive/10 text-destructive",
+                                !['active', 'failed'].includes(getProviderStatus(selectedProviderId)) && "bg-muted text-muted-foreground"
+                            )}>
+                                {statusLabelForDetail(getProviderStatus(selectedProviderId))}
+                            </span>
+                        </div>
                     </div>
                 </div>
 
@@ -399,7 +459,7 @@ export const ProvidersSettings = memo(() => {
                         {isCustom ? (
                             <CustomProviderConfig
                                 providerId={selectedProviderId}
-                                displayName={(providerData as any).displayName ?? (providerData as any).name ?? 'Custom Node'}
+                                displayName={(providerData as any).displayName ?? (providerData as any).name ?? 'Custom provider'}
                                 baseUrl={(providerData as any).baseUrl ?? ''}
                                 apiKey={(providerData as any).apiKey}
                                 headers={(providerData as any).headers}
@@ -407,23 +467,27 @@ export const ProvidersSettings = memo(() => {
                             />
                         ) : (
                             <>
-                                {(providerData as any).requiresKey && (
+                                {((providerData as any).requiresKey || runtimeProvider?.requiresKey) && (
                                     <ApiKeyConfig
                                         providerKey={selectedProviderId}
-                                        displayName={(providerData as any).name}
+                                        displayName={displayData.name}
+                                        settingKey={runtimeProvider?.apiKeyKey}
+                                        initialPresent={runtimeProvider?.apiKeyPresent}
                                     />
                                 )}
                                 {(providerData as any).baseUrl || PROVIDER_BASE_URL_MAP[selectedProviderId] ? (
                                     <EndpointConfig
                                         providerKey={selectedProviderId}
-                                        displayName={(providerData as any).name}
+                                        displayName={displayData.name}
+                                        settingKey={runtimeProvider?.baseUrlKey}
+                                        initialValue={runtimeProvider?.baseUrl || (providerData as any).baseUrl || ''}
                                     />
                                 ) : null}
                             </>
                         )}
 
                         {selectedProviderId === 'nine_router' && (
-                            <div className="p-4 rounded-xl border border-border bg-muted/30 flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <div className="flex flex-col gap-4 rounded-xl border border-border bg-background p-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                                 <div className="flex items-center gap-2 border-b border-border pb-2">
                                     <WorkbenchIcon name="lucide:brush" size={14} className="text-primary" />
                                     <span className="text-[11px] font-bold text-foreground uppercase tracking-wider">Image Generation Gateway (9Router)</span>
@@ -434,7 +498,7 @@ export const ProvidersSettings = memo(() => {
                                         <WorkbenchSelect
                                             value={providerParams.imageProvider || ''}
                                             onValueChange={(val) => updateProviderParams('nine_router', { imageProvider: val })}
-                                            className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
+                                            className="h-8 text-[11px] bg-background border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                             options={[
                                                 { value: "", label: "No provider selected (Uses 9Router default)" },
                                                 { value: "openai", label: "OpenAI" },
@@ -452,7 +516,7 @@ export const ProvidersSettings = memo(() => {
                                             <button
                                                 type="button"
                                                 onClick={() => void fetchNineRouterImageModelsAction(true)}
-                                                className="flex items-center gap-1 text-[9px] text-muted-foreground/70 hover:text-muted-foreground transition-colors"
+                                                className="flex items-center gap-1 text-[9px] text-muted-foreground hover:text-foreground transition-colors"
                                                 title="Refresh available models from 9Router"
                                             >
                                                 <WorkbenchIcon name="lucide:refresh-cw" size={10} className={nineRouterImageModelsLoading ? 'animate-spin' : ''} />
@@ -463,7 +527,7 @@ export const ProvidersSettings = memo(() => {
                                             <WorkbenchSelect
                                                 value=""
                                                 onValueChange={() => {}}
-                                                className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
+                                                className="h-8 text-[11px] bg-background border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                                 options={[{ value: "", label: 'Fetching models from 9Router...' }]}
                                             />
                                         ) : nineRouterImageModelsError ? (
@@ -476,14 +540,14 @@ export const ProvidersSettings = memo(() => {
                                                     value={providerParams.imageGenModel || ''}
                                                     placeholder="e.g., openrouter/black-forest-labs/FLUX.1-schnell"
                                                     onChangeText={(val) => updateProviderParams('nine_router', { imageGenModel: val })}
-                                                    className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono px-2"
+                                                    className="h-8 text-[11px] bg-background border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono px-2"
                                                 />
                                             </div>
                                         ) : nineRouterImageModels.length > 0 ? (
                                             <WorkbenchSelect
                                                 value={providerParams.imageGenModel || ''}
                                                 onValueChange={(val) => updateProviderParams('nine_router', { imageGenModel: val })}
-                                                className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
+                                                className="h-8 text-[11px] bg-background border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                                 options={[
                                                     { value: "", label: 'No model selected' },
                                                     ...nineRouterImageModels.map((m) => ({
@@ -498,9 +562,9 @@ export const ProvidersSettings = memo(() => {
                                                     value={providerParams.imageGenModel || ''}
                                                     placeholder="e.g., openrouter/black-forest-labs/FLUX.1-schnell"
                                                     onChangeText={(val) => updateProviderParams('nine_router', { imageGenModel: val })}
-                                                    className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono px-2"
+                                                    className="h-8 text-[11px] bg-background border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono px-2"
                                                 />
-                                                <p className="text-[9px] text-muted-foreground/50">No models discovered. Ensure 9Router is running with image providers configured.</p>
+                                                <p className="text-[9px] text-muted-foreground">No models discovered. Ensure 9Router is running with image providers configured.</p>
                                             </div>
                                         )}
                                     </div>
@@ -509,7 +573,7 @@ export const ProvidersSettings = memo(() => {
                         )}
 
                         {selectedProviderId === 'aihubmix' && (
-                            <div className="p-4 rounded-xl border border-border bg-muted/30 flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <div className="flex flex-col gap-4 rounded-xl border border-border bg-background p-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                                 <div className="flex items-center gap-2 border-b border-border pb-2">
                                     <WorkbenchIcon name="lucide:sliders" size={14} className="text-pink-400" />
                                     <span className="text-[11px] font-bold text-foreground uppercase tracking-wider">Gateway Model Mappings</span>
@@ -520,7 +584,7 @@ export const ProvidersSettings = memo(() => {
                                         <WorkbenchSelect
                                             value={providerParams.embeddingModel || ''}
                                             onValueChange={(val) => updateProviderParams('aihubmix', { embeddingModel: val })}
-                                            className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
+                                            className="h-8 text-[11px] bg-background border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                             options={[
                                                 { value: "", label: "No model selected" },
                                                 { value: "text-embedding-3-small", label: "text-embedding-3-small" },
@@ -534,7 +598,7 @@ export const ProvidersSettings = memo(() => {
                                         <WorkbenchSelect
                                             value={providerParams.imageModel || ''}
                                             onValueChange={(val) => updateProviderParams('aihubmix', { imageModel: val })}
-                                            className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
+                                            className="h-8 text-[11px] bg-background border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                             options={[
                                                 { value: "", label: "No model selected" },
                                                 { value: "dall-e-3", label: "DALL-E 3 (Premium)" },
@@ -549,7 +613,7 @@ export const ProvidersSettings = memo(() => {
                                         <WorkbenchSelect
                                             value={providerParams.sttModel || ''}
                                             onValueChange={(val) => updateProviderParams('aihubmix', { sttModel: val })}
-                                            className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
+                                            className="h-8 text-[11px] bg-background border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                             options={[
                                                 { value: "", label: "No model selected" },
                                                 { value: "whisper-1", label: "Whisper v1" },
@@ -562,7 +626,7 @@ export const ProvidersSettings = memo(() => {
                                         <WorkbenchSelect
                                             value={providerParams.ttsModel || ''}
                                             onValueChange={(val) => updateProviderParams('aihubmix', { ttsModel: val })}
-                                            className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
+                                            className="h-8 text-[11px] bg-background border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                             options={[
                                                 { value: "", label: "No model selected" },
                                                 { value: "tts-1", label: "TTS OpenAI v1" },
@@ -575,7 +639,7 @@ export const ProvidersSettings = memo(() => {
                         )}
 
                         {selectedProviderId === 'nine_router' && (
-                            <div className="p-4 rounded-xl border border-border bg-muted/30 flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <div className="flex flex-col gap-4 rounded-xl border border-border bg-background p-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                                 <div className="flex items-center gap-2 border-b border-border pb-2">
                                     <WorkbenchIcon name="lucide:sliders" size={14} className="text-primary" />
                                     <span className="text-[11px] font-bold text-foreground uppercase tracking-wider">Proxy Capabilities Config</span>
@@ -586,7 +650,7 @@ export const ProvidersSettings = memo(() => {
                                         <WorkbenchSelect
                                             value={providerParams.embeddingModel || ''}
                                             onValueChange={(val) => updateProviderParams('nine_router', { embeddingModel: val })}
-                                            className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
+                                            className="h-8 text-[11px] bg-background border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                             options={[
                                                 { value: "", label: "No model selected" },
                                                 { value: "nomic-embed-text", label: "Nomic Embed Text (Local)" },
@@ -601,7 +665,7 @@ export const ProvidersSettings = memo(() => {
                                             <button
                                                 type="button"
                                                 onClick={() => void fetchNineRouterImageModelsAction(true)}
-                                                className="flex items-center gap-1 text-[9px] text-muted-foreground/70 hover:text-muted-foreground transition-colors"
+                                                className="flex items-center gap-1 text-[9px] text-muted-foreground hover:text-foreground transition-colors"
                                                 title="Refresh available models from 9Router"
                                             >
                                                 <WorkbenchIcon name="lucide:refresh-cw" size={10} className={nineRouterImageModelsLoading ? 'animate-spin' : ''} />
@@ -612,7 +676,7 @@ export const ProvidersSettings = memo(() => {
                                             <WorkbenchSelect
                                                 value=""
                                                 onValueChange={() => {}}
-                                                className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
+                                                className="h-8 text-[11px] bg-background border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                                 options={[{ value: "", label: 'Fetching models from 9Router...' }]}
                                             />
                                         ) : nineRouterImageModelsError ? (
@@ -625,14 +689,14 @@ export const ProvidersSettings = memo(() => {
                                                     value={providerParams.imageGenModel || ''}
                                                     placeholder="e.g., openrouter/black-forest-labs/FLUX.1-schnell"
                                                     onChangeText={(val) => updateProviderParams('nine_router', { imageGenModel: val })}
-                                                    className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono px-2"
+                                                    className="h-8 text-[11px] bg-background border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono px-2"
                                                 />
                                             </div>
                                         ) : nineRouterImageModels.length > 0 ? (
                                             <WorkbenchSelect
                                                 value={providerParams.imageGenModel || ''}
                                                 onValueChange={(val) => updateProviderParams('nine_router', { imageGenModel: val })}
-                                                className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
+                                                    className="h-8 text-[11px] bg-background border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                                 options={[
                                                     { value: "", label: 'No model selected' },
                                                     ...nineRouterImageModels.map((m) => ({
@@ -647,9 +711,9 @@ export const ProvidersSettings = memo(() => {
                                                     value={providerParams.imageGenModel || ''}
                                                     placeholder="e.g., openrouter/black-forest-labs/FLUX.1-schnell"
                                                     onChangeText={(val) => updateProviderParams('nine_router', { imageGenModel: val })}
-                                                    className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono px-2"
+                                                    className="h-8 text-[11px] bg-background border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono px-2"
                                                 />
-                                                <p className="text-[9px] text-muted-foreground/50">No models discovered. Ensure 9Router is running with image providers configured.</p>
+                                                <p className="text-[9px] text-muted-foreground">No models discovered. Ensure 9Router is running with image providers configured.</p>
                                             </div>
                                         )}
                                     </div>
@@ -659,7 +723,7 @@ export const ProvidersSettings = memo(() => {
                                         <WorkbenchSelect
                                             value={providerParams.searchModel || ''}
                                             onValueChange={(val) => updateProviderParams('nine_router', { searchModel: val })}
-                                            className="h-8 text-[11px] bg-muted/40 border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
+                                            className="h-8 text-[11px] bg-background border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
                                             options={[
                                                 { value: "", label: "No model selected" },
                                                 { value: "kr/claude-sonnet-4.5", label: "kr/claude-sonnet-4.5 (Smart Discovery)" },
@@ -682,8 +746,8 @@ export const ProvidersSettings = memo(() => {
                         <ModelConfig
                             providerKey={selectedProviderId}
                             displayName={displayData.name}
-                            requiresKey={(providerData as any).requiresKey || false}
-                            isLocal={(providerData as any).isLocal || false}
+                            requiresKey={Boolean((providerData as any).requiresKey || runtimeProvider?.requiresKey)}
+                            isLocal={Boolean((providerData as any).isLocal || runtimeProvider?.isLocal)}
                             apiKeyPresent={isCustom
                                 ? Boolean((providerData as any).apiKey)
                                 : Boolean((() => {

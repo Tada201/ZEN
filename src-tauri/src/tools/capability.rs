@@ -9,55 +9,49 @@ pub(crate) struct ToolStatusInfo {
 pub(crate) fn tool_status(id: &str) -> ToolStatusInfo {
     match id {
         "draw" => ToolStatusInfo {
-            status: "frontend_missing",
-            detail: "Executor exists, but the drawing:ops frontend listener is not wired.",
-            agent_visible: false,
-            user_configurable: false,
-        },
-        "activate_2d_operational_map" => ToolStatusInfo {
-            status: "frontend_missing",
-            detail: "Executor exists, but the map:activate-operational listener is not wired.",
-            agent_visible: false,
-            user_configurable: false,
-        },
-        "activate_3d_globe" => ToolStatusInfo {
-            status: "frontend_missing",
-            detail: "Executor exists, but the globe:navigate listener is not wired.",
-            agent_visible: false,
-            user_configurable: false,
-        },
-        "calculate_route" => ToolStatusInfo {
             status: "partial",
-            detail:
-                "Route data works, but route visualization is not currently wired to the frontend.",
+            detail: "Canvas drawing is retained, but its agent-to-canvas event bridge remains partial.",
             agent_visible: true,
             user_configurable: true,
         },
-        "create_geofence" => ToolStatusInfo {
-            status: "frontend_missing",
-            detail: "Executor exists, but the map:geofence-created listener is not wired.",
+        // Legacy map adapters remain in source only as future-feature code.
+        // They are intentionally unavailable to agents until one unified world
+        // map tool and its frontend event contract are ready.
+        "activate_2d_operational_map" | "activate_3d_globe" => ToolStatusInfo {
+            status: "disabled_future",
+            detail: "Disabled until the 2D and 3D map tools are replaced by one unified world-map tool.",
             agent_visible: false,
             user_configurable: false,
         },
-        "vector_search" => ToolStatusInfo {
-            status: "requires_config",
-            detail: "Requires indexed documents and a working embedding provider.",
-            agent_visible: true,
-            user_configurable: true,
+        // Retired adapters remain classified here so settings/audit callers
+        // can explain why an old id is unavailable without re-exposing it.
+        "vector_search"
+        | "guidance"
+        | "write_to_memory"
+        | "search_session_memory"
+        | "get_memory_stats" => ToolStatusInfo {
+            status: "disabled_future",
+            detail: "Retired from the agent tool surface; revisit after the deterministic document and session-memory redesign.",
+            agent_visible: false,
+            user_configurable: false,
         },
-        "get_weather"
-        | "get_earthquakes"
-        | "get_military_aircraft"
+        "calculate_route"
         | "geocode_search"
         | "reverse_geocode"
-        | "web_search"
-        | "web_fetch" => ToolStatusInfo {
+        | "get_earthquakes"
+        | "get_military_aircraft" => ToolStatusInfo {
+            status: "disabled_future",
+            detail: "Retired until the separate map and OSINT adapters are replaced by one unified world-map tool.",
+            agent_visible: false,
+            user_configurable: false,
+        },
+        "web_search" | "web_fetch" => ToolStatusInfo {
             status: "external",
             detail: "Requires network access or an external provider/service.",
             agent_visible: true,
             user_configurable: true,
         },
-        "tool_list" | "tool_info" | "tool_exec" | "tools_search" | "guidance" | "list_tools" => {
+        "tool_list" | "tool_info" | "tool_exec" | "tools_search" | "list_tools" => {
             ToolStatusInfo {
                 status: "internal",
                 detail: "Internal discovery/execution protocol tool.",
@@ -94,8 +88,7 @@ pub(crate) fn tool_aliases(id: &str) -> &'static [&'static str] {
             "internet", "news", "current", "latest", "lookup", "tavily", "exa",
         ],
         "web_fetch" => &["url", "page", "website", "open link", "fetch"],
-        "vector_search" => &["rag", "semantic", "knowledge base", "documents"],
-        "list_documents" => &["files", "library", "documents", "uploads"],
+        "list_documents" => &["files", "library", "documents", "uploads", "uploaded files"],
         "read_document_content" => &["read file", "open file", "content viewer"],
         "grep_documents" => &["grep", "find text", "search files", "ripgrep"],
         "write_file" => &["create file", "save file"],
@@ -109,16 +102,9 @@ pub(crate) fn tool_aliases(id: &str) -> &'static [&'static str] {
             "widget",
         ],
         "spawn_agent" => &["delegate", "subagent", "background agent", "task agent"],
-        "handoff_to_agent" => &["switch agent", "transfer agent"],
         "write_todos" => &["todo", "plan", "task list", "checklist"],
         "graph_session" => &["math", "plot", "equation", "graph"],
         "get_system_metrics" => &["hardware", "cpu", "ram", "gpu", "system"],
-        "calculate_route" => &["directions", "routing", "map route"],
-        "geocode_search" => &["location", "coordinates", "address"],
-        "reverse_geocode" => &["coordinates", "address", "location"],
-        "get_weather" => &["forecast", "weather"],
-        "get_earthquakes" => &["seismic", "earthquake", "quake"],
-        "get_military_aircraft" => &["aircraft", "adsb", "radar", "planes"],
         "calculator" => &[
             "math",
             "calc",

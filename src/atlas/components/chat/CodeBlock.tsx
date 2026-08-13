@@ -82,7 +82,7 @@ export function CodeBlock({
   }, [code, normalizedLanguage]);
 
   return (
-    <div className="group/code relative my-3 overflow-hidden rounded-xl border border-border bg-card shadow-md transition-all duration-200">
+    <div className="group/code relative my-2 overflow-hidden rounded-lg border border-border bg-card shadow-sm transition-all duration-200">
       <div className="flex items-center justify-between border-b border-border bg-muted px-3 py-1.5">
         <span className="font-mono text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
           {language ?? "plaintext"}
@@ -121,7 +121,7 @@ export function CodeBlock({
           </Button>
         </div>
       </div>
-      <pre className="max-h-[400px] overflow-y-auto overflow-x-auto p-4 text-[12px] leading-relaxed bg-muted">
+      <pre className="max-h-[400px] overflow-y-auto overflow-x-auto p-3 text-[12px] leading-relaxed bg-muted">
         <code
           className={`font-mono text-foreground language-${normalizedLanguage}`}
           dangerouslySetInnerHTML={{ __html: highlightedHtml }}

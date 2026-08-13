@@ -1,12 +1,5 @@
 import type { StateCreator } from "zustand";
 import type { SettingsState } from "./types";
-import {
-  VOICE_DISPLAY_AGENT_DEFAULT_COMPACT_THRESHOLD,
-  VOICE_DISPLAY_AGENT_DEFAULT_CONTEXT_TOKENS,
-  VOICE_DISPLAY_AGENT_DEFAULT_MAX_TURNS,
-  VOICE_DISPLAY_AGENT_DEFAULT_PROMPT,
-} from "./voiceDefaults";
-
 export interface AudioSlice {
   ttsEnabled: boolean;
   ttsEngine: "piper" | "web" | "system";
@@ -39,13 +32,7 @@ export interface AudioSlice {
   echoCancellation: boolean;
   autoGainControl: boolean;
   vadThreshold: number;
-  voiceDisplayAgentEnabled: boolean;
   voiceDisplayAgentModel: string;
-  voiceDisplayAgentContextTokens: number;
-  voiceDisplayAgentMaxTurns: number;
-  voiceDisplayAgentAutoCompactEnabled: boolean;
-  voiceDisplayAgentCompactThreshold: number;
-  voiceDisplayAgentPrompt: string;
 
   setForceSttWeb: (val: boolean) => void;
   setForceTtsWeb: (val: boolean) => void;
@@ -83,13 +70,7 @@ export const createAudioSlice: StateCreator<SettingsState, [], [], AudioSlice> =
   echoCancellation: true,
   autoGainControl: true,
   vadThreshold: 0.015,
-  voiceDisplayAgentEnabled: true,
   voiceDisplayAgentModel: "",
-  voiceDisplayAgentContextTokens: VOICE_DISPLAY_AGENT_DEFAULT_CONTEXT_TOKENS,
-  voiceDisplayAgentMaxTurns: VOICE_DISPLAY_AGENT_DEFAULT_MAX_TURNS,
-  voiceDisplayAgentAutoCompactEnabled: true,
-  voiceDisplayAgentCompactThreshold: VOICE_DISPLAY_AGENT_DEFAULT_COMPACT_THRESHOLD,
-  voiceDisplayAgentPrompt: VOICE_DISPLAY_AGENT_DEFAULT_PROMPT,
 
   // Direct set() — immediate state update, not staged
   setForceSttWeb: (val: boolean) => {

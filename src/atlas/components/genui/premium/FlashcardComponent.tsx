@@ -34,7 +34,7 @@ export function FlashcardComponent({ data }: { data: FlashcardData }) {
   };
 
   return (
-    <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-lg flex flex-col min-h-[220px] justify-between relative overflow-hidden group">
+    <div className="genui-card-surface w-full max-w-none min-w-0 rounded-2xl border border-border bg-card p-5 shadow-lg flex flex-col min-h-[220px] justify-between relative overflow-hidden group">
       {/* Card Header metadata */}
       <div className="flex items-center justify-between gap-4 mb-3">
         <div className="flex items-center gap-1.5 min-w-0">

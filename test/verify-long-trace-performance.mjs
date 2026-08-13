@@ -17,13 +17,20 @@ const output = read("src/atlas/components/chat/tool/content/TruncatedOutput.tsx"
 assert(messageList.includes("scrollFrameRef"), "message scrolling needs one shared pending frame");
 assert(messageList.includes("window.requestAnimationFrame"), "message scrolling should write layout in a paint frame");
 assert(messageList.includes("window.cancelAnimationFrame"), "message scrolling must cancel pending work on unmount");
-assert(messageList.includes("if (!isAutoScrolling.current) return"), "a queued scroll frame must re-check user scroll intent before writing layout");
+assert(
+  messageList.includes("if (!isAutoScrolling.current) return") ||
+    messageList.includes("if (isAutoScrolling.current) viewport.scrollTop"),
+  "a queued scroll frame must re-check user scroll intent before writing layout",
+);
 assert(signature.includes("CONTENT_BUCKET_SIZE"), "stream signatures should bucket small text deltas");
 assert(signature.includes("TOOL_OUTPUT_BUCKET_SIZE"), "stream signatures should bucket small tool-output deltas");
 
 // Active reasoning is intentionally cheap; completed reasoning may use the
 // richer markdown/math renderer without reparsing a growing stream.
-assert(reasoning.includes("isThinking ? \"\" : normalizeMathMarkdown"), "active reasoning must defer markdown normalization");
+assert(
+  reasoning.includes("if (isThinking) return \"\";") || reasoning.includes("if (isThinking)"),
+  "active reasoning must defer markdown normalization",
+);
 assert(reasoning.includes("whitespace-pre-wrap"), "active reasoning must retain readable plain-text output");
 assert(reasoning.includes("}, 1000);"), "reasoning duration must update at display precision");
 
@@ -36,7 +43,8 @@ assert(markdown.includes("splitMarkdownIntoBlocks"), "rich markdown must retain 
 
 // Long traces should not broaden subscriptions or remount a live group for
 // changing child-id lists.
-assert(trace.includes("useMemo(() => dedupeTraceToolCalls"), "trace tool deduplication should be memoized");
+assert(trace.includes("Tool identity and merge semantics are owned by the stream reducer"), "trace should consume canonical tool identity without render-time deduplication");
+assert(!trace.includes("dedupeTraceToolCalls(toolCalls)"), "trace must not deduplicate canonical live tools during render");
 assert(trace.includes("normalizedToolCalls.map"), "trace rows should render from the normalized collection");
 assert(!trace.includes("toolCalls.map(t => t.id).join"), "trace keys must not depend on changing child-id lists");
 

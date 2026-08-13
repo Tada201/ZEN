@@ -41,7 +41,7 @@ export function PollCard({ data }: { data: PollData }) {
   const hasSelection = Object.values(selected).some(Boolean);
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-lg">
+    <div className="genui-card-surface w-full max-w-none min-w-0 rounded-2xl border border-border bg-card p-5 shadow-lg">
       <div className="flex items-start gap-2.5 mb-3.5">
         <div className="p-1.5 rounded-lg border border-primary bg-primary/10 text-primary shrink-0 mt-0.5">
           <HelpCircle className="w-3.5 h-3.5" />

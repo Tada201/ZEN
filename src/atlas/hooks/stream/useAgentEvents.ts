@@ -10,6 +10,8 @@ import { appendActionStepToMessages } from "./agentActionLedger";
 import { getAgentChatId, rememberAgentChat } from "./agentLifecycleRouting";
 import { getDirectOrActiveStreamingChatId } from "./activeStreamRouting";
 import { persistExecutionCheckpointForToolCall } from "./persistExecutionCheckpoint";
+import { upsertScopedSubagent } from "@/atlas/agentRuntime/scopedSubagentStore";
+import { normalizeScopedSubagentStatus } from "@/atlas/agentRuntime/subagentRuntime";
 import {
   getTaskChatId,
   getTaskPlanChatId,
@@ -24,6 +26,7 @@ import {
   syncAgentSpawnToActivity,
   syncTaskToActivity,
 } from "./agentActivitySync";
+import { focusActiveAgentsPanel, shouldFocusAgentsForSpawn } from "./agentPanelFocus";
 
 const INLINE_ACTION_KINDS = new Set([
   "agent_handoff",
@@ -49,24 +52,32 @@ const INLINE_ACTION_KINDS = new Set([
 const TTFT_PHASE_MARKERS: Record<string, TtftMarker> = {
   persisted: "dbInsert",
   db_persisted: "dbInsert",
-  provider_ready: "providerReady",
   llm_invoked: "llmInvoked",
   agent_invoked: "llmInvoked",
   orchestrator_invoked: "llmInvoked",
 };
 
-function getActiveAssistantIndex(messages: Message[], preferredMessageId?: string): number {
+function getActiveAssistantIndex(
+  messages: Message[],
+  preferredMessageId?: string,
+  parentToolCallId?: string,
+): number {
   if (preferredMessageId) {
     const exact = messages.findIndex((m) => m.id === preferredMessageId);
     if (exact !== -1) return exact;
   }
 
-  return findWritableAssistantIndex(messages);
-}
+  if (parentToolCallId) {
+    const owner = messages.findIndex((message) =>
+      message.role === "assistant" && (
+        message.toolCalls?.some((tool) => tool.id === parentToolCallId)
+        || message.steps?.some((step) => step.type === "tool-call" && step.toolCall?.id === parentToolCallId)
+      ),
+    );
+    if (owner !== -1) return owner;
+  }
 
-function appendActionStep(chatId: string, payload: AgentActionEventPayload, kind: string) {
-  if (!chatId) return;
-  useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => appendActionStepToMessages(prev, chatId, payload, kind));
+  return findWritableAssistantIndex(messages);
 }
 
 function markTtftStatusPhase(chatId: string, phase?: unknown) {
@@ -97,26 +108,51 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
   const workflowChatIdsRef = useRef<Map<string, string>>(new Map());
   const agentChunkBufferRef = useRef<Array<{ chatId: string; payload: AgentActionEventPayload }>>([]);
   const agentChunkFrameRef = useRef<number | null>(null);
+  const lifecycleBufferRef = useRef<Array<{ chatId: string; payload: AgentActionEventPayload; kind: string }>>([]);
+  const lifecycleFrameRef = useRef<number | null>(null);
+
+  const flushLifecycleBuffer = () => {
+    lifecycleFrameRef.current = null;
+    const buffered = lifecycleBufferRef.current;
+    lifecycleBufferRef.current = [];
+    const byChat = new Map<string, Array<{ payload: AgentActionEventPayload; kind: string }>>();
+    buffered.forEach(({ chatId, payload, kind }) => {
+      const items = byChat.get(chatId) || [];
+      items.push({ payload, kind });
+      byChat.set(chatId, items);
+    });
+    byChat.forEach((items, chatId) => {
+      useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) =>
+        items.reduce((messages, item) => appendActionStepToMessages(messages, chatId, item.payload, item.kind), prev),
+      );
+    });
+  };
+
+  const appendLifecycleStep = (chatId: string, payload: AgentActionEventPayload, kind: string) => {
+    if (!chatId) return;
+    lifecycleBufferRef.current.push({ chatId, payload, kind });
+    if (lifecycleFrameRef.current === null) lifecycleFrameRef.current = window.requestAnimationFrame(flushLifecycleBuffer);
+  };
 
   const appendTaskActionStep = (payload: AgentActionEventPayload, kind: string) => {
     const chatId = getTaskChatId(taskChatIdsRef.current, useChatStore.getState(), payload);
     if (!chatId) return;
     rememberTaskChat(taskChatIdsRef.current, payload, chatId);
-    appendActionStep(chatId, { ...payload, chat_id: chatId }, kind);
+    appendLifecycleStep(chatId, { ...payload, chat_id: chatId }, kind);
   };
 
   const appendWorkflowActionStep = (payload: AgentActionEventPayload, kind: string) => {
     const chatId = getWorkflowChatId(workflowChatIdsRef.current, useChatStore.getState(), payload);
     if (!chatId) return;
     rememberWorkflowChat(workflowChatIdsRef.current, payload, chatId);
-    appendActionStep(chatId, { ...payload, chat_id: chatId }, kind);
+    appendLifecycleStep(chatId, { ...payload, chat_id: chatId }, kind);
   };
 
   const appendAgentActionStep = (payload: AgentActionEventPayload, kind: string) => {
     const chatId = getAgentChatId(agentChatIdsRef.current, payload, useChatStore.getState());
     if (!chatId) return;
     rememberAgentChat(agentChatIdsRef.current, payload, chatId);
-    appendActionStep(chatId, { ...payload, chat_id: chatId }, kind);
+    appendLifecycleStep(chatId, { ...payload, chat_id: chatId }, kind);
   };
 
   const flushAgentChunkBuffer = () => {
@@ -174,7 +210,7 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
           } else if (kind.startsWith("workflow_")) {
             rememberWorkflowChat(workflowChatIdsRef.current, payload, chatId);
           }
-          appendActionStep(chatId, { ...payload, chat_id: chatId }, kind);
+          appendLifecycleStep(chatId, { ...payload, chat_id: chatId }, kind);
           return;
         }
 
@@ -304,7 +340,7 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
         const payload = event.payload;
         const chatId = getDirectOrActiveStreamingChatId(useChatStore.getState(), payload);
         if (!chatId) return;
-        appendActionStep(chatId, { ...payload, chat_id: chatId }, "orchestrator_progress");
+        appendLifecycleStep(chatId, { ...payload, chat_id: chatId }, "orchestrator_progress");
       });
 
       const unlistenChatStatus = await listenAppEvent("chat:status", (event) => {
@@ -312,10 +348,30 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
         const chatId = getDirectOrActiveStreamingChatId(useChatStore.getState(), payload);
         if (!chatId) return;
         markTtftStatusPhase(chatId, payload.phase);
-        appendActionStep(chatId, { ...payload, chat_id: chatId } as AgentActionEventPayload, "chat_status");
+        if (payload.phase === "paused" || payload.phase === "resumed") {
+          useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
+            const index = findWritableAssistantIndex(prev, chatId);
+            if (index === -1) return prev;
+            const next = [...prev];
+            next[index] = {
+              ...next[index],
+              status: payload.phase === "paused" ? "paused" : "sending",
+              isThinking: payload.phase !== "paused",
+            };
+            return next;
+          });
+        }
+        appendLifecycleStep(chatId, { ...payload, chat_id: chatId } as AgentActionEventPayload, "chat_status");
       });
 
       const unlistenAgentSpawn = await listenAppEvent("agent:spawn", (event) => {
+        const spawnId = event.payload.spawn_id || event.payload.spawnId;
+        if (shouldFocusAgentsForSpawn(spawnId)) {
+          // Open the canonical Agents panel for new child work, but do not
+          // steal focus when the user is already viewing another right-panel
+          // surface or has explicitly dismissed Agents for this run.
+          focusActiveAgentsPanel();
+        }
         const chatId = getAgentChatId(agentChatIdsRef.current, event.payload, useChatStore.getState());
         if (chatId) syncAgentSpawnToActivity(chatId, event.payload);
         appendAgentActionStep(event.payload, "agent_spawn");
@@ -422,14 +478,14 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
                 ? "in_progress"
                 : "pending");
         });
-        appendActionStep(chatId, { ...payload, chat_id: chatId }, "task_list_updated");
+        appendLifecycleStep(chatId, { ...payload, chat_id: chatId }, "task_list_updated");
       });
 
       const unlistenTaskComplexityAnalyzed = await listenAppEvent("task:complexity_analyzed", (event) => {
         const payload = event.payload;
         const chatId = getTaskPlanChatId(useChatStore.getState(), payload);
         if (!chatId) return;
-        appendActionStep(chatId, { ...payload, chat_id: chatId }, "task_complexity_analyzed");
+        appendLifecycleStep(chatId, { ...payload, chat_id: chatId }, "task_complexity_analyzed");
       });
 
       const unlistenContextDrift = await listenAppEvent("chat:context-drift", (event) => {
@@ -508,69 +564,106 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
         // Keep the stream heartbeat alive while a sub-agent is working.
         resetHeartbeatTimeout?.(chatId);
 
+        const spawnId = payload.spawn_id || payload.spawnId || "";
+        // Backend identity is required for a durable hierarchy. Drop malformed
+        // lifecycle events rather than creating an empty-key step that can
+        // absorb later children or render as an orphan card.
+        if (!spawnId.trim()) return;
+
         useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-          const targetIdx = getActiveAssistantIndex(prev, payload.parent_tool_call_id || payload.parentToolCallId);
+          const targetIdx = getActiveAssistantIndex(
+            prev,
+            undefined,
+            payload.parent_tool_call_id || payload.parentToolCallId,
+          );
           if (targetIdx === -1) return prev;
 
           const next = [...prev];
           const msg = next[targetIdx];
           const steps = msg.steps ? [...msg.steps] : [];
-          const spawnId = payload.spawn_id || payload.spawnId || "";
           const eventId = spawnId;
           const timestamp = payload.timestamp ? new Date(payload.timestamp).getTime() : Date.now();
 
-          // Step.status uses ExecutionEventStatus, which uses "error" instead
-          // of the backend's "failed" for terminal failures. Keep the raw
-          // subagent.status for rendering while storing a normalized value.
-          const normalizedStatus: Step["status"] = payload.status === "failed" ? "error" : payload.status;
-
+          const existingIdx = steps.findIndex((s) => s.eventId === eventId && s.type === "subagent");
+          const existing = existingIdx !== -1 ? steps[existingIdx] : undefined;
+          const normalizedIncomingStatus = normalizeScopedSubagentStatus(payload.status);
+          const incomingStatus = normalizedIncomingStatus === "queued" || normalizedIncomingStatus === "stale"
+            ? "running"
+            : normalizedIncomingStatus;
+          const terminalStatuses = new Set(["completed", "failed", "cancelled", "incomplete", "uncertain"]);
+          const existingStatus = existing?.subagent?.status;
+          const keepExistingTerminal = Boolean(
+            existingStatus && terminalStatuses.has(existingStatus) && terminalStatuses.has(incomingStatus)
+              || existingStatus && terminalStatuses.has(existingStatus) && !terminalStatuses.has(incomingStatus),
+          );
+          const effectiveStatus = keepExistingTerminal ? existingStatus! : incomingStatus;
+          const effectiveNormalizedStatus: Step["status"] = effectiveStatus === "failed"
+            ? "error"
+            : effectiveStatus === "cancelled"
+              ? "cancelled"
+              : effectiveStatus === "incomplete" || effectiveStatus === "uncertain"
+                ? "completed"
+                : effectiveStatus;
+          const incomingChildToolCallIds = payload.child_tool_call_ids || payload.childToolCallIds || [];
           const subagentStep: Step = {
             type: "subagent",
             eventId,
-            status: normalizedStatus,
-            timestamp,
+            status: effectiveNormalizedStatus,
+            timestamp: existing?.subagent?.timestamp ?? timestamp,
             subagent: {
               spawnId,
-              parentToolCallId: payload.parent_tool_call_id || payload.parentToolCallId,
-              agentId: payload.agent_id || "",
-              agentName: payload.agent_name || "",
-              task: payload.task || "",
-              status: payload.status,
-              resultSummary: payload.result_summary || payload.resultSummary,
-              error: payload.error,
-              durationMs: typeof payload.duration_ms === "number" ? payload.duration_ms : payload.durationMs,
-              timestamp,
-              childToolCallIds: payload.child_tool_call_ids || payload.childToolCallIds,
+              parentToolCallId: payload.parent_tool_call_id || payload.parentToolCallId || existing?.subagent?.parentToolCallId,
+              agentId: payload.agent_id || existing?.subagent?.agentId || "",
+              agentName: payload.agent_name || existing?.subagent?.agentName || "",
+              task: payload.task || existing?.subagent?.task || "",
+              status: effectiveStatus,
+              resultSummary: payload.result_summary || payload.resultSummary || existing?.subagent?.resultSummary,
+              error: payload.error || existing?.subagent?.error,
+              durationMs: typeof payload.duration_ms === "number" ? payload.duration_ms : payload.durationMs ?? existing?.subagent?.durationMs,
+              timestamp: existing?.subagent?.timestamp ?? timestamp,
+              childToolCallIds: [...new Set([...(existing?.subagent?.childToolCallIds || []), ...incomingChildToolCallIds])],
             },
           };
 
-          const existingIdx = steps.findIndex((s) => s.eventId === eventId && s.type === "subagent");
           if (existingIdx !== -1) {
-            const existing = steps[existingIdx];
-            steps[existingIdx] = {
-              ...existing,
-              status: normalizedStatus,
-              subagent: {
-                ...existing.subagent,
-                ...subagentStep.subagent,
-                // Prefer newer terminal fields; keep existing task/agent.
-                status: subagentStep.subagent!.status,
-                spawnId: subagentStep.subagent?.spawnId || existing.subagent?.spawnId || spawnId,
-                agentId: subagentStep.subagent?.agentId || existing.subagent?.agentId || "",
-                task: subagentStep.subagent?.task || existing.subagent?.task || "",
-                agentName: subagentStep.subagent?.agentName || existing.subagent?.agentName || "",
-              },
-            };
+            steps[existingIdx] = subagentStep;
           } else {
-            steps.push({ ...subagentStep, status: normalizedStatus });
+            steps.push(subagentStep);
           }
 
           next[targetIdx] = { ...msg, steps };
           return next;
         });
+
+        // Side-effect: update the scoped subagent runtime store AFTER the
+        // Zustand reducer completes to avoid re-entrancy/render storms.
+        upsertScopedSubagent(chatId, {
+          spawnId,
+          parentToolCallId: payload.parent_tool_call_id || payload.parentToolCallId,
+          agentId: payload.agent_id || "",
+          agentName: payload.agent_name || "",
+          task: payload.task || "",
+          status: payload.status,
+          resultSummary: payload.result_summary || payload.resultSummary,
+          error: payload.error,
+          durationMs: typeof payload.duration_ms === "number" ? payload.duration_ms : payload.durationMs,
+          timestamp: (() => {
+            const timestamp = payload.timestamp ? new Date(payload.timestamp).getTime() : Date.now();
+            return timestamp;
+          })(),
+          childToolCallIds: payload.child_tool_call_ids || payload.childToolCallIds || [],
+        });
+
         persistExecutionCheckpointForToolCall({
           chatId,
           toolCallId: payload.parent_tool_call_id || payload.parentToolCallId,
+          traceStatus: payload.status === "completed"
+            ? "completed"
+            : payload.status === "failed"
+              ? "failed"
+              : payload.status === "cancelled"
+                ? "cancelled"
+                : "running",
         });
       });
 

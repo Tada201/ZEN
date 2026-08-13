@@ -1,3 +1,6 @@
+//! Retired routing/geocoding adapters kept source-only for the future unified
+//! `world_map` tool. They are intentionally not registered or agent-visible.
+
 use crate::agent::tools::AgentTool;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;

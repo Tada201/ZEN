@@ -3,6 +3,7 @@ export type DisclosureLifecycleStatus =
   | "awaiting_approval"
   | "error"
   | "failed"
+  | "interrupted"
   | "completed"
   | "cancelled";
 
@@ -16,7 +17,8 @@ export function isDisclosureAttentionState(status: DisclosureLifecycleStatus): b
   return status === "running"
     || status === "awaiting_approval"
     || status === "error"
-    || status === "failed";
+    || status === "failed"
+    || status === "interrupted";
 }
 
 export function isDisclosureTerminalState(status: DisclosureLifecycleStatus): boolean {

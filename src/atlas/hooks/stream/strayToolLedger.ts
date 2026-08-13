@@ -8,27 +8,71 @@ import type { Message, ToolCall } from "../../components/chat/types";
  *
  * The assistant may already be finalized (`"sent"` / `"cancelled"`) by the
  * time this runs in the `chat:done` handler — the finalize callback runs
- * before the reconcile call. The status filter therefore accepts any
- * non-failed assistant state so the optimistic → backend ID remapping still
- * works after finalization.
+ * before the reconcile call. Failed assistants stay on their dedicated error
+ * path; only a live or successfully finalized assistant is remapped.
  */
 const RECONCILABLE_ASSISTANT_STATUSES = new Set(["sending", "sent", "cancelled"]);
+const pendingRecoveryTools = new Map<string, ToolCall[]>();
+const MAX_PENDING_RECOVERY_TOOLS = 256;
+
+/**
+ * Keep late tool events out of the message list until the backend assistant
+ * owner is available. This replaces new-run system `tool-ledger-*` messages;
+ * legacy ledger rows are still accepted by the reconciliation adapter below.
+ */
+export function rememberRecoveryTool(messageId: string | undefined, tool: ToolCall) {
+  if (!messageId || !tool.id) return;
+  const existing = pendingRecoveryTools.get(messageId) || [];
+  const index = existing.findIndex((candidate) => candidate.id === tool.id);
+  if (index === -1) existing.push(tool);
+  else existing[index] = { ...existing[index], ...tool, input: tool.input || existing[index].input, output: tool.output || existing[index].output };
+  pendingRecoveryTools.set(messageId, existing);
+
+  let total = 0;
+  for (const [key, tools] of pendingRecoveryTools) {
+    total += tools.length;
+    if (total <= MAX_PENDING_RECOVERY_TOOLS) break;
+    pendingRecoveryTools.delete(key);
+  }
+}
+
+export function takeRecoveryTools(messageIds: string[]) {
+  const tools: ToolCall[] = [];
+  for (const messageId of new Set(messageIds.filter(Boolean))) {
+    tools.push(...(pendingRecoveryTools.get(messageId) || []));
+    pendingRecoveryTools.delete(messageId);
+  }
+  return tools;
+}
+
+export function clearRecoveryTools() {
+  pendingRecoveryTools.clear();
+}
 
 export function reconcileStrayToolLedgers(
   prev: Message[],
   assistantIdBeforeFinalize: string,
   backendAssistantId: string,
 ): Message[] {
+  const candidateAssistantIds = new Set([assistantIdBeforeFinalize, backendAssistantId]);
   const idx = prev.findIndex(
-    (m) => m.id === assistantIdBeforeFinalize && m.role === "assistant" && typeof m.status === "string" && RECONCILABLE_ASSISTANT_STATUSES.has(m.status),
+    (m) => candidateAssistantIds.has(m.id)
+      && m.role === "assistant"
+      && typeof m.status === "string"
+      && RECONCILABLE_ASSISTANT_STATUSES.has(m.status),
   );
   if (idx === -1) return prev;
 
-  const strayTools: ToolCall[] = [];
+  const strayTools: ToolCall[] = takeRecoveryTools([...candidateAssistantIds]);
   const remaining = prev.filter((m) => {
     if (m.role === "system" && m.id.startsWith("tool-ledger-") && m.status === "sent") {
+      // Stray tools carry the backend assistant message id (allocated in the
+      // runner before the optimistic placeholder is remapped), so match both
+      // the pre-finalize optimistic id AND the real backend id. Matching only
+      // the optimistic id silently dropped every backend-id-bearing tool,
+      // leaving orphan ledgers that never persisted and vanished on reload.
       const belongsToThisAssistant = (m.toolCalls || []).some(
-        (t) => !t.messageId || t.messageId === assistantIdBeforeFinalize,
+        (t) => !t.messageId || candidateAssistantIds.has(t.messageId),
       );
       if (belongsToThisAssistant) {
         strayTools.push(...(m.toolCalls || []));
@@ -40,7 +84,10 @@ export function reconcileStrayToolLedgers(
 
   const next = [...remaining];
   const newIdx = next.findIndex(
-    (m) => m.id === assistantIdBeforeFinalize && m.role === "assistant" && typeof m.status === "string" && RECONCILABLE_ASSISTANT_STATUSES.has(m.status),
+    (m) => candidateAssistantIds.has(m.id)
+      && m.role === "assistant"
+      && typeof m.status === "string"
+      && RECONCILABLE_ASSISTANT_STATUSES.has(m.status),
   );
   if (newIdx === -1) return prev;
 

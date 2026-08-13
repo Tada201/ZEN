@@ -4,6 +4,7 @@ import { AppDialog } from "@/components/ui/AppDialog";
 import { chatApi } from "@/api/chatApi";
 import { toast } from "sonner";
 import { toAssetUrl } from "@/lib/utils/assetUrl";
+import { presentExecutionError } from "@/atlas/agentRuntime/executionError";
 
 /**
  * MarkdownErrorBoundary - Catches rendering errors in markdown blocks
@@ -11,28 +12,31 @@ import { toAssetUrl } from "@/lib/utils/assetUrl";
  */
 export class MarkdownErrorBoundary extends Component<
   { children: ReactNode; content?: string },
-  { hasError: boolean }
+  { hasError: boolean; error?: Error }
 > {
   constructor(props: { children: ReactNode; content?: string }) {
     super(props);
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
   }
 
   render() {
     if (this.state.hasError) {
+      const presentation = presentExecutionError(this.state.error || "Markdown renderer failed", { context: "renderer", recoverable: true });
       return (
-        <div className="my-4 p-4 rounded-xl border border-rose-500/20 bg-rose-500/5">
-          <div className="flex items-center gap-2 text-destructive text-[10px] font-mono uppercase tracking-widest mb-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-            Markdown Render Error
+        <div className="my-4 rounded-xl border border-destructive bg-card p-3" role="alert">
+          <div className="flex items-center gap-2 text-destructive text-[11px] font-medium mb-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-destructive" aria-hidden="true" />
+            {presentation.title}
           </div>
-          <pre className="text-[11px] font-mono text-destructive whitespace-pre-wrap overflow-auto max-h-32">
-            {this.props.content || "Content could not be rendered"}
-          </pre>
+          <div className="text-[12px] leading-relaxed text-foreground">{presentation.summary}</div>
+          <details className="mt-2 rounded bg-muted px-2 py-1">
+            <summary className="cursor-pointer text-[10px] uppercase tracking-wide text-muted-foreground">Technical details</summary>
+            <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] text-muted-foreground">{presentation.technicalDetails}</pre>
+          </details>
         </div>
       );
     }
@@ -64,12 +68,16 @@ export function parseYoutubeId(url: string): string | null {
   return match ? match[1] : null;
 }
 
-export function YoutubePreview({ videoId }: { videoId: string }) {
+export function YoutubePreview({ videoId, onOpenLink }: { videoId: string; onOpenLink?: (url: string) => boolean }) {
   return (
     <a
       href={`https://www.youtube.com/watch?v=${videoId}`}
       target="_blank"
       rel="noreferrer"
+      onClick={(event) => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        if (onOpenLink?.(`https://www.youtube.com/watch?v=${videoId}`)) event.preventDefault();
+      }}
       className="block my-4 group relative overflow-hidden rounded-xl border border-border/30 bg-card/90 hover:border-primary/30 transition-all duration-200 max-w-[480px]"
     >
       <div className="relative aspect-video bg-background/90 overflow-hidden">
@@ -238,10 +246,15 @@ export function extractImagesFromChildren(children: React.ReactNode): Array<{ sr
 }
 
 export function stripCodeFence(content: string): string {
-  return content
-    .replace(/^```[^\n]*\n/, '')
-    .replace(/\n```$/, '')
-    .replace(/\n$/, '');
+  const opening = content.match(/^ {0,3}(`{3,}|~{3,})[^\n]*\n/);
+  if (!opening) return content.replace(/\n$/, "");
+
+  const body = content.slice(opening[0].length);
+  const closing = body.match(/\n {0,3}(`{3,}|~{3,})[ \t]*$/);
+  if (closing && closing[1][0] === opening[1][0] && closing[1].length >= opening[1].length) {
+    return body.slice(0, closing.index);
+  }
+  return body.replace(/\n$/, "");
 }
 
 // Helper to remove the [!TYPE] text from the React element tree

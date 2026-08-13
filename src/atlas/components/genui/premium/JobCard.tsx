@@ -2,7 +2,7 @@ import { MapPin, DollarSign, Calendar } from 'lucide-react';
 
 export function JobCard({ data }: { data: any }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-lg max-w-md">
+    <div className="genui-card-surface w-full max-w-none min-w-0 rounded-2xl border border-border bg-card p-5 shadow-lg">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-muted border border-border flex items-center justify-center text-primary-foreground font-black text-lg font-sans">

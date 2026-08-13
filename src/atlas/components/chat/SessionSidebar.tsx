@@ -891,7 +891,7 @@ export const SessionSidebar = memo(({
               }}
             >
               <Settings2 size={12} />
-              <span className="text-xs font-medium text-muted-foreground">Config</span>
+              <span className="text-xs font-medium text-muted-foreground">Settings</span>
             </Button>
           </div>
         </div>

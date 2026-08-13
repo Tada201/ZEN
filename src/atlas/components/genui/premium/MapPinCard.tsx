@@ -23,7 +23,7 @@ export function MapPinCard({ data }: { data: MapPinData }) {
   const phone = data.phone;
 
   return (
-    <div className="w-full max-w-sm rounded-2xl border border-border bg-card overflow-hidden shadow-lg">
+    <div className="genui-card-surface w-full max-w-none min-w-0 rounded-2xl border border-border bg-card overflow-hidden shadow-lg">
       <div className="w-full h-36 relative border-b border-border">
         <MapComponent
           latitude={lat}

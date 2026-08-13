@@ -1,6 +1,8 @@
 import type { Model } from "../../ModelSelector";
 import type { Attachment } from "../types";
 
+export type ComposerLayoutMode = "default" | "welcome" | "sidebar" | "narrow";
+
 export interface PremiumChatInputProps {
   className?: string;
   /** "welcome" selects a compact, attached composer for the workspace
@@ -24,6 +26,9 @@ export interface PremiumChatInputProps {
     provider?: string;
   }) => void;
   onAbort?: () => void;
+  onPause?: () => void;
+  onResume?: () => void;
+  isPaused?: boolean;
   isLoading?: boolean;
   models: Model[];
   selectedModelId: string;
@@ -31,7 +36,6 @@ export interface PremiumChatInputProps {
   onSelectModel: (id: string, provider: string) => void;
   onOpenModelSelector?: () => void;
   onOpenSkills?: () => void;
-  onOpenSettings?: () => void;
   activeChatId?: string | null;
   /** Archived transcripts stay readable but cannot be edited or resumed. */
   readOnly?: boolean;

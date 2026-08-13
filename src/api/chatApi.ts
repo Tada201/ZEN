@@ -41,6 +41,43 @@ export interface BackendMessage {
   attachments?: string;
 }
 
+export interface BackendExecutionNode {
+  id: string;
+  traceId: string;
+  runId: string;
+  messageId: string;
+  parentId?: string | null;
+  agentId?: string | null;
+  agentName?: string | null;
+  sequence: number;
+  kind: string;
+  phase?: string | null;
+  startedAt?: number | null;
+  completedAt?: number | null;
+  durationMs?: number | null;
+  summary: string;
+  target?: string | null;
+  resultSummary?: string | null;
+  outputPreview?: string | null;
+  safeDetails?: Record<string, unknown>;
+  retryCount?: number | null;
+}
+
+export interface BackendExecutionTrace {
+  traceId: string;
+  chatId: string;
+  messageId: string;
+  traceVersion: number;
+  status: "running" | "completed" | "cancelled" | "failed" | "interrupted" | "checkpoint" | string;
+  startedAt?: number | null;
+  completedAt?: number | null;
+  updatedAt: string;
+  eventCount: number;
+  nodes: BackendExecutionNode[];
+  /** Compatibility projection for legacy history consumers. */
+  steps: unknown[];
+}
+
 export interface BackendChatTag {
   id: string;
   chatId: string;
@@ -118,8 +155,22 @@ export const chatApi = {
   listMessages: (chatId: string | null) => callCommand<BackendMessage[]>("get_messages", { chatId }),
   listMessagesPage: (chatId: string, limit?: number, offset?: number) =>
     callCommand<PaginatedResponse<BackendMessage>>("get_messages_page", { chatId, limit, offset }),
-  updateMessageSteps: (chatId: string, messageId: string, stepsJson: string) =>
-    callCommand<void>("update_message_steps", { chatId, messageId, stepsJson }),
+  updateMessageSteps: (
+    chatId: string,
+    messageId: string,
+    stepsJson: string,
+    traceStatus?: "running" | "completed" | "cancelled" | "failed" | "interrupted" | "checkpoint",
+  ) => callCommand<void>("update_message_steps", { chatId, messageId, stepsJson, traceStatus }),
+  upsertExecutionTrace: (
+    chatId: string,
+    messageId: string,
+    traceJson: string,
+    traceStatus?: "running" | "completed" | "cancelled" | "failed" | "interrupted" | "checkpoint",
+  ) => callCommand<BackendExecutionTrace>("upsert_execution_trace", { chatId, messageId, traceJson, traceStatus }),
+  listExecutionTraces: (chatId: string) =>
+    callCommand<BackendExecutionTrace[]>("list_execution_traces", { chatId }),
+  getExecutionTrace: (chatId: string, messageId: string) =>
+    callCommand<BackendExecutionTrace | null>("get_execution_trace", { chatId, messageId }),
   searchChats: (query: string) => callCommand<SearchResult[]>("search_chats", { query }),
   exportChat: (chatId: string) => callCommand<unknown>("export_chat", { chatId }),
   importChat: (sourcePath: string) => callCommand<unknown>("import_chat", { sourcePath }),
@@ -157,7 +208,11 @@ export const chatApi = {
       generativeUi,
     });
   },
-  abortChat: (chatId: string) => callCommand<void>("abort_chat", { chatId }),
+  abortChat: (chatId: string) => callCommand<boolean>("abort_chat", { chatId }),
+  cancelSubagent: (chatId: string, spawnId: string) =>
+    callCommand<boolean>("cancel_subagent", { chatId, spawnId }),
+  pauseChat: (chatId: string) => callCommand<boolean>("pause_chat", { chatId }),
+  continueChat: (chatId: string) => callCommand<boolean>("continue_chat", { chatId }),
   exportImageToWorkspace: (imageUriOrFilename: string) => {
     let filename = imageUriOrFilename;
     if (imageUriOrFilename.includes("/")) {

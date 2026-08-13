@@ -75,7 +75,7 @@ export function ZenTitleBar({ children }: ZenTitleBarProps = {}) {
   return (
     <header
       data-tauri-drag-region="deep"
-      className="zen-titlebar flex h-11 shrink-0 items-center border-b border-border bg-card text-foreground select-none"
+      className="zen-titlebar relative z-[100] flex h-11 shrink-0 items-center border-b border-border bg-card text-foreground select-none"
     >
       {/* The app mark doubles as the sidebar toggle. Hover or keyboard focus
           swaps it for the panel glyph so the action is discoverable without

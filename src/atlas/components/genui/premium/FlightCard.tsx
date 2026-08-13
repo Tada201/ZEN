@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 
 export function FlightCard({ data }: { data: any }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-lg max-w-md">
+    <div className="genui-card-surface w-full max-w-none min-w-0 rounded-2xl border border-border bg-card p-5 shadow-lg">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Plane className="text-primary h-4 w-4 rotate-45" />

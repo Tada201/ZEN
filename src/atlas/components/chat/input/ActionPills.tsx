@@ -4,14 +4,6 @@ import { Paperclip, FileText, X } from 'lucide-react';
 import { motionDurations, motionEasings, useReducedMotion } from '@/lib/motion';
 
 interface ActionPillsProps {
-  generativeUI?: boolean;
-  setGenerativeUI?: (val: boolean) => void;
-  isThinking?: boolean;
-  setIsThinking?: (val: boolean) => void;
-  isDeepResearch?: boolean;
-  setIsDeepResearch?: (val: boolean) => void;
-  isWebSearch?: boolean;
-  setIsWebSearch?: (val: boolean) => void;
   selectedFiles: File[];
   removeFile: (index: number) => void;
 }
@@ -64,7 +56,7 @@ export const ActionPills = memo(({
   }
 
   return (
-    <motion.div layout={!reducedMotion} className="flex flex-wrap gap-2 px-3 pt-3">
+    <motion.div className="flex min-w-0 flex-nowrap gap-1.5 overflow-x-auto no-scrollbar px-2 pt-2">
       <AnimatePresence initial={false}>
       {selectedFiles.map((file, i) => {
         const isImg = isImageFile(file);
@@ -73,16 +65,15 @@ export const ActionPills = memo(({
 
         return (
           <motion.div
-            layout={!reducedMotion}
-            initial={reducedMotion ? false : { opacity: 0, y: -4, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={reducedMotion ? undefined : { opacity: 0, y: -4, scale: 0.96 }}
+            initial={reducedMotion ? false : { opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reducedMotion ? undefined : { opacity: 0, y: -4 }}
             transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
             key={`${file.name}:${file.lastModified}:${i}`}
-            className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 bg-muted/10 dark:bg-muted/50 border border-border/10 dark:border-border rounded-lg text-[12px] font-medium text-foreground/80 dark:text-foreground group hover:border-border/20 dark:hover:border-border transition-all duration-200"
+            className="composer-chip shrink-0 pl-1.5 pr-2.5 py-1 text-[12px] font-medium group transition-colors"
           >
             {isImg && imgUrl ? (
-              <div className="relative w-6 h-6 rounded overflow-hidden border border-border/20 dark:border-border shrink-0 bg-muted dark:bg-muted">
+              <div className="relative h-6 w-6 shrink-0 overflow-hidden rounded border border-border bg-muted">
                 <img 
                   src={imgUrl} 
                   alt={file.name} 
@@ -90,7 +81,7 @@ export const ActionPills = memo(({
                 />
               </div>
             ) : (
-              <div className="w-6 h-6 rounded flex items-center justify-center bg-muted/10 dark:bg-muted/50 shrink-0">
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-muted">
                 {isTxt ? (
                   <FileText className="w-3.5 h-3.5 text-primary dark:text-primary" />
                 ) : (
@@ -108,10 +99,10 @@ export const ActionPills = memo(({
 
             <button 
               onClick={() => removeFile(i)} 
-              className="hover:bg-muted/20 dark:hover:bg-muted p-0.5 rounded-full transition-colors ml-1"
+              className="composer-control composer-control--icon ml-0.5 rounded-md p-0.5"
               aria-label={`Remove ${file.name}`}
             >
-              <X className="w-3 h-3 text-muted-foreground dark:text-muted-foreground hover:text-foreground/80 dark:hover:text-foreground" />
+              <X className="h-3 w-3 text-muted-foreground" />
             </button>
           </motion.div>
         );

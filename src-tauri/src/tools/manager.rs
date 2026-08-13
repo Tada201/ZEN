@@ -721,32 +721,20 @@ fn id_to_display_name(id: &str) -> String {
         "run_command" | "terminal" => "Run Command".into(),
         "web_search" => "Web Search".into(),
         "web_fetch" => "Web Fetch".into(),
-        "vector_search" => "Vector Search".into(),
         "list_documents" => "List Documents".into(),
         "read_document_content" => "Read Document".into(),
         "grep_documents" => "Grep Documents".into(),
         "write_file" | "file_write" => "Write File".into(),
         "edit_file" => "Edit File".into(),
-        "get_weather" => "Weather".into(),
-        "get_earthquakes" => "Earthquakes".into(),
-        "get_military_aircraft" => "Aircraft Radar".into(),
         "calculator" => "Calculator".into(),
         "get_system_metrics" | "system_metrics" => "System Metrics".into(),
-        "calculate_route" => "Routing".into(),
-        "geocode_search" => "Geocode Search".into(),
-        "reverse_geocode" => "Reverse Geocode".into(),
-        "create_geofence" => "Geofence".into(),
-        "activate_2d_operational_map" => "2D Operational Map".into(),
+        // Legacy map/geofence tools are intentionally absent from the catalog.
         "spawn_agent" => "Spawn Agent".into(),
-        "delegate_to_agent" => "Delegate to Agent".into(),
         "write_todos" => "Task Checklist".into(),
-        "write_to_memory" => "Write Memory".into(),
-        "search_session_memory" => "Search Memory".into(),
-        "get_memory_stats" => "Memory Stats".into(),
         "draw" => "Drawing Canvas".into(),
         "generate_image" => "Image Generation".into(),
         "graph_session" => "Graph Session".into(),
-        "tool_list" | "tool_info" | "tool_exec" | "tools_search" | "guidance" | "list_tools" => {
+        "tool_list" | "tool_info" | "tool_exec" | "tools_search" | "list_tools" => {
             String::new()
         } // meta-tools: hidden from UI
         _ => id.to_string(),
@@ -757,25 +745,14 @@ fn id_to_icon(id: &str) -> String {
     match id {
         "run_command" | "terminal" => "lucide:terminal",
         "web_search" | "web_fetch" => "lucide:globe",
-        "vector_search" => "lucide:search",
         "list_documents" | "read_document_content" => "lucide:file-text",
         "grep_documents" => "lucide:file-search",
         "write_file" | "edit_file" | "file_write" => "lucide:file-signature",
-        "get_weather" => "lucide:cloud",
-        "get_earthquakes" => "lucide:activity",
-        "get_military_aircraft" => "lucide:radar",
         "calculator" => "lucide:calculator",
         "get_system_metrics" | "system_metrics" => "lucide:cpu",
-        "calculate_route" => "lucide:route",
-        "geocode_search" | "reverse_geocode" => "lucide:map-pin",
-        "create_geofence" => "lucide:map-pin",
-        "activate_2d_operational_map" => "lucide:map",
         "spawn_agent" => "lucide:bot",
-        "delegate_to_agent" => "lucide:user-plus",
         "write_todos" => "lucide:list-checks",
-        "write_to_memory" | "search_session_memory" | "get_memory_stats" | "graph_session" => {
-            "lucide:database"
-        }
+        "graph_session" => "lucide:database",
         "draw" => "lucide:pen",
         "generate_image" => "lucide:image",
         _ => "lucide:cpu",
@@ -834,27 +811,60 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tool_list_hides_deprecated_delegate_alias() {
+    async fn tool_list_exposes_only_canonical_spawn_tool() {
         let manager = manager_for_tests();
         let tools = manager.list_allowed(&[]).await;
 
         assert!(tools.iter().any(|t| t.id == "spawn_agent"));
-        assert!(tools.iter().any(|t| t.id == "handoff_to_agent"));
+        assert!(!tools.iter().any(|t| t.id == "handoff_to_agent"));
         assert!(!tools.iter().any(|t| t.id == "delegate_to_agent"));
     }
 
     #[tokio::test]
-    async fn tool_list_hides_frontend_missing_tools() {
+    async fn tool_list_hides_disabled_future_tools() {
         let manager = manager_for_tests();
         let tools = manager.list_allowed(&[]).await;
 
-        assert!(!tools.iter().any(|t| t.id == "draw"));
+        assert!(tools.iter().any(|t| t.id == "draw"));
         assert!(!tools.iter().any(|t| t.id == "activate_2d_operational_map"));
+        assert!(!tools.iter().any(|t| t.id == "activate_3d_globe"));
+        assert!(!tools.iter().any(|t| t.id == "create_geofence"));
+        assert!(!tools.iter().any(|t| t.id == "get_weather"));
         assert!(tools.iter().any(|t| t.id == "manage_board"));
     }
 
     #[tokio::test]
-    async fn metadata_marks_frontend_missing_tools() {
+    async fn retired_tools_are_not_discoverable() {
+        let manager = manager_for_tests();
+        let tools = manager.list_allowed(&[]).await;
+
+        for retired in [
+            "vector_search",
+            "guidance",
+            "write_to_memory",
+            "search_session_memory",
+            "get_memory_stats",
+            "calculate_route",
+            "geocode_search",
+            "reverse_geocode",
+            "get_earthquakes",
+            "get_military_aircraft",
+        ] {
+            assert!(
+                !tools.iter().any(|tool| tool.id == retired),
+                "retired tool '{}' must not be discoverable",
+                retired
+            );
+        }
+
+        assert!(tools.iter().any(|tool| tool.id == "list_documents"));
+        assert!(tools.iter().any(|tool| tool.id == "read_document_content"));
+        assert!(tools.iter().any(|tool| tool.id == "grep_documents"));
+        assert!(!tools.iter().any(|tool| tool.id == "vector_search"));
+    }
+
+    #[tokio::test]
+    async fn metadata_keeps_draw_available_for_audit() {
         let manager = manager_for_tests();
         let tools = manager.list_metadata().await;
         let draw = tools
@@ -862,8 +872,8 @@ mod tests {
             .find(|t| t.id == "draw")
             .expect("draw metadata should still be visible for audit");
 
-        assert_eq!(draw.status, "frontend_missing");
-        assert!(!draw.user_configurable);
+        assert_eq!(draw.status, "partial");
+        assert!(draw.user_configurable);
     }
 
     #[tokio::test]

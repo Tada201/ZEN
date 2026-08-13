@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useId } from "react";
 import { Globe, MapPin, ChevronLeft, ChevronRight, Grid, ListCollapse, Layers } from "lucide-react";
 import * as SunCalc from "suncalc";
 import { CardShell, CardTitle } from "./CardShell";
@@ -20,6 +20,7 @@ interface WorldTimeCardData {
 export function WorldTimeCard({ data }: { data: WorldTimeCardData }) {
   const title = data.title || "World Clock Monitor";
   const clocks = useMemo(() => data.clocks || [], [data.clocks]);
+  const mapId = useId().replace(/:/g, "");
   const [activeIndex, setActiveIndex] = useState(0);
   const [isListExpanded, setIsListExpanded] = useState(false);
   const [showTimezoneOverlay, setShowTimezoneOverlay] = useState(false);
@@ -190,7 +191,7 @@ export function WorldTimeCard({ data }: { data: WorldTimeCardData }) {
   }, []);
 
   return (
-    <CardShell motion={false} className="relative overflow-hidden border-border bg-muted p-0 flex-col gap-0">
+    <CardShell motion={false} className="relative flex flex-col overflow-hidden border-border bg-muted p-0 gap-0">
       <style>{`
         @keyframes selection-sonar {
           0% { transform: scale(0.6); opacity: 0.9; }
@@ -208,10 +209,10 @@ export function WorldTimeCard({ data }: { data: WorldTimeCardData }) {
       <div className={`absolute inset-0 transition-colors duration-1000 ${activeClock.isNight ? 'time-gradient-night' : 'time-gradient-day'}`} />
 
       {/* Left-Right side-by-side split board */}
-      <div className="relative z-10 grid-cols-1 md:grid-cols-12 items-stretch min-h-[340px]">
+      <div className="relative z-10 grid grid-cols-1 md:grid-cols-12 items-stretch min-h-[252px]">
         
         {/* Left Column (25% width / col-span-3) - Analog Clock Face Focus + Controls */}
-        <div className="md:col-span-3 flex-col justify-between p-5 relative overflow-hidden border-r border-border">
+        <div className="md:col-span-3 flex flex-col justify-between p-4 relative overflow-hidden border-b md:border-b-0 md:border-r border-border">
           {/* Header Title */}
           <div className="flex items-center gap-2 border-b border-border pb-3 mb-2">
             <Globe className="w-4 h-4 text-primary" />
@@ -220,7 +221,7 @@ export function WorldTimeCard({ data }: { data: WorldTimeCardData }) {
             </CardTitle>
           </div>
 
-          <div className="flex-col items-center justify-center text-center gap-3 py-4 relative group">
+          <div className="flex flex-col items-center justify-center text-center gap-3 py-3 relative group">
             {/* Nav Arrows directly integrated on top of the left clock panel */}
             {clocks.length > 1 && (
               <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex items-center justify-between pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-20">
@@ -277,14 +278,14 @@ export function WorldTimeCard({ data }: { data: WorldTimeCardData }) {
             </div>
 
             {/* City details */}
-            <div className="flex-col gap-0.5 min-w-0 w-full mt-1">
+            <div className="flex flex-col gap-0.5 min-w-0 w-full mt-1">
               <span className="text-[8px] font-mono tracking-widest text-primary/75 uppercase font-bold">
                 {activeClock.country}
               </span>
               <h3 className="text-base font-black text-primary-foreground tracking-tight truncate leading-tight mt-0.5">
                 {activeClock.city}
               </h3>
-              <div className="flex-col items-center gap-0.5 mt-1 font-mono">
+              <div className="flex flex-col items-center gap-0.5 mt-1 font-mono">
                 {/* Clock timer text made bigger (text-2xl font-black) */}
                 <span className="text-2xl font-black text-primary-foreground tracking-tighter drop-shadow-sm">
                   {activeClock.time}
@@ -324,7 +325,7 @@ export function WorldTimeCard({ data }: { data: WorldTimeCardData }) {
         </div>
 
         {/* Right Column (75% width / col-span-9) - Flush Coordinate Projector Map */}
-        <div className="md:col-span-9 bg-black relative flex-col justify-center min-h-[340px]">
+        <div className="md:col-span-9 bg-black relative flex flex-col justify-center min-h-[210px] md:min-h-[252px]">
           
           {/* Overlay Map Headers */}
           <div className="absolute top-4 left-4 z-10 flex items-center gap-1.5 text-[8.5px] font-mono text-muted-foreground bg-muted border-border rounded-md px-2 py-0.5 pointer-events-none">
@@ -351,7 +352,7 @@ export function WorldTimeCard({ data }: { data: WorldTimeCardData }) {
           {/* SVG Map Container stretched to fill edges */}
           <svg viewBox="30.767 241.591 784.077 458.627" className="w-full h-full object-cover">
             <defs>
-              <mask id="mapMask">
+              <mask id={`${mapId}-mapMask`}>
                 <rect x="30.767" y="241.591" width="784.077" height="458.627" fill="black" />
                 <image href="/world-map.svg" x="30.767" y="241.591" width="784.077" height="458.627" style={{ filter: "invert(1)" }} />
               </mask>
@@ -393,7 +394,7 @@ export function WorldTimeCard({ data }: { data: WorldTimeCardData }) {
             )}
 
             {/* Day/Night Shading */}
-            <g mask="url(#mapMask)">
+            <g mask={`url(#${mapId}-mapMask)`}>
               <path d={terminatorPath} fill="black" opacity="0.45" />
             </g>
 
@@ -459,8 +460,8 @@ export function WorldTimeCard({ data }: { data: WorldTimeCardData }) {
 
       {/* Expanded City Grid Cards Panel (Row) */}
       {isListExpanded && clocks.length > 1 && (
-        <div className="relative z-10 p-5 border-t border-border bg-muted animate-[fadeIn_0.2s_ease-out]">
-          <div className="grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        <div className="relative z-10 p-4 border-t border-border bg-muted animate-[fadeIn_0.2s_ease-out]">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
             {parsedClocks.map((c, idx) => {
               const isActive = idx === activeIndex;
               const hourRotation = c.hour * 30 + c.minute * 0.5;

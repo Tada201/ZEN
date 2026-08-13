@@ -40,10 +40,11 @@ assert(
 assert(
   traceSource.includes('preferCompact = false') &&
     traceSource.includes('importantToolCalls') &&
-    /const compactToolCalls = preferCompact[\s\S]*?importantToolCalls/.test(traceSource) &&
-    /const renderedToolCalls = preferCompact[\s\S]*?status === "running"/.test(traceSource) &&
-    traceSource.includes('tool.status === "awaiting_approval" || tool.status === "error"'),
-  'agent execution trace should support compact chat mode while preserving approval/error/running tool rows',
+    /const shouldDefaultOpen = preferCompact[\s\S]*?importantToolCalls/.test(traceSource) &&
+    traceSource.includes('normalizedToolCalls.map') &&
+    /tool\.status === "awaiting_approval"[\s\S]*?tool\.status === "error"/.test(traceSource) &&
+    traceSource.includes('tool.recoveryState === "stale"'),
+  'agent execution trace should force-open on approval/error/running while always rendering the full expandable tool list',
 );
 
 assert(

@@ -48,7 +48,7 @@ export function DiffCard({ data }: { data: DiffData }) {
   };
 
   return (
-    <div className="w-full max-w-2xl rounded-2xl border border-border bg-card overflow-hidden shadow-lg flex flex-col">
+    <div className="genui-card-surface w-full max-w-none min-w-0 rounded-2xl border border-border bg-card overflow-hidden shadow-lg flex flex-col">
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-muted">
         <div className="flex items-center gap-2">
           <GitCompare className="w-3.5 h-3.5 text-muted-foreground" />

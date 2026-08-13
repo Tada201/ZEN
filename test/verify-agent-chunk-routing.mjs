@@ -12,12 +12,16 @@ const lane = readFileSync("src/atlas/components/chat/AgentDelegationLane.tsx", "
 
 assert(eventBus.includes("AgentChunk(AgentChunkPayload)"), "backend should define AgentChunk event");
 assert(eventBus.includes('"agent:chunk"'), "backend should expose agent:chunk event name");
+assert(eventBus.includes("spawn_id: Option<String>"), "agent chunks should carry stable child-run identity");
+assert(escalation.includes("spawn_id: spawn_id_clone"), "streamed child chunks should preserve their spawn identity");
+assert(loop.includes("spawn_id: self.trace_id()"), "progress chunks should preserve their spawn identity");
 assert(escalation.includes("AgentChunkPayload"), "runner stream callback should import agent chunk payload");
 assert(escalation.includes("AgentEvent::AgentChunk"), "runner stream callback should emit agent chunks");
 assert(loop.includes("current_agent.id == \"generalist\""), "generalist/root turns should not emit noisy agent chunks");
 assert(events.includes("AgentChunkEventPayload"), "frontend typed event payload should include agent chunks");
 assert(events.includes('"agent:chunk": AgentChunkEventPayload'), "typed event map should include agent:chunk");
 assert(useAgentEvents.includes('listenAppEvent("agent:chunk"'), "frontend should listen for agent chunks");
+assert(useAgentEvents.includes("shouldFocusAgentsForSpawn") && useAgentEvents.includes("focusActiveAgentsPanel"), "new subagent runs should focus the canonical Agents panel");
 assert(ledger.includes('kind === "agent_chunk"'), "ledger should normalize agent chunk steps");
 assert(ledger.includes("completeMatchingAgentChunkSteps"), "agent complete should close live chunk rows");
 assert(ledger.includes("stripDuplicateResultSummary"), "ledger should avoid showing final result text that already streamed");

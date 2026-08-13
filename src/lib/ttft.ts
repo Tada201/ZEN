@@ -4,7 +4,6 @@
 export type TtftMarker = 
   | 'alpha'           // user submits
   | 'dbInsert'        // user msg persisted
-  | 'providerReady'   // LLM provider resolved
   | 'llmInvoked'      // first token request sent
   | 'firstChunk'      // first SSE byte received in frontend
   | 'firstRender'     // first text visible to user
@@ -100,11 +99,10 @@ export function ttftReport(chatId: string, reason: string): void {
   console.table({
     '1. User Submitted (alpha)': formatTime(markers.alpha),
     '2. DB Persisted': formatTime(markers.dbInsert),
-    '3. Provider Ready': formatTime(markers.providerReady),
-    '4. LLM Invoked': formatTime(markers.llmInvoked),
-    '5. First Chunk (Frontend)': formatTime(markers.firstChunk),
-    '6. First Render Visible': formatTime(markers.firstRender),
-    '7. Stream Complete': formatTime(markers.complete),
+    '3. LLM Invoked': formatTime(markers.llmInvoked),
+    '4. First Chunk (Frontend)': formatTime(markers.firstChunk),
+    '5. First Render Visible': formatTime(markers.firstRender),
+    '6. Stream Complete': formatTime(markers.complete),
   });
   
   if (markers.firstRender && markers.alpha) {

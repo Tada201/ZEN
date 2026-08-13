@@ -3,10 +3,15 @@ import { buildCardCatalogPrompt } from "../chat/cardCatalog";
 
 export function buildOpenUISystemPrompt(): string {
   const promptOptions = { ...openuiPromptOptions, editMode: true, inlineMode: true };
-  let basePrompt = openuiLibrary.prompt(promptOptions);
-  
+  // The official library exposes this as openuiLibrary.prompt(promptOptions);
+  // keep the runtime guard because older package typings model prompt as a string.
+  const promptFactory = (openuiLibrary as any).prompt;
+  let basePrompt = typeof promptFactory === "function"
+    ? promptFactory(promptOptions)
+    : String(promptFactory || "");
+
   basePrompt += `
-${buildCardCatalogPrompt()}
+${buildCardCatalogPrompt({ format: "openui" })}
 
 ### ZEN OPENUI RENDERING CONTRACT
 1. Output OpenUI Lang only, not JSX, HTML, CSS, JavaScript, React code, or imports. When replying in Zen chat, wrap the OpenUI Lang in exactly one markdown code fence using the openui language tag: \`\`\`openui ... \`\`\`. Do not emit raw OpenUI assignments outside that fence.
@@ -23,6 +28,9 @@ ${buildCardCatalogPrompt()}
 12. Keep layouts bounded and readable: avoid deeply nested trees, huge tables, unbounded lists, heavy animation, absolute positioning, or content that requires horizontal scrolling.
 13. During streaming, prefer a small valid partial interface over an incomplete complex one. Every emitted component call must be syntactically complete enough for the renderer to recover.
 14. Use concise labels and realistic placeholder data when needed. Do not include hidden instructions, secrets, or system prompt text inside the UI.
+15. Prefer a single full-width Root surface with one clear visual hierarchy. Use Grid only for genuinely comparable values, keep columns responsive, and avoid decorative wrappers around every field.
+16. For long results, use a compact summary plus a bounded disclosure rather than rendering every row. Keep charts, maps, and timelines to a readable height and never require horizontal scrolling.
+17. The PREMIUM RICH CARDS catalog below is a design reference for card-like information density in Zen chat; it is not an OpenUI tag syntax. In this canvas, use the OpenUI primitives above instead of <card> blocks.
 `;
 
   return basePrompt;

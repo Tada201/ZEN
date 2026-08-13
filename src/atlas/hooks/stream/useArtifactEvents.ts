@@ -14,18 +14,20 @@ export function useArtifactEvents({ resetHeartbeatTimeout }: UseArtifactEventsPr
   const unlistenRefs = useRef<UnlistenFn[]>([]);
   const deltaBuffersRef = useRef<Record<string, string>>({});
   const deltaRafRef = useRef<number | null>(null);
+  const artifactKeysRef = useRef<Record<string, string>>({});
 
   const flushArtifactDeltas = () => {
     const buffers = deltaBuffersRef.current;
-    const chatIds = Object.keys(buffers);
+    const artifactKeys = Object.keys(buffers);
     deltaRafRef.current = null;
-    if (chatIds.length === 0) return;
+    if (artifactKeys.length === 0) return;
 
     const { setSessionMessages } = useChatStore.getState();
-    for (const chatId of chatIds) {
-      const delta = buffers[chatId];
-      delete buffers[chatId];
+    for (const artifactKey of artifactKeys) {
+      const delta = buffers[artifactKey];
+      delete buffers[artifactKey];
       if (!delta) continue;
+      const chatId = artifactKey.split(":", 1)[0];
       setSessionMessages(chatId, (prev: Message[]) => applyArtifactDeltaToMessages(prev, delta, chatId));
     }
   };
@@ -57,7 +59,10 @@ export function useArtifactEvents({ resetHeartbeatTimeout }: UseArtifactEventsPr
         resetHeartbeatTimeout(chatId);
         const delta = event.payload.delta || "";
         if (!delta) return;
-        deltaBuffersRef.current[chatId] = `${deltaBuffersRef.current[chatId] || ""}${delta}`;
+        const artifactPayload = event.payload as typeof event.payload & Record<string, unknown>;
+        const artifactKey = `${chatId}:${artifactPayload.message_id || artifactPayload.messageId || "active"}:${artifactPayload.artifact_id || artifactPayload.artifactId || "artifact"}`;
+        artifactKeysRef.current[chatId] = artifactKey;
+        deltaBuffersRef.current[artifactKey] = `${deltaBuffersRef.current[artifactKey] || ""}${delta}`;
         if (!deltaRafRef.current) {
           deltaRafRef.current = requestAnimationFrame(flushArtifactDeltas);
         }

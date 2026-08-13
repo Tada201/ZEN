@@ -60,6 +60,7 @@ export interface AppSlice {
   isDirty: boolean;
   isSyncing: boolean;
   activeSettings: Partial<SettingsState>;
+  stagedOriginals: Partial<SettingsState>;
   workspacePath: string;
   hooks: Record<string, boolean>;
   skills: Record<string, boolean>;
@@ -162,13 +163,7 @@ export interface AudioSlice {
   echoCancellation: boolean;
   autoGainControl: boolean;
   vadThreshold: number;
-  voiceDisplayAgentEnabled: boolean;
   voiceDisplayAgentModel: string;
-  voiceDisplayAgentContextTokens: number;
-  voiceDisplayAgentMaxTurns: number;
-  voiceDisplayAgentAutoCompactEnabled: boolean;
-  voiceDisplayAgentCompactThreshold: number;
-  voiceDisplayAgentPrompt: string;
 
   setForceSttWeb: (val: boolean) => void;
   setForceTtsWeb: (val: boolean) => void;
@@ -197,6 +192,7 @@ export interface AiSlice {
   providerParams: Record<string, ProviderParams>;
   reasoningEnabled: boolean;
   reasoningEffort: "low" | "medium" | "high";
+  reasoningDisclosureDensity: "compact" | "balanced" | "detailed";
   streamingEnabled: boolean;
   streamSpeed: number;
   thinkingMode: boolean;
@@ -218,6 +214,10 @@ export interface AiSlice {
   deepResearchMaxSourcesPerRound: number;
   embeddingProvider: string;
   streamingSpeed: "instant" | "typewriter";
+  titleMakerEnabled: boolean;
+  titleMakerModel: string;
+  titleMakerProvider: string;
+  titleMakerPrompt: string;
   structuredResponseEnabled: boolean;
   selectedSchemaId: string;
   toolsEnabled: boolean;

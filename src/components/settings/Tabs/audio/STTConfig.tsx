@@ -156,7 +156,6 @@ export const STTConfig = memo(() => {
                                     disabled: !webSpeechCapability.supported,
                                 },
                                 { label: 'Moonshine Tiny (Local)', value: 'moonshine' },
-                                { label: 'OS Native (Planned)', value: 'system', disabled: true },
                             ]}
                             width={220}
                         />
@@ -194,7 +193,7 @@ export const STTConfig = memo(() => {
                             }
                         />
 
-                        <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
+                        <div className="rounded-xl border border-border bg-background px-4 py-3">
                             <div className="flex items-center justify-between gap-3">
                                 <div className="flex min-w-0 flex-col gap-1">
                                     <div className="flex items-center gap-2 text-[12px] font-bold text-foreground">
@@ -211,7 +210,7 @@ export const STTConfig = memo(() => {
                                         <span className={runtimeStatus?.backend === 'cuda' || runtimeStatus?.backend === 'vulkan' ? 'font-bold text-success' : 'font-bold text-warning'}>
                                             Backend: {backendLabel}
                                         </span>
-                                        <span className="truncate text-muted-foreground/70">{backendDetail}</span>
+                                        <span className="truncate text-muted-foreground">{backendDetail}</span>
                                     </div>
                                 </div>
                                 <WorkbenchButton
@@ -237,7 +236,7 @@ export const STTConfig = memo(() => {
                 )}
 
                 {sttEngine === 'web' && (
-                    <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3 text-[11px] text-muted-foreground">
+                    <div className="flex flex-col gap-3 rounded-xl border border-border bg-background px-4 py-3 text-[11px] text-muted-foreground">
                         <div className="flex items-center gap-2 text-foreground">
                             <Mic size={12} className="text-primary" />
                             <span className="font-bold">Browser Web Speech</span>

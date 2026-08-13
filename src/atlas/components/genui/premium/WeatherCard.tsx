@@ -12,7 +12,7 @@ export function WeatherCard({ data }: { data: any }) {
   const low = data.low ?? data.temp_min;
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-lg w-full max-w-md">
+    <div className="genui-card-surface rounded-2xl border border-border bg-card p-5 shadow-lg w-full max-w-none min-w-0">
       <div className="flex items-center justify-between mb-3">
         <div>
           <h4 className="font-bold text-primary-foreground text-sm">{location}</h4>

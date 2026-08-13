@@ -5,23 +5,29 @@ import { WorkbenchInput } from '@/components/settings/ui/WorkbenchInput';
 import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
 import { PROVIDER_KEY_MAP } from '@/lib/types/provider';
-import { isSecretPresentValue } from '@/api';
+import { isSecretPresentValue, SECRET_PRESENT_VALUE } from '@/api';
 import { toast } from 'sonner';
 import { settingsApi } from '@/api/settingsApi';
 
 interface ApiKeyConfigProps {
     providerKey: string;
     displayName: string;
+    settingKey?: string;
+    initialPresent?: boolean;
 }
 
-export const ApiKeyConfig = React.memo(({ providerKey, displayName }: ApiKeyConfigProps) => {
+export const ApiKeyConfig = React.memo(({ providerKey, displayName, settingKey, initialPresent = false }: ApiKeyConfigProps) => {
     const [showKey, setShowKey] = useState(false);
+    const [runtimeKey, setRuntimeKey] = useState('');
+    const [runtimePresent, setRuntimePresent] = useState(initialPresent);
     
     // Select specific API key based on provider
-    const apiKey = useSettingsStore(s => {
+    const mappedApiKey = useSettingsStore(s => {
         const target = PROVIDER_KEY_MAP[providerKey];
         return target ? (s[target as keyof SettingsState] as string) : '';
     });
+    const target = PROVIDER_KEY_MAP[providerKey];
+    const apiKey = target ? mappedApiKey : runtimePresent ? SECRET_PRESENT_VALUE : runtimeKey;
 
     const updateSetting = useSettingsStore(s => s.updateSetting);
     const applyChanges = useSettingsStore(s => s.applyChanges);
@@ -31,25 +37,35 @@ export const ApiKeyConfig = React.memo(({ providerKey, displayName }: ApiKeyConf
     const placeholder = isSecretPresentValue(apiKey) ? 'Saved key present. Enter a new key to replace it.' : 'Enter secure API key...';
 
     const handleUpdate = useCallback((text: string) => {
-        const target = PROVIDER_KEY_MAP[providerKey];
         if (target) {
             updateSetting({ [target]: text } as any);
+        } else {
+            setRuntimeKey(text);
+            setRuntimePresent(false);
         }
-    }, [providerKey, updateSetting]);
+    }, [target, updateSetting]);
 
     const handleBlur = useCallback(async () => {
-        await applyChanges();
+        if (target) {
+            await applyChanges();
+        } else if (settingKey && runtimeKey.trim()) {
+            await settingsApi.setSetting(settingKey, runtimeKey.trim());
+            setRuntimePresent(true);
+            setRuntimeKey('');
+        }
         fetchModels(providerKey);
-    }, [providerKey, applyChanges, fetchModels]);
+    }, [providerKey, applyChanges, fetchModels, runtimeKey, settingKey, target]);
 
     const handleRemove = useCallback(async () => {
-        const target = PROVIDER_KEY_MAP[providerKey];
-        if (!target) return;
-        await settingsApi.deleteSecret(target.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`));
-        updateSetting({ [target]: '' } as any);
+        const secretKey = settingKey || (target ? target.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`) : '');
+        if (!secretKey) return;
+        await settingsApi.deleteSecret(secretKey);
+        if (target) updateSetting({ [target]: '' } as any);
+        setRuntimePresent(false);
+        setRuntimeKey('');
         toast.success(`${displayName} key removed.`);
         fetchModels(providerKey);
-    }, [applyChanges, displayName, fetchModels, providerKey, updateSetting]);
+    }, [displayName, fetchModels, providerKey, settingKey, target, updateSetting]);
 
     return (
         <form
@@ -59,7 +75,7 @@ export const ApiKeyConfig = React.memo(({ providerKey, displayName }: ApiKeyConf
         >
             <div className="flex flex-col">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">API Key</label>
-                <span className="text-[11px] text-muted-foreground/60">Required for authentication to {displayName}.</span>
+                <span className="text-[11px] text-muted-foreground">Required for authentication to {displayName}.</span>
             </div>
             <div className="flex max-w-2xl items-center gap-2">
               <div className="relative min-w-0 flex-1">
@@ -69,7 +85,7 @@ export const ApiKeyConfig = React.memo(({ providerKey, displayName }: ApiKeyConf
                     placeholder={placeholder}
                     onChangeText={handleUpdate}
                     onBlur={handleBlur}
-                    className="w-full h-9 pr-10 font-mono text-xs bg-muted/20 border-border/60 focus:border-primary/40 transition-all rounded-lg"
+                    className="w-full h-9 rounded-lg border border-border bg-background pr-10 font-mono text-xs transition-all focus:border-primary"
                 />
                 <WorkbenchButton
                     variant="ghost"

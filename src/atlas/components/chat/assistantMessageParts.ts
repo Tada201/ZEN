@@ -5,6 +5,7 @@ import {
   type ParsedCard,
 } from "./assistantCardParser";
 import type { Message, SpawnMeta, Step, ToolCall } from "./types";
+import { splitReasoningSections, type ReasoningSection } from "@/atlas/components/chat/reasoningSections";
 // NOTE: This module keeps a local `inputRecord` helper instead of importing
 // the shared `toToolInputRecord` from `./tool/toToolInputRecord` because the
 // test loader (test/test-loader.mjs) loads this file via Vite's ssrLoadModule,// which transforms it to a data: URL — and Node.js cannot resolve relative
@@ -29,7 +30,8 @@ export type GroupedAssistantStep =
       cleanText: string;
       orderedCards: OrderedCard[];
     })
-  | (Step & { type: "reasoning" | "action" | "subagent" })
+  | (Step & { type: "reasoning"; reasoningSections?: ReasoningSection[] })
+  | (Step & { type: "action" | "subagent" })
   | { type: "tool-group"; toolCalls: ToolCall[] };
 
 /**
@@ -68,7 +70,6 @@ export function selectParentWorkingStatus({
   if (chatStatusPhase === CHAT_STATUS_PHASES.AgentStreaming) return "thinking";
   if (chatStatusPhase === CHAT_STATUS_PHASES.ToolBatchPlanned) return "planning";
   if (
-    chatStatusPhase === CHAT_STATUS_PHASES.ProviderReady ||
     chatStatusPhase === CHAT_STATUS_PHASES.ToolCallStreaming ||
     chatStatusPhase === CHAT_STATUS_PHASES.ToolCallReady ||
     chatStatusPhase === CHAT_STATUS_PHASES.ToolExecuting
@@ -225,7 +226,24 @@ function shouldHideToolActionStep(step: Step, visibleToolIds: Set<string>) {
   return Boolean(id && visibleToolIds.has(id));
 }
 
-type MutableGroupedStep = Step | { type: "tool-group"; toolCalls: ToolCall[] };
+// Tools are grouped only when the backend supplies the same explicit
+// `batchId`/`toolBatchId`; missing identity always produces a separate row.
+// The tool-call preview phases ("Preparing X" / "X ready") duplicate the tool
+// card and carry no boundary meaning, so they are dropped outright here. The
+// batch-lifecycle phases (tool_batch_planned / tool_executing) are kept in the
+// grouped projection because they act as batch boundaries and feed the parent
+// breathing indicator; they are hidden at render time via
+// VISIBLE_CHAT_STATUS_PHASES in AssistantMessage, not dropped here.
+function isSuppressedToolPreviewStatus(step: Step) {
+  if (step.type !== "action" || step.kind !== "chat_status") return false;
+  const phase = step.metadata?.phase;
+  return phase === CHAT_STATUS_PHASES.ToolCallStreaming || phase === CHAT_STATUS_PHASES.ToolCallReady;
+}
+
+type MutableGroupedStep =
+  | Step
+  | (Step & { type: "reasoning"; reasoningSections?: ReasoningSection[] })
+  | { type: "tool-group"; toolCalls: ToolCall[] };
 
 function isTerminalToolStatus(status?: ToolCall["status"]) {
   return status === "completed" || status === "error";
@@ -240,13 +258,19 @@ function explicitToolBatchId(tool: ToolCall) {
 }
 
 function mergeGroupedToolCall(existing: ToolCall, incoming: ToolCall): ToolCall {
-  const shouldKeepTerminalStatus = isTerminalToolStatus(existing.status) && incoming.status === "running";
+  const incomingTime = incoming.lastUpdatedAt ?? incoming.completedAt;
+  const existingTime = existing.lastUpdatedAt ?? existing.completedAt;
+  const shouldKeepTerminalStatus = isTerminalToolStatus(existing.status) && (
+    incoming.status === "running" ||
+    (isTerminalToolStatus(incoming.status) && (incomingTime === undefined || (existingTime !== undefined && incomingTime < existingTime)))
+  );
   return {
     ...existing,
     ...incoming,
     status: shouldKeepTerminalStatus ? existing.status : incoming.status,
     input: inputIsEmptyObject(incoming.input) ? existing.input : incoming.input ?? existing.input,
     output: incoming.output || existing.output,
+    outputPreview: incoming.outputPreview || existing.outputPreview,
     durationMs: incoming.durationMs ?? existing.durationMs,
     approvalContext: incoming.approvalContext || existing.approvalContext,
     runId: incoming.runId || existing.runId,
@@ -335,18 +359,19 @@ function mergeOpenAgentLifecycle(grouped: MutableGroupedStep[], incoming: Step) 
 }
 
 function findOpenToolGroup(grouped: MutableGroupedStep[], incoming: ToolCall): { type: "tool-group"; toolCalls: ToolCall[] } | undefined {
+  const incomingBatchId = explicitToolBatchId(incoming);
+  // A missing batch identity is not permission to infer a batch from timing
+  // or adjacency. Without an explicit backend batch, keep different tools in
+  // separate rows. A repeated tool id is the one exception: it is a lifecycle
+  // update for the same tool (for example a persisted tool_result completing a
+  // live tool_call), so it must merge into its original row.
   for (let i = grouped.length - 1; i >= 0; i -= 1) {
     const item = grouped[i];
     if (item.type === "tool-group") {
-      const incomingBatchId = explicitToolBatchId(incoming);
+      if (item.toolCalls.some((tool) => tool.id === incoming.id)) return item;
+      if (!incomingBatchId) return undefined;
       const groupBatchIds = new Set(item.toolCalls.map(explicitToolBatchId).filter(Boolean));
-      if (incomingBatchId && groupBatchIds.has(incomingBatchId)) return item;
-      if (incomingBatchId && groupBatchIds.size > 0 && !groupBatchIds.has(incomingBatchId)) return undefined;
-      // If the user never saw visible commentary between tool calls, keep the
-      // whole contiguous run collapsed into one batch regardless of timing.
-      // This preserves interleaved text as a hard boundary while preventing
-      // long search/tool runs from exploding into many separate cards.
-      return item;
+      return groupBatchIds.has(incomingBatchId) ? item : undefined;
     }
     if (!shouldKeepToolBatchOpen(item)) return undefined;
   }
@@ -424,11 +449,18 @@ function pushGroupedStep(grouped: MutableGroupedStep[], step: Step) {
     }
     const existingReasoning = existingReasoningIndex !== -1 ? grouped[existingReasoningIndex] : undefined;
     if (existingReasoning && existingReasoning.type === "reasoning") {
-      const previous = (existingReasoning.content || "").trimEnd();
+      const existingReasoningStep = existingReasoning as Step & { type: "reasoning"; reasoningSections?: ReasoningSection[] };
+      const previous = (existingReasoningStep.content || "").trimEnd();
       const incoming = (step.content || "").trimStart();
-      existingReasoning.content = previous && incoming ? `${previous}\n${incoming}` : previous || incoming;
+      const previousSections = existingReasoningStep.reasoningSections || splitReasoningSections(previous);
+      const incomingSections = splitReasoningSections(incoming, previousSections.length);
+      existingReasoningStep.content = previous && incoming ? `${previous}\n${incoming}` : previous || incoming;
+      existingReasoningStep.reasoningSections = [...previousSections, ...incomingSections];
     } else {
-      grouped.push({ ...step });
+      grouped.push({
+        ...step,
+        reasoningSections: splitReasoningSections(step.content || ""),
+      });
     }
   } else if (step.type === "tool-call" && step.toolCall) {
     if (!isToolVisibleInChat(step.toolCall)) return;
@@ -473,6 +505,7 @@ export function groupAssistantSteps(steps: Step[] | undefined): GroupedAssistant
 
   steps.filter(Boolean).forEach((step) => {
     if (shouldHideToolActionStep(step, visibleToolIds)) return;
+    if (isSuppressedToolPreviewStatus(step)) return;
 
     if (step.type === "tool-call" && step.toolCall?.traceId && subagentSpawnIds.has(step.toolCall.traceId)) {
       return;
@@ -527,7 +560,15 @@ export function groupToolCalls(toolCalls: ToolCall[] | undefined): ToolCall[] {
   if (!toolCalls || toolCalls.length === 0) return [];
 
   const grouped: ToolCall[] = [];
-  toolCalls.forEach((tc) => {
+  const orderedToolCalls = toolCalls
+    .map((tool, index) => ({ tool, index }))
+    .sort((left, right) =>
+      (left.tool.sequence ?? Number.MAX_SAFE_INTEGER) - (right.tool.sequence ?? Number.MAX_SAFE_INTEGER)
+      || (left.tool.startTime ?? Number.MAX_SAFE_INTEGER) - (right.tool.startTime ?? Number.MAX_SAFE_INTEGER)
+      || left.index - right.index,
+    )
+    .map(({ tool }) => tool);
+  orderedToolCalls.forEach((tc) => {
     if (!isToolVisibleInChat(tc)) return;
     const sameIdIndex = grouped.findIndex((tool) => tool.id === tc.id);
     if (sameIdIndex !== -1) {

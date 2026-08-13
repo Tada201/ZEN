@@ -41,7 +41,10 @@ These rules apply to all code under `src/`.
 ## Performance Rules
 
 1. Streaming token, artifact, or telemetry updates must be buffered. Do not
-   perform raw per-delta React state writes in hot paths.
+   perform raw per-delta React state writes in hot paths. Allowed patterns:
+   rAF-batched micro-updates (one DOM commit per animation frame), append-only
+   text node growth, and ≤60ms coalesced state writes. A trailing streaming
+   cursor updated per-token is permitted if it uses CSS animation only.
 2. Zustand setters used by streaming paths must no-op when the value is
    unchanged.
 3. Components must subscribe to exact Zustand slices. Avoid broad store
@@ -95,13 +98,18 @@ surfaces around them:
    Avoid decorative bounce, shake, and unbounded pulse effects.
 4. Use stable React keys and coordinated enter/exit behavior. Do not animate
    token-by-token streaming deltas; animate the message or execution surface
-   mount and meaningful phase changes only.
+   mount and meaningful phase changes only. Exception: a single trailing-edge
+   streaming cursor (CSS-only caret or pulse) is permitted and encouraged to
+   signal "content is still arriving." Efficient per-token DOM append without
+   layout reflow is allowed; heavy per-token animations are not.
 5. Lazy-loaded modules, empty states, errors, tool cards, subagent rows,
    overlays, menus, right-panel tabs, and composer modes must use the central
    motion policy rather than one-off animation classes.
-6. Motion is controlled only by Zen's persisted user preference through
-   `src/lib/motion.ts`; do not add direct OS reduced-motion checks or parallel
-   motion policies.
+6. Motion is controlled by Zen's persisted user preference through
+   `src/lib/motion.ts`. Respect the OS `prefers-reduced-motion` setting as the
+   default when the user has not explicitly configured the in-app preference;
+   the in-app toggle overrides the OS setting once set. Do not create a second
+   parallel motion policy or additional OS media queries beyond reduced-motion.
 7. Review the complete interaction path, including loading, error, reload,
    responsive, and animation-disabled states. The result must remain smooth in
    relation to adjacent components, not only within the new component itself.
@@ -165,10 +173,11 @@ The main chat timeline is a user-facing progress surface, not an execution log.
 4. Approval and error states are exceptions to the quiet default: they must be
    visible, actionable, and written in user language. Show risk, reason, and
    approve/deny controls without dumping raw arguments.
-5. Completed successful tool calls must disappear from the main chat timeline
-   after the assistant answer is done or when the chat reloads. Preserve their
-   data for audit/replay surfaces, but do not append a leftover execution card
-   below the final answer.
+5. After the assistant answer is done or on reload, collapse successful
+   completed tool calls to a single-line summary (verb + target + status) in
+   the timeline. Full output belongs behind an explicit disclosure. Do not
+   leave expanded tool cards trailing below the final answer, but preserve a
+   visible collapsed summary so users can audit what the agent did inline.
 6. Subagent rows should show delegation status and final summary. They must not
    stream child-agent token deltas, prompt text, or full transcripts into the
    parent chat unless the user explicitly opens a diagnostic disclosure.
@@ -180,6 +189,92 @@ The main chat timeline is a user-facing progress surface, not an execution log.
    reviewer" over raw tool ids, event kinds, or JSON keys.
 9. Any verifier for chat execution UI must assert the user-facing contract
    above, not brittle snapshots of old internal component structure.
+
+### Agent Lifecycle & Streaming Contracts
+
+These rules define the visual state machine for an agentic message turn.
+
+#### Canonical Agent Phase States
+
+Every assistant turn moves through a subset of these phases. The UI must
+communicate the current phase via a persistent status indicator (badge, label,
+or subtle row) so the user never wonders "is it stuck?":
+
+| Phase | UI Signal | Cancel Semantic |
+|---|---|---|
+| `queued` | "Preparing…" or skeleton | Cancel aborts before LLM call |
+| `planning` | "Thinking…" with cancel | Cancel kills upstream request |
+| `tool_announced` | Tool name + intent shown | Cancel before execution |
+| `tool_running` | Tool card expanded, spinner | Cancel aborts the tool |
+| `waiting_for_approval` | Approval card, no spinner | User decides (approve/deny) |
+| `streaming` | Trailing cursor, text grows | Stop ends generation |
+| `draining` | Remaining text reveals | — (auto-completes) |
+| `completed` | Controls appear (copy/regen) | — |
+| `interrupted` | "Stopped" badge, partial kept | Retry / Continue available |
+| `errored` | Inline error + retry action | Retry / Edit-and-resend |
+
+#### Streaming Cursor
+
+- Show a CSS-only blinking caret or pulsing block at the trailing edge of the
+  active text block while `streaming` or `draining`.
+- Hide the cursor on `completed`, `interrupted`, or `errored`.
+- The cursor must not trigger React re-renders; use a CSS animation class
+  toggled by a data attribute or class.
+
+#### Completion State Transition
+
+When the stream ends (either `chat:done` or user stop):
+
+1. Remove the streaming cursor.
+2. Hide the Stop button; show Copy, Regenerate, and (if applicable) Continue.
+3. If the message was interrupted by the user, add a visible "Stopped" badge.
+4. If the message was interrupted by an error, show the error inline with a
+   Retry action.
+5. Partial content is always preserved — never discard what was already shown.
+
+#### Tool Announce Phase
+
+For both approval-gated and auto-approved tools:
+
+1. When a tool is about to execute, render a brief announce row showing the
+   tool name and a one-line intent (e.g., "Editing `src/main.rs`").
+2. For approval-gated tools, the announce row transitions into the approval
+   card.
+3. For auto-approved tools, the announce row transitions into the running card
+   once execution begins. Fast tools (<200ms) may collapse announce + result
+   into a single completed summary.
+
+#### Mid-Stream Error Recovery
+
+If the transport connection drops mid-stream (no `done` or `error` event
+received, but the connection closed):
+
+1. Preserve partial content already rendered.
+2. Show an inline "Connection lost" indicator below the partial content.
+3. Offer "Retry" (re-send from the last known state) and "Keep partial"
+   (mark as interrupted).
+4. Do not silently truncate — the user must always see why the response stopped.
+
+#### Auto-Scroll Pinning
+
+1. Auto-scroll to bottom only when the user is already pinned to the bottom
+   (within ~100px of the viewport edge).
+2. If the user scrolls up during streaming, stop auto-scrolling and show a
+   "↓ New content" indicator when fresh content arrives below the viewport.
+3. Clicking the indicator or scrolling back to the bottom re-enables pinning.
+4. Schedule scroll updates through a single rAF batch — never per-token.
+
+#### Autonomy Level Indicator
+
+When the agent operates in agentic mode (tool calling enabled), the chat header
+or a persistent badge must show the current autonomy level:
+
+- **Ask** — every tool requires approval
+- **Auto-safe** — read-only tools auto-approve; write/destructive tools gate
+- **Full-auto** — all tools auto-approve (visible warning)
+
+The indicator must be switchable mid-session. Changing it takes effect on the
+next tool call.
 
 ### Execution Timeline Persistence
 
@@ -307,6 +402,17 @@ as a whole should not pretend to target a message.
 7. Avoid `any`. Use `unknown`, discriminated unions, or local type guards.
 8. Do not add duplicate hooks, stores, registries, renderers, or component
    implementations for an existing domain.
+
+## Premium composer review checklist
+
+Before shipping a change to `PremiumChatInput` or a composer-owned child, verify:
+
+- One canonical task-disclosure implementation is active; legacy checklist variants are not imported.
+- Prototype/test prompt controls are development-gated and absent from production builds.
+- The public composer API contains no compatibility props that have no runtime owner.
+- Provider icons have stable sizing, decorative semantics, and a safe fallback for unknown aliases.
+- Geometry-critical resize and streaming paths remain instant; only meaningful popovers, disclosures, and state changes animate through the central motion policy.
+- The semantic composer tokens remain the only active surface vocabulary.
 
 ## Frontend Review Gate
 

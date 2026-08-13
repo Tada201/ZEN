@@ -44,7 +44,7 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
             if (nextStatus === 'success') {
                 toast.success(`Connection to ${displayName} is healthy.`);
             } else {
-                toast.warning(`Handshake with ${displayName} completed but no models were returned.`);
+                toast.warning(`Connection test for ${displayName} completed but no models were returned.`);
             }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -94,7 +94,7 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
     const providerError = useSettingsStore(s => s.customProviders.find(cp => cp.id === providerId)?.error);
 
     return (
-        <div className="flex flex-col gap-4 p-4 bg-muted/20 border border-border/40 rounded-xl relative overflow-hidden">
+        <div className="relative flex flex-col gap-4 overflow-hidden rounded-xl border border-border bg-background p-4">
             <div className="absolute top-0 right-0 p-3 flex items-center gap-2">
                  <button
                     type="button"
@@ -103,12 +103,12 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                     className={cn(
                         "flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all",
                         isPinging
-                            ? "bg-muted border-border/40 text-muted-foreground/40 cursor-wait"
+                            ? "bg-muted border-border text-muted-foreground cursor-wait"
                             : "bg-primary/10 border-primary/20 text-primary hover:bg-primary/20"
                     )}
                 >
                     <WorkbenchIcon name={isPinging ? "lucide:loader-2" : "lucide:radio"} size={10} className={isPinging ? "animate-spin" : undefined} />
-                    <span className="text-[9px] font-bold uppercase tracking-widest">{isPinging ? 'Pinging' : 'Test'}</span>
+                    <span className="text-[9px] font-bold uppercase tracking-widest">{isPinging ? 'Testing' : 'Test'}</span>
                 </button>
                  <button
                     onClick={() => toggleCustomProvider(providerId)}
@@ -116,7 +116,7 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                         "flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all",
                         isEnabled
                             ? "bg-success/10 border-emerald-500/20 text-success"
-                            : "bg-muted border-border/40 text-muted-foreground/40"
+                            : "bg-muted border-border text-muted-foreground"
                     )}
                 >
                     <div className={cn(
@@ -130,27 +130,27 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
             <div className="flex flex-col gap-2">
                 <div className="flex flex-col">
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">Alias</label>
-                    <span className="text-[11px] text-muted-foreground/60">Identifier for this local node.</span>
+                    <span className="text-[11px] text-muted-foreground">Name shown for this provider.</span>
                 </div>
                 <WorkbenchInput
                     value={localName}
                     onChangeText={setLocalName}
                     onBlur={() => { void updateCustomProvider(providerId, { displayName: localName } as any).catch(error => setSaveError(String(error))); }}
-                    className="max-w-lg h-9 bg-muted/20 border-border/60 rounded-lg"
+                    className="max-w-lg h-9 bg-background border-border rounded-lg"
                 />
             </div>
 
             <div className="flex flex-col gap-2">
                 <div className="flex flex-col">
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">Target Endpoint</label>
-                    <span className="text-[11px] text-muted-foreground/60">OpenAI-compatible completion API.</span>
+                    <span className="text-[11px] text-muted-foreground">OpenAI-compatible API endpoint.</span>
                 </div>
                 <WorkbenchInput
                     value={localUrl}
                     onChangeText={setLocalUrl}
                     onBlur={() => { void updateCustomProvider(providerId, { baseUrl: localUrl } as any).catch(error => setSaveError(String(error))); }}
                     className={cn(
-                        "max-w-lg h-9 font-mono text-xs bg-muted/20 border-border/60 rounded-lg",
+                        "max-w-lg h-9 font-mono text-xs bg-background border-border rounded-lg",
                         providerError && "border-destructive/30 bg-destructive/5"
                     )}
                 />
@@ -165,7 +165,7 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
             <div className="flex flex-col gap-2">
                 <div className="flex flex-col">
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">Secure Key</label>
-                    <span className="text-[11px] text-muted-foreground/60">Auth token if required.</span>
+                    <span className="text-[11px] text-muted-foreground">Optional authentication token.</span>
                 </div>
                 <div className="flex max-w-2xl items-center gap-2">
                   <form
@@ -186,13 +186,13 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                             void updateCustomProvider(providerId, { apiKey: localKey } as any).catch(error => setSaveError(String(error)));
                             setKeyDirty(false);
                         }}
-                        className="w-full h-9 pr-10 font-mono text-xs bg-muted/20 border-border/60 rounded-lg"
+                        className="w-full h-9 pr-10 font-mono text-xs bg-background border-border rounded-lg"
                     />
                     <WorkbenchButton
                         variant="ghost"
                         size="icon"
                         onClick={() => setShowKey(!showKey)}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground/40 hover:text-foreground"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-foreground"
                     >
                         <WorkbenchIcon name={showKey ? "lucide:eye-off" : "lucide:eye"} size={13} />
                     </WorkbenchButton>
@@ -211,7 +211,7 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                 </div>
             </div>
 
-            <details className="rounded-md border border-border/40 p-3">
+            <details className="rounded-md border border-border bg-background p-3">
                 <summary className="cursor-pointer text-[11px] font-medium text-foreground">Advanced headers</summary>
                 <textarea
                     value={headersText}
@@ -236,42 +236,42 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
             <div className="flex flex-col gap-2">
                 <div className="flex flex-col">
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">Manual model IDs</label>
-                    <span className="text-[11px] text-muted-foreground/60">One model ID per line. These remain available when the endpoint has no model-list route.</span>
+                    <span className="text-[11px] text-muted-foreground">One model ID per line. These remain available when the endpoint has no model-list route.</span>
                 </div>
                 <textarea
                     value={modelsText}
                     onChange={(event) => setModelsText(event.target.value)}
                     onBlur={() => { void saveManualModels().catch(error => setSaveError(String(error))); }}
                     placeholder="provider/model-id"
-                    className="min-h-20 max-w-2xl resize-y rounded-lg border border-border/60 bg-muted/20 px-3 py-2 font-mono text-[11px] text-foreground outline-none focus:border-primary/50"
+                    className="min-h-20 max-w-2xl resize-y rounded-lg border border-border bg-background px-3 py-2 font-mono text-[11px] text-foreground outline-none focus:border-primary/50"
                 />
             </div>
 
             {saveError && <div className="rounded-md border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-[11px] text-destructive">{saveError}</div>}
 
-            <div className="pt-3 border-t border-border/40 flex justify-end">
+            <div className="flex justify-end border-t border-border pt-3">
                 <WorkbenchButton
                     variant="ghost"
                     className="h-8 px-3 text-[10px] font-bold text-destructive/60 hover:text-destructive hover:bg-rose-500/10"
                     onClick={async () => {
-                        const confirmed = await ask('Permanently delete this custom node?', {
-                            title: 'ZEN_NODE_PURGE',
+                        const confirmed = await ask('Permanently delete this custom provider?', {
+                            title: 'Remove provider',
                             kind: 'warning'
                         });
                         if (confirmed) {
                             try {
                                 await removeCustomProvider(providerId);
-                                toast.success(`Custom node "${displayName}" was purged.`);
+                                toast.success(`Custom provider "${displayName}" was removed.`);
                             } catch (error) {
                                 const message = error instanceof Error ? error.message : String(error);
                                 setSaveError(message);
-                                toast.error(`Could not purge node: ${message}`);
+                                toast.error(`Could not remove provider: ${message}`);
                             }
                         }
                     }}
                 >
                     <WorkbenchIcon name="lucide:trash-2" size={12} className="mr-2" />
-                    Purge Node
+                    Remove provider
                 </WorkbenchButton>
             </div>
         </div>

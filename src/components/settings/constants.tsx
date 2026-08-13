@@ -25,6 +25,7 @@ export const SETTINGS_REGISTRY: SettingRowEntry[] = [
   { id: 'streaming', tab: 'chat_behavior', label: 'Response Streaming', keywords: ['real-time', 'stream', 'live'] },
   { id: 'thinking_mode', tab: 'chat_behavior', label: 'Chain-of-Thought (Thinking Mode)', keywords: ['reasoning', 'deep', 'thought', 'cot'] },
   { id: 'thinking_budget', tab: 'chat_behavior', label: 'Reasoning Token Budget', keywords: ['reasoning', 'budget', 'tokens', 'thinking'] },
+  { id: 'reasoning_disclosure_density', tab: 'chat_behavior', label: 'Reasoning Disclosure', keywords: ['reasoning', 'thinking', 'compact', 'balanced', 'detailed', 'display'] },
   { id: 'prompt_caching', tab: 'chat_behavior', label: 'Prompt Caching', keywords: ['cache', 'context', 'memory'] },
   { id: 'hardware_acceleration', tab: 'chat_behavior', label: 'Hardware Acceleration', keywords: ['gpu', 'compute', 'acceleration'] },
   // Audio
@@ -87,7 +88,7 @@ export const NAV_ITEMS: NavItem[] = [
 export const TAB_FIELD_MAP: Record<string, string[]> = {
   'general': ['workspace_path'],
   'appearance': ['theme', 'density', 'animations', 'gui_boot_enable', 'gui_css_injection'],
-  'chat_behavior': ['persona_style', 'system_prompt', 'temperature', 'max_tokens', 'streaming', 'thinking_mode', 'thinking_budget', 'prompt_caching', 'hardware_acceleration'],
+  'chat_behavior': ['persona_style', 'system_prompt', 'temperature', 'max_tokens', 'streaming', 'thinking_mode', 'thinking_budget', 'reasoning_disclosure_density', 'prompt_caching', 'hardware_acceleration'],
   'audio': ['mic_device', 'speaker_device', 'mic_gain', 'stt_backend', 'tts_backend', 'vad_enabled', 'system_sounds'],
   'providers': ['api_key', 'provider_endpoint', 'model_discovery'],
   'models_routing': ['routing_strategy', 'auto_escalate'],

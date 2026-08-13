@@ -663,10 +663,20 @@ impl ToolService {
                     };
                 }
             };
+            // Carry the owning spawn/delegation call through the private tool
+            // input boundary. Spawn tools use this to stamp child execution
+            // events with an authoritative parent tool id; the hidden field is
+            // never exposed to the model-facing tool schema.
+            let mut tool_input = tool_call.args.clone();
+            if tool_call.name == "spawn_agent" {
+                if let Some(object) = tool_input.as_object_mut() {
+                    object.insert("_parent_tool_call_id".to_string(), serde_json::json!(tool_call.id.clone()));
+                }
+            }
             let tool_run_future = tool.run(
                 app.clone(),
                 chat_id.clone(),
-                tool_call.args.clone(),
+                tool_input,
                 depth,
                 allowed_tools,
                 token.clone(),
@@ -882,11 +892,9 @@ impl ToolService {
                 // here (no `v2_exists` yet) and surfaces a clean "tool
                 // not found" instead of a misleading network error.
                 let hint = if crate::mcp::client::is_external_tool_name(&tool_call.name) {
-                    // External tools aren't reachable via handoff_to_agent
-                    // (that dispatches to a registered agent, not a
-                    // discovered MCP server). The LLM has no way to call
-                    // or observe the discovery step, so point it at a
-                    // concrete next action: confirm the server wiring.
+                    // External tools are not part of the local delegation
+                    // path. Point the model at a concrete next action:
+                    // confirm the server wiring.
                     // Interpolate `tool_call.name` so the LLM sees which
                     // tool is actually missing (the registry may hold
                     // many external tools and the model needs to know
@@ -896,7 +904,7 @@ impl ToolService {
                         tool_call.name
                     )
                 } else {
-                    "Use handoff_to_agent if you need a specialized expert."
+                    "Use spawn_agent if you need a specialized expert."
                         .to_string()
                 };
                 crate::agent::types::ToolResult {
@@ -1265,7 +1273,6 @@ fn map_tool_operation(name: &str) -> PrivilegedOperation {
     if normalized.contains("read")
         || normalized.contains("grep")
         || normalized.contains("list_document")
-        || normalized.contains("vector_search")
     {
         return PrivilegedOperation::FileRead;
     }

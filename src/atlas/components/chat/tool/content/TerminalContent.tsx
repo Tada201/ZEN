@@ -7,6 +7,7 @@ import type { ToolOutputPreview } from "../toolOutputPreview";
 import { Panel } from "./primitives";
 import { TruncatedOutput } from "./TruncatedOutput";
 import { toToolInputRecord } from "../toToolInputRecord";
+import { redactToolText } from "../toolTextRedaction";
 
 interface TerminalContentProps {
   toolCall: ToolCall;
@@ -22,12 +23,15 @@ export function TerminalContent({ toolCall, outputPreview }: TerminalContentProp
   const commandValue = input.command || input.cmd || input.shell_command || input.script
     || nestedInput.command || nestedInput.cmd || nestedInput.shell_command || nestedInput.script;
   const command = typeof commandValue === "string" ? commandValue : undefined;
+  const workingDirectoryValue = input.cwd || input.working_directory || input.workingDirectory
+    || nestedInput.cwd || nestedInput.working_directory || nestedInput.workingDirectory;
+  const workingDirectory = typeof workingDirectoryValue === "string" ? workingDirectoryValue : undefined;
   // Some shell adapters return plain text instead of `{ stdout, stderr }`.
   // For a terminal card that plain text is still the command output; do not
   // fall through to a generic technical-details block.
   const fallbackOutput = outputPreview.content || outputPreview.raw || "";
-  const stdout = outputPreview.stdout || (!outputPreview.stderr && toolCall.status !== "running" ? fallbackOutput : "");
-  const stderr = outputPreview.stderr || "";
+  const stdout = redactToolText(outputPreview.stdout || (!outputPreview.stderr && toolCall.status !== "running" ? fallbackOutput : ""));
+  const stderr = redactToolText(outputPreview.stderr || "");
   const hasStderr = Boolean(stderr.trim());
   const output = [stdout, hasStderr ? stderr : ""].filter(Boolean).join("\n");
   const isRunning = toolCall.status === "running" && toolCall.recoveryState !== "stale";
@@ -49,7 +53,8 @@ export function TerminalContent({ toolCall, outputPreview }: TerminalContentProp
     <div className="flex flex-col gap-2">
       {command && (
         <Panel label="Command">
-          <div className="flex items-start gap-2 font-mono text-[11px] text-foreground">
+          <div className="flex flex-col gap-1 font-mono text-[11px] text-foreground">
+            <div className="flex items-start gap-2">
             <span className="select-none text-muted-foreground">$ </span>
             <span className="min-w-0 flex-1 break-words">{command}</span>
             <span className={cn(
@@ -59,6 +64,12 @@ export function TerminalContent({ toolCall, outputPreview }: TerminalContentProp
               {isStale ? <CircleAlert className="h-3 w-3" /> : isRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : isFailed ? <CircleAlert className="h-3 w-3" /> : <CircleCheck className="h-3 w-3" />}
               {statusLabel}
             </span>
+            </div>
+            {workingDirectory && (
+              <div className="break-all pl-3.5 text-[10px] text-muted-foreground">
+                cwd {workingDirectory}
+              </div>
+            )}
           </div>
         </Panel>
       )}

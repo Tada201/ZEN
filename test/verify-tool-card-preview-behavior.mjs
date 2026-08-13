@@ -110,6 +110,10 @@ assert(
   "file diffs should render in the expanded detail view via the diff parser + DiffCard",
 );
 assert(
+  detailSource.includes("defaultOpen={outputPreview.files.length === 1}"),
+  "single-file edits should reveal the diff when the tool detail is opened",
+);
+assert(
   !cardSource.includes("file.diff"),
   "the collapsed tool card must not render raw diff snippets inline",
 );

@@ -16,6 +16,7 @@ export type {
 export { chatApi } from "./chatApi";
 export type {
   BackendChat,
+  BackendExecutionTrace,
   BackendChatTag,
   BackendFolder,
   BackendMessage,
@@ -57,7 +58,7 @@ export { terminalApi } from "./terminalApi";
 export { workspaceApi } from "./workspaceApi";
 export type { BrowseFolderResult, FolderEntry } from "./workspaceApi";
 export { agentsApi } from "./agentsApi";
-export type { AgentInfo } from "./agentsApi";
+export type { AgentInfo, AgentProfileDraft } from "./agentsApi";
 export { memoryApi } from "./memoryApi";
 export type { MemoryEntry, MemorySearchResult, MemoryStats, SessionMemoryItem } from "./memoryApi";
 export { gtsmApi } from "./gtsmApi";

@@ -126,10 +126,15 @@ impl Tool for ApplyPatchTool {
                             message: format!("Failed to write file: {}", e),
                         }
                     })?;
+                    let (diff, lines_added, lines_removed) =
+                        unified_diff(&target_path, "", &content);
 
                     results.push(json!({
                         "file_path": path.to_string_lossy(),
-                        "change_type": "added",
+                        "change_type": "created",
+                        "lines_added": lines_added,
+                        "lines_removed": lines_removed,
+                        "diff": diff,
                         "success": true,
                     }));
                 }
@@ -142,6 +147,11 @@ impl Tool for ApplyPatchTool {
                         reason: format!("Workspace violation: {}", e),
                     })?;
 
+                    let original_content = if target_path.exists() {
+                        Some(read_text_file(&target_path).await?)
+                    } else {
+                        None
+                    };
                     if target_path.exists() {
                         tokio::fs::remove_file(&target_path).await.map_err(|e| {
                             ToolError::ExecutionFailed {
@@ -150,9 +160,17 @@ impl Tool for ApplyPatchTool {
                         })?;
                     }
 
+                    let (diff, lines_added, lines_removed) = unified_diff(
+                        &target_path,
+                        original_content.as_deref().unwrap_or(""),
+                        "",
+                    );
                     results.push(json!({
                         "file_path": path.to_string_lossy(),
                         "change_type": "deleted",
+                        "lines_added": lines_added,
+                        "lines_removed": lines_removed,
+                        "diff": diff,
                         "success": true,
                     }));
                 }

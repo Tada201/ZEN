@@ -22,7 +22,7 @@ export function TerminalCard({ data }: { data: TerminalData }) {
   const isSuccess = exitCode === 0;
 
   return (
-    <div className="w-full max-w-xl rounded-2xl border border-border bg-card overflow-hidden shadow-lg flex flex-col font-mono text-[10px]">
+    <div className="genui-card-surface w-full max-w-none min-w-0 rounded-2xl border border-border bg-card overflow-hidden shadow-lg flex flex-col font-mono text-[10px]">
       {/* Terminal Titlebar Header */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted">
         <div className="flex items-center gap-2">

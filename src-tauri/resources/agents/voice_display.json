@@ -6,6 +6,11 @@
   "model_override": null,
   "max_iterations": 3,
   "context_window": 131072,
-  "description": "Voice mode render-only board agent",
-  "model_tier": "local"
+  "description": "Automatic voice-mode render-only board agent",
+  "model_tier": "local",
+  "user_invocable": false,
+  "model_invocable": true,
+  "allow_nested_delegation": false,
+  "inject_agents_md": false,
+  "config_mode": "model_only"
 }

@@ -44,7 +44,7 @@ export function ChartCard({ data }: { data: ChartData }) {
   ];
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-lg flex flex-col">
+    <div className="genui-card-surface w-full max-w-none min-w-0 rounded-2xl border border-border bg-card p-5 shadow-lg flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-primary-foreground tracking-tight">{title}</h3>
         {chartType === "pie" ? (

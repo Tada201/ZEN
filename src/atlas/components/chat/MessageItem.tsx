@@ -1,5 +1,4 @@
-import { useMemo } from "react";
-import { Message, ArtifactData, normalizeVercelMessage } from "./types";
+import { Message, ArtifactData } from "./types";
 import type { SettingsTabId } from "@/lib/features/frontendFeatures";
 import { UserMessage } from "./UserMessage";
 import { AssistantMessage } from "./AssistantMessage";
@@ -13,7 +12,6 @@ export function MessageItem({
   onDismissError,
   onRegenerate,
   onContinueResearch,
-  onAbort,
   isChatStreaming,
   messages,
   compact,
@@ -30,11 +28,9 @@ export function MessageItem({
   messages?: Message[];
   compact?: boolean;
 }) {
-  const message = useMemo(() => normalizeVercelMessage(rawMessage), [rawMessage]);
-
-  if (message.id.startsWith("tool-ledger-")) {
-    return null;
-  }
+  // Live runtime records are already canonical. Legacy persisted records are
+  // normalized at the query boundary before reaching the display tree.
+  const message = rawMessage;
 
   const isAssistant = message.role === "assistant";
   const hasExecutionLedger = message.steps?.some((step) => step.type === "action" || step.type === "tool-call" || step.type === "reasoning");
@@ -46,7 +42,6 @@ export function MessageItem({
           message={message} 
           compact={compact} 
           onContinueResearch={onContinueResearch}
-          onAbort={onAbort}
           isChatStreaming={isChatStreaming}
           messages={messages}
         />
