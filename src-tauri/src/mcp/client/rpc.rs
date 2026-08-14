@@ -17,6 +17,7 @@
 use std::time::{Duration, Instant};
 
 use serde_json::{Map, Value};
+use tokio_util::sync::CancellationToken;
 
 use crate::mcp::types::modern_request_meta;
 use crate::tools::url_safety::build_pinned_http_client;
@@ -139,11 +140,18 @@ impl McpClient {
     /// return the unwrapped `result` object. Mirrors `call_external_tool`'s
     /// transport dispatch and modern `_meta` injection but for an arbitrary
     /// method with no tool-level `isError` contract.
+    ///
+    /// `cancel` cooperatively aborts an in-flight call (HTTP arm races the
+    /// request; stdio arm forwards the token). `header_name` overrides the
+    /// `Mcp-Name` header value for modern HTTP (tools use the tool name, other
+    /// methods use the method name); `None` defaults to the method.
     pub(super) async fn request_endpoint(
         &self,
         server_name: &str,
         method: &str,
         params: Value,
+        cancel: Option<&CancellationToken>,
+        header_name: Option<&str>,
     ) -> Result<Value, String> {
         let endpoint = {
             let endpoints = self.external_endpoints.lock().unwrap();
@@ -152,6 +160,7 @@ impl McpClient {
                 .cloned()
                 .ok_or_else(|| format!("No endpoint for external MCP server '{}'", server_name))?
         };
+        let name_header = header_name.unwrap_or(method);
 
         match endpoint {
             ServerEndpoint::Http(endpoint) => {
@@ -172,16 +181,24 @@ impl McpClient {
                 };
                 let parsed_url = validate_mcp_endpoint_url(&endpoint.url)?;
                 let client = build_pinned_http_client(&parsed_url, endpoint.request_timeout).await?;
-                let resp = Self::apply_mcp_headers(
+                let request = Self::apply_mcp_headers(
                     client.post(&target_url),
                     Some(&endpoint),
                     Some(method),
-                    Some(method),
+                    Some(name_header),
                 )
                 .json(&body)
                 .timeout(endpoint.request_timeout)
-                .send()
-                .await
+                .send();
+                let resp = match cancel {
+                    Some(token) => tokio::select! {
+                        result = request => result,
+                        _ = token.cancelled() => {
+                            return Err(format!("MCP {} cancelled", method));
+                        }
+                    },
+                    None => request.await,
+                }
                 .map_err(|e| format!("MCP {} failed: {}", method, e))?;
                 if !resp.status().is_success() {
                     return Err(format!("MCP {} returned HTTP {}", method, resp.status()));
@@ -198,7 +215,7 @@ impl McpClient {
                 }
                 let json = endpoint
                     .transport
-                    .send_request(method, Some(params))
+                    .send_request_cancelable(method, Some(params), cancel)
                     .await?;
                 unwrap_result(json, method)
             }

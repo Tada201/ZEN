@@ -61,7 +61,7 @@ const SRC = (p) => {
   // Read the whole client directory as one blob so shape assertions that
   // predate the split keep anchoring on the same content.
   if (p === "src-tauri/src/mcp/client.rs") {
-    return ["mod", "sync", "stdio_helpers", "http_handshake", "http_body"]
+    return ["mod", "sync", "stdio_helpers", "http_handshake", "http_body", "rpc"]
       .map((f) => {
         try {
           return readFileSync(path.join(PROJECT_ROOT, "src-tauri/src/mcp/client", `${f}.rs`), "utf8");
@@ -136,7 +136,11 @@ function assertContainsAll(section, source, patterns) {
       src,
       [
         /async\s+fn\s+execute\b/,
-        /\.call_external_tool\(\s*&self\.server_name\s*,\s*&self\.origin_tool_name\s*,/,
+        // `call_external_tool` gained a leading `app` param (Phase 6 MRTR
+        // elicitation needs an AppHandle to prompt the user), so tolerate
+        // any args before the server/tool pair — what matters is the pair
+        // is passed as two separate borrows, un-prefixed and in order.
+        /\.call_external_tool\([\s\S]*?&self\.server_name\s*,\s*&self\.origin_tool_name\s*,/,
       ],
     )
   ) {
@@ -229,16 +233,16 @@ function assertContainsAll(section, source, patterns) {
     allOk = false;
   }
   // Negative assertion: the body must NOT recompute the prefix. The
-  // un-prefixed `tool_name` should reach the wire directly as
-  // `params.name`. We assert that the body uses `format!("{}/tools/call", ...)`
-  // (the right shape) and references both `server_name` and `tool_name`
-  // as bare identifiers.
+  // un-prefixed `tool_name` reaches the wire directly as `params.name`.
+  // Tool calls now route through the shared `request_endpoint` in
+  // `client/rpc.rs`, which builds the legacy per-method path generically
+  // (`{}/{}` with `method`); a modern endpoint posts to the single URL.
   if (
     !assertContainsAll(
       section,
       src,
       [
-        /format!\(\s*"\{\}\/tools\/call"\s*,\s*endpoint\.url\.trim_end_matches\('\/'\)/
+        /format!\(\s*"\{\}\/\{\}"\s*,\s*endpoint\.url\.trim_end_matches\('\/'\)\s*,\s*method\s*\)/
       ],
     )
   ) {

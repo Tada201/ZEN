@@ -149,6 +149,27 @@ export interface McpServerStatusEvent {
   error?: string;
 }
 
+/** How a server is asking for input in an MRTR round. */
+export type McpElicitMode = "form" | "url";
+
+/** The user's decision on an elicitation. `content` rides only on a form `accept`. */
+export type McpElicitAction = "accept" | "decline" | "cancel";
+
+/**
+ * A pending MRTR elicitation surfaced by `mcp:elicitation:request`. `form` mode
+ * carries a flat-primitive `schema` to render inputs; `url` mode carries a full
+ * `url` shown verbatim for consent — the backend never prefetches it and only
+ * opens it in the OS browser after an explicit accept.
+ */
+export interface PendingElicitation {
+  requestId: string;
+  serverName: string;
+  mode: McpElicitMode;
+  message?: string;
+  url?: string;
+  schema?: Record<string, unknown>;
+}
+
 export const mcpApi = {
   getConfig: (scope: McpScope) => callCommand<McpConfig>("mcp_get_config", { scope }),
   saveConfig: (scope: McpScope, config: McpConfig) =>
@@ -243,4 +264,28 @@ export const mcpApi = {
     onEvent: (event: McpServerStatusEvent) => void,
   ): Promise<UnlistenFn> =>
     listen<McpServerStatusEvent>("mcp:server:status", (e) => onEvent(e.payload)),
+  /**
+   * Resolve a pending MRTR elicitation. `action` is the user's decision;
+   * `content` is only forwarded for a form-mode `accept` (the backend drops it
+   * otherwise). Never send secret values via form mode — servers requesting
+   * credentials are auto-declined by the backend before they ever reach here.
+   */
+  resolveElicitation: (
+    requestId: string,
+    action: McpElicitAction,
+    content?: Record<string, unknown>,
+  ) =>
+    callCommand<void>("mcp_resolve_elicitation", {
+      requestId,
+      value: content && action === "accept" ? { action, content } : { action },
+    }),
+  /**
+   * Subscribe to `mcp:elicitation:request` events. Each event is a server
+   * asking for input mid-request; the handler renders the modal and calls
+   * `resolveElicitation`. Returns a Tauri unlisten function.
+   */
+  subscribeElicitation: (
+    onEvent: (request: PendingElicitation) => void,
+  ): Promise<UnlistenFn> =>
+    listen<PendingElicitation>("mcp:elicitation:request", (e) => onEvent(e.payload)),
 };

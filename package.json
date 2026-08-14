@@ -85,6 +85,7 @@
     "test:mcp-server-ui": "node test/verify-mcp-server-ui.mjs",
     "test:mcp-production-tools": "node test/verify-mcp-production-tools.mjs",
     "test:mcp-resources-prompts": "node test/verify-mcp-resources-prompts.mjs",
+    "test:mcp-mrtr-elicitation": "node test/verify-mcp-mrtr-elicitation.mjs",
     "test:history-replay-coalescing": "node test/verify-history-replay-coalescing.mjs",
     "test:input-responsiveness": "node test/verify-input-responsiveness.mjs",
     "test:chat-scrubber-input-stability": "node test/verify-chat-scrubber-input-stability.mjs",

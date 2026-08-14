@@ -10,6 +10,8 @@ import { useSettingsStore } from "./lib/stores/useSettingsStore";
 import { normalizeThemeId } from "./atlas/theme";
 import { BootScreen } from "./components/bootscreen";
 import { useAppInit } from "./hooks/useAppInit";
+import { useMcpElicitations } from "./hooks/useMcpElicitations";
+import { McpElicitationModal } from "./components/Zen/modals/McpElicitationModal";
 
 import { WorkspaceApp } from "./atlas/sections/WorkspaceSection";
 import { EXECUTION_DISCLOSURE_HARNESS_QUERY } from "./atlas/components/chat/executionDisclosureHarnessContract";
@@ -83,6 +85,10 @@ function AppRuntime() {
   useGlobalStreamListener();
   useFullscreen();
 
+  // Global MRTR elicitation prompts — a modern MCP server can ask the user for
+  // input mid-request from any surface, so the queue lives at the App root.
+  const { current: elicitation, resolveCurrent } = useMcpElicitations();
+
   // Run the frontend init hook at App root so it survives BootScreen
   // unmounting. This is the single source of the `setComplete("frontend")`
   // signal that pairs with Rust's `backend_ready` to fire the splash →
@@ -122,6 +128,9 @@ function AppRuntime() {
           )}
         </TooltipProvider>
         <Toaster position="bottom-right" richColors theme={toastTheme} />
+        {elicitation && (
+          <McpElicitationModal request={elicitation} onResolved={resolveCurrent} />
+        )}
       </ZenProvider>
     </ErrorBoundary>
   );

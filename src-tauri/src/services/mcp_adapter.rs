@@ -183,7 +183,7 @@ impl Tool for McpToolAdapter {
             tokens.get(&chat_id).cloned()
         };
         client
-            .call_external_tool(&self.server_name, &self.origin_tool_name, args, cancel)
+            .call_external_tool(Some(&app), &self.server_name, &self.origin_tool_name, args, cancel)
             .await
             .map(|content| ToolOutput {
                 content,

@@ -16,6 +16,20 @@ pub mod url_safety;
 #[path = "../../src/services/runtime_resource.rs"]
 pub mod runtime_resource;
 
+// MRTR parse + elicitation safety logic (Phase 6). `mrtr.rs` is pure and only
+// depends on `crate::mcp::{resources::sanitize_text, types::methods}`, both of
+// which are themselves serde-only, so we mirror that path here to run its
+// `#[cfg(test)]` tests on Windows (the full-app `cargo test --lib` hits the
+// STATUS_ENTRYPOINT_NOT_FOUND loader bug).
+pub mod mcp {
+    #[path = "../../../src/mcp/resources.rs"]
+    pub mod resources;
+    #[path = "../../../src/mcp/types.rs"]
+    pub mod types;
+    #[path = "../../../src/mcp/mrtr.rs"]
+    pub mod mrtr;
+}
+
 #[cfg(test)]
 mod tests {
     use super::permission::{PermissionDecision, PermissionDefault, RiskLevel, ToolPermissions};

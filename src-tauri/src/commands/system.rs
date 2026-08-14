@@ -55,19 +55,46 @@ pub async fn relaunch_app(app: AppHandle) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub async fn export_diagnostics(app: AppHandle, destination: String) -> AppResult<()> {
+pub async fn export_diagnostics(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    destination: String,
+) -> AppResult<()> {
     let app_dir = app.path().app_data_dir().map_err(|error| crate::error::ZenError::Custom(format!("Could not resolve app data directory: {error}")))?;
     let destination = std::path::PathBuf::from(destination);
     let parent = destination.parent().ok_or_else(|| crate::error::ZenError::Custom("Diagnostics destination has no parent directory".to_string()))?;
     std::fs::create_dir_all(parent).map_err(|error| crate::error::ZenError::Custom(format!("Could not prepare diagnostics destination: {error}")))?;
     let data_status = crate::services::data_cleanup::inspect(&app_dir);
+    // MCP protocol status: only safe inventory metadata (transport/availability/
+    // negotiated protocol era + capabilities). Commands, URLs, headers, env
+    // values, and server payloads are never included.
+    state.mcp_discovery.refresh().await.ok();
+    let mcp = state.mcp_discovery.snapshot().await;
+    let mcp_servers = mcp.servers.iter().map(|record| serde_json::json!({
+        "scope": record.scope,
+        "transport": record.transport,
+        "availability": record.availability,
+        "protocol_era": record.protocol_era,
+        "protocol_version": record.protocol_version,
+        "capabilities": record.capabilities,
+        "tool_count": record.tool_count,
+        "last_error_code": record.last_error_code,
+    })).collect::<Vec<_>>();
     let payload = serde_json::json!({
         "format": 1,
         "app_version": env!("CARGO_PKG_VERSION"),
         "platform": std::env::consts::OS,
         "architecture": std::env::consts::ARCH,
         "data_categories": data_status.items.iter().map(|item| serde_json::json!({ "category": item.category, "exists": item.exists })).collect::<Vec<_>>(),
-        "note": "Secrets, chats, database contents, file paths, and raw logs are intentionally excluded.",
+        "mcp": {
+            "supported_protocol_versions": [
+                crate::mcp::types::MODERN_PROTOCOL_VERSION,
+                crate::mcp::types::PROTOCOL_VERSION,
+            ],
+            "server_count": mcp_servers.len(),
+            "servers": mcp_servers,
+        },
+        "note": "Secrets, chats, database contents, file paths, MCP server names/URLs/commands, and raw logs are intentionally excluded.",
     });
     let bytes = serde_json::to_vec_pretty(&payload).map_err(|error| crate::error::ZenError::Custom(format!("Could not serialize diagnostics: {error}")))?;
     std::fs::write(destination, bytes).map_err(|error| crate::error::ZenError::Custom(format!("Could not write diagnostics: {error}")))?;

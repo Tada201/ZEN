@@ -19,11 +19,11 @@ use crate::services::{
     AuditEvent, McpCapabilitySummary, McpConfigService, McpConsentStore, McpDiscoveryService,
     PendingConsent, PermissionDecision, PrivilegedOperation, SecretService, SecurityService,
 };
-use crate::tools::url_safety::{build_pinned_http_client, validate_public_http_url};
+use crate::tools::url_safety::validate_public_http_url;
 use crate::tools::ToolRegistry;
 
 use super::stdio::StdioTransport;
-use super::types::{methods, modern_request_meta};
+use super::types::methods;
 
 /// stdio-transport handshake + tool discovery, split out to keep this
 /// file under the Rust size cap. Adds `initialize_stdio_server` and
@@ -33,7 +33,6 @@ mod stdio_helpers;
 /// Streamable-HTTP body decoding (`application/json` or SSE-framed
 /// `text/event-stream`), split out for the same reason.
 mod http_body;
-use http_body::read_rpc_response;
 
 /// HTTP-transport handshake + tool discovery (`apply_mcp_headers`,
 /// `discover_http_server`, `initialize_server`,
@@ -58,6 +57,11 @@ mod features;
 /// Server→client list-change subscription listener (`spawn_stdio_subscription`),
 /// split out for the same reason.
 mod subscriptions;
+
+/// Multi Round-Trip Requests loop (`request_with_mrtr`) + the elicitation
+/// await store, split out for the same reason. The command layer resolves a
+/// pending elicitation through `resolve_elicitation`.
+pub mod elicit;
 
 /// Build the LLM-visible prefixed form (`ext:{server}:{tool}`) for an
 /// external MCP tool. Centralised in this module so the wire shape is
@@ -343,6 +347,11 @@ pub struct McpClient {
     /// returns a positive `ttlMs`; entries expire on their TTL and are dropped
     /// wholesale for a server on teardown/resync/list-change. Never persisted.
     feature_cache: std::sync::Mutex<HashMap<String, rpc::CacheEntry>>,
+    /// In-flight MRTR elicitations awaiting a user decision, keyed by a
+    /// client-generated id echoed back by `mcp_resolve_elicitation`. Each value
+    /// is the one-shot sender the transport loop is blocked on. Never persisted;
+    /// dropped on resolve or timeout.
+    elicitations: std::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<Value>>>,
 }
 
 impl McpClient {
@@ -364,6 +373,7 @@ impl McpClient {
             external_endpoints: std::sync::Mutex::new(HashMap::new()),
             sync_lock: Arc::new(Mutex::new(())),
             feature_cache: std::sync::Mutex::new(HashMap::new()),
+            elicitations: std::sync::Mutex::new(HashMap::new()),
         }
     }
 
@@ -461,149 +471,40 @@ impl McpClient {
         });
     }
 
-    /// Call a tool on an external MCP server via HTTP POST.
+    /// Call a tool on an external MCP server.
     /// `server_name` and `tool_name` are passed as separate, un-prefixed
     /// strings — the caller (`McpToolAdapter::execute`) already splits
-    /// them. There is no string parsing here; if the caller's contract
-    /// breaks, this method just sends the wrong server/tool pair over
-    /// the wire, which is a logical bug, not a panic.
+    /// them. There is no string parsing here.
     ///
-    /// `cancel` cooperatively aborts an in-flight call: the HTTP arm races
-    /// the request against the token; the stdio arm forwards it so the
-    /// transport emits `notifications/cancelled` and drops the pending
-    /// response. A JSON-RPC `error` or a `result.isError == true` tool
+    /// `cancel` cooperatively aborts an in-flight call. `app`, when present,
+    /// lets the client satisfy a modern server's MRTR `InputRequiredResult` by
+    /// prompting the user (elicitation); without it an input-required result
+    /// fails closed. A JSON-RPC `error` or a `result.isError == true` tool
     /// result both surface as `Err` so the runner records the tool as failed
     /// rather than feeding a spurious success payload back to the model.
     pub async fn call_external_tool(
         &self,
+        app: Option<&AppHandle>,
         server_name: &str,
         tool_name: &str,
         arguments: serde_json::Value,
         cancel: Option<CancellationToken>,
     ) -> Result<serde_json::Value, String> {
-        // Single critical section grabs the endpoint atomically — no
-        // window where a concurrent re-sync leaves the map out of date.
-        let endpoint = {
-            let endpoints = self.external_endpoints.lock().unwrap();
-            endpoints
-                .get(server_name)
-                .cloned()
-                .ok_or_else(|| {
-                    format!("No endpoint for external MCP server '{}'", server_name)
-                })?
-        };
-
-        match endpoint {
-            ServerEndpoint::Http(endpoint) => {
-                let call_url =
-                    format!("{}/tools/call", endpoint.url.trim_end_matches('/'));
-                let body = serde_json::json!({
-                    "jsonrpc": "2.0",
-                    "method": methods::TOOLS_CALL,
-                    "params": {
-                        "name": tool_name,
-                        "arguments": arguments,
-                    },
-                    "id": next_http_request_id(),
-                });
-
-                let parsed_url = validate_mcp_endpoint_url(&endpoint.url)?;
-                let client = build_pinned_http_client(&parsed_url, endpoint.request_timeout).await?;
-                let target_url = if endpoint.modern { &endpoint.url } else { &call_url };
-                let mut body = body;
-                if endpoint.modern {
-                    if let Value::Object(ref mut params) = body["params"] {
-                        if let Value::Object(meta) = modern_request_meta() {
-                            for (key, value) in meta {
-                                params.insert(key, value);
-                            }
-                        }
-                    }
-                }
-                let request = Self::apply_mcp_headers(
-                    client.post(target_url),
-                    Some(&endpoint),
-                    Some(methods::TOOLS_CALL),
-                    Some(tool_name),
-                )
-                    .json(&body)
-                    .timeout(endpoint.request_timeout)
-                    .send();
-                // Race the request against cancellation so a cancelled agent
-                // turn drops the connection (reqwest aborts the request on
-                // future-drop) instead of blocking on a slow server.
-                let resp = match &cancel {
-                    Some(token) => tokio::select! {
-                        result = request => result,
-                        _ = token.cancelled() => {
-                            return Err("External MCP call cancelled".to_string());
-                        }
-                    },
-                    None => request.await,
-                }
-                .map_err(|e| format!("External MCP call failed: {}", e))?;
-                if !resp.status().is_success() {
-                    return Err(format!(
-                        "External MCP call returned HTTP {}",
-                        resp.status()
-                    ));
-                }
-
-                let result: serde_json::Value = read_rpc_response(resp)
-                    .await
-                    .map_err(|e| format!("External MCP call: {}", e))?;
-
-                if let Some(error) = result.get("error") {
-                    let msg = error
-                        .get("message")
-                        .and_then(|m| m.as_str())
-                        .unwrap_or("Unknown error");
-                    return Err(format!("External tool error: {}", msg));
-                }
-
-                let payload = result
-                    .get("result")
-                    .cloned()
-                    .ok_or_else(|| "External tool returned no result".to_string())?;
-                map_tool_call_result(payload)
-            }
-            ServerEndpoint::Stdio(stdio_endpoint) => {
-                // Route the tools/call through the stdio transport.
-                // The transport owns the child process; we just send a
-                // request and wait for the matching response.
-                let mut params = serde_json::json!({
-                    "name": tool_name,
-                    "arguments": arguments,
-                });
-                if stdio_endpoint.modern {
-                    if let Value::Object(ref mut object) = params {
-                        if let Value::Object(meta) = modern_request_meta() {
-                            for (key, value) in meta {
-                                object.insert(key, value);
-                            }
-                        }
-                    }
-                }
-                let resp = stdio_endpoint
-                    .transport
-                    .send_request_cancelable(methods::TOOLS_CALL, Some(params), cancel.as_ref())
-                    .await?;
-
-                if let Some(error) = resp.get("error") {
-                    let msg = error
-                        .get("message")
-                        .and_then(|m| m.as_str())
-                        .unwrap_or("Unknown error");
-                    return Err(format!("External tool error: {}", msg));
-                }
-
-                let payload = resp
-                    .get("result")
-                    .cloned()
-                    .ok_or_else(|| "External tool returned no result".to_string())?;
-                map_tool_call_result(payload)
-            }
-        }
+        let base_params = serde_json::json!({
+            "name": tool_name,
+            "arguments": arguments,
+        });
+        let payload = self
+            .request_with_mrtr(
+                app,
+                server_name,
+                methods::TOOLS_CALL,
+                base_params,
+                cancel.as_ref(),
+                Some(tool_name),
+            )
+            .await?;
+        map_tool_call_result(payload)
     }
 }
 

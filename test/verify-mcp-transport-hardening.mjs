@@ -22,8 +22,16 @@ assert.match(client, /inputSchema/);
 assert.match(client, /input_schema/);
 assert.match(client, /outputSchema/);
 assert.match(client, /output_schema/);
+// Modern HTTP posts every JSON-RPC message to the one configured endpoint;
+// legacy appends the method path. The selection moved out of a single
+// `client.rs` into `rpc.rs` (arbitrary methods) and `http_handshake.rs`
+// (tool discovery) when the module was split and `tools/call` was routed
+// through the MRTR loop, so assert the behaviour wherever it now lives.
 assert.match(client, /if endpoint\.modern \{ &endpoint\.url \} else \{ tools_url \}/);
-assert.match(client, /if endpoint\.modern \{ &endpoint\.url \} else \{ &call_url \}/);
+assert.match(
+  client,
+  /let target_url = if endpoint\.modern \{\s*endpoint\.url\.clone\(\)\s*\} else \{\s*format!\("\{\}\/\{\}", endpoint\.url\.trim_end_matches\('\/'\), method\)\s*\}/,
+);
 assert.match(client, /modern_http_uses_one_endpoint_for_discovery_and_tools/);
 
 assert.match(stdio, /MAX_STDIO_MESSAGE_BYTES\s*:\s*usize\s*=\s*2\s*\*\s*1024\s*\*\s*1024/);

@@ -10,6 +10,8 @@ export type {
   McpAvailability,
   McpCapabilitySummary,
   McpConfig,
+  McpElicitAction,
+  McpElicitMode,
   McpInventory,
   McpPrompt,
   McpPromptArgument,
@@ -24,6 +26,7 @@ export type {
   McpServerStatusEvent,
   McpTransport,
   PendingConsent,
+  PendingElicitation,
 } from "./mcpApi";
 export { chatApi } from "./chatApi";
 export type {

@@ -278,13 +278,14 @@ pub async fn mcp_list_resource_templates(
 /// allowlist / path-traversal guard before the request is sent.
 #[tauri::command]
 pub async fn mcp_read_resource(
+    app: AppHandle,
     state: State<'_, AppState>,
     server_name: String,
     uri: String,
 ) -> ZenResult<Vec<McpResourceContents>> {
     state
         .mcp_client
-        .read_resource(&server_name, &uri)
+        .read_resource(Some(&app), &server_name, &uri)
         .await
         .map_err(|e| ZenError::Custom(format!("MCP read resource failed: {}", e)))
 }
@@ -307,6 +308,7 @@ pub async fn mcp_list_prompts(
 /// inlined — so a prompt can't smuggle executable or opaque content.
 #[tauri::command]
 pub async fn mcp_get_prompt(
+    app: AppHandle,
     state: State<'_, AppState>,
     server_name: String,
     name: String,
@@ -314,8 +316,24 @@ pub async fn mcp_get_prompt(
 ) -> ZenResult<Vec<McpPromptMessage>> {
     state
         .mcp_client
-        .get_prompt(&server_name, &name, arguments.unwrap_or(Value::Null))
+        .get_prompt(Some(&app), &server_name, &name, arguments.unwrap_or(Value::Null))
         .await
         .map_err(|e| ZenError::Custom(format!("MCP get prompt failed: {}", e)))
+}
+
+/// Resolve a pending MRTR elicitation with the user's decision. `value` is the
+/// raw `{action, content?}` object the modal collected — the backend never
+/// trusts it beyond the action clamp in `build_elicit_result`. `content` is
+/// only forwarded for a form-mode accept.
+#[tauri::command]
+pub async fn mcp_resolve_elicitation(
+    state: State<'_, AppState>,
+    request_id: String,
+    value: Value,
+) -> ZenResult<()> {
+    state
+        .mcp_client
+        .resolve_elicitation(&request_id, value)
+        .map_err(|e| ZenError::Custom(format!("MCP resolve elicitation failed: {}", e)))
 }
 

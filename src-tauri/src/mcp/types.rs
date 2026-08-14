@@ -197,6 +197,10 @@ pub mod methods {
     pub const PROMPTS_LIST: &str = "prompts/list";
     pub const PROMPTS_GET: &str = "prompts/get";
 
+    /// Server-initiated (MRTR) input request the client fulfills. Delivered
+    /// inside `InputRequiredResult.inputRequests`, never as a standalone RPC.
+    pub const ELICITATION_CREATE: &str = "elicitation/create";
+
     // Server → client notifications (list-change + resource subscription).
     pub const NOTIFICATIONS_TOOLS_LIST_CHANGED: &str = "notifications/tools/list_changed";
     pub const NOTIFICATIONS_RESOURCES_LIST_CHANGED: &str = "notifications/resources/list_changed";
@@ -232,7 +236,12 @@ pub fn modern_request_meta() -> Value {
                 "name": "zen",
                 "version": env!("CARGO_PKG_VERSION"),
             },
-            "io.modelcontextprotocol/clientCapabilities": {},
+            // We fulfill server-initiated input requests (MRTR) via elicitation
+            // in both form and url modes. Sampling/roots are deprecated and NOT
+            // declared, so a spec-conformant server must not ask for them.
+            "io.modelcontextprotocol/clientCapabilities": {
+                "elicitation": { "form": {}, "url": {} }
+            },
         }
     })
 }

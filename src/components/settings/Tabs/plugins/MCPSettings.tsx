@@ -337,6 +337,12 @@ export const MCPSettings = memo((_props: { embedded?: boolean }) => {
             Secrets can be referenced with{' '}
             <span className="font-mono">{'${env:VAR}'}</span> and are never written to disk.
           </p>
+          <p className="text-[10px] text-muted-foreground/70 mt-1">
+            Speaks MCP <span className="font-mono">2026-07-28</span> (modern) and{' '}
+            <span className="font-mono">2025-06-18</span> (legacy). Older
+            <span className="font-mono"> 2024-11-05</span> servers connect in a
+            reduced-compatibility mode; SSE-only transports aren&apos;t supported.
+          </p>
         </div>
 
         <div className="space-y-3">

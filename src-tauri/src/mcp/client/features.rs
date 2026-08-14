@@ -62,7 +62,7 @@ impl McpClient {
                 params.insert("cursor".to_string(), Value::String(c.to_string()));
             }
             let result = self
-                .request_endpoint(server_name, method, Value::Object(params))
+                .request_endpoint(server_name, method, Value::Object(params), None, None)
                 .await?;
             if page == 1 {
                 let hint = super::rpc::parse_cache_hint(&result);
@@ -110,16 +110,19 @@ impl McpClient {
 
     /// `resources/read` — validate the requested URI, then normalize every
     /// content block. Text is control-stripped and size-capped; binary stays
-    /// base64 and is never decoded into model text.
+    /// base64 and is never decoded into model text. Routes through the MRTR
+    /// loop so a server may elicit input (`app` prompts the user); a `None`
+    /// handle fails closed on an input-required result.
     pub async fn read_resource(
         &self,
+        app: Option<&tauri::AppHandle>,
         server_name: &str,
         uri: &str,
     ) -> Result<Vec<McpResourceContents>, String> {
         validate_resource_uri(uri)?;
         let params = serde_json::json!({ "uri": uri });
         let result = self
-            .request_endpoint(server_name, methods::RESOURCES_READ, params)
+            .request_with_mrtr(app, server_name, methods::RESOURCES_READ, params, None, None)
             .await?;
         let contents = result
             .get("contents")
@@ -145,8 +148,11 @@ impl McpClient {
     /// arguments. Message content is sanitized to plain text; embedded resource
     /// blocks are summarized to their URI rather than inlined so a prompt can't
     /// smuggle opaque binary or executable content into the conversation.
+    /// Routes through the MRTR loop; `app` prompts the user if the server
+    /// elicits input, and a `None` handle fails closed.
     pub async fn get_prompt(
         &self,
+        app: Option<&tauri::AppHandle>,
         server_name: &str,
         name: &str,
         arguments: Value,
@@ -156,7 +162,7 @@ impl McpClient {
             params["arguments"] = arguments;
         }
         let result = self
-            .request_endpoint(server_name, methods::PROMPTS_GET, params)
+            .request_with_mrtr(app, server_name, methods::PROMPTS_GET, params, None, None)
             .await?;
         let messages = result
             .get("messages")

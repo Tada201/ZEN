@@ -1,19 +1,24 @@
 #!/usr/bin/env node
 /**
- * Verifier — typed MCP external server settings UI.
+ * Verifier — typed MCP external server settings UI (scope + CRUD contract).
  *
  * Asserts the wire contract between:
- *   - src/api/mcpApi.ts           (typed TS API + listener)
- *   - src-tauri/src/commands/mcp.rs (4 new Tauri commands)
- *   - src-tauri/src/services/mcp_config.rs (typed add/remove/list helpers)
- *   - src-tauri/src/tools/mod.rs   (ToolRegistry::remove_by_prefix helper)
- *   - src-tauri/src/mcp/client.rs  (sync_lock + clear-adapters + status events)
- *   - src-tauri/src/lib.rs         (commands registered + boot caller)
- *   - src/components/settings/Tabs/plugins/MCPExternalServers.tsx (typed cards)
- *   - src/components/settings/Tabs/plugins/MCPSettings.tsx (event subscriber)
+ *   - src/api/mcpApi.ts             (typed TS API + status listener)
+ *   - src-tauri/src/commands/mcp.rs (scope-aware upsert/set_enabled/remove/reconnect)
+ *   - src-tauri/src/services/mcp_config.rs (typed scope + CRUD helpers)
+ *   - src-tauri/src/tools/mod.rs    (ToolRegistry::remove_by_prefix helper)
+ *   - src-tauri/src/mcp/client/*.rs (sync_lock + clear-adapters + status events)
+ *   - src-tauri/src/lib.rs          (commands registered + boot caller)
+ *   - src/components/settings/Tabs/plugins/McpServerRow.tsx  (typed row)
+ *   - src/components/settings/Tabs/plugins/McpServerForm.tsx (add/edit form)
+ *   - src/components/settings/Tabs/plugins/MCPSettings.tsx   (event subscriber)
+ *
+ * This is a behavior/contract verifier: it targets the CRUD wire shape and the
+ * status-event contract, not source-file paths. `client.rs` was split into a
+ * `client/` module dir, so the Rust client is read by concatenating every
+ * `client/*.rs` file — the assertions survive future re-splits of that module.
  *
  * Run: `node test/verify-mcp-server-ui.mjs`.
- * Each section reports pass/fail; exit 0 iff every section passes.
  */
 import fs from 'fs';
 import path from 'path';
@@ -28,6 +33,19 @@ function read(rel) {
 }
 function exists(rel) {
   return fs.existsSync(path.join(ROOT, rel));
+}
+/** Concatenate every file in a directory matching `filter` (the client module
+ *  is split across many files; join them so symbol asserts don't care where a
+ *  symbol landed). Normalizes CRLF so regexes are line-ending agnostic. */
+function readDirConcat(relDir, filter = () => true) {
+  const dir = path.join(ROOT, relDir);
+  return fs
+    .readdirSync(dir)
+    .filter(filter)
+    .sort()
+    .map((f) => fs.readFileSync(path.join(dir, f), 'utf8'))
+    .join('\n')
+    .replace(/\r\n/g, '\n');
 }
 
 let failed = 0;
@@ -44,19 +62,16 @@ const section = (label, fn) => {
 
 console.log('MCP server settings UI verifier\n');
 
-// Note: the verifier intentionally lives alongside verify-mcp-tool-adapter
-// and verify-mcp-annotation-mapping; both target the same surface so this
-// split keeps each script small and runnable on its own.
-
 // ─── Section A: src/api/mcpApi.ts ───────────────────────────────
-console.log('A. src/api/mcpApi.ts — typed entries + listener');
+console.log('A. src/api/mcpApi.ts — typed entries + scope CRUD + listener');
 (() => {
   const src = read('src/api/mcpApi.ts');
-  section('Exports McpServerEntry interface with transport-aware fields', () => {
+  section('Exports McpServerEntry interface with scope + transport-aware fields', () => {
     const m = src.match(/export\s+interface\s+McpServerEntry\s*\{[^}]*\}/);
     if (!m) return false;
     return (
       /name:\s*string/.test(m[0]) &&
+      /scope:\s*McpScope/.test(m[0]) &&
       /transport:\s*McpTransport/.test(m[0]) &&
       /url\?:\s*string/.test(m[0]) &&
       /command\?:\s*string/.test(m[0])
@@ -67,8 +82,13 @@ console.log('A. src/api/mcpApi.ts — typed entries + listener');
     if (!m) return false;
     return m[1].includes('"http"') && m[1].includes('"stdio"');
   });
+  section('Exports McpScope type union (user | workspace)', () => {
+    const m = src.match(/export\s+type\s+McpScope\s*=\s*([^;]+);/);
+    if (!m) return false;
+    return m[1].includes('"user"') && m[1].includes('"workspace"');
+  });
   section('Exports McpServerStatus type union', () => {
-    const m = src.match(/export\s+type\s+McpServerStatus\s*=\s*([^;]+);/);
+    const m = src.match(/export\s+type\s+McpServerStatus\s*=\s*([\s\S]*?);/);
     if (!m) return false;
     return ['reconnecting', 'connected', 'failed']
       .map((s) => m[1].includes(`"${s}"`))
@@ -80,18 +100,24 @@ console.log('A. src/api/mcpApi.ts — typed entries + listener');
     return /name:\s*string/.test(m[0]) && /status:\s*McpServerStatus/.test(m[0]);
   });
   section('mcpApi.listServers wraps mcp_list_servers', () => {
-    const m = src.match(/listServers:\s*\([^)]*\)\s*=>\s*[^,]+,/);
-    return !!m && /mcp_list_servers/.test(m[0]);
+    return /listServers:\s*\([^)]*\)\s*=>[\s\S]*?mcp_list_servers/.test(src);
   });
-  section('mcpApi.addServer wraps mcp_add_server', () => {
+  section('mcpApi.upsertServer(scope, name, config) wraps mcp_upsert_server', () => {
     return (
-      /addServer:\s*\(/.test(src) &&
-      /callCommand<void>\(\s*"mcp_add_server"/.test(src)
+      /upsertServer:\s*\(\s*scope:\s*McpScope,\s*name:\s*string,\s*config:/.test(src) &&
+      /callCommand<void>\(\s*"mcp_upsert_server"/.test(src)
     );
   });
-  section('mcpApi.removeServer wraps mcp_remove_server', () => {
+  section('mcpApi.setEnabled(scope, name, enabled) wraps mcp_set_enabled', () => {
     return (
-      /removeServer:\s*\(/.test(src) &&
+      /setEnabled:\s*\(\s*scope:\s*McpScope,\s*name:\s*string,\s*enabled:\s*boolean\s*\)/.test(
+        src,
+      ) && /callCommand<boolean>\(\s*"mcp_set_enabled"/.test(src)
+    );
+  });
+  section('mcpApi.removeServer(scope, name) wraps mcp_remove_server', () => {
+    return (
+      /removeServer:\s*\(\s*scope:\s*McpScope,\s*name:\s*string\s*\)/.test(src) &&
       /callCommand<boolean>\(\s*"mcp_remove_server"/.test(src)
     );
   });
@@ -107,32 +133,40 @@ console.log('A. src/api/mcpApi.ts — typed entries + listener');
       /listen<McpServerStatusEvent>\(\s*"mcp:server:status"/.test(src)
     );
   });
+  section('Retired addServer / mcp_add_server surface is fully gone', () => {
+    return !/\baddServer\b/.test(src) && !/mcp_add_server/.test(src);
+  });
 })();
 
 // ─── Section B: src-tauri/src/commands/mcp.rs ────────────────────
-console.log('\nB. src-tauri/src/commands/mcp.rs — typed commands');
+console.log('\nB. src-tauri/src/commands/mcp.rs — scope-aware commands');
 (() => {
   const src = read('src-tauri/src/commands/mcp.rs');
-  // Anchor every per-function assertion on `pub async fn mcp_X` rather
-  // than on `#\[tauri::command\]` (which risks swallowing the previous
-  // command's body via non-greedy back-reference).
   const fnBody = (name) =>
-    src.match(
-      new RegExp(`pub\\s+async\\s+fn\\s+${name}[\\s\\S]*?\\n\\}`),
-    );
+    src.match(new RegExp(`pub\\s+async\\s+fn\\s+${name}[\\s\\S]*?\\n\\}`));
 
   section('mcp_list_servers returns Vec<McpServerEntry>', () => {
     const m = fnBody('mcp_list_servers');
     return !!m && /Vec<McpServerEntry>/.test(m[0]);
   });
-  section('mcp_add_server(name, url) triggers background sync', () => {
-    const m = fnBody('mcp_add_server');
+  section('mcp_upsert_server(scope, name, config) triggers background sync', () => {
+    const m = fnBody('mcp_upsert_server');
     if (!m) return false;
     return (
+      /scope:\s*McpScope/.test(m[0]) &&
       /name:\s*String/.test(m[0]) &&
-      /url:\s*String/.test(m[0]) &&
-      /\.add_server\(\s*&name,\s*&url\s*\)/.test(m[0]) &&
+      /config:\s*Value/.test(m[0]) &&
+      /\.upsert_server\(\s*scope,\s*&name,\s*config\s*\)/.test(m[0]) &&
       /tokio::spawn[\s\S]*?sync_external_servers\(\s*Some\(&app\)/.test(m[0])
+    );
+  });
+  section('mcp_set_enabled returns bool and re-syncs only when the row existed', () => {
+    const m = fnBody('mcp_set_enabled');
+    if (!m) return false;
+    return (
+      /->\s*ZenResult<bool>/.test(m[0]) &&
+      /\.set_enabled\(\s*scope,\s*&name,\s*enabled\s*\)/.test(m[0]) &&
+      /if\s+existed\s*\{[\s\S]*?sync_external_servers\(\s*Some\(&app\)/.test(m[0])
     );
   });
   section('mcp_remove_server returns bool and skips sync when not removed', () => {
@@ -140,8 +174,7 @@ console.log('\nB. src-tauri/src/commands/mcp.rs — typed commands');
     if (!m) return false;
     return (
       /->\s*ZenResult<bool>/.test(m[0]) &&
-      /\.remove_server\(\s*&name\s*\)/.test(m[0]) &&
-      // Only fires sync when removal actually happened.
+      /\.remove_server\(\s*scope,\s*&name\s*\)/.test(m[0]) &&
       /if\s+removed\s*\{[\s\S]*?sync_external_servers\(\s*Some\(&app\)/.test(m[0])
     );
   });
@@ -150,24 +183,32 @@ console.log('\nB. src-tauri/src/commands/mcp.rs — typed commands');
     if (!m) return false;
     return (
       /client\.sync_external_servers\(\s*Some\(&app\)/.test(m[0]) &&
-      // Must NOT touch mcp_config for a reconnect.
-      !/\.add_server\(|\.remove_server\(/.test(m[0])
+      !/\.upsert_server\(|\.remove_server\(|\.set_enabled\(/.test(m[0])
     );
   });
-  section('McpServerEntry is imported via crate::services', () => {
-    return /use\s+crate::services::McpServerEntry/.test(src);
+  section('McpScope + McpServerEntry are imported via crate::services', () => {
+    return (
+      /use\s+crate::services::\{[^}]*McpScope[^}]*\}/.test(src) &&
+      /use\s+crate::services::\{[^}]*McpServerEntry[^}]*\}/.test(src)
+    );
   });
 })();
 
 // ─── Section C: src-tauri/src/services/mcp_config.rs ────────────
-console.log('\nC. src-tauri/src/services/mcp_config.rs — typed helpers');
+console.log('\nC. src-tauri/src/services/mcp_config.rs — scope + typed CRUD');
 (() => {
   const src = read('src-tauri/src/services/mcp_config.rs');
-  section('McpServerEntry struct exists with transport + optional url/command/args', () => {
-    const m = src.match(/pub\s+struct\s+McpServerEntry\s*\{[^}]*\}/);
+  section('McpScope enum exists with User and Workspace variants', () => {
+    const m = src.match(/pub\s+enum\s+McpScope\s*\{[^}]*\}/);
+    if (!m) return false;
+    return /User/.test(m[0]) && /Workspace/.test(m[0]);
+  });
+  section('McpServerEntry struct has scope + transport + optional url/command', () => {
+    const m = src.match(/pub\s+struct\s+McpServerEntry\s*\{[\s\S]*?\n\}/);
     if (!m) return false;
     return (
       /pub\s+name:\s*String/.test(m[0]) &&
+      /pub\s+scope:\s*McpScope/.test(m[0]) &&
       /pub\s+transport:\s*McpTransport/.test(m[0]) &&
       /pub\s+url:\s*Option<String>/.test(m[0]) &&
       /pub\s+command:\s*Option<String>/.test(m[0])
@@ -178,36 +219,55 @@ console.log('\nC. src-tauri/src/services/mcp_config.rs — typed helpers');
     if (!m) return false;
     return /Http/.test(m[0]) && /Stdio/.test(m[0]);
   });
-  section('list_servers surfaces both HTTP (url) and stdio (command) entries', () => {
+  section('list_servers merges both scopes (Workspace overrides User)', () => {
     return (
       /pub\s+async\s+fn\s+list_servers/.test(src) &&
-      /\.get\("url"\)\.and_then\(\|v\|\s*v\.as_str\(\)\)/.test(src) &&
-      /\.get\("command"\)\.and_then\(\|v\|\s*v\.as_str\(\)\)/.test(src)
+      /McpScope::MERGE_ORDER/.test(src) &&
+      /merged\.insert\(entry\.name\.clone\(\),\s*entry\)/.test(src)
     );
   });
-  section('add_server rejects empty name and empty url', () => {
+  section('parse surfaces both HTTP (url) and stdio (command) entries', () => {
     return (
-      /MCP server name must not be empty/.test(src) &&
-      /MCP server url must not be empty/.test(src)
+      /obj\.get\("url"\)\.and_then\(\|v\|\s*v\.as_str\(\)\)/.test(src) &&
+      /obj\.get\("command"\)\.and_then\(\|v\|\s*v\.as_str\(\)\)/.test(src)
     );
   });
-  section('add_server upserts without dropping sibling fields', () => {
+  section('upsert_server(scope, name, entry) rejects an empty name', () => {
     return (
-      /or_insert_with\(\|\|\s*serde_json::json!\(\{\}\)\)/.test(src) &&
-      /obj\.insert\("url"\.to_string\(\),\s*serde_json::Value::String\(url\.to_string\(\)\)\)/.test(src)
+      /pub\s+async\s+fn\s+upsert_server\(\s*[\s\S]*?scope:\s*McpScope,\s*name:\s*&str,\s*entry:\s*Value/.test(
+        src,
+      ) && /MCP server name must not be empty/.test(src)
     );
   });
-  section('remove_server returns bool and skips rewrite when nothing changed', () => {
+  section('validate_entry requires a usable url (http) or command (stdio)', () => {
+    return /entry needs a non-empty 'url' \(http\) or 'command' \(stdio\)/.test(src);
+  });
+  section('validate rejects raw secrets — env refs only are persisted', () => {
     return (
-      /pub\s+async\s+fn\s+remove_server[\s\S]*?->\s*Result<bool, McpConfigError>/.test(src) &&
-      /pub\s+async\s+fn\s+remove_server[\s\S]*?return\s+Ok\(false\)/.test(src)
+      /must use an environment reference; raw secrets are not persisted/.test(src) &&
+      /fn\s+contains_secret_reference/.test(src)
     );
   });
-  section('remove_server uses serde_json::Map::remove to drop the entry', () => {
-    // `serde_json::Map` exposes `remove` returning Option<Value>;
-    // `shift_remove` returns the (key, value) pair. We use whichever
-    // is consistent with the running serde_json version's API.
-    return /\.remove\(name\)\.is_some\(\)/.test(src);
+  section('upsert merges onto the existing entry so siblings survive', () => {
+    return /\.or_insert_with\(\|\|\s*Value::Object\(Map::new\(\)\)\)/.test(src);
+  });
+  section('set_enabled(scope, name, bool) toggles the disabled flag', () => {
+    return (
+      /pub\s+async\s+fn\s+set_enabled\(\s*[\s\S]*?scope:\s*McpScope,\s*name:\s*&str,\s*enabled:\s*bool/.test(
+        src,
+      ) &&
+      /entry\.remove\("disabled"\)/.test(src) &&
+      /entry\.insert\("disabled"\.to_string\(\),\s*Value::Bool\(true\)\)/.test(src)
+    );
+  });
+  section('remove_server(scope, name) returns bool and skips a no-op rewrite', () => {
+    return (
+      /pub\s+async\s+fn\s+remove_server\(\s*&self,\s*scope:\s*McpScope,\s*name:\s*&str\s*\)\s*->\s*Result<bool, McpConfigError>/.test(
+        src,
+      ) &&
+      /servers\.remove\(name\)\.is_some\(\)/.test(src) &&
+      /if\s+!removed\s*\{\s*return\s+Ok\(false\)/.test(src)
+    );
   });
 })();
 
@@ -216,10 +276,8 @@ console.log('\nD. src-tauri/src/tools/mod.rs — remove_by_prefix helper');
 (() => {
   const src = read('src-tauri/src/tools/mod.rs');
   section('ToolRegistry::remove_by_prefix exists', () => {
-    return (
-      /pub\s+fn\s+remove_by_prefix\s*\(\s*&mut\s*self,\s*prefix:\s*&str\s*\)\s*->\s*usize/.test(
-        src,
-      )
+    return /pub\s+fn\s+remove_by_prefix\s*\(\s*&mut\s*self,\s*prefix:\s*&str\s*\)\s*->\s*usize/.test(
+      src,
     );
   });
   section('remove_by_prefix clears tools, risks, and definitions by prefix', () => {
@@ -231,37 +289,32 @@ console.log('\nD. src-tauri/src/tools/mod.rs — remove_by_prefix helper');
   });
 })();
 
-// ─── Section E: src-tauri/src/mcp/client.rs ───────────────────────
-console.log('\nE. src-tauri/src/mcp/client.rs — sync lock + status events');
+// ─── Section E: src-tauri/src/mcp/client/*.rs ─────────────────────
+console.log('\nE. src-tauri/src/mcp/client/ — sync lock + status events');
 (() => {
-  const src = read('src-tauri/src/mcp/client.rs');
+  // client.rs was split into a module dir; concatenate every *.rs so these
+  // structural asserts survive where each symbol physically lives.
+  const src = readDirConcat('src-tauri/src/mcp/client', (f) => f.endsWith('.rs'));
   section('McpClient struct owns Arc<Mutex<()>> sync_lock', () => {
     return /sync_lock:\s*Arc<Mutex<\(\)>>/.test(src);
   });
   section('sync_lock initialized in McpClient::new', () => {
-    return (
-      /impl\s+McpClient\s*\{[\s\S]*?sync_lock:\s*Arc::new\(\s*Mutex::new\(\(\)[^)]*\)/.test(src)
-    );
+    return /sync_lock:\s*Arc::new\(\s*Mutex::new\(\(\)\s*\)\s*\)/.test(src);
   });
   section('sync_external_servers takes Option<&AppHandle>', () => {
-    return (
-      /pub\s+async\s+fn\s+sync_external_servers\(\s*self:\s*&Arc<Self>,\s*app:\s*Option<&AppHandle>\s*\)/.test(
-        src,
-      )
+    return /pub\s+async\s+fn\s+sync_external_servers\(\s*self:\s*&Arc<Self>,\s*app:\s*Option<&AppHandle>\s*\)/.test(
+      src,
     );
   });
-  section(
-    'sync_external_servers acquires sync_lock and wipes ext:* adapters first',
-    () => {
-      return (
-        /let\s+_guard\s*=\s*self\.sync_lock\.lock\(\)\.await/.test(src) &&
-        /registry\.remove_by_prefix\("ext:"\)/.test(src)
-      );
-    },
-  );
+  section('sync acquires sync_lock and wipes ext:* adapters first', () => {
+    return (
+      /let\s+_guard\s*=\s*self\.sync_lock\.lock\(\)\.await/.test(src) &&
+      /\.remove_by_prefix\("ext:"\)/.test(src)
+    );
+  });
   section('emit_server_status helper exists with app: Option<&AppHandle>', () => {
     return (
-      /fn\s+emit_server_status\(\s*\n?\s*app:\s*Option<&AppHandle>/.test(src) &&
+      /fn\s+emit_server_status\(\s*[\s\S]*?app:\s*Option<&AppHandle>/.test(src) &&
       /app\.emit\("mcp:server:status"/.test(src)
     );
   });
@@ -269,13 +322,11 @@ console.log('\nE. src-tauri/src/mcp/client.rs — sync lock + status events');
     return (
       /"name":\s*name/.test(src) &&
       /"status":\s*status/.test(src) &&
-      /payload\["error"\]\s*=\s*serde_json::Value::String\(e\)/.test(src)
+      /payload\["error"\]\s*=\s*serde_json::Value::String\(/.test(src)
     );
   });
-  section('servers emit reconnecting/connected/failed spanning the loop', () => {
-    // Count distinct call sites by scanning for the literal name string.
+  section('servers emit status across the sync loop (>= 6 call sites)', () => {
     const calls = (src.match(/emit_server_status\(/g) || []).length;
-    // bootstrap + 5 in-loop emit call sites = at least 6.
     return calls >= 6;
   });
 })();
@@ -284,60 +335,91 @@ console.log('\nE. src-tauri/src/mcp/client.rs — sync lock + status events');
 console.log('\nF. src-tauri/src/lib.rs — command registration + boot caller');
 (() => {
   const src = read('src-tauri/src/lib.rs');
-  section('invoke_handler registers all 4 new commands', () => {
+  section('invoke_handler registers the scope CRUD command surface', () => {
     return (
       /commands::mcp::mcp_list_servers/.test(src) &&
-      /commands::mcp::mcp_add_server/.test(src) &&
+      /commands::mcp::mcp_upsert_server/.test(src) &&
+      /commands::mcp::mcp_set_enabled/.test(src) &&
       /commands::mcp::mcp_remove_server/.test(src) &&
       /commands::mcp::mcp_reconnect/.test(src)
     );
   });
+  section('retired mcp_add_server is no longer registered', () => {
+    return !/commands::mcp::mcp_add_server/.test(src);
+  });
   section('boot caller passes None to sync_external_servers', () => {
-    // Tolerant whitespace across lines.
     return /client\.sync_external_servers\(\s*None\s*\)\.await/.test(src);
   });
 })();
 
-// ─── Section G: MCPExternalServers.tsx — typed cards ─────────────
-console.log('\nG. MCPExternalServers.tsx — typed list-of-cards UI');
+// ─── Section G: split UI components (row + form) ─────────────────
+console.log('\nG. McpServerRow.tsx + McpServerForm.tsx — typed split UI');
 (() => {
-  const src = read('src/components/settings/Tabs/plugins/MCPExternalServers.tsx');
-  section('No <textarea> editor remains (raw JSON has been retired)', () => {
-    return !/<textarea\b/i.test(src);
+  const base = 'src/components/settings/Tabs/plugins';
+  section('Retired MCPExternalServers.tsx no longer exists', () => {
+    return !exists(`${base}/MCPExternalServers.tsx`);
   });
-  section('Receives typed McpServerEntry[] + statusMap props', () => {
+  section('McpServerRow renders name + endpoint + status pill + transport/scope', () => {
+    if (!exists(`${base}/McpServerRow.tsx`)) return false;
+    const src = read(`${base}/McpServerRow.tsx`);
     return (
-      /interface\s+Props\s*\{[^}]*\}/.test(src) &&
-      /servers:\s*McpServerEntry\[\]/.test(src) &&
-      /statusMap:\s*Record<string,\s*McpServerStatusEvent>/.test(src)
+      /server\.name/.test(src) &&
+      /endpointDisplay/.test(src) &&
+      /StatusPill/.test(src) &&
+      /TRANSPORT_LABEL/.test(src) &&
+      /TRANSPORT_ICON/.test(src) &&
+      /SCOPE_LABEL/.test(src)
     );
   });
-  section('Renders per-row name + endpoint display + status pill', () => {
-    return /server\.name/.test(src) && /endpointDisplay/.test(src) && /StatusPill/.test(src);
+  section('McpServerRow wires onEdit / onToggleEnabled / onRemove', () => {
+    const src = read(`${base}/McpServerRow.tsx`);
+    return (
+      /onEdit\(server\)/.test(src) &&
+      /onToggleEnabled\(server,/.test(src) &&
+      /onRemove\(server\)/.test(src)
+    );
   });
-  section('Displays transport badge (HTTP / stdio) per row', () => {
-    return /TRANSPORT_LABEL/.test(src) && /TRANSPORT_ICON/.test(src);
+  section('McpServerForm exposes McpFormSubmit { scope, name, config }', () => {
+    if (!exists(`${base}/McpServerForm.tsx`)) return false;
+    const src = read(`${base}/McpServerForm.tsx`);
+    const m = src.match(/export\s+interface\s+McpFormSubmit\s*\{[\s\S]*?\n\}/);
+    if (!m) return false;
+    return (
+      /scope:\s*McpScope/.test(m[0]) &&
+      /name:\s*string/.test(m[0]) &&
+      /config:/.test(m[0])
+    );
   });
-  section('Includes Add MCP Server and Reconnect All buttons', () => {
-    return /Add MCP Server/.test(src) && /Reconnect All/.test(src);
+  section('McpServerForm supports both stdio and http transports', () => {
+    const src = read(`${base}/McpServerForm.tsx`);
+    return /transport:\s*McpTransport/.test(src) && /parseArgs/.test(src) && /buildEntry/.test(src);
   });
 })();
 
-// ─── Section H: MCPSettings.tsx — event subscriber ───────────────
+// ─── Section H: MCPSettings.tsx — event subscriber + handlers ────
 console.log('\nH. MCPSettings.tsx — wires typed UI + mcp:server:status events');
 (() => {
   const src = read('src/components/settings/Tabs/plugins/MCPSettings.tsx');
-  section('No more legacy JSON textarea path (uses listServers not getConfig-by-string)', () => {
+  section('Uses listServers (no legacy JSON textarea parse path)', () => {
     return !/JSON\.parse\(configText\)/.test(src) && /mcpApi\.listServers/.test(src);
   });
   section('Subscribes to mcp:server:status via subscribeServerStatus', () => {
     return /mcpApi\s*\.\s*subscribeServerStatus\s*\(/.test(src);
   });
-  section('Wires add/remove/reconnect into typed handlers', () => {
+  section('Renders the split McpServerRow + McpServerForm components', () => {
     return (
-      /handleAdd[\s\S]*?await\s+mcpApi\.addServer/.test(src) &&
-      /handleRemove[\s\S]*?await\s+mcpApi\.removeServer/.test(src) &&
-      /handleReconnect[\s\S]*?await\s+mcpApi\.reconnect/.test(src)
+      /<McpServerRow\b/.test(src) &&
+      /<McpServerForm\b/.test(src) &&
+      /Add MCP Server/.test(src) &&
+      /Reconnect All/.test(src)
+    );
+  });
+  section('Wires upsert/setEnabled/remove/reconnect into typed handlers', () => {
+    return (
+      /await\s+mcpApi\.upsertServer/.test(src) &&
+      /await\s+mcpApi\.setEnabled/.test(src) &&
+      /await\s+mcpApi\.removeServer/.test(src) &&
+      /await\s+mcpApi\.reconnect/.test(src)
     );
   });
 })();
@@ -346,33 +428,28 @@ console.log('\nH. MCPSettings.tsx — wires typed UI + mcp:server:status events'
 console.log('\nI. Runtime wire contract');
 (() => {
   const ts = read('src/api/mcpApi.ts');
-  const rs = read('src-tauri/src/mcp/client.rs');
-  section(
-    'Event payload { name, status, error? } agrees between TS and Rust',
-    () => {
-      // TS declares name, status, optional error.
-      const tsShape =
-        /name:\s*string/.test(ts) &&
-        /status:\s*McpServerStatus/.test(ts) &&
-        /error\?:\s*string/.test(ts);
-      // Rust emits exactly those three keys (error only when Some).
-      const rsShape =
-        /"name":\s*name/.test(rs) && /"status":\s*status/.test(rs) && /payload\["error"\]/.test(rs);
-      return tsShape && rsShape;
-    },
-  );
-  section('Status values match exactly: reconnecting / connected / failed', () => {
-    // TS union invariant:
-    const tsUnion = /"reconnecting"/.test(ts) && /"connected"/.test(ts) && /"failed"/.test(ts);
-    // Rust emit helper only knows the same three.
-    const rsCallSites = rs.match(/emit_server_status\([^)]*?\)/g) || [];
+  const rs = readDirConcat('src-tauri/src/mcp/client', (f) => f.endsWith('.rs'));
+  section('Event payload { name, status, error? } agrees between TS and Rust', () => {
+    const tsShape =
+      /name:\s*string/.test(ts) &&
+      /status:\s*McpServerStatus/.test(ts) &&
+      /error\?:\s*string/.test(ts);
+    const rsShape =
+      /"name":\s*name/.test(rs) && /"status":\s*status/.test(rs) && /payload\["error"\]/.test(rs);
+    return tsShape && rsShape;
+  });
+  section('Status values agree: TS union covers every emitted Rust status', () => {
+    const tsUnionM = ts.match(/export\s+type\s+McpServerStatus\s*=\s*([\s\S]*?);/);
+    if (!tsUnionM) return false;
+    const tsValues = (tsUnionM[1].match(/"([a-z_]+)"/g) || []).map((s) => s.replace(/"/g, ''));
+    // Every status literal emitted by the Rust helper must exist in the TS union.
+    const rsCallSites = rs.match(/emit_server_status\([\s\S]*?\)/g) || [];
     const rsStatusValues = rsCallSites
-      .flatMap((s) => s.match(/"(reconnecting|connected|failed)"/g) || [])
+      .flatMap((s) => s.match(/"(reconnecting|connected|failed|disabled|awaiting_consent)"/g) || [])
       .map((s) => s.replace(/"/g, ''));
-    const allValid = rsStatusValues.every((v) =>
-      ['reconnecting', 'connected', 'failed'].includes(v),
-    );
-    return tsUnion && allValid && rsStatusValues.length >= 6;
+    const covered = rsStatusValues.every((v) => tsValues.includes(v));
+    const coreTs = ['reconnecting', 'connected', 'failed'].every((v) => tsValues.includes(v));
+    return coreTs && covered && rsStatusValues.length >= 6;
   });
 })();
 

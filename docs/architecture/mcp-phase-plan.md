@@ -1,6 +1,6 @@
 # MCP Modernization And Agent Discovery Plan
 
-**Status:** Proposed implementation plan  
+**Status:** Phases 0–8 implemented; Phase 7 extensions deferred by design  
 **Owner:** MCP/tooling maintainers  
 **Planning date:** 2026-08-14  
 **Scope:** External MCP configuration, protocol transports, security, tool discovery, agent awareness, and optional MCP features
@@ -488,6 +488,39 @@ Exit gate:
 - Request state is never parsed or modified by the client.
 - Server-origin and requested data are visible in user-facing language.
 
+**Implementation status (2026-08-14): Phase 6 complete.** MRTR parsing is a pure
+module (`mcp/mrtr.rs`): `is_input_required` treats a missing `resultType` as
+`complete`, `parse_input_required` reads `inputRequests`/`requestState`, caps the
+surfaced requests at `MAX_INPUT_REQUESTS` (16) so a hostile server can't flood
+the UI, truncates+control-strips each prompt message, and marks every
+server-request method other than `elicitation/create` as a *fatal* block (ZEN
+never declared support for sampling/roots, so a conformant server won't ask). A
+form-mode `requestedSchema` that names a credential (`schema_requests_secret`
+scans key/title/format for password/token/key/secret needles) is *non-fatally*
+auto-declined, and a url-mode request without a displayable absolute `http(s)`
+URL is likewise auto-declined — a secret is never collectable in-band and an
+unusable URL is never shown. The opaque `requestState` is stored as a raw
+`Value` and echoed back **verbatim** on retry via `build_retry_params`, which
+also drops any `requestState` the interim result did not resend (spec: clients
+MUST NOT invent one). `client/elicit.rs` owns the fail-closed loop
+(`request_with_mrtr`, `MAX_MRTR_ROUNDS` = 5): `tools/call`, `resources/read`,
+and `prompts/get` all route through it; a `None` UI handle turns an
+input-required result into an error rather than a silent hang or auto-answer; a
+fatal block fails the whole call while a non-fatal block auto-declines that one
+request. Each prompt emits `mcp:elicitation:request`, awaits a 120s
+`ELICIT_TIMEOUT_SECS` oneshot (timeout ⇒ cancel), and a url is opened only after
+an explicit accept and only through the OS browser (`opener().open_url`, never
+prefetched or rendered in-app). `build_elicit_result` attaches `content` only on
+an accepted form. The client declares `elicitation: { form: {}, url: {} }` in
+`modern_request_meta`'s `io.modelcontextprotocol/clientCapabilities`. The
+frontend `McpElicitationModal` renders only flat-primitive form fields (object/
+array props are skipped so no structured/opaque input is smuggled), shows a
+url-mode consent card with the full URL verbatim and a trust warning, and every
+exit path calls `mcp_resolve_elicitation` so the awaiting backend request is
+always released; `useMcpElicitations` de-dupes and FIFO-queues concurrent
+requests. Behavior is locked by `test/verify-mcp-mrtr-elicitation.mjs` (shape +
+adversarial-input semantics) plus Rust unit tests in `mrtr.rs`/`elicit.rs`.
+
 ### Phase 7 — Optional extensions
 
 **Goal:** Add extensions only when a product requirement justifies their cost.
@@ -501,6 +534,36 @@ Candidates:
 
 Extensions must be explicitly negotiated, feature-gated, and independently
 matured. They must not be mixed into the mandatory core transport path.
+
+**Implementation status (2026-08-14): deferred, by design.** No Phase-7 extension
+ships in this release. Each is deferred until a concrete product requirement
+justifies its cost, and none is allowed to leak into the core transport:
+
+- **Tasks (durable long-running tool handles):** deferred. ZEN's execution model
+  is synchronous request/response with cooperative cancellation
+  (`notifications/cancelled`, `CancellationToken`) and MRTR for interactive
+  pauses, which covers current tool needs. A durable task store, polling, and
+  reload-safe resumption are a large surface (persistence, UI, reconnect replay)
+  with no current consumer. Add only when a first-party server needs
+  minutes-to-hours background execution; gate behind a negotiated
+  `tasks` capability so a server that doesn't advertise it never sees task
+  semantics.
+- **MCP Apps (sandboxed interactive server UI):** deferred. This requires a
+  strict artifact/CSP boundary and an iframe/webview sandbox that ZEN does not
+  have; introducing it now would widen the untrusted-content attack surface
+  without a driving use case. Revisit only with a dedicated sandbox design
+  reviewed against `Security.md`; must be feature-gated and never auto-enabled by
+  a server's advertisement alone.
+- **OpenTelemetry trace-context propagation:** deferred. ZEN already has
+  structured `tracing` and a safe diagnostics export (Phase 8); outbound OTel
+  would add a network egress path and a dependency with no current backend to
+  receive it. Add behind an explicit opt-in setting if/when a user runs a
+  collector; never on by default.
+
+The negotiation and feature-gating hooks already exist: capabilities are
+declared in `modern_request_meta` and the server's advertised capabilities are
+captured per-server in the inventory snapshot, so a future extension can be
+gated on a negotiated capability without touching the mandatory transport path.
 
 ### Phase 8 — Release hardening
 
@@ -524,6 +587,55 @@ Release gate:
 - Security and consent tests pass.
 - Agent behavior is deterministic when MCP is absent, unavailable, ready, or
   changing.
+
+**Implementation status (2026-08-14): Phase 8 complete.** The MCP verifiers are
+behavior/contract tests (Node `verify-mcp-*.mjs`) that assert both the source
+shape and a reference re-implementation of each safety rule against adversarial
+input, rather than snapshotting a fixed file path: inventory, protocol
+negotiation, transport hardening, security, init handshake, pagination, tool
+adapter, annotation mapping, server UI, production tools, resources/prompts, and
+now `verify-mcp-mrtr-elicitation.mjs` for Phase 6. Modern and legacy HTTP flows
+are covered by `wiremock` tests in `mcp/client/mod.rs`
+(`modern_http_uses_one_endpoint_for_discovery_and_tools` and explicit legacy
+fallback); stdio framing/cancellation is covered in `mcp/stdio.rs`. Malformed and
+malicious-server behavior is exercised at the parse/validate boundary
+(unsupported-method fatal block, request-flood cap, oversized-message
+truncation, credential-schema refusal, non-http(s) URL refusal, traversal/
+control-char/blob-size guards in `resources.rs`). The pure MRTR parse/elicit
+logic also runs as native Rust tests in the Windows-safe `policy-tests` crate
+(`mcp::mrtr::tests`, wired via `#[path]`), so the safety invariants are locked by
+an executable check and not only a source-shape regex. The settings UI documents
+the supported protocol versions (modern `2026-07-28`, legacy `2025-06-18`,
+reduced `2024-11-05`, no SSE). `export_diagnostics` writes safe inventory + protocol
+status only — transport, availability, negotiated era/version, capability
+summary, tool count, and stable error code per server, plus the list of
+supported protocol versions; server names, URLs, commands, headers, env values,
+and payloads are excluded. Migration guidance for existing `.mcp.json` entries
+is in §9 below.
+
+### Migrating an existing `.mcp.json`
+
+Older ZEN configs remain readable — no manual rewrite is required — but two
+behaviors changed and are worth knowing:
+
+1. **Consent is re-armed for every server.** After upgrading, each configured
+   server (including ones saved before this work) starts in `AwaitingConsent`
+   and must be approved once in Settings → MCP before it connects. The consent
+   fingerprint covers transport/url/command/args and the *key names* of
+   headers/env (never their values); editing any of those re-triggers consent.
+2. **Raw secrets are rejected at save time.** A header or `env` value that looks
+   like a literal credential is refused on persist unless it is written as a
+   reference: `${env:VAR}` (expanded from the host environment at connect time)
+   or `${secret:name}` (resolved from `SecretService`). Move any inline token
+   out of `.mcp.json` into the host environment or the secret store and replace
+   it with a reference. Nothing secret is ever written back to the file.
+
+Other notes: HTTP servers post every JSON-RPC message to the one configured
+endpoint (modern) instead of appending `/tools/list`·`/tools/call`; a `type`
+field (`stdio` | `http`) is honored and stale fields are dropped when the
+transport changes; SSE-only transports are not supported (use Streamable HTTP);
+and a malformed hand-edited entry fails closed to a visible unavailable state
+rather than starting a process or connection.
 
 ## 5. Agent decision table
 
