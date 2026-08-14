@@ -1,4 +1,4 @@
-import { ArrowUp, Mic, Pause, Play, Square } from "lucide-react";
+import { ArrowUp, Bookmark, BookmarkCheck, Mic, Pause, Play, Square } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils/style";
 import { useUIStore } from "@/lib/stores/useUIStore";
@@ -77,6 +77,11 @@ export interface ChatInputFooterProps {
   isPaused?: boolean;
   isLoading?: boolean;
   hasContent: boolean;
+  // Prompt stash: save the current draft (text + images) to restore later in
+  // any thread. `hasStash` switches the button between save and restore.
+  onStash?: () => void;
+  onRestore?: () => void;
+  hasStash?: boolean;
 }
 
 export const ChatInputFooter = (props: ChatInputFooterProps) => {
@@ -171,6 +176,25 @@ export const ChatInputFooter = (props: ChatInputFooterProps) => {
       </div>
 
       <div className="composer-fixed-actions flex shrink-0 items-center gap-1.5">
+        {props.onStash && props.onRestore && (
+          <button
+            onClick={() => {
+              if (props.hasStash) props.onRestore?.();
+              else props.onStash?.();
+            }}
+            type="button"
+            disabled={!props.hasStash && !props.hasContent}
+            className={cn(
+              "composer-control composer-control--icon p-1.5",
+              isWelcome ? "rounded-md" : "rounded-full",
+              props.hasStash && "text-primary",
+            )}
+            aria-label={props.hasStash ? "Restore stashed draft" : "Stash current draft"}
+            title={props.hasStash ? "Restore stashed draft in this chat" : "Save current draft to restore later in any chat"}
+          >
+            {props.hasStash ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+          </button>
+        )}
         <ContextTrigger chatId={props.activeChatId} />
         <button
           onClick={handleMicClick}

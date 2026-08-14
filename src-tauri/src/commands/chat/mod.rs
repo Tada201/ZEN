@@ -6,6 +6,7 @@
 //!   `crud`      — create/get/list/delete + bulk delete.
 //!   `send`      — `send_message` (the heavy lifter).
 //!   `title`     — title generation + update.
+//!   `repair`    — one-shot Mermaid diagram repair via the active model.
 //!   `archive`   — pin / archive / unarchive / list-archived.
 //!   `tags`      — tag listing + chat search.
 //!   `folders`   — chat folder CRUD.
@@ -16,6 +17,7 @@ mod crud;
 mod folders;
 mod helpers;
 mod lifecycle;
+mod repair;
 mod send;
 mod tags;
 mod title;
@@ -26,6 +28,7 @@ pub use crud::*;
 pub use folders::*;
 pub use helpers::{sanitize_title, ThinkingConfig};
 pub use lifecycle::*;
+pub use repair::*;
 pub use send::*;
 pub use tags::*;
 pub use title::*;

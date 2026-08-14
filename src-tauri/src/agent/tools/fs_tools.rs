@@ -20,8 +20,9 @@ impl AgentTool for ListDocumentsTool {
     }
 
     fn description(&self) -> &str {
-        "Lists uploaded documents with their exact recorded file paths. Call this first when the relevant file path is unknown, then use read_document_content for authoritative contents. \
-         The returned file_path should be passed to read_document_content."
+        "Lists ONLY user-uploaded / ingested documents from the knowledge base (the RAG library), with their recorded file paths and ingest status. \
+         This does NOT read the workspace filesystem and will be empty when no documents have been uploaded — to browse real workspace files and folders use `list_directory` instead. \
+         Call this when you need an uploaded file's path, then pass the returned file_path to read_document_content."
     }
 
     fn input_schema(&self) -> Value {
@@ -62,6 +63,187 @@ impl AgentTool for ListDocumentsTool {
 
         Ok(json!({ "documents": formatted_docs }))
     }
+}
+
+// ─── 1b. ListDirectoryTool ───
+// Native workspace file/folder lister. `list_documents` only knows about
+// RAG-ingested uploads, so the agent had no way to see real workspace files
+// without shelling out to `ls`/`dir` — which fails under PowerShell. This
+// tool gives a deterministic, boundary-checked listing.
+pub struct ListDirectoryTool;
+
+#[derive(Deserialize)]
+struct ListDirectoryArgs {
+    /// Directory to list. Omit to use the workspace root.
+    #[serde(default)]
+    path: Option<String>,
+    /// List nested entries when true. Omit for top-level only.
+    #[serde(default)]
+    recursive: Option<bool>,
+}
+
+const LIST_DIR_MAX_ENTRIES: usize = 1_000;
+const LIST_DIR_MAX_DEPTH: usize = 8;
+
+pub(crate) fn is_ignored_dir(name: &str) -> bool {
+    matches!(
+        name,
+        ".git" | "node_modules" | "target" | ".next" | "dist" | ".venv" | "__pycache__"
+    )
+}
+
+#[async_trait]
+impl AgentTool for ListDirectoryTool {
+    fn id(&self) -> &str {
+        "list_directory"
+    }
+
+    fn description(&self) -> &str {
+        "Lists files and subdirectories inside a workspace directory, with type and size. \
+         Use this to discover the real files in the current workspace before reading or editing them. \
+         Omit `path` to list the workspace root. Set `recursive` to true to walk nested folders \
+         (common noise dirs like .git, node_modules, and target are skipped). \
+         Results are capped; narrow `path` if the listing is truncated."
+    }
+
+    fn input_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Directory to list, absolute or workspace-relative. Omit this field to use the workspace root. Do NOT pass \"undefined\" or \"null\" — omit it instead."
+                },
+                "recursive": {
+                    "type": "boolean",
+                    "description": "List nested entries when true. Omit for top-level contents only."
+                }
+            },
+            "additionalProperties": false
+        })
+    }
+
+    async fn run(
+        &self,
+        app: AppHandle,
+        chat_id: String,
+        input: Value,
+        _depth: u32,
+        _allowed_tools: Option<Arc<Mutex<HashSet<String>>>>,
+        _token: tokio_util::sync::CancellationToken,
+    ) -> Result<Value> {
+        let args: ListDirectoryArgs = serde_json::from_value(input).unwrap_or(ListDirectoryArgs {
+            path: None,
+            recursive: None,
+        });
+        let recursive = args.recursive.unwrap_or(false);
+
+        let state = app.state::<AppState>();
+        let workspace = state
+            .workspace_for_chat(&chat_id)
+            .await
+            .map_err(|e| anyhow::anyhow!("Unable to resolve session workspace: {}", e))?;
+
+        // Resolve the requested path (or the workspace root) and confirm it
+        // stays inside the workspace boundary.
+        let target = match args.path.as_deref().map(str::trim) {
+            Some(p) if !p.is_empty() => {
+                crate::workspace::resolve_workspace_path(&workspace, p)
+                    .map_err(|e| anyhow::anyhow!("Workspace violation: {}", e))?
+            }
+            _ => workspace.clone(),
+        };
+        let target = crate::workspace::validate_workspace_path(&workspace, &target)
+            .map_err(|e| anyhow::anyhow!("Workspace violation: {}", e))?;
+
+        if !target.exists() {
+            return Err(anyhow::anyhow!(
+                "Directory not found: {}",
+                target.display()
+            ));
+        }
+        if !target.is_dir() {
+            return Err(anyhow::anyhow!(
+                "Not a directory: {}",
+                target.display()
+            ));
+        }
+
+        let mut entries = Vec::new();
+        let mut truncated = collect_dir_entries(&target, &target, recursive, 0, &mut entries).await;
+        if entries.len() > LIST_DIR_MAX_ENTRIES {
+            entries.truncate(LIST_DIR_MAX_ENTRIES);
+            truncated = true;
+        }
+
+        // Directories first, then alphabetical — a stable, human-friendly order.
+        entries.sort_by(|a, b| {
+            let a_dir = a.get("type").and_then(Value::as_str) == Some("dir");
+            let b_dir = b.get("type").and_then(Value::as_str) == Some("dir");
+            b_dir.cmp(&a_dir).then_with(|| {
+                a.get("name")
+                    .and_then(Value::as_str)
+                    .cmp(&b.get("name").and_then(Value::as_str))
+            })
+        });
+
+        Ok(json!({
+            "path": target.to_string_lossy(),
+            "entries": entries,
+            "truncated": truncated,
+        }))
+    }
+}
+
+/// Walk a directory collecting `{name, type, size, modified_ms}` records.
+/// Returns `true` if traversal stopped early because the entry cap was hit.
+/// Names are workspace-relative to `root` so nested entries stay readable.
+fn collect_dir_entries<'a>(
+    root: &'a Path,
+    dir: &'a Path,
+    recursive: bool,
+    depth: usize,
+    out: &'a mut Vec<Value>,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = bool> + Send + 'a>> {
+    Box::pin(async move {
+        let Ok(mut rd) = tokio::fs::read_dir(dir).await else {
+            return false;
+        };
+        while let Ok(Some(entry)) = rd.next_entry().await {
+            if out.len() >= LIST_DIR_MAX_ENTRIES {
+                return true;
+            }
+            let name = entry.file_name().to_string_lossy().to_string();
+            let Ok(meta) = entry.metadata().await else {
+                continue;
+            };
+            let is_dir = meta.is_dir();
+            let rel = entry
+                .path()
+                .strip_prefix(root)
+                .ok()
+                .map(|p| p.to_string_lossy().replace('\\', "/"))
+                .unwrap_or_else(|| name.clone());
+            let modified_ms = meta
+                .modified()
+                .ok()
+                .and_then(|m| m.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_millis() as u64);
+            out.push(json!({
+                "name": rel,
+                "type": if is_dir { "dir" } else { "file" },
+                "size": if is_dir { Value::Null } else { json!(meta.len()) },
+                "modified_ms": modified_ms,
+            }));
+
+            if is_dir && recursive && depth + 1 < LIST_DIR_MAX_DEPTH && !is_ignored_dir(&name) {
+                if collect_dir_entries(root, &entry.path(), recursive, depth + 1, out).await {
+                    return true;
+                }
+            }
+        }
+        false
+    })
 }
 
 // ─── 2. ReadDocumentTool ───
@@ -529,5 +711,62 @@ impl AgentTool for crate::tools::fs_tools::ApplyPatchTool {
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))?;
         Ok(output.content)
+    }
+}
+
+#[cfg(test)]
+mod list_directory_tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn collects_top_level_entries_only() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        std::fs::write(root.join("a.txt"), "hello").unwrap();
+        std::fs::create_dir(root.join("sub")).unwrap();
+        std::fs::write(root.join("sub").join("nested.txt"), "x").unwrap();
+
+        let mut entries = Vec::new();
+        let truncated = collect_dir_entries(root, root, false, 0, &mut entries).await;
+        assert!(!truncated);
+        // Non-recursive: the two top-level entries, not the nested file.
+        assert_eq!(entries.len(), 2);
+        let names: Vec<&str> = entries
+            .iter()
+            .filter_map(|e| e.get("name").and_then(Value::as_str))
+            .collect();
+        assert!(names.contains(&"a.txt"));
+        assert!(names.contains(&"sub"));
+        assert!(!names.iter().any(|n| n.contains("nested")));
+    }
+
+    #[tokio::test]
+    async fn recursive_walk_reaches_nested_and_skips_ignored() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir(root.join("sub")).unwrap();
+        std::fs::write(root.join("sub").join("nested.txt"), "x").unwrap();
+        std::fs::create_dir(root.join("node_modules")).unwrap();
+        std::fs::write(root.join("node_modules").join("dep.js"), "y").unwrap();
+
+        let mut entries = Vec::new();
+        collect_dir_entries(root, root, true, 0, &mut entries).await;
+        let names: Vec<String> = entries
+            .iter()
+            .filter_map(|e| e.get("name").and_then(Value::as_str).map(String::from))
+            .collect();
+        // Nested file reached (relative, forward-slashed); ignored dir contents skipped.
+        assert!(names.iter().any(|n| n == "sub/nested.txt"));
+        assert!(names.iter().any(|n| n == "node_modules"));
+        assert!(!names.iter().any(|n| n.contains("dep.js")));
+    }
+
+    #[test]
+    fn ignored_dirs_match_known_noise() {
+        assert!(is_ignored_dir(".git"));
+        assert!(is_ignored_dir("node_modules"));
+        assert!(is_ignored_dir("target"));
+        assert!(!is_ignored_dir("src"));
     }
 }

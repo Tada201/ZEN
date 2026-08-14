@@ -6,6 +6,8 @@ pub mod hardware;
 pub mod logging;
 pub mod mcp_adapter;
 pub mod mcp_config;
+pub mod mcp_consent;
+pub mod mcp_discovery;
 pub mod media;
 pub mod permissions;
 pub mod process_manager;
@@ -25,7 +27,11 @@ pub use document::DocumentService;
 pub use media::MediaService;
 pub use hardware::{HardwareInfo, HardwareService};
 pub use logging::init_backend_logging;
-pub use mcp_config::{McpConfigError, McpConfigService, McpServerEntry, McpTransport};
+pub use mcp_config::{McpConfigError, McpConfigService, McpScope, McpServerEntry, McpTransport};
+pub use mcp_consent::{McpConsentStore, PendingConsent};
+pub use mcp_discovery::{
+    McpAvailability, McpCapabilitySummary, McpDiscoveryService, McpInventory, McpServerRecord,
+};
 pub use secret::SecretService;
 pub use secret_policy::{
     is_secret_key, is_secret_placeholder_write, redact_if_secret, SECRET_PRESENT_SENTINEL,

@@ -45,7 +45,23 @@ import path from "node:path";
 
 const __filename = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = path.resolve(path.dirname(__filename), "..");
-const SRC = (p) => readFileSync(path.join(PROJECT_ROOT, p), "utf8");
+const SRC = (p) => {
+  // `mcp/client.rs` was split into `client/{mod,sync,stdio_helpers,http_handshake,http_body}.rs`.
+  // Read the whole client directory as one blob so shape assertions that
+  // predate the split keep anchoring on the same content.
+  if (p === "src-tauri/src/mcp/client.rs") {
+    return ["mod", "sync", "stdio_helpers", "http_handshake", "http_body"]
+      .map((f) => {
+        try {
+          return readFileSync(path.join(PROJECT_ROOT, "src-tauri/src/mcp/client", `${f}.rs`), "utf8");
+        } catch {
+          return "";
+        }
+      })
+      .join("\n");
+  }
+  return readFileSync(path.join(PROJECT_ROOT, p), "utf8");
+};
 
 let exitCode = 0;
 function fail(section, message) {

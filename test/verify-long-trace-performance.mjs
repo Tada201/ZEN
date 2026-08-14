@@ -22,6 +22,8 @@ assert(
     messageList.includes("if (isAutoScrolling.current) viewport.scrollTop"),
   "a queued scroll frame must re-check user scroll intent before writing layout",
 );
+assert(messageList.includes("FOLLOW_REARM_THRESHOLD_PX = 40"), "follow-at-end must re-arm only within a tight 40px band");
+assert(messageList.includes("distanceFromBottom <= FOLLOW_REARM_THRESHOLD_PX"), "scroll intent must be re-evaluated against the 40px rearm band");
 assert(signature.includes("CONTENT_BUCKET_SIZE"), "stream signatures should bucket small text deltas");
 assert(signature.includes("TOOL_OUTPUT_BUCKET_SIZE"), "stream signatures should bucket small tool-output deltas");
 

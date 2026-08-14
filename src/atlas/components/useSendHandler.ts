@@ -135,7 +135,9 @@ export function useSendHandler(ctx: UseSendHandlerCtx): UseSendHandlerResult {
         model: modelId,
         webSearch: ctx.isWebSearch,
         deepResearch: ctx.isDeepResearch,
-        generativeUI: promptText.includes("genui") || ctx.internalGenerativeUI,
+        // Suggested prompts must not silently elevate a disabled capability.
+        // GenUI is an explicit composer capability, never a text heuristic.
+        generativeUI: ctx.internalGenerativeUI,
         imageGen: ctx.isImageGenEnabled,
         files: [],
         attachments: [],

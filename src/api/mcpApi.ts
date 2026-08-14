@@ -5,8 +5,12 @@ export type McpConfig = Record<string, unknown>;
 
 export type McpTransport = "http" | "stdio";
 
+/** Which catalog a server lives in: `user` (global) or `workspace` (project). */
+export type McpScope = "user" | "workspace";
+
 export interface McpServerEntry {
   name: string;
+  scope: McpScope;
   transport: McpTransport;
   /** Set for HTTP-transport entries. */
   url?: string;
@@ -14,9 +18,130 @@ export interface McpServerEntry {
   command?: string;
   /** Set for stdio-transport entries. */
   args?: string[];
+  /** Environment variables for stdio servers (values may be `${env:VAR}`). */
+  env?: Record<string, string>;
+  /** HTTP request headers for http servers (values may be `${env:VAR}`). */
+  headers?: Record<string, string>;
+  /** Per-server request timeout override in milliseconds. */
+  timeoutMs?: number;
+  /** When true the client skips this row during sync. */
+  disabled: boolean;
 }
 
-export type McpServerStatus = "reconnecting" | "connected" | "failed";
+export type McpServerStatus =
+  | "reconnecting"
+  | "connected"
+  | "failed"
+  | "disabled"
+  | "awaiting_consent";
+
+export type McpAvailability =
+  | "configured"
+  | "connecting"
+  | "ready"
+  | "failed"
+  | "disabled"
+  | "awaiting_consent";
+
+/**
+ * A server held at the connection-consent gate. Carries only what the user
+ * needs to review before approving — never header/env *values*, only their
+ * key names. `fingerprint` is echoed back verbatim to `approveServer`.
+ */
+export interface PendingConsent {
+  name: string;
+  scope: string;
+  transport: string;
+  /** HTTP: `scheme://host[:port]`. stdio: the command. */
+  origin: string;
+  /** stdio args (empty for http). Config-authored, not secret. */
+  args: string[];
+  /** Names (not values) of configured headers/env vars. */
+  credentialKeys: string[];
+  /** The exact fingerprint the user approves. */
+  fingerprint: string;
+}
+
+export interface McpCapabilitySummary {
+  tools: boolean;
+  resources: boolean;
+  prompts: boolean;
+}
+
+/** A `resources/list` entry, safety-normalized by the backend. */
+export interface McpResource {
+  uri: string;
+  name: string;
+  title?: string;
+  description?: string;
+  mimeType?: string;
+  size?: number;
+}
+
+/** A `resources/templates/list` entry (RFC 6570 URI template). */
+export interface McpResourceTemplate {
+  uriTemplate: string;
+  name: string;
+  title?: string;
+  description?: string;
+  mimeType?: string;
+}
+
+/**
+ * One `resources/read` content block. Exactly one of `text`/`blobBase64` is
+ * set; `truncated` marks a payload clipped at the backend size cap. Binary
+ * stays base64 — it is never decoded into model text.
+ */
+export interface McpResourceContents {
+  uri: string;
+  mimeType?: string;
+  text?: string;
+  blobBase64?: string;
+  truncated: boolean;
+}
+
+export interface McpPromptArgument {
+  name: string;
+  description?: string;
+  required: boolean;
+}
+
+/** A `prompts/list` entry, safety-normalized. */
+export interface McpPrompt {
+  name: string;
+  title?: string;
+  description?: string;
+  arguments: McpPromptArgument[];
+}
+
+/**
+ * One `prompts/get` message. `content` is sanitized plain text; embedded
+ * resources are summarized to their URI, never inlined.
+ */
+export interface McpPromptMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface McpServerRecord {
+  serverId: string;
+  name: string;
+  scope: McpScope;
+  transport: "stdio" | "streamable_http" | "legacy_http_sse";
+  availability: McpAvailability;
+  protocolEra: "modern_2026" | "legacy_2025" | "legacy_2024" | "unknown";
+  protocolVersion?: string;
+  capabilities: McpCapabilitySummary;
+  toolCount: number;
+  lastSuccessAt?: string;
+  lastErrorCode?: string;
+}
+
+export interface McpInventory {
+  /** Monotonic snapshot revision; consumers ignore older event snapshots. */
+  revision: number;
+  servers: McpServerRecord[];
+}
 
 export interface McpServerStatusEvent {
   name: string;
@@ -25,14 +150,86 @@ export interface McpServerStatusEvent {
 }
 
 export const mcpApi = {
-  getConfig: () => callCommand<McpConfig>("mcp_get_config"),
-  saveConfig: (config: McpConfig) => callCommand<void>("mcp_save_config", { config }),
+  getConfig: (scope: McpScope) => callCommand<McpConfig>("mcp_get_config", { scope }),
+  saveConfig: (scope: McpScope, config: McpConfig) =>
+    callCommand<void>("mcp_save_config", { scope, config }),
   listServers: () => callCommand<McpServerEntry[]>("mcp_list_servers"),
-  addServer: (name: string, url: string) =>
-    callCommand<void>("mcp_add_server", { name, url }),
-  removeServer: (name: string) =>
-    callCommand<boolean>("mcp_remove_server", { name }),
+  /**
+   * Upsert `mcpServers[name]` in `scope` from a raw entry object. The
+   * backend validates the entry has the fields its transport needs
+   * (`url` for http, `command` for stdio) before persisting, then
+   * kicks a background reconnect.
+   */
+  upsertServer: (scope: McpScope, name: string, config: Record<string, unknown>) =>
+    callCommand<void>("mcp_upsert_server", { scope, name, config }),
+  /** Enable/disable a row without deleting it. Returns whether it existed. */
+  setEnabled: (scope: McpScope, name: string, enabled: boolean) =>
+    callCommand<boolean>("mcp_set_enabled", { scope, name, enabled }),
+  removeServer: (scope: McpScope, name: string) =>
+    callCommand<boolean>("mcp_remove_server", { scope, name }),
   reconnect: () => callCommand<void>("mcp_reconnect"),
+  getInventory: () => callCommand<McpInventory>("mcp_get_inventory"),
+  /** Servers held at the consent gate, awaiting explicit user approval. */
+  listPending: () => callCommand<PendingConsent[]>("mcp_list_pending"),
+  /**
+   * Approve a pending server for the exact `fingerprint` the user reviewed,
+   * then re-sync so it connects. A stale fingerprint is rejected by the
+   * backend so a config that changed after the prompt can't be approved blind.
+   */
+  approveServer: (name: string, fingerprint: string) =>
+    callCommand<void>("mcp_approve_server", { name, fingerprint }),
+  /** Deny/revoke consent; also clears any stored OAuth token, then re-syncs. */
+  denyServer: (name: string) => callCommand<void>("mcp_deny_server", { name }),
+  /**
+   * List a connected server's resources. Explicit user action — nothing is
+   * injected into the model. Entries are safety-normalized (URI allowlisted,
+   * fields control-stripped) by the backend.
+   */
+  listResources: (serverName: string) =>
+    callCommand<McpResource[]>("mcp_list_resources", { serverName }),
+  /** List a connected server's resource templates (RFC 6570 URI templates). */
+  listResourceTemplates: (serverName: string) =>
+    callCommand<McpResourceTemplate[]>("mcp_list_resource_templates", { serverName }),
+  /**
+   * Read a specific resource URI. The backend validates the URI against the
+   * scheme allowlist / path-traversal guard and caps content size; binary
+   * stays base64.
+   */
+  readResource: (serverName: string, uri: string) =>
+    callCommand<McpResourceContents[]>("mcp_read_resource", { serverName, uri }),
+  /** List a connected server's prompts. Explicit user action. */
+  listPrompts: (serverName: string) =>
+    callCommand<McpPrompt[]>("mcp_list_prompts", { serverName }),
+  /**
+   * Fetch a prompt's messages with user-supplied arguments. Message content is
+   * sanitized to plain text; embedded resources are summarized to their URI.
+   */
+  getPrompt: (serverName: string, name: string, args?: Record<string, unknown>) =>
+    callCommand<McpPromptMessage[]>("mcp_get_prompt", {
+      serverName,
+      name,
+      arguments: args,
+    }),
+  /**
+   * Run the interactive OAuth 2.1 (PKCE) flow: opens the system browser to a
+   * loopback redirect, exchanges the code, stores the token in the OS keyring,
+   * then re-syncs. `resourceMetadataUrl` comes from a 401's advertised
+   * protected-resource metadata when present.
+   */
+  authorizeOauth: (
+    name: string,
+    serverUrl: string,
+    clientId: string,
+    scopes?: string,
+    resourceMetadataUrl?: string,
+  ) =>
+    callCommand<void>("mcp_authorize_oauth", {
+      name,
+      serverUrl,
+      clientId,
+      scopes,
+      resourceMetadataUrl,
+    }),
   /**
    * Subscribe to per-row `mcp:server:status` events. The handler
    * receives one event per server row whenever a sync
@@ -40,6 +237,8 @@ export const mcpApi = {
    * unlisten function — call it in a React effect cleanup to
    * detach the listener when the settings tab unmounts.
    */
+  subscribeInventory: (onEvent: (inventory: McpInventory) => void): Promise<UnlistenFn> =>
+    listen<McpInventory>("mcp:inventory", (e) => onEvent(e.payload)),
   subscribeServerStatus: (
     onEvent: (event: McpServerStatusEvent) => void,
   ): Promise<UnlistenFn> =>

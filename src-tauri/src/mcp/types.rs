@@ -15,6 +15,9 @@ use serde_json::Value;
 /// Per https://modelcontextprotocol.io/, `2025-06-18` is widely supported
 /// by official reference SDKs.
 pub const PROTOCOL_VERSION: &str = "2025-06-18";
+/// Current-protocol probe/version. Legacy servers are retained behind the
+/// compatibility fallback until the transport path is fully modernized.
+pub const MODERN_PROTOCOL_VERSION: &str = "2026-07-28";
 
 /// HTTP header the client sets on every MCP request so the server knows
 /// it accepts both `application/json` and `text/event-stream` responses.
@@ -23,6 +26,8 @@ pub const HEADER_PROTOCOL_VERSION: &str = "MCP-Protocol-Version";
 /// HTTP header carrying the session id assigned by the server during
 /// `initialize`. Required on every request after the handshake completes.
 pub const HEADER_SESSION_ID: &str = "Mcp-Session-Id";
+pub const HEADER_METHOD: &str = "Mcp-Method";
+pub const HEADER_NAME: &str = "Mcp-Name";
 
 /// Required `Accept` value per the Streamable HTTP transport spec.
 pub const ACCEPT_JSON_OR_SSE: &str = "application/json, text/event-stream";
@@ -157,6 +162,10 @@ pub struct ServerCapabilities {
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub tools: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub resources: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub prompts: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub experimental: Option<Value>,
 }
 
@@ -177,10 +186,22 @@ pub struct InitializeResult {
 // ─── Method Name Constants (subset used by client) ───
 
 pub mod methods {
+    pub const DISCOVER: &str = "server/discover";
     pub const INITIALIZE: &str = "initialize";
     pub const NOTIFICATIONS_INITIALIZED: &str = "notifications/initialized";
     pub const TOOLS_LIST: &str = "tools/list";
     pub const TOOLS_CALL: &str = "tools/call";
+    pub const RESOURCES_LIST: &str = "resources/list";
+    pub const RESOURCES_READ: &str = "resources/read";
+    pub const RESOURCES_TEMPLATES_LIST: &str = "resources/templates/list";
+    pub const PROMPTS_LIST: &str = "prompts/list";
+    pub const PROMPTS_GET: &str = "prompts/get";
+
+    // Server → client notifications (list-change + resource subscription).
+    pub const NOTIFICATIONS_TOOLS_LIST_CHANGED: &str = "notifications/tools/list_changed";
+    pub const NOTIFICATIONS_RESOURCES_LIST_CHANGED: &str = "notifications/resources/list_changed";
+    pub const NOTIFICATIONS_PROMPTS_LIST_CHANGED: &str = "notifications/prompts/list_changed";
+    pub const NOTIFICATIONS_RESOURCES_UPDATED: &str = "notifications/resources/updated";
 }
 
 /// Builds a JSON-RPC notification (no `id`). MCP uses notifications for
@@ -201,6 +222,21 @@ pub fn notification(method: impl Into<String>, params: Option<Value>) -> Value {
 /// Sentinel payload for the `notifications/initialized` notification.
 /// The MCP spec says params SHOULD be empty — we send `{}` so pre-handshake
 /// ledger consumers can branch on field presence without crashing.
+/// Per-request metadata used by the current protocol era. Server-provided
+/// values are never merged into this object; it is client-owned only.
+pub fn modern_request_meta() -> Value {
+    serde_json::json!({
+        "_meta": {
+            "io.modelcontextprotocol/protocolVersion": MODERN_PROTOCOL_VERSION,
+            "io.modelcontextprotocol/clientInfo": {
+                "name": "zen",
+                "version": env!("CARGO_PKG_VERSION"),
+            },
+            "io.modelcontextprotocol/clientCapabilities": {},
+        }
+    })
+}
+
 pub fn initialized_notification() -> Value {
     notification(methods::NOTIFICATIONS_INITIALIZED, Some(serde_json::json!({})))
 }

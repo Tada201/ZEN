@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const assistant = read("src/atlas/components/chat/AssistantMessage.tsx");
+const assistantLogic = read("src/atlas/components/chat/AssistantMessage.logic.ts");
 const trace = read("src/atlas/components/chat/AgentExecutionTrace.tsx");
 const reasoning = read("src/atlas/components/chat/ReasoningBlock.tsx");
 const delegation = read("src/atlas/components/chat/AgentDelegationLane.tsx");
@@ -12,12 +13,12 @@ const deepResearch = read("src/atlas/components/chat/DeepResearchRunMessage.tsx"
 const disclosure = read("src/atlas/components/chat/executionDisclosure.ts");
 const rightPanel = read("src/atlas/components/right-panel/RightPanelInsights.tsx");
 
-assert(assistant.includes("function getExecutionStepKey"), "assistant should centralize stable execution step identity");
-assert(assistant.includes("toolBatchId") && assistant.includes("executionId") && assistant.includes("runId"), "live group keys should prefer canonical execution identity");
-assert(assistant.includes("executionGroupKeyCacheRef") && assistant.includes("groupKeyCache"), "live group keys should cache child identity across stream updates");
-assert(assistant.includes("baseFingerprint") && assistant.includes("fallbackFingerprint") && assistant.includes("immutable group shape"), "groups without IDs should use immutable fingerprint identity before index fallback");
-assert(assistant.includes("rememberedKey"), "late canonical identity must not remount an already-visible live group");
-assert(!assistant.includes("step.toolCalls.map(t => t.id).join"), "live group keys must not depend on changing child-id lists");
+assert(assistantLogic.includes("function getExecutionStepKey"), "assistant should centralize stable execution step identity");
+assert(assistantLogic.includes("toolBatchId") && assistantLogic.includes("executionId") && assistantLogic.includes("runId"), "live group keys should prefer canonical execution identity");
+assert(assistant.includes("executionGroupKeyCacheRef") && assistantLogic.includes("groupKeyCache"), "live group keys should cache child identity across stream updates");
+assert(assistantLogic.includes("baseFingerprint") && assistantLogic.includes("fallbackFingerprint") && assistantLogic.includes("immutable group shape"), "groups without IDs should use immutable fingerprint identity before index fallback");
+assert(assistantLogic.includes("rememberedKey"), "late canonical identity must not remount an already-visible live group");
+assert(!assistantLogic.includes("step.toolCalls.map(t => t.id).join"), "live group keys must not depend on changing child-id lists");
 const executionGroupBlock = assistant.match(/<ExecutionGroup[\s\S]*?\/>/)?.[0] || "";
 const subagentBlock = assistant.match(/<SubagentExecutionCard[\s\S]*?\/>/)?.[0] || "";
 assert(!executionGroupBlock.includes("isStreaming="), "ExecutionGroup must not receive the removed presentation prop");

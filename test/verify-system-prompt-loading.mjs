@@ -36,10 +36,11 @@ assert(
   "assistant placeholder should render before waiting on Gen UI system prompt load",
 );
 assert(
-  sendSource.includes("if (data.generativeUI)") &&
+  sendSource.includes("const generativeUIEnabled = data.generativeUI === true") &&
+    sendSource.includes("if (generativeUIEnabled)") &&
     sendSource.includes("systemPrompt = await preloadOpenUISystemPrompt();") &&
     sendSource.includes("systemPrompt: systemPrompt"),
-  "send path should pass the cached OpenUI prompt only for Gen UI turns",
+  "send path should pass the cached OpenUI prompt only for explicitly enabled Gen UI turns",
 );
 // Gen UI prompt warming was moved out of PremiumChatInput.tsx into
 // useGenUISync.ts (single idempotent effect on the internal toggle).

@@ -41,6 +41,9 @@ export function createLocalFirstFeedbackStep({
       tools: enabledTools,
       toolCount: enabledTools.length,
       parallel: enabledTools.length > 1,
+      // This explicit per-turn capability marker is persisted with the
+      // ordered timeline and is the reload-time GenUI gate.
+      generativeUI: Boolean(generativeUI),
     },
   };
 }

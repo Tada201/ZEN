@@ -18,17 +18,23 @@
  * `node:fs`, assert with `node:assert`, drive HTTP via global `fetch`.
  */
 import { createServer } from "node:http";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
-const CLIENT_RS = new URL("../src-tauri/src/mcp/client.rs", import.meta.url);
+// `client.rs` was split into a `client/` module directory; the pagination
+// logic now lives in `client/stdio_helpers.rs` + `client/http_handshake.rs`.
+// Read the whole module so the source-shape assertions survive the split.
+const CLIENT_DIR = new URL("../src-tauri/src/mcp/client/", import.meta.url);
 
 const PROTOCOL_VERSION = "2025-06-18";
 const ACCEPT_JSON_OR_SSE = "application/json, text/event-stream";
 
 // ── 1. Source-shape assertions ────────────────────────────────────────────
 
-const clientSource = readFileSync(CLIENT_RS, "utf8");
+const clientSource = readdirSync(CLIENT_DIR)
+  .filter((f) => f.endsWith(".rs"))
+  .map((f) => readFileSync(new URL(f, CLIENT_DIR), "utf8"))
+  .join("\n");
 
 function assertContainsAll(label, source, patterns) {
   const missing = patterns.filter((re) => !re.test(source));

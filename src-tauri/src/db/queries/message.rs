@@ -168,3 +168,47 @@ pub async fn update_message_content_and_metadata(
         .await?;
     Ok(())
 }
+
+/// Persists an edited assistant message body (used by self-healing diagram
+/// repairs). Optionally rewrites `steps_json` in the same write so reloads
+/// reproduce the fixed content on the timeline path too. Scoped to the chat +
+/// assistant role; errors when no matching row exists.
+pub async fn update_message_content(
+    pool: &SqlitePool,
+    chat_id: &str,
+    message_id: &str,
+    content: &str,
+    steps_json: Option<&str>,
+) -> ZenResult<()> {
+    let result = match steps_json {
+        Some(steps) => {
+            sqlx::query(
+                "UPDATE messages SET content = ?, steps_json = ? WHERE id = ? AND chat_id = ? AND role = 'assistant'",
+            )
+            .bind(content)
+            .bind(steps)
+            .bind(message_id)
+            .bind(chat_id)
+            .execute(pool)
+            .await?
+        }
+        None => {
+            sqlx::query(
+                "UPDATE messages SET content = ? WHERE id = ? AND chat_id = ? AND role = 'assistant'",
+            )
+            .bind(content)
+            .bind(message_id)
+            .bind(chat_id)
+            .execute(pool)
+            .await?
+        }
+    };
+
+    if result.rows_affected() == 0 {
+        return Err(crate::error::ZenError::Custom(
+            UPDATE_MESSAGE_STEPS_NOT_FOUND.to_string(),
+        ));
+    }
+
+    Ok(())
+}

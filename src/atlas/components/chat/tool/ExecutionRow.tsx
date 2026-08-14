@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   CheckCircle2,
   ChevronRight,
+  Circle,
   Loader2,
   ShieldAlert,
   XCircle,
@@ -64,6 +65,38 @@ const STATUS_ICON_CLASS: Record<ExecutionStatus, string> = {
   awaiting_approval: "text-warning",
 };
 
+export function normalizeExecutionRowStatus(value: string | undefined): ExecutionStatus {
+  const normalized = (value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  switch (normalized) {
+    case "completed":
+    case "complete":
+    case "done":
+    case "success":
+    case "succeeded":
+      return "completed";
+    case "error":
+    case "errored":
+    case "failed":
+    case "failure":
+      return "error";
+    case "cancelled":
+    case "canceled":
+    case "stopped":
+    case "aborted":
+    case "interrupted":
+      return "interrupted";
+    case "awaiting_approval":
+    case "waiting_for_approval":
+    case "approval_required":
+    case "approval":
+      return "awaiting_approval";
+    default:
+      // Unknown or missing backend phases are treated as active rather than
+      // crashing the row. The next lifecycle event can resolve the final state.
+      return "running";
+  }
+}
+
 export function getExecutionStatusLabel(status: ExecutionStatus) {
   if (status === "awaiting_approval") return "Needs approval";
   if (status === "completed") return "Complete";
@@ -95,8 +128,9 @@ export function ExecutionRow({
   statusLabel,
   variant = "card",
 }: ExecutionRowProps) {
-  const Icon = STATUS_ICONS[status];
-  const resolvedStatusLabel = statusLabel || getExecutionStatusLabel(status);
+  const resolvedStatus = normalizeExecutionRowStatus(status);
+  const Icon = STATUS_ICONS[resolvedStatus] ?? Circle;
+  const resolvedStatusLabel = statusLabel || getExecutionStatusLabel(resolvedStatus);
   const resolvedAriaLabel = [
     typeof title === "string" ? title : undefined,
     resolvedStatusLabel,
@@ -116,12 +150,12 @@ export function ExecutionRow({
     return (
       <div
         aria-expanded={expanded}
-        aria-busy={status === "running"}
-        data-status={status}
+        aria-busy={resolvedStatus === "running"}
+        data-status={resolvedStatus}
         className={containerClassName}
       >
         <ExecutionRowContent
-          status={status}
+          status={resolvedStatus}
           title={title}
           subtitle={subtitle}
           duration={duration}
@@ -139,14 +173,14 @@ export function ExecutionRow({
       type="button"
       onClick={onClick}
       aria-expanded={expanded}
-      aria-busy={status === "running"}
-      data-status={status}
+      aria-busy={resolvedStatus === "running"}
+      data-status={resolvedStatus}
       aria-label={resolvedAriaLabel}
       className={containerClassName}
     >
       {variant === "ledger" ? (
         <span
-          className={cn("execution-row-status-dot h-1.5 w-1.5 shrink-0 rounded-full", `execution-row-status-dot--${status}`)}
+          className={cn("execution-row-status-dot h-1.5 w-1.5 shrink-0 rounded-full", `execution-row-status-dot--${resolvedStatus}`)}
           aria-hidden="true"
         />
       ) : (
@@ -154,12 +188,15 @@ export function ExecutionRow({
           aria-label={resolvedStatusLabel}
           className={cn(
             "execution-row-icon h-3.5 w-3.5 shrink-0 transition-colors duration-200",
-            STATUS_ICON_CLASS[status],
+            STATUS_ICON_CLASS[resolvedStatus],
           )}
         />
       )}
       <span className="execution-row-copy min-w-0 flex-1 items-baseline gap-2 py-1.5 pl-0.5">
-        <span className="execution-row-title min-w-0 truncate text-[12px] font-medium leading-5 text-foreground">
+        <span className={cn(
+          "execution-row-title min-w-0 truncate text-[12px] font-medium leading-5",
+          resolvedStatus === "running" ? "animate-shimmer-text" : "text-foreground",
+        )}>
           {title}
         </span>
         {subtitle && (
@@ -177,15 +214,15 @@ export function ExecutionRow({
         </span>
       )}
 
-      {(variant === "ledger" || status !== "completed") && (
+      {(variant === "ledger" || resolvedStatus !== "completed") && (
         <span
           className={cn(
             "execution-row-status shrink-0 text-[11px]",
-            status === "running" && "text-primary",
-            status === "awaiting_approval" && "text-warning",
-            status === "error" && "text-destructive",
-            status === "interrupted" && "text-warning",
-            status === "completed" && "text-success",
+            resolvedStatus === "running" && "text-primary",
+            resolvedStatus === "awaiting_approval" && "text-warning",
+            resolvedStatus === "error" && "text-destructive",
+            resolvedStatus === "interrupted" && "text-warning",
+            resolvedStatus === "completed" && "text-success",
           )}
         >
           {resolvedStatusLabel}
@@ -226,13 +263,14 @@ function ExecutionRowContent({
   statusLabel,
   variant = "card",
 }: ExecutionRowContentProps) {
-  const Icon = STATUS_ICONS[status];
-  const resolvedStatusLabel = statusLabel || getExecutionStatusLabel(status);
+  const resolvedStatus = normalizeExecutionRowStatus(status);
+  const Icon = STATUS_ICONS[resolvedStatus] ?? Circle;
+  const resolvedStatusLabel = statusLabel || getExecutionStatusLabel(resolvedStatus);
   return (
     <>
       {variant === "ledger" ? (
         <span
-          className={cn("execution-row-status-dot h-1.5 w-1.5 shrink-0 rounded-full", `execution-row-status-dot--${status}`)}
+          className={cn("execution-row-status-dot h-1.5 w-1.5 shrink-0 rounded-full", `execution-row-status-dot--${resolvedStatus}`)}
           aria-hidden="true"
         />
       ) : (
@@ -240,12 +278,15 @@ function ExecutionRowContent({
           aria-label={resolvedStatusLabel}
           className={cn(
             "execution-row-icon h-3.5 w-3.5 shrink-0 transition-colors duration-200",
-            STATUS_ICON_CLASS[status],
+            STATUS_ICON_CLASS[resolvedStatus],
           )}
         />
       )}
       <span className="execution-row-copy min-w-0 flex-1 items-baseline gap-2 py-1.5 pl-0.5">
-        <span className="execution-row-title min-w-0 truncate text-[12px] font-medium leading-5 text-foreground">
+        <span className={cn(
+          "execution-row-title min-w-0 truncate text-[12px] font-medium leading-5",
+          resolvedStatus === "running" ? "animate-shimmer-text" : "text-foreground",
+        )}>
           {title}
         </span>
         {subtitle && (
@@ -263,15 +304,15 @@ function ExecutionRowContent({
         </span>
       )}
 
-      {(variant === "ledger" || status !== "completed") && (
+      {(variant === "ledger" || resolvedStatus !== "completed") && (
         <span
           className={cn(
             "execution-row-status shrink-0 text-[11px]",
-            status === "running" && "text-primary",
-            status === "awaiting_approval" && "text-warning",
-            status === "error" && "text-destructive",
-            status === "interrupted" && "text-warning",
-            status === "completed" && "text-success",
+            resolvedStatus === "running" && "text-primary",
+            resolvedStatus === "awaiting_approval" && "text-warning",
+            resolvedStatus === "error" && "text-destructive",
+            resolvedStatus === "interrupted" && "text-warning",
+            resolvedStatus === "completed" && "text-success",
           )}
         >
           {resolvedStatusLabel}

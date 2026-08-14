@@ -22,9 +22,21 @@ impl Tool for RunCommandTool {
     }
 
     fn description(&self) -> &str {
-        "Executes a shell command on the local machine and returns stdout+stderr output. \
-         Commands timeout after 30 seconds by default. Output is capped by the terminal manager. \
-         State does not persist between calls. Do not use this for long-running servers or watchers."
+        // Tell the model exactly which shell will run the command so it stops
+        // guessing cross-platform syntax (e.g. `ls -la` under PowerShell fails —
+        // that misfire is what motivated stating the environment up front).
+        #[cfg(target_os = "windows")]
+        {
+            "Executes a command on the local machine via Windows PowerShell (powershell.exe -NonInteractive -NoProfile) and returns stdout+stderr. \
+             This is PowerShell, NOT bash/cmd: use PowerShell cmdlets and syntax (Get-ChildItem instead of `ls -la`, Get-Content instead of `cat`, Remove-Item instead of `rm`). Prefer the dedicated `list_directory` tool for listing files. \
+             Commands time out after 30 seconds by default. Output is capped. State does not persist between calls. Do not use this for long-running servers or watchers."
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            "Executes a command on the local machine via a POSIX shell (sh -c) on macOS/Linux and returns stdout+stderr. \
+             Use standard POSIX/bash syntax. \
+             Commands time out after 30 seconds by default. Output is capped. State does not persist between calls. Do not use this for long-running servers or watchers."
+        }
     }
 
     fn parameters_schema(&self) -> serde_json::Value {

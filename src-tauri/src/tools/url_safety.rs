@@ -122,6 +122,53 @@ pub async fn validate_url_dns_safety(parsed_url: &Url) -> Result<(), String> {
     Ok(())
 }
 
+/// Build a bounded, no-redirect HTTP client pinned to the first validated
+/// address returned for `url`. The hostname remains on the URL so TLS SNI and
+/// certificate validation still use the configured origin, while the socket
+/// cannot be silently re-resolved to a different address after validation.
+pub async fn build_pinned_http_client(
+    url: &Url,
+    timeout: std::time::Duration,
+) -> Result<reqwest::Client, String> {
+    let parsed = validate_public_http_url(url.as_str())?;
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err("HTTP MCP URLs must not contain userinfo".to_string());
+    }
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| "URL must include a host".to_string())?;
+    let port = parsed
+        .port_or_known_default()
+        .ok_or_else(|| "URL must include a valid port".to_string())?;
+    let ip_host = host.trim_start_matches('[').trim_end_matches(']');
+    let pinned_addr = if let Ok(ip) = ip_host.parse::<IpAddr>() {
+        validate_public_ip(ip)?;
+        SocketAddr::new(ip, port)
+    } else {
+        let lookup_target = format!("{}:{}", host, port);
+        let addrs = tokio::net::lookup_host(lookup_target)
+            .await
+            .map_err(|e| format!("DNS resolution failed for {}: {}", host, e))?;
+        let validated = addrs
+            .map(|addr| {
+                validate_public_ip(addr.ip())?;
+                Ok::<SocketAddr, String>(addr)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        validated
+            .into_iter()
+            .next()
+            .ok_or_else(|| "DNS resolution returned no public addresses".to_string())?
+    };
+
+    reqwest::Client::builder()
+        .timeout(timeout)
+        .redirect(reqwest::redirect::Policy::none())
+        .resolve(host, pinned_addr)
+        .build()
+        .map_err(|e| format!("Failed to build pinned HTTP client: {}", e))
+}
+
 /// Build a `reqwest::RequestBuilder` for `url` that is DNS-pinned to a single
 /// validated `SocketAddr`.
 ///

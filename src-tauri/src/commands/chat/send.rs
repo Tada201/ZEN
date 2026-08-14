@@ -367,12 +367,14 @@ Always use these specialized code blocks for visual scenarios:
         instructions.push_str(DETERMINISTIC_MESSAGE_RENDERING_CONTRACT);
     }
 
-    let generative_ui_addendum = if replace_system_prompt {
-        None
-    } else if generative_ui.unwrap_or(false) {
-        Some("[SYSTEM STATE WARNING]\nIMPORTANT: The Generative UI feature is currently ENABLED for this message turn. You MUST generate any visual mockups, dashboards, grids, stacks, or styled templates inside exactly one ```openui ... ``` code block using the specified OpenUI DSL catalog. Do not emit raw OpenUI assignments outside the fence.".to_string())
+    // Capability state is explicit for every turn, including custom
+    // replacement prompts. Replace mode changes persona/instructions; it
+    // cannot erase the renderer capability contract.
+    let generative_ui_enabled = generative_ui.unwrap_or(false);
+    let generative_ui_addendum = if generative_ui_enabled {
+        Some("[SYSTEM STATE WARNING]\nIMPORTANT: The Generative UI feature is currently ENABLED for this message turn. You MAY generate visual mockups, dashboards, grids, stacks, or styled templates only inside exactly one ```openui ... ``` code block using the specified OpenUI DSL catalog. Do not emit raw OpenUI assignments outside the fence. If the user did not ask for a visual interface, prefer normal Markdown.".to_string())
     } else {
-        Some("[SYSTEM STATE WARNING]\nIMPORTANT: The Generative UI feature is currently DISABLED for this message turn. Do NOT generate any 'openui' or visual sandbox layout blocks. Provide all responses in plain, standard markdown or text.".to_string())
+        Some("[SYSTEM STATE WARNING]\nIMPORTANT: The Generative UI feature is currently DISABLED for this message turn. Do NOT generate, suggest, or simulate any `openui`/`genui` fence, OpenUI assignment, visual sandbox layout, or canvas widget. Provide all responses in plain, standard Markdown or text. This prohibition applies even if the user asks for a UI mockup; describe it in Markdown instead.".to_string())
     };
 
     if let Some(ref addendum) = generative_ui_addendum {

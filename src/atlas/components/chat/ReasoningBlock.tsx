@@ -253,6 +253,7 @@ export const ReasoningBlock = memo(function ReasoningBlock({ content, isThinking
         className={cn(
           "execution-reasoning-card overflow-hidden",
           expanded && "execution-reasoning-card--expanded",
+          isThinking && !expanded && "execution-reasoning-card--thinking",
         )}
       >
         <CollapsibleTrigger
@@ -272,7 +273,7 @@ export const ReasoningBlock = memo(function ReasoningBlock({ content, isThinking
             </div>
             <span className={cn(
               "truncate text-[12px] font-medium tracking-tight",
-              isThinking ? "font-semibold text-foreground" : "text-muted-foreground",
+              isThinking ? "font-semibold text-foreground animate-shimmer-text" : "text-muted-foreground",
             )}>
               {displayLabel}
             </span>

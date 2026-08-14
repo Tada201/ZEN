@@ -138,6 +138,14 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
   // the caller must call flushScopedSubagentNotifications() once after mapping.
   steps.forEach((step) => upsertScopedSubagentFromStep(msg.chatId, step, true));
   const parsedToolCalls = canonicalParts.toolCalls;
+  const timelineGenerativeUI = steps.find((step) =>
+    typeof step.metadata?.generativeUI === "boolean",
+  )?.metadata?.generativeUI;
+  const generativeUI = typeof parsedMetadata?.generativeUI === "boolean"
+    ? (parsedMetadata.generativeUI ? 1 : 0)
+    : typeof timelineGenerativeUI === "boolean"
+      ? (timelineGenerativeUI ? 1 : 0)
+      : undefined;
 
 
   let parsedAttachments = [];
@@ -174,6 +182,7 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
     role: msg.role as Message["role"],
     content: finalContent,
     reasoning: reasoning || undefined,
+    generativeUI,
     attachments: parsedAttachments,
     toolCalls: parsedToolCalls as Message["toolCalls"],
     steps,
@@ -198,28 +207,50 @@ export const mapDbMessageToMessage = (msg: BackendMessage): Message => {
 };
 
 /**
- * A hydrated `sending` row has no live stream after an app reload. Keep the
- * saved timeline visible, but stop presenting it as an active run. Tool-level
- * stale markers let the cards explain exactly what was interrupted without
- * changing the backend status vocabulary.
+ * A hydrated row has no live stream after an app reload. Keep the saved
+ * timeline visible, but never leave a tool spinner active without a live
+ * owner. Completed traces promote stale running summaries to completed;
+ * interrupted/failed or ambiguous rows receive the stale recovery marker.
  */
 function markRecoveredMessage(message: Message): Message {
-  if (message.role !== "assistant" || message.status !== "sending") return message;
-  const markStep = (step: Step): Step => {
-    if (step.type === "tool-call" && step.toolCall?.status === "running") {
-      return { ...step, recoveryState: "stale", toolCall: { ...step.toolCall, recoveryState: "stale" } };
+  if (message.role !== "assistant") return message;
+
+  const traceStatus = String(message.metadata?.traceStatus || "").trim().toLowerCase();
+  const traceCompleted = traceStatus === "completed";
+  const messageTerminal = message.status === "sent" || message.status === "failed" || message.status === "cancelled";
+
+  const reconcileTool = (tool: NonNullable<Message["toolCalls"]>[number]) => {
+    if (tool.status !== "running") return tool;
+    const hasCompletionEvidence = tool.completedAt !== undefined || tool.durationMs !== undefined;
+    if (traceCompleted || (message.status === "sent" && hasCompletionEvidence)) {
+      return { ...tool, status: "completed" as const, recoveryState: undefined };
+    }
+    return messageTerminal || message.status === "sending"
+      ? { ...tool, recoveryState: "stale" as const }
+      : tool;
+  };
+
+  const reconcileStep = (step: Step): Step => {
+    if (step.type === "tool-call" && step.toolCall) {
+      const toolCall = reconcileTool(step.toolCall);
+      return toolCall === step.toolCall
+        ? step
+        : { ...step, recoveryState: toolCall.recoveryState, toolCall };
     }
     if (step.type === "subagent" && step.subagent?.status === "running") {
       return { ...step, recoveryState: "stale", subagent: { ...step.subagent, recoveryState: "stale" } };
     }
     return step;
   };
+
+  const steps = message.steps?.map(reconcileStep);
+  const toolCalls = message.toolCalls?.map(reconcileTool);
+  const recovered = message.status === "sending";
   return {
     ...message,
-    status: "sent",
-    recoveryState: "recovered",
-    steps: message.steps?.map(markStep),
-    toolCalls: message.toolCalls?.map((tool) => tool.status === "running" ? { ...tool, recoveryState: "stale" } : tool),
+    ...(recovered ? { status: "sent" as const, recoveryState: "recovered" as const } : {}),
+    steps,
+    toolCalls,
   };
 }
 

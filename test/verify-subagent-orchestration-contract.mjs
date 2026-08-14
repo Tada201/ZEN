@@ -8,6 +8,7 @@ const scopedStore = read("src/atlas/agentRuntime/scopedSubagentStore.ts");
 const card = read("src/atlas/components/chat/SubagentExecutionCard.tsx");
 const panel = read("src/atlas/components/right-panel/OrchestratorPanel.tsx");
 const assistant = read("src/atlas/components/chat/AssistantMessage.tsx");
+const assistantLogic = read("src/atlas/components/chat/AssistantMessage.logic.ts");
 const types = read("src/atlas/components/chat/types.ts");
 const agentEvents = read("src/atlas/hooks/stream/useAgentEvents.ts");
 const statusPanel = read("src/atlas/components/chat/RunStatusPopover.tsx");
@@ -68,7 +69,7 @@ assert(tauriLib.includes("commands::chat::cancel_subagent"), "subagent cancellat
 assert(spawnTools.includes("let terminal_status = if was_cancelled") && spawnTools.includes('status: terminal_status.to_string()'), "user-stopped subagents must finish as cancelled rather than failed");
 
 assert(assistant.includes("buildDelegationTree"), "assistant rendering must consume the canonical delegation tree");
-assert(assistant.includes("parentSpawnId"), "nested subagent rows must be removed from the flat parent timeline");
+assert(assistantLogic.includes("parentSpawnId"), "nested subagent rows must be removed from the flat parent timeline");
 assert(assistant.includes("childrenByParent"), "parent cards must receive their nested delegation children");
 assert(assistant.includes("childToolCalls={message.toolCalls || []}"), "child selection must happen centrally rather than through an ad hoc filter");
 

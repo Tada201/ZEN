@@ -7,11 +7,23 @@ export {
 } from "./tauriClient";
 export type { IpcErrorCode, IpcErrorPayload } from "./tauriClient";
 export type {
+  McpAvailability,
+  McpCapabilitySummary,
   McpConfig,
+  McpInventory,
+  McpPrompt,
+  McpPromptArgument,
+  McpPromptMessage,
+  McpResource,
+  McpResourceContents,
+  McpResourceTemplate,
+  McpScope,
   McpServerEntry,
+  McpServerRecord,
   McpServerStatus,
   McpServerStatusEvent,
   McpTransport,
+  PendingConsent,
 } from "./mcpApi";
 export { chatApi } from "./chatApi";
 export type {

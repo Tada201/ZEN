@@ -33,21 +33,50 @@ function extractInlineThoughtBlocks(content: string): { content: string; reasoni
     : { content, reasoning: "" };
 }
 
+function isTerminalToolStatus(status: unknown): boolean {
+  return status === "completed" || status === "error";
+}
+
+function mergeProjectedTool(existing: RecordValue, incoming: RecordValue): RecordValue {
+  const existingIsTerminal = isTerminalToolStatus(existing.status);
+  const incomingIsTerminal = isTerminalToolStatus(incoming.status);
+  // `tool_calls` is a legacy summary column and can still contain the running
+  // version while `steps_json` contains the final tool event. The ordered step
+  // is authoritative for lifecycle state, but keep richer fields from either
+  // source so reload does not lose the compact output or target.
+  const useIncoming = incomingIsTerminal || !existingIsTerminal;
+  const source = useIncoming ? incoming : existing;
+  return {
+    ...existing,
+    ...source,
+    status: source.status || existing.status,
+    input: source.input || existing.input,
+    output: source.output || (useIncoming ? "" : existing.output),
+    outputPreview: source.outputPreview || (useIncoming ? undefined : existing.outputPreview),
+    completedAt: source.completedAt ?? existing.completedAt,
+    durationMs: source.durationMs ?? existing.durationMs,
+  };
+}
+
 function mergeToolCalls(existing: Array<RecordValue>, steps: Array<RecordValue>): Array<RecordValue> {
   const result: Array<RecordValue> = [];
-  const ids = new Set<string>();
+  const indexes = new Map<string, number>();
   for (const tool of existing) {
     const id = typeof tool.id === "string" ? tool.id : "";
-    if (id && ids.has(id)) continue;
+    if (id && indexes.has(id)) continue;
+    if (id) indexes.set(id, result.length);
     result.push(tool);
-    if (id) ids.add(id);
   }
   for (const step of steps) {
     if (step.type !== "tool-call" || !isRecord(step.toolCall)) continue;
     const id = typeof step.toolCall.id === "string" ? step.toolCall.id : "";
-    if (id && ids.has(id)) continue;
+    const existingIndex = id ? indexes.get(id) : undefined;
+    if (existingIndex !== undefined) {
+      result[existingIndex] = mergeProjectedTool(result[existingIndex], step.toolCall);
+      continue;
+    }
+    if (id) indexes.set(id, result.length);
     result.push(step.toolCall);
-    if (id) ids.add(id);
   }
   return result;
 }
@@ -79,7 +108,12 @@ export function projectCanonicalMessageParts(input: {
       input: tool.args,
       output: tool.state === "result" ? (typeof tool.result === "string" ? tool.result : JSON.stringify(tool.result ?? "")) : "",
     }));
-    toolCalls = mergeToolCalls(toolCalls, legacy.map((tool) => ({ type: "tool-call", toolCall: tool })));
+    const existingIds = new Set(toolCalls.map((tool) => typeof tool.id === "string" ? tool.id : "").filter(Boolean));
+    for (const tool of legacy) {
+      if (tool.id && existingIds.has(tool.id)) continue;
+      toolCalls.push(tool);
+      if (tool.id) existingIds.add(tool.id);
+    }
   }
   const canonicalSteps = steps.length > 0 ? steps : [
     ...(reasoning ? [{ type: "reasoning", content: reasoning }] : []),

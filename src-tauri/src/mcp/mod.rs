@@ -1,4 +1,9 @@
 pub mod client;
+pub mod env;
+pub mod oauth;
+pub mod resources;
+pub mod sandbox;
+pub mod tool_schema;
 /// MCP (Model Context Protocol) Module
 ///
 /// Client-only: connects to external MCP servers configured via `.mcp.json`.

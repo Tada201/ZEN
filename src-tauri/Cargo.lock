@@ -13063,6 +13063,7 @@ dependencies = [
  "urlencoding",
  "uuid",
  "webrtc-vad",
+ "windows-sys 0.59.0",
  "wiremock",
  "zip 4.6.1",
 ]

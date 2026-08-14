@@ -20,6 +20,8 @@ Start here:
    `docs/architecture/frontend-rules.md`.
 11. For the chat execution timeline persistence flow, read
    `docs/architecture/execution-timeline-persistence.md`.
+12. For MCP protocol modernization and agent server discovery, read
+   `docs/architecture/mcp-phase-plan.md`.
 
 This directory should hold architecture decisions, not loose notes. If a new
 pattern is introduced, document the owner, the allowed path, and what not to do.

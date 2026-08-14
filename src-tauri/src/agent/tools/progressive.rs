@@ -195,18 +195,31 @@ impl ProgressiveToolRegistry {
         self.register_metadata(ToolMetadata::new(
             "list_documents",
             "List Documents",
-            "List uploaded documents with their exact recorded file paths. Call this first when a document path is unknown.",
+            "List uploaded/ingested documents with their exact recorded file paths. Use for files a user uploaded into the knowledge base — NOT for browsing the workspace (use list_directory for that).",
             "file",
-            vec!["file", "directory", "list", "filesystem", "disk"],
+            vec!["uploads", "documents", "library", "ingested", "knowledge base"],
             DetailLevel::Full,
+        ));
+
+        self.register_metadata(ToolMetadata::new(
+            "list_directory",
+            "List Directory",
+            "List files and subdirectories inside the workspace. Use to discover real workspace files before reading or editing. Omit path for the workspace root; set recursive to walk nested folders.",
+            "file",
+            vec!["directory", "list", "folder", "ls", "dir", "tree", "files", "filesystem"],
+            DetailLevel::Standard,
         ));
 
         self.register_metadata(ToolMetadata::new(
             "run_command",
             "Terminal Execution",
-            "Execute a command in the system terminal.",
+            if cfg!(target_os = "windows") {
+                "Run a command in the local terminal (Windows PowerShell). Use PowerShell syntax, not bash."
+            } else {
+                "Run a command in the local terminal (POSIX sh on macOS/Linux). Use bash/POSIX syntax."
+            },
             "system",
-            vec!["terminal", "command", "shell", "exec", "bash"],
+            vec!["terminal", "command", "shell", "exec", "bash", "powershell"],
             DetailLevel::Full,
         ));
 
@@ -243,10 +256,19 @@ impl ProgressiveToolRegistry {
         self.register_metadata(ToolMetadata::new(
             "grep_documents",
             "Grep Documents",
-            "Search uploaded documents for exact substrings; read matching files with read_document_content before relying on them.",
+            "Search uploaded knowledge-base documents for exact substrings — NOT workspace files (use search_files for those). Read matches with read_document_content before relying on them.",
             "file",
-            vec!["file", "search", "grep", "text"],
+            vec!["file", "search", "grep", "text", "uploads", "documents"],
             DetailLevel::Full,
+        ));
+
+        self.register_metadata(ToolMetadata::new(
+            "search_files",
+            "Search Files",
+            "Grep the contents of workspace files by regex. Use to find where code/text appears before reading files; output_mode files_with_matches (default), content, or count.",
+            "file",
+            vec!["grep", "search", "ripgrep", "find text", "content", "regex", "code search", "files"],
+            DetailLevel::Standard,
         ));
 
         self.register_metadata(ToolMetadata::new(
@@ -335,9 +357,21 @@ impl ProgressiveToolRegistry {
             }),
         );
         self.tool_factory.insert(
+            "list_directory".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::fs_tools::ListDirectoryTool) as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
             "grep_documents".to_string(),
             Box::new(|| {
                 Arc::new(crate::agent::tools::fs_tools::GrepDocumentsTool) as Arc<dyn AgentTool>
+            }),
+        );
+        self.tool_factory.insert(
+            "search_files".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::search_files::SearchFilesTool) as Arc<dyn AgentTool>
             }),
         );
         self.tool_factory.insert(

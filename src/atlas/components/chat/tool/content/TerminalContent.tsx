@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Copy, Check, CircleAlert, CircleCheck, Loader2 } from "lucide-react";
+import { Copy, Check, CircleAlert, CircleCheck, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ToolCall } from "../../types";
@@ -8,6 +8,7 @@ import { Panel } from "./primitives";
 import { TruncatedOutput } from "./TruncatedOutput";
 import { toToolInputRecord } from "../toToolInputRecord";
 import { redactToolText } from "../toolTextRedaction";
+import { presentExecutionError } from "@/atlas/agentRuntime/executionError";
 
 interface TerminalContentProps {
   toolCall: ToolCall;
@@ -38,6 +39,13 @@ export function TerminalContent({ toolCall, outputPreview }: TerminalContentProp
   const isStale = toolCall.recoveryState === "stale";
   const isFailed = toolCall.status === "error" || (outputPreview.exitCode !== undefined && outputPreview.exitCode !== "0");
   const statusLabel = isStale ? "Interrupted" : isRunning ? "Running" : isFailed ? "Failed" : "Complete";
+  // Compact classification of the failure so a broken command leads with one
+  // readable line + next action, not a wall of stderr. Full stderr moves into a
+  // collapsed disclosure below.
+  const failure = useMemo(
+    () => (isFailed ? presentExecutionError(stderr || outputPreview.summary || fallbackOutput, { context: "tool" }) : null),
+    [isFailed, stderr, outputPreview.summary, fallbackOutput],
+  );
 
   const handleCopy = async () => {
     try {
@@ -76,6 +84,18 @@ export function TerminalContent({ toolCall, outputPreview }: TerminalContentProp
 
       <Panel label="Terminal">
         <div className="group relative">
+          {failure && (
+            <div className="mb-2 flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-2.5 py-2" role="alert">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />
+              <div className="min-w-0">
+                <div className="text-[11px] font-semibold text-destructive">{failure.title}</div>
+                <div className="mt-0.5 break-words text-[11px] leading-relaxed text-foreground">{failure.summary}</div>
+                {failure.action !== "none" && (
+                  <div className="mt-1 text-[10px] text-muted-foreground">Next: {failure.actionLabel}</div>
+                )}
+              </div>
+            </div>
+          )}
           {stdout && (
             <TruncatedOutput
               content={stdout}
@@ -84,7 +104,22 @@ export function TerminalContent({ toolCall, outputPreview }: TerminalContentProp
               className="text-muted-foreground"
             />
           )}
-          {hasStderr && (
+          {hasStderr && failure && (
+            <details className="mt-2 overflow-hidden rounded-md border border-destructive/40 bg-card">
+              <summary className="cursor-pointer select-none bg-destructive/10 px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-destructive">
+                Terminal output
+              </summary>
+              <div className="border-t border-destructive/40 p-2">
+                <TruncatedOutput
+                  content={stderr}
+                  headLines={6}
+                  tailLines={6}
+                  className="border-l-2 border-l-destructive bg-muted p-2 font-mono text-[11px] leading-relaxed text-destructive"
+                />
+              </div>
+            </details>
+          )}
+          {hasStderr && !failure && (
             <TruncatedOutput
               content={stderr}
               headLines={4}
@@ -92,7 +127,7 @@ export function TerminalContent({ toolCall, outputPreview }: TerminalContentProp
               className="mt-2 border-l-2 border-l-destructive bg-muted p-2 font-mono text-[11px] leading-relaxed text-destructive"
             />
           )}
-          {!stdout && !hasStderr && (
+          {!stdout && !hasStderr && !failure && (
             <div className="text-[11px] text-muted-foreground">{isRunning ? "Waiting for output..." : "No output"}</div>
           )}
 

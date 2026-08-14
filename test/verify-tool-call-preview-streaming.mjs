@@ -47,7 +47,8 @@ assert.doesNotMatch(trace, /Preparing \$\{preview\?\.toolName/, "tool-preview 'P
 assert.doesNotMatch(trace, /Tool call"\} ready/, "tool-preview 'X ready' row must not be rendered");
 
 const assistant = readFileSync(new URL("../src/atlas/components/chat/AssistantMessage.tsx", import.meta.url), "utf8");
-assert.doesNotMatch(assistant, /ToolCallStreaming,/, "preview phases must stay out of VISIBLE_CHAT_STATUS_PHASES");
-assert.doesNotMatch(assistant, /ToolCallReady,/, "preview phases must stay out of VISIBLE_CHAT_STATUS_PHASES");
+const assistantLogic = readFileSync(new URL("../src/atlas/components/chat/AssistantMessage.logic.ts", import.meta.url), "utf8");
+assert.doesNotMatch(assistantLogic, /ToolCallStreaming,/, "preview phases must stay out of VISIBLE_CHAT_STATUS_PHASES");
+assert.doesNotMatch(assistantLogic, /ToolCallReady,/, "preview phases must stay out of VISIBLE_CHAT_STATUS_PHASES");
 
 console.log("tool-call preview streaming verifier passed");

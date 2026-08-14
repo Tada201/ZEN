@@ -1,4 +1,4 @@
-import { FileText } from "lucide-react";
+import { FileText, Folder, File as FileIcon } from "lucide-react";
 import { CodeBlock } from "../../CodeBlock";
 import { Panel, MoreRow, asRecord, str, arr } from "./primitives";
 import type { RendererContext } from "./registry";
@@ -6,9 +6,16 @@ import type { RendererContext } from "./registry";
 const MAX_ROWS = 8;
 const MAX_GREP_FILES = 8;
 const MAX_MATCHES_PER_FILE = 5;
+const MAX_DIR_ROWS = 40;
 
 function filenameOf(path: string): string {
   return path.replace(/\\/g, "/").split("/").pop() || path;
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /** Map a file extension to a Prism language hint for the read viewer. */
@@ -69,6 +76,47 @@ export function DocumentList({ output }: RendererContext) {
   );
 }
 
+/* ── list_directory ───────────────────────────────────────────── */
+// Output: { path, entries: [{ name, type: "dir"|"file", size?, modified_ms? }], truncated }
+export function DirectoryList({ output }: RendererContext) {
+  const record = asRecord(output);
+  const entries = arr(record.entries);
+  if (entries.length === 0) {
+    return "entries" in record ? (
+      <Panel label="Directory">
+        <div className="text-[12px] text-muted-foreground">Empty directory.</div>
+      </Panel>
+    ) : null;
+  }
+
+  const truncated = record.truncated === true;
+  const rows = entries.slice(0, MAX_DIR_ROWS).map(asRecord);
+  return (
+    <Panel label={`${entries.length} item${entries.length === 1 ? "" : "s"}${truncated ? " (truncated)" : ""}`}>
+      <div className="flex flex-col gap-0.5">
+        {rows.map((entry, index) => {
+          const isDir = str(entry.type) === "dir";
+          const name = str(entry.name) || "—";
+          const size = typeof entry.size === "number" ? formatBytes(entry.size) : "";
+          const Icon = isDir ? Folder : FileIcon;
+          return (
+            <div key={name + index} className="flex items-center gap-2 min-w-0">
+              <Icon className={`h-3.5 w-3.5 shrink-0 ${isDir ? "text-primary" : "text-muted-foreground"}`} />
+              <span className={`min-w-0 flex-1 truncate font-mono text-[11px] ${isDir ? "text-foreground" : "text-muted-foreground"}`}>
+                {name}{isDir ? "/" : ""}
+              </span>
+              {size && (
+                <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">{size}</span>
+              )}
+            </div>
+          );
+        })}
+        <MoreRow hidden={entries.length - rows.length} />
+      </div>
+    </Panel>
+  );
+}
+
 /* ── read_document_content ────────────────────────────────────── */
 // Output: { file_path, content, modified_ms? }
 export function DocumentContent({ output }: RendererContext) {
@@ -96,8 +144,8 @@ export function DocumentContent({ output }: RendererContext) {
   );
 }
 
-/* ── grep_documents ───────────────────────────────────────────── */
-// Output: { results: [{ filename, path?, matches: [{ line, content }] }], count? }
+/* ── grep_documents / search_files ────────────────────────────── */
+// Output: { results: [{ filename, path?, count?, matches: [{ line, content }] }], count?, total_matches? }
 export function GrepResults({ output }: RendererContext) {
   const record = asRecord(output);
   const results = arr(record.results);
@@ -110,30 +158,46 @@ export function GrepResults({ output }: RendererContext) {
   }
 
   const files = results.slice(0, MAX_GREP_FILES).map(asRecord);
-  const totalMatches = files.reduce((sum, file) => sum + arr(file.matches).length, 0);
+  // `content` mode carries per-line matches; `files_with_matches`/`count` mode
+  // carries a numeric `count` with empty matches. Prefer the explicit total.
+  const totalMatches =
+    typeof record.total_matches === "number"
+      ? record.total_matches
+      : files.reduce((sum, file) => {
+          const n = arr(file.matches).length;
+          return sum + (n > 0 ? n : typeof file.count === "number" ? file.count : 0);
+        }, 0);
 
   return (
-    <Panel label={`${totalMatches} matches · ${results.length} files`}>
+    <Panel label={`${totalMatches} match${totalMatches === 1 ? "" : "es"} · ${results.length} file${results.length === 1 ? "" : "s"}`}>
       <div className="flex flex-col gap-2">
         {files.map((file, fileIndex) => {
           const name = str(file.filename) || filenameOf(str(file.path)) || `File ${fileIndex + 1}`;
-          const matches = arr(file.matches).slice(0, MAX_MATCHES_PER_FILE).map(asRecord);
+          const lineMatches = arr(file.matches).slice(0, MAX_MATCHES_PER_FILE).map(asRecord);
+          const count = typeof file.count === "number" ? file.count : lineMatches.length;
           return (
             <div key={name + fileIndex} className="min-w-0">
-              <div className="truncate font-mono text-[11px] text-foreground">{name}</div>
-              <div className="mt-0.5 flex flex-col gap-0.5">
-                {matches.map((match, matchIndex) => (
-                  <div key={matchIndex} className="flex gap-2 min-w-0">
-                    <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
-                      {String(match.line ?? "?")}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
-                      {str(match.content)}
-                    </span>
-                  </div>
-                ))}
-                <MoreRow hidden={arr(file.matches).length - matches.length} />
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground">{name}</span>
+                {lineMatches.length === 0 && count > 0 && (
+                  <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">{count}</span>
+                )}
               </div>
+              {lineMatches.length > 0 && (
+                <div className="mt-0.5 flex flex-col gap-0.5">
+                  {lineMatches.map((match, matchIndex) => (
+                    <div key={matchIndex} className="flex gap-2 min-w-0">
+                      <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
+                        {String(match.line ?? "?")}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
+                        {str(match.content)}
+                      </span>
+                    </div>
+                  ))}
+                  <MoreRow hidden={arr(file.matches).length - lineMatches.length} />
+                </div>
+              )}
             </div>
           );
         })}

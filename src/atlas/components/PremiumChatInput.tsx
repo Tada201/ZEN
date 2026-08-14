@@ -25,6 +25,7 @@ import { usePinnedActions } from "./usePinnedActions";
 import { useSlashApply } from "./useSlashApply";
 import { useReasoningCapabilities } from "./useReasoningCapabilities";
 import { useChatTaskDrawer } from "./useChatTaskDrawer";
+import { usePromptStashStore } from "@/lib/stores/usePromptStashStore";
 import { ChatInputTextAreaBlock } from "./ChatInputTextAreaBlock";
 import type { ChatInputTextAreaBlockProps } from "./ChatInputTextAreaBlock";
 import { ChatInputFooter } from "./ChatInputFooter";
@@ -136,6 +137,20 @@ export const PremiumChatInput = memo(
     // ── Attachment state ──
     const { selectedFiles, addFiles, removeFile, clearFiles } =
       useAttachments();
+
+    // ── Prompt stash (save draft in any chat, restore in any other) ──
+    const hasStash = usePromptStashStore((state) => state.stash !== null);
+    const stashDraft = usePromptStashStore((state) => state.stashDraft);
+    const restoreDraft = usePromptStashStore((state) => state.restoreDraft);
+    const handleStash = useCallback(() => {
+      void stashDraft(message, selectedFiles);
+    }, [stashDraft, message, selectedFiles]);
+    const handleRestore = useCallback(() => {
+      const restored = restoreDraft();
+      if (!restored) return;
+      if (restored.text) setMessage(restored.text);
+      if (restored.images.length > 0) addFiles(restored.images);
+    }, [restoreDraft, setMessage, addFiles]);
     const handleFileChange = useCallback(
       (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) addFiles(e.target.files);
@@ -317,6 +332,9 @@ export const PremiumChatInput = memo(
         onSend: handleSend,
         isLoading,
         hasContent: message.trim().length > 0 || selectedFiles.length > 0,
+        onStash: handleStash,
+        onRestore: handleRestore,
+        hasStash,
       }),
       [
         layoutMode, selectedModelOpen, setModelMenuOpen,
@@ -331,6 +349,7 @@ export const PremiumChatInput = memo(
         onOpenSkills, isImageGenEnabled, setIsImageGenEnabled, supportsImageGen,
         onAbort, onPause, onResume, isPaused,
         activeChatId, readOnly, handleSend, isLoading, message, selectedFiles.length,
+        handleStash, handleRestore, hasStash,
       ],
     );
 

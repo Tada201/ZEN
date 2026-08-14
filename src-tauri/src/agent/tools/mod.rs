@@ -8,6 +8,7 @@ pub mod map_tools;
 pub mod osint_tools;
 pub mod progressive;
 pub mod routing_tools;
+pub mod search_files;
 pub mod session_memory_tools;
 pub mod skill_tool;
 pub mod spawn_tools;

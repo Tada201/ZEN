@@ -370,6 +370,8 @@ pub struct AppState {
     pub session_memory: Arc<RwLock<Arc<crate::rag::session_memory::SessionMemoryManager>>>,
     pub mcp_client: Arc<crate::mcp::McpClient>,
     pub mcp_config: Arc<crate::services::McpConfigService>,
+    pub mcp_discovery: Arc<crate::services::McpDiscoveryService>,
+    pub mcp_consent: Arc<crate::services::McpConsentStore>,
     pub pending_tool_approvals:
         Arc<tokio::sync::Mutex<HashMap<String, crate::services::tool::PendingToolApproval>>>,
     pub pending_orchestrator_approvals:
@@ -535,6 +537,8 @@ impl AppState {
             workspace_folder_arc.clone(),
             security_for_mcp_config,
         ));
+        let mcp_discovery = Arc::new(crate::services::McpDiscoveryService::new(mcp_config.clone()));
+        let mcp_consent = Arc::new(crate::services::McpConsentStore::new(security.clone()));
 
         Self {
             db: InitState::new(),
@@ -556,7 +560,7 @@ impl AppState {
             settings_manager: settings_manager.clone(),
             media,
             secret_manager: secret_manager.clone(),
-            security,
+            security: security.clone(),
             chat_cancellation_tokens: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             chat_pause_controls: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             rag: InitState::new(),
@@ -567,8 +571,14 @@ impl AppState {
             mcp_config: mcp_config.clone(),
             mcp_client: Arc::new(crate::mcp::McpClient::new(
                 tool_registry_v2.clone(),
-                mcp_config,
+                mcp_config.clone(),
+                mcp_discovery.clone(),
+                security.clone(),
+                secret_manager.clone(),
+                mcp_consent.clone(),
             )),
+            mcp_discovery,
+            mcp_consent,
             pending_tool_approvals,
             pending_orchestrator_approvals: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             subagent_cancellation_tokens: Arc::new(tokio::sync::Mutex::new(HashMap::new())),

@@ -237,10 +237,10 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
             onContinueResearch={isArchivedSession ? undefined : handleContinueResearch}
           />
 
-          <div className="relative z-30 shrink-0 px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-3">
+          <div className="relative z-30 shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-1">
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 -top-12 h-12 bg-gradient-to-t from-background via-background/80 to-transparent"
+              className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-gradient-to-t from-background via-background/80 to-transparent"
             />
             <div className="relative mx-auto w-full max-w-[700px]">
               <PremiumChatInput

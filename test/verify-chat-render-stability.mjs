@@ -14,6 +14,9 @@ const workspaceBackground = readFileSync(new URL("../src/components/workbench/Wo
 
 assert(!messageList.includes("useVirtualizer"), "chat messages must remain in normal document flow");
 assert(!messageList.includes("position: `translateY"), "chat rows must not be absolutely translated");
+assert(messageList.includes("turn-fold-${turn.turnId}"), "folded turns must render as one-line markers in normal flow");
+assert(messageList.includes("revealTurn"), "folded turn markers must expand back to full rows");
+assert(messageList.includes("isFirstOfFoldedTurn"), "a folded turn must skip its hidden rows instead of stacking markers");
 assert(messageList.includes("key={message.id}"), "message rows must use stable message IDs");
 assert(markdownUtils.includes("id: `${type}-${blockIndex}`"), "markdown keys must survive stream completion");
 assert(!markdownUtils.includes("isComplete ? 'done' : 'streaming'"), "completion must not remount markdown blocks");

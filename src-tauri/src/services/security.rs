@@ -136,6 +136,16 @@ pub enum PrivilegedOperation {
     FileWrite,
     NetworkFetch,
     McpToolCall,
+    /// User consent to connect a configured MCP server (human-in-the-loop
+    /// gate). Recorded when a server is approved, denied, or blocked pending
+    /// consent before any process spawn or network connection.
+    McpConnectionConsent,
+    /// An MCP server endpoint was disconnected / its adapters unregistered.
+    McpDisconnect,
+    /// MCP client shutdown: all endpoints torn down (app exit / re-sync wipe).
+    McpShutdown,
+    /// MCP protocol/tool discovery attempt against a server.
+    McpDiscovery,
     SecretRead,
     SecretWrite,
     UntrustedRender,
@@ -150,6 +160,10 @@ impl PrivilegedOperation {
             PrivilegedOperation::FileWrite => "file_write",
             PrivilegedOperation::NetworkFetch => "network_fetch",
             PrivilegedOperation::McpToolCall => "mcp_tool_call",
+            PrivilegedOperation::McpConnectionConsent => "mcp_connection_consent",
+            PrivilegedOperation::McpDisconnect => "mcp_disconnect",
+            PrivilegedOperation::McpShutdown => "mcp_shutdown",
+            PrivilegedOperation::McpDiscovery => "mcp_discovery",
             PrivilegedOperation::SecretRead => "secret_read",
             PrivilegedOperation::SecretWrite => "secret_write",
             PrivilegedOperation::UntrustedRender => "untrusted_render",

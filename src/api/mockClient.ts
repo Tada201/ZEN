@@ -425,6 +425,7 @@ const mockCommands: Record<string, (args: any) => any> = {
   mcp_get_config: () => ({ servers: {} }),
   mcp_save_config: () => {},
   mcp_list_servers: () => [],
+  mcp_get_inventory: () => ({ revision: 0, servers: [] }),
 
   // Graph / Session Map
   get_session_state: () => ({ nodes: [], edges: [] }),

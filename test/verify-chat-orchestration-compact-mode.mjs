@@ -5,6 +5,10 @@ const assistantSource = readFileSync(
   new URL('../src/atlas/components/chat/AssistantMessage.tsx', import.meta.url),
   'utf8',
 );
+const assistantLogicSource = readFileSync(
+  new URL('../src/atlas/components/chat/AssistantMessage.logic.ts', import.meta.url),
+  'utf8',
+);
 const traceSource = readFileSync(
   new URL('../src/atlas/components/chat/AgentExecutionTrace.tsx', import.meta.url),
   'utf8',
@@ -23,11 +27,11 @@ const liveSessionSource = readFileSync(
 );
 
 assert(
-  assistantSource.includes('function isVisibleChatActionStep') &&
-    assistantSource.includes('step.kind === "approval_request"') &&
-    assistantSource.includes('step.kind === "clarification_request"') &&
-    assistantSource.includes('step.kind === "chat_status"') &&
-    !assistantSource.includes('step.kind === "agent_chunk" ||'),
+  assistantLogicSource.includes('function isVisibleChatActionStep') &&
+    assistantLogicSource.includes('step.kind === "approval_request"') &&
+    assistantLogicSource.includes('step.kind === "clarification_request"') &&
+    assistantLogicSource.includes('step.kind === "chat_status"') &&
+    !assistantLogicSource.includes('step.kind === "agent_chunk" ||'),
   'assistant chat should only render concise status and user-action orchestration rows',
 );
 

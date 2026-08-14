@@ -23,9 +23,14 @@ export function mergeLiveToolState(fetched: Message, existing?: Message): Messag
   const mergeTool = (tool: ToolCall): ToolCall => {
     const live = liveTools.get(tool.id);
     if (!live) return { ...tool, output: tool.output || "" };
+    // A finalized/reloaded message must not let an old in-memory running
+    // snapshot overwrite a terminal status fetched from SQLite. During an
+    // active stream the sending message remains the live authority; after the
+    // stream has ended, the fetched persisted lifecycle wins.
+    const liveOwnsLifecycle = existing.status === "sending";
     return {
       ...tool,
-      status: live.status || tool.status,
+      status: liveOwnsLifecycle ? (live.status || tool.status) : tool.status,
       output: live.output || tool.output || "",
       outputPreview: live.outputPreview || tool.outputPreview,
       durationMs: live.durationMs ?? tool.durationMs,

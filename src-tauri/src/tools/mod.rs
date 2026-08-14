@@ -609,6 +609,8 @@ pub fn init_tool_registry(permissions: ToolPermissions) -> ToolRegistry {
         "get_system_metrics",
         "draw",
         "list_documents",
+        "list_directory",
+        "search_files",
         "grep_documents",
         "write_file",
         "edit_file",

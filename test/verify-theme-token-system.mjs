@@ -83,6 +83,7 @@ const allowedColorLiteralFiles = new Set([
   "src/components/widgets/workbench/MathPlotInterface.tsx",
   "src/components/widgets/workbench/DesmosCanvas.tsx",
   // Domain: chart/card data colors
+  "src/lib/chart.ts", // canonical chart data palette
   "src/components/ui/chart.tsx",
   // Domain: voice/audio canvas rendering
   "src/components/atlas/components/voice/VoiceOscilloscope.tsx",

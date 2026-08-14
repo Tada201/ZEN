@@ -165,8 +165,8 @@ impl Tool for McpToolAdapter {
     /// error instead of panicking.
     async fn execute(
         &self,
-        _app: AppHandle,
-        _chat_id: String,
+        app: AppHandle,
+        chat_id: String,
         args: serde_json::Value,
     ) -> Result<ToolOutput, ToolError> {
         let client = self.mcp_client.upgrade().ok_or_else(|| {
@@ -174,8 +174,16 @@ impl Tool for McpToolAdapter {
                 message: "MCP client is no longer available".to_string(),
             }
         })?;
+        // Thread the chat's cancellation token so a cancelled agent turn also
+        // aborts an in-flight MCP call instead of leaking the connection.
+        let cancel = {
+            use tauri::Manager;
+            let state = app.state::<crate::commands::AppState>();
+            let tokens = state.chat_cancellation_tokens.lock().await;
+            tokens.get(&chat_id).cloned()
+        };
         client
-            .call_external_tool(&self.server_name, &self.origin_tool_name, args)
+            .call_external_tool(&self.server_name, &self.origin_tool_name, args, cancel)
             .await
             .map(|content| ToolOutput {
                 content,

@@ -24,10 +24,12 @@
  */
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
-const CLIENT_RS = new URL("../src-tauri/src/mcp/client.rs", import.meta.url);
+// `client.rs` was split into a `client/` module dir; concatenate every file so
+// source-shape assertions survive wherever a symbol landed post-split.
+const CLIENT_DIR = new URL("../src-tauri/src/mcp/client/", import.meta.url);
 const TYPES_RS = new URL("../src-tauri/src/mcp/types.rs", import.meta.url);
 
 const PROTOCOL_VERSION = "2025-06-18";
@@ -35,7 +37,10 @@ const ACCEPT_JSON_OR_SSE = "application/json, text/event-stream";
 
 // ── 1. Source-shape assertions ────────────────────────────────────────────
 
-const clientSource = readFileSync(CLIENT_RS, "utf8");
+const clientSource = readdirSync(CLIENT_DIR)
+  .filter((f) => f.endsWith(".rs"))
+  .map((f) => readFileSync(new URL(f, CLIENT_DIR), "utf8"))
+  .join("\n");
 const typesSource = readFileSync(TYPES_RS, "utf8");
 
 function assertContainsAll(label, source, patterns) {

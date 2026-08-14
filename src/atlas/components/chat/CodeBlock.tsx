@@ -2,26 +2,7 @@ import { useState, useCallback, useMemo } from "react";
 import { Copy, Check, PanelRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ArtifactData } from "./types";
-import Prism from "prismjs";
-
-// Import commonly used language components for syntax highlighting
-import "prismjs/components/prism-bash";
-import "prismjs/components/prism-css";
-import "prismjs/components/prism-javascript";
-import "prismjs/components/prism-json";
-import "prismjs/components/prism-markdown";
-import "prismjs/components/prism-python";
-import "prismjs/components/prism-jsx";
-import "prismjs/components/prism-tsx";
-import "prismjs/components/prism-typescript";
-import "prismjs/components/prism-yaml";
-import "prismjs/components/prism-sql";
-import "prismjs/components/prism-c";
-import "prismjs/components/prism-cpp";
-import "prismjs/components/prism-csharp";
-import "prismjs/components/prism-java";
-import "prismjs/components/prism-rust";
-import "prismjs/components/prism-go";
+import { getLanguageGrammarName, highlightToHtml } from "./prismHighlight";
 
 export function useCopy() {
   const [copied, setCopied] = useState(false);
@@ -32,23 +13,6 @@ export function useCopy() {
     });
   }, []);
   return { copied, copy };
-}
-
-function getLanguageGrammarName(lang: string): string {
-  const normalized = lang.toLowerCase().trim();
-  const map: Record<string, string> = {
-    js: "javascript",
-    ts: "typescript",
-    py: "python",
-    sh: "bash",
-    shell: "bash",
-    md: "markdown",
-    rb: "ruby",
-    cs: "csharp",
-    golang: "go",
-    yml: "yaml",
-  };
-  return map[normalized] || normalized;
 }
 
 export function CodeBlock({
@@ -63,23 +27,10 @@ export function CodeBlock({
   const { copied, copy } = useCopy();
   const normalizedLanguage = getLanguageGrammarName(language ?? "plaintext");
 
-  const highlightedHtml = useMemo(() => {
-    const grammar = Prism.languages[normalizedLanguage];
-    if (grammar) {
-      try {
-        return Prism.highlight(code, grammar, normalizedLanguage);
-      } catch (err) {
-        console.error("Prism highlighting failed:", err);
-      }
-    }
-    // Fallback: escape HTML entities for safety
-    return code
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }, [code, normalizedLanguage]);
+  const highlightedHtml = useMemo(
+    () => highlightToHtml(code, language),
+    [code, language],
+  );
 
   return (
     <div className="group/code relative my-2 overflow-hidden rounded-lg border border-border bg-card shadow-sm transition-all duration-200">

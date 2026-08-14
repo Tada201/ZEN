@@ -245,12 +245,16 @@ const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
   components,
   onOpenArtifact,
   chatId,
+  messageId,
+  allowGenerativeUI,
 }: {
   block: MarkdownBlock;
   isStreaming: boolean;
   components: Components;
   onOpenArtifact?: (a: ArtifactData) => void;
   chatId?: string;
+  messageId?: string;
+  allowGenerativeUI: boolean;
 }) {
   const chatPlugins = useSettingsStore(useShallow(s => s.chatPlugins));
   const streamingSpeed = useSettingsStore(s => s.streamingSpeed ?? 'instant');
@@ -273,7 +277,7 @@ const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
     const langMatch = block.content.match(/^```([^\s`]*)/);
     const lang = normalizeCodeLanguage(langMatch ? langMatch[1] : block.language);
 
-    if (lang === 'openui') {
+    if (lang === 'openui' && allowGenerativeUI) {
       return (
         <div className="my-3 overflow-visible">
           <Suspense fallback={<RichBlockFallback />}>
@@ -285,14 +289,14 @@ const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
     if (lang === 'mermaid') {
       return (
         <Suspense fallback={<RichBlockFallback />}>
-          <MermaidDiagram code={codeStr} isStreaming={isStreaming} />
+          <MermaidDiagram code={codeStr} isStreaming={isStreaming} chatId={chatId} messageId={messageId} />
         </Suspense>
       );
     }
     if (lang === 'chart') {
       return (
         <Suspense fallback={<RichBlockFallback />}>
-          <ChartBlock content={codeStr} isStreaming={isStreaming} />
+          <ChartBlock content={codeStr} isStreaming={isStreaming} chatId={chatId} messageId={messageId} />
         </Suspense>
       );
     }
@@ -323,7 +327,8 @@ const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
 }, (prev, next) => {
   return prev.block.content === next.block.content
     && prev.isStreaming === next.isStreaming
-    && prev.onOpenArtifact === next.onOpenArtifact;
+    && prev.onOpenArtifact === next.onOpenArtifact
+    && prev.allowGenerativeUI === next.allowGenerativeUI;
 });
 
 export function MarkdownContent({
@@ -333,6 +338,8 @@ export function MarkdownContent({
   isStreaming,
   onOpenArtifact,
   chatId,
+  messageId,
+  allowGenerativeUI = false,
 }: {
   content: string;
   reasoning?: string;
@@ -340,6 +347,10 @@ export function MarkdownContent({
   isStreaming?: boolean;
   onOpenArtifact?: (a: ArtifactData) => void;
   chatId?: string;
+  /** Backend message id used to persist self-healing diagram repairs. */
+  messageId?: string;
+  /** Render OpenUI only when the originating turn explicitly enabled it. */
+  allowGenerativeUI?: boolean;
 }) {
   const footnoteScope = useId().replace(/[^a-zA-Z0-9_-]/g, "-");
 
@@ -406,7 +417,7 @@ export function MarkdownContent({
         const lang = normalizeCodeLanguage(match[1]);
         // These are now primarily handled at the block level, but keep
         // as fallback for inline parsing edge cases
-        if (lang === "openui") {
+        if (lang === "openui" && allowGenerativeUI) {
           return (
             <div className="my-3 overflow-visible">
               <Suspense fallback={<RichBlockFallback />}>
@@ -418,14 +429,14 @@ export function MarkdownContent({
         if (lang === "mermaid") {
           return (
             <Suspense fallback={<RichBlockFallback />}>
-              <MermaidDiagram code={codeStr} isStreaming={isStreaming} />
+              <MermaidDiagram code={codeStr} isStreaming={isStreaming} chatId={chatId} messageId={messageId} />
             </Suspense>
           );
         }
         if (lang === "chart") {
           return (
             <Suspense fallback={<RichBlockFallback />}>
-              <ChartBlock content={codeStr} isStreaming={isStreaming} />
+              <ChartBlock content={codeStr} isStreaming={isStreaming} chatId={chatId} messageId={messageId} />
             </Suspense>
           );
         }
@@ -613,7 +624,7 @@ export function MarkdownContent({
     td: ({ children }) => <TableCell>{children}</TableCell>,
     strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
     hr: () => <hr className="my-4 border-border" />,
-  }), [chatId, footnoteScope, isStreaming, onOpenArtifact, openLinkInBrowserPreview]);
+  }), [allowGenerativeUI, chatId, footnoteScope, isStreaming, messageId, onOpenArtifact, openLinkInBrowserPreview]);
 
   return (
     <div className="space-y-3">
@@ -632,6 +643,8 @@ export function MarkdownContent({
               components={components}
               onOpenArtifact={onOpenArtifact}
               chatId={chatId}
+              messageId={messageId}
+              allowGenerativeUI={allowGenerativeUI}
             />
           ))}
         </div>

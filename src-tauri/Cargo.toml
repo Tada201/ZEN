@@ -79,6 +79,17 @@ geojson = "0.24"
 [dev-dependencies]
 wiremock = "0.6"
 
+# Windows Job Object sandboxing for stdio MCP child processes. windows-sys 0.59
+# is already resolved transitively in the tree (>30 days old per Security.md);
+# these feature flags are additive and only enable the JobObjects/Threading FFI.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }
+
 [profile.dev]
 opt-level = 0
 incremental = false

@@ -7,6 +7,7 @@ import {
   FileSearch,
   FileText,
   Files,
+  FolderTree,
   Globe,
   ListChecks,
   MapPin,
@@ -20,7 +21,7 @@ import { EarthquakeList, AircraftList, RouteCard, GeocodeList } from "./OsintRen
 import { SystemMetricsCard } from "./SystemMetricsCard";
 import { CalculatorCard } from "./CalculatorCard";
 import { TodosCard } from "./TodosCard";
-import { DocumentList, DocumentContent, GrepResults } from "./DocumentRenderers";
+import { DocumentList, DirectoryList, DocumentContent, GrepResults } from "./DocumentRenderers";
 
 /**
  * Context handed to every identity-based renderer.
@@ -59,8 +60,10 @@ const RENDERERS: Record<string, ToolRenderer> = {
   calculator: { icon: Calculator, render: CalculatorCard },
   write_todos: { icon: ListChecks, render: TodosCard },
   list_documents: { icon: Files, render: DocumentList },
+  list_directory: { icon: FolderTree, render: DirectoryList },
   read_document_content: { icon: FileText, render: DocumentContent },
   grep_documents: { icon: FileSearch, render: GrepResults },
+  search_files: { icon: FileSearch, render: GrepResults },
 };
 
 /** Fallback icons for tools without a full renderer, keyed by name family. */

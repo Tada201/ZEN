@@ -79,13 +79,15 @@ export function useSendMessage(
       return typeof window === "number" && window > 0 ? window : null;
     })();
 
+    const generativeUIEnabled = data.generativeUI === true;
+
     const { userMessage, assistantMessage } = createOptimisticChatMessages({
       sessionId: targetSessionId,
       content: data.message,
       model: data.model,
       provider: activeProvider,
       deepResearch: data.deepResearch,
-      generativeUI: data.generativeUI,
+      generativeUI: generativeUIEnabled,
       tools: data.tools,
       attachments: data.attachments,
     });
@@ -113,7 +115,7 @@ export function useSendMessage(
     try {
       let systemPrompt: string | null = null;
       let systemPromptMode: "append" | "replace" | null = null;
-      if (data.generativeUI) {
+      if (generativeUIEnabled) {
         systemPrompt = await preloadOpenUISystemPrompt();
       }
       if (data.systemPrompt?.trim()) {
@@ -149,7 +151,7 @@ export function useSendMessage(
         stop: providerParams.stop,
         thinking: data.thinking,
         deepResearch: data.deepResearch,
-        generativeUi: data.generativeUI,
+        generativeUi: generativeUIEnabled,
         imageGen: data.imageGen,
         tools: data.tools,
         attachments: data.attachments,

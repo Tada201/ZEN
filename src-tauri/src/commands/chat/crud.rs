@@ -198,6 +198,45 @@ pub async fn update_message_steps(
     Ok(())
 }
 
+/// Persist an AI-repaired assistant message body (self-healing diagrams).
+///
+/// The edited `content` — and, when provided, the rewritten execution timeline
+/// `steps_json` (wrapped in the same backend checkpoint envelope as
+/// `update_message_steps`) — replaces the stored message so the fix survives
+/// app reloads on both the content and timeline render paths. Only assistant
+/// rows belonging to the requested chat are updated.
+#[tauri::command]
+pub async fn update_message_content(
+    state: State<'_, AppState>,
+    chat_id: String,
+    message_id: String,
+    content: String,
+    steps_json: Option<String>,
+    trace_status: Option<String>,
+) -> ZenResult<()> {
+    if content.trim().is_empty() {
+        return Err(crate::error::ZenError::Custom(
+            "Updated message content must not be empty".to_string(),
+        ));
+    }
+
+    let checkpoint = match steps_json {
+        Some(raw) => Some(normalize_trace_checkpoint(&raw, trace_status.as_deref())?),
+        None => None,
+    };
+
+    let db = state.db().await?;
+    queries::update_message_content(
+        &db,
+        &chat_id,
+        &message_id,
+        &content,
+        checkpoint.as_deref(),
+    )
+    .await?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,64 +1,7 @@
 import React, { useState } from "react";
 import { Folder, File, ChevronRight, ChevronDown, FolderOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-interface TreeNode {
-  name: string;
-  type: "file" | "dir";
-  children?: TreeNode[];
-  level: number;
-}
-
-/**
- * Parses the raw tree string into a hierarchical structure.
- * Handles both ASCII tree formats (├──, └──) and indentation-based trees.
- */
-function parseTree(input: string): TreeNode[] {
-  const lines = input.split("\n").filter(l => l.trim().length > 0);
-  const root: TreeNode[] = [];
-  const stack: { node: TreeNode; indent: number }[] = [];
-
-  for (const line of lines) {
-    // Calculate indentation level
-    // We look for characters that indicate depth: │, ├, └, and spaces
-    const indentMatch = line.match(/^([ │├└\s]*)/);
-    const indentStr = indentMatch ? indentMatch[1] : "";
-    
-    // Depth is roughly indent length / constant, or based on specific symbols
-    // A more robust way: count special characters + spaces
-    const depth = indentStr.length;
-    
-    const name = line.replace(/^[ │├└─\s]*/, "").trim();
-    if (!name) continue;
-
-    const type = name.endsWith("/") || name.includes(".") === false || line.includes("📁") ? "dir" : "file";
-    const cleanName = name.replace(/\/$/, "");
-
-    const newNode: TreeNode = {
-      name: cleanName,
-      type: type as "file" | "dir",
-      level: depth,
-      children: type === "dir" ? [] : undefined
-    };
-
-    // Find parent in stack
-    while (stack.length > 0 && stack[stack.length - 1].indent >= depth) {
-      stack.pop();
-    }
-
-    if (stack.length === 0) {
-      root.push(newNode);
-    } else {
-      stack[stack.length - 1].node.children?.push(newNode);
-    }
-
-    if (type === "dir") {
-      stack.push({ node: newNode, indent: depth });
-    }
-  }
-
-  return root;
-}
+import { MAX_TREE_LINES, parseTree, type TreeNode } from "@/lib/tree";
 
 interface TreeItemProps {
   node: TreeNode;
@@ -103,7 +46,7 @@ const TreeItem = ({ node }: TreeItemProps) => {
 };
 
 export const FileTree = ({ content }: { content: string }) => {
-  const nodes = React.useMemo(() => parseTree(content), [content]);
+  const { nodes, truncated } = React.useMemo(() => parseTree(content), [content]);
 
   return (
     <div className="my-3 rounded-lg border border-border bg-card shadow-sm overflow-hidden">
@@ -122,6 +65,11 @@ export const FileTree = ({ content }: { content: string }) => {
           </div>
         )}
       </div>
+      {truncated && (
+        <div className="px-3 py-1.5 border-t border-border text-[11px] text-muted-foreground">
+          Tree truncated — showing first {MAX_TREE_LINES} entries
+        </div>
+      )}
     </div>
   );
 };

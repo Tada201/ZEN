@@ -111,6 +111,8 @@ export interface ActionMeta {
   model?: string;
   toolCount?: number;
   parallel?: boolean;
+  /** Per-turn capability marker persisted in the local-first timeline. */
+  generativeUI?: boolean;
   tools?: string[];
   workflowId?: string;
   totalTasks?: number;
@@ -546,7 +548,21 @@ export function normalizeVercelMessage(msg: unknown): Message {
     status: msg.status === "sending" || msg.status === "sent" || msg.status === "failed" || msg.status === "cancelled" ? msg.status : undefined,
     error: typeof msg.error === "string" ? msg.error : undefined,
     isThinking: typeof msg.isThinking === "boolean" ? msg.isThinking : undefined,
-    generativeUI: typeof msg.generativeUI === "number" ? msg.generativeUI : undefined,
+    generativeUI: typeof msg.generativeUI === "boolean"
+      ? (msg.generativeUI ? 1 : 0)
+      : typeof msg.generativeUI === "number"
+        ? (msg.generativeUI !== 0 ? 1 : 0)
+        : normalizedSteps?.find((step) => {
+            const metadata = isRecord(step.metadata) ? step.metadata : undefined;
+            return typeof metadata?.generativeUI === "boolean";
+          })?.metadata?.generativeUI
+            ? 1
+            : normalizedSteps?.some((step) => {
+                const metadata = isRecord(step.metadata) ? step.metadata : undefined;
+                return metadata?.generativeUI === false;
+              })
+                ? 0
+                : undefined,
     kind: typeof msg.kind === "string" ? msg.kind as MessageKind : undefined,
     metadata: isRecord(msg.metadata) ? msg.metadata as ActionMeta : undefined,
     toolInvocations: toToolInvocationArray(msg.toolInvocations),

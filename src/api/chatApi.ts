@@ -161,6 +161,24 @@ export const chatApi = {
     stepsJson: string,
     traceStatus?: "running" | "completed" | "cancelled" | "failed" | "interrupted" | "checkpoint",
   ) => callCommand<void>("update_message_steps", { chatId, messageId, stepsJson, traceStatus }),
+  /**
+   * Persist an edited assistant message body (self-healing diagram repairs).
+   * `stepsJson` + `traceStatus` optionally rewrite the execution timeline in
+   * the same write so the fix survives reloads on the timeline path too.
+   */
+  updateMessageContent: (
+    chatId: string,
+    messageId: string,
+    content: string,
+    stepsJson?: string,
+    traceStatus?: "running" | "completed" | "cancelled" | "failed" | "interrupted" | "checkpoint",
+  ) => callCommand<void>("update_message_content", {
+    chatId,
+    messageId,
+    content,
+    stepsJson: stepsJson ?? null,
+    traceStatus: traceStatus ?? null,
+  }),
   upsertExecutionTrace: (
     chatId: string,
     messageId: string,
@@ -183,6 +201,30 @@ export const chatApi = {
     callCommand<void>("update_chat_title", { chatId, title }),
   generateSessionTitle: (chatId: string, firstUserMessage: string) =>
     callCommand<string>("generate_session_title", { chatId, firstUserMessage }),
+  /**
+   * Self-heal a Mermaid diagram: send the broken code + renderer error to the
+   * active model and return corrected Mermaid code. One-shot, no chat history,
+   * no persistence — the corrected code is rendered in place by the frontend.
+   */
+  repairMermaid: (code: string, error: string, options?: { provider?: string; model?: string }) =>
+    callCommand<string>("repair_mermaid", {
+      code,
+      error,
+      provider: options?.provider ?? null,
+      model: options?.model ?? null,
+    }),
+  /**
+   * Self-heal an oversized/invalid chart payload: send the broken JSON + size
+   * error to the active model and return corrected, condensed chart JSON.
+   * One-shot, no chat history — the frontend re-parses and re-renders it.
+   */
+  repairChart: (code: string, error: string, options?: { provider?: string; model?: string }) =>
+    callCommand<string>("repair_chart", {
+      code,
+      error,
+      provider: options?.provider ?? null,
+      model: options?.model ?? null,
+    }),
   togglePinChat: (chatId: string) => callCommand<void>("toggle_pin_chat", { chatId }),
   archiveChat: (chatId: string) => callCommand<void>("archive_chat", { chatId }),
   unarchiveChat: (chatId: string) => callCommand<void>("unarchive_chat", { chatId }),

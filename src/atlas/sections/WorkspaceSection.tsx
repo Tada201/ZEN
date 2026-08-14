@@ -607,7 +607,7 @@ export function WorkspaceApp() {
                       />
                     </div>
                     <div className="w-full shrink-0">
-                      <div className="max-w-3xl mx-auto w-full px-6 py-4">
+                      <div className="max-w-3xl mx-auto w-full px-6 pt-1 pb-3">
                         <div
                           className="w-full"
                         >
@@ -653,7 +653,7 @@ export function WorkspaceApp() {
                             isStreaming={isArchivedSession ? false : isStreaming}
                           />
                         </div>
-                        <div className="w-full bg-background border-t border-border p-4 shrink-0">
+                        <div className="w-full bg-background border-t border-border px-4 pt-2 pb-3 shrink-0">
                           <div className="max-w-3xl mx-auto w-full">
                             <div
                               className="w-full"

@@ -79,6 +79,26 @@ impl ContextMiddleware for SystemPromptMiddleware {
         );
         ctx.try_push_section(ContextSectionId::Time, &mut remaining, &time_block);
 
+        // ── Authoritative MCP inventory ──
+        // Inventory is injected on every tool-enabled turn, including the
+        // explicit empty state. It is status metadata, not instructions from
+        // an external server, and is bounded/redacted by the discovery service.
+        if ctx.tools_enabled {
+            if let Some(state) = self.app.try_state::<crate::commands::AppState>() {
+                if let Err(error) = state.mcp_discovery.refresh().await {
+                    tracing::debug!(error = %error, "MCP inventory refresh unavailable during prompt build");
+                }
+                let inventory = state.mcp_discovery.snapshot().await;
+                let inventory_block = crate::services::McpDiscoveryService::prompt_block(&inventory);
+                ctx.try_push_section(ContextSectionId::ToolSystem, &mut remaining, &inventory_block);
+                ctx.try_push_section(
+                    ContextSectionId::ToolSystem,
+                    &mut remaining,
+                    "Only `ready` MCP servers may be used. Never invent a server, command, tool ID, URL, or argument. For MCP work, call `tool_list` by user intent, then `tool_info` with the exact returned ID, then `tool_exec` with only the documented arguments. If no server is ready, explain that clearly instead of guessing.\n",
+                );
+            }
+        }
+
         // ── UI Rendering & Formatting Rules ──
         ctx.try_push_section(
             ContextSectionId::UiRules,
@@ -278,6 +298,7 @@ impl ContextMiddleware for SystemPromptMiddleware {
             );
             ctx.try_push_section(ContextSectionId::ToolSystem, &mut remaining, "- Execute dependent tools sequentially. Use parallel tool calls only when results do not depend on each other.\n");
             ctx.try_push_section(ContextSectionId::ToolSystem, &mut remaining, "- For uploaded/local documents: call `list_documents` when the exact path is unknown, then call `read_document_content` with the returned `file_path` for authoritative contents. Use `grep_documents` only for exact-term discovery, and read matching files before relying on them.\n");
+            ctx.try_push_section(ContextSectionId::ToolSystem, &mut remaining, "- For real workspace files (not uploads): use `list_directory` to browse folders and `search_files` to grep file contents by regex; do not shell out to `ls`/`dir`/`Select-String`.\n");
             ctx.try_push_section(ContextSectionId::ToolSystem, &mut remaining, "- After tool results arrive, use their specific data in the next response and summarize findings before final answer when useful.\n");
             ctx.try_push_section(ContextSectionId::ToolSystem, &mut remaining, "- If a tool is unknown or denied, use the hint in the result and rediscover with `tool_list`.\n");
             if !ctx.tools_supported {
@@ -286,6 +307,19 @@ impl ContextMiddleware for SystemPromptMiddleware {
                     &mut remaining,
                     "- Output EXACTLY one JSON block per tool call: ```json\n{\"tool\":\"TOOL_NAME\",\"args\":{}}\n```\n",
                 );
+            }
+
+            // External MCP tools are dynamically registered from the user's
+            // configured servers and named `ext:{server}:{tool}`. They are
+            // invisible until discovered, so the model must be told they
+            // exist — otherwise it never queries for them. Gated on presence
+            // so agents with no MCP servers configured see no MCP noise.
+            if ctx
+                .authorized_tool_ids
+                .iter()
+                .any(|t| crate::mcp::client::is_external_tool_name(t))
+            {
+                ctx.try_push_section(ContextSectionId::ToolSystem, &mut remaining, "- **External MCP Tools**: The user has configured one or more external MCP servers. Their tools are available through this same protocol and are named `ext:{server}:{tool}`. Discover them with `tool_list` (optionally `tool_list({\"query\":\"intent\"})`), read the chosen tool's schema with `tool_info`, then run it via `tool_exec`. Prefer a relevant `ext:` tool when it fits the task better than a built-in one.\n");
             }
         }
 

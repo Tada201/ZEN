@@ -977,6 +977,12 @@ html[data-motion="off"] .execution-row-status-dot--running {
 .execution-card-body {
   padding: 8px;
   border-top: 1px solid var(--execution-border);
+  /* Strict cap: any tool card scrolls internally instead of growing
+     unbounded. This is the single scroll owner — inner blocks must not add
+     their own competing max-height/scroll (avoids nested scrollbars). */
+  max-height: 26rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .execution-reasoning-card {
@@ -987,6 +993,15 @@ html[data-motion="off"] .execution-row-status-dot--running {
 }
 
 .execution-reasoning-card--expanded {
+  border: 1px solid var(--execution-border);
+  border-left: 2px solid hsl(var(--primary));
+  border-radius: 6px;
+  background: var(--execution-surface);
+}
+
+/* A live (collapsed) thinking block gets the same surface as the expanded
+   state so it is not a bare transparent strip against the chat background. */
+.execution-reasoning-card--thinking {
   border: 1px solid var(--execution-border);
   border-left: 2px solid hsl(var(--primary));
   border-radius: 6px;

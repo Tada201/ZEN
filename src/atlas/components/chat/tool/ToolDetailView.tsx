@@ -9,6 +9,7 @@ import { parseUnifiedDiff } from "./parseUnifiedDiff";
 import { DiffCard } from "@/atlas/components/genui/premium/DiffCard";
 import { CodeBlock } from "../CodeBlock";
 import { filenameOf } from "./content/primitives";
+import { languageFromPath } from "@/atlas/components/chat/prismHighlight";
 import { cn } from "@/lib/utils";
 import { ChevronRight } from "lucide-react";
 import { toToolInputRecord } from "./toToolInputRecord";
@@ -120,6 +121,7 @@ function FileChangeCard({
             <DiffCard
               data={{
                 filename: file.path,
+                language: languageFromPath(file.path),
                 hunks: parsed!.hunks,
                 additions: parsed!.additions || file.linesAdded || 0,
                 deletions: parsed!.deletions || file.linesRemoved || 0,

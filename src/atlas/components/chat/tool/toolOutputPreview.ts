@@ -111,9 +111,20 @@ function normalizeResults(value: unknown): ToolPreviewResultItem[] {
   if (!Array.isArray(value)) return [];
   return value.slice(0, 5).map((item, index) => {
     const record = asRecord(item);
+    // Directory entries ({name,type,size}) and ingested documents
+    // ({file_name,status}) have no title/summary; derive a readable line so
+    // they render as a list rather than raw JSON in the generic fallback.
+    const dirName = record.type === "dir" || record.type === "file" ? record.name : undefined;
+    const docName = record.file_name || record.file_path;
+    const size = typeof record.size === "number" ? `${record.size} B` : "";
     return {
-      title: compactText(record.title || record.name || record.url || `Result ${index + 1}`, 120),
-      summary: compactText(record.summary || record.snippet || record.description || record.content, 180),
+      title: compactText(record.title || record.name || record.url || dirName || docName || `Result ${index + 1}`, 120),
+      summary: compactText(
+        record.summary || record.snippet || record.description || record.content
+          || (dirName ? [record.type, size].filter(Boolean).join(" · ") : "")
+          || record.status,
+        180,
+      ),
       url: compactText(record.url || record.link, 180),
     };
   });
@@ -258,7 +269,7 @@ export function buildToolOutputPreview(output: string): ToolOutputPreview {
   const parsed = parseMaybeJson(output);
   const record = asRecord(parsed);
   const candidates = outputCandidates(record, parsed);
-  const resultSource = findFromCandidates(candidates, ["results", "items", "data"]);
+  const resultSource = findFromCandidates(candidates, ["results", "items", "data", "entries", "documents"]);
   const results = normalizeResults(resultSource);
   const fileSource = findFromCandidates(candidates, ["files", "changed_files", "changedFiles"]);
   const files = normalizeFiles(fileSource).length > 0

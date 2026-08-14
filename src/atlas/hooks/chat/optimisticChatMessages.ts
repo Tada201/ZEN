@@ -46,6 +46,10 @@ export function createOptimisticChatMessages({
     status: "sending",
     model,
     provider,
+    // Persist the per-turn capability in the optimistic message and its
+    // durable timeline projection so reloads can enforce the same renderer
+    // policy instead of guessing from response content.
+    generativeUI: generativeUI ? 1 : 0,
     kind: deepResearch ? "deep_research" : undefined,
     steps: [
       createLocalFirstFeedbackStep({

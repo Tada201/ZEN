@@ -20,6 +20,16 @@ pub struct ToolDescriptor {
     pub risk_level: Option<String>,
     pub status: String,
     pub status_detail: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transport: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub availability: Option<String>,
 }
 
 /// Full detail returned by tool_info
@@ -321,6 +331,11 @@ impl ToolManager {
                             description: meta.description,
                             category: meta.category,
                             tags: meta.tags,
+                            origin: None,
+                            server_id: None,
+                            server_name: None,
+                            transport: None,
+                            availability: None,
                         });
                     }
                 }
@@ -340,6 +355,11 @@ impl ToolManager {
                             description: tool.description().to_string(),
                             category: "agent".to_string(),
                             tags: Vec::new(),
+                            origin: None,
+                            server_id: None,
+                            server_name: None,
+                            transport: None,
+                            availability: None,
                         });
                     }
                 }
@@ -366,8 +386,25 @@ impl ToolManager {
                         description: info.description,
                         category: "tool".to_string(),
                         tags: Vec::new(),
+                        origin: None,
+                        server_id: None,
+                        server_name: None,
+                        transport: None,
+                        availability: None,
                     });
                 }
+            }
+        }
+
+        // External adapters carry the stable `ext:<server>:<tool>` identity.
+        // Add bounded origin metadata without creating a second registry.
+        for descriptor in &mut descriptors {
+            if let Some((server_name, _tool_name)) = descriptor.id.strip_prefix("ext:").and_then(split_external_id) {
+                descriptor.origin = Some("mcp".to_string());
+                descriptor.server_id = Some(format!("mcp:{}", server_name));
+                descriptor.server_name = Some(server_name.to_string());
+                descriptor.transport = Some("unknown".to_string());
+                descriptor.availability = Some("ready".to_string());
             }
         }
 
@@ -715,6 +752,10 @@ pub fn meta_tool_definitions() -> Vec<crate::tools::ToolInfo> {
 }
 
 // ── Display helpers for list_metadata ──────────────────────────────
+
+fn split_external_id(value: &str) -> Option<(&str, &str)> {
+    value.split_once(':').filter(|(server, tool)| !server.is_empty() && !tool.is_empty())
+}
 
 fn id_to_display_name(id: &str) -> String {
     match id {

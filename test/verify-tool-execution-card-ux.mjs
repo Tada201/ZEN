@@ -59,6 +59,10 @@ const assistantMessageSource = readFileSync(
   new URL("../src/atlas/components/chat/AssistantMessage.tsx", import.meta.url),
   "utf8",
 );
+const assistantLogicSource = readFileSync(
+  new URL("../src/atlas/components/chat/AssistantMessage.logic.ts", import.meta.url),
+  "utf8",
+);
 const mockStreamingSource = readFileSync(
   new URL("../src/api/mockStreaming.ts", import.meta.url),
   "utf8",
@@ -313,7 +317,25 @@ checkAll(assert, [
       ),
       pinContains("toolCalls={step.toolCalls}", "assistant messages should pass `toolCalls` as a single prop into the grouped execution row, not iterate inside the message"),
       pinAbsent("step.toolCalls.map(tool =>", "assistant messages must not iterate step.toolCalls inside the message body"),
-      pinContains("function shouldShowToolGroupInTimeline", "assistant messages should expose shouldShowToolGroupInTimeline as the visibility gate"),
+      pinContains("<ExecutionGroup", "assistant messages must render the grouped execution row via ExecutionGroup (which owns the AgentExecutionTrace delegation)"),
+      pinAbsent(
+        /\.toolCalls\.(map|forEach|flatMap)\(\(tool\b/,
+        "AssistantMessage must not re-iterate step.toolCalls at the parent-message level (defeats the grouped execution row)",
+      ),
+    ],
+  },
+
+  // ── ASSISTANTMESSAGE.LOGIC ────────────────────────────────────────────────
+  // Pure derivation module: the shouldShowToolGroupInTimeline visibility gate
+  // lives here (not the component) so it can be unit-tested without DOM. It
+  // must keep actionable (running/awaiting_approval/error) and completed
+  // groups visible, and the derive call site must wire the live message status
+  // and answer state into the stable execution-history gate.
+  {
+    context: "AssistantMessage.logic.ts",
+    source: assistantLogicSource,
+    pins: [
+      pinContains("function shouldShowToolGroupInTimeline", "assistant logic should expose shouldShowToolGroupInTimeline as the visibility gate"),
       pinContains('message.status === "sending"', "shouldShowToolGroupInTimeline must read live message.status as the isStreaming signal"),
       pinContains("hasAssistantAnswerText", "shouldShowToolGroupInTimeline must receive the assistant-answer state for the live/reload contract"),
       pinContains('tool.status === "awaiting_approval"', "shouldShowToolGroupInTimeline must keep awaiting_approval rows visible"),
@@ -330,11 +352,6 @@ checkAll(assert, [
       pinRegexPresent(
         /shouldShowToolGroupInTimeline\(\s*step,\s*message\.status\s*===\s*"sending",\s*hasAssistantAnswerText\s*\)/,
         "the filter call site must wire the live message status and answer state into the stable execution-history gate",
-      ),
-      pinContains("<ExecutionGroup", "assistant messages must render the grouped execution row via ExecutionGroup (which owns the AgentExecutionTrace delegation)"),
-      pinAbsent(
-        /\.toolCalls\.(map|forEach|flatMap)\(\(tool\b/,
-        "AssistantMessage must not re-iterate step.toolCalls at the parent-message level (defeats the grouped execution row)",
       ),
     ],
   },

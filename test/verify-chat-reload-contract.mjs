@@ -25,6 +25,8 @@ import { loadSourceModule, closeSourceModuleLoader } from "./test-loader.mjs";
 // ── Load the projection + normalization modules ──────────────────────────
 const projectionModule = await loadSourceModule("../src/atlas/hooks/stream/projectStepsForPersistence.ts");
 const projectStepsForPersistence = projectionModule.projectStepsForPersistence;
+const messageProjectionModule = await loadSourceModule("../src/atlas/agentRuntime/messageProjection.ts");
+const { projectCanonicalMessageParts } = messageProjectionModule;
 
 const typesModule = await loadSourceModule("../src/atlas/components/chat/types.ts");
 const { normalizeVercelMessage } = typesModule;
@@ -56,6 +58,25 @@ assert.equal(completedNormalized.steps[0].type, "tool-call", "first rehydrated s
 assert.equal(completedNormalized.steps[0].toolCall.status, "completed", "rehydrated tool call should preserve completed status");
 assert.equal(completedNormalized.steps[1].type, "text", "second rehydrated step should be the answer text");
 assert.equal(completedNormalized.content, "Here is the final answer.", "rehydrated content should match the persisted answer");
+
+// Regression: the legacy message-level summary can lag behind steps_json. A
+// running summary must not overwrite the completed tool lifecycle from the
+// ordered step during reload.
+const staleSummaryProjection = projectCanonicalMessageParts({
+  content: "Completed answer.",
+  toolCalls: [
+    { id: "stale-tool", name: "read_file", status: "running", input: { path: "a.ts" }, output: "" },
+  ],
+  steps: [
+    { type: "tool-call", toolCall: { id: "stale-tool", name: "read_file", status: "completed", input: { path: "a.ts" }, output: "", completedAt: Date.now() } },
+    { type: "text", content: "Completed answer." },
+  ],
+});
+assert.equal(
+  staleSummaryProjection.toolCalls[0].status,
+  "completed",
+  "steps_json terminal status must win over a stale running legacy tool summary",
+);
 
 // Regression: a persisted timeline must remain source ordered. The final
 // message-level `content` and `toolCalls` summaries are not chronological
@@ -103,16 +124,40 @@ const assistantSource = readFileSync(
   new URL("../src/atlas/components/chat/AssistantMessage.tsx", import.meta.url),
   "utf8",
 );
-assert.ok(
-  assistantSource.includes("function shouldShowToolGroupInTimeline"),
-  "shouldShowToolGroupInTimeline gate must exist in AssistantMessage.tsx",
+const assistantLogicSource = readFileSync(
+  new URL("../src/atlas/components/chat/AssistantMessage.logic.ts", import.meta.url),
+  "utf8",
+);
+const queriesSource = readFileSync(
+  new URL("../src/atlas/hooks/chat/useChatQueries.ts", import.meta.url),
+  "utf8",
+);
+const liveMergeSource = readFileSync(
+  new URL("../src/atlas/hooks/chat/liveLedgerMerge.ts", import.meta.url),
+  "utf8",
 );
 assert.ok(
-  /hasActionableTool\s*=\s*step\.toolCalls\.some/.test(assistantSource),
+  queriesSource.includes("const traceCompleted = traceStatus === \"completed\""),
+  "reload hydration must recognize a terminal completed execution trace",
+);
+assert.ok(
+  queriesSource.includes('status: \"completed\" as const') && queriesSource.includes('recoveryState: \"stale\" as const'),
+  "reload hydration must resolve running tools instead of leaving an unowned spinner",
+);
+assert.ok(
+  liveMergeSource.includes('const liveOwnsLifecycle = existing.status === \"sending\"'),
+  "live tool state must only override persisted lifecycle while the message is actively streaming",
+);
+assert.ok(
+  assistantLogicSource.includes("function shouldShowToolGroupInTimeline"),
+  "shouldShowToolGroupInTimeline gate must exist in AssistantMessage.logic.ts",
+);
+assert.ok(
+  /hasActionableTool\s*=\s*step\.toolCalls\.some/.test(assistantLogicSource),
   "shouldShowToolGroupInTimeline must keep running/approval/error groups visible",
 );
 assert.ok(
-  /return\s+true\s*;/.test(assistantSource),
+  /return\s+true\s*;/.test(assistantLogicSource),
   "shouldShowToolGroupInTimeline must keep completed tool groups visible after the answer arrives",
 );
 assert.ok(

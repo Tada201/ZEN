@@ -21,6 +21,10 @@ const assistantMessageSource = readFileSync(
   new URL("../src/atlas/components/chat/AssistantMessage.tsx", import.meta.url),
   "utf8",
 );
+const assistantLogicSource = readFileSync(
+  new URL("../src/atlas/components/chat/AssistantMessage.logic.ts", import.meta.url),
+  "utf8",
+);
 const chatQueriesSource = readFileSync(
   new URL("../src/atlas/hooks/chat/useChatQueries.ts", import.meta.url),
   "utf8",
@@ -73,7 +77,7 @@ assert(
 );
 assert(
   assistantMessageSource.includes("visibleGroupedSteps") &&
-    assistantMessageSource.includes('step.kind !== "chat_status"') &&
+    assistantLogicSource.includes('step.kind !== "chat_status"') &&
     !assistantMessageSource.includes("ExecutionSummaryBar") &&
     !assistantMessageSource.includes("summarizeExecutionSteps"),
   "assistant messages should suppress low-value request pipeline cards and raw chat_status rows",
