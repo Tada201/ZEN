@@ -28,6 +28,10 @@ use crate::mcp::types::methods;
 
 /// Message length cap for an elicitation prompt shown to the user.
 const MAX_MESSAGE_BYTES: usize = 4 * 1024;
+/// Serialized-size cap for a form-mode `requestedSchema`. A conformant schema of
+/// flat primitives is tiny; anything past this is treated as a hostile payload
+/// and the request is blocked rather than forwarded to the UI/IPC.
+const MAX_SCHEMA_BYTES: usize = 32 * 1024;
 /// Bound on the number of input requests we will surface for one result. A
 /// conformant server sends a handful; this stops a hostile server flooding the
 /// UI with prompts.
@@ -145,19 +149,26 @@ fn parse_one_request(key: &str, req: &Value) -> ElicitationRequest {
         }
         ElicitMode::Form => {
             let schema = params.get("requestedSchema").cloned();
-            let blocked = schema
+            let oversized = schema
                 .as_ref()
-                .filter(|s| schema_requests_secret(s))
-                .map(|_| {
-                    "server asked for a credential via form mode; use URL mode for secrets"
-                        .to_string()
-                });
+                .is_some_and(|s| s.to_string().len() > MAX_SCHEMA_BYTES);
+            let blocked = if oversized {
+                Some("form-mode requestedSchema exceeds the size limit".to_string())
+            } else {
+                schema
+                    .as_ref()
+                    .filter(|s| schema_requests_secret(s))
+                    .map(|_| {
+                        "server asked for a credential via form mode; use URL mode for secrets"
+                            .to_string()
+                    })
+            };
             ElicitationRequest {
                 key: key.to_string(),
                 mode,
                 message: message_raw,
                 url: None,
-                requested_schema: schema,
+                requested_schema: if oversized { None } else { schema },
                 blocked,
                 fatal: false,
             }
@@ -179,9 +190,9 @@ fn is_displayable_url(raw: &str) -> bool {
 /// inconvenience, while rendering a password field violates the spec.
 pub fn schema_requests_secret(schema: &Value) -> bool {
     const NEEDLES: &[&str] = &[
-        "password", "passwd", "secret", "token", "apikey", "api_key", "api-key", "access_key",
-        "accesskey", "credential", "private_key", "privatekey", "client_secret", "clientsecret",
-        "otp", "passphrase", "pin",
+        "password", "passwd", "pwd", "passcode", "secret", "token", "apikey", "api_key", "api-key",
+        "access_key", "accesskey", "credential", "private_key", "privatekey", "client_secret",
+        "clientsecret", "otp", "passphrase", "pin", "auth",
     ];
     let looks_secret = |s: &str| {
         let lower = s.to_ascii_lowercase();
@@ -318,11 +329,40 @@ mod tests {
             "properties": { "pw": {"type": "string", "format": "password"} }
         });
         assert!(schema_requests_secret(&schema2));
+        // Common short credential field names are caught too.
+        for name in ["pwd", "passcode", "authToken"] {
+            let s = serde_json::json!({"properties": {name: {"type": "string"}}});
+            assert!(schema_requests_secret(&s), "{} should be secret", name);
+        }
         let benign = serde_json::json!({
             "type": "object",
             "properties": { "name": {"type": "string"}, "email": {"type": "string", "format": "email"} }
         });
         assert!(!schema_requests_secret(&benign));
+    }
+
+    #[test]
+    fn oversized_form_schema_is_blocked_and_dropped() {
+        let mut props = Map::new();
+        for i in 0..4000 {
+            props.insert(
+                format!("f{}", i),
+                serde_json::json!({"type": "string", "title": "x".repeat(20)}),
+            );
+        }
+        let result = serde_json::json!({
+            "resultType": "input_required",
+            "inputRequests": {
+                "big": {
+                    "method": "elicitation/create",
+                    "params": {"mode": "form", "requestedSchema": {"properties": props}}
+                }
+            }
+        });
+        let parsed = parse_input_required(&result);
+        let req = &parsed.requests[0];
+        assert!(req.blocked.is_some(), "oversized schema blocked");
+        assert!(req.requested_schema.is_none(), "oversized schema not forwarded");
     }
 
     #[test]

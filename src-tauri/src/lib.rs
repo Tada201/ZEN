@@ -633,6 +633,7 @@ pub fn run() {
             commands::mcp::mcp_list_prompts,
             commands::mcp::mcp_get_prompt,
             commands::mcp::mcp_resolve_elicitation,
+            commands::mcp::mcp_replay_elicitations,
             commands::context_viewer::get_context_breakdown,
             commands::context_viewer::get_context_snapshot,
         ])

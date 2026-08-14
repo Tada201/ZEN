@@ -87,7 +87,8 @@ function AppRuntime() {
 
   // Global MRTR elicitation prompts — a modern MCP server can ask the user for
   // input mid-request from any surface, so the queue lives at the App root.
-  const { current: elicitation, resolveCurrent } = useMcpElicitations();
+  const { current: elicitation, pending: pendingElicitations, resolveCurrent } =
+    useMcpElicitations();
 
   // Run the frontend init hook at App root so it survives BootScreen
   // unmounting. This is the single source of the `setComplete("frontend")`
@@ -129,7 +130,11 @@ function AppRuntime() {
         </TooltipProvider>
         <Toaster position="bottom-right" richColors theme={toastTheme} />
         {elicitation && (
-          <McpElicitationModal request={elicitation} onResolved={resolveCurrent} />
+          <McpElicitationModal
+            request={elicitation}
+            pending={pendingElicitations}
+            onResolved={resolveCurrent}
+          />
         )}
       </ZenProvider>
     </ErrorBoundary>

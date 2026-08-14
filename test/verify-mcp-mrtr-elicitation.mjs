@@ -53,6 +53,8 @@ assertAll("mrtr.rs parse + builders", mrtr, [
   /fn\s+is_displayable_url\b/,
   /fn\s+build_elicit_result\b/,
   /fn\s+build_retry_params\b/,
+  // oversized form schema is blocked, not forwarded to the UI/IPC
+  /MAX_SCHEMA_BYTES/,
   // opaque requestState echoed, and dropped when the interim result had none
   /map\.insert\(\s*"requestState"\.to_string\(\),\s*state\.clone\(\)\s*\)/,
   /map\.remove\("requestState"\)/,
@@ -73,9 +75,19 @@ assertAll("elicit.rs fail-closed MRTR loop", elicit, [
   // url opened only on accept, only via the OS browser, never prefetched
   /opener\(\)\.open_url/,
   /if\s+action\s*==\s*"accept"/,
+  // caller cancel is raced against the prompt and aborts the round
+  /cancelled\s*=>/,
+  /is_cancelled/,
+  // an abandoned prompt tells the UI to dismiss so no stale submit lands
+  /mcp:elicitation:close/,
+  // in-flight prompts are replayable for a UI that mounts/reloads late
+  /fn\s+replay_elicitations\b/,
 ]);
 
-assertAll("commands/mcp.rs resolve surface", commands, [/fn\s+mcp_resolve_elicitation\b/]);
+assertAll("commands/mcp.rs resolve surface", commands, [
+  /fn\s+mcp_resolve_elicitation\b/,
+  /fn\s+mcp_replay_elicitations\b/,
+]);
 
 // Elicitation capability (form + url) must be declared to the server.
 assertAll("types.rs declares elicitation capability", types, [
@@ -122,6 +134,7 @@ assertAll("plan Phase 6 present", plan, [
 
 const MAX_INPUT_REQUESTS = 16;
 const MAX_MESSAGE_BYTES = 4 * 1024;
+const MAX_SCHEMA_BYTES = 32 * 1024;
 const ELICITATION_CREATE = "elicitation/create";
 
 const isInputRequired = (r) => r?.resultType === "input_required";
@@ -132,9 +145,9 @@ assert.equal(isInputRequired({ resultType: "input_required" }), true);
 // Secret-schema detector (mirror of schema_requests_secret): errs toward false
 // positives so a password/token field can never reach form mode.
 const NEEDLES = [
-  "password", "passwd", "secret", "token", "apikey", "api_key", "api-key",
-  "access_key", "accesskey", "credential", "private_key", "privatekey",
-  "client_secret", "clientsecret", "otp", "passphrase", "pin",
+  "password", "passwd", "pwd", "passcode", "secret", "token", "apikey", "api_key",
+  "api-key", "access_key", "accesskey", "credential", "private_key", "privatekey",
+  "client_secret", "clientsecret", "otp", "passphrase", "pin", "auth",
 ];
 function schemaRequestsSecret(schema) {
   const props = schema?.properties;
@@ -150,6 +163,9 @@ function schemaRequestsSecret(schema) {
 assert.equal(schemaRequestsSecret({ properties: { api_key: { type: "string" } } }), true);
 assert.equal(schemaRequestsSecret({ properties: { pw: { format: "password" } } }), true);
 assert.equal(schemaRequestsSecret({ properties: { AccessToken: { type: "string" } } }), true);
+assert.equal(schemaRequestsSecret({ properties: { pwd: { type: "string" } } }), true);
+assert.equal(schemaRequestsSecret({ properties: { passcode: { type: "string" } } }), true);
+assert.equal(schemaRequestsSecret({ properties: { authToken: { type: "string" } } }), true);
 assert.equal(
   schemaRequestsSecret({ properties: { name: { type: "string" }, email: { format: "email" } } }),
   false,
@@ -198,10 +214,14 @@ function parseInputRequired(result) {
       const ok = typeof params.url === "string" && isDisplayableUrl(params.url);
       requests.push({ key, mode, message, url: params.url, blocked: ok ? null : "bad url", fatal: false });
     } else {
-      const blocked = params.requestedSchema && schemaRequestsSecret(params.requestedSchema)
-        ? "credential via form mode"
-        : null;
-      requests.push({ key, mode, message, blocked, fatal: false });
+      const schema = params.requestedSchema;
+      const oversized = schema != null && JSON.stringify(schema).length > MAX_SCHEMA_BYTES;
+      const blocked = oversized
+        ? "schema too large"
+        : schema && schemaRequestsSecret(schema)
+          ? "credential via form mode"
+          : null;
+      requests.push({ key, mode, message, schema: oversized ? null : schema, blocked, fatal: false });
     }
   }
   return { requests, requestState: result.requestState ?? null };
@@ -232,6 +252,16 @@ assert.ok(at("key").blocked && !at("key").fatal, "credential form auto-declined,
 assert.ok(at("link").blocked && !at("link").fatal, "bad url auto-declined, not fatal");
 assert.ok(at("nope").blocked && at("nope").fatal, "undeclared method is a fatal protocol violation");
 assert.equal(mixed.requestState, "AEAD-blob", "requestState kept opaque, unchanged");
+
+// Oversized form schema is blocked and never forwarded to the UI.
+const bigSchema = { properties: {} };
+for (let i = 0; i < 4000; i++) bigSchema.properties[`f${i}`] = { type: "string", title: "x".repeat(20) };
+const over = parseInputRequired({
+  resultType: "input_required",
+  inputRequests: { big: { method: ELICITATION_CREATE, params: { mode: "form", requestedSchema: bigSchema } } },
+});
+assert.ok(over.requests[0].blocked, "oversized schema is blocked");
+assert.equal(over.requests[0].schema, null, "oversized schema is not forwarded");
 
 // build_retry_params: echo requestState verbatim; drop it when absent.
 function buildRetryParams(original, inputResponses, requestState) {

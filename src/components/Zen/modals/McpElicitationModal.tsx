@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils/style';
 import { Button } from '@/components/ui/button';
 import { Globe, MessageSquare, ShieldAlert, X } from 'lucide-react';
@@ -48,6 +48,8 @@ function toFields(schema: Record<string, unknown> | undefined): SchemaField[] {
 
 interface Props {
   request: PendingElicitation;
+  /** How many further prompts are queued behind this one. */
+  pending?: number;
   /** Resolve this request and advance the queue. */
   onResolved: (requestId: string) => void;
 }
@@ -63,13 +65,16 @@ interface Props {
  * Every path ends in a single `resolveElicitation` call (accept/decline/cancel)
  * so the awaiting backend request is always released.
  */
-export function McpElicitationModal({ request, onResolved }: Props) {
+export function McpElicitationModal({ request, pending = 0, onResolved }: Props) {
   const fields = useMemo(
     () => (request.mode === 'form' ? toFields(request.schema) : []),
     [request.mode, request.schema],
   );
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [busy, setBusy] = useState(false);
+  const [remaining, setRemaining] = useState<number | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const firstFieldRef = useRef<HTMLElement>(null);
 
   // A fresh request resets the collected values so a prior form can't leak into
   // the next prompt.
@@ -77,6 +82,22 @@ export function McpElicitationModal({ request, onResolved }: Props) {
     setValues({});
     setBusy(false);
   }, [request.requestId]);
+
+  // Mirror the backend deadline so the user sees the prompt won't wait forever;
+  // when it hits zero the backend has already answered `cancel` and emitted a
+  // close event, so we just stop counting and let that event dismiss us.
+  useEffect(() => {
+    if (!request.timeoutSecs) {
+      setRemaining(null);
+      return;
+    }
+    setRemaining(request.timeoutSecs);
+    const id = setInterval(
+      () => setRemaining((r) => (r === null ? null : Math.max(0, r - 1))),
+      1000,
+    );
+    return () => clearInterval(id);
+  }, [request.requestId, request.timeoutSecs]);
 
   const missingRequired = fields.some(
     (f) => f.required && (values[f.key] === undefined || values[f.key] === ''),
@@ -90,6 +111,10 @@ export function McpElicitationModal({ request, onResolved }: Props) {
         const content =
           action === 'accept' && request.mode === 'form' ? values : undefined;
         await mcpApi.resolveElicitation(request.requestId, action, content);
+      } catch {
+        // The backend already abandoned this request (timeout / cancelled) and
+        // answered the server; there is nothing to send. Advancing the queue in
+        // `finally` is the correct outcome, so swallow the stale-resolve error.
       } finally {
         onResolved(request.requestId);
       }
@@ -97,12 +122,48 @@ export function McpElicitationModal({ request, onResolved }: Props) {
     [busy, onResolved, request.mode, request.requestId, values],
   );
 
+  // Move focus into the dialog on open and trap Tab within it; Escape cancels.
+  useEffect(() => {
+    firstFieldRef.current?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        void resolve('cancel');
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable || focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [request.requestId, resolve]);
+
   const isUrl = request.mode === 'url';
 
   return (
-    <div className="fixed inset-0 z-[210] flex items-center justify-center p-8">
+    <div
+      className="fixed inset-0 z-[210] flex items-center justify-center p-8"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mcp-elicit-title"
+    >
       <div className="absolute inset-0 bg-card/95 backdrop-blur-sm" />
-      <div className="relative w-full max-w-lg bg-card border border-border rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+      <div
+        ref={dialogRef}
+        className="relative w-full max-w-lg bg-card border border-border rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted">
           <div className="flex items-center gap-3">
             {isUrl ? (
@@ -110,13 +171,31 @@ export function McpElicitationModal({ request, onResolved }: Props) {
             ) : (
               <MessageSquare size={16} className="text-brand-purple" />
             )}
-            <span className="text-[11px] font-black uppercase tracking-[0.2em] text-foreground">
+            <span
+              id="mcp-elicit-title"
+              className="text-[11px] font-black uppercase tracking-[0.2em] text-foreground"
+            >
               Server Input Request
             </span>
+            {pending > 0 && (
+              <span className="text-[9px] font-mono text-muted-foreground">
+                +{pending} queued
+              </span>
+            )}
           </div>
-          <span className="text-[9px] font-mono text-muted-foreground truncate max-w-[140px]">
-            {request.serverName}
-          </span>
+          <div className="flex items-center gap-2">
+            {remaining !== null && (
+              <span
+                className="text-[9px] font-mono text-muted-foreground tabular-nums"
+                aria-live="polite"
+              >
+                {remaining}s
+              </span>
+            )}
+            <span className="text-[9px] font-mono text-muted-foreground truncate max-w-[140px]">
+              {request.serverName}
+            </span>
+          </div>
         </div>
 
         <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto scrollbar-thin">
@@ -147,12 +226,13 @@ export function McpElicitationModal({ request, onResolved }: Props) {
             </p>
           ) : (
             <div className="space-y-4">
-              {fields.map((field) => (
+              {fields.map((field, i) => (
                 <Field
                   key={field.key}
                   field={field}
                   value={values[field.key]}
                   disabled={busy}
+                  inputRef={i === 0 ? firstFieldRef : undefined}
                   onChange={(v) => setValues((prev) => ({ ...prev, [field.key]: v }))}
                 />
               ))}
@@ -201,11 +281,13 @@ function Field({
   field,
   value,
   disabled,
+  inputRef,
   onChange,
 }: {
   field: SchemaField;
   value: unknown;
   disabled: boolean;
+  inputRef?: React.Ref<HTMLElement>;
   onChange: (value: unknown) => void;
 }) {
   const inputClass = cn(
@@ -224,6 +306,7 @@ function Field({
       {field.type === 'boolean' ? (
         <label className="flex items-center gap-2 cursor-pointer select-none">
           <input
+            ref={inputRef as React.Ref<HTMLInputElement>}
             type="checkbox"
             checked={Boolean(value)}
             disabled={disabled}
@@ -234,8 +317,10 @@ function Field({
         </label>
       ) : field.type === 'enum' ? (
         <select
+          ref={inputRef as React.Ref<HTMLSelectElement>}
           value={typeof value === 'string' ? value : ''}
           disabled={disabled}
+          aria-required={field.required}
           onChange={(e) => onChange(e.target.value)}
           className={inputClass}
         >
@@ -250,9 +335,11 @@ function Field({
         </select>
       ) : (
         <input
+          ref={inputRef as React.Ref<HTMLInputElement>}
           type={field.type === 'number' || field.type === 'integer' ? 'number' : 'text'}
           value={value === undefined || value === null ? '' : String(value)}
           disabled={disabled}
+          aria-required={field.required}
           onChange={(e) => {
             const raw = e.target.value;
             if (field.type === 'number' || field.type === 'integer') {

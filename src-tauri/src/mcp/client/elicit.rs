@@ -43,6 +43,14 @@ const MAX_MRTR_ROUNDS: usize = 5;
 /// treated as a cancel (mirrors the tool-approval timeout).
 const ELICIT_TIMEOUT_SECS: u64 = 120;
 
+/// A pending elicitation the transport loop is blocked on. Holds the one-shot
+/// sender to release it plus the emit `payload`, so a UI that mounts or reloads
+/// after the request fired can replay what's still awaiting a decision.
+pub(crate) struct PendingElicit {
+    tx: oneshot::Sender<Value>,
+    payload: Value,
+}
+
 impl McpClient {
     /// Send `method`/`params` to `server_name`, transparently satisfying any
     /// MRTR `InputRequiredResult` via elicitation, and return the final
@@ -59,16 +67,21 @@ impl McpClient {
         header_name: Option<&str>,
     ) -> Result<Value, String> {
         let mut params = base_params;
-        for _round in 0..MAX_MRTR_ROUNDS {
+        for round in 0..MAX_MRTR_ROUNDS {
             let result = self
                 .request_endpoint(server_name, method, params.clone(), cancel, header_name)
                 .await?;
             if !is_input_required(&result) {
                 return Ok(result);
             }
+            // Last round: the server still wants input we can no longer satisfy.
+            // Error before prompting so we don't collect an answer we'll discard.
+            if round + 1 == MAX_MRTR_ROUNDS {
+                break;
+            }
             let parsed = parse_input_required(&result);
             let responses = self
-                .gather_input_responses(app, server_name, &parsed.requests)
+                .gather_input_responses(app, server_name, cancel, &parsed.requests)
                 .await?;
             params = build_retry_params(params, responses, parsed.request_state.as_ref());
         }
@@ -85,10 +98,16 @@ impl McpClient {
         &self,
         app: Option<&AppHandle>,
         server_name: &str,
+        cancel: Option<&CancellationToken>,
         requests: &[ElicitationRequest],
     ) -> Result<Map<String, Value>, String> {
         let mut responses = Map::new();
         for req in requests {
+            // A caller cancellation mid-round aborts the whole logical request
+            // rather than prompting for input nobody is waiting on anymore.
+            if cancel.is_some_and(CancellationToken::is_cancelled) {
+                return Err(format!("MCP {} cancelled during input", server_name));
+            }
             // A request whose *method* we never declared support for is a
             // protocol violation; refuse the whole call rather than guess.
             if let Some(reason) = &req.blocked {
@@ -100,7 +119,9 @@ impl McpClient {
                 responses.insert(req.key.clone(), build_elicit_result("decline", None));
                 continue;
             }
-            let value = self.prompt_elicitation(app, server_name, req).await?;
+            let value = self
+                .prompt_elicitation(app, server_name, cancel, req)
+                .await?;
             responses.insert(req.key.clone(), value);
         }
         Ok(responses)
@@ -108,11 +129,16 @@ impl McpClient {
 
     /// Emit the elicitation to the UI, await the user's decision, and (for an
     /// accepted URL-mode request) open the URL in the OS browser. Returns the
-    /// `ElicitResult` value to echo back to the server.
+    /// `ElicitResult` value to echo back to the server. The wait is raced
+    /// against the caller `cancel` token and a wall-clock deadline (echoed to
+    /// the UI in the payload); either ⇒ the pending entry is dropped, a
+    /// `mcp:elicitation:close` event is emitted so any open modal dismisses
+    /// itself, and a `cancel` result is returned to the server.
     async fn prompt_elicitation(
         &self,
         app: Option<&AppHandle>,
         server_name: &str,
+        cancel: Option<&CancellationToken>,
         req: &ElicitationRequest,
     ) -> Result<Value, String> {
         let Some(app) = app else {
@@ -123,11 +149,6 @@ impl McpClient {
         };
         let request_id = uuid::Uuid::new_v4().to_string();
         let (tx, rx) = oneshot::channel::<Value>();
-        {
-            let mut pending = self.elicitations.lock().unwrap();
-            pending.insert(request_id.clone(), tx);
-        }
-
         let mode = match req.mode {
             ElicitMode::Form => "form",
             ElicitMode::Url => "url",
@@ -139,24 +160,39 @@ impl McpClient {
             "message": req.message,
             "url": req.url,
             "schema": req.requested_schema,
+            "timeoutSecs": ELICIT_TIMEOUT_SECS,
         });
+        {
+            let mut pending = self.elicitations.lock().unwrap();
+            pending.insert(
+                request_id.clone(),
+                PendingElicit {
+                    tx,
+                    payload: payload.clone(),
+                },
+            );
+        }
         if let Err(e) = app.emit("mcp:elicitation:request", payload) {
             self.elicitations.lock().unwrap().remove(&request_id);
             return Err(format!("failed to surface MCP elicitation: {}", e));
         }
 
-        let decision = match tokio::time::timeout(
-            std::time::Duration::from_secs(ELICIT_TIMEOUT_SECS),
-            rx,
-        )
-        .await
-        {
-            Ok(Ok(value)) => value,
-            // Channel dropped or timed out ⇒ treat as a cancel and clean up.
-            Ok(Err(_)) | Err(_) => {
-                self.elicitations.lock().unwrap().remove(&request_id);
-                build_elicit_result("cancel", None)
+        let timeout = tokio::time::sleep(std::time::Duration::from_secs(ELICIT_TIMEOUT_SECS));
+        let cancelled = async {
+            match cancel {
+                Some(token) => token.cancelled().await,
+                None => std::future::pending().await,
             }
+        };
+        let decision = tokio::select! {
+            biased;
+            r = rx => match r {
+                Ok(value) => value,
+                // Sender dropped (session teardown) ⇒ treat as cancel.
+                Err(_) => build_elicit_result("cancel", None),
+            },
+            _ = timeout => self.abandon_elicitation(app, &request_id),
+            _ = cancelled => self.abandon_elicitation(app, &request_id),
         };
 
         let action = decision.get("action").and_then(Value::as_str).unwrap_or("cancel");
@@ -180,6 +216,31 @@ impl McpClient {
         Ok(build_elicit_result(action, content))
     }
 
+    /// Drop a pending entry the user never answered (timeout / cancel) and tell
+    /// the UI to dismiss its modal so a stale prompt can't be submitted into a
+    /// call that already moved on. Returns the `cancel` result for the server.
+    fn abandon_elicitation(&self, app: &AppHandle, request_id: &str) -> Value {
+        self.elicitations.lock().unwrap().remove(request_id);
+        let _ = app.emit(
+            "mcp:elicitation:close",
+            serde_json::json!({ "requestId": request_id }),
+        );
+        build_elicit_result("cancel", None)
+    }
+
+    /// Re-emit every in-flight elicitation so a freshly-mounted or reloaded UI
+    /// picks up prompts that fired before it was listening. Called from the
+    /// command layer when the frontend (re)subscribes.
+    pub fn replay_elicitations(&self, app: &AppHandle) {
+        let payloads: Vec<Value> = {
+            let pending = self.elicitations.lock().unwrap();
+            pending.values().map(|p| p.payload.clone()).collect()
+        };
+        for payload in payloads {
+            let _ = app.emit("mcp:elicitation:request", payload);
+        }
+    }
+
     /// Resolve a pending elicitation from the command layer. `value` is the raw
     /// `{action, content?}` object the UI collected. Returns an error if no
     /// elicitation is awaiting this id (already resolved, timed out, or stale).
@@ -189,7 +250,8 @@ impl McpClient {
             pending.remove(request_id)
         };
         match sender {
-            Some(tx) => tx
+            Some(entry) => entry
+                .tx
                 .send(value)
                 .map_err(|_| "elicitation was no longer awaiting a response".to_string()),
             None => Err("no MCP elicitation is pending for this id".to_string()),
@@ -259,7 +321,7 @@ mod tests {
             fatal: true,
         }];
         assert!(client
-            .gather_input_responses(None, "srv", &reqs)
+            .gather_input_responses(None, "srv", None, &reqs)
             .await
             .is_err());
     }
@@ -279,7 +341,7 @@ mod tests {
             fatal: false,
         }];
         let responses = client
-            .gather_input_responses(None, "srv", &reqs)
+            .gather_input_responses(None, "srv", None, &reqs)
             .await
             .expect("auto-decline should not error");
         assert_eq!(
@@ -304,8 +366,31 @@ mod tests {
             fatal: false,
         }];
         assert!(client
-            .gather_input_responses(None, "srv", &reqs)
+            .gather_input_responses(None, "srv", None, &reqs)
             .await
             .is_err());
+    }
+
+    #[tokio::test]
+    async fn already_cancelled_token_aborts_before_prompting() {
+        // A caller cancellation surfaces as an error instead of prompting, so a
+        // cancelled turn never opens a modal nobody is waiting on.
+        let client = test_client();
+        let token = CancellationToken::new();
+        token.cancel();
+        let reqs = vec![ElicitationRequest {
+            key: "k".into(),
+            mode: ElicitMode::Form,
+            message: "your name?".into(),
+            url: None,
+            requested_schema: Some(serde_json::json!({"type": "object"})),
+            blocked: None,
+            fatal: false,
+        }];
+        assert!(client
+            .gather_input_responses(None, "srv", Some(&token), &reqs)
+            .await
+            .is_err());
+        assert!(client.pending_elicitation_ids().is_empty());
     }
 }

@@ -349,9 +349,10 @@ pub struct McpClient {
     feature_cache: std::sync::Mutex<HashMap<String, rpc::CacheEntry>>,
     /// In-flight MRTR elicitations awaiting a user decision, keyed by a
     /// client-generated id echoed back by `mcp_resolve_elicitation`. Each value
-    /// is the one-shot sender the transport loop is blocked on. Never persisted;
-    /// dropped on resolve or timeout.
-    elicitations: std::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<Value>>>,
+    /// holds the one-shot sender the transport loop is blocked on plus the emit
+    /// payload, so a freshly-mounted or reloaded UI can replay what's pending.
+    /// Never persisted; dropped on resolve, timeout, or cancel.
+    elicitations: std::sync::Mutex<HashMap<String, elicit::PendingElicit>>,
 }
 
 impl McpClient {

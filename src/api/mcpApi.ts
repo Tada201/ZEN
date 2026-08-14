@@ -168,6 +168,8 @@ export interface PendingElicitation {
   message?: string;
   url?: string;
   schema?: Record<string, unknown>;
+  /** Backend deadline for this prompt; the modal counts down and self-cancels. */
+  timeoutSecs?: number;
 }
 
 export const mcpApi = {
@@ -288,4 +290,21 @@ export const mcpApi = {
     onEvent: (request: PendingElicitation) => void,
   ): Promise<UnlistenFn> =>
     listen<PendingElicitation>("mcp:elicitation:request", (e) => onEvent(e.payload)),
+  /**
+   * Subscribe to `mcp:elicitation:close` events — the backend gave up on a
+   * prompt (timeout or run cancelled) and already answered the server, so the
+   * modal must dismiss without sending a now-dead resolve.
+   */
+  subscribeElicitationClose: (
+    onEvent: (requestId: string) => void,
+  ): Promise<UnlistenFn> =>
+    listen<{ requestId: string }>("mcp:elicitation:close", (e) =>
+      onEvent(e.payload.requestId),
+    ),
+  /**
+   * Ask the backend to re-emit every in-flight elicitation. Called once the
+   * listener is attached (mount/reload) so a prompt that fired before the UI
+   * was listening is recovered instead of silently timing out.
+   */
+  replayElicitations: () => callCommand<void>("mcp_replay_elicitations"),
 };

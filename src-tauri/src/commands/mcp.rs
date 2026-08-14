@@ -337,3 +337,13 @@ pub async fn mcp_resolve_elicitation(
         .map_err(|e| ZenError::Custom(format!("MCP resolve elicitation failed: {}", e)))
 }
 
+/// Re-emit every in-flight elicitation. The frontend calls this once its
+/// listener is attached (mount or reload) so a prompt that fired before the UI
+/// was listening — or that survived a webview reload — is surfaced instead of
+/// silently waiting out its timeout.
+#[tauri::command]
+pub async fn mcp_replay_elicitations(state: State<'_, AppState>, app: AppHandle) -> ZenResult<()> {
+    state.mcp_client.replay_elicitations(&app);
+    Ok(())
+}
+
