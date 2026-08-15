@@ -357,19 +357,15 @@ export function WorkspaceApp() {
 
   const handleRegenerate = useCallback((messageId: string) => {
     const currentMessages = messagesRef.current;
-    const msgIndex = currentMessages.findIndex(m => m.id === messageId);
-    if (msgIndex === -1) return;
-    let lastUserMsg = null;
-    for (let i = msgIndex - 1; i >= 0; i--) {
-      if (currentMessages[i].role === "user") {
-        lastUserMsg = currentMessages[i];
-        break;
-      }
-    }
-    if (!lastUserMsg?.content) return;
-    setMessages(currentMessages.slice(0, msgIndex));
+    const userMsgIndex = currentMessages.findIndex(m => m.id === messageId);
+    if (userMsgIndex === -1) return;
+    const userMsg = currentMessages[userMsgIndex];
+    if (userMsg.role !== "user" || !userMsg.content) return;
+    // Regenerate is anchored on the user turn: drop everything the agent
+    // produced after this prompt, then re-run with the current model.
+    setMessages(currentMessages.slice(0, userMsgIndex));
     handleSendMessageInternal({
-      message: lastUserMsg.content,
+      message: userMsg.content,
       model: selectedModelId,
       provider: selectedProvider,
     });

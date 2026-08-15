@@ -182,7 +182,7 @@ export function AssistantMessage({
   onRetry,
   onOpenSettings,
   onDismissError,
-  onRegenerate,
+  isLast,
   compact,
 }: {
   message: Message;
@@ -190,7 +190,7 @@ export function AssistantMessage({
   onRetry?: (id: string) => void;
   onOpenSettings?: (tab: SettingsTabId, provider?: string) => void;
   onDismissError?: (id: string) => void;
-  onRegenerate?: (id: string) => void;
+  isLast?: boolean;
   compact?: boolean;
 }) {
   const { copied, copy } = useCopy();
@@ -261,7 +261,7 @@ export function AssistantMessage({
             <div className={cn("space-y-1", compact && "space-y-0.5")}>
               {(message.model || message.provider) && (
                 <div className="flex items-center gap-1.5 mb-1 select-none">
-                  <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground hover:bg-muted border-border transition-colors">
+                  <Badge variant="outline" className="h-5 px-1.5 text-[11px] font-bold uppercase tracking-wider bg-muted text-muted-foreground hover:bg-muted border-border transition-colors">
                     <Zap className="mr-1 h-3 w-3" />
                     {message.model || "Default"}
                     {message.provider && (
@@ -513,7 +513,7 @@ export function AssistantMessage({
                 </div>
                 <div className="flex flex-1 flex-col min-w-0">
                   <span className="font-semibold text-[14px] truncate">{message.artifact.title}</span>
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono mt-0.5">
+                  <span className="text-[11px] text-muted-foreground uppercase tracking-widest font-mono mt-0.5">
                     {message.artifact.type} · Generated Module
                   </span>
                 </div>
@@ -524,12 +524,17 @@ export function AssistantMessage({
           </div>
 
             {showMessageActions && (
-            <div className="hidden items-center gap-1 group-hover:flex mt-1">
+            <div className={cn(
+              "flex items-center gap-1 transition-opacity [@media(pointer:coarse)]:opacity-100 [@media(pointer:coarse)]:pointer-events-auto mt-1",
+              isLast
+                ? "opacity-100 pointer-events-auto"
+                : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto",
+            )}>
               <Button
                 size="sm"
                 variant="ghost"
                 type="button"
-                className="h-7 px-2.5 text-[10px] font-medium text-muted-foreground hover:text-foreground bg-transparent border border-border hover:bg-muted gap-1.5 transition-all"
+                className="h-7 px-2.5 text-[11px] font-medium text-muted-foreground hover:text-foreground bg-transparent border border-border hover:bg-muted gap-1.5 transition-all"
                 onClick={() => copy(message.content)}
               >
                 {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
@@ -540,23 +545,11 @@ export function AssistantMessage({
                   size="sm"
                   variant="ghost"
                   type="button"
-                  className="h-7 px-2.5 text-[10px] font-medium text-muted-foreground hover:text-foreground bg-transparent border border-border hover:bg-muted gap-1.5 transition-all"
+                  className="h-7 px-2.5 text-[11px] font-medium text-muted-foreground hover:text-foreground bg-transparent border border-border hover:bg-muted gap-1.5 transition-all"
                   onClick={() => onRetry(message.id)}
                 >
                   <RefreshCcw className="h-3 w-3" />
                   Retry
-                </Button>
-              )}
-              {onRegenerate && (message.status === "sent" || message.status === "cancelled") && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  type="button"
-                  className="h-7 px-2.5 text-[10px] font-medium text-muted-foreground hover:text-foreground bg-transparent border border-border hover:bg-muted gap-1.5 transition-all"
-                  onClick={() => onRegenerate(message.id)}
-                >
-                  <RefreshCcw className="h-3 w-3" />
-                  Regenerate
                 </Button>
               )}
             </div>
@@ -568,7 +561,7 @@ export function AssistantMessage({
                 size="sm"
                 variant="outline"
                 type="button"
-                className="h-7 px-3 text-[10px] font-medium border-warning text-warning hover:bg-warning/10 gap-1.5"
+                className="h-7 px-3 text-[11px] font-medium border-warning text-warning hover:bg-warning/10 gap-1.5"
                 onClick={() => onRetry?.(message.id)}
               >
                 <RefreshCcw className="h-3 w-3" />

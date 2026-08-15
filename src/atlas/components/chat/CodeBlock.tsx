@@ -35,7 +35,7 @@ export function CodeBlock({
   return (
     <div className="group/code relative my-2 overflow-hidden rounded-lg border border-border bg-card shadow-sm transition-all duration-200">
       <div className="flex items-center justify-between border-b border-border bg-muted px-3 py-1.5">
-        <span className="font-mono text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
+        <span className="font-mono text-[11px] text-muted-foreground font-bold uppercase tracking-wider">
           {language ?? "plaintext"}
         </span>
         <div className="flex items-center gap-1.5">
@@ -43,7 +43,7 @@ export function CodeBlock({
             <Button
               size="sm"
               variant="ghost"
-              className="h-6 gap-1 px-2 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              className="h-6 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenArtifact({
@@ -61,13 +61,13 @@ export function CodeBlock({
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 gap-1 px-2 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="h-6 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             onClick={(e) => {
               e.stopPropagation();
               copy(code);
             }}
           >
-            {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
+            {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
             {copied ? "Copied" : "Copy"}
           </Button>
         </div>

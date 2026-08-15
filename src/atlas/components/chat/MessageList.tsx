@@ -90,6 +90,15 @@ export const MessageList = memo(function MessageList({
     [activeMessage],
   );
 
+  // The latest user turn is the only one that offers regenerate: editing it
+  // re-runs the agent for a fresh reply. Older prompts are settled history.
+  const lastUserMessageId = useMemo(() => {
+    for (let i = filteredMessages.length - 1; i >= 0; i--) {
+      if (filteredMessages[i].role === "user") return filteredMessages[i].id;
+    }
+    return undefined;
+  }, [filteredMessages]);
+
   // Collapse the middle of long committed histories by default. Expanding is a
   // one-way reveal per mount; a thread short enough to fit never collapses.
   const [showAllCommitted, setShowAllCommitted] = useState(false);
@@ -286,6 +295,7 @@ export const MessageList = memo(function MessageList({
                     onRegenerate={onRegenerate}
                     onContinueResearch={onContinueResearch}
                     isChatStreaming={_isStreaming}
+                    isLastUserTurn={message.id === lastUserMessageId}
                     messages={message.kind === "deep_research" ? filteredMessages : undefined}
                     compact={compact}
                   />
@@ -308,6 +318,8 @@ export const MessageList = memo(function MessageList({
                 onRegenerate={onRegenerate}
                 onContinueResearch={onContinueResearch}
                 isChatStreaming={_isStreaming}
+                isLast
+                isLastUserTurn={activeMessage.id === lastUserMessageId}
                 messages={activeMessage.kind === "deep_research" ? filteredMessages : undefined}
                 compact={compact}
               />

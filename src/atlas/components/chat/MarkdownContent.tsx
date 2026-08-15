@@ -16,7 +16,6 @@ import { useReducedMotion } from "@/lib/motion";
 import { isSafeGeneratedHref } from "@/lib/security/generatedLinks";
 import { normalizeBrowserPreviewUrl } from "@/lib/security/browserPreviewUrl";
 import { useUIStore } from "@/lib/stores/useUIStore";
-import { toAssetUrl } from "@/lib/utils/assetUrl";
 import {
   MarkdownErrorBoundary,
   flattenChildren,
@@ -28,201 +27,9 @@ import {
   stripCodeFence,
   removeAlertTag
 } from "./MarkdownHelperComponents";
-import { ExternalLink, Download } from "lucide-react";
-import { AppDialog } from "@/components/ui/AppDialog";
-import { chatApi } from "@/api/chatApi";
-import { toast } from "sonner";
-import { useState, useCallback } from "react";
-
-function InteractiveImage({ src, alt }: { src: string; alt: string }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const resolvedSrc = toAssetUrl(src);
-
-  const handleExport = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setExporting(true);
-    const toastId = toast.loading("Saving image to workspace...");
-    try {
-      const savedPath = await chatApi.exportImageToWorkspace(src);
-      toast.success(`Image saved to workspace: ${savedPath}`, { id: toastId });
-    } catch (err: any) {
-      console.error(err);
-      toast.error(`Failed to export image: ${err?.message || err}`, { id: toastId });
-    } finally {
-      setExporting(false);
-    }
-  }, [src]);
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className="block my-4 shrink-0 relative overflow-hidden rounded-lg border border-border hover:border-primary transition-all duration-200 group"
-      >
-        <img
-          src={resolvedSrc}
-          alt={alt}
-          className="max-w-full rounded-lg hover:scale-[1.01] transition-transform duration-200"
-          loading="lazy"
-        />
-      </button>
-
-      <AppDialog
-        open={isOpen}
-        onOpenChange={setIsOpen}
-        title={alt || "Image Preview"}
-        footer={
-          <div className="flex w-full items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={handleExport}
-              disabled={exporting}
-              className="flex items-center gap-1.5 border border-border px-3 py-1.5 text-[11px] rounded text-foreground hover:bg-muted transition-colors disabled:opacity-50"
-            >
-              <Download size={12} />
-              <span>{exporting ? "Saving..." : "Export to Workspace"}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsOpen(false)}
-              className="border border-border px-3 py-1.5 text-[11px] rounded text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Close
-            </button>
-          </div>
-        }
-      >
-        <div className="relative flex items-center justify-center min-h-[300px] p-2">
-          <img
-            src={resolvedSrc}
-            alt={alt}
-            className="max-h-[60vh] max-w-full object-contain rounded-md"
-          />
-        </div>
-      </AppDialog>
-    </>
-  );
-}
-
-// ── References grid component ──────────────────────────────────────────────
-
-interface ReferenceItem {
-  number: number;
-  title: string;
-  url: string;
-}
-
-function ReferencesGrid({ items, onOpenLink }: { items: ReferenceItem[]; onOpenLink?: (url: string) => boolean }) {
-  return (
-    <div className="my-3">
-      <h2 className="mb-2 text-lg font-semibold tracking-tight text-foreground">
-        References
-      </h2>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {items.map((ref) => {
-          const safeHref = /^(https?:\/\/)/i.test(ref.url) && isSafeGeneratedHref(ref.url) ? ref.url : null;
-          const body = (
-            <>
-              <span className="mt-[1px] flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                {ref.number}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-foreground">{ref.title}</span>
-                <span className="block truncate text-[11px] text-muted-foreground">{ref.url}</span>
-              </span>
-              {safeHref && <ExternalLink className="mt-1 h-3 w-3 shrink-0 text-muted-foreground" />}
-            </>
-          );
-          const className = "flex items-start gap-2 rounded-md border border-border bg-card px-2 py-1.5 text-[13px] leading-snug transition-colors hover:bg-muted";
-
-          if (!safeHref) {
-            return <div key={ref.number} className={className}>{body}</div>;
-          }
-
-          return (
-            <a
-              key={ref.number}
-              href={safeHref}
-              target="_blank"
-              rel="noreferrer"
-              onClick={(event) => {
-                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-                if (onOpenLink?.(safeHref)) event.preventDefault();
-              }}
-              className={className}
-            >
-              {body}
-            </a>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/// Parse a markdown ## References section into structured items.
-/// Returns the items and the content with the references section removed.
-function parseReferencesSection(content: string): {
-  clean: string;
-  items: ReferenceItem[] | null;
-} {
-  // Parse line-by-line so a code sample containing "## References" is never
-  // mistaken for the assistant's references section. Normalize CRLF because
-  // persisted messages can come from Windows or provider payloads.
-  const lines = content.replace(/\r\n?/g, "\n").split("\n");
-  let inFence = false;
-  let fenceMarker = "";
-  let headingIndex = -1;
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    const fence = line.match(/^ {0,3}(`{3,}|~{3,})/);
-    if (fence) {
-      if (!inFence) {
-        inFence = true;
-        fenceMarker = fence[1];
-      } else if (fence[1][0] === fenceMarker[0] && fence[1].length >= fenceMarker.length) {
-        inFence = false;
-        fenceMarker = "";
-      }
-      continue;
-    }
-    if (!inFence && /^ {0,3}#{2,6}\s+References\s*$/i.test(line)) {
-      headingIndex = index;
-      break;
-    }
-  }
-
-  if (headingIndex < 0) return { clean: content, items: null };
-
-  let listIndex = headingIndex + 1;
-  while (listIndex < lines.length && !lines[listIndex].trim()) listIndex += 1;
-  const listLines: string[] = [];
-  while (listIndex < lines.length && /^\s*\d+\.\s+.+/.test(lines[listIndex])) {
-    listLines.push(lines[listIndex].trim());
-    listIndex += 1;
-  }
-  if (listLines.length === 0) return { clean: content, items: null };
-
-  const items = listLines
-    .map((line) => {
-      const numMatch = line.match(/^(\d+)\.\s+/);
-      const number = numMatch ? parseInt(numMatch[1], 10) : 0;
-      const text = line.replace(/^\d+\.\s+/, "").trim();
-      const linkMatch = text.match(/^\[(.+?)\]\((.+)\)$/);
-      return linkMatch
-        ? { number, title: linkMatch[1], url: linkMatch[2] }
-        : { number, title: text, url: text };
-    })
-    .filter((item) => item.number > 0);
-
-  if (items.length === 0) return { clean: content, items: null };
-
-  const clean = [...lines.slice(0, headingIndex), ...lines.slice(listIndex)].join("\n");
-  return { clean, items };
-}
+import { useCallback } from "react";
+import { InteractiveImage } from "./MarkdownImage";
+import { ReferencesGrid, parseReferencesSection } from "./MarkdownReferences";
 
 const MermaidDiagram = React.lazy(() => import("./MermaidDiagram").then(m => ({ default: m.MermaidDiagram })));
 const ChartBlock = React.lazy(() => import("./ChartBlock").then(m => ({ default: m.ChartBlock })));
@@ -632,7 +439,7 @@ export function MarkdownContent({
         <ReasoningBlock content={thought} isThinking={isThinking} />
       )}
       {isPlainShortText ? (
-        <div className="whitespace-pre-wrap break-words text-foreground">{mainContent}</div>
+        <div className="max-w-[68ch] whitespace-pre-wrap break-words leading-[1.6] text-foreground">{mainContent}</div>
       ) : (
         <div className="space-y-3">
           {(blocks.length > 0 ? blocks : [{ id: "fallback-single-block", type: "text", content: refStrippedContent, isComplete: !isStreaming, index: 0 } as any]).map((block) => (
@@ -656,11 +463,11 @@ export function MarkdownContent({
       {!mainContent && isStreaming && (
         <div className="flex items-center gap-2 py-4" aria-live="polite">
           <div className="flex gap-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]" />
-            <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]" />
-            <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" />
+            <div className="w-1.5 h-1.5 rounded-full bg-primary animate-[execution-status-pulse_1.4s_ease-in-out_infinite] motion-reduce:animate-none" />
+            <div className="w-1.5 h-1.5 rounded-full bg-primary animate-[execution-status-pulse_1.4s_ease-in-out_infinite] [animation-delay:200ms] motion-reduce:animate-none" />
+            <div className="w-1.5 h-1.5 rounded-full bg-primary animate-[execution-status-pulse_1.4s_ease-in-out_infinite] [animation-delay:400ms] motion-reduce:animate-none" />
           </div>
-          <span className="text-[10px] font-mono tracking-widest text-muted-foreground uppercase">
+          <span className="text-[11px] font-mono tracking-widest text-muted-foreground uppercase">
             Generating response
           </span>
         </div>

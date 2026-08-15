@@ -13,6 +13,8 @@ export function MessageItem({
   onRegenerate,
   onContinueResearch,
   isChatStreaming,
+  isLast,
+  isLastUserTurn,
   messages,
   compact,
 }: {
@@ -25,6 +27,8 @@ export function MessageItem({
   onContinueResearch?: (request: string) => void;
   onAbort?: () => void;
   isChatStreaming?: boolean;
+  isLast?: boolean;
+  isLastUserTurn?: boolean;
   messages?: Message[];
   compact?: boolean;
 }) {
@@ -55,11 +59,20 @@ export function MessageItem({
         onRetry={onRetry} 
         onOpenSettings={onOpenSettings}
         onDismissError={onDismissError}
-        onRegenerate={onRegenerate}
+        isLast={isLast}
         compact={compact} 
       />
     );
   }
 
-  return <UserMessage message={message} compact={compact} />;
+  return (
+    <UserMessage
+      message={message}
+      compact={compact}
+      // Regenerate lives on the user turn and only the latest one: editing the
+      // prompt re-runs the agent for a fresh reply. Suppress it while a run is
+      // in flight so a resend can't race the active stream.
+      onRegenerate={isLastUserTurn && !isChatStreaming ? onRegenerate : undefined}
+    />
+  );
 }

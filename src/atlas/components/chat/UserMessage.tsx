@@ -1,10 +1,18 @@
-import { Check, Copy, FileText, Paperclip } from "lucide-react";
+import { Check, Copy, FileText, Paperclip, RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Message } from "./types";
 import { useCopy } from "./CodeBlock";
 
-export function UserMessage({ message, compact }: { message: Message; compact?: boolean }) {
+export function UserMessage({
+  message,
+  compact,
+  onRegenerate,
+}: {
+  message: Message;
+  compact?: boolean;
+  onRegenerate?: (id: string) => void;
+}) {
   const { copied, copy } = useCopy();
 
   return (
@@ -21,17 +29,29 @@ export function UserMessage({ message, compact }: { message: Message; compact?: 
       )}>
         <div className="flex min-w-0 flex-col gap-2 max-w-[85%]">
           <div className="relative">
-            <div className="flex items-end gap-3 group/user">
+            <div className="flex items-end gap-1 group/user">
               <Button
                 size="sm"
                 variant="ghost"
                 type="button"
-                className="h-8 w-8 p-0 text-muted-foreground/40 hover:text-foreground hover:bg-muted/40 opacity-0 group-hover/user:opacity-100 transition-opacity mb-1 shrink-0"
+                className="h-8 w-8 p-0 text-muted-foreground/40 hover:text-foreground hover:bg-muted/40 opacity-0 group-hover/user:opacity-100 focus-visible:opacity-100 transition-opacity mb-1 shrink-0"
                 onClick={() => copy(message.content)}
                 title="Copy message"
               >
-                {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
               </Button>
+              {onRegenerate && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  type="button"
+                  className="h-8 w-8 p-0 text-muted-foreground/40 hover:text-foreground hover:bg-muted/40 opacity-0 group-hover/user:opacity-100 focus-visible:opacity-100 transition-opacity mb-1 shrink-0"
+                  onClick={() => onRegenerate(message.id)}
+                  title="Regenerate reply from this prompt"
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                </Button>
+              )}
               <div className="rounded-2xl border border-border dark:border-border bg-primary/10 dark:bg-primary/20 backdrop-blur-xl backdrop-saturate-150 px-5 py-3 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3),inset_0_1px_1px_hsl(var(--foreground) / 0.08)] text-[14px] leading-relaxed text-foreground/90 font-medium ring-1 ring-ring/5 dark:ring-ring/10">
                 {message.content}
               </div>

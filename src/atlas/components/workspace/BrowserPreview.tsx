@@ -6,7 +6,9 @@ import {
   Shield,
   Lock,
   Search,
-  MoreVertical,
+  Monitor,
+  Tablet,
+  Smartphone,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -18,6 +20,19 @@ interface BrowserPreviewProps {
   onUrlChange?: (url: string) => void;
 }
 
+// Address-bar navigation is user-typed, so loopback dev servers are permitted;
+// agent/chat-supplied `initialUrl` stays SSRF-guarded (no allowLoopback).
+const ADDRESS_BAR_OPTS = { allowLoopback: true } as const;
+
+// Responsive presets wrap the iframe at a fixed CSS width so a full-screen
+// preview can be checked at tablet/phone breakpoints without leaving Zen.
+const VIEWPORTS = [
+  { id: "responsive", label: "Responsive", icon: Monitor, width: null },
+  { id: "tablet", label: "Tablet (768px)", icon: Tablet, width: 768 },
+  { id: "mobile", label: "Mobile (390px)", icon: Smartphone, width: 390 },
+] as const;
+type ViewportId = (typeof VIEWPORTS)[number]["id"];
+
 export function BrowserPreview({ initialUrl = "about:blank", onUrlChange }: BrowserPreviewProps) {
   const safeInitialUrl = normalizeBrowserPreviewUrl(initialUrl) ?? "about:blank";
   const [url, setUrl] = useState(safeInitialUrl);
@@ -27,6 +42,8 @@ export function BrowserPreview({ initialUrl = "about:blank", onUrlChange }: Brow
   const [reloadKey, setReloadKey] = useState(0);
   const [history, setHistory] = useState<string[]>([safeInitialUrl]);
   const [historyIndex, setHistoryIndex] = useState(0);
+  const [viewportId, setViewportId] = useState<ViewportId>("responsive");
+  const viewportWidth = VIEWPORTS.find((v) => v.id === viewportId)?.width ?? null;
 
   useEffect(() => {
     const nextUrl = normalizeBrowserPreviewUrl(initialUrl);
@@ -45,9 +62,9 @@ export function BrowserPreview({ initialUrl = "about:blank", onUrlChange }: Brow
   }, [historyIndex, initialUrl, url]);
 
   const handleNavigate = (newUrl: string) => {
-    const formattedUrl = normalizeBrowserPreviewUrl(newUrl);
+    const formattedUrl = normalizeBrowserPreviewUrl(newUrl, ADDRESS_BAR_OPTS);
     if (!formattedUrl) {
-      setError("This preview only allows public HTTP(S) addresses.");
+      setError("This preview only allows public HTTP(S) addresses or a local dev server.");
       return;
     }
 
@@ -126,6 +143,22 @@ export function BrowserPreview({ initialUrl = "about:blank", onUrlChange }: Brow
         </div>
 
         <div className="flex items-center gap-1 border-l border-border/5 pl-2">
+          {VIEWPORTS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setViewportId(id)}
+              aria-pressed={viewportId === id}
+              className={cn(
+                "rounded p-1.5 transition-colors hover:bg-card/5",
+                viewportId === id ? "text-primary opacity-100" : "opacity-40 hover:opacity-100",
+              )}
+              aria-label={label}
+              title={label}
+            >
+              <Icon className="h-4 w-4" />
+            </button>
+          ))}
           <button
             type="button"
             onClick={() => url !== "about:blank" && window.open(url, "_blank", "noopener,noreferrer")}
@@ -135,14 +168,11 @@ export function BrowserPreview({ initialUrl = "about:blank", onUrlChange }: Brow
           >
             <ExternalLink className="h-4 w-4" />
           </button>
-          <button type="button" className="rounded p-1.5 opacity-60 transition-colors hover:bg-card/5 hover:opacity-100" aria-label="Browser options">
-            <MoreVertical className="h-4 w-4" />
-          </button>
         </div>
         {error && <p className="px-2 text-[11px] text-destructive" role="alert">{error}</p>}
       </div>
 
-      <div className="relative flex-1 bg-card">
+      <div className="relative flex-1 overflow-auto bg-card">
         {isLoading && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/20 backdrop-blur-[2px]">
             <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
@@ -157,14 +187,19 @@ export function BrowserPreview({ initialUrl = "about:blank", onUrlChange }: Brow
             <p className="max-w-xs text-center text-sm leading-relaxed opacity-50">Enter a URL above to preview your app or browse the web directly within Zen.</p>
           </div>
         ) : (
-          <iframe
-            key={`${url}:${reloadKey}`}
-            src={url}
-            className="h-full w-full border-none"
-            title="Preview"
-            sandbox="allow-forms allow-scripts"
-            onLoad={() => setIsLoading(false)}
-          />
+          <div
+            className={cn("h-full", viewportWidth != null && "mx-auto border-x border-border/10 shadow-2xl")}
+            style={viewportWidth != null ? { width: viewportWidth, maxWidth: "100%" } : undefined}
+          >
+            <iframe
+              key={`${url}:${reloadKey}`}
+              src={url}
+              className="h-full w-full border-none"
+              title="Preview"
+              sandbox="allow-forms allow-scripts"
+              onLoad={() => setIsLoading(false)}
+            />
+          </div>
         )}
       </div>
     </div>

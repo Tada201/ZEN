@@ -23,6 +23,19 @@ assert(!isSafeBrowserPreviewUrl("http://[::1]/"));
 assert.equal(normalizeBrowserPreviewUrl("example.com"), "https://example.com");
 assert.equal(normalizeBrowserPreviewUrl("localhost:3000"), null);
 
+// Loopback opt-in: only the address bar passes allowLoopback. Loopback dev
+// servers become previewable, but LAN and link-local hosts stay blocked so an
+// opted-in address bar can't reach the rest of the private network.
+assert(isSafeBrowserPreviewUrl("http://localhost:3000", { allowLoopback: true }));
+assert(isSafeBrowserPreviewUrl("http://127.0.0.1:5173", { allowLoopback: true }));
+assert(isSafeBrowserPreviewUrl("http://[::1]/", { allowLoopback: true }));
+assert(isSafeBrowserPreviewUrl("http://app.localhost:3000", { allowLoopback: true }));
+assert(!isSafeBrowserPreviewUrl("http://192.168.1.5", { allowLoopback: true }));
+assert(!isSafeBrowserPreviewUrl("http://10.0.0.5", { allowLoopback: true }));
+assert(!isSafeBrowserPreviewUrl("http://169.254.1.1", { allowLoopback: true }));
+assert(!isSafeBrowserPreviewUrl("http://foo.local", { allowLoopback: true }));
+assert.equal(normalizeBrowserPreviewUrl("localhost:3000", { allowLoopback: true }), "https://localhost:3000");
+
 const component = readFileSync(
   new URL("../src/atlas/components/workspace/BrowserPreview.tsx", import.meta.url),
   "utf8",
@@ -30,7 +43,9 @@ const component = readFileSync(
 const tauriConfig = readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8");
 assert(tauriConfig.includes("frame-src 'self' http: https:;"));
 assert(component.includes("normalizeBrowserPreviewUrl(initialUrl)"));
-assert(component.includes("const formattedUrl = normalizeBrowserPreviewUrl(newUrl)"));
+assert(component.includes("normalizeBrowserPreviewUrl(newUrl, ADDRESS_BAR_OPTS)"));
+// initialUrl (agent/chat-supplied) must NOT opt into loopback.
+assert(!component.includes("normalizeBrowserPreviewUrl(initialUrl, ADDRESS_BAR_OPTS)"));
 assert(component.includes('sandbox="allow-forms allow-scripts"'));
 assert(!component.includes("allow-same-origin"));
 assert(!component.includes("allow-popups"));
