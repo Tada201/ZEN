@@ -77,7 +77,6 @@ export const PROVIDER_CAPABILITY_PROFILES: Record<string, ProviderCapabilityProf
     mimo: { parameters: ['temperature', 'topP', 'maxTokens', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: false },
     together: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
     perplexity: { parameters: ['temperature', 'topP', 'maxTokens', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: false },
-    aihubmix: { parameters: ['temperature', 'topP', 'maxTokens', 'presencePenalty', 'frequencyPenalty', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
     kilocode: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
 };
 
@@ -88,6 +87,8 @@ export const DEFAULT_PROVIDER_CAPABILITY_PROFILE: ProviderCapabilityProfile = {
     supportsVision: false,
 };
 
+export type CustomProviderApiFormat = 'openai_chat' | 'anthropic_messages';
+
 export interface CustomProviderConfig {
     id: string;
     displayName: string;
@@ -96,6 +97,8 @@ export interface CustomProviderConfig {
     enabled: boolean;
     customModels: ModelInfo[];
     headers?: Record<string, string>;
+    /** Wire protocol the endpoint speaks. Defaults to 'openai_chat'. */
+    apiFormat?: CustomProviderApiFormat;
     error?: string;
 }
 
@@ -116,7 +119,6 @@ export const PROVIDER_KEY_MAP: Record<string, string> = {
     nvidia: 'nvidiaApiKey',
     ollama: 'ollamaBaseUrl',
     lmstudio: 'lmstudioBaseUrl',
-    aihubmix: 'aihubmixApiKey',
 };
 
 export const PROVIDER_BASE_URL_MAP: Record<string, string> = {
@@ -133,7 +135,6 @@ export const PROVIDER_BASE_URL_MAP: Record<string, string> = {
     xai: 'xaiBaseUrl',
     kilocode: 'kilocodeBaseUrl',
     nvidia: 'nvidiaBaseUrl',
-    aihubmix: 'aihubmixBaseUrl',
     mimo: 'mimoBaseUrl',
     ollama: 'ollamaBaseUrl',
     lmstudio: 'lmstudioBaseUrl',
@@ -323,16 +324,6 @@ export const providerOrder: ProviderInfo[] = [
         requiresKey: true,
         category: 'cloud',
         icon: 'lucide:shield-check'
-    },
-    {
-        key: 'aihubmix',
-        name: 'AIHubMix',
-        description: 'Advanced all-in-one model gateway for premium multimodal models.',
-        isLocal: false,
-        requiresKey: true,
-        category: 'cloud',
-        apiKeyLink: 'https://aihubmix.com/dashboard',
-        icon: 'lucide:sparkles'
     }
 ];
 

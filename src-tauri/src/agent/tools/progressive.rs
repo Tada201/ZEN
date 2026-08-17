@@ -169,13 +169,19 @@ impl ProgressiveToolRegistry {
         );
 
         self.register_metadata(ToolMetadata::new(
-            "get_system_metrics",
-            "System Metrics",
-            "Retrieve real-time hardware performance metrics including CPU load, RAM usage, and network throughput.",
+            "update_goal",
+            "Update Goal",
+            "Mark the session goal complete (with evidence) or blocked (recurring blocker). Terminal states only.",
             "system",
-            vec!["system", "metrics", "performance", "cpu", "memory", "hardware"],
-            DetailLevel::Standard,
+            vec!["goal", "objective", "complete", "blocked", "status"],
+            DetailLevel::Minimal,
         ));
+        self.tool_factory.insert(
+            "update_goal".to_string(),
+            Box::new(|| {
+                Arc::new(crate::agent::tools::task_tools::UpdateGoalTool) as Arc<dyn AgentTool>
+            }),
+        );
 
         self.register_metadata(ToolMetadata::new(
             "read_document_content",
@@ -327,13 +333,13 @@ impl ProgressiveToolRegistry {
             vec!["skill", "instructions", "guidance", "load"],
             DetailLevel::Full,
         ));
+        // ponytail: the agent-facing `browser` tool (drive the embedded preview
+        // via CDP) is intentionally NOT registered yet — the preview is a
+        // standalone right-panel browser for now. Re-add register_metadata +
+        // tool_factory.insert("browser", …) here when agent control lands.
+        // Backend (browser::*, BrowserTool, default_tool_risk, tool-coverage,
+        // capability) stays in place so re-enabling is a one-spot change.
 
-        self.tool_factory.insert(
-            "get_system_metrics".to_string(),
-            Box::new(|| {
-                Arc::new(crate::agent::tools::system_tools::SystemMetricsTool) as Arc<dyn AgentTool>
-            }),
-        );
         // Legacy routing/geocoding wrappers remain source-only for the future
         // unified `world_map` tool; they are intentionally not registered.
         self.tool_factory.insert(

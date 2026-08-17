@@ -281,6 +281,10 @@ impl LlmProvider for OllamaProvider {
     ) -> ZenResult<ChatResponse> {
         let url = format!("{}/api/chat", self.base_url);
 
+        // Sanitize tool names to the strict function charset and keep a
+        // per-request reverse map so returned tool calls decode to canonical ids.
+        let mut name_codec = crate::llm::ToolNameCodec::default();
+
         let ollama_messages: Vec<OllamaMessage> = messages
             .into_iter()
             .map(|m| {
@@ -312,7 +316,7 @@ impl LlmProvider for OllamaProvider {
                         tcs.into_iter()
                             .map(|tc| OllamaToolCall {
                                 function: OllamaFunctionCall {
-                                    name: tc.name,
+                                    name: name_codec.encode(&tc.name),
                                     arguments: tc.args,
                                 },
                             })
@@ -329,7 +333,7 @@ impl LlmProvider for OllamaProvider {
                     json!({
                         "type": "function",
                         "function": {
-                            "name": t.name,
+                            "name": name_codec.encode(&t.name),
                             "description": t.description,
                             "parameters": t.parameters
                         }
@@ -424,7 +428,7 @@ impl LlmProvider for OllamaProvider {
                                 for tc in tc_list {
                                     tool_calls.push(crate::db::models::ToolCall {
                                         id: format!("call_{}", Uuid::new_v4()),
-                                        name: tc.function.name.clone(),
+                                        name: name_codec.decode(&tc.function.name),
                                         args: tc.function.arguments.clone(),
                                     });
                                 }

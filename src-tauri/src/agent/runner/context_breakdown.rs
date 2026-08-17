@@ -157,6 +157,16 @@ pub struct ContextBreakdownPayload {
     pub recall_tokens: Option<usize>,
     pub summary_tokens: usize,
     pub conversation_tokens: usize,
+    /// Provider-reported prompt tokens from the most recently COMPLETED
+    /// LLM call this run (OpenAI `prompt_tokens`, Anthropic `input_tokens`,
+    /// Gemini `promptTokenCount`). `None` before the first call returns.
+    /// This is the real input-context size the provider billed, distinct
+    /// from `total_tokens` which is Zen's tokenizer estimate. The two are
+    /// surfaced side by side so the user sees estimate-vs-actual drift.
+    pub actual_input_tokens: Option<usize>,
+    /// Provider-reported completion tokens from the most recent completed
+    /// LLM call (OpenAI `completion_tokens`, Anthropic `output_tokens`).
+    pub actual_output_tokens: Option<usize>,
     pub compaction_event: Option<CompactionEvent>,
     pub sections: Vec<ContextSection>,
 }
@@ -320,6 +330,11 @@ pub fn compute_context_breakdown(
         recall_tokens: totals.recall,
         summary_tokens: totals.summary,
         conversation_tokens: totals.conversation,
+        // Filled in by the runner loop from the last completed LLM
+        // response before the payload is emitted; `compute_*` only has
+        // the pre-call estimate, so it leaves the real usage as None.
+        actual_input_tokens: None,
+        actual_output_tokens: None,
         compaction_event: compaction,
         sections,
     }
@@ -580,6 +595,7 @@ mod tests {
             conversation: Vec::new(),
             extra_system_messages: Vec::new(),
             chat_id: "test".to_string(),
+            workspace_root: None,
             recall_block: None,
             authorized_tool_ids: Vec::new(),
             tools_supported: true,

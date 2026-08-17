@@ -275,6 +275,275 @@ impl DocumentService {
         // Remove from SQLite (cascades to document_chunks)
         crate::db::queries::delete_document(&pool, doc_id).await
     }
+
+    // ─── Per-chat attachments (Phase 1) ───
+    //
+    // Distinct from `ingest`: an attachment is owned by a chat, stored in the
+    // blob store under appdata, extracted to plain text once, and retrieved by
+    // the agent ON DEMAND via list/read tools — its content is NOT injected
+    // into the prompt. No vector embedding (that's the RAG `ingest` path).
+
+    async fn require_pool(&self) -> AppResult<SqlitePool> {
+        self.db_pool
+            .read()
+            .await
+            .clone()
+            .ok_or_else(|| AppError::Custom("Database not initialized".into()))
+    }
+
+    /// Validate, store, extract, and record one chat attachment.
+    /// `bytes` are the raw file contents; `filename` is the user display name.
+    pub async fn attach_to_chat(
+        &self,
+        app_data_dir: PathBuf,
+        chat_id: String,
+        filename: String,
+        bytes: Vec<u8>,
+    ) -> AppResult<Document> {
+        use crate::services::attachment_store as store;
+
+        if bytes.is_empty() {
+            return Err(AppError::Custom("Attachment is empty".into()));
+        }
+        if bytes.len() > store::MAX_ATTACHMENT_BYTES {
+            return Err(AppError::Custom(format!(
+                "Attachment exceeds the {} MB limit",
+                store::MAX_ATTACHMENT_BYTES / (1024 * 1024)
+            )));
+        }
+
+        let pool = self.require_pool().await?;
+
+        // Per-chat file-count cap.
+        let existing = crate::db::queries::count_documents_for_chat(&pool, &chat_id).await?;
+        if existing >= store::MAX_ATTACHMENTS_PER_CHAT {
+            return Err(AppError::Custom(format!(
+                "This chat already has the maximum of {} attachments",
+                store::MAX_ATTACHMENTS_PER_CHAT
+            )));
+        }
+
+        // Magic-byte sniff. `infer` recognizes binary container formats
+        // (pdf/docx/xlsx/images); plain text returns None, which we accept.
+        // When a signature IS detected it must be an allowed type, and it must
+        // agree with the extension — reject a .txt that is really a zip, etc.
+        let ext = std::path::Path::new(&filename)
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        if let Some(kind) = infer::get(&bytes) {
+            let sniffed = kind.extension();
+            if !Self::is_allowed_sniffed(sniffed) {
+                return Err(AppError::Custom(format!(
+                    "Unsupported file type '{}' (detected from contents)",
+                    sniffed
+                )));
+            }
+            if !Self::extension_matches_sniff(&ext, sniffed) {
+                return Err(AppError::Custom(format!(
+                    "File contents ('{}') do not match the '.{}' extension",
+                    sniffed, ext
+                )));
+            }
+        } else if !Self::is_allowed_text_ext(&ext) {
+            // No magic signature and not a known text extension → reject
+            // rather than sending mojibake to the model.
+            return Err(AppError::Custom(format!(
+                "Unsupported or unrecognized file type '.{}'",
+                ext
+            )));
+        }
+
+        let doc_id = Uuid::new_v4().to_string();
+        let mime_type = {
+            let p = PathBuf::from(&filename);
+            Self::guess_mime_type(&p)
+        };
+        let doc_type = {
+            let p = PathBuf::from(&filename);
+            Self::guess_doc_type(&p)
+        };
+
+        // Persist original bytes first (so a preview exists even if extraction
+        // is thin), then extract text from the stored blob.
+        let stored = store::store_attachment(
+            &app_data_dir,
+            &chat_id,
+            &doc_id,
+            &filename,
+            &bytes,
+            "",
+        )
+        .await
+        .map_err(AppError::Custom)?;
+
+        let extracted = match self.ingestion_engine.extract_text(&stored.blob_path).await {
+            Ok(text) => text,
+            Err(e) => {
+                // Roll back the stored bytes so we don't orphan a blob.
+                store::delete_attachment_files(&stored.blob_path, &stored.text_path).await;
+                return Err(AppError::Custom(format!(
+                    "Could not extract text from '{}': {}",
+                    filename, e
+                )));
+            }
+        };
+
+        // Re-write the extracted sidecar now that we have the text.
+        if let Err(e) = tokio::fs::write(&stored.text_path, extracted.as_bytes()).await {
+            store::delete_attachment_files(&stored.blob_path, &stored.text_path).await;
+            return Err(AppError::Custom(format!(
+                "Failed to persist extracted text: {}",
+                e
+            )));
+        }
+
+        let token_estimate = crate::agent::runner::helpers::estimate_tokens(&extracted) as i64;
+
+        // Metadata cards: sheet names for spreadsheets (cheap re-open, no cell
+        // scan); page_count is left for the frontend/PDF path in a later phase.
+        let sheet_names: Option<String> = if matches!(ext.as_str(), "xls" | "xlsx" | "xlsb" | "ods")
+        {
+            tokio::task::spawn_blocking({
+                let p = stored.blob_path.clone();
+                move || crate::rag::office_extract::spreadsheet_sheet_names(&p)
+            })
+            .await
+            .ok()
+            .and_then(|r| r.ok())
+            .filter(|names| !names.is_empty())
+            .and_then(|names| serde_json::to_string(&names).ok())
+        } else {
+            None
+        };
+
+        let doc = crate::db::queries::add_chat_attachment(
+            &pool,
+            &crate::db::queries::NewChatAttachment {
+                id: &doc_id,
+                chat_id: &chat_id,
+                filename: &filename,
+                // file_path points at the ORIGINAL blob; read tool uses the
+                // extracted sidecar via content_hash lookup, preview uses this.
+                file_path: &stored.blob_path.to_string_lossy(),
+                file_size: stored.size,
+                doc_type,
+                mime_type: &mime_type,
+                content_hash: &stored.content_hash,
+                token_estimate,
+                page_count: None,
+                sheet_names: sheet_names.as_deref(),
+            },
+        )
+        .await?;
+
+        Ok(doc)
+    }
+
+    /// Allowed types when detected by magic bytes.
+    fn is_allowed_sniffed(sniffed: &str) -> bool {
+        matches!(
+            sniffed,
+            "pdf" | "docx" | "xlsx" | "pptx" | "odt" | "ods" | "odp" | "epub"
+                | "png" | "jpg" | "webp" | "gif" | "bmp" | "tif"
+        )
+    }
+
+    /// Text/code extensions that legitimately have no magic signature.
+    fn is_allowed_text_ext(ext: &str) -> bool {
+        matches!(
+            ext,
+            "txt" | "md" | "csv" | "json" | "html" | "css" | "xml" | "yaml" | "yml" | "toml"
+                | "rs" | "js" | "ts" | "tsx" | "jsx" | "py" | "go" | "c" | "cpp" | "h" | "rst"
+                | "org" | "adoc" | "log"
+        )
+    }
+
+    /// Whether a claimed extension is consistent with the sniffed type. OOXML
+    /// (docx/xlsx/pptx) and ODF and epub are all ZIP containers, so `infer`
+    /// may report the specific subtype or fall back to a sibling — accept any
+    /// ZIP-family document extension for a ZIP-family sniff.
+    fn extension_matches_sniff(ext: &str, sniffed: &str) -> bool {
+        let zip_family = ["docx", "xlsx", "pptx", "odt", "ods", "odp", "epub", "zip"];
+        if zip_family.contains(&sniffed) && zip_family.contains(&ext) {
+            return true;
+        }
+        match sniffed {
+            "jpg" => matches!(ext, "jpg" | "jpeg"),
+            "tif" => matches!(ext, "tif" | "tiff"),
+            other => ext == other,
+        }
+    }
+
+    /// List one chat's attachments (metadata only).
+    pub async fn list_for_chat(&self, chat_id: &str) -> AppResult<Vec<Document>> {
+        let pool = self.require_pool().await?;
+        crate::db::queries::list_documents_for_chat(&pool, chat_id).await
+    }
+
+    /// Delete one chat attachment: remove the DB row and its blob + sidecar.
+    pub async fn delete_chat_attachment(
+        &self,
+        app_data_dir: &std::path::Path,
+        doc_id: &str,
+    ) -> AppResult<()> {
+        use crate::services::attachment_store as store;
+        let pool = self.require_pool().await?;
+        let doc = crate::db::queries::get_document(&pool, doc_id).await?;
+        crate::db::queries::delete_document(&pool, doc_id).await?;
+        // Blob path is stored in file_path; the extracted sidecar sits next to
+        // it under `<doc_id>.extracted.txt`.
+        if let Some(blob) = doc.file_path.as_deref() {
+            let blob_path = std::path::PathBuf::from(blob);
+            let text_path = blob_path
+                .parent()
+                .map(|d| d.join(format!("{doc_id}.extracted.txt")))
+                .unwrap_or_else(|| {
+                    store::attachments_root(app_data_dir)
+                        .join(format!("{doc_id}.extracted.txt"))
+                });
+            store::delete_attachment_files(&blob_path, &text_path).await;
+        }
+        Ok(())
+    }
+
+    /// GC every stored file for a deleted chat, after its rows are gone.
+    pub async fn purge_chat_attachments(
+        &self,
+        app_data_dir: &std::path::Path,
+        chat_id: &str,
+    ) -> AppResult<()> {
+        crate::services::attachment_store::delete_chat_attachments(app_data_dir, chat_id)
+            .await
+            .map_err(AppError::Custom)
+    }
+
+    /// Read the extracted text sidecar for one attachment, capped so a giant
+    /// spreadsheet can't blow up the IPC payload / the preview pane. The full
+    /// text stays on disk for the agent's read tool; this is a preview.
+    pub async fn read_chat_attachment_text(&self, doc_id: &str) -> AppResult<String> {
+        const PREVIEW_CAP: usize = 256 * 1024;
+        let pool = self.require_pool().await?;
+        let doc = crate::db::queries::get_document(&pool, doc_id).await?;
+        let blob = doc
+            .file_path
+            .as_deref()
+            .ok_or_else(|| AppError::Custom("Attachment has no stored file".into()))?;
+        let text_path = std::path::PathBuf::from(blob)
+            .parent()
+            .map(|d| d.join(format!("{doc_id}.extracted.txt")))
+            .ok_or_else(|| AppError::Custom("Could not resolve extracted sidecar".into()))?;
+        let text = tokio::fs::read_to_string(&text_path)
+            .await
+            .map_err(|e| AppError::Custom(format!("Could not read extracted text: {e}")))?;
+        if text.len() > PREVIEW_CAP {
+            let cut = crate::tools::fs_tools::truncate_utf8(&text, PREVIEW_CAP);
+            Ok(format!("{cut}\n\n… preview truncated ({} bytes total)", text.len()))
+        } else {
+            Ok(text)
+        }
+    }
 }
 
 impl Default for DocumentService {

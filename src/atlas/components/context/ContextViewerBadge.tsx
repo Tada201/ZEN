@@ -11,6 +11,7 @@ import {
 } from "@/lib/types/contextBreakdown";
 import { useContextStore, selectLatestBreakdown } from "@/lib/stores/useContextStore";
 import { contextApi } from "@/api/contextApi";
+import { listenAppEvent } from "@/api/events";
 import {
   Popover,
   PopoverContent,
@@ -72,17 +73,37 @@ export const ContextViewerBadge = memo(function ContextViewerBadge({
   useEffect(() => {
     if (!chatId) return;
     let cancelled = false;
-    contextApi
-      .getBreakdown(chatId)
-      .then((payload) => {
-        if (cancelled || !payload) return;
-        useContextStore.getState().apply(payload);
-      })
-      .catch(() => {
-        // Snapshot is best-effort; missing data is acceptable.
-      });
+    const refresh = () => {
+      contextApi
+        .getBreakdown(chatId)
+        .then((payload) => {
+          if (cancelled) return;
+          // After a manual /compact the backend cache entry is dropped, so a
+          // null payload means "no fresh breakdown yet" — clear the slot
+          // rather than keep serving the pre-compaction numbers.
+          if (!payload) {
+            useContextStore.getState().reset(chatId);
+            return;
+          }
+          useContextStore.getState().apply(payload);
+        })
+        .catch(() => {
+          // Snapshot is best-effort; missing data is acceptable.
+        });
+    };
+    refresh();
+    // Compaction changes the picture without a new turn; re-pull when it
+    // lands so the badge doesn't keep the pre-compaction utilization.
+    let unlisten: (() => void) | undefined;
+    void listenAppEvent("context:compacted", (event) => {
+      if (event.payload?.chatId === chatId) refresh();
+    }).then((unlistenFn) => {
+      if (cancelled) unlistenFn();
+      else unlisten = unlistenFn;
+    });
     return () => {
       cancelled = true;
+      unlisten?.();
     };
   }, [chatId]);
 
@@ -160,6 +181,8 @@ export const ContextViewerBadge = memo(function ContextViewerBadge({
       modelWindow,
       capUtilization,
       compaction: breakdown.compactionEvent,
+      actualInput: breakdown.actualInputTokens,
+      actualOutput: breakdown.actualOutputTokens,
     };
   }, [breakdown, summary.window, summary.tokens]);
 
@@ -309,6 +332,28 @@ export const ContextViewerBadge = memo(function ContextViewerBadge({
                 hint={`${(stats.capUtilization * 100).toFixed(0)}% used`}
                 className="col-span-2"
               />
+            )}
+            {(stats.actualInput != null || stats.actualOutput != null) && (
+              <>
+                <Stat
+                  label="Actual in"
+                  value={
+                    stats.actualInput != null
+                      ? formatTokens(stats.actualInput)
+                      : "—"
+                  }
+                  hint="billed"
+                />
+                <Stat
+                  label="Actual out"
+                  value={
+                    stats.actualOutput != null
+                      ? formatTokens(stats.actualOutput)
+                      : "—"
+                  }
+                  hint="billed"
+                />
+              </>
             )}
           </div>
         )}

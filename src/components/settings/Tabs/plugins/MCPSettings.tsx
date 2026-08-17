@@ -133,10 +133,15 @@ export const MCPSettings = memo((_props: { embedded?: boolean }) => {
   }, [applyInventory]);
 
   const handleSubmit = useCallback(
-    async ({ scope, name, config }: McpFormSubmit) => {
+    async ({ scope, name, config, secrets }: McpFormSubmit) => {
       setBusy(true);
       try {
         setStatusMap((prev) => ({ ...prev, [name]: { name, status: 'reconnecting' } }));
+        // Store credential values in the keyring first so the `${secret:KEY}`
+        // references in `config` resolve on the sync the upsert kicks off.
+        for (const { key, value } of secrets) {
+          await mcpApi.setSecret(key, value);
+        }
         await mcpApi.upsertServer(scope, name, config);
         setFormOpen(false);
         setEditing(null);

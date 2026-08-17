@@ -11,6 +11,7 @@ const dbModelsSource = readFileSync(new URL("../src-tauri/src/db/models.rs", imp
 const openAiModelsSource = readFileSync(new URL("../src-tauri/src/llm/openai_compat/models.rs", import.meta.url), "utf8");
 const pinnedSource = readFileSync(new URL("../src/atlas/components/chat/input/PinnedActionBar.tsx", import.meta.url), "utf8");
 const plusSource = readFileSync(new URL("../src/atlas/components/chat/input/PlusActionMenu.tsx", import.meta.url), "utf8");
+const thinkingConfigSource = readFileSync(new URL("../src/atlas/components/chat/input/ThinkingConfig.tsx", import.meta.url), "utf8");
 const chatCommandSource = readFileSync(new URL("../src-tauri/src/commands/chat/send.rs", import.meta.url), "utf8");
 const openAiStreamSource = readFileSync(new URL("../src-tauri/src/llm/openai_compat/stream.rs", import.meta.url), "utf8");
 const anthropicSource = readFileSync(new URL("../src-tauri/src/llm/anthropic.rs", import.meta.url), "utf8");
@@ -45,13 +46,33 @@ assert(
 );
 
 // buildThinkingPayload moved into useChatInputModes.ts (mode ownership).
+// 'none' models have no tunable reasoning parameter and send.rs only
+// forwards effort/budget, so the fallthrough must report enabled:false —
+// an enabled:true claim would send nothing on the wire.
 assert(
   chatInputModesSource.includes("const buildThinkingPayload = useCallback(") &&
     chatInputModesSource.includes('if (reasoningConfigType === "effort")') &&
     chatInputModesSource.includes('if (reasoningConfigType === "budget")') &&
-    chatInputModesSource.includes("return { enabled: true };") &&
+    chatInputModesSource.includes("no tunable reasoning parameter") &&
+    chatInputModesSource.includes("return { enabled: false };") &&
+    !chatInputModesSource.includes("return { enabled: true };") &&
     inputSource.includes("buildThinkingPayload"),
   "chat input should only send reasoning parameters supported by the selected model metadata",
+);
+
+// The on/off toggle is a placebo for reasoningConfigType 'none' (nothing is
+// sent on the wire), so ThinkingConfig must render it only for tunable
+// types; the 'none' informational note shows at full opacity with no toggle.
+assert(
+  thinkingConfigSource.includes("{isTunable && (") &&
+    thinkingConfigSource.includes("isTunable && !isThinking") &&
+    thinkingConfigSource.includes("reasoningConfigType === 'none'") &&
+    thinkingConfigSource.includes("aria-pressed={isThinking}"),
+  "reasoning on/off toggle must render only when the model exposes a tunable reasoning parameter",
+);
+assert(
+  !thinkingConfigSource.includes("Enabling it ensures"),
+  "the 'none' note must not promise that toggling changes model behavior",
 );
 
 assert(

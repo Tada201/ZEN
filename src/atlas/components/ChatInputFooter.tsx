@@ -1,5 +1,4 @@
 import { ArrowUp, Bookmark, BookmarkCheck, Mic, Pause, Play, Square } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils/style";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import type { ComposerLayoutMode, PremiumChatInputProps } from "./chat/input/PremiumChatInputTypes";
@@ -9,14 +8,15 @@ import { PinnedActionBar } from "./chat/input/PinnedActionBar";
 import { PermissionModeMenu } from "./PermissionModeMenu";
 import { ContextTrigger } from "./ContextTrigger";
 import { PlusActionMenu } from "./chat/input/PlusActionMenu";
-import { motionDurations, motionEasings, useReducedMotion } from "@/lib/motion";
 
 /**
  * `ChatInputFooter` — the bottom toolbar of the chat input composer:
  * the inline model picker (only when not already pinned to the
  * sidebar header), the permission-mode menu, the pinned action bar,
- * the context-badge trigger, the voice-mode mic, and the Send/Stop
- * button. Carved out of `PremiumChatInput.tsx` so the composer stays
+ * the context-badge trigger, the voice-mode mic, the transport controls
+ * (Pause / Resume / Stop while a run is active), and the submit button
+ * (send when idle, queue while streaming). Carved out of
+ * `PremiumChatInput.tsx` so the composer stays
  * under the 350-line warning limit.
  *
  * Type notes:
@@ -85,7 +85,6 @@ export interface ChatInputFooterProps {
 }
 
 export const ChatInputFooter = (props: ChatInputFooterProps) => {
-  const reducedMotion = useReducedMotion();
   const isWelcome = props.layoutMode === "welcome";
   const isCompact = props.layoutMode === "sidebar" || props.layoutMode === "narrow";
   const isSidebar = props.layoutMode === "sidebar";
@@ -117,7 +116,7 @@ export const ChatInputFooter = (props: ChatInputFooterProps) => {
       )}
     >
       <div className="composer-action-rail flex min-w-0 items-center gap-0.5 overflow-visible">
-        {isWelcome && props.setIsPlusMenuOpen && props.handleFileChange && (
+        {props.setIsPlusMenuOpen && props.handleFileChange && (
           <PlusActionMenu
             isOpen={props.isPlusMenuOpen ?? false}
             setIsOpen={props.setIsPlusMenuOpen}
@@ -220,12 +219,24 @@ export const ChatInputFooter = (props: ChatInputFooterProps) => {
             <span className="composer-footer-action-label">Pause</span>
           </button>
         )}
-        {props.isLoading && props.isPaused && props.onAbort && (
+        {props.isLoading && props.isPaused && props.onResume && (
+          <button
+            onClick={props.onResume}
+            type="button"
+            className="flex items-center justify-center gap-1 rounded-md border border-primary px-1.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/10"
+            aria-label="Resume paused response"
+            title="Resume the paused response"
+          >
+            <Play className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="composer-footer-action-label">Resume</span>
+          </button>
+        )}
+        {props.isLoading && props.onAbort && (
           <button
             onClick={props.onAbort}
             type="button"
             className="flex items-center justify-center gap-1 rounded-md border border-destructive px-1.5 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/10"
-            aria-label="Stop paused response"
+            aria-label="Stop response"
             title="Stop this response and keep the partial work"
           >
             <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
@@ -235,59 +246,22 @@ export const ChatInputFooter = (props: ChatInputFooterProps) => {
         <button
           onClick={() => void props.onSend()}
           type="button"
-          disabled={!props.hasContent && !props.isLoading}
-          aria-label={props.isPaused ? "Resume response" : props.isLoading ? "Stop response" : "Send message"}
-          title={props.isPaused ? "Resume the paused response" : props.isLoading ? "Stop response" : "Send message"}
+          disabled={!props.hasContent}
+          aria-label={props.isLoading ? "Queue message" : "Send message"}
+          title={props.isLoading ? "Queue this message — it sends when the current turn finishes" : "Send message"}
           className={cn(
             "composer-submit relative p-1",
             isWelcome ? "rounded-md" : "rounded-full",
-            props.isLoading
-              ? props.isPaused
+            props.hasContent
+              ? isWelcome
                 ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                : isWelcome
-                  ? "bg-rose-500 text-foreground hover:bg-rose-600"
-                  : "bg-rose-500 text-foreground shadow-lg shadow-rose-500/20 hover:bg-rose-600"
-              : props.hasContent
-                ? isWelcome
-                  ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                  : "bg-primary text-primary-foreground shadow-sm"
-                : "bg-muted text-muted-foreground cursor-not-allowed",
+                : "bg-primary text-primary-foreground shadow-sm"
+              : "bg-muted text-muted-foreground cursor-not-allowed",
           )}
         >
-          <AnimatePresence initial={false} mode="wait">
-            {props.isPaused ? (
-              <motion.span
-                key="resume"
-                initial={reducedMotion ? false : { opacity: 0, y: 2 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={reducedMotion ? undefined : { opacity: 0, y: -2 }}
-                transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
-                className="inline-flex"
-              >
-                <Play className="h-4 w-4 fill-current" />
-              </motion.span>
-            ) : props.isLoading ? (
-              <motion.div
-                key="stop"
-                initial={reducedMotion ? false : { opacity: 0, y: 2 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={reducedMotion ? undefined : { opacity: 0, y: -2 }}
-                transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
-                className="relative h-4 w-4 rounded-[2px] bg-current"
-              />
-            ) : (
-              <motion.span
-                key="send"
-                initial={reducedMotion ? false : { opacity: 0, y: 2 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={reducedMotion ? undefined : { opacity: 0, y: -2 }}
-                transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
-                className="inline-flex"
-              >
-                <ArrowUp className="h-4 w-4 stroke-[3px]" />
-              </motion.span>
-            )}
-          </AnimatePresence>
+          {/* Icon is identical across send/queue states by design: the button
+              keeps one meaning, so no icon swap or motion is warranted. */}
+          <ArrowUp className="h-4 w-4 stroke-[3px]" />
         </button>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import type { Attachment, Message } from "../../components/chat/types";
+import type { Attachment, Message, MessageKind } from "../../components/chat/types";
 import { createLocalFirstFeedbackStep } from "./localFirstFeedback";
 
 export function createOptimisticChatMessages({
@@ -10,6 +10,7 @@ export function createOptimisticChatMessages({
   generativeUI,
   tools,
   attachments = [],
+  messageKind,
   now = Date.now(),
 }: {
   sessionId: string;
@@ -20,6 +21,8 @@ export function createOptimisticChatMessages({
   generativeUI?: boolean;
   tools?: string[];
   attachments?: Attachment[];
+  /** Persisted row kind; `goal_continuation` renders as a quiet system row. */
+  messageKind?: MessageKind;
   now?: number;
 }): { userMessage: Message; assistantMessage: Message } {
   const userMessage: Message = {
@@ -31,6 +34,7 @@ export function createOptimisticChatMessages({
     status: "sent",
     model,
     provider,
+    kind: messageKind,
     steps: [],
     toolCalls: [],
     attachments,

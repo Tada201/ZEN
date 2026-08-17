@@ -39,6 +39,16 @@ impl super::LmStudioProvider {
                             .as_deref()
                             .map(Self::arch_supports_tools)
                             .unwrap_or(false);
+                        // Detect that the model reasons, but map config type to
+                        // "none" (native, no tunable control) — NOT "effort":
+                        // LM Studio's /v1/chat/completions ignores per-request
+                        // reasoning_effort (lmstudio-bug-tracker #988) and nested
+                        // reasoning.effort only exists on the separate
+                        // /v1/responses endpoint (#1250), which Zen does not
+                        // integrate. An effort UI would send a parameter the
+                        // server silently drops, recreating a placebo toggle.
+                        let (supports_reasoning, reasoning_config_type) =
+                            reasoning_metadata_from_capabilities(&m);
 
                         ModelInfo {
                             id: m.id.clone(),
@@ -55,8 +65,8 @@ impl super::LmStudioProvider {
                             state: m.state,
                             supports_vision: Some(is_vlm),
                             supports_tools: Some(has_native_tools),
-                            supports_reasoning: None,
-                            reasoning_config_type: None,
+                            supports_reasoning,
+                            reasoning_config_type,
                         }
                     })
                     .collect();
@@ -145,6 +155,8 @@ impl super::LmStudioProvider {
                     state,
                     supports_vision: None, // Pattern based detection in frontend/runner
                     supports_tools: None,  // Inferred via arch in supports_tools()
+                    // Only /api/v0/models exposes reasoning capabilities; the v1
+                    // payload has no equivalent field, so reasoning stays unknown.
                     supports_reasoning: None,
                     reasoning_config_type: None,
                 }
@@ -186,9 +198,95 @@ impl super::LmStudioProvider {
                 state: None,
                 supports_vision: None,
                 supports_tools: None,
+                // OpenAI-compat /v1/models carries no capability metadata;
+                // only /api/v0/models exposes reasoning capabilities.
                 supports_reasoning: None,
                 reasoning_config_type: None,
             })
             .collect())
+    }
+}
+
+/// Derive (supports_reasoning, reasoning_config_type) from a v0 model entry's
+/// capabilities payload. Reports (Some(true), Some("none")) — the model
+/// reasons natively with no tunable control from Zen — when allowed_options is
+/// present, non-empty, and offers an active mode ("on", "low", "medium",
+/// "high"). Returns (None, None) otherwise (unknown rather than false, since
+/// older builds simply omit the field).
+fn reasoning_metadata_from_capabilities(
+    entry: &LmStudioModelEntry,
+) -> (Option<bool>, Option<String>) {
+    let has_active_mode = entry
+        .capabilities
+        .as_ref()
+        .and_then(|c| c.reasoning.as_ref())
+        .and_then(|r| r.allowed_options.as_deref())
+        .is_some_and(|opts| {
+            !opts.is_empty()
+                && opts
+                    .iter()
+                    .any(|o| matches!(o.as_str(), "on" | "low" | "medium" | "high"))
+        });
+
+    if has_active_mode {
+        (Some(true), Some("none".to_string()))
+    } else {
+        (None, None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry_from_json(json: &str) -> LmStudioModelEntry {
+        serde_json::from_str(json).unwrap()
+    }
+
+    #[test]
+    fn reasoning_metadata_absent_capabilities_stays_unknown() {
+        // Older builds omit the field entirely; behavior must be unchanged.
+        let entry = entry_from_json(r#"{"id":"qwen3","type":"llm","arch":"qwen3"}"#);
+        assert_eq!(
+            reasoning_metadata_from_capabilities(&entry),
+            (None, None)
+        );
+    }
+
+    #[test]
+    fn reasoning_metadata_on_off_options_detected() {
+        let entry = entry_from_json(
+            r#"{"id":"m","capabilities":{"reasoning":{"allowed_options":["off","on"]}}}"#,
+        );
+        assert_eq!(
+            reasoning_metadata_from_capabilities(&entry),
+            (Some(true), Some("none".to_string()))
+        );
+    }
+
+    #[test]
+    fn reasoning_metadata_graded_options_detected() {
+        let entry = entry_from_json(
+            r#"{"id":"m","capabilities":{"reasoning":{"allowed_options":["off","on","low","medium","high"]}}}"#,
+        );
+        assert_eq!(
+            reasoning_metadata_from_capabilities(&entry),
+            (Some(true), Some("none".to_string()))
+        );
+    }
+
+    #[test]
+    fn reasoning_metadata_off_only_or_empty_stays_unknown() {
+        let off_only = entry_from_json(
+            r#"{"id":"m","capabilities":{"reasoning":{"allowed_options":["off"]}}}"#,
+        );
+        assert_eq!(
+            reasoning_metadata_from_capabilities(&off_only),
+            (None, None)
+        );
+
+        let empty =
+            entry_from_json(r#"{"id":"m","capabilities":{"reasoning":{"allowed_options":[]}}}"#);
+        assert_eq!(reasoning_metadata_from_capabilities(&empty), (None, None));
     }
 }

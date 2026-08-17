@@ -21,7 +21,7 @@ const checkpointService = read("src-tauri/src/services/checkpoint.rs");
 check("three autonomy modes share the typed registry", /id: "ask"/.test(modes) && /id: "auto_edit"/.test(modes) && /id: "yolo"/.test(modes));
 check("mode selection persists the complete backend projection", /getSafetyModeSettings\(mode\)/.test(menu) && /await store\.applyChanges\(\)/.test(menu));
 check("active runs expose pause and stop controls in the composer", /Pause/.test(controls) && /Stop response/.test(controls) && /onPause/.test(controls) && /onAbort/.test(input));
-check("paused runs expose resume in the composer", /isPaused/.test(controls) && /Resume response/.test(controls));
+check("paused runs expose resume in the composer", /isPaused/.test(controls) && /aria-label="Resume paused response"/.test(controls));
 check("pause and stop share the composer without duplicate timeline controls", /onPause/.test(controls) && /Stop response/.test(controls) && !/<RunControlBar/.test(assistant));
 check("run lifecycle controls are threaded through the canonical composer", /onPause/.test(input) && /onResume/.test(input) && /isPaused/.test(input));
 check("research continuation remains available as a separate workflow", /handleContinueResearch/.test(chatSection) && /handleContinueResearch/.test(workspaceSection));

@@ -1,11 +1,12 @@
 import type { Message, ToolCall } from "../../components/chat/types";
+import { getToolCallIdentity } from "../../components/chat/tool/toolCallIdentity";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { rememberRecoveryTool } from "./strayToolLedger";
 
 function messageOwnsTool(message: Message, toolCallId: string) {
   return Boolean(
-    message.toolCalls?.some((tool) => tool.id === toolCallId) ||
-    message.steps?.some((step) => step.type === "tool-call" && step.toolCall?.id === toolCallId)
+    message.toolCalls?.some((tool) => getToolCallIdentity(tool) === toolCallId) ||
+    message.steps?.some((step) => step.type === "tool-call" && step.toolCall && getToolCallIdentity(step.toolCall) === toolCallId)
   );
 }
 
@@ -130,16 +131,19 @@ export function mergeToolCall(existing: ToolCall | undefined, incoming: ToolCall
 }
 
 export function upsertTool(prev: Message[], chatId: string, incoming: ToolCall, _now = Date.now()): Message[] {
-  const targetIdx = findTargetMessageIndex(prev, incoming, chatId);
+  const incomingIdentity = getToolCallIdentity(incoming);
+  const targetIdx = findTargetMessageIndex(prev, { ...incoming, id: incomingIdentity }, chatId);
   if (targetIdx === -1) {
     rememberRecoveryTool(incoming.messageId, incoming);
     return prev;
   }
   const next = [...prev];
   const target = next[targetIdx];
-  const hasTool = target.toolCalls?.some((tool) => tool.id === incoming.id) || false;
+  const hasTool = target.toolCalls?.some((tool) => getToolCallIdentity(tool) === incomingIdentity) || false;
   const existingSteps = target.steps || [];
-  const hasToolStep = existingSteps.some((step) => step.type === "tool-call" && step.toolCall?.id === incoming.id);
+  const hasToolStep = existingSteps.some(
+    (step) => step.type === "tool-call" && step.toolCall && getToolCallIdentity(step.toolCall) === incomingIdentity,
+  );
   const nextToolStep = { type: "tool-call" as const, toolCall: incoming };
   // Append the tool step in arrival order — never hoist it above earlier
   // answer text. An agentic run interleaves iterations
@@ -151,11 +155,11 @@ export function upsertTool(prev: Message[], chatId: string, incoming: ToolCall, 
   next[targetIdx] = {
     ...target,
     toolCalls: hasTool
-      ? (target.toolCalls || []).map((tool) => tool.id === incoming.id ? mergeToolCall(tool, incoming) : tool)
+      ? (target.toolCalls || []).map((tool) => getToolCallIdentity(tool) === incomingIdentity ? mergeToolCall(tool, incoming) : tool)
       : [...(target.toolCalls || []), incoming],
     steps: hasToolStep
       ? existingSteps.map((step) =>
-          step.type === "tool-call" && step.toolCall?.id === incoming.id
+          step.type === "tool-call" && step.toolCall && getToolCallIdentity(step.toolCall) === incomingIdentity
             ? { ...step, toolCall: mergeToolCall(step.toolCall, incoming) }
             : step
         )
@@ -194,8 +198,9 @@ export function makeToolCall(
     | "lastUpdatedAt"
   > = {},
 ): ToolCall {
+  const stableId = id?.trim() || getToolCallIdentity({ id, name, ...meta, startTime: meta.startTime ?? now });
   return {
-    id,
+    id: stableId || `tool:${name}:${now}`,
     name,
     status,
     input,

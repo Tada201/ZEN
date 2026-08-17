@@ -20,7 +20,7 @@ import {
 import { reconcileStrayToolLedgers } from "./strayToolLedger";
 import { persistExecutionCheckpointForEvent, flushPendingCheckpoints } from "./persistExecutionCheckpoint";
 import { createAgentRuntimeBridge } from "@/atlas/agentRuntime/runtimeBridge";
-import { normalizeChatDeltaEvent, normalizeChatDoneEvent } from "@/atlas/agentRuntime/normalizeEvent";
+import { normalizeChatDeltaEvent, normalizeChatDoneEvent, normalizeChatErrorEvent } from "@/atlas/agentRuntime/normalizeEvent";
 import { mergeRuntimeTextPartsIntoSteps, type AgentTurnRecord } from "@/atlas/agentRuntime/types";
 import { presentExecutionError } from "@/atlas/agentRuntime/executionError";
 
@@ -266,10 +266,9 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         if (!chatId) return;
 
         clearHeartbeatTimeout(chatId);
-
         const normalizedDone = normalizeChatDoneEvent(event.payload as unknown as Record<string, unknown>);
-        if (normalizedDone) runtimeBridge?.dispatch(normalizedDone);
-        
+        // Drain synchronously so run-finish reduces before finalization reads runtime steps (else a deferred flush pins a short tail).
+        if (normalizedDone) runtimeBridge?.dispatchTerminal(normalizedDone);
         // Ensure any pending chunks are flushed before finalization. The
         // flush consumes and clears the buffer, so never read that buffer
         // after flushing; doing so discarded the final reasoning fragment.
@@ -475,7 +474,6 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
 
         const activeAssistantId = useChatStore.getState().getActiveAssistantForChat(chatId);
         if (!activeAssistantId) return;
-
         const recoverable = event.payload.recoverable === true;
         const errorMessage = event.payload.error || "The model stream stopped before returning output.";
         const errorPresentation = presentExecutionError(errorMessage, {
@@ -483,8 +481,11 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
           recoverable,
         });
         const displayError = errorPresentation.summary;
-
         clearHeartbeatTimeout(chatId);
+        // Mirror chat:done: drain runtime bridge + flush so the final burst finalizes now, not only after reload.
+        const normalizedError = normalizeChatErrorEvent(event.payload as unknown as Record<string, unknown>);
+        if (normalizedError) runtimeBridge?.dispatchTerminal(normalizedError);
+        flushAllChunkBuffers();
         clearChunkTrackingForChat(chatId, chunkBuffersRef.current, firstChunkDeltas.current);
         console.error("[chat:error]", errorMessage);
         ttftReport(chatId, "error");
@@ -494,7 +495,6 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
           if (assistantIdx === -1) return prev;
           if (prev[assistantIdx].id !== activeAssistantId) return prev;
           if (prev[assistantIdx].status !== "sending") return prev;
-
           const next = [...prev];
           const failedMessage = markMessageAsFailed(next[assistantIdx], displayError, recoverable);
           next[assistantIdx] = {

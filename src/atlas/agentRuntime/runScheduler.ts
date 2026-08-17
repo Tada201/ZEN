@@ -3,6 +3,7 @@ import type { AgentRunEvent, AgentTurnRecord } from "./types.ts";
 
 export interface AgentRunScheduler {
   dispatch: (event: AgentRunEvent) => void;
+  flushNow: (runId: string) => void;
   get: (runId: string) => AgentTurnRecord | undefined;
   reveal: (runId: string, maxCharacters?: number) => AgentTurnRecord | undefined;
   clear: (runId: string) => void;
@@ -31,10 +32,15 @@ export function createAgentRunScheduler(
     records.set(runId, record);
     onFlush?.(record);
 
-    const stillDraining = record.status === "draining" && record.parts.some(
+    // Keep draining the reveal budget across frames whenever visible text
+    // trails received text — not only once the run finishes. A large burst
+    // followed by a tool-call gap (no further events) would otherwise leave
+    // the tail frozen at 180 chars until the next chunk or a reload.
+    const backlog = record.parts.some(
       (part) => part.visibleText.length < part.receivedText.length,
     );
-    if (stillDraining && !frames.has(runId)) {
+    const stillRevealing = backlog && record.status !== "queued";
+    if (stillRevealing && !frames.has(runId)) {
       frames.set(runId, requestFrame(() => flush(runId)));
     }
   };
@@ -47,6 +53,14 @@ export function createAgentRunScheduler(
       if (!frames.has(event.runId)) {
         frames.set(event.runId, requestFrame(() => flush(event.runId)));
       }
+    },
+    flushNow(runId) {
+      // Terminal events (error/cancel) must land in the same synchronous tick
+      // as the caller's own message finalization, otherwise a later flush would
+      // find the row already marked failed and skip the pending text tail.
+      const frame = frames.get(runId);
+      if (frame !== undefined) cancelFrame(frame);
+      flush(runId);
     },
     get(runId) {
       return records.get(runId);

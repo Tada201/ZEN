@@ -348,7 +348,7 @@ checkAll(assert, [
         /return\s+true\s*;?/m,
         "shouldShowToolGroupInTimeline must keep completed execution groups visible after completion and reload",
       ),
-      pinContains("groupedSteps.filter(", "visibleGroupedSteps must filter through shouldShowToolGroupInTimeline per step"),
+      pinContains("orderedSteps.filter(", "visibleGroupedSteps must filter through shouldShowToolGroupInTimeline per step"),
       pinRegexPresent(
         /shouldShowToolGroupInTimeline\(\s*step,\s*message\.status\s*===\s*"sending",\s*hasAssistantAnswerText\s*\)/,
         "the filter call site must wire the live message status and answer state into the stable execution-history gate",
@@ -441,7 +441,7 @@ checkAll(assert, [
     pins: [
       pinContains("Invocation", "MCP cards must show the invocation section"),
       pinContains("Result", "MCP cards must show the result section"),
-      pinContains("server_name", "MCP cards must identify the server"),
+      pinContains("const tool =", "MCP cards must identify the invoked tool"),
       pinContains("redactStructuredValue", "MCP arguments must be redacted before display"),
       pinContains("Copy MCP details", "MCP cards must provide a copy affordance"),
     ],

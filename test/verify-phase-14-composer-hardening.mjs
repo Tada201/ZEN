@@ -6,10 +6,9 @@ const packageJson = JSON.parse(read("package.json"));
 const input = read("src/atlas/components/PremiumChatInput.tsx");
 const footer = read("src/atlas/components/ChatInputFooter.tsx");
 const textArea = read("src/atlas/components/ChatInputTextAreaBlock.tsx");
-const taskDrawer = read("src/atlas/components/chat/input/TaskDrawer.tsx");
+const runStatus = read("src/atlas/components/chat/RunStatusPopover.tsx");
 const taskStatus = read("src/lib/tasks/taskStatus.ts");
 const taskStore = read("src/lib/stores/taskStore.ts");
-const taskDrawerHook = read("src/atlas/components/useChatTaskDrawer.ts");
 const pinnedHook = read("src/atlas/components/usePinnedActions.ts");
 const taskPreview = read("src/atlas/components/chat/taskPlanPreviewModel.ts");
 const pinned = read("src/atlas/components/chat/input/PinnedActionBar.tsx");
@@ -27,12 +26,13 @@ assert(pinned.includes("composer-pinned-rail"), "the pinned rail must not masque
 
 assert(taskStatus.includes("normalizeTaskDisplayStatus") && taskStatus.includes("normalizeTaskText") && taskStatus.includes("taskStatusLabel"), "task status and text vocabulary must have one shared normalizer");
 assert(taskStore.includes("normalizeTaskDisplayStatus") && taskStore.includes("normalizeTaskText") && taskStore.includes("Number.isFinite"), "malformed task events must be normalized before entering the store");
-assert(taskDrawerHook.includes("[chatId]") && taskDrawerHook.includes("setIsOpen(false)"), "switching chats must close a stale task disclosure");
+// The checklist disclosure moved to the Run status popover; the sticky store
+// keeps lists scoped per chat so switching chats cannot leak a stale plan.
+assert(taskStore.includes("task.chatId === chat_id"), "task lists must stay scoped per chat");
 assert(pinnedHook.includes("try {") && pinnedHook.includes("localStorage.setItem") && pinnedHook.includes("catch"), "storage failures must not break the composer");
 assert(taskPreview.includes("normalizeTaskDisplayStatus"), "detailed task previews must use the shared status normalizer");
-assert(taskDrawer.includes("normalizeTaskDisplayStatus") && taskDrawer.includes("taskStatusLabel"), "compact task disclosure must use the same status vocabulary");
-assert(taskDrawer.includes("text-destructive") && taskDrawer.includes("task.error"), "failed tasks must remain visible and explain the failure");
-assert(taskDrawer.includes("max-h-[min(50vh,20rem)]") && taskDrawer.includes("overflow-y-auto"), "long task plans must be bounded instead of pushing the composer off screen");
+assert(runStatus.includes("ChecklistRow") && runStatus.includes("normalizeTaskDisplayStatus"), "the status-popover checklist must use the same status vocabulary");
+assert(runStatus.includes("max-h-[min(74vh,36rem)]"), "long checklists must be bounded instead of pushing the status popover off screen");
 
 assert(footer.includes('className="composer-footer-action-label">Pause</span>') && footer.includes('className="composer-footer-action-label">Stop</span>'), "control labels must use container-aware visibility");
 assert(!footer.includes("composer-footer-action-label hidden sm:inline"), "footer labels must not be governed by viewport breakpoints");

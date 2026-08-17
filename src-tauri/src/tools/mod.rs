@@ -565,7 +565,7 @@ pub fn default_tool_risk(id: &str) -> RiskLevel {
     match id {
         "run_command" | "terminal" => RiskLevel::Critical,
         "web_fetch" | "write_file" | "edit_file" | "apply_patch" | "spawn_agent"
-        | "file_write" => RiskLevel::High,
+        | "file_write" | "browser" => RiskLevel::High,
         "web_search" | "read_document_content" | "draw" | "generate_image" => {
             RiskLevel::Medium
         }
@@ -603,9 +603,9 @@ pub fn init_tool_registry(permissions: ToolPermissions) -> ToolRegistry {
         "tools_search",
         "list_tools",
         "write_todos",
+        "update_goal",
         "read_document_content",
         "run_command",
-        "system_metrics",
         "get_system_metrics",
         "draw",
         "list_documents",

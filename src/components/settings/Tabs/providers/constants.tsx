@@ -24,6 +24,5 @@ export const PROVIDER_ICONS: Record<string, React.ReactNode> = {
         </svg>
     ),
     nine_router: <WorkbenchIcon name="lucide:router" size={16} />,
-    opencode: <WorkbenchIcon name="lucide:code-2" size={16} />,
-    aihubmix: <WorkbenchIcon name="lucide:sparkles" size={16} />
+    opencode: <WorkbenchIcon name="lucide:code-2" size={16} />
 };

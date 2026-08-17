@@ -4,6 +4,15 @@
  * of `PremiumChatInput.tsx` so the composer no longer carries ~80 lines
  * of inline handler bodies.
  *
+ * Submit semantics (one meaning for the submit control, always):
+ * 1. `/goal …` runs client-side immediately (set/pause/resume/clear/view).
+ * 2. `/compact …` runs client-side immediately (manual context
+ *    compaction); it is never enqueued and never reaches the model.
+ * 3. While a turn is streaming, submitting enqueues the prompt per chat
+ *    (`usePromptQueueStore`) instead of aborting the run. Stopping and
+ *    pausing are dedicated footer controls.
+ * 4. Otherwise the prompt dispatches through `ctx.onSend` normally.
+ *
  * The hook takes a single `ctx` argument containing every value the
  * send / suggested-prompt pipelines read; both handlers close over
  * those values via the `ctx` reference. We intentionally do NOT
@@ -25,8 +34,13 @@
  */
 
 import { useCallback } from "react";
+import { toast } from "sonner";
 import type { Attachment } from "./chat/types";
 import type { ThinkingPayload } from "./chat/input/PremiumChatInputTypes";
+import { executeGoalCommand, parseGoalCommand } from "./chat/input/slashGoal";
+import { executeCompactCommand, parseCompactCommand } from "./chat/input/slashCompact";
+import { usePromptQueueStore } from "@/lib/stores/promptQueueStore";
+import { useSkillsRegistryStore } from "@/lib/stores/skillsRegistryStore";
 
 export interface UseSendHandlerCtx {
   /** Composer-driven state. */
@@ -41,6 +55,8 @@ export interface UseSendHandlerCtx {
   isPaused?: boolean;
   onAbort?: () => void;
   onResume?: () => void;
+  /** Chat the composer is bound to; queueing and /goal are scoped to it. */
+  activeChatId?: string | null;
   /** Composer-driven selectors. */
   selectedModelId?: string;
   selectedProvider?: string;
@@ -87,15 +103,70 @@ export interface UseSendHandlerResult {
 
 export function useSendHandler(ctx: UseSendHandlerCtx): UseSendHandlerResult {
   const handleSend = useCallback(async () => {
-    if (ctx.isLoading) {
-      if (ctx.isPaused) {
-        ctx.onResume?.();
-      } else {
-        ctx.onAbort?.();
+    // `/goal` is a client-side command: it resolves immediately, even while
+    // a turn is streaming, and never reaches the model.
+    const goalCommand = parseGoalCommand(ctx.message);
+    if (goalCommand) {
+      if (!ctx.activeChatId) {
+        toast.error("Start or select a chat before using /goal.");
+        return;
       }
+      await executeGoalCommand(ctx.activeChatId, goalCommand);
+      ctx.resetMessage();
       return;
     }
+
+    // `/compact` is a client-side command: it compacts the chat context
+    // immediately. It must NEVER be enqueued into the prompt queue while a
+    // turn is streaming — the executor refuses and toasts instead.
+    const compactCommand = parseCompactCommand(ctx.message);
+    if (compactCommand) {
+      void executeCompactCommand(compactCommand, {
+        chatId: ctx.activeChatId,
+        isLoading: ctx.isLoading,
+      });
+      ctx.resetMessage();
+      return;
+    }
+
+    // `/skills` opens the skills registry dialog client-side; it never reaches
+    // the model. (Skill *invocation* — `/name` or `$name` — travels to the
+    // backend where the loop expands and injects the body.)
+    if (ctx.message.trim() === "/skills") {
+      useSkillsRegistryStore.getState().open();
+      ctx.resetMessage();
+      return;
+    }
+
     if (!ctx.message.trim() && ctx.selectedFiles.length === 0) return;
+
+    // While a turn is running, submit = queue (Cursor-style). Stopping is a
+    // dedicated footer control; the submit button keeps one meaning.
+    if (ctx.isLoading && ctx.activeChatId) {
+      const attachments = await ctx.convertFiles(ctx.selectedFiles);
+      const selectedModelId = ctx.selectedModelId;
+      const selectedProvider = ctx.selectedProvider;
+      const selectedModelInfo = ctx.selectedModelInfo;
+      usePromptQueueStore.getState().enqueue(ctx.activeChatId, {
+        message: ctx.message,
+        model: selectedModelId || selectedModelInfo?.id || "No Model",
+        provider: selectedProvider || selectedModelInfo?.provider || "ollama",
+        webSearch: ctx.isWebSearch,
+        thinking: ctx.buildThinkingPayload(ctx.supportsReasoning, ctx.reasoningConfigType),
+        deepResearch: ctx.isDeepResearch,
+        generativeUI: ctx.internalGenerativeUI,
+        imageGen: ctx.isImageGenEnabled,
+        attachments,
+        tools: undefined,
+      });
+      const length = usePromptQueueStore.getState().queues[ctx.activeChatId]?.length ?? 0;
+      toast.success(
+        length === 1 ? "Queued — sends when this turn finishes." : `Queued (${length} waiting).`,
+      );
+      ctx.resetMessage();
+      ctx.resetFiles();
+      return;
+    }
 
     const selectedModelId = ctx.selectedModelId;
     const selectedProvider = ctx.selectedProvider;

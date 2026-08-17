@@ -46,7 +46,7 @@ export const GpuWidget = memo(function GpuWidget({ context }: { context: WidgetC
                                 onClick={() => setSelectedGpuType('igpu')}
                                 className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded transition-all duration-200 ${
                                     selectedGpuType === 'igpu'
-                                        ? 'bg-violet-500/10 text-violet-400 border border-violet-500/20'
+                                        ? 'bg-primary/10 text-primary border border-primary/20'
                                         : 'text-muted-foreground hover:text-muted-foreground border border-transparent'
                                 }`}
                             >
@@ -56,7 +56,7 @@ export const GpuWidget = memo(function GpuWidget({ context }: { context: WidgetC
                                 onClick={() => setSelectedGpuType('dgpu')}
                                 className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded transition-all duration-200 ${
                                     selectedGpuType === 'dgpu'
-                                        ? 'bg-violet-500/10 text-violet-400 border border-violet-500/20'
+                                        ? 'bg-primary/10 text-primary border border-primary/20'
                                         : 'text-muted-foreground hover:text-muted-foreground border border-transparent'
                                 }`}
                             >
@@ -75,7 +75,7 @@ export const GpuWidget = memo(function GpuWidget({ context }: { context: WidgetC
             <div className="bg-card/60 border border-border rounded-lg p-1">
                 <Sparkline
                     data={activeHistory}
-                    color="hsl(var(--primary))" // violet-500
+                    color="hsl(var(--primary))"
                     height={32}
                     showDot={true}
                     maxValue={100}
@@ -95,7 +95,7 @@ export const GpuWidget = memo(function GpuWidget({ context }: { context: WidgetC
                 </div>
                 <div className="flex flex-col items-end">
                     <span className="text-[9px] font-mono text-muted-foreground leading-none">VRAM</span>
-                    <span className="text-xs font-mono text-violet-400 font-bold">{Math.round(memPercent)}%</span>
+                    <span className="text-xs font-mono text-primary font-bold">{Math.round(memPercent)}%</span>
                 </div>
             </div>
 
@@ -108,7 +108,7 @@ export const GpuWidget = memo(function GpuWidget({ context }: { context: WidgetC
                 </div>
                 <div className="h-1 bg-card rounded-full overflow-hidden border border-border/25">
                     <div
-                        className="h-full bg-violet-500/60 transition-all duration-300 rounded-full"
+                        className="h-full bg-primary/60 transition-all duration-300 rounded-full"
                         style={{ width: `${memPercent}%` }}
                     />
                 </div>

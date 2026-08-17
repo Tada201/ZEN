@@ -207,12 +207,10 @@ export const SettingsSchema = z.object({
   xaiBaseUrl: z.string().default("https://api.x.ai/v1"),
   kilocodeBaseUrl: z.string().default("https://api.kilo.ai/api/gateway"),
   nvidiaBaseUrl: z.string().default("https://integrate.api.nvidia.com/v1"),
-  aihubmixBaseUrl: z.string().default("https://aihubmix.com/v1"),
   mimoBaseUrl: z.string().default("https://api.xiaomimimo.com/api/free-ai/openai/chat"),
   nineRouterBaseUrl: z.string().default("http://localhost:20128/v1"),
   opencodeBaseUrl: z.string().default("https://opencode.ai/zen/v1"),
   nineRouterApiKey: z.string().default(""),
-  aihubmixApiKey: z.string().default(""),
 
   // ─── Workspace ───────────────────────────────────────────────────────────
   workspacePath: z.string().default(""),

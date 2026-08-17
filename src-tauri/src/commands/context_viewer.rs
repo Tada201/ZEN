@@ -44,6 +44,11 @@ pub struct ContextSnapshot {
     pub model_context_window: Option<usize>,
     pub utilization: f32,
     pub has_data: bool,
+    /// Provider-reported prompt/completion tokens from the most recent
+    /// completed LLM call, when the cached breakdown carries them. `None`
+    /// before the first call of a run returns.
+    pub actual_input_tokens: Option<usize>,
+    pub actual_output_tokens: Option<usize>,
     pub layer_totals: LayerSnapshot,
     pub top_sections: Vec<SectionSnapshot>,
 }
@@ -168,6 +173,8 @@ fn empty_snapshot(chat_id: &str, context_window: usize) -> ContextSnapshot {
         model_context_window: None,
         utilization: 0.0,
         has_data: false,
+        actual_input_tokens: None,
+        actual_output_tokens: None,
         layer_totals: LayerSnapshot {
             system_prompt: 0,
             system_tools: 0,
@@ -222,6 +229,8 @@ fn derive_snapshot(payload: &ContextBreakdownPayload) -> ContextSnapshot {
         model_context_window: payload.model_context_window.filter(|&w| w > 0),
         utilization,
         has_data: true,
+        actual_input_tokens: payload.actual_input_tokens,
+        actual_output_tokens: payload.actual_output_tokens,
         layer_totals: LayerSnapshot {
             system_prompt: payload.system_prompt_tokens,
             system_tools: payload.system_tools_tokens,

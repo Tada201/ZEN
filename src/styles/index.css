@@ -50,14 +50,52 @@
   --code-foreground: 0 0% 92%;
   --code-border: 240 6% 18%;
 
+  /* Editor chrome — VS Code-style IDE surfaces (code editor, artifact panel,
+     workspace tabs). Intentionally dark regardless of app theme, like --code-*.
+     One vocabulary so the editor cluster stops drifting between #1e1e1e /
+     #1e1e24 / #252526 / #18181c one-offs. */
+  --editor-surface: 0 0% 12%;      /* main content / active tab (#1e1e1e) */
+  --editor-elevated: 240 3% 15%;   /* tab bar, panel header (#252526)     */
+  --editor-inactive: 0 0% 10%;     /* inactive tab — recedes, VS Code way */
+  --editor-foreground: 0 0% 83%;   /* code / editor body text (#d4d4d4)   */
+
   --radius: 0.5rem;
 
-  /* Compact workbench rhythm: 4px detail steps, 8px component gaps,
-     12px section separation. Keep readable prose outside this scale. */
-  --zen-space-detail: 0.25rem;
-  --zen-space-control: 0.5rem;
-  --zen-space-section: 0.75rem;
-  --zen-control-size: 1.875rem;
+  /* ── Spacing scale (single source of truth) ────────────────────────────
+     4px-based ramp. These mirror Tailwind's default step values so existing
+     `p-2`/`gap-3` utilities already land on the scale; the named tokens exist
+     so components and hand-written CSS reference the SAME steps instead of
+     off-scale one-offs (3px, 7px, 14px…). Legal steps only — snap ties up. */
+  --space-0: 0;
+  --space-px: 1px;
+  --space-1: 0.25rem;  /* 4  */
+  --space-2: 0.5rem;   /* 8  */
+  --space-3: 0.75rem;  /* 12 */
+  --space-4: 1rem;     /* 16 */
+  --space-5: 1.25rem;  /* 20 */
+  --space-6: 1.5rem;   /* 24 */
+  --space-8: 2rem;     /* 32 */
+  --space-10: 2.5rem;  /* 40 */
+  --space-12: 3rem;    /* 48 */
+
+  /* Semantic spacing — reach for these in components 90% of the time. They
+     name intent, so a density/rhythm change edits one line here, not 150
+     call sites. Compact workbench rhythm: 4px detail, 8px control, 12px section. */
+  --zen-space-detail: var(--space-1);    /* icon gaps, chip insets     */
+  --zen-space-control: var(--space-2);   /* control padding, item gaps */
+  --zen-space-section: var(--space-3);   /* section separation         */
+  --space-inset-card: var(--space-4);    /* card / panel padding       */
+  --space-inset-compact: var(--space-2); /* dense rows, list items     */
+  --space-stack: var(--space-3);         /* vertical gap between blocks */
+  --space-gutter: var(--space-4);        /* layout column gutter        */
+  --zen-control-size: 1.875rem;          /* 30px — min hit target       */
+
+  /* Semantic surfaces — one elevation vocabulary so panels/popovers/overlays
+     stop re-deriving local backgrounds. Resolve through the active theme. */
+  --surface-base: hsl(var(--background));
+  --surface-raised: hsl(var(--card));
+  --surface-overlay: hsl(var(--popover));
+  --surface-sunken: hsl(var(--muted));
 
   /* Execution ledger aliases — derived from the active theme so the trace
      remains Codex-like without overriding a user's chosen ZEN palette. */
@@ -162,7 +200,24 @@
   --color-code-foreground: hsl(var(--code-foreground));
   --color-code-border: hsl(var(--code-border));
 
-  --radius: var(--radius);
+  /* Editor chrome utilities — bg-editor-surface, text-editor-foreground, etc. */
+  --color-editor-surface: hsl(var(--editor-surface));
+  --color-editor-elevated: hsl(var(--editor-elevated));
+  --color-editor-inactive: hsl(var(--editor-inactive));
+  --color-editor-foreground: hsl(var(--editor-foreground));
+
+  /* Radius ramp — derive every Tailwind `rounded-*` utility from the runtime
+     --radius that ZenThemeProvider sets from the active preset (sharp/smooth/
+     round/pill). Without this, rounded-md/lg/xl resolve to Tailwind's fixed
+     defaults and the radius preset silently does nothing. Negative results
+     (sharp preset) clamp to 0 per spec. `rounded-full` stays 9999px. */
+  --radius-xs: calc(var(--radius) - 6px);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 16px);
 
   /* UI Atlas accent swatches (kept as fixed brand colors) */
   --color-violet: hsl(262 83% 58%);
@@ -223,6 +278,11 @@
 .composer-shell--loading {
   border-color: hsl(var(--primary) / 0.55);
   box-shadow: 0 0 0 1px hsl(var(--primary) / 0.22), 0 8px 20px hsl(var(--background) / 0.14);
+}
+
+.composer-shell--dragging {
+  border-color: hsl(var(--primary) / 0.7);
+  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.3), 0 8px 20px hsl(var(--background) / 0.14);
 }
 
 .composer-editor-row {
@@ -347,7 +407,6 @@
 
 .composer-focus:focus-visible,
 .composer-control:focus-visible,
-.composer-editor:focus-visible,
 .composer-menu-item:focus-visible,
 .composer-submit:focus-visible {
   outline: 2px solid hsl(var(--ring));

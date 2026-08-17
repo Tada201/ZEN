@@ -174,11 +174,10 @@ impl McpClient {
                     "params": params,
                     "id": next_http_request_id(),
                 });
-                let target_url = if endpoint.modern {
-                    endpoint.url.clone()
-                } else {
-                    format!("{}/{}", endpoint.url.trim_end_matches('/'), method)
-                };
+                // Streamable HTTP posts every method to the single endpoint URL
+                // in both eras; legacy has no per-method subpath. Using a
+                // `/{method}` suffix makes real servers (e.g. Exa) 404.
+                let target_url = endpoint.url.clone();
                 let parsed_url = validate_mcp_endpoint_url(&endpoint.url)?;
                 let client = build_pinned_http_client(&parsed_url, endpoint.request_timeout).await?;
                 let request = Self::apply_mcp_headers(

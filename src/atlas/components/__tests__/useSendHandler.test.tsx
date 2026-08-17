@@ -11,8 +11,9 @@
  *      component that calls `handleSend` on the same key chord,
  *      dispatch a synthetic `KeyboardEvent`, and confirm `onSend`
  *      was called.
- *   3. Abort-when-loading — `isLoading === true` short-circuits
- *      `handleSend` to `ctx.onAbort?.()` and skips `ctx.onSend`.
+ *   3. Queue-when-loading — `isLoading === true` with an active chat
+ *      enqueues the prompt in `usePromptQueueStore` and skips
+ *      `ctx.onSend`; stopping is a dedicated footer control.
  *   4. Suggested-prompt pipeline — `handleSuggestedClick("hello")`
  *      pays out with `files: []`, `attachments: []`, and
  *      `generativeUI` honouring `ctx.internalGenerativeUI` or the
@@ -80,6 +81,20 @@ vi.mock("@/api/chatApi", () => ({
   },
 }));
 
+// The queue/goal paths pull in sonner toasts and the Tauri event bus.
+// Neither belongs in a unit test env — stub both.
+vi.mock("sonner", () => ({
+  toast: {
+    success: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+vi.mock("@/api/events", () => ({
+  listenAppEvent: vi.fn(async () => () => undefined),
+}));
+
 // Static imports AFTER the vi.mock factories so vitest's hoister
 // rewires `fileToAttachment` and `chatApi.sendMessage` first.
 
@@ -87,6 +102,7 @@ import { useSendHandler } from "../useSendHandler";
 import type { UseSendHandlerCtx } from "../useSendHandler";
 import { fileToAttachment } from "../chat/input/fileAttachments";
 import { chatApi } from "@/api/chatApi";
+import { usePromptQueueStore } from "@/lib/stores/promptQueueStore";
 
 // ── Local renderHook harness (no @testing-library/react) ───
 //
@@ -303,10 +319,12 @@ describe("useSendHandler", () => {
     });
   });
 
-  it("abort-when-loading: handleSend short-circuits to onAbort and skips onSend", async () => {
+  it("queue-when-loading: handleSend enqueues the prompt instead of aborting", async () => {
+    const chatId = "queue-test-chat";
     const ctx = buildCtx({
-      message: "interrupted prompt",
+      message: "queued prompt",
       isLoading: true,
+      activeChatId: chatId,
     });
     const m = mountWithCtx(ctx, useSendHandler);
 
@@ -314,12 +332,15 @@ describe("useSendHandler", () => {
       await (m.box.current as ReturnType<typeof useSendHandler>).handleSend();
     });
 
-    expect(ctx.onAbort).toHaveBeenCalledTimes(1);
+    const queue = usePromptQueueStore.getState().queues[chatId] ?? [];
+    expect(queue).toHaveLength(1);
+    expect(queue[0]?.payload.message).toBe("queued prompt");
     expect(ctx.onSend).not.toHaveBeenCalled();
-    expect(ctx.convertFiles).not.toHaveBeenCalled();
-    expect(ctx.resetMessage).not.toHaveBeenCalled();
-    expect(ctx.resetFiles).not.toHaveBeenCalled();
+    expect(ctx.onAbort).not.toHaveBeenCalled();
+    expect(ctx.resetMessage).toHaveBeenCalledTimes(1);
+    expect(ctx.resetFiles).toHaveBeenCalledTimes(1);
 
+    usePromptQueueStore.getState().clear(chatId);
     m.unmount();
   });
 

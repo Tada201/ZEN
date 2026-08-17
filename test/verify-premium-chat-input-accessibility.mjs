@@ -6,7 +6,8 @@ const plus = read("src/atlas/components/chat/input/PlusActionMenu.tsx");
 const menuItem = read("src/atlas/components/chat/input/MenuItem.tsx");
 const model = read("src/atlas/components/chat/input/ModelSearchDropdown.tsx");
 const slash = read("src/atlas/components/chat/input/SlashCommandPopover.tsx");
-const task = read("src/atlas/components/chat/input/TaskDrawer.tsx");
+const queue = read("src/atlas/components/chat/input/QueuedPromptsStrip.tsx");
+const goal = read("src/atlas/components/chat/input/GoalBanner.tsx");
 const pinned = read("src/atlas/components/chat/input/PinnedActionBar.tsx");
 const thinking = read("src/atlas/components/chat/input/ThinkingConfig.tsx");
 const textarea = read("src/atlas/components/ChatInputTextAreaBlock.tsx");
@@ -33,7 +34,8 @@ assert(slash.includes('role="listbox"') && slash.includes('role="option"') && sl
 assert(textarea.includes("aria-activedescendant") && textarea.includes("aria-controls={slashIsPopoverOpen ? slashListboxId"), "textarea must own the slash listbox relationship");
 assert(input.includes("slashListboxId") && input.includes("listboxId={slashListboxId}"), "slash listbox IDs must be shared by the trigger and popup");
 
-assert(task.includes("aria-expanded={isOpen}") && task.includes("aria-controls={taskPanelId}") && task.includes('role="region"'), "task plan must be a labelled disclosure");
+assert(queue.includes('aria-label="Remove queued prompt"') && queue.includes("title=\"Send this prompt now\""), "queued prompt pills must expose remove and send-now affordances");
+assert(goal.includes('role="status"') && goal.includes('aria-label="Pause goal"') && goal.includes('aria-label="Clear goal"'), "the goal banner must announce status and expose its controls accessibly");
 assert(thinking.includes("aria-pressed={isThinking}") && thinking.includes("type=\"button\""), "reasoning enablement must be a real toggle button");
 
 console.log("premium chat input accessibility contract passed");

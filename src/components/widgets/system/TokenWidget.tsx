@@ -3,9 +3,9 @@ import type { WidgetContext } from './types';
 import { useRenderLogger } from '@/hooks/useRenderLogger';
 
 function getStatusColor(pct: number): string {
-    if (pct < 50) return '#8b5cf6';
-    if (pct < 80) return '#f59e0b';
-    return '#ef4444';
+    if (pct < 50) return 'hsl(var(--primary))';
+    if (pct < 80) return 'hsl(var(--warning))';
+    return 'hsl(var(--destructive))';
 }
 
 export const TokenWidget = memo(function TokenWidget({ context }: { context: WidgetContext }) {

@@ -478,6 +478,25 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
                 ? "in_progress"
                 : "pending");
         });
+        // An empty list is the backend's explicit checklist clear; render one
+        // completed "Checklist cleared" step instead of the vague
+        // perpetually-running "Task list updated" fallback.
+        if (Array.isArray(payload.tasks) && payload.tasks.length === 0) {
+          // Unique id → its own ledger row. On the shared task-list key a
+          // terminal row would swallow every later write_todos update.
+          appendLifecycleStep(
+            chatId,
+            {
+              ...payload,
+              chat_id: chatId,
+              id: `${chatId}_checklist_cleared_${Date.now()}`,
+              content: "Checklist cleared",
+              status: "completed",
+            },
+            "task_list_updated",
+          );
+          return;
+        }
         appendLifecycleStep(chatId, { ...payload, chat_id: chatId }, "task_list_updated");
       });
 

@@ -43,7 +43,6 @@ export const DIRECT_PROVIDER_URLS: Record<string, string> = {
     qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     nine_router: 'http://localhost:20128/v1',
     opencode: 'https://opencode.ai/zen/v1',
-    aihubmix: 'https://aihubmix.com/v1',
 };
 
 import { ModelInfo, CustomProviderConfig } from '../../types/provider';
@@ -261,7 +260,6 @@ export interface ProviderSlice {
   xaiApiKey: string;
   kilocodeApiKey: string;
   nineRouterApiKey: string;
-  aihubmixApiKey: string;
   openaiBaseUrl: string;
   anthropicBaseUrl: string;
   googleBaseUrl: string;
@@ -275,7 +273,6 @@ export interface ProviderSlice {
   xaiBaseUrl: string;
   kilocodeBaseUrl: string;
   nvidiaBaseUrl: string;
-  aihubmixBaseUrl: string;
   mimoBaseUrl: string;
   nineRouterBaseUrl: string;
   opencodeBaseUrl: string;

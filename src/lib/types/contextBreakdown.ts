@@ -88,6 +88,16 @@ export interface ContextBreakdown {
   recallTokens: number | null;
   summaryTokens: number;
   conversationTokens: number;
+  /**
+   * Provider-reported prompt tokens from the most recent COMPLETED LLM
+   * call this run (OpenAI `prompt_tokens`, Anthropic `input_tokens`,
+   * Gemini `promptTokenCount`). `null` before the first call returns.
+   * This is the real billed input size, distinct from `totalTokens`
+   * (Zen's tokenizer estimate); surfaced side by side to show drift.
+   */
+  actualInputTokens: number | null;
+  /** Provider-reported completion tokens from the same call. */
+  actualOutputTokens: number | null;
   compactionEvent: CompactionEvent | null;
   sections: ContextSection[];
 }
@@ -108,6 +118,10 @@ export interface ContextSnapshot {
   /** Real model window when known; falls back to `contextWindow`. */
   modelContextWindow: number | null;
   utilization: number;
+  /** Provider-reported prompt/completion tokens from the most recent
+   *  completed LLM call; `null` before the first call returns. */
+  actualInputTokens: number | null;
+  actualOutputTokens: number | null;
   layerTotals: {
     systemPrompt: number;
     systemTools: number;

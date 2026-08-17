@@ -1,6 +1,6 @@
 //! Basic chat CRUD: create / get / list / get-messages / delete / bulk-delete.
 
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 use tracing::info;
 
 use crate::commands::pagination::{normalize_page, page_from_fetch, Page};
@@ -297,7 +297,11 @@ pub async fn get_messages_page(
 }
 
 #[tauri::command]
-pub async fn delete_chat(state: State<'_, AppState>, chat_id: String) -> ZenResult<()> {
+pub async fn delete_chat(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    chat_id: String,
+) -> ZenResult<()> {
     let db = state.db().await?;
     // 0. Cancel any in-flight stream for this chat so the runner stops
     //    writing to a session that is about to be destroyed.
@@ -329,7 +333,18 @@ pub async fn delete_chat(state: State<'_, AppState>, chat_id: String) -> ZenResu
     }
 
     // 1. Remove SQLite rows first (primary source of truth)
+    // 1a. Attachment rows: chat_id was added by ALTER TABLE, so SQLite has no
+    //     FK cascade for it — delete the documents rows explicitly, then GC the
+    //     blob directory under appdata.
+    let _ = queries::delete_documents_for_chat(&db, &chat_id).await;
     queries::delete_chat(&db, &chat_id).await?;
+    if let Ok(dir) = app.path().app_data_dir() {
+        if let Err(e) =
+            crate::services::attachment_store::delete_chat_attachments(&dir, &chat_id).await
+        {
+            tracing::warn!(chat_id = %chat_id, error = %e, "delete_chat: failed to remove attachment blobs");
+        }
+    }
     // 2. Best-effort: remove conversation vectors from LanceDB so deleted
     //    content cannot resurface via semantic recall.
     if let Ok(store) = state.conversation_store.get().await {
@@ -345,7 +360,11 @@ pub async fn delete_chat(state: State<'_, AppState>, chat_id: String) -> ZenResu
 }
 
 #[tauri::command]
-pub async fn bulk_delete_chats(state: State<'_, AppState>, chat_ids: Vec<String>) -> ZenResult<()> {
+pub async fn bulk_delete_chats(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    chat_ids: Vec<String>,
+) -> ZenResult<()> {
     let db = state.db().await?;
     // 0. Cancel any in-flight streams for these chats so runners stop
     //    writing to sessions that are about to be destroyed.
@@ -392,7 +411,19 @@ pub async fn bulk_delete_chats(state: State<'_, AppState>, chat_ids: Vec<String>
     }
 
     // 1. Remove SQLite rows first
+    for chat_id in &chat_ids {
+        let _ = queries::delete_documents_for_chat(&db, chat_id).await;
+    }
     queries::bulk_delete_chats(&db, &chat_ids).await?;
+    if let Ok(dir) = app.path().app_data_dir() {
+        for chat_id in &chat_ids {
+            if let Err(e) =
+                crate::services::attachment_store::delete_chat_attachments(&dir, chat_id).await
+            {
+                tracing::warn!(chat_id = %chat_id, error = %e, "bulk_delete_chats: failed to remove attachment blobs");
+            }
+        }
+    }
     // 2. Best-effort vector cleanup — same lifecycle as single delete
     if let Ok(store) = state.conversation_store.get().await {
         for chat_id in &chat_ids {

@@ -1,6 +1,9 @@
 pub mod checkpoint;
+pub mod compact;
 pub mod data_cleanup;
+pub mod attachment_store;
 pub mod document;
+pub mod goal;
 pub mod gtsm;
 pub mod hardware;
 pub mod logging;

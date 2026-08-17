@@ -447,6 +447,27 @@ export interface TaskComplexityAnalyzedEventPayload {
   };
 }
 
+export interface ThreadGoalEventPayload {
+  chatId?: string | null;
+  objective?: string;
+  status?: string;
+  turnsCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface GoalUpdatedEventPayload {
+  chat_id?: string | null;
+  /** null when the goal was cleared. */
+  goal?: ThreadGoalEventPayload | null;
+}
+
+export interface ContextCompactedEventPayload {
+  chatId?: string | null;
+  messagesSummarized?: number;
+  messagesKept?: number;
+}
+
 export interface AppEventPayloadMap {
   "tool:start": ToolStartEventPayload;
   "tool:complete": ToolCompleteEventPayload;
@@ -492,6 +513,8 @@ export interface AppEventPayloadMap {
   "task:failed": AgentActionEventPayload;
   "task:list_updated": TaskListUpdatedEventPayload;
   "task:complexity_analyzed": TaskComplexityAnalyzedEventPayload;
+  "goal:updated": GoalUpdatedEventPayload;
+  "context:compacted": ContextCompactedEventPayload;
 }
 
 export type AppEventName = keyof AppEventPayloadMap;

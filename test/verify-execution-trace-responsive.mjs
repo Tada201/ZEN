@@ -10,7 +10,7 @@ const rules = read("docs/architecture/frontend-rules.md");
 
 assert(row.includes('type="button"'), "execution disclosure must use a native keyboard button");
 assert(row.includes("aria-expanded={expanded}"), "execution disclosure must expose expanded state");
-assert(row.includes("aria-busy={status === \"running\"}"), "execution rows must expose running state");
+assert(row.includes("aria-busy={resolvedStatus === \"running\"}"), "execution rows must expose running state");
 assert(row.includes("resolvedAriaLabel"), "execution rows must provide a concise accessible label");
 assert(row.includes("Duration ${duration}"), "duration must remain available to assistive technology");
 assert(trace.includes("execution-trace min-w-0"), "trace boundary must allow flex shrink in narrow surfaces");

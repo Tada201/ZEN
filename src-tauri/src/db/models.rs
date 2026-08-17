@@ -119,6 +119,21 @@ pub struct Message {
     pub created_at: String,
 }
 
+// ─── Thread goal ───
+
+/// Persistent per-chat objective set through `/goal`. One row per chat;
+/// status is one of `active | paused | complete | blocked`.
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadGoal {
+    pub chat_id: String,
+    pub objective: String,
+    pub status: String,
+    pub turns_count: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 // ─── Artifact ───
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -153,6 +168,19 @@ pub struct Document {
     pub workspace: String,
     pub embedding_model: Option<String>,
     pub created_at: String,
+    /// Owning chat for a per-chat attachment; NULL for workspace-global docs.
+    #[serde(default)]
+    pub chat_id: Option<String>,
+    #[serde(default)]
+    pub token_estimate: Option<i64>,
+    #[serde(default)]
+    pub page_count: Option<i64>,
+    /// JSON array of sheet names for spreadsheets, else NULL.
+    #[serde(default)]
+    pub sheet_names: Option<String>,
+    /// SHA-256 of the stored blob (content-addressed store key).
+    #[serde(default)]
+    pub content_hash: Option<String>,
 }
 
 // ─── Settings ───
@@ -434,6 +462,10 @@ pub struct ProviderConfig {
     /// Extra headers for the provider
     #[serde(default)]
     pub headers: Option<std::collections::HashMap<String, String>>,
+    /// Wire protocol: "openai_chat" (default) | "anthropic_messages".
+    /// Only meaningful for custom providers; built-in arms ignore it.
+    #[serde(default)]
+    pub api_format: Option<String>,
 }
 // ─── Orchestration ───
 

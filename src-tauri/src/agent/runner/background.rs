@@ -44,6 +44,8 @@ impl Runner {
                     compaction_threshold,
                     compaction_token_threshold,
                     summarization_token_budget,
+                    force: false,
+                    instructions: None,
                 })
                 .await
                 {
@@ -187,11 +189,16 @@ impl Runner {
     }
 
     /// LLM-based summarization (used by compaction).
+    ///
+    /// `instructions` carries the optional focus text the user supplied with
+    /// a manual `/compact <instructions>`; when present it is appended to
+    /// the summary prompt as a clearly separated priority section.
     pub async fn summarize_messages(
         messages: &[ChatMessage],
         provider: &dyn LlmProvider,
         model: &str,
         max_tokens: usize,
+        instructions: Option<&str>,
     ) -> Result<String> {
         let mut text = String::new();
         for m in messages {
@@ -206,15 +213,23 @@ impl Runner {
             text.push_str(&format!("{}{} : {}\n", m.role, name_part, m.content));
         }
 
+        let mut prompt = format!(
+            "Please provide a concise, high-level summary of the following conversation history. \
+             Focus on the user's intent, the key questions asked, decisions made, and important details. \
+             Do not include details about specific file tools used unless crucial. \
+             Keep the summary brief and under 3-4 sentences.\n\nConversation:\n{}",
+            text
+        );
+        if let Some(focus) = instructions.map(str::trim).filter(|s| !s.is_empty()) {
+            prompt.push_str(&format!(
+                "\n\nThe user requested this compaction with the following focus instructions — prioritize preserving these aspects:\n{}",
+                focus
+            ));
+        }
+
         let prompt_message = ChatMessage {
             role: "user".to_string(),
-            content: format!(
-                "Please provide a concise, high-level summary of the following conversation history. \
-                 Focus on the user's intent, the key questions asked, decisions made, and important details. \
-                 Do not include details about specific file tools used unless crucial. \
-                 Keep the summary brief and under 3-4 sentences.\n\nConversation:\n{}",
-                text
-            ),
+            content: prompt,
             reasoning_details: None,
             images: None,
             tool_calls: None,
@@ -240,6 +255,40 @@ impl Runner {
 
         Ok(res.content)
     }
+
+    /// Manual (`/compact`) compaction entry point used by
+    /// `services::compact`. Runs the same machinery as the automatic
+    /// post-turn compaction but bypasses the threshold gate and threads
+    /// the user's optional focus instructions into the summary prompt.
+    /// The `config` bundle mirrors the values `trigger_background_compaction`
+    /// sources from the runner's run config.
+    ///
+    /// Returns `(messages_summarized, messages_kept)`; `(0, n)` means the
+    /// active window did not exceed the keep window and nothing was
+    /// summarized (the caller decides how to report that).
+    pub async fn compact_conversation_now(
+        app: AppHandle,
+        db: SqlitePool,
+        chat_id: String,
+        active_model: String,
+        config: super::config::RunConfig,
+        instructions: Option<String>,
+    ) -> Result<(usize, usize)> {
+        let outcome = perform_background_compaction(CompactionParams {
+            app,
+            db,
+            chat_id,
+            active_model,
+            summarization_model: config.summarization_model,
+            compaction_threshold: config.compaction_threshold,
+            compaction_token_threshold: config.compaction_token_threshold,
+            summarization_token_budget: config.summarization_token_budget,
+            force: true,
+            instructions,
+        })
+        .await?;
+        Ok((outcome.messages_summarized, outcome.messages_kept))
+    }
 }
 
 // ─── Async worker functions ────────────────────────────────────────────────────
@@ -254,9 +303,20 @@ struct CompactionParams {
     compaction_threshold: usize,
     compaction_token_threshold: usize,
     summarization_token_budget: usize,
+    /// Manual (`/compact`) path: compact even when under the thresholds.
+    force: bool,
+    /// Optional user focus instructions threaded into the summary prompt.
+    instructions: Option<String>,
 }
 
-async fn perform_background_compaction(params: CompactionParams) -> Result<()> {
+/// What one compaction pass actually did. `messages_summarized == 0` means
+/// the gate (or the keep window) skipped summarization entirely.
+struct CompactionOutcome {
+    messages_summarized: usize,
+    messages_kept: usize,
+}
+
+async fn perform_background_compaction(params: CompactionParams) -> Result<CompactionOutcome> {
     let CompactionParams {
         app,
         db,
@@ -266,6 +326,8 @@ async fn perform_background_compaction(params: CompactionParams) -> Result<()> {
         compaction_threshold,
         compaction_token_threshold,
         summarization_token_budget,
+        force,
+        instructions,
     } = params;
     let active_msgs = queries::get_active_messages(&db, &chat_id).await?;
 
@@ -286,12 +348,16 @@ async fn perform_background_compaction(params: CompactionParams) -> Result<()> {
 
     let current_tokens = estimate_conversation_tokens(&active_chat_msgs);
 
-    if active_msgs.len() > compaction_threshold || current_tokens > compaction_token_threshold {
+    if force
+        || active_msgs.len() > compaction_threshold
+        || current_tokens > compaction_token_threshold
+    {
         tracing::info!(
             chat_id = %chat_id,
             msg_count = %active_msgs.len(),
             tokens = %current_tokens,
-            "Compaction threshold exceeded. Starting summarization."
+            forced = force,
+            "Starting conversation summarization."
         );
 
         let keep_count = 10;
@@ -313,8 +379,17 @@ async fn perform_background_compaction(params: CompactionParams) -> Result<()> {
                 &*provider,
                 &sum_model,
                 summarization_token_budget,
+                instructions.as_deref(),
             )
             .await?;
+
+            // An empty completion (e.g. a model that emits only thinking
+            // tokens) must not stand in for the summarized history.
+            if summary.trim().is_empty() {
+                anyhow::bail!(
+                    "Summarization model returned an empty summary; aborting compaction"
+                );
+            }
 
             let message_count = to_summarize.len() as i32;
             let token_count = estimate_conversation_tokens(to_summarize) as i32;
@@ -336,10 +411,18 @@ async fn perform_background_compaction(params: CompactionParams) -> Result<()> {
                 compacted_count = %message_count,
                 "Marked {} messages as compacted by ID", message_count
             );
+
+            return Ok(CompactionOutcome {
+                messages_summarized: to_summarize.len(),
+                messages_kept: active_msgs.len() - to_summarize.len(),
+            });
         }
     }
 
-    Ok(())
+    Ok(CompactionOutcome {
+        messages_summarized: 0,
+        messages_kept: active_msgs.len(),
+    })
 }
 
 /// Embed new user messages and upsert their vectors into LanceDB.

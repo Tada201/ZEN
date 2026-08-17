@@ -5,7 +5,7 @@
 
 use serde_json::json;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
@@ -65,6 +65,7 @@ pub async fn send_message(
     system_prompt_mode: Option<String>,
     voice_display_context: Option<String>,
     model_context_window: Option<i64>,
+    message_kind: Option<String>,
 ) -> ZenResult<()> {
     info!(
         chat_id = %chat_id,
@@ -96,6 +97,51 @@ pub async fn send_message(
     }
 
     // 1. Add user message to DB
+    // Non-image attachments are registered into the chat's attachment store so
+    // the agent retrieves them ON DEMAND via list/read tools — their text is no
+    // longer stuffed into the prompt (wasteful). Images stay inline for the
+    // vision path. On registration success we strip the heavy base64/text from
+    // the persisted message row; on failure we keep them so nothing is lost.
+    let mut attachments = attachments;
+    if let Some(atts) = attachments.as_mut() {
+        if !atts.is_empty() {
+            match app.path().app_data_dir() {
+                Ok(dir) => {
+                    for att in atts.iter_mut() {
+                        if att.mime_type.starts_with("image/") {
+                            continue;
+                        }
+                        let Some(bytes) = decode_data_url(&att.data) else {
+                            tracing::warn!(name = %att.name, "Attachment data was not a decodable data URL; leaving inline");
+                            continue;
+                        };
+                        match state
+                            .documents
+                            .attach_to_chat(
+                                dir.clone(),
+                                chat_id.clone(),
+                                att.name.clone(),
+                                bytes,
+                            )
+                            .await
+                        {
+                            Ok(_) => {
+                                att.data = String::new();
+                                att.extracted_text = None;
+                            }
+                            Err(e) => {
+                                tracing::warn!(chat_id = %chat_id, name = %att.name, error = %e, "Failed to register chat attachment; keeping inline text fallback");
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "Could not resolve app data dir; attachments left inline");
+                }
+            }
+        }
+    }
+
     let attachments_json = attachments.as_ref().and_then(|atts| {
         match serde_json::to_string(atts) {
             Ok(json_str) => Some(json_str),
@@ -116,6 +162,7 @@ pub async fn send_message(
             model: model.as_deref(),
             is_complete: true,
             attachments: attachments_json.as_deref(),
+            kind: message_kind.as_deref(),
             ..Default::default()
         },
     )
@@ -263,15 +310,29 @@ pub async fn send_message(
                 if let Ok(atts) = serde_json::from_str::<Vec<crate::db::models::Attachment>>(att_str) {
                     for att in atts {
                         if att.mime_type.starts_with("image/") {
-                            final_images.push(att.data.clone());
-                        } else if let Some(ref text) = att.extracted_text {
-                            final_content.push_str(&format!("\n\n[Attachment: {}]\n{}", att.name, text));
+                            if !att.data.is_empty() {
+                                final_images.push(att.data.clone());
+                            }
                         } else {
-                            tracing::warn!(
-                                "Non-image attachment '{}' (mime: {}) ignored because extracted_text is missing.",
-                                att.name,
-                                att.mime_type
-                            );
+                            // Non-image attachments live in the chat attachment
+                            // store and are read on demand via the document
+                            // tools — do NOT inline their text into the prompt.
+                            // A short marker keeps the model aware they exist.
+                            // Legacy rows (pre-Phase-3) may still carry
+                            // extracted_text; fall back to inlining those so old
+                            // chats don't lose content.
+                            match att.extracted_text.as_deref() {
+                                Some(text) if !att.data.is_empty() => {
+                                    final_content
+                                        .push_str(&format!("\n\n[Attachment: {}]\n{}", att.name, text));
+                                }
+                                _ => {
+                                    final_content.push_str(&format!(
+                                        "\n\n[Attached file: {} — use list_documents / read_document_content to read it]",
+                                        att.name
+                                    ));
+                                }
+                            }
                         }
                     }
                 }
@@ -294,6 +355,15 @@ pub async fn send_message(
         })
         .collect();
 
+    // Thread goal: when `/goal` armed an objective for this chat, every turn
+    // carries the goal contract and gains the `update_goal` tool so the model
+    // can close the loop (complete with evidence / blocked) without the user.
+    let thread_goal = queries::get_thread_goal(&db, &chat_id)
+        .await
+        .ok()
+        .flatten()
+        .filter(|g| g.status == crate::services::goal::GOAL_STATUS_ACTIVE);
+
     // 5. Build Agent
     let mut tool_ids = vec![];
     if web_search.unwrap_or(false) {
@@ -301,6 +371,11 @@ pub async fn send_message(
     }
     if image_gen.unwrap_or(false) {
         tool_ids.push("generate_image".to_string());
+    }
+    if thread_goal.is_some() {
+        // The goal system block tells the model this tool exists; expose it
+        // only while a goal is actually armed so idle chats don't carry it.
+        tool_ids.push("update_goal".to_string());
     }
 
     if let Some(requested_tools) = tools {
@@ -365,6 +440,10 @@ Always use these specialized code blocks for visual scenarios:
     // cannot accidentally disable deterministic Markdown and timeline output.
     if !instructions.contains("## Deterministic Message and Timeline Contract") {
         instructions.push_str(DETERMINISTIC_MESSAGE_RENDERING_CONTRACT);
+    }
+
+    if let Some(ref goal) = thread_goal {
+        instructions.push_str(&crate::services::goal::goal_system_block(goal));
     }
 
     // Capability state is explicit for every turn, including custom
@@ -723,4 +802,36 @@ Always use these specialized code blocks for visual scenarios:
     });
 
     Ok(())
+}
+
+/// Decode a `data:<mime>;base64,<payload>` URL to raw bytes. Returns None for a
+/// non-data-URL or malformed base64 (caller then leaves the attachment inline).
+fn decode_data_url(data_url: &str) -> Option<Vec<u8>> {
+    use base64::Engine;
+    let comma = data_url.find(',')?;
+    let (header, payload) = data_url.split_at(comma);
+    if !header.starts_with("data:") || !header.contains(";base64") {
+        return None;
+    }
+    base64::engine::general_purpose::STANDARD
+        .decode(payload[1..].as_bytes())
+        .ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::decode_data_url;
+
+    #[test]
+    fn decodes_base64_data_url() {
+        // "hi" → aGk=
+        let bytes = decode_data_url("data:text/plain;base64,aGk=").unwrap();
+        assert_eq!(bytes, b"hi");
+    }
+
+    #[test]
+    fn rejects_non_data_url() {
+        assert!(decode_data_url("https://example.com/x.png").is_none());
+        assert!(decode_data_url("data:text/plain,plainnotbase64").is_none());
+    }
 }

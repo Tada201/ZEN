@@ -3,15 +3,13 @@
  * Verifier for the Codex-style context viewer feature.
  *
  * Pins the contract end-to-end:
- *   - Backend Rust types live in `src-tauri/src/agent/context_breakdown.rs`
+ *   - Backend Rust types live in `src-tauri/src/agent/runner/context_breakdown.rs`
  *     and `src-tauri/src/commands/context_viewer.rs`.
  *   - Frontend TS types mirror them in `src/lib/types/contextBreakdown.ts`.
  *   - The runner emits `context:breakdown` from `event_bus.rs`.
  *   - The Tauri/JS API wrapper covers it under `src/api/contextApi.ts`.
  *   - The Zustand store subscribes via `src/lib/stores/useContextStore.ts`.
- *   - The PremiumChatInput bottom bar shows a `ContextViewerBadge`.
- *   - The right-panel exposes a `context` tab that renders ContentViewerPanel.
- *   - The feature flag is registered in `frontendFeatures.ts`.
+ *   - The composer mounts a `ContextViewerBadge` (via `ContextTrigger`).
  *
  * Pattern: static source verifier. Mirrors the IPI envelope verifier
  * (`test/verify-ipi-tool-output-enclosure.mjs`) for style.
@@ -43,13 +41,12 @@ const fail = (name, detail) => {
 // ─── Files exist ─────────────────────────────────────────────────────
 
 const required = [
-  "src-tauri/src/agent/context_breakdown.rs",
+  "src-tauri/src/agent/runner/context_breakdown.rs",
   "src-tauri/src/commands/context_viewer.rs",
   "src/lib/types/contextBreakdown.ts",
   "src/api/contextApi.ts",
   "src/lib/stores/useContextStore.ts",
   "src/atlas/components/context/ContextViewerBadge.tsx",
-  "src/atlas/components/context/ContextViewerPanel.tsx",
 ];
 
 for (const rel of required) {
@@ -62,12 +59,19 @@ for (const rel of required) {
 
 // ─── Backend: context_breakdown.rs ───────────────────────────────────
 
-const breakdownSrc = read("src-tauri/src/agent/context_breakdown.rs");
+const breakdownSrc = read("src-tauri/src/agent/runner/context_breakdown.rs");
 
 const backendEnumMatches = [
   ["ContextBreakdownPayload", {
     label: "top-level payload",
-    required: ["chat_id", "iteration", "total_tokens", "context_window"],
+    required: [
+      "chat_id",
+      "iteration",
+      "total_tokens",
+      "context_window",
+      "actual_input_tokens",
+      "actual_output_tokens",
+    ],
   }],
   ["ContextSection", {
     label: "per-section record",
@@ -79,7 +83,7 @@ const backendEnumMatches = [
   }],
   ["SectionCategory", {
     label: "category enum",
-    required: ["Identity", "Configuration", "Tools", "Memory", "Conversation"],
+    required: ["Messages", "SystemTools", "McpTools", "Skills", "SystemPrompt", "MetaContext"],
   }],
   ["ContextSectionId", {
     label: "section id enum",
@@ -160,9 +164,16 @@ if (/AgentEvent::ContextBreakdown\(p\)[\s\S]+serde_json::to_value\(p\)/.test(eve
   fail("event_bus bridge_to_tauri serialises ContextBreakdown", "missing arm");
 }
 
-// ─── Backend: middleware.rs instrumentation ─────────────────────────
+// ─── Backend: middleware instrumentation ────────────────────────────
+// The middleware module was split into a directory; EnrichmentContext
+// and its section-log methods live in `core.rs`, while the per-section
+// instrumentation lives in `system_prompt.rs`. Concatenate both so the
+// contract checks below see the whole surface.
 
-const middlewareSrc = read("src-tauri/src/agent/middleware.rs");
+const middlewareSrc =
+  read("src-tauri/src/agent/middleware/core.rs") +
+  "\n" +
+  read("src-tauri/src/agent/middleware/system_prompt.rs");
 
 const instrumentationChecks = [
   ["section_log: Vec<ContextSectionEntry>", "section_log field on EnrichmentContext"],
@@ -274,6 +285,8 @@ const tsRequired = [
   "ContextSection",
   "CompactionEvent",
   "ContextSnapshot",
+  "actualInputTokens",
+  "actualOutputTokens",
 ];
 
 for (const name of tsRequired) {
@@ -312,14 +325,15 @@ const storeSrc = read("src/lib/stores/useContextStore.ts");
 // generics between, e.g. `create<State & Actions>(`. Patterns below
 // intentionally match both shapes to avoid false positives on refactors.
 const storeChecks = [
-  [(set) => /create\b[\s\S]*?\(set\) =>/, "Zustand create hook with set callback"],
+  [/create\b[\s\S]*?\(set\) =>/, "Zustand create hook with set callback"],
   ["apply: (payload)", "apply action accepts payload"],
   ["reset: (chatId)", "reset action exists"],
   ["latestIteration", "iteration dedupe field"],
 ];
 
 for (const [needle, name] of storeChecks) {
-  if (storeSrc.includes(needle)) {
+  const ok = needle instanceof RegExp ? needle.test(storeSrc) : storeSrc.includes(needle);
+  if (ok) {
     pass(`store: ${name}`);
   } else {
     fail(`store: ${name}`, `missing '${needle}'`);
@@ -327,9 +341,12 @@ for (const [needle, name] of storeChecks) {
 }
 
 // ─── Frontend: components ───────────────────────────────────────────
+// The context viewer collapsed into a single self-contained badge: the
+// badge now owns its composition popover directly (opened above the
+// circular gauge), so the former right-panel `ContextViewerPanel` and
+// its `right.context` tab were removed. The contract is now badge-only.
 
 const badgeSrc = read("src/atlas/components/context/ContextViewerBadge.tsx");
-const panelSrc = read("src/atlas/components/context/ContextViewerPanel.tsx");
 
 const badgeChecks = [
   ["ContextViewerBadge", "named export"],
@@ -337,6 +354,9 @@ const badgeChecks = [
   ["utilizationStatus", "uses status mapper"],
   ["data-testid=\"context-viewer-badge\"", "test id for e2e"],
   ["formatTokens", "uses token formatter"],
+  ["compactionEvent", "renders compaction event in the popover"],
+  ["actualInput", "surfaces provider-reported actual input tokens"],
+  ["actualOutput", "surfaces provider-reported actual output tokens"],
 ];
 for (const [needle, name] of badgeChecks) {
   if (badgeSrc.includes(needle)) {
@@ -346,42 +366,24 @@ for (const [needle, name] of badgeChecks) {
   }
 }
 
-const panelChecks = [
-  ["ContextViewerPanel", "named export"],
-  ["Technical details", "disclosure label per chat-timeline rules"],
-  ["compactionEvent", "renders compaction event"],
-  ["CompactionNotice", "compaction card subcomponent"],
-  ["utilizationStatus", "uses status mapper"],
-];
-for (const [needle, name] of panelChecks) {
-  if (panelSrc.includes(needle)) {
-    pass(`panel: ${name}`);
-  } else {
-    fail(`panel: ${name}`, `missing '${needle}'`);
-  }
-}
+// ─── Integration: PremiumChatInput mounts the badge ─────────────────
+// The badge is mounted through the `ContextTrigger` wrapper so the
+// composer file stays under its line-count limit; accept either the
+// direct import or the wrapper.
 
-// ─── Integration: PremiumChatInput + RightPanel + frontendFeatures ─
-
-const premiumInputSrc = read("src/atlas/components/PremiumChatInput.tsx");
-if (premiumInputSrc.includes("ContextViewerBadge")) {
-  pass("PremiumChatInput mounts ContextViewerBadge");
+const inputFooterSources = [
+  "src/atlas/components/PremiumChatInput.tsx",
+  "src/atlas/components/ContextTrigger.tsx",
+]
+  .map((rel) => (existsSync(resolve(root, rel)) ? read(rel) : ""))
+  .join("\n");
+if (
+  inputFooterSources.includes("ContextViewerBadge") ||
+  inputFooterSources.includes("ContextTrigger")
+) {
+  pass("composer mounts the ContextViewerBadge (direct or via ContextTrigger)");
 } else {
-  fail("PremiumChatInput mounts ContextViewerBadge", "missing");
-}
-
-const rightPanelSrc = read("src/atlas/components/RightPanel.tsx");
-if (rightPanelSrc.includes("ContextViewerPanel") || /context['"]?\s*:/.test(rightPanelSrc)) {
-  pass("RightPanel wires 'context' tab to ContextViewerPanel");
-} else {
-  fail("RightPanel wires 'context' tab", "missing ContextViewerPanel reference or 'context' case");
-}
-
-const featuresSrc = read("src/lib/features/frontendFeatures.ts");
-if (/right\.context[\s\S]{0,400}rightPanelTabId:\s*"context"/.test(featuresSrc)) {
-  pass("frontendFeatures registers the right.context feature with tabId 'context'");
-} else {
-  fail("frontendFeatures registers right.context", "expected rightPanelTabId: \"context\"");
+  fail("composer mounts the ContextViewerBadge", "missing");
 }
 
 // ─── Summary ────────────────────────────────────────────────────────

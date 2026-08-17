@@ -16,11 +16,18 @@ pub struct ChatExport {
 
 #[tauri::command]
 pub async fn bulk_archive_chats(
+    app: AppHandle,
     state: State<'_, AppState>,
     chat_ids: Vec<String>,
 ) -> ZenResult<()> {
     let db = state.db().await?;
-    queries::bulk_archive_chats(&db, &chat_ids).await
+    queries::bulk_archive_chats(&db, &chat_ids).await?;
+    // Archived chats have no visible goal controls; pause goals so they stop
+    // auto-continuing (mirrors single-chat archive_chat).
+    for chat_id in &chat_ids {
+        let _ = crate::services::goal::update_status(&app, &db, chat_id, "paused").await;
+    }
+    Ok(())
 }
 
 #[tauri::command]

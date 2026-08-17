@@ -6,6 +6,7 @@ pub mod embedding;
 pub mod hybrid_backend;
 pub mod ingestion;
 pub mod lancedb_store;
+pub mod office_extract;
 pub mod session_memory;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

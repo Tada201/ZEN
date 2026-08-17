@@ -14,6 +14,8 @@ pub mod execution_trace;
 pub use execution_trace::*;
 pub mod graphs;
 pub use graphs::*;
+pub mod goals;
+pub use goals::*;
 pub mod gtsm;
 pub use gtsm::*;
 pub mod message;

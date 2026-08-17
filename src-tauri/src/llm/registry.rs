@@ -82,6 +82,11 @@ impl ProviderRegistry {
             .get(&format!("{}_headers", p_type))
             .await?
             .and_then(|value| serde_json::from_str::<HashMap<String, String>>(&value).ok());
+        let api_format = self
+            .settings
+            .get(&format!("{}_api_format", p_type))
+            .await?
+            .filter(|value| !value.is_empty());
 
         Ok(ProviderConfig {
             provider_type: p_type,
@@ -89,6 +94,7 @@ impl ProviderRegistry {
             api_key,
             display_name: provider_name.to_string(),
             headers,
+            api_format,
         })
     }
 

@@ -1,13 +1,18 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
-import type { McpScope, McpServerEntry, McpTransport } from '@/api';
+import { mcpApi, type McpScope, type McpServerEntry, type McpTransport } from '@/api';
+import { McpSecretFields, secretKeysIn } from './McpSecretFields';
 
 export interface McpFormSubmit {
   scope: McpScope;
   name: string;
   /** Raw entry object persisted under `mcpServers[name]`. */
   config: Record<string, unknown>;
+  /** Credential values to store in the OS keyring before the config upsert so
+   *  `${secret:key}` references in `config` resolve at connect time. Values
+   *  never enter `.mcp.json`. */
+  secrets: Array<{ key: string; value: string }>;
 }
 
 interface Props {
@@ -19,6 +24,7 @@ interface Props {
 }
 
 type Mode = 'form' | 'json';
+
 
 /** Parse a space-separated args string, respecting simple double quotes so
  *  `--flag "a b"` yields two args. Empty tokens are dropped. */
@@ -111,6 +117,14 @@ export const McpServerForm = memo(({ editing, busy, onSubmit, onCancel }: Props)
   }, [editing]);
   const [envJson, setEnvJson] = useState(initialEnvJson);
 
+  // Write-only credential editor. Keys are the `${secret:KEY}` references
+  // found in the active config text; values are what the user types to store
+  // in the OS keyring. `storedKeys` tracks which keys already hold a value so
+  // an edit can leave them blank ("keep existing") instead of clobbering.
+  const [secretValues, setSecretValues] = useState<Record<string, string>>({});
+  const [storedKeys, setStoredKeys] = useState<Set<string>>(new Set());
+
+
   // JSON mode: a single textarea holding either `{"name":{...}}` or
   // `{"mcpServers":{"name":{...}}}`. On edit, prefill with the row's
   // actual saved config so the user edits real values, not a blank box.
@@ -118,6 +132,41 @@ export const McpServerForm = memo(({ editing, busy, onSubmit, onCancel }: Props)
     editing ? JSON.stringify({ [editing.name]: entryToConfig(editing) }, null, 2) : '',
   );
   const [error, setError] = useState<string | null>(null);
+
+  // Secret references in whichever config surface is active drive the editor.
+  const referencedSecretKeys = useMemo(
+    () => secretKeysIn(mode === 'json' ? jsonText : envJson),
+    [mode, jsonText, envJson],
+  );
+
+  // Ask the backend which referenced keys already hold a keyring value so the
+  // editor can mark them "stored" and treat a blank input as "keep existing".
+  useEffect(() => {
+    if (referencedSecretKeys.length === 0) {
+      setStoredKeys(new Set());
+      return;
+    }
+    let cancelled = false;
+    mcpApi
+      .secretStatus(referencedSecretKeys)
+      .then((present) => {
+        if (!cancelled) setStoredKeys(new Set(present));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [referencedSecretKeys]);
+
+  /** Collect non-empty secret inputs for keys still referenced by the config.
+   *  A blank value for an already-stored key is skipped (keep existing); a
+   *  blank value for an unstored key is skipped too (the reference stays
+   *  literal until the user provides it). */
+  const collectSecrets = (): McpFormSubmit['secrets'] =>
+    referencedSecretKeys
+      .map((key) => ({ key, value: (secretValues[key] ?? '').trim() }))
+      .filter((s) => s.value.length > 0);
+
 
   const submitForm = async () => {
     const trimmedName = name.trim();
@@ -161,7 +210,7 @@ export const McpServerForm = memo(({ editing, busy, onSubmit, onCancel }: Props)
     setError(null);
     try {
       const config = buildEntry({ transport, url, command, args, envJson, timeoutMs });
-      await onSubmit({ scope, name: trimmedName, config });
+      await onSubmit({ scope, name: trimmedName, config, secrets: collectSecrets() });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -202,7 +251,7 @@ export const McpServerForm = memo(({ editing, busy, onSubmit, onCancel }: Props)
     const targetName = isEdit ? editing!.name : entryName;
     setError(null);
     try {
-      await onSubmit({ scope, name: targetName, config: entry as Record<string, unknown> });
+      await onSubmit({ scope, name: targetName, config: entry as Record<string, unknown>, secrets: collectSecrets() });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -342,6 +391,11 @@ export const McpServerForm = memo(({ editing, busy, onSubmit, onCancel }: Props)
             />
             {transport === 'http' ? 'Headers' : 'Environment variables'} (JSON, ${'{env:VAR}'} / ${'{secret:KEY}'} supported)
           </button>
+          <p className="text-[9px] text-muted-foreground/60 leading-snug">
+            Reference a secret with{' '}
+            <span className="font-mono">{'${secret:KEY}'}</span> here, then set its
+            value below — it is stored in the OS keyring, not in config.
+          </p>
           {envOpen && (
             <textarea
               value={envJson}
@@ -353,6 +407,15 @@ export const McpServerForm = memo(({ editing, busy, onSubmit, onCancel }: Props)
           )}
         </div>
       )}
+
+      <McpSecretFields
+        keys={referencedSecretKeys}
+        stored={storedKeys}
+        values={secretValues}
+        onChange={(key, value) =>
+          setSecretValues((prev) => ({ ...prev, [key]: value }))
+        }
+      />
 
       {error && (
         <p className="text-[10px] text-red-600 dark:text-red-400 font-mono">{error}</p>

@@ -4,7 +4,6 @@ import { strict as assert } from "node:assert";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const fixture = read("src/atlas/components/chat/PremiumChatInputFixture.tsx");
-const plan = read("Plan_agentic-workbench-completion.md");
 const qa = read("docs/architecture/premium-chat-input-visual-qa.md");
 const packageJson = JSON.parse(read("package.json"));
 
@@ -25,9 +24,9 @@ for (const interaction of ["Show slash commands", "Open model picker", "Open add
 }
 assert(fixture.includes("No backend calls") && fixture.includes("DataTransfer"), "fixture must remain deterministic and local-only");
 
-for (const section of ["Phase 14 — Premium Chat Input hardening and final visual QA", "composer task/capability/geometry risks", "Manual browser visual evidence"]) {
-  assert(plan.includes(section), `consolidated plan must retain ${section}`);
-}
+// The retired Plan_agentic-workbench-completion.md table-of-contents checks
+// were dropped with the plan doc: planning artifacts are not product
+// contracts. The QA matrix below remains the shipped contract.
 assert(qa.includes("Phase 7 rollout checklist"), "visual QA documentation must retain the rollout checklist");
 for (const criterion of ["320px", "1440px", "light", "dark", "focus return", "IME", "reduced motion", "no horizontal overflow"]) {
   assert(qa.toLowerCase().includes(criterion.toLowerCase()), `visual QA matrix must define ${criterion}`);

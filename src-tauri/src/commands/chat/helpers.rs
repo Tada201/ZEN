@@ -131,7 +131,6 @@ pub(crate) fn default_yolo_tool_ids() -> Vec<String> {
         "edit_file",
         "run_command",
         "write_todos",
-        "system_metrics",
         "get_system_metrics",
         "spawn_agent",
         "generate_image",

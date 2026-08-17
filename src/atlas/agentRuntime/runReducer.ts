@@ -38,8 +38,18 @@ export function reduceAgentRun(record: AgentTurnRecord | undefined, event: Agent
       }
     : emptyAgentTurn(event.runId, event.chatId, event.messageId);
 
-  if (next.runId !== event.runId || next.chatId !== event.chatId || isTerminalRunStatus(next.status)) {
-    return next;
+  if (next.runId !== event.runId || next.chatId !== event.chatId) return next;
+
+  const lateDelta = event.kind === "text-delta" || event.kind === "reasoning-delta";
+  let reopened = false;
+  if (isTerminalRunStatus(next.status)) {
+    // Tauri event names are unordered, so a trailing `chat:chunk` can land
+    // after `chat:done` already drained the run to "completed". Re-open the
+    // drain so the tail is appended and revealed instead of silently dropped
+    // (the freeze that only a reload fixed). Failed/cancelled stay terminal.
+    if (!(lateDelta && next.status === "completed")) return next;
+    next.status = "draining";
+    reopened = true;
   }
 
   const sequence = event.sequence ?? next.nextSequence;
@@ -51,7 +61,10 @@ export function reduceAgentRun(record: AgentTurnRecord | undefined, event: Agent
     case "reasoning-delta": {
       const part = getOrCreatePart(next, event);
       part.receivedText += event.delta;
-      next.status = "running";
+      // After a re-opened drain, keep "draining" so the reveal loop can
+      // re-complete once the appended tail is shown; a normal streaming delta
+      // stays "running".
+      next.status = reopened ? "draining" : "running";
       return next;
     }
     case "run-finish": {
@@ -59,8 +72,14 @@ export function reduceAgentRun(record: AgentTurnRecord | undefined, event: Agent
       next.finishReason = event.finishReason;
       if (event.content !== undefined) {
         const textPart = next.parts.find((part) => part.type === "text");
-        if (textPart) textPart.receivedText = event.content;
-        else {
+        // Never shrink: a partial/missing `content` tail must not truncate
+        // text already streamed via deltas. Canonical content wins only when
+        // it is at least as long as what we accumulated.
+        if (textPart) {
+          if (event.content.length >= textPart.receivedText.length) {
+            textPart.receivedText = event.content;
+          }
+        } else {
           next.parts.push({
             type: "text",
             partId: partIdentity(next.runId, next.chatId, next.messageId, undefined, "text"),
@@ -78,11 +97,13 @@ export function reduceAgentRun(record: AgentTurnRecord | undefined, event: Agent
     case "run-error":
       next.status = "failed";
       next.error = event.error;
-      next.parts.forEach((part) => { part.state = "done"; });
+      // Terminal status stops the reveal loop, so surface every received
+      // character now; otherwise the last burst stays hidden until reload.
+      next.parts.forEach((part) => { part.visibleText = part.receivedText; part.state = "done"; });
       return next;
     case "run-cancel":
       next.status = "cancelled";
-      next.parts.forEach((part) => { part.state = "done"; });
+      next.parts.forEach((part) => { part.visibleText = part.receivedText; part.state = "done"; });
       return next;
   }
 }

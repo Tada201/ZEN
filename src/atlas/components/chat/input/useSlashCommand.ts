@@ -42,7 +42,10 @@ function extractQuery(text: string): string {
  * slash context, otherwise returns an inactive state. Pure React + React Query
  * would be heavier; raw `useState` + `useEffect` keeps it cheap.
  */
-export function useSlashCommand(message: string): SlashCommandState {
+export function useSlashCommand(
+  message: string,
+  workspaceRoot?: string | null,
+): SlashCommandState {
   const isActive = useMemo(() => isSlashContext(message), [message]);
   const query = useMemo(() => (isActive ? extractQuery(message) : ""), [message, isActive]);
   const [suggestions, setSuggestions] = useState<SlashSuggestion[]>([]);
@@ -54,7 +57,7 @@ export function useSlashCommand(message: string): SlashCommandState {
     }
     let cancelled = false;
     const t = setTimeout(() => {
-      void skillsApi.suggestSlash(query).then((res) => {
+      void skillsApi.suggestSlash(query, workspaceRoot ?? null).then((res) => {
         if (cancelled) return;
         setSuggestions(toSuggestions(res));
       });
@@ -63,7 +66,7 @@ export function useSlashCommand(message: string): SlashCommandState {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [query, isActive]);
+  }, [query, isActive, workspaceRoot]);
 
   if (!isActive) return EMPTY;
   return { isActive: true, query, suggestions };

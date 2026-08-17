@@ -23,7 +23,7 @@ export const LatencyWidget = memo(function LatencyWidget({ context }: { context:
         <div className={`widget-status-card flex flex-col gap-1 ${cls}`}>
             <span className="widget-status-card__value">{label}</span>
             <div className="h-6 w-full opacity-60">
-                <Sparkline data={history} color={cls.includes('good') ? '#10b981' : cls.includes('warn') ? '#f59e0b' : '#ef4444'} height={24} maxValue={2000} />
+                <Sparkline data={history} color={cls.includes('good') ? 'hsl(var(--success))' : cls.includes('warn') ? 'hsl(var(--warning))' : 'hsl(var(--destructive))'} height={24} maxValue={2000} />
             </div>
         </div>
     );

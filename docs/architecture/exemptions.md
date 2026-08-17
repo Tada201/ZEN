@@ -138,6 +138,13 @@ Reason: Canonical event routing hook coordinates stream, tool, agent, and persis
 Split or Fix Plan: Extract event-family handlers behind the existing hook facade.
 Expires: Next frontend refactor
 
+File: src/atlas/hooks/stream/useChatChunkEvent.ts
+Owner: frontend/chat
+Rule Exempted: TS/TSX hard file-size limit
+Reason: Chunk/done/error stream listener owns first-chunk buffering, runtime-bridge draining, and deep-research handoff finalization in one boundary.
+Split or Fix Plan: Extract the done/error finalization and deep-research handoff branches behind the existing hook facade.
+Expires: Next frontend refactor
+
 File: src/atlas/sections/WorkspaceSection.tsx
 Owner: frontend/workbench
 Rule Exempted: TS/TSX hard file-size limit
@@ -215,3 +222,10 @@ Rule Exempted: Rust warning file-size limit
 Reason: Full MCP 2025-06-18 type definitions (JSON-RPC 2.0, resources, prompts, tools, logging, sampling, completion, roots).
 Split or Fix Plan: Split into types/ sub-module by domain (lifecycle, tools, resources, prompts, logging).
 Expires: Next refactoring cycle
+
+File: src-tauri/src/agent/tools/fs_tools.rs
+Owner: backend/agent-tools
+Rule Exempted: Rust warning file-size limit
+Reason: Agent filesystem tool suite grew range-windowed document reads (offset/limit continuation markers) on top of read/write/edit/list.
+Split or Fix Plan: Move ReadDocumentTool and its windowing helpers into an fs_tools/documents sub-module mirroring the ToolManager variant.
+Expires: Next agent-tools refactor

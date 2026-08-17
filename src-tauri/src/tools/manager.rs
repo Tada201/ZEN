@@ -822,6 +822,25 @@ mod tests {
         ToolManager::new(v1, v2)
     }
 
+    #[test]
+    fn system_metrics_has_one_canonical_v2_registration() {
+        let registry = crate::tools::init_tool_registry(ToolPermissions::default());
+
+        assert!(registry.is_direct_tool("get_system_metrics"));
+        assert!(!registry.is_direct_tool("system_metrics"));
+        assert!(registry
+            .executable_tool_names()
+            .contains("get_system_metrics"));
+        assert!(!registry.executable_tool_names().contains("system_metrics"));
+
+        let definition = registry
+            .list_definitions()
+            .into_iter()
+            .find(|definition| definition.name == "get_system_metrics")
+            .expect("canonical system metrics definition should be registered");
+        assert_eq!(definition.parameters["type"], "object");
+    }
+
     #[tokio::test]
     async fn tool_list_includes_lazy_progressive_metadata() {
         let manager = manager_for_tests();

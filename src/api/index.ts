@@ -39,6 +39,8 @@ export type {
   SearchResult,
   SendMessageRequest,
 } from "./chatApi";
+export { goalApi } from "./goalApi";
+export type { BackendThreadGoal, ThreadGoalStatus } from "./goalApi";
 export { artifactsApi } from "./artifactsApi";
 export type { BackendArtifact } from "./artifactsApi";
 export { documentsApi } from "./documentsApi";

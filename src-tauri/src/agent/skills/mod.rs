@@ -20,7 +20,9 @@ pub use discovery::{
 };
 pub use fragment::{ContextualFragment, FragmentRole, SkillInstructionsFragment, SkillsCatalogFragment};
 pub use injection::{extract_skill_mentions, SkillMention, MENTION_SIGIL};
-pub use manager::{ConfigSkillsCacheKey, SharedSkillsManager, SkillsManager};
+pub use manager::{
+    cwd_for_chat, ConfigSkillsCacheKey, SharedSkillsManager, SkillsManager, SKILLS_CACHE_TTL,
+};
 pub use render::{
     default_skill_metadata_budget, render_available_skills, SkillMetadataBudget, SkillRenderOutcome,
 };

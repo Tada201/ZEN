@@ -12,6 +12,16 @@ import type {
 // event name `context:breakdown`.
 export const CONTEXT_BREAKDOWN_EVENT = "context:breakdown";
 
+// Backend → frontend bridge: `services::compact` emits this after a manual
+// `/compact` finishes, with `{ chatId, messagesSummarized, messagesKept }`.
+export const CONTEXT_COMPACTED_EVENT = "context:compacted";
+
+/** Result of a manual `/compact`. Mirrors the backend `CompactOutcome`. */
+export interface CompactOutcome {
+  messagesSummarized: number;
+  messagesKept: number;
+}
+
 export const contextApi = {
   /**
    * Per-iteration breakdown subscription. Fires once per emitted
@@ -46,6 +56,22 @@ export const contextApi = {
     return callCommand<ContextSnapshot>("get_context_snapshot", {
       chatId,
       contextWindow,
+    });
+  },
+
+  /**
+   * Manual `/compact`: summarize the chat's active history into a
+   * persisted summary immediately and mark the covered messages
+   * compacted. No message is sent to the model. Optional free-text
+   * instructions focus the summary.
+   */
+  compactChatContext(
+    chatId: string,
+    instructions?: string,
+  ): Promise<CompactOutcome> {
+    return callCommand<CompactOutcome>("compact_chat_context", {
+      chatId,
+      instructions,
     });
   },
 };

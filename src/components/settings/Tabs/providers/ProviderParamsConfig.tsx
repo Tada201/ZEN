@@ -105,8 +105,15 @@ export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string
     const [showAdvanced, setShowAdvanced] = useState(false);
 
     const supportedParams = useMemo(() => {
-        const keys = (PROVIDER_CAPABILITY_PROFILES[providerKey] || DEFAULT_PROVIDER_CAPABILITY_PROFILE).parameters;
-        return keys.map(k => COMMON_PARAMS[k]).filter(Boolean);
+        let profile = PROVIDER_CAPABILITY_PROFILES[providerKey];
+        if (!profile) {
+            // Custom providers key by `custom-*` id; derive from their wire protocol.
+            const custom = useSettingsStore.getState().customProviders.find(p => p.id === providerKey);
+            profile = custom?.apiFormat === 'anthropic_messages'
+                ? PROVIDER_CAPABILITY_PROFILES.anthropic
+                : DEFAULT_PROVIDER_CAPABILITY_PROFILE;
+        }
+        return profile.parameters.map(k => COMMON_PARAMS[k]).filter(Boolean);
     }, [providerKey]);
 
     const handleParamChange = (id: string, value: number) => {

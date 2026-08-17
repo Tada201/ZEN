@@ -66,8 +66,15 @@ impl IngestionEngine {
             "txt" | "md" | "csv" | "json" | "rs" | "js" | "ts" | "py" | "html" | "css" => {
                 self.extract_plaintext(path).await
             }
-            "doc" | "docx" | "ppt" | "pptx" | "xls" | "xlsx" | "rtf" | "odt" | "ods" | "odp"
-            | "epub" | "xml" | "yaml" | "yml" | "toml" => self.extract_with_markitdown(path).await,
+            // Spreadsheets: native calamine (pure Rust, MSI-safe).
+            "xls" | "xlsx" | "xlsb" | "ods" => self.extract_spreadsheet(path).await,
+            // Word/PowerPoint OOXML: native zip + quick-xml.
+            "docx" | "pptx" => self.extract_ooxml(path).await,
+            // Legacy binary / other office formats have no native reader yet —
+            // fall back to markitdown only if the optional binary is present.
+            "doc" | "ppt" | "rtf" | "odt" | "odp" | "epub" | "xml" | "yaml" | "yml" | "toml" => {
+                self.extract_with_markitdown(path).await
+            }
             "png" | "jpg" | "jpeg" | "webp" | "tif" | "tiff" | "bmp" => {
                 self.extract_image_ocr(path).await
             }
@@ -82,6 +89,33 @@ impl IngestionEngine {
         Ok(ExtractedText {
             text,
             extractor: "plaintext",
+        })
+    }
+
+    /// Native spreadsheet extraction via calamine (sync → spawn_blocking).
+    async fn extract_spreadsheet(&self, path: &Path) -> Result<ExtractedText> {
+        let path_buf = path.to_path_buf();
+        let (text, _sheets) = tokio::task::spawn_blocking(move || {
+            crate::rag::office_extract::extract_spreadsheet(&path_buf)
+        })
+        .await
+        .context("spreadsheet extraction task failed")??;
+        Ok(ExtractedText {
+            text,
+            extractor: "calamine",
+        })
+    }
+
+    /// Native docx/pptx extraction via zip + quick-xml (sync → spawn_blocking).
+    async fn extract_ooxml(&self, path: &Path) -> Result<ExtractedText> {
+        let path_buf = path.to_path_buf();
+        let text =
+            tokio::task::spawn_blocking(move || crate::rag::office_extract::extract_ooxml(&path_buf))
+                .await
+                .context("OOXML extraction task failed")??;
+        Ok(ExtractedText {
+            text,
+            extractor: "ooxml",
         })
     }
 

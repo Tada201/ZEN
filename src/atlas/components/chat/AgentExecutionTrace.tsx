@@ -12,6 +12,7 @@ import type { ExecutionStatus } from "./tool/ExecutionRow";
 import { classifyToolCategory, type ToolCategory } from "./tool/toolCategory";
 import { formatDuration } from "./tool/formatDuration";
 import { toToolInputRecord } from "./tool/toToolInputRecord";
+import { getToolCallIdentity } from "./tool/toolCallIdentity";
 import {
   createDisclosureState,
   toggleDisclosure,
@@ -196,6 +197,12 @@ export function AgentExecutionTrace({
     return map;
   }, [executionSteps]);
 
+  // Previews are keyed by the backend toolCallId; only a tool carrying that id
+  // can resolve one. Falling back to the render-time identity would let two
+  // id-less rows sharing a name+startTime read the same preview.
+  const previewFor = (tc: (typeof normalizedToolCalls)[number]): string | undefined =>
+    tc.id ? streamingPreviews.get(tc.id) || undefined : undefined;
+
   const groupStatus = useMemo(() => getGroupStatus(normalizedToolCalls), [normalizedToolCalls]);
   const disclosureStateRef = useRef(createDisclosureState(groupStatus, shouldDefaultOpen));
   const [isExpanded, setIsExpanded] = useState(disclosureStateRef.current.open);
@@ -318,9 +325,9 @@ export function AgentExecutionTrace({
       <div className="execution-tool-rail relative pl-4 before:absolute before:left-[5px] before:top-1 before:h-[calc(100%-8px)] before:w-px before:bg-border flex flex-col gap-1.5">
         {normalizedToolCalls.map((tc, idx) => (
           <div
-            key={tc.id || tc.runId || idx}
+            key={getToolCallIdentity(tc, idx)}
           >
-            <ToolTraceRow toolCall={tc} sessionId={sessionId} messageId={messageId} onOpenArtifact={onOpenArtifact} streamingPreview={streamingPreviews.get(tc.id) || undefined} />
+            <ToolTraceRow toolCall={tc} sessionId={sessionId} messageId={messageId} onOpenArtifact={onOpenArtifact} streamingPreview={previewFor(tc)} />
           </div>
         ))}
       </div>
@@ -403,9 +410,9 @@ export function AgentExecutionTrace({
           <div className="execution-tool-rail relative pl-4 before:absolute before:left-[5px] before:top-1 before:h-[calc(100%-8px)] before:w-px before:bg-border flex flex-col gap-1.5">
             {normalizedToolCalls.map((tc, idx) => (
               <div
-                key={tc.id || tc.runId || idx}
+                key={getToolCallIdentity(tc, idx)}
               >
-                <ToolTraceRow toolCall={tc} sessionId={sessionId} messageId={messageId} onOpenArtifact={onOpenArtifact} streamingPreview={streamingPreviews.get(tc.id) || undefined} />
+                <ToolTraceRow toolCall={tc} sessionId={sessionId} messageId={messageId} onOpenArtifact={onOpenArtifact} streamingPreview={previewFor(tc)} />
               </div>
             ))}
       </div>

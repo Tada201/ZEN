@@ -1,16 +1,18 @@
 import { useState, useEffect, useMemo, memo, useCallback, useId } from "react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils/style";
 import { IS_TAURI } from "@/api";
 
 import { ActionPills } from "./chat/input/ActionPills";
 import { ImagePresetStrip } from "./chat/input/ImagePresetStrip";
 import { ModelSearchDropdown } from "./chat/input/ModelSearchDropdown";
-import { TaskDrawer } from "./chat/input/TaskDrawer";
 import { SuggestedPromptStrip } from "./chat/input/SuggestedPromptStrip";
 import { SlashCommandPopover } from "./chat/input/SlashCommandPopover";
 import { useSlashCommand } from "./chat/input/useSlashCommand";
 import type { ComposerLayoutMode, PremiumChatInputProps } from "./chat/input/PremiumChatInputTypes";
 import { fileToAttachment } from "./chat/input/fileAttachments";
+import { useComposerDrop } from "./chat/input/useComposerDrop";
+import type { FileRejection } from "./chat/input/attachmentValidation";
 import { useRenderLogger } from "@/hooks/useRenderLogger";
 
 import { useAttachments } from "./AttachmentPills";
@@ -24,8 +26,10 @@ import { useGenUISync } from "./useGenUISync";
 import { usePinnedActions } from "./usePinnedActions";
 import { useSlashApply } from "./useSlashApply";
 import { useReasoningCapabilities } from "./useReasoningCapabilities";
-import { useChatTaskDrawer } from "./useChatTaskDrawer";
 import { usePromptStashStore } from "@/lib/stores/usePromptStashStore";
+import { usePromptQueueStore, type QueuedPrompt } from "@/lib/stores/promptQueueStore";
+import { GoalBanner } from "./chat/input/GoalBanner";
+import { QueuedPromptsStrip } from "./chat/input/QueuedPromptsStrip";
 import { ChatInputTextAreaBlock } from "./ChatInputTextAreaBlock";
 import type { ChatInputTextAreaBlockProps } from "./ChatInputTextAreaBlock";
 import { ChatInputFooter } from "./ChatInputFooter";
@@ -67,6 +71,7 @@ export const PremiumChatInput = memo(
     onOpenModelSelector,
     onOpenSkills,
     activeChatId,
+    workspaceRoot,
     readOnly = false,
     input: externalInput,
     onInputChange,
@@ -118,14 +123,9 @@ export const PremiumChatInput = memo(
     }, []);
     const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
     const [pinnedActions, togglePin] = usePinnedActions();
-    const {
-      visibleTasks,
-      isOpen: isTaskDrawerOpen,
-      setIsOpen: setIsTaskDrawerOpen,
-    } = useChatTaskDrawer(activeChatId);
 
     // ── Slash command popover state ──
-    const slash = useSlashCommand(message);
+    const slash = useSlashCommand(message, workspaceRoot);
     const slashIsPopoverOpen = slash.isActive
       && slash.suggestions.length > 0
       && !isPlusMenuOpen
@@ -145,19 +145,35 @@ export const PremiumChatInput = memo(
     const handleStash = useCallback(() => {
       void stashDraft(message, selectedFiles);
     }, [stashDraft, message, selectedFiles]);
+    const handleRejections = useCallback((rejected: FileRejection[]) => {
+      if (rejected.length === 0) return;
+      // Collapse to one toast; list the first few names so the user knows which.
+      const shown = rejected.slice(0, 3)
+        .map((r) => `${r.name} (${r.reason})`)
+        .join(", ");
+      const more = rejected.length > 3 ? ` +${rejected.length - 3} more` : "";
+      toast.error(
+        rejected.length === 1
+          ? `Couldn't attach ${shown}`
+          : `Couldn't attach ${rejected.length} files: ${shown}${more}`,
+      );
+    }, []);
     const handleRestore = useCallback(() => {
       const restored = restoreDraft();
       if (!restored) return;
       if (restored.text) setMessage(restored.text);
-      if (restored.images.length > 0) addFiles(restored.images);
-    }, [restoreDraft, setMessage, addFiles]);
+      if (restored.images.length > 0) handleRejections(addFiles(restored.images));
+    }, [restoreDraft, setMessage, addFiles, handleRejections]);
     const handleFileChange = useCallback(
       (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) addFiles(e.target.files);
+        if (e.target.files) handleRejections(addFiles(e.target.files));
+        // Reset so re-selecting the same file re-fires onChange.
+        e.target.value = "";
         setIsPlusMenuOpen(false);
       },
-      [addFiles],
+      [addFiles, handleRejections],
     );
+    const drop = useComposerDrop(addFiles, handleRejections, readOnly);
 
     // ── Generative UI sync (extracted hook) ──
     const [internalGenerativeUI, setGenerativeUIInternal] = useGenUISync(
@@ -210,6 +226,7 @@ export const PremiumChatInput = memo(
         isPaused,
         onAbort,
         onResume,
+        activeChatId,
         selectedModelId,
         selectedProvider,
         selectedModelInfo,
@@ -226,7 +243,7 @@ export const PremiumChatInput = memo(
         resetFiles: clearFiles,
       }),
       [
-        message, selectedFiles, isLoading, isPaused, onAbort, onResume,
+        message, selectedFiles, isLoading, isPaused, onAbort, onResume, activeChatId,
         selectedModelId, selectedProvider, selectedModelInfo,
         isWebSearch, isDeepResearch, isImageGenEnabled, supportsImageGen,
         internalGenerativeUI, supportsReasoning, reasoningConfigType,
@@ -236,29 +253,46 @@ export const PremiumChatInput = memo(
     );
     const { handleSend, handleSuggestedClick } = useSendHandler(sendCtx);
 
+    // ── Prompt queue display (per-chat) ──
+    const EMPTY_QUEUE: QueuedPrompt[] = [];
+    const queuedPrompts = usePromptQueueStore(
+      (s) => (activeChatId ? s.queues[activeChatId] ?? EMPTY_QUEUE : EMPTY_QUEUE),
+    );
+    const removeQueuedPrompt = useCallback(
+      (id: string) => {
+        if (activeChatId) usePromptQueueStore.getState().remove(activeChatId, id);
+      },
+      [activeChatId],
+    );
+    const sendQueuedPromptNow = useCallback(
+      (item: QueuedPrompt) => {
+        if (!activeChatId) return;
+        if (isLoading) {
+          toast.info("Still streaming — the prompt stays queued.");
+          return;
+        }
+        usePromptQueueStore.getState().remove(activeChatId, item.id);
+        onSend({
+          message: item.payload.message,
+          model: item.payload.model,
+          provider: item.payload.provider,
+          webSearch: item.payload.webSearch ?? false,
+          deepResearch: item.payload.deepResearch ?? false,
+          generativeUI: item.payload.generativeUI ?? false,
+          imageGen: item.payload.imageGen,
+          files: [],
+          attachments: item.payload.attachments ?? [],
+          thinking: item.payload.thinking ?? { enabled: false },
+        });
+      },
+      [activeChatId, isLoading, onSend],
+    );
+
     // ── Memoized prop buckets for the extracted JSX blocks ──
     // Use `useMemo` so the prop object identity is stable per render
     // span and child re-renders stay minimal.
     const textAreaProps = useMemo<ChatInputTextAreaBlockProps>(
       () => ({
-        isPlusMenuOpen,
-        setIsPlusMenuOpen: setPlusMenuOpen,
-        handleFileChange,
-        pinnedActions: visiblePinnedActions,
-        togglePin,
-        supportsReasoning,
-        isThinking,
-        setIsThinking,
-        isDeepResearch,
-        setIsDeepResearch,
-        isWebSearch,
-        setIsWebSearch,
-        generativeUI: internalGenerativeUI,
-        setGenerativeUI: setGenerativeUIInternal,
-        onOpenSkills,
-        isImageGenEnabled,
-        setIsImageGenEnabled,
-        supportsImageGen,
         layoutMode,
         textareaRef,
         value: message,
@@ -273,12 +307,6 @@ export const PremiumChatInput = memo(
         applySlashSuggestion,
       }),
       [
-        isPlusMenuOpen, setPlusMenuOpen, handleFileChange,
-        visiblePinnedActions, togglePin, supportsReasoning,
-        isThinking, setIsThinking, isDeepResearch, setIsDeepResearch,
-        isWebSearch, setIsWebSearch,
-        internalGenerativeUI, setGenerativeUIInternal,
-        onOpenSkills, isImageGenEnabled, setIsImageGenEnabled, supportsImageGen,
         layoutMode, readOnly,
         textareaRef, message, setMessage,
         handleSend, slashIsPopoverOpen, slashSelectedIndex, slashListboxId,
@@ -361,6 +389,19 @@ export const PremiumChatInput = memo(
             onSelect={handleSuggestedClick}
           />
         )}
+        {/* Above the composer: the session goal banner and the prompt queue.
+            The space above the input is reserved for exactly these two —
+            queued prompts waiting for the running turn and the /goal state. */}
+        {!isWelcome && !readOnly && activeChatId && (
+          <>
+            <GoalBanner chatId={activeChatId} />
+            <QueuedPromptsStrip
+              items={queuedPrompts}
+              onRemove={removeQueuedPrompt}
+              onSendNow={sendQueuedPromptNow}
+            />
+          </>
+        )}
         {/* The composer owns live textarea and optional-row geometry. Layout
             projection is intentionally disabled: Motion's transform-based
             layout animation would visually animate every wrap/height change,
@@ -368,13 +409,26 @@ export const PremiumChatInput = memo(
         <div
           ref={containerRef}
           data-layout-mode={layoutMode}
+          onDragEnter={drop.onDragEnter}
+          onDragOver={drop.onDragOver}
+          onDragLeave={drop.onDragLeave}
+          onDrop={drop.onDrop}
           className={cn(
             "composer-shell relative w-full overflow-visible",
             isWelcome && "composer-shell--welcome",
             className,
             isLoading && "composer-shell--loading",
+            drop.isDragging && "composer-shell--dragging",
           )}
         >
+          {drop.isDragging && !readOnly && (
+            <div
+              className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-[inherit] border-2 border-dashed border-primary/60 bg-primary/10 backdrop-blur-sm"
+              aria-hidden="true"
+            >
+              <span className="text-sm font-medium text-primary">Drop files to attach</span>
+            </div>
+          )}
           <SlashCommandPopover
             isOpen={!readOnly && slashIsPopoverOpen}
             suggestions={slash.suggestions}
@@ -383,13 +437,6 @@ export const PremiumChatInput = memo(
             onSelect={applySlashSuggestion}
             onHover={setSlashSelectedIndex}
           />
-          {!readOnly && visibleTasks.length > 0 && !slashIsPopoverOpen && !isPlusMenuOpen && !selectedModelOpen && (
-            <TaskDrawer
-              tasks={visibleTasks}
-              isOpen={isTaskDrawerOpen}
-              onToggle={() => setIsTaskDrawerOpen(!isTaskDrawerOpen)}
-            />
-          )}
           <div className="flex flex-col">
             {layoutMode === "sidebar" && !readOnly && (
               <div className="composer-toolbar px-2 pt-1 flex items-center justify-between border-b">

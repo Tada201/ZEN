@@ -15,6 +15,12 @@ pub struct AnthropicProvider {
     client: Client,
     api_key: String,
     base_url: String,
+    /// `anthropic-version` header value. Constructor default for the built-in
+    /// provider; custom Anthropic-format providers reuse the same default.
+    version: String,
+    /// Label reported in `ModelInfo.provider`. The built-in provider uses
+    /// "anthropic"; custom providers report their own display name.
+    provider_label: String,
 }
 
 const ANTHROPIC_VERSION: &str = "2023-06-01";
@@ -238,6 +244,12 @@ struct ToolCallAcc {
 
 impl AnthropicProvider {
     pub fn new(api_key: &str, base_url: &str) -> Self {
+        Self::with_identity(api_key, base_url, "anthropic")
+    }
+
+    /// Build a provider with a custom label (for custom Anthropic-format
+    /// providers). `provider_label` flows into `ModelInfo.provider`.
+    pub fn with_identity(api_key: &str, base_url: &str, provider_label: &str) -> Self {
         Self {
             client: Client::builder()
                 .timeout(std::time::Duration::from_secs(60))
@@ -246,6 +258,8 @@ impl AnthropicProvider {
                 .expect("Failed to build Anthropic HTTP client"),
             api_key: api_key.to_string(),
             base_url: base_url.trim_end_matches('/').to_string(),
+            version: ANTHROPIC_VERSION.to_string(),
+            provider_label: provider_label.to_string(),
         }
     }
 
@@ -288,7 +302,7 @@ impl LlmProvider for AnthropicProvider {
             .client
             .get(&url)
             .header("x-api-key", &self.api_key)
-            .header("anthropic-version", ANTHROPIC_VERSION)
+            .header("anthropic-version", &self.version)
             .send()
             .await
         {
@@ -324,7 +338,7 @@ impl LlmProvider for AnthropicProvider {
                             name: item.id.clone(),
                             size: None,
                             modified_at: None,
-                            provider: Some("anthropic".to_string()),
+                            provider: Some(self.provider_label.clone()),
                             model_type: None,
                             arch: None,
                             quantization: None,
@@ -357,7 +371,7 @@ impl LlmProvider for AnthropicProvider {
                 name: "claude-4-7-opus-20260416".to_string(),
                 size: None,
                 modified_at: None,
-                provider: Some("anthropic".to_string()),
+                provider: Some(self.provider_label.clone()),
                 model_type: None,
                 arch: None,
                 quantization: None,
@@ -375,7 +389,7 @@ impl LlmProvider for AnthropicProvider {
                 name: "claude-4-6-opus-20260219".to_string(),
                 size: None,
                 modified_at: None,
-                provider: Some("anthropic".to_string()),
+                provider: Some(self.provider_label.clone()),
                 model_type: None,
                 arch: None,
                 quantization: None,
@@ -393,7 +407,7 @@ impl LlmProvider for AnthropicProvider {
                 name: "claude-4-6-sonnet-20260219".to_string(),
                 size: None,
                 modified_at: None,
-                provider: Some("anthropic".to_string()),
+                provider: Some(self.provider_label.clone()),
                 model_type: None,
                 arch: None,
                 quantization: None,
@@ -411,7 +425,7 @@ impl LlmProvider for AnthropicProvider {
                 name: "claude-4-5-sonnet-20251210".to_string(),
                 size: None,
                 modified_at: None,
-                provider: Some("anthropic".to_string()),
+                provider: Some(self.provider_label.clone()),
                 model_type: None,
                 arch: None,
                 quantization: None,
@@ -429,7 +443,7 @@ impl LlmProvider for AnthropicProvider {
                 name: "claude-3-7-sonnet-20250219".to_string(),
                 size: None,
                 modified_at: None,
-                provider: Some("anthropic".to_string()),
+                provider: Some(self.provider_label.clone()),
                 model_type: None,
                 arch: None,
                 quantization: None,
@@ -447,7 +461,7 @@ impl LlmProvider for AnthropicProvider {
                 name: "claude-3-5-sonnet-20241022".to_string(),
                 size: None,
                 modified_at: None,
-                provider: Some("anthropic".to_string()),
+                provider: Some(self.provider_label.clone()),
                 model_type: None,
                 arch: None,
                 quantization: None,
@@ -465,7 +479,7 @@ impl LlmProvider for AnthropicProvider {
                 name: "claude-3-5-haiku-20241022".to_string(),
                 size: None,
                 modified_at: None,
-                provider: Some("anthropic".to_string()),
+                provider: Some(self.provider_label.clone()),
                 model_type: None,
                 arch: None,
                 quantization: None,
@@ -492,6 +506,7 @@ impl LlmProvider for AnthropicProvider {
         token: tokio_util::sync::CancellationToken,
     ) -> ZenResult<ChatResponse> {
         let url = self.url("/v1/messages");
+        let mut name_codec = crate::llm::ToolNameCodec::default(); // sanitize tool names (no ':') + decode map
 
         // Extract system message and convert the rest to Anthropic format
         let mut system_prompt: Option<String> = None;
@@ -515,7 +530,7 @@ impl LlmProvider for AnthropicProvider {
                         for tc in tool_calls {
                             blocks.push(AnthropicContentBlock::ToolUse {
                                 id: tc.id,
-                                name: tc.name,
+                                name: name_codec.encode(&tc.name),
                                 input: tc.args,
                                 cache_control: None,
                             });
@@ -590,7 +605,7 @@ impl LlmProvider for AnthropicProvider {
         let anthropic_tools = tools.map(|ts| {
             ts.into_iter()
                 .map(|t| AnthropicTool {
-                    name: t.name,
+                    name: name_codec.encode(&t.name),
                     description: t.description,
                     input_schema: t.parameters,
                 })
@@ -657,7 +672,7 @@ impl LlmProvider for AnthropicProvider {
             .client
             .post(&url)
             .header("x-api-key", &self.api_key)
-            .header("anthropic-version", ANTHROPIC_VERSION)
+            .header("anthropic-version", &self.version)
             .header("content-type", "application/json")
             .json(&request)
             .send()
@@ -725,19 +740,31 @@ impl LlmProvider for AnthropicProvider {
                                 if let Some(block) = &event.content_block {
                                     match block.block_type.as_str() {
                                         "tool_use" => {
-                                            let acc = ToolCallAcc {
-                                                id: block.id.clone().unwrap_or_default(),
-                                                name: block.name.clone().unwrap_or_default(),
+                                            let name = name_codec
+                                                .decode(&block.name.clone().unwrap_or_default());
+                                            // Assign a stable id at block start so the
+                                            // early-stream ToolCallReady id matches the
+                                            // finalized tool-call id. Otherwise id-less
+                                            // blocks get a fresh uuid at finalize and the
+                                            // early execution/approval card orphans.
+                                            let stable_id = block
+                                                .id
+                                                .clone()
+                                                .filter(|value| !value.is_empty())
+                                                .unwrap_or_else(|| {
+                                                    format!("toolu_{}", uuid::Uuid::new_v4())
+                                                });
+                                            tool_call_accs.push(ToolCallAcc {
+                                                id: stable_id.clone(),
+                                                name: name.clone(),
                                                 input_json: String::new(),
                                                 ready_emitted: false,
-                                            };
-                                            tool_call_accs.push(acc);
+                                            });
                                             active_tool_index = Some(tool_call_accs.len() - 1);
-                                            let idx = tool_call_accs.len() - 1;
                                             on_chunk(crate::llm::LlmChunk::ToolCallDelta {
-                                                index: idx,
-                                                id: block.id.clone(),
-                                                name: block.name.clone(),
+                                                index: tool_call_accs.len() - 1,
+                                                id: Some(stable_id),
+                                                name: block.name.as_ref().map(|_| name),
                                                 arguments_delta: String::new(),
                                                 arguments_snapshot: String::new(),
                                             });
@@ -772,7 +799,7 @@ impl LlmProvider for AnthropicProvider {
                                                 ));
                                                 reasoning_details.push(
                                                     crate::db::models::ReasoningBlock {
-                                                        provider: "anthropic".to_string(),
+                                                        provider: self.provider_label.clone(),
                                                         block_type: "thinking".to_string(),
                                                         text: Some(thought.clone()),
                                                         raw: None,
@@ -914,7 +941,7 @@ impl LlmProvider for AnthropicProvider {
             .client
             .post(&url)
             .header("x-api-key", &self.api_key)
-            .header("anthropic-version", ANTHROPIC_VERSION)
+            .header("anthropic-version", &self.version)
             .header("content-type", "application/json")
             .body("{}")
             .send()

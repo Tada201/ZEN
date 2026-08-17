@@ -30,6 +30,7 @@ const CesiumCanvas = React.lazy(() => import("@/components/workbench/MapContaine
 const ArtifactPanel = React.lazy(() => import("@/components/shared/ArtifactPanel").then(m => ({ default: m.ArtifactPanel })));
 const OrchestratorPanel = React.lazy(() => import("./right-panel/OrchestratorPanel").then(m => ({ default: m.OrchestratorPanel })));
 const ApprovalCenter = React.lazy(() => import("./chat/right-panel/ApprovalCenter").then(m => ({ default: m.ApprovalCenter })));
+const AttachmentsPanel = React.lazy(() => import("./chat/right-panel/AttachmentsPanel").then(m => ({ default: m.AttachmentsPanel })));
 const InteractiveDrawingCanvas = React.lazy(() => import("@/components/widgets/workbench/InteractiveDrawingCanvas"));
 const BrowserPreview = React.lazy(() => import("./workspace/BrowserPreview").then(m => ({ default: m.BrowserPreview })));
 
@@ -317,6 +318,8 @@ export function RightPanel() {
         return <ApprovalCenter />;
       case 'artifacts':
         return <ArtifactPanel isEmbedded={true} />;
+      case 'attachments':
+        return <AttachmentsPanel />;
       case 'terminal':
         if (!activeChatId) return <div className="p-4 text-sm text-muted-foreground">Select a chat before opening a terminal.</div>;
         return terminalTabs.length === 0 ? renderTerminalEmptyState() : null;
@@ -555,7 +558,7 @@ export function RightPanel() {
               <span className="truncate max-w-[180px]">Target: {operationalParams?.label || "Active Search"}</span>
             </div>
           </div>
-        ) : visibleActiveRightTab === 'drawing' || visibleActiveRightTab === 'approvals' || visibleActiveRightTab === 'agents' || visibleActiveRightTab === 'terminal' || visibleActiveRightTab === 'artifacts' || visibleActiveRightTab === 'browser' ? (
+        ) : visibleActiveRightTab === 'drawing' || visibleActiveRightTab === 'approvals' || visibleActiveRightTab === 'agents' || visibleActiveRightTab === 'terminal' || visibleActiveRightTab === 'artifacts' || visibleActiveRightTab === 'attachments' || visibleActiveRightTab === 'browser' ? (
           <div className="flex-grow flex-1 relative overflow-hidden bg-background flex flex-col">
             <AnimatePresence mode="wait">
               <motion.div

@@ -36,9 +36,9 @@ export function TabSystem({
 }: TabSystemProps) {
   const reducedMotion = useReducedMotion();
   return (
-    <div className="h-full flex flex-col bg-[#1e1e1e]">
+    <div className="h-full flex flex-col bg-editor-surface">
       {/* Tab Bar */}
-      <div className="flex items-center bg-[#252526] border-b border-border/5 overflow-x-auto no-scrollbar group">
+      <div className="flex items-center bg-editor-elevated border-b border-border/5 overflow-x-auto no-scrollbar group">
         <div className="flex h-10">
           {tabs.map((tab) => {
             const isActive = tab.id === activeTabId;
@@ -51,7 +51,7 @@ export function TabSystem({
                 className={cn(
                   "relative flex items-center gap-2 px-4 py-2 cursor-pointer border-r border-border/5 min-w-[120px] max-w-[200px] transition-all group/tab",
                   isActive 
-                    ? "bg-[#1e1e1e] text-primary-foreground" 
+                    ? "bg-editor-surface text-primary-foreground" 
                     : "text-primary-foreground/40 hover:bg-card/5 hover:text-primary-foreground/60"
                 )}
               >

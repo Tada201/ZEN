@@ -93,3 +93,14 @@ Codex CLI uses the global `~/.codex/config.toml`; do not assume a project-local 
 3. **Function over Form**: Prioritize utility and performance. Every unique animation or UI feature must serve a clear purpose and be useful. Avoid performance waste on purely decorative elements.
 4. **Utilize .codegraph Rules**: Always consult `.agents/rules/codegraph.md` when querying the SQLite codegraph database to inspect schemas and find optimal SQL query templates.
 5. **Concise Claude-style Responses**: Always consult and follow the guidelines in `.agents/rules/agents_response.md` to keep communication concise, direct, tool-first, and minimally verbose during task execution.
+
+## Design Tokens (frontend consistency)
+
+`src/styles/index.css` is the single source of truth for color, spacing, radius, and surface tokens. Prefer semantic tokens over raw values so themes, density, and radius presets keep working. `npm run lint:tokens` (also in `quality-check.ps1`) blocks new raw hex and off-scale spacing/radius; it is baselined, so only *new* drift fails.
+
+- **Colors**: use `hsl(var(--token))` or the Tailwind semantic utilities (`bg-card`, `text-muted-foreground`, `border-border`, `bg-primary`). Never hardcode hex in `.tsx` — it bypasses the theme and the eDEX/light presets.
+- **Spacing**: stay on the 4px scale — legal steps (px): `0 2 4 6 8 10 12 16 20 24 28 32 36 40 48`. Use Tailwind steps (`p-2`, `gap-3`) or the semantic vars (`--space-inset-card`, `--space-stack`, `--zen-space-control`). No off-scale arbitrary values (`p-[7px]`, `gap-[13px]`); snap ties up.
+- **Radius**: use `rounded-sm | rounded | rounded-lg | rounded-xl | rounded-full` — all derive from the runtime `--radius` preset. Avoid `rounded-md`/`rounded-2xl` where a ramp step fits, and never hardcode `rounded-[9px]`.
+- **Surfaces**: reference `--surface-base/raised/overlay/sunken` for panel elevation instead of inventing local backgrounds.
+
+If a raw value is genuinely intentional, re-baseline with `npm run lint:tokens -- --update` in the same commit.

@@ -22,7 +22,8 @@ check("standard runner waits at a safe boundary", /wait_for_chat_resume\(&self\.
 check("orchestrator and research routes honor the same gate", /wait_for_chat_resume\(&self\.app, chat_id, &token\)/.test(orchestrator) && /wait_for_chat_resume\(self\.app, self\.chat_id, self\.token\)/.test(research));
 check("frontend has typed pause and continue IPC calls", /pauseChat/.test(api) && /continueChat/.test(api));
 check("frontend pause preserves streaming and resume restores it", /const pauseStream/.test(hook) && /status: \"paused\"/.test(hook) && /const resumeStream/.test(hook) && /setStreamingForChat\(chatId, true\)/.test(hook));
-check("composer distinguishes paused Resume from active Stop", /isPaused/.test(controls) && /Resume response/.test(controls) && /Stop response/.test(controls));
+check("composer distinguishes paused Resume from active Stop", /isPaused/.test(controls) && /aria-label="Resume paused response"/.test(controls) && /aria-label="Stop response"/.test(controls));
+check("submit queues instead of aborting a running turn", /Queue message/.test(controls) && /usePromptQueueStore/.test(read("src/atlas/components/useSendHandler.ts")) && /disabled=\{!props\.hasContent\}/.test(controls));
 check("live status events reconcile paused and resumed message state", /payload\.phase === \"paused\"/.test(events) && /status: payload\.phase === \"paused\" \? \"paused\" : \"sending\"/.test(events));
 
 const failures = checks.filter(({ condition }) => !condition);

@@ -27,6 +27,9 @@ export const ThinkingConfig = ({
 }: ThinkingConfigProps) => {
   const isGoogle = provider?.toLowerCase() === 'google' || provider?.toLowerCase() === 'gemini';
   const effortLabel = isGoogle ? "Thinking Level" : "Reasoning Effort";
+  // 'none' models reason natively with no tunable parameter — the payload
+  // builder reports enabled:false, so there is no on/off state to expose.
+  const isTunable = reasoningConfigType === 'effort' || reasoningConfigType === 'budget';
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -34,32 +37,34 @@ export const ThinkingConfig = ({
           <Brain className="w-4 h-4 text-warning" />
           <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Reasoning Config</span>
         </div>
-        <button
-          type="button"
-          onClick={() => setIsThinking(!isThinking)}
-          aria-pressed={isThinking}
-          aria-label={isThinking ? "Disable reasoning" : "Enable reasoning"}
-          className="flex items-center gap-2 cursor-pointer group rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <span className={cn(
-            "text-[10px] font-bold uppercase tracking-widest transition-colors",
-            isThinking ? "text-warning" : "text-muted-foreground group-hover:text-muted-foreground"
-          )}>
-            {isThinking ? "Active" : "Off"}
-          </span>
-          <div className={cn(
-            "composer-control relative h-5 w-8 rounded-full p-0.5 transition-colors duration-200",
-            isThinking ? "bg-warning text-warning-foreground" : "bg-muted"
-          )}>
+        {isTunable && (
+          <button
+            type="button"
+            onClick={() => setIsThinking(!isThinking)}
+            aria-pressed={isThinking}
+            aria-label={isThinking ? "Disable reasoning" : "Enable reasoning"}
+            className="flex items-center gap-2 cursor-pointer group rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span className={cn(
+              "text-[10px] font-bold uppercase tracking-widest transition-colors",
+              isThinking ? "text-warning" : "text-muted-foreground group-hover:text-muted-foreground"
+            )}>
+              {isThinking ? "Active" : "Off"}
+            </span>
             <div className={cn(
-              "h-3.5 w-3.5 rounded-full bg-card shadow-sm transition-transform duration-200 ease-out",
-              isThinking ? "translate-x-3.5" : "translate-x-0"
-            )} />
-          </div>
-        </button>
+              "composer-control relative h-5 w-8 rounded-full p-0.5 transition-colors duration-200",
+              isThinking ? "bg-warning text-warning-foreground" : "bg-muted"
+            )}>
+              <div className={cn(
+                "h-3.5 w-3.5 rounded-full bg-card shadow-sm transition-transform duration-200 ease-out",
+                isThinking ? "translate-x-3.5" : "translate-x-0"
+              )} />
+            </div>
+          </button>
+        )}
       </div>
 
-      <div className={cn("space-y-3 transition-opacity", !isThinking && "opacity-50 pointer-events-none")}>
+      <div className={cn("space-y-3 transition-opacity", isTunable && !isThinking && "opacity-50 pointer-events-none")}>
 
         {/* Effort Selection - OpenAI Style */}
         {reasoningConfigType === 'effort' && (
@@ -112,10 +117,11 @@ export const ThinkingConfig = ({
           </div>
         )}
 
-        {/* Fallback/Generic message for reasoning models without tunable params in UI */}
+        {/* Informational note for models that reason natively with no tunable
+            parameter — shown at full opacity; there is no toggle to dim. */}
         {reasoningConfigType === 'none' && (
           <div className="composer-meta rounded-md bg-muted px-2.5 py-1.5 text-center text-[10px] italic">
-            This model supports reasoning natively. Enabling it ensures the assistant uses its deep thinking capabilities for your request.
+            This model reasons natively; reasoning depth isn't configurable from Zen.
           </div>
         )}
       </div>

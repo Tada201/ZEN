@@ -65,6 +65,12 @@ pub(crate) fn tool_status(id: &str) -> ToolStatusInfo {
             agent_visible: true,
             user_configurable: true,
         },
+        "browser" => ToolStatusInfo {
+            status: "external",
+            detail: "Drives the embedded WebView2 preview (navigate/click/type/read/screenshot/console). Windows only.",
+            agent_visible: true,
+            user_configurable: true,
+        },
         _ => ToolStatusInfo {
             status: "ready",
             detail: "Registered with an executable backend implementation.",
@@ -106,6 +112,7 @@ pub(crate) fn tool_aliases(id: &str) -> &'static [&'static str] {
         "spawn_agent" => &["delegate", "subagent", "background agent", "task agent"],
         "write_todos" => &["todo", "plan", "task list", "checklist"],
         "graph_session" => &["math", "plot", "equation", "graph"],
+        "browser" => &["preview", "web page", "webview", "dev server", "click", "screenshot", "dom"],
         "get_system_metrics" => &["hardware", "cpu", "ram", "gpu", "system"],
         "calculator" => &[
             "math",

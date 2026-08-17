@@ -15,7 +15,9 @@
  *   * `buildThinkingPayload(supportsReasoning, reasoningConfigType)` —
  *     maps the modes above to a `ThinkingPayload` the LLM client
  *     understands, picking the right envelope per `reasoningConfigType`
- *     (`effort` / `budget` / boolean-only).
+ *     (`effort` / `budget`); `none` models have no tunable parameter, so
+ *     they report `enabled: false` rather than an on state that sends
+ *     nothing on the wire.
  *
  * The hook returns getters + setters + builder. Callers should destructure
  * the shape they care about; doing so also gives the correct memo
@@ -45,7 +47,8 @@ export interface ChatInputModesState {
   /**
    * Build the LLM `ThinkingPayload` from the current modes and the
    * model's reasoning capability flags. Returns `{ enabled: false }`
-   * when reasoning isn't supported or thinking is OFF.
+   * when reasoning isn't supported, thinking is OFF, or the model
+   * exposes no tunable reasoning parameter (`none`).
    */
   buildThinkingPayload: (
     supportsReasoning: boolean,
@@ -126,7 +129,8 @@ export function useChatInputModes(): ChatInputModesState {
         return { enabled: true, budgetTokens: thinkingBudget };
       }
 
-      return { enabled: true };
+      // 'none': no tunable reasoning parameter — nothing is sent on the wire, so the payload must not claim enabled.
+      return { enabled: false };
     },
     [isThinking, thinkingEffort, thinkingBudget],
   );

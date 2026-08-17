@@ -11,13 +11,17 @@ const diffParserSource = readFileSync(
   new URL("../src/atlas/components/chat/tool/parseUnifiedDiff.ts", import.meta.url),
   "utf8",
 );
+const wordDiffSource = readFileSync(
+  new URL("../src/atlas/components/chat/tool/wordDiff.ts", import.meta.url),
+  "utf8",
+);
 // Strip the redaction import regardless of CRLF/LF line endings, then prepend
 // the redaction source so the concatenated module declares it exactly once.
 const previewSource = readFileSync(sourcePath, "utf8").replace(
   /^import\s*\{\s*redactToolText\s*\}\s*from\s*["']\.\/toolTextRedaction["'];?\s*\r?\n/m,
   "",
 );
-const source = `${redactionSource}\n${previewSource}\n${diffParserSource}`;
+const source = `${redactionSource}\n${previewSource}\n${diffParserSource.replace(/^import.*wordDiff.*\r?\n/m, "")}\n${wordDiffSource.replace(/^import[^\n]+\r?\n/m, "")}`;
 const transpiled = ts.transpileModule(source, {
   compilerOptions: {
     module: ts.ModuleKind.ES2022,

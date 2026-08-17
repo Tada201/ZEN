@@ -158,30 +158,32 @@ export function SystemDiagnostics() {
     }), [metrics, activeModel, activeProvider, isStreaming, simulatedLatency, tokenStats, sessions.length, appUptimeSecs]);
 
     return (
-        <div className="flex flex-col gap-2 p-1 text-muted-foreground select-none">
-            {/* Widget Groups */}
+        <div className="station-panel">
             {WIDGET_GROUPS.map((group) => {
                 const isCollapsed = collapsedGroups[group.id];
+                const isLive = group.id === 'llm' && isStreaming;
                 return (
-                    <div key={group.id} className="flex flex-col border border-border-strong rounded-lg bg-background/40 overflow-hidden shadow-sm">
+                    <div key={group.id} className="station-group">
                         <button
                             type="button"
                             onClick={() => toggleGroup(group.id)}
-                            className="flex items-center justify-between px-2.5 py-1.5 bg-card/30 hover:bg-card/50 transition-colors border-b border-border-strong cursor-pointer w-full text-left focus:outline-none focus-visible:outline-none"
+                            className="station-group__header"
                         >
-                            <div className="flex items-center gap-1.5 text-[9.5px] font-mono font-bold tracking-widest text-muted-foreground">
-                                <WorkbenchIcon name={group.icon} size={11} className="text-violet-400/80" />
+                            <span className="station-group__title">
+                                <WorkbenchIcon name={group.icon} size={11} />
                                 <span>{group.title}</span>
-                            </div>
-                            <WorkbenchIcon
-                                name={isCollapsed ? "solar:alt-arrow-down-bold" : "solar:alt-arrow-up-bold"}
-                                size={11}
-                                className="text-muted-foreground"
-                            />
+                            </span>
+                            <span className="flex items-center gap-2">
+                                {isLive && <span className="station-group__live" aria-label="live" />}
+                                <WorkbenchIcon
+                                    name={isCollapsed ? "solar:alt-arrow-down-bold" : "solar:alt-arrow-up-bold"}
+                                    size={11}
+                                />
+                            </span>
                         </button>
 
                         {!isCollapsed && (
-                            <div className="p-1.5 grid grid-cols-4 gap-1.5 transition-all duration-300">
+                            <div className="station-group__body">
                                 {group.widgets.map((widget) => {
                                     const colSpanClass =
                                         widget.span === 1 ? 'col-span-1' :
@@ -189,15 +191,12 @@ export function SystemDiagnostics() {
                                         widget.span === 3 ? 'col-span-3' : 'col-span-4';
 
                                     return (
-                                        <div
-                                            key={widget.id}
-                                            className={`${colSpanClass} bg-card/20 border border-border-strong rounded-lg p-2 flex flex-col gap-1.5`}
-                                        >
-                                            <div className="flex items-center gap-1.5 border-b border-border-strong pb-0.5 text-muted-foreground text-[8px] font-mono tracking-wider font-bold uppercase">
-                                                <WorkbenchIcon name={widget.icon} size={9} className="text-violet-500/60" />
+                                        <div key={widget.id} className={`${colSpanClass} station-cell`}>
+                                            <div className="station-cell__label">
+                                                <WorkbenchIcon name={widget.icon} size={9} />
                                                 <span>{widget.label}</span>
                                             </div>
-                                            <div className="pt-0.5 flex-1 flex flex-col justify-center">
+                                            <div className="station-cell__body">
                                                 <widget.component context={context} />
                                             </div>
                                         </div>

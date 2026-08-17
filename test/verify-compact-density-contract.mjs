@@ -13,7 +13,7 @@ const tree = read("src/atlas/components/chat/FileTree.tsx");
 const research = read("src/atlas/components/chat/DeepResearchRunMessage.tsx");
 
 const assertions = [
-  ["central compact rhythm tokens", /--zen-space-detail:\s*0\.25rem[\s\S]*--zen-space-control:\s*0\.5rem[\s\S]*--zen-control-size:\s*1\.875rem/, css],
+  ["central compact rhythm tokens", /--zen-space-detail:\s*var\(--space-1\)[\s\S]*--zen-space-control:\s*var\(--space-2\)[\s\S]*--zen-control-size:\s*1\.875rem/, css],
   ["composer editor row uses compact token padding", /\.composer-editor-row[\s\S]*padding:\s*var\(--zen-space-control\)/, css],
   ["message list opts into compact density", /chat-density-compact relative flex min-h-0 flex-1/, messageList],
   ["assistant rows use compact horizontal and vertical padding", /group flex w-full flex-col px-3[\s\S]*bg-transparent py-0\.5[\s\S]*bg-transparent py-1/, assistant],

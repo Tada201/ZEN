@@ -36,6 +36,8 @@ export function useSendMessage(
     systemPromptMode?: "append" | "replace" | null;
     /** Override target session — used by retry to route to the original session. */
     targetSessionId?: string;
+    /** Automatic goal-continuation turn (useChatTurnAdvance): quiet timeline row. */
+    goalContinuation?: boolean;
   }) => {
     let targetSessionId = data.targetSessionId || currentSessionId;
     // Capture fresh-session state BEFORE ensureSession potentially creates a
@@ -90,6 +92,7 @@ export function useSendMessage(
       generativeUI: generativeUIEnabled,
       tools: data.tools,
       attachments: data.attachments,
+      messageKind: data.goalContinuation ? "goal_continuation" : undefined,
     });
 
     // Publish the optimistic turn before any abort IPC so a newly activated
@@ -159,6 +162,7 @@ export function useSendMessage(
         systemPromptMode,
         voiceDisplayContext: systemPromptMode === "replace" ? buildVoiceDisplayContext() : null,
         modelContextWindow,
+        messageKind: data.goalContinuation ? "goal_continuation" : null,
       });
 
       // ── Title maker ─────────────────────────────────────────────────────

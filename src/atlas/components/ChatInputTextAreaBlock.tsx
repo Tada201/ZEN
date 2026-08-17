@@ -1,13 +1,13 @@
 import type { SlashSuggestion } from "./chat/input/useSlashCommand";
 import type { ComposerLayoutMode } from "./chat/input/PremiumChatInputTypes";
-import { PlusActionMenu } from "./chat/input/PlusActionMenu";
 import { cn } from "@/lib/utils/style";
 
 /**
  * `ChatInputTextAreaBlock` — the middle row of the chat input
  * composer: the auto-grow textarea and the keyboard handler that mediates
- * slash-popover navigation + Enter-to-send. The welcome variant moves the
- * add-context menu into the lower toolbar for a denser workbench layout.
+ * slash-popover navigation + Enter-to-send. The add-context (plus) menu now
+ * lives in the lower toolbar alongside the model selector so this row is all
+ * input width.
  *
  * The `welcome` variant nests the textarea inside an inset input well
  * so the workspace setup surface reads as a single refined composer.
@@ -18,25 +18,6 @@ import { cn } from "@/lib/utils/style";
  */
 
 export interface ChatInputTextAreaBlockProps {
-  // PlusActionMenu state
-  isPlusMenuOpen: boolean;
-  setIsPlusMenuOpen: (open: boolean) => void;
-  handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  pinnedActions: string[];
-  togglePin: (id: string) => void;
-  supportsReasoning: boolean;
-  isThinking: boolean;
-  setIsThinking: (v: boolean) => void;
-  isDeepResearch: boolean;
-  setIsDeepResearch: (v: boolean) => void;
-  isWebSearch: boolean;
-  setIsWebSearch: (v: boolean) => void;
-  generativeUI: boolean;
-  setGenerativeUI: (v: boolean) => void;
-  onOpenSkills?: () => void;
-  isImageGenEnabled: boolean;
-  setIsImageGenEnabled: (v: boolean) => void;
-  supportsImageGen: boolean;
   // Textarea
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   value: string;
@@ -54,24 +35,6 @@ export interface ChatInputTextAreaBlockProps {
 }
 
 export const ChatInputTextAreaBlock = ({
-  isPlusMenuOpen,
-  setIsPlusMenuOpen,
-  handleFileChange,
-  pinnedActions,
-  togglePin,
-  supportsReasoning,
-  isThinking,
-  setIsThinking,
-  isDeepResearch,
-  setIsDeepResearch,
-  isWebSearch,
-  setIsWebSearch,
-  generativeUI,
-  setGenerativeUI,
-  onOpenSkills,
-  isImageGenEnabled,
-  setIsImageGenEnabled,
-  supportsImageGen,
   textareaRef,
   value,
   onChange,
@@ -162,28 +125,6 @@ export const ChatInputTextAreaBlock = ({
         isWelcome && "composer-editor-row--welcome",
       )}
     >
-      {!isWelcome && !readOnly && (
-        <PlusActionMenu
-          isOpen={isPlusMenuOpen}
-          setIsOpen={setIsPlusMenuOpen}
-          onFileSelect={handleFileChange}
-          pinnedActions={pinnedActions}
-          togglePin={togglePin}
-          supportsReasoning={supportsReasoning}
-          isThinking={isThinking}
-          setIsThinking={setIsThinking}
-          isDeepResearch={isDeepResearch}
-          setIsDeepResearch={setIsDeepResearch}
-          isWebSearch={isWebSearch}
-          setIsWebSearch={setIsWebSearch}
-          generativeUI={generativeUI}
-          setGenerativeUI={setGenerativeUI}
-          onOpenSkills={onOpenSkills}
-          isImageGenEnabled={isImageGenEnabled}
-          setIsImageGenEnabled={setIsImageGenEnabled}
-          supportsImageGen={supportsImageGen}
-        />
-      )}
       {isWelcome ? (
         <div className="flex min-h-[30px] min-w-0 flex-1 items-center px-1 py-0.5">
           {textarea}

@@ -4,8 +4,10 @@ pub mod ollama;
 pub mod openai_compat;
 pub mod provider_meta;
 pub mod registry;
+pub mod tool_name_codec;
 
 pub use registry::ProviderRegistry;
+pub use tool_name_codec::ToolNameCodec;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -132,6 +134,14 @@ pub fn make_provider(config: &ProviderConfig) -> Arc<dyn LlmProvider> {
         "anthropic" => Arc::new(AnthropicProvider::new(&config.api_key, &config.base_url)),
         "lmstudio" => Arc::new(LmStudioProvider::new(&config.base_url)),
         _ => {
+            // Custom providers may declare a non-OpenAI wire protocol.
+            if config.api_format.as_deref() == Some("anthropic_messages") {
+                return Arc::new(AnthropicProvider::with_identity(
+                    &config.api_key,
+                    &config.base_url,
+                    &config.display_name,
+                ));
+            }
             let mut extra_headers = vec![];
             if let Some(p) = provider_meta::PROVIDER_CATALOG
                 .iter()

@@ -35,3 +35,25 @@ export function normalizeChatDoneEvent(payload: Record<string, unknown>): AgentR
     sequence: typeof payload.sequence === "number" ? payload.sequence : undefined,
   };
 }
+
+export function normalizeChatErrorEvent(payload: Record<string, unknown>): AgentRunEvent | null {
+  const chatId = stringValue(payload.chat_id, payload.chatId);
+  if (!chatId) return null;
+  // A recoverable transport stall is an interruption, not a hard failure, so
+  // the run is cancelled (parts kept) rather than marked failed.
+  const recoverable = payload.recoverable === true;
+  const runId = stringValue(payload.run_id, payload.runId, chatId) || chatId;
+  const messageId = stringValue(payload.message_id, payload.messageId);
+  const sequence = typeof payload.sequence === "number" ? payload.sequence : undefined;
+  if (recoverable) {
+    return { kind: "run-cancel", runId, chatId, messageId, sequence };
+  }
+  return {
+    kind: "run-error",
+    runId,
+    chatId,
+    messageId,
+    error: stringValue(payload.error) || "The model stream stopped before returning output.",
+    sequence,
+  };
+}

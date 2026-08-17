@@ -3,6 +3,7 @@ import { strict as assert } from "node:assert";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const markdown = read("src/atlas/components/chat/MarkdownContent.tsx");
+const references = read("src/atlas/components/chat/MarkdownReferences.tsx");
 const smooth = read("src/atlas/components/chat/SmoothMarkdown.tsx");
 const splitter = read("src/atlas/components/chat/markdown-utils.ts");
 const helpers = read("src/atlas/components/chat/MarkdownHelperComponents.tsx");
@@ -16,8 +17,8 @@ assert(markdown.includes("input: ({ checked") && markdown.includes("Completed ta
 assert(markdown.includes("https?:\\/\\/") && markdown.includes("mainContent"), "short streaming text should fall back to Markdown when it contains a URL");
 assert(markdown.includes("table:") && markdown.includes("<Table"), "GFM tables should use the structured table renderer");
 assert(markdown.includes("del:") && markdown.includes("sup:") && markdown.includes("sub:"), "inline strikethrough and superscript/subscript should have explicit formatting");
-assert(markdown.includes("isSafeGeneratedHref(ref.url)") && !markdown.includes("href={ref.url}"), "reference cards must not bypass generated-link validation");
-assert(markdown.includes('code sample containing "## References"') && markdown.includes("inFence"), "reference extraction must not consume headings inside fenced code");
+assert(references.includes("isSafeGeneratedHref(ref.url)") && !references.includes("href={ref.url}"), "reference cards must not bypass generated-link validation");
+assert(references.includes('code sample containing "## References"') && references.includes("inFence"), "reference extraction must not consume headings inside fenced code");
 assert(splitter.includes("`{3,}|~{3,}") && splitter.includes("isClosingFence"), "streaming block splitting should support both GFM fence styles");
 assert(helpers.includes("opening = content.match") && helpers.includes("~{3,}"), "code-fence stripping should support tilde fences");
 assert(fixtureContent.includes("|") && fixtureContent.includes("```") && fixtureContent.includes("> "), "the rich Markdown fixture should cover tables, fenced code, and blockquotes");

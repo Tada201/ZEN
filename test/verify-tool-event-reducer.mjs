@@ -4,10 +4,15 @@ import ts from "typescript";
 
 const sourcePath = new URL("../src/atlas/hooks/stream/toolEventReducer.ts", import.meta.url);
 const source = readFileSync(sourcePath, "utf8");
+const identitySource = readFileSync(
+  new URL("../src/atlas/components/chat/tool/toolCallIdentity.ts", import.meta.url),
+  "utf8",
+).replace(/^import[^\n]+\n/, "");
 
 // The reducer now depends on the Zustand chat store. Strip the alias import and
 // inject a runtime mock so the isolated data-URL module can still be exercised.
 const preparedSource = source
+  .replace(/import\s+\{\s*getToolCallIdentity\s*\}\s+from\s+["']\.\.\/\.\.\/components\/chat\/tool\/toolCallIdentity["'];?\s*\n?/, `${identitySource}\n`)
   .replace(/import\s+\{\s*useChatStore\s*\}\s+from\s+["']@\/lib\/stores\/useChatStore["'];?\s*\n?/, "")
   .replace(/import\s+\{\s*rememberRecoveryTool\s*\}\s+from\s+["']\.\/strayToolLedger["'];?\s*\n?/, "globalThis.__recoveryTools = []; function rememberRecoveryTool(messageId, tool) { if (messageId) globalThis.__recoveryTools.push({ messageId, tool }); }")
   .trim() +
@@ -244,6 +249,31 @@ const turn2 = messages.find((m) => m.id === "temp-assistant-2");
 assert.equal(turn1.toolCalls.length, 1, "same chat-wide runId must not append the new turn's tool to the finalized turn-1 assistant");
 assert.equal(turn2.toolCalls.length, 1, "new turn's tool must attach to the active sending assistant below the latest user message");
 assert.equal(turn2.toolCalls[0].id, "t2", "the sending assistant should own the new tool");
+
+// Sparse lifecycle events without a backend tool_call_id must still reconcile
+// to one row. The sequence + run identity is stable across start/completion,
+// and must not depend on the array index used by the renderer.
+globalThis.__activeAssistantByChat = {};
+messages = [
+  { id: "assistant-sparse", sessionId: chatId, role: "assistant", content: "", status: "sending", steps: [], toolCalls: [] },
+];
+messages = upsertTool(
+  messages,
+  chatId,
+  makeToolCall("", "run_command", "running", { command: "npm test" }, "", undefined, 500, { runId: chatId, sequence: 7 }),
+  500,
+);
+messages = upsertTool(
+  messages,
+  chatId,
+  makeToolCall("", "run_command", "completed", {}, "passed", 120, 620, { runId: chatId, sequence: 7 }),
+  620,
+);
+const sparseAssistant = messages[0];
+assert.equal(sparseAssistant.toolCalls.length, 1, "sparse lifecycle events should keep one tool call");
+assert.equal(sparseAssistant.steps.length, 1, "sparse lifecycle events should keep one tool step");
+assert.equal(sparseAssistant.toolCalls[0].status, "completed", "completion should update the stable sparse tool row");
+assert.equal(sparseAssistant.toolCalls[0].output, "passed", "completion output should update the stable sparse tool row");
 
 globalThis.__activeAssistantByChat = {};
 

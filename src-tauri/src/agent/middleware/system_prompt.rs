@@ -401,7 +401,7 @@ impl ContextMiddleware for SystemPromptMiddleware {
             ctx.try_push_section(
                 ContextSectionId::TodoChecklist,
                 &mut remaining,
-                "4. After completing each step, re-call `write_todos` with that step marked `completed: true` BEFORE moving to the next. The checklist is the source of truth.\n",
+                "4. As work progresses, re-call `write_todos` with the current item's status set to `completed` and the next item set to `in_progress`. Keep exactly one item `in_progress` at a time. The checklist is the source of truth.\n",
             );
             ctx.try_push_section(
                 ContextSectionId::TodoChecklist,
@@ -411,12 +411,7 @@ impl ContextMiddleware for SystemPromptMiddleware {
             ctx.try_push_section(
                 ContextSectionId::TodoChecklist,
                 &mut remaining,
-                "6. CLEARING THE CHECKLIST: Once a task is fully finished, you MUST call `write_todos` with an EMPTY array `{\"todos\": []}`. This action signals the system to immediately clear the drawer from the UI.\n",
-            );
-            ctx.try_push_section(
-                ContextSectionId::TodoChecklist,
-                &mut remaining,
-                "7. At the end of the task, call `write_todos` one final time with every step `completed: true`, followed immediately by an empty list `{\"todos\": []}` to clean up completely.\n\n",
+                "6. When the task is fully finished, call `write_todos` once with every item marked `completed` so the user sees the final state. To remove the panel entirely, call it with an empty array `{\"todos\": []}`.\n\n",
             );
             ctx.try_push_section(
                 ContextSectionId::TodoChecklist,
@@ -426,7 +421,7 @@ impl ContextMiddleware for SystemPromptMiddleware {
             ctx.try_push_section(
                 ContextSectionId::TodoChecklist,
                 &mut remaining,
-                "`write_todos` takes `{\"todos\": [{\"task\": string, \"completed\": bool}]}`. Order matters: keep steps in execution order; the first non-completed item is what the UI highlights as the current step.\n",
+                "`write_todos` takes `{\"todos\": [{\"task\": string, \"status\": \"pending\" | \"in_progress\" | \"completed\"}]}`. `status` is optional — if you omit it, the first unfinished item is treated as the current step. Keep items in execution order; the `in_progress` item is what the UI highlights as the current step.\n",
             );
         }
 

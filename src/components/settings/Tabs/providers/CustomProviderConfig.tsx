@@ -3,11 +3,12 @@ import { toast } from 'sonner';
 import { ask } from '@tauri-apps/plugin-dialog';
 import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import { WorkbenchInput } from '@/components/settings/ui/WorkbenchInput';
+import { WorkbenchSelect } from '@/components/settings/ui/WorkbenchSelect';
 import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
 import { cn } from '@/lib/utils/style';
 import { isSecretPresentValue, settingsApi } from '@/api';
-import type { ModelInfo } from '@/lib/types/provider';
+import type { CustomProviderApiFormat, ModelInfo } from '@/lib/types/provider';
 
 interface CustomProviderConfigProps {
     providerId: string;
@@ -15,10 +16,11 @@ interface CustomProviderConfigProps {
     baseUrl: string;
     apiKey?: string;
     headers?: Record<string, string>;
+    apiFormat?: CustomProviderApiFormat;
     customModels?: ModelInfo[];
 }
 
-export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, apiKey, headers = {}, customModels = [] }: CustomProviderConfigProps) => {
+export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, apiKey, headers = {}, apiFormat, customModels = [] }: CustomProviderConfigProps) => {
     const [showKey, setShowKey] = useState(false);
     const updateCustomProvider = useSettingsStore(s => s.updateCustomProvider);
     const removeCustomProvider = useSettingsStore(s => s.removeCustomProvider);
@@ -27,6 +29,7 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
     // Local state to allow typing without immediate store validation interference
     const [localName, setLocalName] = useState(displayName);
     const [localUrl, setLocalUrl] = useState(baseUrl);
+    const [localApiFormat, setLocalApiFormat] = useState<CustomProviderApiFormat>(apiFormat ?? 'openai_chat');
     const [localKey, setLocalKey] = useState(isSecretPresentValue(apiKey) ? '' : apiKey || '');
     const [keyDirty, setKeyDirty] = useState(false);
     const [headersText, setHeadersText] = useState(Object.entries(headers).map(([key, value]) => `${key}: ${value}`).join('\n'));
@@ -142,8 +145,28 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
 
             <div className="flex flex-col gap-2">
                 <div className="flex flex-col">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">API Format</label>
+                    <span className="text-[11px] text-muted-foreground">OpenAI Chat Completions or Anthropic Messages.</span>
+                </div>
+                <WorkbenchSelect
+                    value={localApiFormat}
+                    onValueChange={(val) => {
+                        const next = val as CustomProviderApiFormat;
+                        setLocalApiFormat(next);
+                        void updateCustomProvider(providerId, { apiFormat: next }).catch(error => setSaveError(String(error)));
+                    }}
+                    className="max-w-lg h-9 bg-background border-border rounded-lg"
+                    options={[
+                        { value: 'openai_chat', label: 'OpenAI Chat Completions' },
+                        { value: 'anthropic_messages', label: 'Anthropic Messages' },
+                    ]}
+                />
+            </div>
+
+            <div className="flex flex-col gap-2">
+                <div className="flex flex-col">
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">Target Endpoint</label>
-                    <span className="text-[11px] text-muted-foreground">OpenAI-compatible API endpoint.</span>
+                    <span className="text-[11px] text-muted-foreground">{localApiFormat === 'anthropic_messages' ? 'Anthropic Messages API endpoint.' : 'OpenAI-compatible API endpoint.'}</span>
                 </div>
                 <WorkbenchInput
                     value={localUrl}

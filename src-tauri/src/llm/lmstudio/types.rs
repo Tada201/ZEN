@@ -19,6 +19,25 @@ pub struct LmStudioModelEntry {
     pub quantization: Option<String>,
     pub state: Option<String>,
     pub max_context_length: Option<u64>,
+    /// Newer LM Studio builds report per-model capabilities; older builds omit
+    /// the field entirely and must deserialize exactly as before.
+    #[serde(default)]
+    pub capabilities: Option<LmStudioCapabilities>,
+}
+
+/// Per-model capability flags reported by `/api/v0/models`.
+#[derive(Deserialize, Debug, Default)]
+pub struct LmStudioCapabilities {
+    #[serde(default)]
+    pub reasoning: Option<LmStudioReasoningCapability>,
+}
+
+/// Reasoning capability block; `allowed_options` is e.g. `["off","on"]` or
+/// `["off","on","low","medium","high"]` on newer builds.
+#[derive(Deserialize, Debug, Default)]
+pub struct LmStudioReasoningCapability {
+    #[serde(default)]
+    pub allowed_options: Option<Vec<String>>,
 }
 
 // ─── LM Studio v1 API types ───

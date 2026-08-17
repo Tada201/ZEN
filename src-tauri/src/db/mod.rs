@@ -1,8 +1,10 @@
 pub mod models;
 pub mod queries;
 
-use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
+use std::str::FromStr;
 use std::path::Path;
+use std::time::Duration;
 use tracing::info;
 
 use crate::error::ZenResult;
@@ -17,9 +19,17 @@ pub async fn init_pool(db_path: &Path) -> ZenResult<SqlitePool> {
     let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
     info!(path = %db_path.display(), "Opening SQLite database");
 
+    // SQLite permits many readers but still has one writer at a time. The
+    // application persists user messages, assistant lifecycle state, tool
+    // traces, and recovery checkpoints concurrently, so a pool connection
+    // must wait for the active writer instead of failing immediately with
+    // SQLITE_BUSY ("database is locked"). Keep this policy here so every
+    // database caller receives the same connection behavior.
+    let connect_options = SqliteConnectOptions::from_str(&db_url)?
+        .busy_timeout(Duration::from_secs(10));
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
-        .connect(&db_url)
+        .connect_with(connect_options)
         .await?;
 
     // Run migrations (embedded SQL)
@@ -27,6 +37,60 @@ pub async fn init_pool(db_path: &Path) -> ZenResult<SqlitePool> {
 
     info!("Database initialized successfully");
     Ok(pool)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::init_pool;
+    use crate::db::queries::{add_message, create_chat, NewMessage};
+    use std::time::Duration;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn waits_for_a_competing_writer_before_returning_database_locked() {
+        let dir = tempdir().expect("temporary database directory");
+        let pool = init_pool(&dir.path().join("zen.db"))
+            .await
+            .expect("database should initialize");
+        let chat = create_chat(&pool, "Lock test", None, None)
+            .await
+            .expect("chat should be created");
+
+        let mut held = pool.begin().await.expect("lock transaction should begin");
+        sqlx::query("UPDATE chats SET title = ? WHERE id = ?")
+            .bind("Writer 1")
+            .bind(&chat.id)
+            .execute(&mut *held)
+            .await
+            .expect("lock transaction should acquire the write lock");
+
+        let writer_pool = pool.clone();
+        let chat_id = chat.id.clone();
+        let pending_writer = tokio::spawn(async move {
+            add_message(
+                &writer_pool,
+                &NewMessage {
+                    chat_id: &chat_id,
+                    role: "user",
+                    content: "Writer 2",
+                    is_complete: true,
+                    ..Default::default()
+                },
+            )
+            .await
+        });
+
+        // Give the second writer a chance to reach SQLite while the first
+        // transaction still owns the lock. Without busy_timeout this returns
+        // SQLITE_BUSY immediately; with the shared connection policy it waits.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        held.commit().await.expect("first writer should commit");
+
+        pending_writer
+            .await
+            .expect("writer task should not panic")
+            .expect("second writer should wait and then commit");
+    }
 }
 
 /// Run schema migrations inline — no external migration files needed.
@@ -236,6 +300,9 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
             info!("'documents' table migration completed successfully");
         }
     }
+
+    // Chat-scoped attachment columns (idempotent). See documents.rs.
+    crate::db::queries::documents::migrate_chat_attachment_columns(pool).await?;
 
     sqlx::query(
         r#"
@@ -960,6 +1027,24 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
             style       TEXT NOT NULL,
             created_at  INTEGER NOT NULL,
             updated_at  INTEGER NOT NULL
+        );
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    // Thread-scoped goals: one persistent objective row per chat, driven by
+    // the `/goal` slash command. `turns_count` counts automatic continuation
+    // turns so runaway goal loops can be bounded.
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS thread_goals (
+            chat_id     TEXT PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE,
+            objective   TEXT NOT NULL,
+            status      TEXT NOT NULL DEFAULT 'active',
+            turns_count INTEGER NOT NULL DEFAULT 0,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
         );
         "#,
     )

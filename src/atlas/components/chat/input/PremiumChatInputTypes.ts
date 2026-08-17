@@ -37,6 +37,8 @@ export interface PremiumChatInputProps {
   onOpenModelSelector?: () => void;
   onOpenSkills?: () => void;
   activeChatId?: string | null;
+  /** The chat's captured workspace root; slash autocomplete resolves discovered skills against it. */
+  workspaceRoot?: string | null;
   /** Archived transcripts stay readable but cannot be edited or resumed. */
   readOnly?: boolean;
   input?: string;

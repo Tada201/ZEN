@@ -38,14 +38,14 @@ export const DiskWidget = memo(function DiskWidget({ context }: { context: Widge
                                     {disk.isRemovable ? 'REMOVABLE' : 'FIXED'}
                                 </span>
                             </div>
-                            <span className={`text-[10px] font-mono font-bold ${isAlert ? 'text-rose-500' : 'text-muted-foreground'}`}>
+                            <span className={`text-[10px] font-mono font-bold ${isAlert ? 'text-destructive' : 'text-muted-foreground'}`}>
                                 {Math.round(percent)}%
                             </span>
                         </div>
 
                         <div className="h-1 bg-card rounded-full overflow-hidden border border-border/25">
                             <div
-                                className={`h-full transition-all duration-500 rounded-full ${isAlert ? 'bg-rose-500/60' : 'bg-violet-500/60'}`}
+                                className={`h-full transition-all duration-500 rounded-full ${isAlert ? 'bg-destructive/60' : 'bg-primary/60'}`}
                                 style={{ width: `${percent}%` }}
                             />
                         </div>

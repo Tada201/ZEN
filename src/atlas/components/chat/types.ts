@@ -23,7 +23,8 @@ export type MessageKind =
   | 'workflow_failed'
   | 'task_started'
   | 'task_completed'
-  | 'task_failed';
+  | 'task_failed'
+  | 'goal_continuation';
 
 export interface ToolCallMeta {
   toolName: string;

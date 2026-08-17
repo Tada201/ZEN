@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "lint:tokens": "node scripts/design-token-guard.mjs",
     "dev:tauri": "tauri dev --config src-tauri/tauri.dev.conf.json",
     "build": "tsc && vite build",
     "build:tauri": "tauri build",

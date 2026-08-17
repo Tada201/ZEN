@@ -1008,6 +1008,7 @@ impl Runner {
                 api_key,
                 display_name: provider_name.to_uppercase(),
                 headers: None,
+                api_format: None,
             });
         }
 
@@ -1034,6 +1035,7 @@ impl Runner {
                         api_key: key,
                         display_name: cloud_name.to_uppercase(),
                         headers: None,
+                        api_format: None,
                     });
                 }
             }

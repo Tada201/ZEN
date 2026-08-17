@@ -1,5 +1,6 @@
 pub mod child_runner;
 pub mod handoff_context;
+pub mod browser_tools;
 pub mod drawing_tools;
 pub mod fs_tools;
 pub mod graph_session;
@@ -12,7 +13,6 @@ pub mod search_files;
 pub mod session_memory_tools;
 pub mod skill_tool;
 pub mod spawn_tools;
-pub mod system_tools;
 pub mod task_tools;
 pub mod terminal_tools;
 

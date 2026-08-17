@@ -41,6 +41,8 @@ if (-not $SkipBuild) {
     Run "npm run build"
 }
 
+Run "npm run lint:tokens"
+
 Assert-NoMatches `
     "Raw frontend invoke calls found outside src/api/tauriClient.ts" `
     { Get-ChildItem src -Recurse -File | Where-Object { $_.FullName -notmatch 'src[/\\]api[/\\]tauriClient\.ts' } | Select-String -Pattern 'invoke<|invoke\(' }

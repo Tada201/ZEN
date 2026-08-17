@@ -16,7 +16,8 @@ const sources = [
   "src/atlas/components/chat/input/ImagePresetStrip.tsx",
   "src/atlas/components/chat/input/SuggestedPromptStrip.tsx",
   "src/atlas/components/chat/input/SlashCommandPopover.tsx",
-  "src/atlas/components/chat/input/TaskDrawer.tsx",
+  "src/atlas/components/chat/input/QueuedPromptsStrip.tsx",
+  "src/atlas/components/chat/input/GoalBanner.tsx",
   "src/atlas/components/chat/input/ThinkingConfig.tsx",
   "src/atlas/components/PermissionModeMenu.tsx",
 ].map(read);

@@ -85,9 +85,9 @@ export function CodeEditor({ activeFile }: { activeFile: string | null }) {
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#1e1e1e]">
+    <div className="h-full flex flex-col bg-editor-surface">
       {/* Tabs Header */}
-      <div className="flex bg-[#252526] border-b border-border/20 overflow-x-auto no-scrollbar h-9">
+      <div className="flex bg-editor-elevated border-b border-border/20 overflow-x-auto no-scrollbar h-9">
         {tabs.map((tab) => (
           <div
             key={tab.path}
@@ -95,8 +95,8 @@ export function CodeEditor({ activeFile }: { activeFile: string | null }) {
             className={cn(
               "flex items-center gap-2 px-3 h-full border-r border-border/20 cursor-pointer transition-colors text-[11px] group min-w-[120px] max-w-[200px]",
               activeTabPath === tab.path 
-                ? "bg-[#1e1e1e] text-foreground border-t-2 border-t-primary" 
-                : "bg-[#2d2d2d] text-muted-foreground hover:bg-[#2a2d2e]"
+                ? "bg-editor-surface text-foreground border-t-2 border-t-primary" 
+                : "bg-editor-inactive text-muted-foreground hover:bg-editor-elevated"
             )}
           >
             <span className="truncate flex-1">{tab.name}</span>

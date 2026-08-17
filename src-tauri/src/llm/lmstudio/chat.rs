@@ -56,6 +56,10 @@ impl super::LmStudioProvider {
     ) -> ZenResult<ChatResponse> {
         let url = format!("{}/v1/chat/completions", self.base_url);
 
+        // Sanitize tool names to the strict function charset and keep a
+        // per-request reverse map so streamed tool calls decode to canonical ids.
+        let mut name_codec = crate::llm::ToolNameCodec::default();
+
         let oai_messages: Vec<OpenAiMessage> = messages
             .into_iter()
             .map(|m| {
@@ -65,7 +69,7 @@ impl super::LmStudioProvider {
                             id: tc.id,
                             call_type: "function".to_string(),
                             function: OpenAiFunctionOut {
-                                name: tc.name,
+                                name: name_codec.encode(&tc.name),
                                 arguments: tc.args.to_string(),
                             },
                         })
@@ -95,7 +99,7 @@ impl super::LmStudioProvider {
                     serde_json::json!({
                         "type": "function",
                         "function": {
-                            "name": t.name,
+                            "name": name_codec.encode(&t.name),
                             "description": t.description,
                             "parameters": t.parameters
                         }
@@ -104,6 +108,14 @@ impl super::LmStudioProvider {
                 .collect()
         });
 
+        // Reasoning fields intentionally stay None — this is the honest wire
+        // behavior, do not "fix" it into a placebo toggle. LM Studio's
+        // /v1/chat/completions ignores per-request reasoning_effort
+        // (lmstudio-bug-tracker #988, open) and nested reasoning.effort only
+        // exists on the separate /v1/responses endpoint (#1250, open), which
+        // Zen does not integrate. Reasoning is surfaced read-only via model
+        // capabilities (see models.rs reasoning_metadata_from_capabilities);
+        // inbound reasoning tokens are still parsed from the stream below.
         let request = OpenAiChatRequest {
             model: model.to_string(),
             messages: oai_messages,
@@ -224,7 +236,7 @@ impl super::LmStudioProvider {
                                         name: if acc.name.is_empty() {
                                             None
                                         } else {
-                                            Some(acc.name.clone())
+                                            Some(name_codec.decode(&acc.name))
                                         },
                                         arguments_delta: delta
                                             .function
@@ -240,14 +252,16 @@ impl super::LmStudioProvider {
                                             )
                                         {
                                             acc.ready_emitted = true;
+                                            // Pin a stable id before the early ToolCallReady
+                                            // so it matches the finalized tool-call id; LM
+                                            // Studio streams may omit tool-call ids.
+                                            if acc.id.is_empty() {
+                                                acc.id = format!("call_{}", uuid::Uuid::new_v4());
+                                            }
                                             on_chunk(crate::llm::LlmChunk::ToolCallReady {
                                                 index: idx,
-                                                id: if acc.id.is_empty() {
-                                                    None
-                                                } else {
-                                                    Some(acc.id.clone())
-                                                },
-                                                name: acc.name.clone(),
+                                                id: Some(acc.id.clone()),
+                                                name: name_codec.decode(&acc.name),
                                                 arguments,
                                             });
                                         }
@@ -273,14 +287,14 @@ impl super::LmStudioProvider {
             let mut tcs = Vec::new();
             for acc in results_tool_calls {
                 if !acc.name.is_empty() {
-                    let tool_name = acc.name.clone();
+                    let tool_name = name_codec.decode(&acc.name);
                     tcs.push(crate::db::models::ToolCall {
                         id: if acc.id.is_empty() {
                             format!("call_{}", uuid::Uuid::new_v4())
                         } else {
                             acc.id
                         },
-                        name: acc.name,
+                        name: tool_name.clone(),
                         args: match serde_json::from_str(&acc.arguments) {
                             Ok(args) => args,
                             Err(e) => {

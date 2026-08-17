@@ -75,11 +75,11 @@ impl AgentTool for SkillTool {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("missing 'action' field"))?;
 
-        let cwd = std::env::current_dir().unwrap_or_default();
+        let cwd = crate::agent::skills::cwd_for_chat(&_app, &_chat_id).await;
 
         match action {
             "list" => {
-                let outcome = self.manager.skills_for_cwd(&cwd, false).await;
+                let outcome = self.manager.enabled_skills_for_cwd(&cwd).await;
                 let items: Vec<Value> = outcome
                     .skills
                     .iter()
@@ -106,7 +106,7 @@ impl AgentTool for SkillTool {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("missing 'name' for action={}", action))?;
                 let args = input.get("args").and_then(|v| v.as_str()).unwrap_or("");
-                let outcome = self.manager.skills_for_cwd(&cwd, false).await;
+                let outcome = self.manager.enabled_skills_for_cwd(&cwd).await;
                 let skill = outcome
                     .find_by_name(name)
                     .ok_or_else(|| anyhow!("skill not found: {}", name))?;

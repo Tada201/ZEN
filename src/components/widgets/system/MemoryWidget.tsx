@@ -60,6 +60,9 @@ export const MemoryWidget = memo(function MemoryWidget({ context }: { context: S
         const activeLimit = Math.round((numDots * roundedPercent) / 100);
         const availableLimit = Math.round((numDots * (memoryAvailable || 0)) / memoryTotal);
 
+        const primary = getComputedStyle(document.documentElement)
+            .getPropertyValue('--primary').trim() || '262 83% 65%';
+
         ctx.clearRect(0, 0, displayWidth, displayHeight);
 
         for (let i = 0; i < numDots; i++) {
@@ -73,11 +76,11 @@ export const MemoryWidget = memo(function MemoryWidget({ context }: { context: S
             ctx.arc(x, y, dotSize, 0, Math.PI * 2);
 
             if (i < activeLimit) {
-                ctx.fillStyle = '#8b5cf6'; // violet-500
+                ctx.fillStyle = `hsl(${primary})`;
             } else if (i < activeLimit + availableLimit) {
-                ctx.fillStyle = 'rgba(139, 92, 246, 0.35)'; // violet-500/35
+                ctx.fillStyle = `hsl(${primary} / 0.35)`;
             } else {
-                ctx.fillStyle = 'rgba(139, 92, 246, 0.08)'; // violet-500/08
+                ctx.fillStyle = `hsl(${primary} / 0.08)`;
             }
 
             ctx.fill();
@@ -109,7 +112,7 @@ export const MemoryWidget = memo(function MemoryWidget({ context }: { context: S
                 </div>
                 <div className="h-1 bg-card rounded-full overflow-hidden border border-border/25">
                     <div
-                        className="h-full bg-violet-500/60 transition-all duration-300 rounded-full"
+                        className="h-full bg-primary/60 transition-all duration-300 rounded-full"
                         style={{ width: `${swapPercent}%` }}
                     />
                 </div>

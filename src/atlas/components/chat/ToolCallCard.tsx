@@ -311,23 +311,29 @@ export function ToolCallCard({
           )}
 
           {chatId && (effectiveStatus === "awaiting_approval" || effectiveStatus === "error" || isStale) && (
-            <div className="flex justify-end">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <button type="button" onClick={() => openRunInspector(chatId, toolCall.messageId || messageId, toolCall.id)} className="inline-flex h-7 items-center rounded-md border border-border bg-background px-2.5 text-[11px] font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">Inspect run</button>
+              {effectiveStatus === "error" && onRetry && (
+                <button type="button" className="inline-flex h-7 items-center gap-1.5 justify-center rounded-md border border-border bg-transparent px-3 text-[11px] font-medium text-foreground transition-colors duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" onClick={() => onRetry?.(id)}>
+                  <RefreshCcw className="h-3 w-3" />
+                  Retry
+                </button>
+              )}
+              {effectiveStatus === "awaiting_approval" && (
+                <>
+                  <button type="button" className="inline-flex h-7 items-center justify-center rounded-md border border-border bg-transparent px-3 text-[11px] font-medium text-foreground transition-colors duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" onClick={() => onCancel?.(id)}>
+                    Deny
+                  </button>
+                  <button type="button" className="inline-flex h-7 items-center justify-center rounded-md bg-primary px-3 text-[11px] font-medium text-primary-foreground transition-colors duration-200 hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" onClick={() => onRetry?.(id)}>
+                    Approve
+                  </button>
+                </>
+              )}
             </div>
           )}
 
-          {effectiveStatus === "awaiting_approval" && (
-            <div className="flex justify-end gap-2">
-              <button type="button" className="inline-flex h-7 items-center justify-center rounded-md border border-border bg-transparent px-3 text-[11px] font-medium text-foreground transition-colors duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" onClick={() => onCancel?.(id)}>
-                Deny
-              </button>
-              <button type="button" className="inline-flex h-7 items-center justify-center rounded-md bg-primary px-3 text-[11px] font-medium text-primary-foreground transition-colors duration-200 hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" onClick={() => onRetry?.(id)}>
-                Approve
-              </button>
-            </div>
-          )}
-
-          {effectiveStatus === "error" && onRetry && (
+          {/* Retry outside an inspectable/approval context (e.g. no chatId) keeps its own row. */}
+          {!(chatId && (effectiveStatus === "awaiting_approval" || effectiveStatus === "error" || isStale)) && effectiveStatus === "error" && onRetry && (
             <div className="flex justify-end gap-2">
               <button type="button" className="inline-flex h-7 items-center gap-1.5 justify-center rounded-md border border-border bg-transparent px-3 text-[11px] font-medium text-foreground transition-colors duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" onClick={() => onRetry?.(id)}>
                 <RefreshCcw className="h-3 w-3" />

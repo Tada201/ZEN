@@ -20,9 +20,9 @@ impl AgentTool for ListDocumentsTool {
     }
 
     fn description(&self) -> &str {
-        "Lists ONLY user-uploaded / ingested documents from the knowledge base (the RAG library), with their recorded file paths and ingest status. \
-         This does NOT read the workspace filesystem and will be empty when no documents have been uploaded — to browse real workspace files and folders use `list_directory` instead. \
-         Call this when you need an uploaded file's path, then pass the returned file_path to read_document_content."
+        "Lists the files the user attached to THIS chat (the chat's attachment workspace), with slim metadata cards — id, name, type, size, and an estimated token cost — but NOT their contents. \
+         This is distinct from the working-directory filesystem: to browse real workspace files use `list_directory`. \
+         Call this first to see what the user uploaded, then pass a returned id/file_path to read_document_content to read a specific one on demand."
     }
 
     fn input_schema(&self) -> Value {
@@ -36,20 +36,20 @@ impl AgentTool for ListDocumentsTool {
     async fn run(
         &self,
         app: AppHandle,
-        _chat_id: String,
+        chat_id: String,
         _input: Value,
         _depth: u32,
         _allowed_tools: Option<Arc<Mutex<HashSet<String>>>>,
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         let state = app.state::<AppState>();
-        let docs = crate::db::queries::list_documents(
-            &state
-                .db()
-                .await
-                .map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?,
-        )
-        .await?;
+        let pool = state
+            .db()
+            .await
+            .map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?;
+        // Chat-scoped: only this chat's attachments. Falls back to nothing when
+        // the chat has no uploads (rather than leaking the global library).
+        let docs = crate::db::queries::list_documents_for_chat(&pool, &chat_id).await?;
 
         let mut formatted_docs = Vec::new();
         for doc in docs {
@@ -57,6 +57,11 @@ impl AgentTool for ListDocumentsTool {
                 "id": doc.id,
                 "file_name": doc.filename,
                 "file_path": doc.file_path,
+                "mime_type": doc.mime_type,
+                "size_bytes": doc.file_size,
+                "token_estimate": doc.token_estimate,
+                "page_count": doc.page_count,
+                "sheet_names": doc.sheet_names,
                 "status": doc.status,
             }));
         }
@@ -252,6 +257,53 @@ pub struct ReadDocumentTool;
 #[derive(Deserialize)]
 struct ReadDocumentArgs {
     file_path: String,
+    /// Character offset to start reading from (0-based).
+    #[serde(default)]
+    offset: Option<usize>,
+    /// Max characters to return; clamped to [1, READ_DOC_MAX_LIMIT].
+    #[serde(default)]
+    limit: Option<usize>,
+}
+
+/// Character-window limits for read_document_content. Windowing is
+/// character-based (unlike the byte-based `truncate_utf8`) so a resume offset
+/// stays valid across multi-byte content.
+const READ_DOC_DEFAULT_LIMIT: usize = 24 * 1024;
+const READ_DOC_MAX_LIMIT: usize = 64 * 1024;
+
+/// Pure character window over `content`. Returns the window text, the
+/// character position just past it (the resume point for the next call), and
+/// the total character count. `offset >= total` yields an empty window.
+fn window_text(content: &str, offset: usize, limit: usize) -> (String, usize, usize) {
+    let total = content.chars().count();
+    if offset >= total {
+        return (String::new(), offset, total);
+    }
+    let window: String = content.chars().skip(offset).take(limit).collect();
+    let next = offset + window.chars().count();
+    (window, next, total)
+}
+
+/// Window plus honest continuation/EOF markers for one read call.
+fn windowed_content(content: &str, offset: usize, limit: usize) -> String {
+    let (window, next, total) = window_text(content, offset, limit);
+    if offset >= total {
+        format!("[offset {offset} is beyond the end of the file ({total} characters total) — nothing to read]")
+    } else if next < total {
+        format!("{window}... [TRUNCATED at character {next} of {total} — call read_document_content again with offset={next} to continue]")
+    } else {
+        window
+    }
+}
+
+/// The `<doc_id>.extracted.txt` sidecar written next to a chat attachment's
+/// original blob (see `services::attachment_store::store_attachment`). Returns
+/// None when the stored path has no parent to anchor against.
+fn extracted_sidecar_path(blob_path: Option<&str>, doc_id: &str) -> Option<PathBuf> {
+    let blob = blob_path?;
+    Path::new(blob)
+        .parent()
+        .map(|dir| dir.join(format!("{doc_id}.extracted.txt")))
 }
 
 #[async_trait]
@@ -261,7 +313,8 @@ impl AgentTool for ReadDocumentTool {
     }
 
     fn description(&self) -> &str {
-        "Reads authoritative raw text from one uploaded or workspace file. Prefer the exact file_path returned by list_documents; absolute paths, workspace-relative paths, IDs, and exact filenames are accepted."
+        "Reads authoritative raw text from one uploaded or workspace file. Prefer the exact file_path returned by list_documents; absolute paths, workspace-relative paths, IDs, and exact filenames are accepted. \
+         Long files are returned as a character window: when the result ends with a [TRUNCATED ...] marker, call this tool again with the stated offset to continue reading from that exact character position; `limit` controls how many characters come back."
     }
 
     fn input_schema(&self) -> Value {
@@ -271,6 +324,17 @@ impl AgentTool for ReadDocumentTool {
                 "file_path": {
                     "type": "string",
                     "description": "Path to the file, ID, or filename from the document list"
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Character position to start reading from (0-based). Default 0. Use the resume point stated by a previous [TRUNCATED ...] marker to continue."
+                },
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65536,
+                    "description": "Maximum number of characters to return. Default 24576; clamped to at most 65536."
                 }
             },
             "required": ["file_path"],
@@ -291,32 +355,45 @@ impl AgentTool for ReadDocumentTool {
         if args.file_path.trim().is_empty() {
             anyhow::bail!("file_path must not be empty");
         }
+        let offset = args.offset.unwrap_or(0);
+        let limit = args
+            .limit
+            .unwrap_or(READ_DOC_DEFAULT_LIMIT)
+            .clamp(1, READ_DOC_MAX_LIMIT);
         let state = app.state::<AppState>();
+        let pool = state
+            .db()
+            .await
+            .map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?;
+
+        // 1. Chat attachment fast-path. Uploaded files live under appdata
+        // (outside the workspace) and their originals may be binary, so we read
+        // the pre-extracted plain-text sidecar rather than the blob. Match by
+        // id or exact filename within THIS chat only.
+        let attachments =
+            crate::db::queries::list_documents_for_chat(&pool, &chat_id).await?;
+        if let Some(doc) = attachments
+            .into_iter()
+            .find(|d| d.id == args.file_path || d.filename == args.file_path)
+        {
+            if let Some(sidecar) = extracted_sidecar_path(doc.file_path.as_deref(), &doc.id) {
+                if let Ok(content) = tokio::fs::read_to_string(&sidecar).await {
+                    return Ok(json!({
+                        "file_name": doc.filename,
+                        "mime_type": doc.mime_type,
+                        "content": windowed_content(&content, offset, limit)
+                    }));
+                }
+            }
+        }
+
+        // 2. Workspace file fall-back (workspace-relative path / absolute path).
         let workspace = state
             .workspace_for_chat(&chat_id)
             .await
             .map_err(|e| anyhow::anyhow!("Unable to resolve session workspace: {}", e))?;
 
-        // Resolve path
         let mut target_path = PathBuf::from(&args.file_path);
-
-        if !target_path.exists() {
-            let docs = crate::db::queries::list_documents(
-                &state
-                    .db()
-                    .await
-                    .map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?,
-            )
-            .await?;
-            if let Some(doc) = docs
-                .into_iter()
-                .find(|d| d.filename == args.file_path || d.id == args.file_path)
-            {
-                if let Some(doc_path) = doc.file_path {
-                    target_path = PathBuf::from(&doc_path);
-                }
-            }
-        }
 
         if !target_path.exists() {
             if let Ok(relative_path) =
@@ -341,20 +418,9 @@ impl AgentTool for ReadDocumentTool {
 
         let content = tokio::fs::read_to_string(&target_path).await?;
 
-        // Truncate to avoid context overflow
-        let max_len = 24 * 1024;
-        let final_text = if content.len() > max_len {
-            format!(
-                "{}... [TRUNCATED]",
-                crate::tools::fs_tools::truncate_utf8(&content, max_len)
-            )
-        } else {
-            content
-        };
-
         Ok(json!({
             "file_path": target_path.to_string_lossy(),
-            "content": final_text
+            "content": windowed_content(&content, offset, limit)
         }))
     }
 }
@@ -404,18 +470,13 @@ impl AgentTool for GrepDocumentsTool {
             anyhow::bail!("query must not be empty");
         }
         let state = app.state::<AppState>();
-        let workspace = state
-            .workspace_for_chat(&chat_id)
+        let pool = state
+            .db()
             .await
-            .map_err(|e| anyhow::anyhow!("Unable to resolve session workspace: {}", e))?;
-        let docs = crate::db::queries::list_documents(
-            &state
-                .db()
-                .await
-                .map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?,
-        )
-        .await?;
-        let max_file_bytes = crate::tools::fs_tools::workspace_max_file_bytes(&state).await;
+            .map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?;
+        // Chat-scoped: search only THIS chat's uploaded attachments, over their
+        // pre-extracted plain-text sidecars (originals may be binary).
+        let docs = crate::db::queries::list_documents_for_chat(&pool, &chat_id).await?;
 
         let mut results = Vec::new();
         let query = if args.case_sensitive.unwrap_or(false) {
@@ -424,52 +485,37 @@ impl AgentTool for GrepDocumentsTool {
             args.query.to_lowercase()
         };
 
-        for doc in docs {
-            if let Some(path_str) = doc.file_path {
-                let path = Path::new(&path_str);
-                if path.exists() {
-                    let Ok(path) = crate::workspace::validate_workspace_path(&workspace, path)
-                    else {
-                        continue;
-                    };
+        for doc in &docs {
+            let Some(sidecar) = extracted_sidecar_path(doc.file_path.as_deref(), &doc.id) else {
+                continue;
+            };
+            if let Ok(content) = tokio::fs::read_to_string(&sidecar).await {
+                let search_content = if args.case_sensitive.unwrap_or(false) {
+                    content.clone()
+                } else {
+                    content.to_lowercase()
+                };
 
-                    if crate::tools::fs_tools::enforce_existing_file_size(&path, max_file_bytes)
-                        .await
-                        .is_err()
-                    {
-                        continue;
-                    }
-
-                    if let Ok(content) = tokio::fs::read_to_string(&path).await {
-                        let search_content = if args.case_sensitive.unwrap_or(false) {
-                            content.clone()
+                if search_content.contains(&query) {
+                    let mut matches = Vec::new();
+                    for (idx, line) in content.lines().enumerate() {
+                        let search_line = if args.case_sensitive.unwrap_or(false) {
+                            line.to_string()
                         } else {
-                            content.to_lowercase()
+                            line.to_lowercase()
                         };
-
-                        if search_content.contains(&query) {
-                            let mut matches = Vec::new();
-                            for (idx, line) in content.lines().enumerate() {
-                                let search_line = if args.case_sensitive.unwrap_or(false) {
-                                    line.to_string()
-                                } else {
-                                    line.to_lowercase()
-                                };
-                                if search_line.contains(&query) {
-                                    matches
-                                        .push(json!({ "line": idx + 1, "content": line.trim() }));
-                                }
-                                if matches.len() >= 5 {
-                                    break;
-                                }
-                            }
-                            results.push(json!({
-                                "filename": doc.filename,
-                                "path": path.to_string_lossy(),
-                                "matches": matches
-                            }));
+                        if search_line.contains(&query) {
+                            matches.push(json!({ "line": idx + 1, "content": line.trim() }));
+                        }
+                        if matches.len() >= 5 {
+                            break;
                         }
                     }
+                    results.push(json!({
+                        "id": doc.id,
+                        "filename": doc.filename,
+                        "matches": matches
+                    }));
                 }
             }
             if results.len() >= 10 {
@@ -768,5 +814,64 @@ mod list_directory_tests {
         assert!(is_ignored_dir("node_modules"));
         assert!(is_ignored_dir("target"));
         assert!(!is_ignored_dir("src"));
+    }
+}
+
+#[cfg(test)]
+mod read_document_window_tests {
+    use super::*;
+
+    #[test]
+    fn window_text_empty_content_yields_empty_window() {
+        let (window, next, total) = window_text("", 0, READ_DOC_DEFAULT_LIMIT);
+        assert_eq!(window, "");
+        assert_eq!(next, 0);
+        assert_eq!(total, 0);
+    }
+
+    #[test]
+    fn window_text_offset_beyond_end_is_empty() {
+        let (window, next, total) = window_text("abc", 10, 5);
+        assert_eq!(window, "");
+        assert_eq!(next, 10);
+        assert_eq!(total, 3);
+    }
+
+    #[test]
+    fn window_text_windows_by_chars_not_bytes() {
+        // 3 chars / 6 UTF-8 bytes: skipping 1 char must land mid-byte-sequence
+        // safely, which byte slicing or truncate_utf8 cannot do.
+        let (window, next, total) = window_text("é你z", 1, 1);
+        assert_eq!(window, "你");
+        assert_eq!(next, 2);
+        assert_eq!(total, 3);
+    }
+
+    #[test]
+    fn window_text_next_lands_on_total_when_limit_exceeds_remainder() {
+        let (window, next, total) = window_text("abcdef", 4, 100);
+        assert_eq!(window, "ef");
+        assert_eq!(next, total);
+        assert_eq!(total, 6);
+    }
+
+    #[test]
+    fn windowed_content_marks_truncation_with_resume_point() {
+        let text = windowed_content("abcdef", 0, 3);
+        assert!(text.starts_with("abc"));
+        assert!(text.contains("TRUNCATED at character 3 of 6"));
+        assert!(text.contains("offset=3"));
+    }
+
+    #[test]
+    fn windowed_content_beyond_end_reports_honest_empty() {
+        let text = windowed_content("abc", 9, 10);
+        assert!(text.contains("beyond the end"));
+        assert!(text.contains("3 characters total"));
+    }
+
+    #[test]
+    fn windowed_content_exact_boundary_has_no_marker() {
+        assert_eq!(windowed_content("abcdef", 0, 6), "abcdef");
     }
 }

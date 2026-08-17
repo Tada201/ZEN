@@ -56,6 +56,13 @@
     "evidence": "Structured patch writes route through the canonical ToolService permission boundary and patch parser."
   },
   {
+    "id": "browser",
+    "risk": "High",
+    "owner": "backend/browser",
+    "status": "lightweight-policy-gate",
+    "evidence": "Embedded WebView2 preview control; URLs re-validated by loopback-gated allowlist (browser::url_policy), in-process CDP only (no debug port), isolated data dir; routes through ToolService High-risk permission gate."
+  },
+  {
     "id": "web_search",
     "risk": "Medium",
     "owner": "backend/search",

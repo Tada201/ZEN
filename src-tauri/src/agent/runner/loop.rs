@@ -158,6 +158,13 @@ impl Runner {
         let mut just_received_tool_results = false;
         let mut total_tokens_in: i64 = 0;
         let mut total_tokens_out: i64 = 0;
+        // Provider-reported usage from the most recent completed LLM call.
+        // The breakdown for iteration N is computed BEFORE that iteration's
+        // call, so it carries the real usage of iteration N-1 (the latest
+        // the provider has actually billed). None until the first call
+        // returns.
+        let mut last_actual_input: Option<usize> = None;
+        let mut last_actual_output: Option<usize> = None;
         let mut message_persisted = false;
         let mut assistant_message_id: Option<String> = None;
         let mut accumulated_commentary = String::new();
@@ -187,18 +194,61 @@ impl Runner {
         let mut preloaded_skill_fragments: Vec<
             crate::agent::skills::SkillInstructionsFragment,
         > = Vec::new();
+        // Skill discovery resolves against the chat's captured workspace
+        // root, not the process cwd — the app's cwd is the install dir.
+        let chat_workspace_root: Option<std::path::PathBuf> = match self.db_pool.as_ref() {
+            Some(db) => crate::db::queries::get_chat(db, &chat_id)
+                .await
+                .ok()
+                .and_then(|chat| chat.workspace_root)
+                .and_then(|root| {
+                    crate::workspace::canonicalize_workspace_root(std::path::Path::new(&root))
+                        .ok()
+                }),
+            None => None,
+        };
+        let skills_cwd = chat_workspace_root
+            .clone()
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
         if let Some(latest) = conversation.iter().rev().find(|m| m.role == "user") {
             if !latest.content.is_empty() {
                 if let Some(state) = self.app.try_state::<crate::commands::AppState>() {
                     let mgr = state.skills_manager.clone();
-                    let cwd = std::env::current_dir().unwrap_or_default();
-                    let outcome = mgr.skills_for_cwd(&cwd, false).await;
+                    let outcome = mgr.enabled_skills_for_cwd(&skills_cwd).await;
+                    let mut seen: std::collections::HashSet<String> =
+                        std::collections::HashSet::new();
+                    // A leading `/skill-name args` is a slash invocation: the
+                    // body is expanded with $ARGUMENTS/$ARGUMENTS_SUFFIX and
+                    // takes priority over any `$name` mentions of the same
+                    // skill. The raw user text stays in the transcript.
+                    if let skills_mod::SlashCommand::Skill { name, args } =
+                        skills_mod::parse_slash_command(&latest.content, &outcome.skills)
+                    {
+                        if let Some(skill) = outcome.find_by_name(&name) {
+                            if let Ok(body) = tokio::fs::read_to_string(&skill.path).await {
+                                let suffix = if args.is_empty() {
+                                    String::new()
+                                } else {
+                                    format!(": {}", args)
+                                };
+                                let expanded = body
+                                    .replace("$ARGUMENTS_SUFFIX", &suffix)
+                                    .replace("$ARGUMENTS", &args);
+                                seen.insert(name);
+                                preloaded_skill_fragments.push(
+                                    skills_mod::SkillInstructionsFragment {
+                                        name: skill.name.clone(),
+                                        path: skill.path.display().to_string(),
+                                        contents: expanded,
+                                    },
+                                );
+                            }
+                        }
+                    }
                     let mentions = skills_mod::extract_skill_mentions(
                         &latest.content,
                         &outcome.skills,
                     );
-                    let mut seen: std::collections::HashSet<String> =
-                        std::collections::HashSet::new();
                     for m in mentions {
                         if !seen.insert(m.name.clone()) {
                             continue;
@@ -453,6 +503,7 @@ impl Runner {
                 conversation: std::mem::take(&mut conversation),
                 extra_system_messages: Vec::new(),
                 chat_id: chat_id.clone(),
+                workspace_root: chat_workspace_root.clone(),
                 recall_block: cached_recall_context.clone(),
                 authorized_tool_ids: authorized_tool_ids.clone(),
                 tools_supported,
@@ -506,6 +557,11 @@ impl Runner {
                     &meta_tools,
                     run_config.model_context_window,
                 );
+                // Overlay the real provider usage from the previous
+                // completed call so the badge can show actual-vs-estimate.
+                let mut breakdown = breakdown;
+                breakdown.actual_input_tokens = last_actual_input;
+                breakdown.actual_output_tokens = last_actual_output;
                 // Mirror the latest per-chat breakdown into the
                 // AppState cache so `get_context_breakdown` /
                 // `get_context_snapshot` can hydrate the right-panel
@@ -640,6 +696,44 @@ impl Runner {
             // Accumulate token counts (fixes #21)
             total_tokens_in += response.tokens_in.unwrap_or(0) as i64;
             total_tokens_out += response.tokens_out.unwrap_or(0) as i64;
+            // Remember this call's real usage so the NEXT iteration's
+            // breakdown reports the provider-billed size. Only overwrite
+            // when the provider actually reported a value.
+            if let Some(t) = response.tokens_in {
+                last_actual_input = Some(t.max(0) as usize);
+            }
+            if let Some(t) = response.tokens_out {
+                last_actual_output = Some(t.max(0) as usize);
+            }
+            // Re-stamp the cached breakdown for this iteration with the
+            // real usage the call just reported and re-emit, so the badge
+            // shows actual-vs-estimate even on a single-turn run that exits
+            // before the next pre-call breakdown would fire.
+            if should_emit_iteration_status(self.depth)
+                && (last_actual_input.is_some() || last_actual_output.is_some())
+            {
+                if let Some(state) = self.app.try_state::<AppState>() {
+                    let updated = {
+                        let mut cache = state.context_breakdown_cache.write().await;
+                        // Guard on run_id: a stop-and-resend can leave a
+                        // newer run's breakdown in the cache under this
+                        // chat_id. Only re-stamp when the cached entry
+                        // belongs to THIS run, or we'd paint this run's
+                        // usage onto the newer run's row.
+                        cache
+                            .get_mut(&chat_id)
+                            .filter(|bd| bd.run_id == run_id)
+                            .map(|bd| {
+                                bd.actual_input_tokens = last_actual_input;
+                                bd.actual_output_tokens = last_actual_output;
+                                bd.clone()
+                            })
+                    };
+                    if let Some(bd) = updated {
+                        self.emit(crate::agent::event_bus::AgentEvent::ContextBreakdown(bd));
+                    }
+                }
+            }
 
             // ── Token budget enforcement (#5) ──
             if let Some(budget) = run_config.token_budget {

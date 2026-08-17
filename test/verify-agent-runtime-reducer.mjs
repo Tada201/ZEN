@@ -38,13 +38,79 @@ record = revealAgentRun(record, 100);
 assert.equal(record.parts[0].visibleText, "Hello world!");
 assert.equal(record.status, "completed");
 
-const stale = reduceAgentRun(record, {
+// A text-delta arriving after the run drained to "completed" is the trailing
+// `chat:chunk` that lost the Tauri event-name race with `chat:done`. It must
+// re-open the drain and append, not be dropped — dropping it was the freeze
+// that only a reload fixed.
+let reopened = reduceAgentRun(record, {
   kind: "text-delta",
   runId: "run-1",
   chatId: "chat-1",
-  delta: " stale",
+  messageId: "msg-1",
+  delta: " and more",
 });
-assert.equal(stale.parts[0].receivedText, "Hello world!");
+assert.equal(reopened.status, "draining", "late text-delta must re-open the drain");
+assert.equal(reopened.parts[0].receivedText, "Hello world! and more");
+reopened = revealAgentRun(reopened, 100);
+assert.equal(reopened.parts[0].visibleText, "Hello world! and more", "re-opened tail must reveal");
+assert.equal(reopened.status, "completed");
+
+// A failed/cancelled run stays terminal — no late delta re-opens it.
+let sealed = reduceAgentRun(emptyAgentTurn("run-seal", "chat-1", "m"), { kind: "run-error", runId: "run-seal", chatId: "chat-1", messageId: "m", error: "boom" });
+sealed = reduceAgentRun(sealed, { kind: "text-delta", runId: "run-seal", chatId: "chat-1", messageId: "m", delta: "late" });
+assert.equal(sealed.status, "failed", "run-error stays terminal");
+assert.equal(sealed.parts.length, 0, "no late part appended to a failed run");
+
+// run-finish must never shrink text already accumulated from deltas. A partial
+// or empty canonical `content` (deep_research handoff, cancelled path) would
+// otherwise truncate the streamed answer to a fragment.
+let grown = emptyAgentTurn("run-grow", "chat-1", "msg-grow");
+grown = reduceAgentRun(grown, { kind: "text-delta", runId: "run-grow", chatId: "chat-1", messageId: "msg-grow", delta: "Full streamed answer" });
+grown = reduceAgentRun(grown, { kind: "run-finish", runId: "run-grow", chatId: "chat-1", messageId: "msg-grow", content: "Full" });
+assert.equal(grown.parts[0].receivedText, "Full streamed answer", "shorter run-finish content must not truncate streamed text");
+
+// A run-error terminal must surface every received character immediately. The
+// scheduler's reveal loop stops on terminal status, so the pending tail would
+// otherwise stay hidden until a reload rehydrated the row from the DB.
+let errored = emptyAgentTurn("run-err", "chat-1", "msg-err");
+errored = reduceAgentRun(errored, {
+  kind: "text-delta",
+  runId: "run-err",
+  chatId: "chat-1",
+  messageId: "msg-err",
+  delta: "Partial tail before failure",
+});
+assert.equal(errored.parts[0].visibleText, "", "text stays hidden until a reveal frame");
+errored = reduceAgentRun(errored, {
+  kind: "run-error",
+  runId: "run-err",
+  chatId: "chat-1",
+  messageId: "msg-err",
+  error: "stream stopped",
+});
+assert.equal(errored.status, "failed");
+assert.equal(errored.error, "stream stopped");
+assert.equal(errored.parts[0].visibleText, "Partial tail before failure", "run-error must reveal the full received tail");
+assert.equal(errored.parts[0].state, "done");
+
+// run-cancel behaves the same for the interrupted (recoverable) case.
+let cancelled = emptyAgentTurn("run-cancel", "chat-1", "msg-cancel");
+cancelled = reduceAgentRun(cancelled, {
+  kind: "reasoning-delta",
+  runId: "run-cancel",
+  chatId: "chat-1",
+  messageId: "msg-cancel",
+  delta: "thinking tail",
+});
+cancelled = reduceAgentRun(cancelled, {
+  kind: "run-cancel",
+  runId: "run-cancel",
+  chatId: "chat-1",
+  messageId: "msg-cancel",
+});
+assert.equal(cancelled.status, "cancelled");
+assert.equal(cancelled.parts[0].visibleText, "thinking tail", "run-cancel must reveal the full received tail");
+
 
 const orderedRuntimeSteps = mergeRuntimeTextPartsIntoSteps([
   {

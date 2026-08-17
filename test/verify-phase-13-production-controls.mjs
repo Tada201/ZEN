@@ -40,8 +40,9 @@ assert(mock.includes("abort_chat: () => true") && mock.includes("pause_chat: () 
 assert(lifecycle.includes("ZenResult<bool>") && lifecycle.includes("Ok(cancelled)"), "backend stop must distinguish accepted cancellation from a no-op");
 
 assert(footer.includes("Pause response at the next safe boundary"));
-assert(footer.includes("Resume response"));
-assert(footer.includes("Stop paused response"));
+assert(footer.includes('aria-label="Resume paused response"'));
+assert(footer.includes('aria-label="Stop response"'));
+assert(footer.includes('props.isLoading ? "Queue message" : "Send message"'), "submit must advertise queue semantics while a run is active");
 assert(lifecycle.includes("control.pause()") && lifecycle.includes("control.resume()"));
 assert(lifecycle.includes("token.cancel()"), "stop must cancel the backend execution token");
 assert(recovery.includes("markRecoveredMessage") && recovery.includes("Interrupted"), "recovery UX must remain covered by the production gate");

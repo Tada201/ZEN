@@ -7,12 +7,28 @@
 //! - `suggest_slash` - autocomplete suggestions for the chat input popover
 
 use crate::agent::skills::{
-    parse_slash_command, suggest_slash_commands, BuiltinCommand, SlashCommand, SlashSuggestionKind,
+    is_valid_skill_name, parse_slash_command, suggest_slash_commands, BuiltinCommand, SlashCommand,
+    SlashSuggestionKind, AGENTS_DIR_NAME, SKILLS_DIR_NAME, SKILLS_FILENAME, ZEN_HOME_DIR,
 };
 use crate::commands::AppState;
-use crate::error::ZenResult;
+use crate::error::{ZenError, ZenResult};
 use serde::Serialize;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
+
+/// Sentinel prefix so the frontend can detect an unconfirmed overwrite and
+/// re-issue with `overwrite: true`.
+pub const SKILL_EXISTS_PREFIX: &str = "skill-exists:";
+
+/// Resolve the discovery cwd from the frontend-supplied workspace root
+/// (the chat the composer belongs to), falling back to the process cwd.
+fn resolve_cwd(workspace_root: Option<&str>) -> PathBuf {
+    workspace_root
+        .and_then(|root| {
+            crate::workspace::canonicalize_workspace_root(std::path::Path::new(root)).ok()
+        })
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
+}
 
 #[derive(Debug, Serialize)]
 pub struct SkillListItem {
@@ -33,9 +49,12 @@ pub struct SkillListItem {
 }
 
 #[tauri::command]
-pub async fn list_skills(app: AppHandle) -> ZenResult<Vec<SkillListItem>> {
+pub async fn list_skills(
+    app: AppHandle,
+    workspace_root: Option<String>,
+) -> ZenResult<Vec<SkillListItem>> {
     let state = app.state::<AppState>();
-    let cwd = std::env::current_dir().unwrap_or_default();
+    let cwd = resolve_cwd(workspace_root.as_deref());
     let outcome = state.skills_manager.skills_for_cwd(&cwd, false).await;
     let mut items = Vec::with_capacity(outcome.skills.len());
     for s in outcome.skills.iter() {
@@ -77,9 +96,13 @@ pub struct SkillLoadResult {
 }
 
 #[tauri::command]
-pub async fn load_skill(app: AppHandle, name: String) -> ZenResult<SkillLoadResult> {
+pub async fn load_skill(
+    app: AppHandle,
+    name: String,
+    workspace_root: Option<String>,
+) -> ZenResult<SkillLoadResult> {
     let state = app.state::<AppState>();
-    let cwd = std::env::current_dir().unwrap_or_default();
+    let cwd = resolve_cwd(workspace_root.as_deref());
     let outcome = state.skills_manager.skills_for_cwd(&cwd, false).await;
     let skill = outcome
         .find_by_name(&name)
@@ -126,10 +149,14 @@ pub enum SlashSuggestionDto {
 }
 
 #[tauri::command]
-pub async fn suggest_slash(app: AppHandle, query: String) -> ZenResult<Vec<SlashSuggestionDto>> {
+pub async fn suggest_slash(
+    app: AppHandle,
+    query: String,
+    workspace_root: Option<String>,
+) -> ZenResult<Vec<SlashSuggestionDto>> {
     let state = app.state::<AppState>();
-    let cwd = std::env::current_dir().unwrap_or_default();
-    let skills = state.skills_manager.list(&cwd).await;
+    let cwd = resolve_cwd(workspace_root.as_deref());
+    let skills = state.skills_manager.enabled_skills_for_cwd(&cwd).await.skills;
     let suggestions = suggest_slash_commands(&query, &skills);
     Ok(suggestions
         .into_iter()
@@ -161,10 +188,14 @@ pub enum SlashParseResult {
 }
 
 #[tauri::command]
-pub async fn parse_slash(app: AppHandle, input: String) -> ZenResult<SlashParseResult> {
+pub async fn parse_slash(
+    app: AppHandle,
+    input: String,
+    workspace_root: Option<String>,
+) -> ZenResult<SlashParseResult> {
     let state = app.state::<AppState>();
-    let cwd = std::env::current_dir().unwrap_or_default();
-    let skills = state.skills_manager.list(&cwd).await;
+    let cwd = resolve_cwd(workspace_root.as_deref());
+    let skills = state.skills_manager.enabled_skills_for_cwd(&cwd).await.skills;
     let parsed = parse_slash_command(&input, &skills);
     Ok(match parsed {
         SlashCommand::NotCommand => SlashParseResult::NotCommand,
@@ -182,5 +213,227 @@ fn builtin_name(b: BuiltinCommand) -> &'static str {
         BuiltinCommand::Help => "help",
         BuiltinCommand::Skills => "skills",
         BuiltinCommand::Settings => "settings",
+        BuiltinCommand::Goal => "goal",
+        BuiltinCommand::Compact => "compact",
+    }
+}
+
+/// Resolve the `<name>/` target dir for a save, given scope + workspace root.
+/// `repo` writes under `<workspace>/.agents/skills/`; `user` under
+/// `<home>/.zen/skills/`. Rejects any resolved path that escapes its root.
+fn resolve_skill_dir(
+    scope: &str,
+    name: &str,
+    workspace_root: Option<&str>,
+    home_dir: &Path,
+) -> ZenResult<PathBuf> {
+    let root = match scope {
+        "repo" => {
+            let ws = workspace_root
+                .and_then(|r| crate::workspace::canonicalize_workspace_root(Path::new(r)).ok())
+                .ok_or_else(|| {
+                    ZenError::Custom("open a workspace to save a project skill".into())
+                })?;
+            ws.join(AGENTS_DIR_NAME).join(SKILLS_DIR_NAME)
+        }
+        "user" => home_dir.join(ZEN_HOME_DIR).join(SKILLS_DIR_NAME),
+        other => return Err(ZenError::Custom(format!("invalid skill scope: {other}"))),
+    };
+    let target = root.join(name);
+    // Belt-and-suspenders: `name` is kebab-validated (no separators), but assert
+    // the join stays under the intended root before writing.
+    if !target.starts_with(&root) {
+        return Err(ZenError::Custom("resolved skill path escapes its root".into()));
+    }
+    Ok(target)
+}
+
+/// Compose a deterministic `SKILL.md`: YAML frontmatter (only emitting optional
+/// keys when set) followed by the body.
+fn compose_skill_md(
+    name: &str,
+    description: &str,
+    allow_implicit_invocation: bool,
+    requires_tools: &[String],
+    invocation_syntax: Option<&str>,
+    body: &str,
+) -> String {
+    let mut out = String::from("---\n");
+    out.push_str(&format!("name: {name}\n"));
+    // Quote the description so colons/special chars stay valid YAML.
+    out.push_str(&format!("description: {}\n", yaml_scalar(description)));
+    out.push_str(&format!(
+        "allow_implicit_invocation: {allow_implicit_invocation}\n"
+    ));
+    if let Some(syntax) = invocation_syntax.filter(|s| !s.trim().is_empty()) {
+        out.push_str(&format!("invocation-syntax: {}\n", yaml_scalar(syntax)));
+    }
+    let tools: Vec<&String> = requires_tools.iter().filter(|t| !t.trim().is_empty()).collect();
+    if !tools.is_empty() {
+        // Inline list form: the frontmatter parser (`parse_frontmatter`) only
+        // reads `[a, b, c]`, not YAML block lists, so keep this on one line.
+        let rendered = tools
+            .iter()
+            .map(|t| yaml_scalar(t))
+            .collect::<Vec<_>>()
+            .join(", ");
+        out.push_str(&format!("requires-tools: [{rendered}]\n"));
+    }
+    out.push_str("---\n\n");
+    out.push_str(body.trim_end());
+    out.push('\n');
+    out
+}
+
+/// Minimal YAML scalar quoting: double-quote when the value contains characters
+/// that would otherwise change YAML meaning.
+fn yaml_scalar(v: &str) -> String {
+    let needs_quote = v.is_empty()
+        || v.starts_with(|c: char| c.is_whitespace())
+        || v.ends_with(|c: char| c.is_whitespace())
+        || v.contains(|c: char| matches!(c, ':' | '#' | '"' | '\'' | '\n' | '[' | ']' | '{' | '}' | '&' | '*' | '!' | '|' | '>' | '%' | '@' | '`'));
+    if needs_quote {
+        // Double-quoted YAML: escape backslash/quote, and fold real newlines and
+        // tabs to their `\n`/`\t` escapes so the scalar stays on one line.
+        format!(
+            "\"{}\"",
+            v.replace('\\', "\\\\")
+                .replace('"', "\\\"")
+                .replace('\r', "")
+                .replace('\n', "\\n")
+                .replace('\t', "\\t")
+        )
+    } else {
+        v.to_string()
+    }
+}
+
+/// Create or edit a skill by writing its `SKILL.md`. Returns the written path.
+///
+/// On an existing file without `overwrite`, returns an error prefixed with
+/// [`SKILL_EXISTS_PREFIX`] so the UI can prompt for confirmation.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn save_skill(
+    app: AppHandle,
+    name: String,
+    description: String,
+    body: String,
+    scope: String,
+    allow_implicit_invocation: bool,
+    requires_tools: Vec<String>,
+    invocation_syntax: Option<String>,
+    workspace_root: Option<String>,
+    overwrite: bool,
+) -> ZenResult<String> {
+    if !is_valid_skill_name(&name) {
+        return Err(ZenError::Custom(format!(
+            "invalid skill name '{name}': use kebab-case (lowercase letters, digits, single dashes)"
+        )));
+    }
+    if description.trim().is_empty() {
+        return Err(ZenError::Custom("description is required".into()));
+    }
+
+    let state = app.state::<AppState>();
+    let dir = resolve_skill_dir(
+        &scope,
+        &name,
+        workspace_root.as_deref(),
+        state.skills_manager.home_dir(),
+    )?;
+    let file = dir.join(SKILLS_FILENAME);
+
+    if file.exists() && !overwrite {
+        return Err(ZenError::Custom(format!(
+            "{SKILL_EXISTS_PREFIX}{} already exists",
+            file.display()
+        )));
+    }
+
+    tokio::fs::create_dir_all(&dir)
+        .await
+        .map_err(|e| ZenError::Custom(format!("create {}: {}", dir.display(), e)))?;
+    let contents = compose_skill_md(
+        &name,
+        description.trim(),
+        allow_implicit_invocation,
+        &requires_tools,
+        invocation_syntax.as_deref(),
+        &body,
+    );
+    tokio::fs::write(&file, contents)
+        .await
+        .map_err(|e| ZenError::Custom(format!("write {}: {}", file.display(), e)))?;
+
+    // Drop the cached catalog so the new/edited skill surfaces immediately
+    // rather than after the discovery TTL.
+    state.skills_manager.clear_cache().await;
+    Ok(file.display().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tmp_root() -> PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let p = std::env::temp_dir().join(format!("zen_save_skill_{nanos}"));
+        std::fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    #[test]
+    fn resolve_repo_scope_under_workspace() {
+        let ws = tmp_root();
+        let dir = resolve_skill_dir("repo", "my-skill", Some(ws.to_str().unwrap()), Path::new("/home"))
+            .unwrap();
+        assert!(dir.ends_with(Path::new(".agents").join("skills").join("my-skill")));
+        assert!(dir.starts_with(ws.canonicalize().unwrap()));
+    }
+
+    #[test]
+    fn resolve_user_scope_under_home() {
+        let dir = resolve_skill_dir("user", "my-skill", None, Path::new("/home/u")).unwrap();
+        assert_eq!(dir, Path::new("/home/u/.zen/skills/my-skill"));
+    }
+
+    #[test]
+    fn repo_scope_requires_workspace() {
+        assert!(resolve_skill_dir("repo", "x", None, Path::new("/home")).is_err());
+    }
+
+    #[test]
+    fn rejects_unknown_scope() {
+        assert!(resolve_skill_dir("bogus", "x", None, Path::new("/home")).is_err());
+    }
+
+    #[test]
+    fn compose_omits_empty_optionals() {
+        let md = compose_skill_md("foo", "does foo", false, &[], None, "body here");
+        assert!(md.contains("name: foo"));
+        assert!(md.contains("description: does foo"));
+        assert!(md.contains("allow_implicit_invocation: false"));
+        assert!(!md.contains("requires-tools"));
+        assert!(!md.contains("invocation-syntax"));
+        assert!(md.trim_end().ends_with("body here"));
+    }
+
+    #[test]
+    fn compose_emits_and_quotes_optionals() {
+        let md = compose_skill_md(
+            "foo",
+            "has: colon",
+            true,
+            &["read".into(), "write".into()],
+            Some("/foo <arg>"),
+            "body",
+        );
+        assert!(md.contains("description: \"has: colon\""));
+        assert!(md.contains("requires-tools: [read, write]"));
+        assert!(md.contains("invocation-syntax: \"/foo <arg>\""));
     }
 }

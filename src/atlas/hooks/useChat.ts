@@ -1,10 +1,13 @@
+import { useEffect } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useStreamingChat } from "./useStreamingChat";
 import { useChatQueries } from "./chat/useChatQueries";
 import { useChatMutations } from "./chat/useChatMutations";
 import { useSendMessage } from "./chat/useSendMessage";
+import { useChatTurnAdvance } from "./chat/useChatTurnAdvance";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
+import { useGoalStore } from "@/lib/stores/goalStore";
 import { chatApi } from "@/api";
 
 export function useChat() {
@@ -49,6 +52,19 @@ export function useChat() {
   });
 
   const { handleSendMessage } = useSendMessage(currentSessionId, () => mutations.handleCreateSession("New Case"));
+
+  // After each finished turn: replay queued prompts, then consider goal
+  // continuation. Mounted here (not in a section) so it tracks whichever
+  // send pipeline the live workspace uses.
+  useChatTurnAdvance(handleSendMessage);
+
+  // Refresh the thread goal mirror when the active session changes so the
+  // goal banner reflects the DB on first visit / after external changes.
+  useEffect(() => {
+    if (currentSessionId) {
+      void useGoalStore.getState().loadGoal(currentSessionId);
+    }
+  }, [currentSessionId]);
 
   const handleExportSession = async (id: string) => {
     try {

@@ -12,12 +12,12 @@ export const CpuMemWidget = memo(function CpuMemWidget({ context }: { context: W
         <div className="widget-cpu-mem p-1">
             <div className="widget-cpu-mem__row">
                 <span className="widget-cpu-mem__label">
-                    <WorkbenchIcon name="solar:cpu-bold" size={12} className="text-violet-400" />
+                    <WorkbenchIcon name="solar:cpu-bold" size={12} className="text-primary" />
                     <span>CPU</span>
                 </span>
                 <div className="widget-cpu-mem__bar bg-card rounded-full overflow-hidden h-1.5 border border-border/25">
                     <div
-                        className="widget-cpu-mem__fill h-full bg-violet-500/80 transition-all duration-300 rounded-full"
+                        className="widget-cpu-mem__fill h-full bg-primary/80 transition-all duration-300 rounded-full"
                         style={{ width: `${cpuPct}%` }}
                         data-warn={cpuPct > 80 ? '' : undefined}
                     />
@@ -26,12 +26,12 @@ export const CpuMemWidget = memo(function CpuMemWidget({ context }: { context: W
             </div>
             <div className="widget-cpu-mem__row">
                 <span className="widget-cpu-mem__label">
-                    <WorkbenchIcon name="solar:ssd-bold" size={12} className="text-violet-400" />
+                    <WorkbenchIcon name="solar:ssd-bold" size={12} className="text-primary" />
                     <span>MEM</span>
                 </span>
                 <div className="widget-cpu-mem__bar bg-card rounded-full overflow-hidden h-1.5 border border-border/25">
                     <div
-                        className="widget-cpu-mem__fill h-full bg-violet-500/80 transition-all duration-300 rounded-full"
+                        className="widget-cpu-mem__fill h-full bg-primary/80 transition-all duration-300 rounded-full"
                         style={{ width: `${memPct}%` }}
                         data-warn={memPct > 85 ? '' : undefined}
                     />

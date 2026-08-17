@@ -106,6 +106,14 @@ impl SecretService {
         Ok(self.get_secret(key).await?.is_some())
     }
 
+    /// Presence check that reads only the settings presence-metadata sentinel,
+    /// never the keyring, and emits no audit event. Used by the write-only
+    /// editor's "stored" markers, which probe many keys per render — hitting the
+    /// keyring + audit log for each would flood both with noise.
+    pub async fn has_secret_unaudited(&self, key: &str) -> AppResult<bool> {
+        Ok(self.settings.get(key).await?.as_deref() == Some(SECRET_PRESENT_SENTINEL))
+    }
+
     /// Remove only credentials owned by the current Zen provider catalog and
     /// declared custom providers. The keyring has no portable enumeration API,
     /// so unrelated credentials are never guessed or deleted.

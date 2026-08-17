@@ -13,6 +13,11 @@ use tokio::sync::RwLock;
 use super::discovery::{load_skills_from_roots, skill_roots, SkillRoot};
 use super::types::{SkillLoadOutcome, SkillMetadata};
 
+/// How long a cached skill scan stays fresh. Short enough that an
+/// author/test loop (edit SKILL.md → next turn) picks up changes,
+/// long enough to keep per-turn discovery off the filesystem.
+pub const SKILLS_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(5);
+
 #[derive(Debug, Clone, Default, Hash, PartialEq, Eq)]
 pub struct ConfigSkillsCacheKey {
     pub cwd: PathBuf,
@@ -52,12 +57,20 @@ impl SkillsManager {
     }
 
     /// Load skills for a cwd, with cache. `force_reload` bypasses both caches.
+    /// Cache entries expire after [`SKILLS_CACHE_TTL`] so authored/edited
+    /// SKILL.md files surface without an app restart (no watcher needed).
     pub async fn skills_for_cwd(&self, cwd: &Path, force_reload: bool) -> SkillLoadOutcome {
         let abs_cwd = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
 
         if !force_reload {
             if let Some(hit) = self.cache_by_cwd.read().await.get(&abs_cwd).cloned() {
-                return hit;
+                let fresh = hit
+                    .scanned_at
+                    .and_then(|t| t.elapsed().ok())
+                    .is_some_and(|age| age < SKILLS_CACHE_TTL);
+                if fresh {
+                    return hit;
+                }
             }
         }
 
@@ -106,6 +119,17 @@ impl SkillsManager {
         self.skills_for_cwd(cwd, false).await.skills
     }
 
+    /// Enabled-only skills for cwd. The runtime toggle (`set_skill_enabled_state`,
+    /// persisted as `skill:<name>:enabled`) removes a skill from every place the
+    /// agent can reach it — catalog, slash autocomplete/parse, and mention/slash
+    /// preload — while `list`/`skills_for_cwd` stay unfiltered so the registry UI
+    /// can still render disabled skills with their toggle.
+    pub async fn enabled_skills_for_cwd(&self, cwd: &Path) -> SkillLoadOutcome {
+        let mut outcome = self.skills_for_cwd(cwd, false).await;
+        outcome.skills.retain(|s| self.is_skill_enabled(s));
+        outcome
+    }
+
     pub fn is_skill_enabled(&self, skill: &SkillMetadata) -> bool {
         // Lock-free read: if another task holds the write lock, fall back
         // to default-enabled (the skill catalog has not yet been disabled).
@@ -138,6 +162,29 @@ impl SkillsManager {
 
 /// Shared handle.
 pub type SharedSkillsManager = Arc<SkillsManager>;
+
+/// Resolve the directory a skill lookup should scan for a given chat: the
+/// chat's captured workspace root when set (canonicalized), else the process
+/// cwd. Agent tools only know their chat_id, so this is the bridge from
+/// chat → discovery root.
+pub async fn cwd_for_chat(app: &tauri::AppHandle, chat_id: &str) -> PathBuf {
+    use tauri::Manager;
+    let fallback = || std::env::current_dir().unwrap_or_default();
+    let Some(state) = app.try_state::<crate::commands::AppState>() else {
+        return fallback();
+    };
+    let Ok(db) = state.db().await else {
+        return fallback();
+    };
+    crate::db::queries::get_chat(&db, chat_id)
+        .await
+        .ok()
+        .and_then(|chat| chat.workspace_root)
+        .and_then(|root| {
+            crate::workspace::canonicalize_workspace_root(std::path::Path::new(&root)).ok()
+        })
+        .unwrap_or_else(fallback)
+}
 
 #[cfg(test)]
 mod tests {
@@ -178,6 +225,32 @@ mod tests {
         // Same outcome (cache hit returns same data, same pointers within struct).
         assert_eq!(first.skills.len(), second.skills.len());
         assert_eq!(first.skills.len(), 2);
+
+        fs::remove_dir_all(&tmp).ok();
+    }
+
+    #[tokio::test]
+    async fn enabled_filter_drops_disabled_skill() {
+        let tmp = std::env::temp_dir().join(format!(
+            "zen_skills_enabled_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let home = tmp.join("home");
+        fs::create_dir_all(home.join(".zen/skills")).unwrap();
+        write_skill(&home.join(".zen/skills"), "keep", "stays");
+        write_skill(&home.join(".zen/skills"), "drop", "gets-disabled");
+
+        let mgr = SkillsManager::new(home.clone());
+        mgr.set_skill_enabled_state("drop", false).await;
+
+        let all = mgr.skills_for_cwd(&home, false).await;
+        assert_eq!(all.skills.len(), 2, "unfiltered list keeps both for the UI");
+        let enabled = mgr.enabled_skills_for_cwd(&home).await;
+        assert_eq!(enabled.skills.len(), 1);
+        assert_eq!(enabled.skills[0].name, "keep");
 
         fs::remove_dir_all(&tmp).ok();
     }

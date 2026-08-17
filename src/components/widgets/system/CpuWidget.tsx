@@ -36,7 +36,7 @@ export const CpuWidget = memo(function CpuWidget({ context }: { context: SystemM
                 <span className="text-[10px] font-mono font-bold text-muted-foreground tracking-wider">
                     {cpuBrand.toUpperCase()}
                 </span>
-                <span className="text-[10px] font-mono text-violet-400/80">ACTIVE</span>
+                <span className="text-[10px] font-mono text-primary/80">ACTIVE</span>
             </div>
 
             {/* Per-Core Grid */}
@@ -48,7 +48,7 @@ export const CpuWidget = memo(function CpuWidget({ context }: { context: SystemM
                         title={`Core ${i}: ${Math.round(usage)}%`}
                     >
                         <div
-                            className="absolute bottom-0 left-0 right-0 bg-violet-500/45 transition-all duration-300"
+                            className="absolute bottom-0 left-0 right-0 bg-primary/45 transition-all duration-300"
                             style={{ height: `${Math.max(usage, usage > 0 ? 2 : 0)}%` }}
                         />
                     </div>
@@ -77,7 +77,7 @@ export const CpuWidget = memo(function CpuWidget({ context }: { context: SystemM
                 </div>
                 <div className="flex flex-col items-end">
                     <span className="text-[9px] font-mono text-muted-foreground leading-none">USAGE</span>
-                    <span className="text-xs font-mono text-violet-400 font-bold">{Math.round(cpuUsage)}%</span>
+                    <span className="text-xs font-mono text-primary font-bold">{Math.round(cpuUsage)}%</span>
                 </div>
             </div>
         </div>

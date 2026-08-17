@@ -18,10 +18,12 @@
  */
 
 import { useCallback, useState } from "react";
+import { validateFiles, type FileRejection } from "./chat/input/attachmentValidation";
 
 export interface AttachmentState {
   selectedFiles: File[];
-  addFiles: (files: FileList | File[]) => void;
+  /** Appends only the files that pass validation; returns anything rejected. */
+  addFiles: (files: FileList | File[]) => FileRejection[];
   removeFile: (index: number) => void;
   clearFiles: () => void;
 }
@@ -29,10 +31,18 @@ export interface AttachmentState {
 export function useAttachments(): AttachmentState {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
-  const addFiles = useCallback((files: FileList | File[]) => {
+  const addFiles = useCallback((files: FileList | File[]): FileRejection[] => {
     const arr = Array.isArray(files) ? files : Array.from(files);
-    if (arr.length === 0) return;
-    setSelectedFiles((prev) => [...prev, ...arr]);
+    if (arr.length === 0) return [];
+    // Validate against the *current* selection inside the updater so rapid
+    // successive drops honour the count cap and dedup without a stale closure.
+    let rejected: FileRejection[] = [];
+    setSelectedFiles((prev) => {
+      const { accepted, rejected: r } = validateFiles(arr, prev);
+      rejected = r;
+      return accepted.length > 0 ? [...prev, ...accepted] : prev;
+    });
+    return rejected;
   }, []);
 
   const removeFile = useCallback(

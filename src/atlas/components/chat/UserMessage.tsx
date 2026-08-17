@@ -1,4 +1,4 @@
-import { Check, Copy, FileText, Paperclip, RefreshCcw } from "lucide-react";
+import { Check, Copy, FileText, Paperclip, RefreshCcw, Repeat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Message } from "./types";
@@ -14,6 +14,20 @@ export function UserMessage({
   onRegenerate?: (id: string) => void;
 }) {
   const { copied, copy } = useCopy();
+
+  // Automatic goal-continuation turns are not user speech — render a quiet
+  // marker row instead of a chat bubble so the timeline stays honest about
+  // which turns the user actually wrote.
+  if (message.kind === "goal_continuation") {
+    return (
+      <div className="flex w-full justify-center px-4 py-1" aria-label="Goal continuation turn">
+        <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Repeat className="h-3 w-3" aria-hidden="true" />
+          Goal continuation
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -61,26 +75,37 @@ export function UserMessage({
           {/* Attachments */}
           {message.attachments && message.attachments.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2 justify-end pr-11">
-              {message.attachments.map((a, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-2 rounded-lg border border-border bg-background/50 px-3 py-1.5 text-xs shadow-sm"
-                >
-                  {a.type === "image" ? (
-                    <div className="h-10 w-10 overflow-hidden rounded border border-border">
-                      <img src={a.data} alt={a.name} className="h-full w-full object-cover" />
+              {message.attachments.map((a, i) => {
+                // Post-registration, non-image attachments carry an empty
+                // `data` (bytes live in the chat store, read on demand), so the
+                // chip is icon + name only. An image with no data (older record
+                // or failed encode) also falls back to the icon.
+                const hasImage = a.type === "image" && !!a.data;
+                const label =
+                  a.type === "image" ? "image"
+                  : a.type === "pdf" ? "pdf"
+                  : a.mimeType?.split("/").pop() || "file";
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 rounded-lg border border-border bg-background/50 px-3 py-1.5 text-xs shadow-sm"
+                  >
+                    {hasImage ? (
+                      <div className="h-10 w-10 overflow-hidden rounded border border-border">
+                        <img src={a.data} alt={a.name} className="h-full w-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="flex h-8 w-8 items-center justify-center rounded bg-muted/50">
+                        {a.type === "pdf" ? <FileText className="h-4 w-4 text-destructive" /> : <Paperclip className="h-4 w-4" />}
+                      </div>
+                    )}
+                    <div className="flex flex-col">
+                      <span className="font-medium truncate max-w-[120px]">{a.name}</span>
+                      <span className="text-[10px] opacity-40 uppercase tracking-tighter">{label}</span>
                     </div>
-                  ) : (
-                    <div className="flex h-8 w-8 items-center justify-center rounded bg-muted/50">
-                      {a.type === "pdf" ? <FileText className="h-4 w-4 text-destructive" /> : <Paperclip className="h-4 w-4" />}
-                    </div>
-                  )}
-                  <div className="flex flex-col">
-                    <span className="font-medium truncate max-w-[120px]">{a.name}</span>
-                    <span className="text-[10px] opacity-40 uppercase tracking-tighter">{a.type}</span>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

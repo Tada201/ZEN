@@ -54,8 +54,12 @@ export function Sparkline({
     useEffect(() => {
         const frameInterval = 1000 / animationFps;
         let lastFrameTime = 0;
+        // Guards the self-rescheduling rAF loop: once cleanup runs, in-flight
+        // render() calls must not queue another frame on an unmounted canvas.
+        let cancelled = false;
 
         const render = () => {
+            if (cancelled) return;
             // Throttle to animationFps when running in rAF loop
             if (widgetAnimations) {
                 const now = performance.now();
@@ -101,11 +105,14 @@ export function Sparkline({
             const visiblePoints = points.filter(p => p.time >= visibleCutoff - 2000);
             const currentMax = maxValue || Math.max(...visiblePoints.map(p => p.val), 1);
 
-            // Resolve Color
+            // Resolve any var(--x) occurrences (bare or wrapped, e.g. hsl(var(--primary)))
+            // since canvas strokeStyle cannot resolve CSS custom properties itself.
             let resolvedColor = color;
-            if (color.startsWith('var(')) {
-                const varName = color.slice(4, -1).trim();
-                resolvedColor = getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || 'hsl(var(--primary))';
+            if (color.includes('var(')) {
+                const rootStyle = getComputedStyle(document.documentElement);
+                resolvedColor = color.replace(/var\((--[^),]+)\)/g, (_, name) =>
+                    rootStyle.getPropertyValue(name).trim() || '0 0% 100%'
+                );
             }
 
             // Step 1: Determine the horizon point (interpolated value at now - delay)
@@ -194,6 +201,7 @@ export function Sparkline({
         }
 
         return () => {
+            cancelled = true;
             renderFnRef.current = null;
             if (requestRef.current) cancelAnimationFrame(requestRef.current);
         };

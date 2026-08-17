@@ -171,6 +171,9 @@ const mockVoiceDisplayAgent = {
   config_mode: "model_only",
 };
 
+// In-memory thread-goal mirror for browser-only dev mode.
+const mockGoalStore: Record<string, { chatId: string; objective: string; status: string; turnsCount: number; createdAt: string; updatedAt: string }> = {};
+
 // Registry of commands
 const mockCommands: Record<string, (args: any) => any> = {
   // Browser-only mode deliberately has no fabricated OSINT data. Live map data
@@ -181,6 +184,51 @@ const mockCommands: Record<string, (args: any) => any> = {
   get_military_aircraft: () => [],
   get_vessels: () => [],
   get_natural_events: () => [],
+
+  // Skills: browser dev has no filesystem to scan, so the registry is empty and
+  // slash autocomplete only offers builtins. Params include workspaceRoot for
+  // parity with the Tauri commands.
+  list_skills: (_args: { workspaceRoot?: string | null }) => [],
+  load_skill: (_args: { name: string; workspaceRoot?: string | null }) => null,
+  set_skill_enabled: (_args: { name: string; enabled: boolean }) => null,
+  save_skill: (args: { name: string; scope: string }) =>
+    `mock://${args.scope}/skills/${args.name}/SKILL.md`,
+  suggest_slash: (_args: { query: string; workspaceRoot?: string | null }) => [],
+  parse_slash: (args: { input: string; workspaceRoot?: string | null }) =>
+    args.input.trim().startsWith("/") ? { kind: "unknown", name: args.input.trim().slice(1) } : { kind: "not_command" },
+
+  // Thread goals: minimal in-memory mirror so /goal works in browser dev.
+  get_thread_goal: (args: { chatId: string }) => mockGoalStore[args.chatId] ?? null,
+  set_thread_goal: (args: { chatId: string; objective: string }) => {
+    mockGoalStore[args.chatId] = {
+      chatId: args.chatId,
+      objective: args.objective,
+      status: "active",
+      turnsCount: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    return mockGoalStore[args.chatId];
+  },
+  update_thread_goal_status: (args: { chatId: string; status: string }) => {
+    const goal = mockGoalStore[args.chatId];
+    if (goal) goal.status = args.status;
+    return goal ?? null;
+  },
+  clear_thread_goal: (args: { chatId: string }) => {
+    delete mockGoalStore[args.chatId];
+    return null;
+  },
+
+  // Manual /compact: mirror the backend outcome shape from the in-memory
+  // messages (the machinery keeps the 10 most recent messages active).
+  compact_chat_context: (args: { chatId: string }) => {
+    const total = messages.filter((m) => m.chatId === args.chatId).length;
+    return {
+      messagesSummarized: Math.max(total - 10, 0),
+      messagesKept: Math.min(total, 10),
+    };
+  },
 
   // Settings API
   get_all_settings: () => settings,
@@ -426,6 +474,8 @@ const mockCommands: Record<string, (args: any) => any> = {
   mcp_save_config: () => {},
   mcp_list_servers: () => [],
   mcp_get_inventory: () => ({ revision: 0, servers: [] }),
+  mcp_set_secret: () => {},
+  mcp_secret_status: () => [],
 
   // Graph / Session Map
   get_session_state: () => ({ nodes: [], edges: [] }),

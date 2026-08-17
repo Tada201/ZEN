@@ -12,6 +12,7 @@ import {
   Map as MapIcon,
   MessageSquare,
   Paintbrush,
+  Paperclip,
   Search,
   Settings,
   Sparkles,
@@ -58,6 +59,7 @@ export type RightPanelTabId =
   | "agents"
   | "drawing"
   | "artifacts"
+  | "attachments"
   | "terminal"
   | "map"
   | "browser";
@@ -114,6 +116,7 @@ export const FRONTEND_FEATURES = [
   { id: "right.inspector", label: "Run Inspector", description: "Trace execution, agents, and tool results", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "none", rightPanelTabId: "inspector", icon: ListTree },
   { id: "right.approvals", label: "Approval Center", description: "Review pending tool actions", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "privileged", rightPanelTabId: "approvals", icon: ShieldCheck },
   { id: "right.artifacts", label: "Artifacts", maturity: "production", surfaces: ["rightRail"], defaultVisible: true, risk: "untrusted-content", rightPanelTabId: "artifacts", icon: Box },
+  { id: "right.attachments", label: "Attachments", description: "Files uploaded to this chat", maturity: "production", surfaces: ["rightRail"], defaultVisible: true, risk: "untrusted-content", rightPanelTabId: "attachments", icon: Paperclip },
   { id: "right.agents", label: "Subagents", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "privileged", rightPanelTabId: "agents", icon: Cpu },
   { id: "right.drawing", label: "Canvas Workspace", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "heavy-runtime", rightPanelTabId: "drawing", icon: Paintbrush },
   { id: "right.terminal", label: "Terminal", maturity: "partial", surfaces: ["rightRail"], defaultVisible: true, risk: "privileged", rightPanelTabId: "terminal", icon: Terminal },

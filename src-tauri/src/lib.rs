@@ -1,6 +1,7 @@
 extern crate pdf_inspector;
 
 pub mod agent;
+pub mod browser;
 pub mod canvas;
 pub mod commands;
 pub mod db;
@@ -447,6 +448,13 @@ pub fn run() {
             commands::workbench::list_workbench_tabs,
             commands::workbench::upsert_workbench_tab,
             commands::workbench::delete_workbench_tab,
+            commands::browser::browser_preview_attach,
+            commands::browser::browser_preview_set_bounds,
+            commands::browser::browser_preview_navigate,
+            commands::browser::browser_preview_reload,
+            commands::browser::browser_preview_hide,
+            commands::browser::browser_preview_detach,
+            commands::browser::browser_preview_console_tail,
             commands::dependency::list_dependency_status,
             commands::dependency::install_managed_dependency,
             commands::backup::get_backup_summary,
@@ -458,6 +466,10 @@ pub fn run() {
             commands::document::list_documents_page,
             commands::document::get_document,
             commands::document::delete_document,
+            commands::document::attach_file_to_chat,
+            commands::document::list_chat_attachments,
+            commands::document::delete_chat_attachment,
+            commands::document::read_chat_attachment_text,
             commands::settings::get_setting,
             commands::settings::set_setting,
             commands::settings::delete_secret,
@@ -479,6 +491,7 @@ pub fn run() {
             commands::skills::set_skill_enabled,
             commands::skills::suggest_slash,
             commands::skills::parse_slash,
+            commands::skills::save_skill,
             commands::media::set_wallpaper_from_path,
             commands::media::clear_wallpaper,
             commands::media::get_current_wallpaper,
@@ -527,6 +540,10 @@ pub fn run() {
             commands::chat::export_chat,
             commands::chat::export_image_to_workspace,
             commands::chat::import_chat,
+            commands::goal::get_thread_goal,
+            commands::goal::set_thread_goal,
+            commands::goal::update_thread_goal_status,
+            commands::goal::clear_thread_goal,
             commands::agent::list_agents,
             commands::agent::create_agent,
             commands::agent::update_agent,
@@ -634,8 +651,11 @@ pub fn run() {
             commands::mcp::mcp_get_prompt,
             commands::mcp::mcp_resolve_elicitation,
             commands::mcp::mcp_replay_elicitations,
+            commands::mcp::mcp_set_secret,
+            commands::mcp::mcp_secret_status,
             commands::context_viewer::get_context_breakdown,
             commands::context_viewer::get_context_snapshot,
+            commands::compact::compact_chat_context,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

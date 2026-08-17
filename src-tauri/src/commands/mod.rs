@@ -2,12 +2,15 @@ pub mod agent;
 pub mod artifacts;
 pub mod backup;
 pub mod audio;
+pub mod browser;
 pub mod canvas;
 pub mod chat;
 pub mod checkpoint;
+pub mod compact;
 pub mod context_viewer;
 pub mod dependency;
 pub mod document;
+pub mod goal;
 pub mod mcp;
 pub mod media;
 pub mod memory;
@@ -425,6 +428,8 @@ pub struct AppState {
     /// Starts at 0 so the first run is observable in the UI.
     pub next_run_id: Arc<AtomicU64>,
     pub usage: Arc<UsageService>,
+    /// Embedded WebView2 browser-preview lifecycle (Windows-native panel).
+    pub browser: Arc<crate::browser::BrowserManager>,
 }
 
 
@@ -618,6 +623,7 @@ impl AppState {
             context_breakdown_cache: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             next_run_id: Arc::new(AtomicU64::new(0)),
             usage: Arc::new(UsageService),
+            browser: Arc::new(crate::browser::BrowserManager::new()),
         }
     }
 

@@ -106,6 +106,25 @@ export const useTaskStore = create<TaskState>((set, get) => {
     listenAppEvent('task:list_updated', (event) => {
       const { chat_id, tasks } = event.payload;
       if (!chat_id || !Array.isArray(tasks)) return;
+      // The checklist tracks the latest write_todos list: a non-empty payload
+      // replaces the chat's previous checklist; an empty payload is the
+      // backend's explicit clear (write_todos with {"todos": []}) and removes
+      // it so the panel disappears. Checklists are never restored on reload,
+      // so clearing matches reload behavior.
+      if (tasks.length === 0) {
+        set((state) => {
+          let removed = false;
+          const newTasks = new Map(state.tasks);
+          for (const [id, task] of newTasks.entries()) {
+            if (task.chatId === chat_id && id.includes('_todo_')) {
+              newTasks.delete(id);
+              removed = true;
+            }
+          }
+          return removed ? { tasks: newTasks } : state;
+        });
+        return;
+      }
 
       set((state) => {
         const newTasks = new Map(state.tasks);

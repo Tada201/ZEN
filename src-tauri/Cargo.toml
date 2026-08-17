@@ -13,7 +13,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["protocol-asset"] }
+tauri = { version = "2", features = ["protocol-asset", "unstable"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
@@ -69,6 +69,15 @@ scraper = "0.22.0"
 spider = "2.2"
 sha2 = "0.10"
 zip = "4.6.1"
+# Magic-byte file-type sniffing for chat attachment validation. Pinned to the
+# version already resolved transitively (see Cargo.lock) — no new provenance.
+infer = "=0.19.0"
+# Native (MSI-safe) office extraction, replacing the Python markitdown path.
+# calamine: pure-Rust xlsx/xls/ods reader, 0.35.0 published 2026-05-10 (>30d).
+# quick-xml pinned to the version already resolved transitively (Cargo.lock)
+# — used to strip text from docx/pptx OOXML parts unzipped via `zip`.
+calamine = "=0.35.0"
+quick-xml = "=0.41.0"
 text-splitter = { version = "0.16", features = ["tiktoken-rs"] }
 ab_glyph = "0.2"
 pdf-inspector = { git = "https://github.com/firecrawl/pdf-inspector" }
@@ -88,6 +97,18 @@ windows-sys = { version = "0.59", features = [
     "Win32_Security",
     "Win32_System_JobObjects",
     "Win32_System_Threading",
+] }
+# Embedded WebView2 preview: in-process COM + CDP (CallDevToolsProtocolMethod)
+# and CapturePreview screenshot. Both crates already resolve transitively via
+# wry 0.55.1 (>30 days old, same provenance); pinned to the exact lockfile
+# versions so no net-new supply-chain surface is introduced.
+webview2-com = "=0.38.2"
+windows = { version = "=0.61.3", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Imaging",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Memory",
 ] }
 
 [profile.dev]

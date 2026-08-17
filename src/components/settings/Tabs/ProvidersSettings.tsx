@@ -81,6 +81,7 @@ export const ProvidersSettings = memo(() => {
         displayName: '',
         baseUrl: '',
         apiKey: '',
+        apiFormat: 'openai_chat' as 'openai_chat' | 'anthropic_messages',
         headersText: '',
         manualModels: '',
         testStatus: 'idle' as 'idle' | 'testing' | 'success' | 'error',
@@ -212,6 +213,7 @@ export const ProvidersSettings = memo(() => {
                 apiKey: addForm.apiKey,
                 displayName: addForm.displayName || 'Custom provider',
                 headers,
+                apiFormat: addForm.apiFormat,
             });
             const ok = models && models.length > 0;
             setAddForm(prev => ({
@@ -247,14 +249,15 @@ export const ProvidersSettings = memo(() => {
                 baseUrl: addForm.baseUrl,
                 apiKey: addForm.apiKey,
                 headers,
+                apiFormat: addForm.apiFormat,
                 customModels: addForm.discoveredModels.length ? addForm.discoveredModels : manualModels,
-            } as any);
+            });
             useSettingsStore.setState(state => ({
                 connectionStatuses: { ...state.connectionStatuses, [newId]: 'success' },
             }));
             void useSettingsStore.getState().fetchModels(newId);
             setIsAddingCustom(false);
-            setAddForm({ displayName: '', baseUrl: '', apiKey: '', headersText: '', manualModels: '', testStatus: 'idle', discoveredModels: [], validationError: null });
+            setAddForm({ displayName: '', baseUrl: '', apiKey: '', apiFormat: 'openai_chat', headersText: '', manualModels: '', testStatus: 'idle', discoveredModels: [], validationError: null });
             toast.success(`Custom provider "${addForm.displayName}" registered.`);
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
@@ -316,6 +319,20 @@ export const ProvidersSettings = memo(() => {
                                 className="mt-3 min-h-24 w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-[12px] text-foreground outline-none focus:border-primary/50"
                             />
                         </details>
+
+                        <div className="flex flex-col gap-2">
+                            <label className="text-xs font-medium text-foreground">API format</label>
+                            <WorkbenchSelect
+                                value={addForm.apiFormat}
+                                onValueChange={(val) => setAddForm(prev => ({ ...prev, apiFormat: val as typeof prev.apiFormat, testStatus: 'idle', validationError: null }))}
+                                className="h-11 bg-background border-border rounded-xl"
+                                options={[
+                                    { value: 'openai_chat', label: 'OpenAI Chat Completions' },
+                                    { value: 'anthropic_messages', label: 'Anthropic Messages' },
+                                ]}
+                            />
+                            <p className="text-[11px] text-muted-foreground">Wire protocol the endpoint speaks.</p>
+                        </div>
 
                         <div className="flex flex-col gap-2">
                             <label className="text-xs font-medium text-foreground">Endpoint URL</label>
@@ -463,6 +480,7 @@ export const ProvidersSettings = memo(() => {
                                 baseUrl={(providerData as any).baseUrl ?? ''}
                                 apiKey={(providerData as any).apiKey}
                                 headers={(providerData as any).headers}
+                                apiFormat={(providerData as any).apiFormat}
                                 customModels={(providerData as any).customModels}
                             />
                         ) : (
@@ -567,72 +585,6 @@ export const ProvidersSettings = memo(() => {
                                                 <p className="text-[9px] text-muted-foreground">No models discovered. Ensure 9Router is running with image providers configured.</p>
                                             </div>
                                         )}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {selectedProviderId === 'aihubmix' && (
-                            <div className="flex flex-col gap-4 rounded-xl border border-border bg-background p-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                <div className="flex items-center gap-2 border-b border-border pb-2">
-                                    <WorkbenchIcon name="lucide:sliders" size={14} className="text-pink-400" />
-                                    <span className="text-[11px] font-bold text-foreground uppercase tracking-wider">Gateway Model Mappings</span>
-                                </div>
-                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Embeddings Model</label>
-                                        <WorkbenchSelect
-                                            value={providerParams.embeddingModel || ''}
-                                            onValueChange={(val) => updateProviderParams('aihubmix', { embeddingModel: val })}
-                                            className="h-8 text-[11px] bg-background border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
-                                            options={[
-                                                { value: "", label: "No model selected" },
-                                                { value: "text-embedding-3-small", label: "text-embedding-3-small" },
-                                                { value: "text-embedding-3-large", label: "text-embedding-3-large" },
-                                                { value: "text-embedding-ada-002", label: "text-embedding-ada-002" }
-                                            ]}
-                                        />
-                                    </div>
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Image Generator Model</label>
-                                        <WorkbenchSelect
-                                            value={providerParams.imageModel || ''}
-                                            onValueChange={(val) => updateProviderParams('aihubmix', { imageModel: val })}
-                                            className="h-8 text-[11px] bg-background border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
-                                            options={[
-                                                { value: "", label: "No model selected" },
-                                                { value: "dall-e-3", label: "DALL-E 3 (Premium)" },
-                                                { value: "dall-e-2", label: "DALL-E 2" },
-                                                { value: "midjourney", label: "Midjourney API" },
-                                                { value: "flux-schnell", label: "Flux Schnell" }
-                                            ]}
-                                        />
-                                    </div>
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Speech-to-Text Model</label>
-                                        <WorkbenchSelect
-                                            value={providerParams.sttModel || ''}
-                                            onValueChange={(val) => updateProviderParams('aihubmix', { sttModel: val })}
-                                            className="h-8 text-[11px] bg-background border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
-                                            options={[
-                                                { value: "", label: "No model selected" },
-                                                { value: "whisper-1", label: "Whisper v1" },
-                                                { value: "whisper-large-v3", label: "Whisper Large v3" }
-                                            ]}
-                                        />
-                                    </div>
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Text-to-Speech Model</label>
-                                        <WorkbenchSelect
-                                            value={providerParams.ttsModel || ''}
-                                            onValueChange={(val) => updateProviderParams('aihubmix', { ttsModel: val })}
-                                            className="h-8 text-[11px] bg-background border-border rounded focus:outline-none focus:border-primary/50 text-primary font-mono"
-                                            options={[
-                                                { value: "", label: "No model selected" },
-                                                { value: "tts-1", label: "TTS OpenAI v1" },
-                                                { value: "tts-1-hd", label: "TTS OpenAI HD" }
-                                            ]}
-                                        />
                                     </div>
                                 </div>
                             </div>

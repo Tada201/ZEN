@@ -137,6 +137,12 @@ export interface SendMessageRequest extends Record<string, unknown> {
    * budget instead of Zen's compaction cap. Omit/null when unknown.
    */
   modelContextWindow?: number | null;
+  /**
+   * Timeline kind for the persisted user row. Only set by automatic goal
+   * continuations (`goal_continuation`), which render as a quiet system row
+   * instead of a user bubble.
+   */
+  messageKind?: string | null;
 }
 export const chatApi = {
   listChats: () => callCommand<BackendChat[]>("get_chats"),

@@ -34,8 +34,12 @@ impl ContextMiddleware for SkillsCatalogMiddleware {
         let state = self.app.try_state::<crate::commands::AppState>();
         let Some(state) = state else { return Ok(()) };
         let mgr = state.skills_manager.clone();
-        let cwd = std::env::current_dir().unwrap_or_default();
-        let outcome = mgr.skills_for_cwd(&cwd, false).await;
+        // Resolve against the chat's workspace, not the process cwd.
+        let cwd = ctx
+            .workspace_root
+            .clone()
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+        let outcome = mgr.enabled_skills_for_cwd(&cwd).await;
         if outcome.is_empty() {
             return Ok(());
         }

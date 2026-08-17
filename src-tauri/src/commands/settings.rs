@@ -373,6 +373,7 @@ pub async fn discover_models(
         api_key: target_api_key,
         display_name: provider.clone(),
         headers: None,
+        api_format: None,
     };
 
     let provider_instance = crate::llm::make_provider(&config);
@@ -685,13 +686,19 @@ pub async fn test_provider_connection(
             "Provider endpoint must use HTTP or HTTPS".to_string(),
         ));
     }
-    config.base_url = config
-        .base_url
-        .trim_end_matches('/')
-        .trim_end_matches("/models")
-        .trim_end_matches("/chat/completions")
-        .trim_end_matches('/')
-        .to_string();
+    // Anthropic Messages endpoints live at `/v1/messages`; the OpenAI-style
+    // `/chat/completions`+`/models` strip would corrupt them, so skip it.
+    if config.api_format.as_deref() == Some("anthropic_messages") {
+        config.base_url = config.base_url.trim_end_matches('/').to_string();
+    } else {
+        config.base_url = config
+            .base_url
+            .trim_end_matches('/')
+            .trim_end_matches("/models")
+            .trim_end_matches("/chat/completions")
+            .trim_end_matches('/')
+            .to_string();
+    }
     let provider_instance = crate::llm::make_provider(&config);
 
     let healthy = tokio::time::timeout(
@@ -740,6 +747,7 @@ fn is_provider_setting_key(key: &str) -> bool {
     key.ends_with("_base_url")
         || key.ends_with("_api_key")
         || key.ends_with("_headers")
+        || key.ends_with("_api_format")
         || key == "active_provider"
 }
 

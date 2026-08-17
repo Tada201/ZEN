@@ -5,7 +5,7 @@ const resizeHookSource = readFileSync(new URL("../src/atlas/components/useAutoRe
 const dropdownSource = readFileSync(new URL("../src/atlas/components/chat/input/ModelSearchDropdown.tsx", import.meta.url), "utf8");
 const inputSource = readFileSync(new URL("../src/atlas/components/PremiumChatInput.tsx", import.meta.url), "utf8");
 const plusMenuSource = readFileSync(new URL("../src/atlas/components/chat/input/PlusActionMenu.tsx", import.meta.url), "utf8");
-const taskHookSource = readFileSync(new URL("../src/atlas/components/useChatTaskDrawer.ts", import.meta.url), "utf8");
+const queueStoreSource = readFileSync(new URL("../src/lib/stores/promptQueueStore.ts", import.meta.url), "utf8");
 
 assert(
   resizeHookSource.includes("const resizeFrameRef = useRef<number | null>(null);"),
@@ -42,7 +42,7 @@ assert(
   "model display must not silently fall back to a different provider's model",
 );
 assert(
-  inputSource.includes("setPlusMenuOpen") && inputSource.includes("setModelMenuOpen") && inputSource.includes("!isPlusMenuOpen && !selectedModelOpen"),
+  inputSource.includes("setPlusMenuOpen") && inputSource.includes("setModelMenuOpen") && /!isPlusMenuOpen\s*&&\s*!selectedModelOpen/.test(inputSource),
   "composer popovers should share one mutual-exclusion policy",
 );
 assert(
@@ -50,8 +50,8 @@ assert(
   "unsupported or unwired add-menu actions must not appear enabled",
 );
 assert(
-  taskHookSource.includes("user-controlled task-plan drawer") && !taskHookSource.includes("setIsOpen(true)"),
-  "task progress must not auto-open over the active composer",
+  queueStoreSource.includes("set((state) => ({"),
+  "the prompt queue must be plain synchronous store updates (no render-path work)",
 );
 
 console.log("input responsiveness verifier passed");

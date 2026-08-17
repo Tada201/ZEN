@@ -1,0 +1,474 @@
+{
+  "src/App.tsx": [
+    "off-scale h-[160px]"
+  ],
+  "src/atlas/components/chat/AgentExecutionTrace.tsx": [
+    "off-scale left-[15px]",
+    "off-scale left-[5px]"
+  ],
+  "src/atlas/components/chat/ArtifactPanel.tsx": [
+    "off-scale w-[320px]",
+    "off-scale w-[360px]",
+    "off-scale w-[400px]",
+    "off-scale w-[450px]"
+  ],
+  "src/atlas/components/chat/AssistantMessage.tsx": [
+    "off-scale w-[800px]"
+  ],
+  "src/atlas/components/chat/AssistantMessageTrace.tsx": [
+    "off-scale mt-[3px]"
+  ],
+  "src/atlas/components/chat/ChartBlock.tsx": [
+    "off-scale h-[240px]",
+    "raw-hex"
+  ],
+  "src/atlas/components/chat/ChatGroupDialog.tsx": [
+    "raw-hex"
+  ],
+  "src/atlas/components/chat/ChatTimelineScrubber.tsx": [
+    "off-scale gap-[3px]",
+    "off-scale w-[17px]"
+  ],
+  "src/atlas/components/chat/CodeBlock.tsx": [
+    "off-scale h-[400px]"
+  ],
+  "src/atlas/components/chat/DeepResearchRunMessage.tsx": [
+    "off-scale h-[240px]",
+    "off-scale h-[360px]",
+    "off-scale w-[200px]",
+    "off-scale w-[800px]"
+  ],
+  "src/atlas/components/chat/input/ActionPills.tsx": [
+    "off-scale w-[120px]"
+  ],
+  "src/atlas/components/chat/input/ModelSearchDropdown.tsx": [
+    "off-scale h-[350px]",
+    "off-scale w-[100px]",
+    "off-scale w-[160px]"
+  ],
+  "src/atlas/components/chat/MainWindowLoadingScreen.tsx": [
+    "raw-hex"
+  ],
+  "src/atlas/components/chat/MarkdownHelperComponents.tsx": [
+    "off-scale h-[300px]",
+    "off-scale w-[200px]",
+    "off-scale w-[480px]"
+  ],
+  "src/atlas/components/chat/MarkdownImage.tsx": [
+    "off-scale h-[300px]"
+  ],
+  "src/atlas/components/chat/MermaidDiagram.tsx": [
+    "off-scale h-[96px]"
+  ],
+  "src/atlas/components/chat/PremiumChatInputFixture.tsx": [
+    "off-scale w-[1440px]"
+  ],
+  "src/atlas/components/chat/ReasoningBlock.tsx": [
+    "off-scale h-[180px]",
+    "off-scale h-[260px]",
+    "off-scale h-[420px]"
+  ],
+  "src/atlas/components/chat/ResearchAgentCard.tsx": [
+    "off-scale w-[200px]"
+  ],
+  "src/atlas/components/chat/ResearchClarificationCard.tsx": [
+    "off-scale w-[800px]"
+  ],
+  "src/atlas/components/chat/ResearchTimeline.tsx": [
+    "off-scale left-[15px]",
+    "off-scale left-[5px]"
+  ],
+  "src/atlas/components/chat/SessionSidebar.tsx": [
+    "off-scale h-[18px]",
+    "off-scale w-[180px]",
+    "off-scale w-[18px]"
+  ],
+  "src/atlas/components/chat/UserMessage.tsx": [
+    "off-scale w-[120px]",
+    "off-scale w-[800px]"
+  ],
+  "src/atlas/components/chat/WelcomeBlackHoleBackground.tsx": [
+    "raw-hex"
+  ],
+  "src/atlas/components/chat/WelcomeBlackHoleSvg.tsx": [
+    "raw-hex"
+  ],
+  "src/atlas/components/chat/WorkspaceWelcome.tsx": [
+    "off-scale h-[300px]",
+    "off-scale h-[38px]",
+    "off-scale w-[306px]",
+    "off-scale w-[640px]"
+  ],
+  "src/atlas/components/ChatInputTextAreaBlock.tsx": [
+    "off-scale h-[30px]",
+    "off-scale h-[34px]"
+  ],
+  "src/atlas/components/FolderBrowser.tsx": [
+    "off-scale h-[320px]",
+    "off-scale w-[220px]"
+  ],
+  "src/atlas/components/genui/index.tsx": [
+    "raw-hex"
+  ],
+  "src/atlas/components/genui/premium/ChartCard.tsx": [
+    "raw-hex"
+  ],
+  "src/atlas/components/genui/premium/CitationCard.tsx": [
+    "off-scale w-[150px]"
+  ],
+  "src/atlas/components/genui/premium/DocumentSummaryCard.tsx": [
+    "off-scale w-[200px]"
+  ],
+  "src/atlas/components/genui/premium/FlashcardComponent.tsx": [
+    "off-scale h-[220px]"
+  ],
+  "src/atlas/components/genui/premium/FlightCard.tsx": [
+    "off-scale top-[3px]"
+  ],
+  "src/atlas/components/genui/premium/InvoiceCard.tsx": [
+    "off-scale w-[150px]"
+  ],
+  "src/atlas/components/genui/premium/MemoryRecallCard.tsx": [
+    "off-scale w-[220px]"
+  ],
+  "src/atlas/components/genui/premium/StockCard.tsx": [
+    "off-scale gap-[3px]"
+  ],
+  "src/atlas/components/genui/premium/TerminalCard.tsx": [
+    "off-scale h-[100px]"
+  ],
+  "src/atlas/components/genui/premium/TimelineCard.tsx": [
+    "off-scale left-[23.5px]"
+  ],
+  "src/atlas/components/genui/premium/WorldTimeCard.tsx": [
+    "off-scale h-[210px]",
+    "off-scale h-[252px]",
+    "off-scale w-[0.5px]",
+    "raw-hex"
+  ],
+  "src/atlas/components/ModelSelector.tsx": [
+    "off-scale h-[600px]",
+    "off-scale w-[200px]",
+    "off-scale w-[250px]"
+  ],
+  "src/atlas/components/ModelSettingsContent.tsx": [
+    "off-scale h-[280px]",
+    "off-scale w-[140px]"
+  ],
+  "src/atlas/components/OpenUIRenderer.tsx": [
+    "off-scale h-[100px]"
+  ],
+  "src/atlas/components/PermissionModeMenu.tsx": [
+    "off-scale h-[30px]"
+  ],
+  "src/atlas/components/right-panel/OrchestratorPanel.tsx": [
+    "off-scale w-[260px]"
+  ],
+  "src/atlas/components/RightPanel.tsx": [
+    "off-scale w-[180px]",
+    "off-scale w-[220px]",
+    "off-scale w-[260px]",
+    "off-scale w-[360px]",
+    "off-scale w-[680px]"
+  ],
+  "src/atlas/components/SandboxedIframe.tsx": [
+    "raw-hex"
+  ],
+  "src/atlas/components/SettingsModal.tsx": [
+    "off-scale h-[220px]",
+    "off-scale w-[100px]",
+    "off-scale w-[132px]"
+  ],
+  "src/atlas/components/SettingsSidebar.tsx": [
+    "off-scale w-[248px]"
+  ],
+  "src/atlas/components/SkillsSettingsContent.tsx": [
+    "off-scale h-[300px]"
+  ],
+  "src/atlas/components/voice/board/BoardMediaWidgets.tsx": [
+    "raw-hex"
+  ],
+  "src/atlas/components/voice/board/BoardQr.tsx": [
+    "raw-hex"
+  ],
+  "src/atlas/components/voice/VoiceDiagnosticsPanel.tsx": [
+    "raw-hex"
+  ],
+  "src/atlas/components/voice/VoiceOscilloscope.tsx": [
+    "off-scale h-[70px]",
+    "off-scale rounded-[22px]",
+    "off-scale rounded-[35px]",
+    "off-scale w-[280px]",
+    "off-scale w-[70px]"
+  ],
+  "src/atlas/components/workspace/BrowserPreview.tsx": [
+    "raw-hex"
+  ],
+  "src/atlas/components/workspace/CodeEditor.tsx": [
+    "off-scale w-[120px]",
+    "off-scale w-[200px]"
+  ],
+  "src/atlas/components/workspace/TabSystem.tsx": [
+    "off-scale w-[120px]",
+    "off-scale w-[200px]"
+  ],
+  "src/atlas/Inspector.tsx": [
+    "off-scale w-[220px]"
+  ],
+  "src/atlas/layouts/WorkspaceLayout.tsx": [
+    "off-scale w-[260px]"
+  ],
+  "src/atlas/Navbar.tsx": [
+    "off-scale w-[14px]"
+  ],
+  "src/atlas/sections/ButtonsSection.tsx": [
+    "raw-hex"
+  ],
+  "src/atlas/sections/CardsSection.tsx": [
+    "off-scale left-[22px]",
+    "raw-hex"
+  ],
+  "src/atlas/sections/ChatSection.tsx": [
+    "off-scale w-[256px]",
+    "off-scale w-[700px]"
+  ],
+  "src/atlas/sections/CombosSection.tsx": [
+    "off-scale h-[100px]",
+    "off-scale w-[140px]",
+    "off-scale w-[240px]"
+  ],
+  "src/atlas/sections/DataDisplaySection.tsx": [
+    "off-scale w-[200px]"
+  ],
+  "src/atlas/sections/FeedbackSection.tsx": [
+    "off-scale w-[200px]",
+    "off-scale w-[320px]",
+    "off-scale w-[380px]"
+  ],
+  "src/atlas/sections/InputsSection.tsx": [
+    "off-scale w-[260px]"
+  ],
+  "src/atlas/sections/lab3d/CanvasGuards.tsx": [
+    "off-scale w-[260px]"
+  ],
+  "src/atlas/sections/Lab3DSection.tsx": [
+    "raw-hex"
+  ],
+  "src/atlas/sections/MediaVisualDemos.tsx": [
+    "off-scale w-[160px]"
+  ],
+  "src/atlas/sections/NavigationSection.tsx": [
+    "off-scale h-[260px]",
+    "off-scale w-[200px]",
+    "off-scale w-[280px]"
+  ],
+  "src/atlas/ThemeCustomizer.tsx": [
+    "off-scale w-[340px]"
+  ],
+  "src/components/bootscreen/index.tsx": [
+    "raw-hex"
+  ],
+  "src/components/bootscreen/StatusPanel.tsx": [
+    "off-scale py-[3px]"
+  ],
+  "src/components/GTSM/favorites/FavoritesPanel.tsx": [
+    "off-scale h-[160px]",
+    "raw-hex"
+  ],
+  "src/components/GTSM/geojson/GeoJsonImportModal.tsx": [
+    "off-scale w-[240px]",
+    "raw-hex"
+  ],
+  "src/components/GTSM/geojson/GeoJsonLayerPanel.tsx": [
+    "off-scale h-[220px]"
+  ],
+  "src/components/GTSM/Minimap.tsx": [
+    "raw-hex"
+  ],
+  "src/components/GTSM/NavigationPanel.tsx": [
+    "off-scale h-[100px]",
+    "off-scale h-[140px]",
+    "raw-hex"
+  ],
+  "src/components/GTSM/search/SearchBar.tsx": [
+    "off-scale h-[380px]",
+    "raw-hex"
+  ],
+  "src/components/GTSM/TargetInspector.tsx": [
+    "off-scale w-[260px]",
+    "raw-hex"
+  ],
+  "src/components/GTSM/timeline/Timeline.tsx": [
+    "raw-hex"
+  ],
+  "src/components/settings/Tabs/audio/FeedbackIntensityConfig.tsx": [
+    "off-scale w-[180px]",
+    "off-scale w-[30px]"
+  ],
+  "src/components/settings/Tabs/audio/InputControls.tsx": [
+    "off-scale w-[180px]"
+  ],
+  "src/components/settings/Tabs/audio/MicrophoneConfig.tsx": [
+    "off-scale w-[180px]"
+  ],
+  "src/components/settings/Tabs/audio/OutputConfig.tsx": [
+    "off-scale w-[180px]"
+  ],
+  "src/components/settings/Tabs/audio/STTCapabilityTable.tsx": [
+    "off-scale w-[760px]"
+  ],
+  "src/components/settings/Tabs/audio/TTSConfig.tsx": [
+    "off-scale w-[160px]",
+    "off-scale w-[220px]",
+    "raw-hex"
+  ],
+  "src/components/settings/Tabs/audio/VoiceModulation.tsx": [
+    "off-scale w-[180px]",
+    "off-scale w-[30px]"
+  ],
+  "src/components/settings/Tabs/chat/GenerationConfig.tsx": [
+    "off-scale w-[100px]"
+  ],
+  "src/components/settings/Tabs/chat/PersonaConfig.tsx": [
+    "off-scale h-[120px]",
+    "off-scale h-[96px]"
+  ],
+  "src/components/settings/Tabs/chat/ProcessingConfig.tsx": [
+    "off-scale w-[70px]"
+  ],
+  "src/components/settings/Tabs/ChatSettings.tsx": [
+    "off-scale h-[80px]",
+    "off-scale w-[140px]"
+  ],
+  "src/components/settings/Tabs/gui/CSSInjection.tsx": [
+    "off-scale w-[400px]"
+  ],
+  "src/components/settings/Tabs/gui/StartupConfig.tsx": [
+    "off-scale w-[120px]"
+  ],
+  "src/components/settings/Tabs/GUISettings.tsx": [
+    "off-scale w-[200px]",
+    "off-scale w-[300px]"
+  ],
+  "src/components/settings/Tabs/intelligence/RetrievalConfig.tsx": [
+    "off-scale w-[120px]"
+  ],
+  "src/components/settings/Tabs/IntelligenceSettings.tsx": [
+    "off-scale w-[140px]",
+    "off-scale w-[220px]"
+  ],
+  "src/components/settings/Tabs/plugins/HooksSettings.tsx": [
+    "off-scale h-[300px]"
+  ],
+  "src/components/settings/Tabs/plugins/McpServerRow.tsx": [
+    "off-scale w-[220px]"
+  ],
+  "src/components/settings/Tabs/providers/ConnectionTestButton.tsx": [
+    "off-scale w-[120px]"
+  ],
+  "src/components/settings/Tabs/providers/ProviderGallery.tsx": [
+    "off-scale h-[78px]"
+  ],
+  "src/components/settings/Tabs/providers/ProviderUsagePanel.tsx": [
+    "off-scale w-[180px]",
+    "off-scale w-[480px]"
+  ],
+  "src/components/settings/Tabs/terminal/ExecutionSafetyConfig.tsx": [
+    "off-scale w-[80px]"
+  ],
+  "src/components/settings/Tabs/terminal/ShellDynamicsConfig.tsx": [
+    "off-scale w-[200px]"
+  ],
+  "src/components/settings/Tabs/ToolsSettings.tsx": [
+    "off-scale h-[420px]",
+    "off-scale w-[132px]"
+  ],
+  "src/components/settings/Tabs/workspace/DirectoryConfig.tsx": [
+    "off-scale w-[300px]"
+  ],
+  "src/components/settings/ui/ModelInPageSelector.tsx": [
+    "off-scale h-[220px]"
+  ],
+  "src/components/ui/command.tsx": [
+    "off-scale h-[300px]"
+  ],
+  "src/components/ui/drawer.tsx": [
+    "off-scale w-[100px]"
+  ],
+  "src/components/ui/resizable.tsx": [
+    "raw-hex"
+  ],
+  "src/components/ui/textarea.tsx": [
+    "off-scale h-[80px]"
+  ],
+  "src/components/ui/toast.tsx": [
+    "off-scale w-[420px]"
+  ],
+  "src/components/widgets/memory/MemoryStatsWidget.tsx": [
+    "off-scale w-[200px]",
+    "raw-hex"
+  ],
+  "src/components/widgets/orchestrator/AgentOrchestratorLiveSession.tsx": [
+    "off-scale w-[96px]"
+  ],
+  "src/components/widgets/orchestrator/AgentWorkspace.tsx": [
+    "off-scale h-[200px]"
+  ],
+  "src/components/widgets/orchestrator/LogEntry.tsx": [
+    "off-scale w-[92px]"
+  ],
+  "src/components/widgets/system/DiskWidget.tsx": [
+    "off-scale w-[80px]"
+  ],
+  "src/components/widgets/system/GpuWidget.tsx": [
+    "off-scale w-[200px]"
+  ],
+  "src/components/widgets/system/NetworkWidget.tsx": [
+    "off-scale w-[160px]"
+  ],
+  "src/components/widgets/workbench/DesmosCanvas.tsx": [
+    "off-scale w-[360px]",
+    "raw-hex"
+  ],
+  "src/components/widgets/workbench/InteractiveDrawingCanvas.tsx": [
+    "off-scale w-[120px]",
+    "raw-hex"
+  ],
+  "src/components/widgets/workbench/MathPlotInterface.tsx": [
+    "raw-hex"
+  ],
+  "src/components/workbench/MainArea.tsx": [
+    "raw-hex"
+  ],
+  "src/components/workbench/MapContainer.tsx": [
+    "off-scale w-[180px]",
+    "off-scale w-[190px]",
+    "off-scale w-[320px]",
+    "off-scale w-[520px]"
+  ],
+  "src/components/workbench/MapLibreMapRenderer.tsx": [
+    "raw-hex"
+  ],
+  "src/components/Zen/LayerManager.tsx": [
+    "raw-hex"
+  ],
+  "src/components/Zen/modals/DesmosCanvas.tsx": [
+    "raw-hex"
+  ],
+  "src/components/Zen/modals/McpElicitationModal.tsx": [
+    "off-scale w-[140px]"
+  ],
+  "src/components/Zen/widgets/GlobeWidget.tsx": [
+    "off-scale h-[240px]",
+    "off-scale h-[34px]"
+  ],
+  "src/components/Zen/WorkbenchTabButton.tsx": [
+    "off-scale right-[5px]"
+  ],
+  "src/components/Zen/XTermSessionView.tsx": [
+    "raw-hex"
+  ],
+  "src/components/Zen/XTermTelemetryDrawer.tsx": [
+    "off-scale h-[220px]"
+  ]
+}

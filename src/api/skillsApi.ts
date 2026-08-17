@@ -42,13 +42,51 @@ export type SlashParseResult =
   | { kind: "builtin"; name: string }
   | { kind: "unknown"; name: string };
 
+export interface SkillSaveInput {
+  name: string;
+  description: string;
+  body: string;
+  scope: "repo" | "user";
+  allowImplicitInvocation: boolean;
+  requiresTools: string[];
+  invocationSyntax?: string | null;
+  workspaceRoot?: string | null;
+  overwrite?: boolean;
+}
+
+/** Backend prefix on the "file exists" error so the UI can offer overwrite. */
+export const SKILL_EXISTS_PREFIX = "skill-exists:";
+
 export const skillsApi = {
-  list: () => callCommand<SkillMetadata[]>("list_skills"),
-  load: (name: string) => callCommand<SkillLoadResult>("load_skill", { name }),
+  list: (workspaceRoot?: string | null) =>
+    callCommand<SkillMetadata[]>("list_skills", { workspaceRoot: workspaceRoot ?? null }),
+  load: (name: string, workspaceRoot?: string | null) =>
+    callCommand<SkillLoadResult>("load_skill", {
+      name,
+      workspaceRoot: workspaceRoot ?? null,
+    }),
   setEnabled: (name: string, enabled: boolean) =>
     callCommand<void>("set_skill_enabled", { name, enabled }),
-  suggestSlash: (query: string) =>
-    callCommand<SlashSuggestionDto[]>("suggest_slash", { query }),
-  parseSlash: (input: string) =>
-    callCommand<SlashParseResult>("parse_slash", { input }),
+  save: (input: SkillSaveInput) =>
+    callCommand<string>("save_skill", {
+      name: input.name,
+      description: input.description,
+      body: input.body,
+      scope: input.scope,
+      allowImplicitInvocation: input.allowImplicitInvocation,
+      requiresTools: input.requiresTools,
+      invocationSyntax: input.invocationSyntax ?? null,
+      workspaceRoot: input.workspaceRoot ?? null,
+      overwrite: input.overwrite ?? false,
+    }),
+  suggestSlash: (query: string, workspaceRoot?: string | null) =>
+    callCommand<SlashSuggestionDto[]>("suggest_slash", {
+      query,
+      workspaceRoot: workspaceRoot ?? null,
+    }),
+  parseSlash: (input: string, workspaceRoot?: string | null) =>
+    callCommand<SlashParseResult>("parse_slash", {
+      input,
+      workspaceRoot: workspaceRoot ?? null,
+    }),
 };

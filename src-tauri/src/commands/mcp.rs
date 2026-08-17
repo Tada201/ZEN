@@ -347,3 +347,65 @@ pub async fn mcp_replay_elicitations(state: State<'_, AppState>, app: AppHandle)
     Ok(())
 }
 
+/// Store a single MCP credential VALUE in the OS keyring under `key` so a
+/// config value can reference it as `${secret:key}` — the raw value never
+/// touches `.mcp.json`. An empty value deletes the stored secret. `key` must
+/// match the reference charset the `${secret:...}` expander accepts.
+#[tauri::command]
+pub async fn mcp_set_secret(
+    state: State<'_, AppState>,
+    key: String,
+    value: String,
+) -> ZenResult<()> {
+    if !is_valid_mcp_secret_key(&key) {
+        return Err(ZenError::Custom(
+            "Secret key must be 1-128 chars of letters, digits, '_', '-', or '.'".to_string(),
+        ));
+    }
+    state.secret_manager.set_secret(key, value).await
+}
+
+/// Return which of `keys` currently have a value in the keyring so the
+/// write-only secret editor can show a "stored" marker without ever exposing
+/// the secret value itself.
+#[tauri::command]
+pub async fn mcp_secret_status(
+    state: State<'_, AppState>,
+    keys: Vec<String>,
+) -> ZenResult<Vec<String>> {
+    let mut present = Vec::new();
+    for key in keys {
+        if is_valid_mcp_secret_key(&key)
+            && state.secret_manager.has_secret_unaudited(&key).await.unwrap_or(false)
+        {
+            present.push(key);
+        }
+    }
+    Ok(present)
+}
+
+/// Same charset/length rule enforced by `mcp::env::expand_secret_refs`, so a
+/// key writable here is always resolvable at spawn/request time.
+fn is_valid_mcp_secret_key(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 128
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.'))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_valid_mcp_secret_key;
+
+    #[test]
+    fn secret_key_charset_matches_expander() {
+        assert!(is_valid_mcp_secret_key("EXA_API_KEY"));
+        assert!(is_valid_mcp_secret_key("my.key-1"));
+        assert!(!is_valid_mcp_secret_key(""));
+        assert!(!is_valid_mcp_secret_key("has space"));
+        assert!(!is_valid_mcp_secret_key("bad$name"));
+        assert!(!is_valid_mcp_secret_key(&"x".repeat(129)));
+    }
+}
+

@@ -18,19 +18,26 @@ function CopyValue({ value }: { value: string }) {
 export function McpContent({ toolCall, outputPreview, input }: McpContentProps) {
   const parsedOutput = parseStructuredValue(toolCall.output || outputPreview.content || outputPreview.raw);
   const output = asRecord(parsedOutput);
-  const server = firstString(input, ["server", "server_name", "mcp_server"]) || firstString(output, ["server", "server_name"]) || "External server";
   const tool = firstString(input, ["tool", "tool_name", "name"]) || firstString(output, ["tool", "tool_name"]) || toolCall.name;
   const argumentsValue = input.arguments ?? input.args ?? input.parameters ?? input;
+  // Canonical status wins. A raw `error` field only counts as failure when it
+  // carries a value AND the call didn't also return a result — `{error: null}`
+  // or a non-fatal warning alongside a result is a success, not a red panel.
+  const hasResult = output.result !== undefined || output.data !== undefined || output.content !== undefined;
+  const errorFieldSet = output.error !== undefined && output.error !== null;
+  const isError = toolCall.status === "error" || (errorFieldSet && !hasResult);
   const resultValue = output.result ?? output.data ?? output.content ?? parsedOutput;
-  const errorValue = output.error ?? (toolCall.status === "error" ? output.message ?? outputPreview.summary : undefined);
-  const resultText = formatStructuredValue(errorValue ?? resultValue);
+  // On error prefer the extracted message over the raw tool-exec envelope
+  // (completed_at/id/input) so the panel shows the failure, not plumbing.
+  const resultText = isError
+    ? formatStructuredValue(output.error ?? output.message ?? outputPreview.errorMessage ?? outputPreview.summary ?? resultValue)
+    : formatStructuredValue(resultValue);
   const argsText = redactStructuredValue(argumentsValue);
+  // Identity (icon + raw tool id) lives in the panel header, not a separate
+  // strip — the card title already carries the humanized action.
+  const identity = <span className="flex min-w-0 items-center gap-1.5">{isError ? <TriangleAlert className="h-3 w-3 shrink-0 text-destructive" aria-hidden="true" /> : <Plug className="h-3 w-3 shrink-0 text-primary" aria-hidden="true" />}<span className="min-w-0 truncate font-mono text-[10px] tracking-normal text-muted-foreground">{tool}</span></span>;
   return <div className="flex flex-col gap-2">
-    <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2">
-      {errorValue ? <TriangleAlert className="h-3.5 w-3.5 text-destructive" aria-hidden="true" /> : <Plug className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">MCP</span><span className="min-w-0 truncate text-[12px] text-foreground">{server}</span><span className="text-muted-foreground">·</span><span className="min-w-0 truncate font-mono text-[11px] text-foreground">{tool}</span>
-    </div>
-    <Panel label="Invocation"><div className="mb-1 flex items-center gap-2 text-[11px] text-muted-foreground"><span className="font-medium text-foreground">{server}</span><span>·</span><span className="font-mono">{tool}</span></div><div className="group relative"><pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-background p-2 pr-8 font-mono text-[11px] leading-relaxed text-foreground">{argsText}</pre><CopyValue value={argsText} /></div></Panel>
-    <Panel label={errorValue ? "Error" : "Result"}><div className="group relative"><pre className={`max-h-56 overflow-auto whitespace-pre-wrap break-words rounded bg-background p-2 pr-8 font-mono text-[11px] leading-relaxed ${errorValue ? "text-destructive" : "text-foreground"}`}>{resultText || "No result payload"}</pre><CopyValue value={resultText} /></div></Panel>
+    <Panel label="Invocation" action={identity}><div className="group relative"><pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-background p-2 pr-8 font-mono text-[11px] leading-relaxed text-foreground">{argsText}</pre><CopyValue value={argsText} /></div></Panel>
+    <Panel label={isError ? "Error" : "Result"}><div className="group relative"><pre className={`max-h-56 overflow-auto whitespace-pre-wrap break-words rounded bg-background p-2 pr-8 font-mono text-[11px] leading-relaxed ${isError ? "text-destructive" : "text-foreground"}`}>{resultText || "No result payload"}</pre><CopyValue value={resultText} /></div></Panel>
   </div>;
 }

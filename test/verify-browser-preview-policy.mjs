@@ -50,4 +50,34 @@ assert(component.includes('sandbox="allow-forms allow-scripts"'));
 assert(!component.includes("allow-same-origin"));
 assert(!component.includes("allow-popups"));
 
+// Rust-side contract: the privileged embedded webview must re-validate every
+// URL through the loopback-gated allowlist port. The renderer's guard is not
+// trusted on its own (Security.md network rule).
+const urlPolicy = readFileSync(
+  new URL("../src-tauri/src/browser/url_policy.rs", import.meta.url),
+  "utf8",
+);
+assert(urlPolicy.includes("pub fn sanitize_preview_url"));
+assert(urlPolicy.includes("must not contain credentials"));
+assert(urlPolicy.includes("private/LAN"));
+
+const browserMod = readFileSync(
+  new URL("../src-tauri/src/browser/mod.rs", import.meta.url),
+  "utf8",
+);
+// attach + navigate both funnel through the allowlist.
+assert((browserMod.match(/url_policy::sanitize_preview_url/g) || []).length >= 2);
+
+// CDP is in-process only via CallDevToolsProtocolMethod (no debug socket).
+const cdp = readFileSync(new URL("../src-tauri/src/browser/cdp.rs", import.meta.url), "utf8");
+assert(cdp.includes("CallDevToolsProtocolMethod"));
+
+// The agent tool must not bypass the allowlist with its own navigation.
+const agentTool = readFileSync(
+  new URL("../src-tauri/src/agent/tools/browser_tools.rs", import.meta.url),
+  "utf8",
+);
+assert(agentTool.includes("mgr.navigate("));
+assert(!agentTool.includes("WebviewUrl::External"));
+
 console.log("browser preview policy verified");

@@ -292,9 +292,12 @@ impl McpClient {
                     );
                 }
 
-                // Step 4: tools/list (paginated)
-                let tools_url = url.trim_end_matches('/').to_string() + "/tools/list";
-                let tools = Self::fetch_external_tools(&client, &http_endpoint, &tools_url).await;
+                // Step 4: tools/list (paginated). Streamable HTTP sends every
+                // JSON-RPC message to the single MCP endpoint URL for both
+                // protocol eras — there is no per-method subpath. Pass the base
+                // URL so legacy servers hit `/mcp`, not a bogus
+                // `/mcp/tools/list` (which real servers 404).
+                let tools = Self::fetch_external_tools(&client, &http_endpoint, url).await;
 
                 (ServerEndpoint::Http(http_endpoint), tools)
             } else if let Some(command) = server_cfg["command"].as_str() {

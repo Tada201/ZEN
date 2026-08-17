@@ -33,8 +33,19 @@ fn normalize_direct_tool_args(tool_name: &str, args: &Value) -> Value {
             }
         }
     } else if tool_name == "write_todos" && normalized.get("todos").is_none() {
-        if let Some(task) = normalized.get("task").and_then(Value::as_str) {
-            normalized = json!({ "todos": [{ "task": task, "completed": false }] });
+        // A model may emit a single bare item ({task}/{step}/{content}) or use
+        // an alternate list key ("plan"/"steps"/"items") instead of "todos".
+        // Rewrap so the tolerant parser in task_tools sees a "todos" array.
+        if let Some(list) = ["plan", "steps", "items", "tasks"]
+            .iter()
+            .find_map(|key| normalized.get(*key).filter(|v| v.is_array()).cloned())
+        {
+            normalized = json!({ "todos": list });
+        } else if normalized.get("task").is_some()
+            || normalized.get("step").is_some()
+            || normalized.get("content").is_some()
+        {
+            normalized = json!({ "todos": [normalized] });
         }
     } else if tool_name == "manage_board" {
         normalized = super::voice_display::normalize_board_operation(normalized)

@@ -307,4 +307,14 @@ export const mcpApi = {
    * was listening is recovered instead of silently timing out.
    */
   replayElicitations: () => callCommand<void>("mcp_replay_elicitations"),
+  /**
+   * Store a credential VALUE in the OS keyring under `key` so config can
+   * reference it as `${secret:key}`. The raw value never reaches `.mcp.json`.
+   * An empty value deletes the stored secret.
+   */
+  setSecret: (key: string, value: string) =>
+    callCommand<void>("mcp_set_secret", { key, value }),
+  /** Return which of `keys` already have a stored value (names only, no values). */
+  secretStatus: (keys: string[]) =>
+    callCommand<string[]>("mcp_secret_status", { keys }),
 };

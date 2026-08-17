@@ -161,16 +161,6 @@ pub static PROVIDER_CATALOG: &[ProviderMeta] = &[
         extra_headers: &[],
     },
     ProviderMeta {
-        name: "aihubmix",
-        display_name: "AIHubMix",
-        description: "OpenAI-compatible gateway for multiple model providers.",
-        category: "cloud",
-        default_base_url: "https://aihubmix.com/v1",
-        api_key_key: Some("aihubmix_api_key"),
-        http_referer: None,
-        extra_headers: &[],
-    },
-    ProviderMeta {
         name: "google",
         display_name: "Google Gemini",
         description: "Google multimodal models through the compatible API.",
@@ -295,7 +285,6 @@ mod tests {
             "deepseek",
             "qwen",
             "xai",
-            "aihubmix",
         ] {
             let meta = PROVIDER_CATALOG
                 .iter()

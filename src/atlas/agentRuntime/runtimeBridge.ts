@@ -3,6 +3,7 @@ import { streamIdentity, type AgentRunEvent, type AgentTurnRecord } from "./type
 
 export interface AgentRuntimeBridge {
   dispatch: (event: AgentRunEvent) => void;
+  dispatchTerminal: (event: AgentRunEvent) => void;
   get: (runId: string, chatId: string, messageId?: string) => AgentTurnRecord | undefined;
   clear: (runId: string, chatId: string, messageId?: string) => void;
 }
@@ -25,6 +26,11 @@ export function createAgentRuntimeBridge(
   return {
     dispatch(event) {
       getScheduler(event).scheduler.dispatch(event);
+    },
+    dispatchTerminal(event) {
+      const { scheduler } = getScheduler(event);
+      scheduler.dispatch(event);
+      scheduler.flushNow(event.runId);
     },
     get(runId, chatId, messageId) {
       return schedulers.get(streamIdentity(runId, chatId, messageId))?.get(runId);

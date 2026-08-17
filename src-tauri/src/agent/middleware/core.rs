@@ -92,6 +92,10 @@ pub struct EnrichmentContext {
     pub extra_system_messages: Vec<String>,
     /// Chat identifier – used by middleware that queries DB or app state.
     pub chat_id: String,
+    /// The chat's captured workspace root (canonicalized). Skill discovery
+    /// and any workspace-scoped middleware must resolve against this, NOT
+    /// the process cwd — a Tauri app's cwd is the install/launch dir.
+    pub workspace_root: Option<std::path::PathBuf>,
     /// Pre-cached semantic recall block (set by runner before chain runs).
     pub recall_block: Option<String>,
     /// Tool IDs authorised for the current agent/iteration.

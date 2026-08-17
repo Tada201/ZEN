@@ -16,6 +16,7 @@ import { Hammer, Search, X } from "lucide-react";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
+import { useSkillsRegistryStore } from "@/lib/stores/skillsRegistryStore";
 import { getVisibleWorkspaceModeFeatures, isWorkspaceModeVisible } from "@/lib/features/frontendFeatures";
 import { useShallow } from 'zustand/react/shallow';
 import { useRenderLogger } from "@/hooks/useRenderLogger";
@@ -38,6 +39,7 @@ const CommandPalette = React.lazy(() => import("@/atlas/CommandPalette").then(m 
 const VoiceModeOverlay = React.lazy(() => import("../components/voice/VoiceModeOverlay").then(m => ({ default: m.VoiceModeOverlay })));
 const ArtifactPanel = React.lazy(() => import("../components/chat/ArtifactPanel").then(m => ({ default: m.ArtifactPanel })));
 const RightPanel = React.lazy(() => import("../components/RightPanel").then(m => ({ default: m.RightPanel })));
+const SkillsRegistryDialog = React.lazy(() => import("../components/skills/SkillsRegistryDialog").then(m => ({ default: m.SkillsRegistryDialog })));
 
 const DeferredOverlayFallback = () => null;
 
@@ -193,6 +195,8 @@ export function WorkspaceApp() {
   const currentWorkspaceTab = isWorkspaceModeVisible(activeTab) ? activeTab : "chat";
   const activeSession = [...sessions, ...archivedSessions].find((session) => session.id === currentSessionId) ?? null;
   const isArchivedSession = activeSession?.archived === true || archivedSessions.some((session) => session.id === currentSessionId);
+  const openSkills = useSkillsRegistryStore((s) => s.open);
+  const skillsRegistryOpen = useSkillsRegistryStore((s) => s.isOpen);
 
   const handleStartNewChat = useCallback(() => {
     if (currentSessionId && isStreaming) {
@@ -564,6 +568,7 @@ export function WorkspaceApp() {
                   variant="welcome"
 
                   activeChatId={null}
+                  workspaceRoot={pendingWorkspaceRoot}
                   onSend={handleSendMessageInternal}
                   onAbort={abortStream}
                   isLoading={false}
@@ -577,6 +582,7 @@ export function WorkspaceApp() {
                     setActiveSettingsTab("providers");
                     setSettingsOpen(true);
                   }}
+                  onOpenSkills={openSkills}
                   />
                 </div>
               }
@@ -609,6 +615,7 @@ export function WorkspaceApp() {
                         >
                           <PremiumChatInput
                             activeChatId={currentSessionId}
+                            workspaceRoot={activeSession?.workspaceRoot}
                             readOnly={isArchivedSession}
                             onSend={handleSendMessageInternal}
                             onAbort={isArchivedSession ? undefined : abortStream}
@@ -628,6 +635,7 @@ export function WorkspaceApp() {
                               setActiveSettingsTab("providers");
                               setSettingsOpen(true);
                             }}
+                            onOpenSkills={openSkills}
                           />
                         </div>
                       </div>
@@ -656,6 +664,7 @@ export function WorkspaceApp() {
                             >
                           <PremiumChatInput
                             activeChatId={currentSessionId}
+                                workspaceRoot={activeSession?.workspaceRoot}
                                 readOnly={isArchivedSession}
                                 onSend={handleSendMessageInternal}
                                 onAbort={isArchivedSession ? undefined : abortStream}
@@ -675,6 +684,7 @@ export function WorkspaceApp() {
                                   setActiveSettingsTab("providers");
                                   setSettingsOpen(true);
                                 }}
+                                onOpenSkills={openSkills}
                               />
                             </div>
                           </div>
@@ -722,6 +732,12 @@ export function WorkspaceApp() {
       {isCommandPaletteOpen && (
         <Suspense fallback={<DeferredOverlayFallback />}>
           <CommandPalette onNewChat={handleStartNewChat} />
+        </Suspense>
+      )}
+
+      {skillsRegistryOpen && (
+        <Suspense fallback={<DeferredOverlayFallback />}>
+          <SkillsRegistryDialog workspaceRoot={activeSession?.workspaceRoot ?? pendingWorkspaceRoot} />
         </Suspense>
       )}
 

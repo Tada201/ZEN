@@ -7,6 +7,7 @@ export interface ProviderConfigRequest {
   apiKey: string;
   displayName: string;
   headers?: Record<string, string>;
+  apiFormat?: string;
 }
 
 export interface ModelUsageSummary {

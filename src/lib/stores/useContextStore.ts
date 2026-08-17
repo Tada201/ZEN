@@ -53,7 +53,27 @@ export const useContextStore = create<ContextStoreState & ContextStoreActions>(
         if (prior) {
           if (prior.latestRunId === payload.runId) {
             if (payload.iteration <= prior.latestIteration) {
-              return state;
+              // Same (runId, iteration) normally means a stale re-broadcast
+              // and is ignored. The one exception: the runner re-emits the
+              // SAME iteration after its LLM call returns, now carrying the
+              // provider-reported `actualInputTokens`/`actualOutputTokens`
+              // the pre-call emit could not know. Let that upgrade through
+              // so the live badge shows real usage on single-turn runs
+              // instead of waiting for the next iteration (which never comes
+              // when the run ends here).
+              const priorHadActuals =
+                prior.latest?.actualInputTokens != null ||
+                prior.latest?.actualOutputTokens != null;
+              const payloadHasActuals =
+                payload.actualInputTokens != null ||
+                payload.actualOutputTokens != null;
+              const isActualsUpgrade =
+                payload.iteration === prior.latestIteration &&
+                payloadHasActuals &&
+                !priorHadActuals;
+              if (!isActualsUpgrade) {
+                return state;
+              }
             }
           } else if (prior.latestRunId > payload.runId) {
             return state;

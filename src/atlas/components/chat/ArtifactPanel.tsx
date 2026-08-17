@@ -92,11 +92,11 @@ export function ArtifactPanel({
       animate={{ opacity: 1, x: 0 }}
       transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.surface, ease: motionEasings.standard }}
       className={cn(
-      "flex flex-col bg-[#1e1e24] sm:relative sm:inset-auto sm:z-fixed sm:h-full sm:shrink-0 sm:border-l border-border/80 shadow-none",
+      "flex flex-col bg-editor-surface sm:relative sm:inset-auto sm:z-fixed sm:h-full sm:shrink-0 sm:border-l border-border/80 shadow-none",
       embedded ? "w-full h-full border-l-0 shadow-none relative inset-auto z-auto" : "fixed inset-y-0 right-0 z-[100] sm:w-[320px] md:w-[360px] lg:w-[400px] xl:w-[450px]"
     )}>
       {/* Header */}
-      <div className="flex h-11 items-center gap-2 border-b border-border/80 bg-[#18181c] px-3 select-none">
+      <div className="flex h-11 items-center gap-2 border-b border-border/80 bg-editor-elevated px-3 select-none">
         {artifact.type === "code" ? (
           <Code2 className="h-4 w-4 text-[hsl(var(--primary))] shrink-0" />
         ) : (
@@ -141,13 +141,13 @@ export function ArtifactPanel({
 
       {/* Editor Tabs Bar */}
       {isPreviewable && (
-        <div className="flex h-9 border-b border-border bg-[#18181c] select-none text-[11px] font-sans font-medium tracking-wide">
+        <div className="flex h-9 border-b border-border bg-editor-elevated select-none text-[11px] font-sans font-medium tracking-wide">
           <button
             className={cn(
               "px-4 flex items-center gap-1.5 border-r border-border/80 h-full transition-colors font-medium",
               viewMode === "preview" 
-                ? "bg-[#1e1e24] text-foreground border-b-2 border-b-primary" 
-                : "bg-[#131316] text-muted-foreground hover:bg-[#18181c]/60 hover:text-foreground"
+                ? "bg-editor-surface text-foreground border-b-2 border-b-primary" 
+                : "bg-editor-inactive text-muted-foreground hover:bg-editor-elevated/60 hover:text-foreground"
             )}
             onClick={() => setViewMode("preview")}
           >
@@ -157,8 +157,8 @@ export function ArtifactPanel({
             className={cn(
               "px-4 flex items-center gap-1.5 border-r border-border/80 h-full transition-colors font-medium",
               viewMode === "code" 
-                ? "bg-[#1e1e24] text-foreground border-b-2 border-b-primary" 
-                : "bg-[#131316] text-muted-foreground hover:bg-[#18181c]/60 hover:text-foreground"
+                ? "bg-editor-surface text-foreground border-b-2 border-b-primary" 
+                : "bg-editor-inactive text-muted-foreground hover:bg-editor-elevated/60 hover:text-foreground"
             )}
             onClick={() => setViewMode("code")}
           >
@@ -172,10 +172,10 @@ export function ArtifactPanel({
       )}
       
       {/* Content */}
-      <div className="flex-1 overflow-auto bg-[#1e1e24] selection:bg-primary/20 relative">
+      <div className="flex-1 overflow-auto bg-editor-surface selection:bg-primary/20 relative">
         {viewMode === "code" ? (
-          <div className="h-full bg-[#1e1e1e] font-mono overflow-auto">
-            <pre className="p-4 text-[12px] leading-relaxed text-[#d4d4d4] whitespace-pre-wrap select-text font-mono">
+          <div className="h-full bg-editor-surface font-mono overflow-auto">
+            <pre className="p-4 text-[12px] leading-relaxed text-editor-foreground whitespace-pre-wrap select-text font-mono">
               <code>{artifact.content}</code>
             </pre>
           </div>
@@ -184,7 +184,7 @@ export function ArtifactPanel({
             initial={reducedMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={reducedMotion ? { duration: 0 } : { duration: motionDurations.fast, ease: motionEasings.standard }}
-            className="h-full bg-[#1e1e24]"
+            className="h-full bg-editor-surface"
           >
             {artifact.type === "markdown" ? (
               <div className="p-5 text-xs max-w-none prose prose-slate dark:prose-invert">
@@ -203,11 +203,11 @@ export function ArtifactPanel({
                 </Suspense>
               </div>
             ) : isSvg ? (
-              <div className="flex h-full items-center justify-center p-4 bg-[#1e1e24]">
+              <div className="flex h-full items-center justify-center p-4 bg-editor-surface">
                 <SandboxedIframe content={artifact.content} title={artifact.title} />
               </div>
             ) : (
-              <div className="p-5 bg-[#1e1e1e] text-[#d4d4d4] font-mono">
+              <div className="p-5 bg-editor-surface text-editor-foreground font-mono">
                 <pre className="text-[12px] leading-relaxed"><code>{artifact.content}</code></pre>
               </div>
             )}

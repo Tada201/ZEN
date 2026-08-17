@@ -77,7 +77,7 @@ export const NetworkWidget = memo(function NetworkWidget({ context }: { context:
     if (!activeIface) {
         return (
             <div className="flex items-center justify-center h-24 bg-card/20 border border-border/40 rounded-sm">
-                <span className="text-[10px] font-mono text-rose-500 italic">OFFLINE</span>
+                <span className="text-[10px] font-mono text-destructive italic">OFFLINE</span>
             </div>
         );
     }
@@ -105,7 +105,7 @@ export const NetworkWidget = memo(function NetworkWidget({ context }: { context:
                 <span className="text-[10px] font-mono font-bold text-muted-foreground tracking-wider">
                     {activeIface.name.toUpperCase()}
                 </span>
-                <span className="text-[10px] font-mono text-violet-400/80">ONLINE</span>
+                <span className="text-[10px] font-mono text-primary/80">ONLINE</span>
             </div>
 
             {/* Throughput Charts */}

@@ -63,6 +63,7 @@ function writeCachedImageModels(models: ModelInfo[]) {
 
 const customProviderApiKeySetting = (id: string) => `${id}_api_key`;
 const customProviderBaseUrlSetting = (id: string) => `${id}_base_url`;
+const customProviderApiFormatSetting = (id: string) => `${id}_api_format`;
 type BackendModelInfo = ModelInfo & {
     maxContextLength?: number;
     supportsVision?: boolean;
@@ -88,13 +89,14 @@ function customProviderId(name: string, existingIds: Set<string>) {
     return id;
 }
 
-async function syncCustomProviderBackendSettings(id: string, baseUrl?: string, apiKey?: string, headers?: Record<string, string>) {
+async function syncCustomProviderBackendSettings(id: string, baseUrl?: string, apiKey?: string, headers?: Record<string, string>, apiFormat?: string) {
     const settings: Record<string, string> = {};
     if (baseUrl !== undefined) settings[customProviderBaseUrlSetting(id)] = baseUrl;
     if (apiKey !== undefined && !isSecretPresentValue(apiKey)) {
         settings[customProviderApiKeySetting(id)] = apiKey;
     }
     if (headers !== undefined) settings[`${id}_headers`] = JSON.stringify(headers);
+    if (apiFormat !== undefined) settings[customProviderApiFormatSetting(id)] = apiFormat;
     if (Object.keys(settings).length === 0) return;
     await settingsApi.setSettings(settings);
 }
@@ -165,12 +167,10 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
   xaiBaseUrl: "https://api.x.ai/v1",
   kilocodeBaseUrl: "https://api.kilo.ai/api/gateway",
   nvidiaBaseUrl: "https://integrate.api.nvidia.com/v1",
-  aihubmixBaseUrl: "https://aihubmix.com/v1",
   mimoBaseUrl: "https://api.xiaomimimo.com/api/free-ai/openai/chat",
   nineRouterBaseUrl: "http://localhost:20128/v1",
   opencodeBaseUrl: "https://opencode.ai/zen/v1",
   nineRouterApiKey: "",
-  aihubmixApiKey: "",
   ollamaBaseUrl: "http://localhost:11434",
   lmstudioBaseUrl: "http://localhost:1234",
   customProviders: [],
@@ -429,13 +429,14 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
     }
     const id = customProviderId(config.displayName, new Set(current.map(provider => provider.id)));
     const baseUrl = normalizeProviderBaseUrl(config.baseUrl);
-    await syncCustomProviderBackendSettings(id, baseUrl, config.apiKey, config.headers || {});
+    await syncCustomProviderBackendSettings(id, baseUrl, config.apiKey, config.headers || {}, config.apiFormat ?? 'openai_chat');
     const newProvider: CustomProviderConfig = {
         ...config,
         id,
         baseUrl,
         apiKey: metadataApiKey(config.apiKey),
         enabled: true,
+        apiFormat: config.apiFormat ?? 'openai_chat',
         customModels: config.customModels || []
     };
     get().updateSetting({ customProviders: [...current, newProvider] } as any);
@@ -452,6 +453,7 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
         await settingsApi.setSettings({
             [customProviderBaseUrlSetting(providerToRemove.id)]: "",
             [`${providerToRemove.id}_headers`]: "",
+            [customProviderApiFormatSetting(providerToRemove.id)]: "",
         });
     } catch (error) {
         console.warn('[removeCustomProvider] Backend settings cleanup failed; proceeding with frontend removal.', error);
@@ -527,8 +529,8 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
         ...updates,
         ...(updates.baseUrl !== undefined ? { baseUrl: normalizeProviderBaseUrl(updates.baseUrl) } : {}),
     };
-    if (normalizedUpdates.baseUrl !== undefined || normalizedUpdates.apiKey !== undefined || normalizedUpdates.headers !== undefined) {
-        await syncCustomProviderBackendSettings(id, normalizedUpdates.baseUrl, normalizedUpdates.apiKey, normalizedUpdates.headers);
+    if (normalizedUpdates.baseUrl !== undefined || normalizedUpdates.apiKey !== undefined || normalizedUpdates.headers !== undefined || normalizedUpdates.apiFormat !== undefined) {
+        await syncCustomProviderBackendSettings(id, normalizedUpdates.baseUrl, normalizedUpdates.apiKey, normalizedUpdates.headers, normalizedUpdates.apiFormat);
     }
     const publicUpdates = {
         ...normalizedUpdates,

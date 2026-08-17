@@ -4,8 +4,11 @@ import {
   AlertCircle,
   Bot,
   Check,
+  CheckCircle2,
+  Circle,
   CircleDashed,
   FileDiff,
+  ListChecks,
   ListTree,
   Loader2,
   Pause,
@@ -21,6 +24,9 @@ import { Button } from "@/components/ui/button";
 import { chatApi } from "@/api";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { useUIStore } from "@/lib/stores/useUIStore";
+import { useTaskStore } from "@/lib/stores/taskStore";
+import { normalizeTaskDisplayStatus, normalizeTaskText } from "@/lib/tasks/taskStatus";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { projectScopedSubagents, type ScopedSubagentRecord } from "@/atlas/agentRuntime/subagentRuntime";
 import { upsertScopedSubagent } from "@/atlas/agentRuntime/scopedSubagentStore";
@@ -243,8 +249,30 @@ function SubagentStatusRow({
   );
 }
 
+function ChecklistRow({ description, status }: { description: string; status: ReturnType<typeof normalizeTaskDisplayStatus> }) {
+  // Simple running checklist: done shows a check, everything else an empty
+  // circle. No spinner — "in progress" is just "not done yet".
+  const done = status === "completed";
+  const Icon = done ? CheckCircle2 : Circle;
+  return (
+    <div className="mx-2.5 mb-1 flex min-w-0 items-start gap-2 text-[11px]">
+      <Icon className={cn("mt-0.5 h-3.5 w-3.5 shrink-0", done ? "text-success" : "text-muted-foreground/70")} aria-hidden="true" />
+      <span className={cn("min-w-0 flex-1 leading-4", done ? "text-muted-foreground line-through" : "text-foreground")}>{description}</span>
+    </div>
+  );
+}
+
 export function RunStatusPopover({ messages, isStreaming }: { messages: Message[]; isStreaming: boolean }) {
   const activeChatId = useUIStore((state) => state.activeChatId);
+  const taskMap = useTaskStore((state) => state.tasks);
+  const checklist = useMemo(
+    () =>
+      Array.from(taskMap.values())
+        .filter((task) => task.chatId === activeChatId && task.id.includes("_todo_"))
+        .sort((a, b) => a.createdAt - b.createdAt),
+    [taskMap, activeChatId],
+  );
+  const checklistDone = checklist.filter((task) => normalizeTaskDisplayStatus(task.status) === "completed").length;
   const openRunInspector = useUIStore((state) => state.openRunInspector);
   const openSubagentInPanel = useUIStore((state) => state.openSubagentInPanel);
   const setRightPanelOpen = useUIStore((state) => state.setRightPanelOpen);
@@ -351,6 +379,15 @@ export function RunStatusPopover({ messages, isStreaming }: { messages: Message[
             </div>
           </section>
 
+          {checklist.length > 0 && (
+            <section className="border-b border-border pb-1.5">
+              <SectionHeader icon={ListChecks} title="Checklist" action={<span className="text-[10px] text-muted-foreground">{checklistDone}/{checklist.length}</span>} />
+              {checklist.map((task) => (
+                <ChecklistRow key={task.id} description={normalizeTaskText(task.description, "Untitled task")} status={normalizeTaskDisplayStatus(task.status)} />
+              ))}
+            </section>
+          )}
+
           {activeSubagents.length > 0 && (
             <section className="border-b border-border pb-1.5">
               <SectionHeader icon={Bot} title="Active subagents" action={<span className="text-[10px] text-muted-foreground">{activeSubagents.length}</span>} />
@@ -389,7 +426,7 @@ export function RunStatusPopover({ messages, isStreaming }: { messages: Message[
             </section>
           )}
 
-          {!activeSubagents.length && !recentSubagents.length && !executionStatus.pendingApprovalCount && !changedFileCount && !isHistoryLoading && !isHistoryReconciling && !isHistoryError && (
+          {!checklist.length && !activeSubagents.length && !recentSubagents.length && !executionStatus.pendingApprovalCount && !changedFileCount && !isHistoryLoading && !isHistoryReconciling && !isHistoryError && (
             <div className="px-2.5 py-3 text-[11px] text-muted-foreground" role="status">No delegated work or pending local actions.</div>
           )}
         </div>

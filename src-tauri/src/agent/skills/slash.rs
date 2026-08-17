@@ -11,6 +11,8 @@ pub enum BuiltinCommand {
     Help,
     Skills,
     Settings,
+    Goal,
+    Compact,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,6 +53,13 @@ pub fn parse_slash_command(input: &str, available_skills: &[SkillMetadata]) -> S
         "help" => SlashCommand::Builtin(BuiltinCommand::Help),
         "skills" => SlashCommand::Builtin(BuiltinCommand::Skills),
         "settings" => SlashCommand::Builtin(BuiltinCommand::Settings),
+        // /goal executes client-side (set/pause/resume/clear/view); listed
+        // here only so the autocomplete popover suggests it.
+        "goal" => SlashCommand::Builtin(BuiltinCommand::Goal),
+        // /compact executes client-side (manual context compaction via the
+        // compact_chat_context command); listed here only so the
+        // autocomplete popover suggests it.
+        "compact" => SlashCommand::Builtin(BuiltinCommand::Compact),
         other => SlashCommand::Unknown(other.to_string()),
     }
 }
@@ -107,6 +116,8 @@ struct BuiltinDef {
 
 const BUILTINS: &[BuiltinDef] = &[
     BuiltinDef { name: "clear", description: "Clear the current chat" },
+    BuiltinDef { name: "compact", description: "Manually compact this chat's context; optionally add focus instructions" },
+    BuiltinDef { name: "goal", description: "Set a goal the agent keeps working toward (/goal <objective>, /goal pause|resume|clear)" },
     BuiltinDef { name: "help", description: "Show available slash commands" },
     BuiltinDef { name: "skills", description: "Open the skills registry" },
     BuiltinDef { name: "settings", description: "Open app settings" },
@@ -161,6 +172,27 @@ mod tests {
     fn parses_builtin_help() {
         let cmd = parse_slash_command("/help", &[]);
         assert_eq!(cmd, SlashCommand::Builtin(BuiltinCommand::Help));
+    }
+
+    #[test]
+    fn parses_builtin_compact() {
+        let cmd = parse_slash_command("/compact", &[]);
+        assert_eq!(cmd, SlashCommand::Builtin(BuiltinCommand::Compact));
+    }
+
+    #[test]
+    fn parses_builtin_compact_with_focus_instructions() {
+        // Trailing text is the focus instructions; the client-side parser
+        // extracts them, the builtin arm only matches the command name.
+        let cmd = parse_slash_command("/compact focus on the database migration work", &[]);
+        assert_eq!(cmd, SlashCommand::Builtin(BuiltinCommand::Compact));
+    }
+
+    #[test]
+    fn compact_prefix_mismatch_is_unknown() {
+        // "/compactx" must not match the compact builtin.
+        let cmd = parse_slash_command("/compactx", &[]);
+        assert_eq!(cmd, SlashCommand::Unknown("compactx".into()));
     }
 
     #[test]

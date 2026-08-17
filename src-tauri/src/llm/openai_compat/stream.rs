@@ -61,7 +61,6 @@ impl OpenAiCompatProvider {
                 | "9router"
                 | "opencode"
                 | "opencode_free"
-                | "aihubmix"
                 | "nvidia"
         )
     }
@@ -347,6 +346,10 @@ impl OpenAiCompatProvider {
 
         let url = self.url("/chat/completions");
 
+        // Sanitize tool names to the provider charset (no ':' etc.) and keep a
+        // per-request reverse map so streamed tool calls decode to canonical ids.
+        let mut name_codec = crate::llm::ToolNameCodec::default();
+
         let oai_messages: Vec<OpenAiMessage> = self
             .sanitize_outbound_messages(messages)
             .into_iter()
@@ -357,7 +360,7 @@ impl OpenAiCompatProvider {
                             id: tc.id,
                             call_type: "function".to_string(),
                             function: OpenAiFunctionOut {
-                                name: tc.name,
+                                name: name_codec.encode(&tc.name),
                                 arguments: tc.args.to_string(),
                             },
                         })
@@ -412,7 +415,7 @@ impl OpenAiCompatProvider {
                     serde_json::json!({
                         "type": "function",
                         "function": {
-                            "name": t.name,
+                            "name": name_codec.encode(&t.name),
                             "description": t.description,
                             "parameters": t.parameters
                         }
@@ -624,7 +627,7 @@ impl OpenAiCompatProvider {
                                         name: if acc.name.is_empty() {
                                             None
                                         } else {
-                                            Some(acc.name.clone())
+                                            Some(name_codec.decode(&acc.name))
                                         },
                                         arguments_delta: delta
                                             .function
@@ -640,14 +643,16 @@ impl OpenAiCompatProvider {
                                             )
                                         {
                                             acc.ready_emitted = true;
+                                            // Pin a stable id before the early ToolCallReady
+                                            // so it matches the finalized tool-call id; some
+                                            // OpenAI-compatible providers omit streamed ids.
+                                            if acc.id.is_empty() {
+                                                acc.id = format!("call_{}", uuid::Uuid::new_v4());
+                                            }
                                             on_chunk(crate::llm::LlmChunk::ToolCallReady {
                                                 index: idx,
-                                                id: if acc.id.is_empty() {
-                                                    None
-                                                } else {
-                                                    Some(acc.id.clone())
-                                                },
-                                                name: acc.name.clone(),
+                                                id: Some(acc.id.clone()),
+                                                name: name_codec.decode(&acc.name),
                                                 arguments,
                                             });
                                         }
@@ -682,7 +687,7 @@ impl OpenAiCompatProvider {
                         } else {
                             acc.id
                         },
-                        name: acc.name,
+                        name: name_codec.decode(&acc.name),
                         args: serde_json::from_str(&acc.arguments)
                             .unwrap_or_else(|_| serde_json::json!({})),
                     });
@@ -805,7 +810,7 @@ impl OpenAiCompatProvider {
             // models, so it defaults to tools on even when the per-model
             // capability cache is cold (e.g. after the 60s provider TTL).
             "openai" | "groq" | "mistral" | "gemini" | "google" | "deepseek" | "qwen" | "xai"
-            | "kilocode" | "opencode" | "opencode_free" | "aihubmix" | "nvidia" | "nine_router"
+            | "kilocode" | "opencode" | "opencode_free" | "nvidia" | "nine_router"
             | "nine-router" | "n9router" | "9router" => true,
 
             // Mixed catalogs — many models lack tool support

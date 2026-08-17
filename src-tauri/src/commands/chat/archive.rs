@@ -15,9 +15,14 @@ pub async fn toggle_pin_chat(state: State<'_, AppState>, chat_id: String) -> Zen
 }
 
 #[tauri::command]
-pub async fn archive_chat(state: State<'_, AppState>, chat_id: String) -> ZenResult<()> {
+pub async fn archive_chat(app: tauri::AppHandle, state: State<'_, AppState>, chat_id: String) -> ZenResult<()> {
     let db = state.db().await?;
-    queries::archive_chat(&db, &chat_id).await
+    queries::archive_chat(&db, &chat_id).await?;
+    // An archived chat has no composer controls visible, so its goal must
+    // not keep auto-continuing in the dark. Pausing (not clearing) keeps the
+    // objective for when the user unarchives.
+    let _ = crate::services::goal::update_status(&app, &db, &chat_id, "paused").await;
+    Ok(())
 }
 
 #[tauri::command]

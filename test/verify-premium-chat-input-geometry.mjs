@@ -6,7 +6,8 @@ const premium = read("src/atlas/components/PremiumChatInput.tsx");
 const textarea = read("src/atlas/components/ChatInputTextAreaBlock.tsx");
 const footer = read("src/atlas/components/ChatInputFooter.tsx");
 const pinned = read("src/atlas/components/chat/input/PinnedActionBar.tsx");
-const task = read("src/atlas/components/chat/input/TaskDrawer.tsx");
+const queue = read("src/atlas/components/chat/input/QueuedPromptsStrip.tsx");
+const goal = read("src/atlas/components/chat/input/GoalBanner.tsx");
 const plus = read("src/atlas/components/chat/input/PlusActionMenu.tsx");
 const menuItem = read("src/atlas/components/chat/input/MenuItem.tsx");
 const model = read("src/atlas/components/chat/input/ModelSearchDropdown.tsx");
@@ -28,8 +29,8 @@ const checks = [
   ["footer preserves a stable fixed action column", /grid-cols-\[minmax\(0,1fr\)_auto\][\s\S]*composer-fixed-actions flex shrink-0 items-center gap-1\.5/, footer],
   ["pinned rail does not add duplicate vertical padding", /composer-pinned-rail min-w-0 flex-1 overflow-hidden bg-transparent px-0 py-0/, pinned],
   ["thinking popover uses 12px content padding", /composer-popover--bounded w-80 p-3/, pinned],
-  ["task drawer uses compact top radius and row padding", /rounded-t-md[\s\S]*composer-menu-item px-2\.5 py-1\.5/, task],
-  ["task rows use compact internal gap", /px-2\.5 pb-2 pt-1 space-y-1\.5[\s\S]*items-start gap-1\.5/, task],
+  ["queued prompt pills use compact chip padding", /composer-chip[\s\S]*py-1\.5 pl-2 pr-1\.5/, queue],
+  ["goal banner uses compact row rhythm", /rounded-lg border border-border bg-card px-2\.5 py-1\.5/, goal],
   ["plus menu uses 4px outer gap and compact padding", /bottom-full left-0 z-30 mb-1 p-1[\s\S]*composer-popover-header px-2 py-1/, plus],
   ["menu items use 8px icon-label gap", /composer-menu-item text-\[13px\][\s\S]*items-center gap-2/, menuItem],
   ["model menu avoids oversized empty and footer spacing", /mb-1 space-y-1\.5[\s\S]*pb-1\.5[\s\S]*py-8[\s\S]*py-1\.5 text-xs/, model],
