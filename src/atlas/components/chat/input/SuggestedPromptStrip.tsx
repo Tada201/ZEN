@@ -46,7 +46,7 @@ export function SuggestedPromptStrip({
           <span className="text-[12px] font-semibold leading-none text-primary">{item.icon}</span>
           <div className="flex flex-col items-start leading-tight">
             <span className="font-semibold">{item.label}</span>
-            <span className="text-[11px] text-muted-foreground dark:text-muted-foreground font-normal">{item.description}</span>
+            <span className="text-[11px] text-muted-foreground font-normal">{item.description}</span>
           </div>
         </button>
       ))}

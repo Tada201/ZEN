@@ -56,7 +56,7 @@ export const QueuedPromptsStrip = memo(({ items, onRemove, onSendNow }: QueuedPr
             <button
               type="button"
               onClick={() => onRemove(item.id)}
-              className="composer-control composer-control--icon shrink-0 rounded-md p-1"
+              className="composer-control composer-control--icon shrink-0 rounded p-1"
               aria-label="Remove queued prompt"
               title="Remove from queue"
             >

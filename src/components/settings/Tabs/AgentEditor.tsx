@@ -5,7 +5,7 @@ import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 import { WorkbenchInput } from "@/components/ui/WorkbenchInput";
 import { WorkbenchSelect } from "../ui/WorkbenchSelect";
 import { ModelSearchDropdown } from "@/atlas/components/chat/input/ModelSearchDropdown";
-import type { Model } from "@/atlas/components/ModelSelector";
+import type { Model } from "@/atlas/components/model-types";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import type { ModelInfo } from "@/lib/types/provider";
 import { cn } from "@/lib/utils";

@@ -68,7 +68,7 @@ export const GoalBanner = memo(({ chatId }: GoalBannerProps) => {
             <button
               type="button"
               onClick={() => run(() => useGoalStore.getState().updateStatus(chatId, "paused"))}
-              className="composer-control composer-control--icon rounded-md p-1"
+              className="composer-control composer-control--icon rounded p-1"
               aria-label="Pause goal"
               title="Pause — stop auto-continuing toward the goal"
             >
@@ -79,7 +79,7 @@ export const GoalBanner = memo(({ chatId }: GoalBannerProps) => {
             <button
               type="button"
               onClick={() => run(() => useGoalStore.getState().updateStatus(chatId, "active"))}
-              className="composer-control composer-control--icon rounded-md p-1"
+              className="composer-control composer-control--icon rounded p-1"
               aria-label="Resume goal"
               title="Resume working toward the goal"
             >
@@ -89,7 +89,7 @@ export const GoalBanner = memo(({ chatId }: GoalBannerProps) => {
           <button
             type="button"
             onClick={() => run(() => useGoalStore.getState().clearGoal(chatId))}
-            className="composer-control composer-control--icon rounded-md p-1"
+            className="composer-control composer-control--icon rounded p-1"
             aria-label="Clear goal"
             title="Remove the goal"
           >

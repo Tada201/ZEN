@@ -40,6 +40,15 @@ import {
 import { useReducedMotion } from "@/lib/motion";
 import { presentExecutionError } from "@/atlas/agentRuntime/executionError";
 
+// The persisted message.model is often a raw provider path like
+// "deepseek/deepseek-v4-flash-0731". Show a human-readable label instead of
+// uppercasing that slug verbatim in the per-message header badge.
+function friendlyModelLabel(model?: string): string {
+  if (!model) return "Default";
+  const tail = model.includes("/") ? model.split("/").pop()! : model;
+  return tail.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 const PremiumCard = React.lazy(() => import("../genui/PremiumCard").then(m => ({ default: m.PremiumCard })));
 const OpenUIRenderer = React.lazy(() => import("../OpenUIRenderer").then(m => ({ default: m.OpenUIRenderer })));
 
@@ -261,11 +270,11 @@ export function AssistantMessage({
             <div className={cn("space-y-1", compact && "space-y-0.5")}>
               {(message.model || message.provider) && (
                 <div className="flex items-center gap-1.5 mb-1 select-none">
-                  <Badge variant="outline" className="h-5 px-1.5 text-[11px] font-bold uppercase tracking-wider bg-muted text-muted-foreground hover:bg-muted border-border transition-colors">
+                  <Badge variant="outline" className="h-5 px-1.5 text-[11px] font-semibold bg-muted text-muted-foreground hover:bg-muted border-border transition-colors">
                     <Zap className="mr-1 h-3 w-3" />
-                    {message.model || "Default"}
+                    {friendlyModelLabel(message.model)}
                     {message.provider && (
-                      <span className="ml-1 text-muted-foreground border-l border-border pl-1">
+                      <span className="ml-1 text-muted-foreground border-l border-border pl-1 capitalize">
                         {message.provider}
                       </span>
                     )}

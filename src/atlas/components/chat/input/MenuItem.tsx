@@ -65,7 +65,7 @@ export const MenuItem = ({
         disabled={disabled}
         onClick={onPin}
         className={cn(
-          "composer-control composer-control--icon absolute right-1 rounded-md p-0.5",
+          "composer-control composer-control--icon absolute right-1 rounded p-0.5",
           "opacity-0 transition-opacity group-hover/item:opacity-100 focus-visible:opacity-100",
           isPinned ? "text-primary opacity-100" : "text-muted-foreground",
         )}

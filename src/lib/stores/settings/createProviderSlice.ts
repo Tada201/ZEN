@@ -2,6 +2,7 @@ import type { StateCreator } from "zustand";
 import { isSecretPresentValue, providersApi, SECRET_PRESENT_VALUE, settingsApi } from "@/api";
 import type { SettingsState, ProviderSlice } from "./types";
 import { DIRECT_PROVIDER_URLS } from "./types";
+import { mapStateToSqlite } from "../settingsMapper";
 import { ModelInfo, CustomProviderConfig, PROVIDER_KEY_MAP, PROVIDER_BASE_URL_MAP, providerOrder } from "../../types/provider";
 
 const isLocalUrl = (url: string) => url.includes('localhost') || url.includes('127.0.0.1');
@@ -99,6 +100,14 @@ async function syncCustomProviderBackendSettings(id: string, baseUrl?: string, a
     if (apiFormat !== undefined) settings[customProviderApiFormatSetting(id)] = apiFormat;
     if (Object.keys(settings).length === 0) return;
     await settingsApi.setSettings(settings);
+}
+
+// Persist the custom_providers catalog JSON to SQLite immediately, alongside
+// the per-id keys. The array only ever holds the api-key presence sentinel
+// (never the raw key), so this is safe to write without the Save gate — it
+// keeps the backend provider catalog consistent with the live frontend list.
+async function persistCustomProviderCatalog(providers: CustomProviderConfig[]) {
+    await settingsApi.setSettings(mapStateToSqlite({ customProviders: providers }));
 }
 
 function normalizeModelInfo(model: BackendModelInfo): ModelInfo {
@@ -439,7 +448,9 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
         apiFormat: config.apiFormat ?? 'openai_chat',
         customModels: config.customModels || []
     };
-    get().updateSetting({ customProviders: [...current, newProvider] } as any);
+    const next = [...current, newProvider];
+    get().updateSetting({ customProviders: next } as any);
+    await persistCustomProviderCatalog(next);
     return id;
   },
 
@@ -493,6 +504,7 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
             Object.entries(state.providerParams).filter(([key]) => key !== id),
         ),
     } as any);
+    await persistCustomProviderCatalog(get().customProviders);
   },
 
   toggleCustomProvider: (id) => {
@@ -518,9 +530,11 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
         } as any);
     }
 
-    state.updateSetting({ 
-        customProviders: current.map(cp => cp.id === id ? { ...cp, enabled: willBeEnabled } : cp) 
-    } as any);
+    const nextProviders = current.map(cp => cp.id === id ? { ...cp, enabled: willBeEnabled } : cp);
+    state.updateSetting({ customProviders: nextProviders } as any);
+    void persistCustomProviderCatalog(nextProviders).catch(err =>
+        console.warn('[toggleCustomProvider] Failed to persist catalog to backend.', err),
+    );
   },
 
   updateCustomProvider: async (id, updates) => {
@@ -538,9 +552,9 @@ export const createProviderSlice: StateCreator<SettingsState, [], [], ProviderSl
             ? { apiKey: isSecretPresentValue(normalizedUpdates.apiKey) ? SECRET_PRESENT_VALUE : metadataApiKey(normalizedUpdates.apiKey) }
             : {}),
     };
-    get().updateSetting({ 
-        customProviders: current.map(cp => cp.id === id ? { ...cp, ...publicUpdates } : cp)
-    } as any);
+    const nextProviders = current.map(cp => cp.id === id ? { ...cp, ...publicUpdates } : cp);
+    get().updateSetting({ customProviders: nextProviders } as any);
+    await persistCustomProviderCatalog(nextProviders);
   },
 
   syncModelCatalog: async () => {

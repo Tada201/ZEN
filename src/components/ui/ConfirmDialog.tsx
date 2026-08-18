@@ -43,18 +43,15 @@ export function ConfirmDialog({
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 px-3 text-xs text-muted-foreground hover:text-primary-foreground"
+            className="h-8 px-3 text-xs text-muted-foreground hover:text-foreground"
             onClick={() => onOpenChange(false)}
           >
             {cancelLabel}
           </Button>
           <Button
+            variant={destructive ? 'destructive' : 'default'}
             size="sm"
-            className={
-              destructive
-                ? 'h-8 px-3 text-xs bg-red-500/90 text-primary-foreground hover:bg-red-500'
-                : 'h-8 px-3 text-xs'
-            }
+            className="h-8 px-3 text-xs"
             onClick={handleConfirm}
           >
             {confirmLabel}
@@ -62,9 +59,11 @@ export function ConfirmDialog({
         </>
       }
     >
-      <p className="text-xs leading-relaxed text-muted-foreground">
-        {description ?? 'This action cannot be undone.'}
-      </p>
+      {description ? null : (
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          This action cannot be undone.
+        </p>
+      )}
     </AppDialog>
   );
 }

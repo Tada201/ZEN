@@ -6,6 +6,7 @@ import { WorkbenchInput } from '@/components/settings/ui/WorkbenchInput';
 import { WorkbenchSelect } from '@/components/settings/ui/WorkbenchSelect';
 import { WorkbenchButton } from '@/components/ui/WorkbenchButton';
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon';
+import { ProviderIcon } from '@/lib/providerIcons';
 import { cn } from '@/lib/utils/style';
 import { isSecretPresentValue, settingsApi } from '@/api';
 import type { CustomProviderApiFormat, ModelInfo } from '@/lib/types/provider';
@@ -17,10 +18,11 @@ interface CustomProviderConfigProps {
     apiKey?: string;
     headers?: Record<string, string>;
     apiFormat?: CustomProviderApiFormat;
+    icon?: string;
     customModels?: ModelInfo[];
 }
 
-export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, apiKey, headers = {}, apiFormat, customModels = [] }: CustomProviderConfigProps) => {
+export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, apiKey, headers = {}, apiFormat, icon, customModels = [] }: CustomProviderConfigProps) => {
     const [showKey, setShowKey] = useState(false);
     const updateCustomProvider = useSettingsStore(s => s.updateCustomProvider);
     const removeCustomProvider = useSettingsStore(s => s.removeCustomProvider);
@@ -30,6 +32,7 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
     const [localName, setLocalName] = useState(displayName);
     const [localUrl, setLocalUrl] = useState(baseUrl);
     const [localApiFormat, setLocalApiFormat] = useState<CustomProviderApiFormat>(apiFormat ?? 'openai_chat');
+    const [localIcon, setLocalIcon] = useState(icon ?? '');
     const [localKey, setLocalKey] = useState(isSecretPresentValue(apiKey) ? '' : apiKey || '');
     const [keyDirty, setKeyDirty] = useState(false);
     const [headersText, setHeadersText] = useState(Object.entries(headers).map(([key, value]) => `${key}: ${value}`).join('\n'));
@@ -161,6 +164,27 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                         { value: 'anthropic_messages', label: 'Anthropic Messages' },
                     ]}
                 />
+            </div>
+
+            <div className="flex flex-col gap-2">
+                <div className="flex flex-col">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">Icon</label>
+                    <span className="text-[11px] text-muted-foreground">Iconify name shown in the model selector, e.g. <code className="font-mono">simple-icons:perplexity</code>. <a href="https://icon-sets.iconify.design/" target="_blank" rel="noreferrer" className="text-primary hover:underline">Browse icons</a></span>
+                </div>
+                <div className="flex max-w-lg items-center gap-2">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground">
+                        {localIcon.trim()
+                            ? <WorkbenchIcon name={localIcon.trim()} size={16} />
+                            : <ProviderIcon provider={providerId} size={16} />}
+                    </span>
+                    <WorkbenchInput
+                        value={localIcon}
+                        onChangeText={setLocalIcon}
+                        onBlur={() => { void updateCustomProvider(providerId, { icon: localIcon.trim() } as any).catch(error => setSaveError(String(error))); }}
+                        placeholder="simple-icons:openai"
+                        className="h-9 flex-1 font-mono text-xs bg-background border-border rounded-lg"
+                    />
+                </div>
             </div>
 
             <div className="flex flex-col gap-2">

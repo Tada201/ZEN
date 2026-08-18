@@ -99,6 +99,8 @@ export interface CustomProviderConfig {
     headers?: Record<string, string>;
     /** Wire protocol the endpoint speaks. Defaults to 'openai_chat'. */
     apiFormat?: CustomProviderApiFormat;
+    /** Iconify name (e.g. 'simple-icons:perplexity') shown for this provider. */
+    icon?: string;
     error?: string;
 }
 

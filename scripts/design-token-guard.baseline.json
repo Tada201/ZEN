@@ -42,9 +42,12 @@
     "off-scale w-[120px]"
   ],
   "src/atlas/components/chat/input/ModelSearchDropdown.tsx": [
-    "off-scale h-[350px]",
+    "off-scale h-[320px]",
     "off-scale w-[100px]",
-    "off-scale w-[160px]"
+    "off-scale w-[150px]",
+    "off-scale w-[160px]",
+    "off-scale w-[220px]",
+    "off-scale w-[600px]"
   ],
   "src/atlas/components/chat/MainWindowLoadingScreen.tsx": [
     "raw-hex"
@@ -149,7 +152,7 @@
   "src/atlas/components/ModelSelector.tsx": [
     "off-scale h-[600px]",
     "off-scale w-[200px]",
-    "off-scale w-[250px]"
+    "off-scale w-[280px]"
   ],
   "src/atlas/components/ModelSettingsContent.tsx": [
     "off-scale h-[280px]",
@@ -200,9 +203,6 @@
     "off-scale rounded-[35px]",
     "off-scale w-[280px]",
     "off-scale w-[70px]"
-  ],
-  "src/atlas/components/workspace/BrowserPreview.tsx": [
-    "raw-hex"
   ],
   "src/atlas/components/workspace/CodeEditor.tsx": [
     "off-scale w-[120px]",

@@ -1,4 +1,4 @@
-import type { Model } from "../../ModelSelector";
+import type { Model } from "../../model-types";
 import type { Attachment } from "../types";
 
 export type ComposerLayoutMode = "default" | "welcome" | "sidebar" | "narrow";

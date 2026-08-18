@@ -3,7 +3,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ZenProvider } from "@/atlas/ZenContext";
 import { PremiumChatInput } from "../PremiumChatInput";
 import type { PremiumChatInputProps } from "../chat/input/PremiumChatInputTypes";
-import type { Model } from "../ModelSelector";
+import type { Model } from "../model-types";
 import { useTaskStore, type Task } from "@/lib/stores/taskStore";
 import { useReducedMotion } from "@/lib/motion";
 import { cn } from "@/lib/utils/style";

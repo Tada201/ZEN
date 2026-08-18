@@ -27,7 +27,9 @@ interface PinnedActionBarProps {
   isCompact?: boolean;
 }
 
-const unpinButtonClass = "absolute -top-1 -right-1 rounded-full border border-border bg-popover p-0.5 text-muted-foreground opacity-70 shadow-sm transition-opacity md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100";
+// Kept inside the pill bounds (top-0 right-0, not negative offsets): the rail
+// container clips overflow, so an overhanging badge was unclickable.
+const unpinButtonClass = "absolute top-0 right-0 rounded-full border border-border bg-popover p-0.5 text-muted-foreground opacity-70 shadow-sm transition-opacity md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100";
 
 export const PinnedActionBar = memo(({
   pinnedActions,

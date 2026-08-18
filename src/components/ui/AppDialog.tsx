@@ -1,8 +1,6 @@
-import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -32,16 +30,13 @@ export function AppDialog({
 }: AppDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn('max-h-[min(86vh,760px)] w-[min(92vw,680px)] gap-0 overflow-hidden border-border bg-background p-0 text-foreground shadow-2xl sm:rounded-none', className)}>
-        <DialogHeader className="border-b border-border px-4 py-3 text-left">
-          <DialogTitle className="text-sm font-semibold tracking-normal text-foreground">{title}</DialogTitle>
+      <DialogContent className={cn('flex max-h-[min(86vh,760px)] w-[min(92vw,680px)] max-w-[min(92vw,680px)] flex-col gap-0 overflow-hidden rounded-xl sm:rounded-xl border-border bg-card p-0 text-foreground shadow-2xl', className)}>
+        <DialogHeader className="min-w-0 border-b border-border px-5 py-4 pr-12 text-left">
+          <DialogTitle className="truncate text-sm font-semibold tracking-normal text-foreground">{title}</DialogTitle>
           {description ? <DialogDescription className="mt-1 text-xs leading-5 text-muted-foreground">{description}</DialogDescription> : null}
         </DialogHeader>
-        <DialogClose className="absolute right-3 top-3 p-1 text-muted-foreground transition-colors hover:text-primary-foreground" aria-label="Close dialog">
-          <X size={16} />
-        </DialogClose>
-        <div className="min-h-0 overflow-y-auto p-4">{children}</div>
-        {footer ? <footer className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">{footer}</footer> : null}
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-5">{children}</div>
+        {footer ? <footer className="flex min-w-0 items-center justify-end gap-2 border-t border-border bg-muted/30 px-5 py-4">{footer}</footer> : null}
       </DialogContent>
     </Dialog>
   );

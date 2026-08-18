@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { Model } from "./ModelSelector";
+import type { Model } from "./model-types";
 
 /**
  * `useReasoningCapabilities` — owns the three derivations the chat

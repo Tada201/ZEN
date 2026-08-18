@@ -43,7 +43,7 @@ export const ThinkingConfig = ({
             onClick={() => setIsThinking(!isThinking)}
             aria-pressed={isThinking}
             aria-label={isThinking ? "Disable reasoning" : "Enable reasoning"}
-            className="flex items-center gap-2 cursor-pointer group rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex items-center gap-2 cursor-pointer group rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <span className={cn(
               "text-[10px] font-bold uppercase tracking-widest transition-colors",
@@ -82,7 +82,7 @@ export const ThinkingConfig = ({
                   setIsThinking(true);
                 }
               }}
-              className="justify-start w-full rounded-md border border-border bg-muted p-0.5"
+              className="justify-start w-full rounded border border-border bg-muted p-0.5"
             >
               <ToggleGroupItem value="low" className="composer-control h-7 min-h-0 flex-1 text-[11px] data-[state=on]:bg-card data-[state=on]:shadow-sm">Low</ToggleGroupItem>
               <ToggleGroupItem value="medium" className="composer-control h-7 min-h-0 flex-1 text-[11px] data-[state=on]:bg-card data-[state=on]:shadow-sm">Medium</ToggleGroupItem>
@@ -120,7 +120,7 @@ export const ThinkingConfig = ({
         {/* Informational note for models that reason natively with no tunable
             parameter — shown at full opacity; there is no toggle to dim. */}
         {reasoningConfigType === 'none' && (
-          <div className="composer-meta rounded-md bg-muted px-2.5 py-1.5 text-center text-[10px] italic">
+          <div className="composer-meta rounded bg-muted px-2.5 py-1.5 text-center text-[10px] italic">
             This model reasons natively; reasoning depth isn't configurable from Zen.
           </div>
         )}

@@ -83,7 +83,7 @@ export const ActionPills = memo(({
             ) : (
               <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-muted">
                 {isTxt ? (
-                  <FileText className="w-3.5 h-3.5 text-primary dark:text-primary" />
+                  <FileText className="w-3.5 h-3.5 text-primary" />
                 ) : (
                   <Paperclip className="w-3.5 h-3.5 text-muted-foreground" />
                 )}
@@ -92,14 +92,14 @@ export const ActionPills = memo(({
             
             <div className="flex flex-col min-w-0">
               <span className="max-w-[120px] truncate leading-tight">{file.name}</span>
-              <span className="text-[9px] text-muted-foreground dark:text-muted-foreground leading-tight font-normal">
+              <span className="text-[9px] text-muted-foreground leading-tight font-normal">
                 {isImg ? 'Image' : isTxt ? 'Text File' : 'Attachment'}
               </span>
             </div>
 
             <button 
               onClick={() => removeFile(i)} 
-              className="composer-control composer-control--icon ml-0.5 rounded-md p-0.5"
+              className="composer-control composer-control--icon ml-0.5 rounded p-0.5"
               aria-label={`Remove ${file.name}`}
             >
               <X className="h-3 w-3 text-muted-foreground" />

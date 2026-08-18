@@ -124,7 +124,7 @@ export const ProvidersSettings = memo(() => {
                 id: provider.id,
                 label: provider.displayName,
                 description: 'OpenAI-compatible custom connection.',
-                icon: 'lucide:network',
+                icon: provider.icon?.trim() || 'lucide:network',
                 category: 'custom',
                 isLocal: false,
                 configured: true,
@@ -481,6 +481,7 @@ export const ProvidersSettings = memo(() => {
                                 apiKey={(providerData as any).apiKey}
                                 headers={(providerData as any).headers}
                                 apiFormat={(providerData as any).apiFormat}
+                                icon={(providerData as any).icon}
                                 customModels={(providerData as any).customModels}
                             />
                         ) : (

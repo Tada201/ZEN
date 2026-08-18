@@ -70,7 +70,7 @@ export const ImagePresetStrip = memo(({
     >
       <div className="composer-toolbar flex items-center gap-1 mr-1.5 shrink-0 border-r pr-1.5">
         <Sparkles className="w-3.5 h-3.5 text-warning" />
-        <span className="text-[11px] font-semibold text-muted-foreground dark:text-muted-foreground select-none">Presets</span>
+        <span className="text-[11px] font-semibold text-muted-foreground select-none">Presets</span>
       </div>
       <div className="flex min-w-max items-center gap-1.5">
         {STYLE_PRESETS.map((preset) => {
