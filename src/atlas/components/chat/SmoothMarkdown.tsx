@@ -166,7 +166,7 @@ export function SmoothMarkdown({
 
   return (
     <div
-      className="smooth-markdown text-sm leading-[1.6] prose prose-invert max-w-[68ch]"
+      className="smooth-markdown text-sm leading-[1.6] prose prose-invert max-w-full"
       data-streaming={isStreaming ? "true" : undefined}
     >
       <ReactMarkdown

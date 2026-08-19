@@ -439,7 +439,7 @@ export function MarkdownContent({
         <ReasoningBlock content={thought} isThinking={isThinking} />
       )}
       {isPlainShortText ? (
-        <div className="max-w-[68ch] whitespace-pre-wrap break-words leading-[1.6] text-foreground">{mainContent}</div>
+        <div className="max-w-full whitespace-pre-wrap break-words leading-[1.6] text-foreground">{mainContent}</div>
       ) : (
         <div className="space-y-3">
           {(blocks.length > 0 ? blocks : [{ id: "fallback-single-block", type: "text", content: refStrippedContent, isComplete: !isStreaming, index: 0 } as any]).map((block) => (
