@@ -49,7 +49,7 @@ assert(panel.includes("function ElapsedSubagentTime"), "running subagents must e
 assert(panel.includes("window.setInterval(() => setNow(Date.now()), 1000)"), "elapsed timers should tick at most once per second");
 assert(panel.includes("window.clearInterval(interval)"), "elapsed timers must clean up their interval");
 assert(panel.includes("avoids re-rendering every subagent row"), "timer updates should stay local to the timer node");
-assert(panel.includes("motion-safe:animate-spin"), "running indicators must preserve reduced-motion behavior");
+assert(panel.includes("animate-spin"), "running indicators must visibly spin");
 assert(!panel.includes("useElapsedNow"), "the panel must not re-render globally for each timer tick");
 assert(panel.includes("useIsFetching"), "Agents panel must observe the canonical message query while it hydrates");
 assert(panel.includes("getQueryData<Message[]>") && panel.includes("messagesFetching"), "Agents panel must reconcile query data with the live message store");

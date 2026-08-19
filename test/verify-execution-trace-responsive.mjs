@@ -16,7 +16,7 @@ assert(row.includes("Duration ${duration}"), "duration must remain available to 
 assert(trace.includes("execution-trace min-w-0"), "trace boundary must allow flex shrink in narrow surfaces");
 assert(trace.includes("bare"), "nested subagent traces must retain the parent-owned disclosure boundary");
 assert(subagent.includes("aria-label={`${resolvedSubagent.agentName}, ${statusLabel}"), "subagent disclosure must announce identity and lifecycle");
-assert(subagent.includes("motion-reduce:transition-none"), "subagent disclosure transitions must honor reduced motion");
+assert(subagent.includes("animate-spin"), "running subagent status must visibly spin");
 assert(styles.includes("container-type: inline-size"), "execution rows must size responsive behavior from their containing surface");
 assert(styles.includes("@container (max-width: 28rem)"), "trace rows must adapt in narrow workbench and transcript surfaces");
 assert(styles.includes("@container (max-width: 21rem)"), "very narrow rows must protect title and action affordance space");

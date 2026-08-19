@@ -159,7 +159,10 @@ fn bridge_lifecycle_events(ctx: BridgeContext<'_>) {
         MessageKind::AgentSpawn => {
             if let Some(ref spawn) = ctx.meta.spawn {
                 AgentEvent::AgentSpawn(AgentSpawnPayload {
-                    spawn_id: ctx.msg_id.to_string(),
+                    spawn_id: spawn
+                        .spawn_id
+                        .clone()
+                        .unwrap_or_else(|| ctx.msg_id.to_string()),
                     parent_agent: spawn.parent_agent.clone(),
                     child_agent_id: ctx.meta.agent_id.clone(),
                     child_agent_name: ctx.meta.agent_name.clone(),

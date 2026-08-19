@@ -91,13 +91,14 @@ function toSubagentFromLane(lane: AgentDelegationLaneModel, timestamp?: number):
 function buildSubagentItems(messages: Message[]): SubagentItem[] {
   const bySpawn = new Map<string, SubagentItem>();
   const parentBySpawn = new Map<string, string>();
+  const canonicalSpawnIds = new Set<string>();
 
   for (const message of messages) {
     if (message.role !== "assistant") continue;
     const steps = message.steps || [];
     const toolCalls = message.toolCalls || [];
     const tree = buildDelegationTree(steps, toolCalls);
-    const canonicalSpawnIds = new Set(tree.nodes.keys());
+    tree.nodes.forEach((_, spawnId) => canonicalSpawnIds.add(spawnId));
 
     tree.nodes.forEach((node, spawnId) => {
       if (node.parentSpawnId) parentBySpawn.set(spawnId, node.parentSpawnId);
@@ -220,7 +221,7 @@ function CompactSubagentRow({ item, selected, onSelect, onStop, stopping }: { it
       <button type="button" onClick={onSelect} className="flex min-w-0 flex-1 items-start gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-current={selected ? "true" : undefined}>
         <span className="relative mt-0.5 shrink-0">
           <WorkbenchIcon name={agentIconName(item.subagent.agentId, item.subagent.agentName)} size={16} className="text-muted-foreground" />
-          <StatusIcon className={cn("absolute -bottom-1 -right-1 h-3 w-3 rounded-full bg-background", running && "motion-safe:animate-spin motion-reduce:transition-none text-primary", failed && "text-destructive", (needsReview || stale) && "text-warning", !running && !failed && !needsReview && !stale && "text-success")} aria-hidden="true" />
+          <StatusIcon className={cn("absolute -bottom-1 -right-1 h-3 w-3 rounded-full bg-background", running && "animate-spin text-primary", failed && "text-destructive", (needsReview || stale) && "text-warning", !running && !failed && !needsReview && !stale && "text-success")} aria-hidden="true" />
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-2">
@@ -235,7 +236,7 @@ function CompactSubagentRow({ item, selected, onSelect, onStop, stopping }: { it
       {running && onStop
         ? (
           <button type="button" onClick={onStop} disabled={stopping} className="mt-0.5 inline-flex h-6 shrink-0 items-center gap-1 rounded border border-destructive/40 px-1.5 text-[10px] font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" aria-label={`Stop ${item.subagent.agentName}`} title={`Stop ${item.subagent.agentName}`}>
-            {stopping ? <Loader2 className="h-3 w-3 motion-safe:animate-spin motion-reduce:transition-none" aria-hidden="true" /> : <Square className="h-3 w-3 fill-current" aria-hidden="true" />}
+            {stopping ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : <Square className="h-3 w-3 fill-current" aria-hidden="true" />}
           </button>
         )
         : <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />}
@@ -439,7 +440,7 @@ export function OrchestratorPanel() {
     const detail = isHistoryReconciling
       ? "Reconciling the saved chat trace before showing the Agents panel."
       : "Checking this chat's saved execution history.";
-    return <div className="flex h-full min-h-0 flex-col bg-background"><div className="flex flex-1 flex-col items-center justify-center px-6 text-center" role="status" aria-live="polite"><Loader2 className="h-5 w-5 motion-safe:animate-spin motion-reduce:transition-none text-primary" aria-hidden="true" /><p className="mt-3 text-[13px] font-medium text-foreground">{label}</p><p className="mt-1 max-w-[260px] text-[12px] leading-5 text-muted-foreground">{detail}</p></div></div>;
+    return <div className="flex h-full min-h-0 flex-col bg-background"><div className="flex flex-1 flex-col items-center justify-center px-6 text-center" role="status" aria-live="polite"><Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden="true" /><p className="mt-3 text-[13px] font-medium text-foreground">{label}</p><p className="mt-1 max-w-[260px] text-[12px] leading-5 text-muted-foreground">{detail}</p></div></div>;
   }
 
   if (isHistoryError) {
@@ -470,7 +471,7 @@ export function OrchestratorPanel() {
         )}
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {isHistoryRefreshing && <div className="flex items-center gap-2 border-b border-border bg-muted px-4 py-2 text-[11px] text-muted-foreground" role="status" aria-live="polite"><Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin motion-reduce:transition-none text-primary" aria-hidden="true" />Refreshing saved execution history…</div>}
+        {isHistoryRefreshing && <div className="flex items-center gap-2 border-b border-border bg-muted px-4 py-2 text-[11px] text-muted-foreground" role="status" aria-live="polite"><Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />Refreshing saved execution history…</div>}
         {recoveredCount > 0 && <div className="border-b border-warning bg-muted px-4 py-2 text-[11px] leading-5 text-foreground" role="status"><span className="font-medium text-warning">Reload reconciliation:</span>{" "}{recoveredCount} subagent {recoveredCount === 1 ? "run was" : "runs were"} interrupted before reload. The saved trace remains available for review.</div>}
         {running.length > 0 && <section aria-labelledby="running-subagents-heading"><h2 id="running-subagents-heading" className="px-4 pb-2 pt-4 text-[12px] font-medium text-muted-foreground">Running · {running.length}</h2>{running.map((item) => <CompactSubagentRow key={item.id} item={item} selected={false} onSelect={() => setSelectedId(item.id)} onStop={() => { void handleStopSubagent(item); }} stopping={stoppingId === item.subagent.spawnId} />)}</section>}
         {ended.length > 0 && <section aria-labelledby="ended-subagents-heading"><h2 id="ended-subagents-heading" className="px-4 pb-2 pt-3 text-[12px] font-medium text-muted-foreground">Ended · {ended.length}</h2>{ended.map((item) => <CompactSubagentRow key={item.id} item={item} selected={false} onSelect={() => setSelectedId(item.id)} />)}</section>}

@@ -120,7 +120,7 @@ export function SubagentExecutionCard({
         )}
         <span aria-hidden="true" className="shrink-0 text-muted-foreground">|</span>
         <Badge variant="outline" className={cn("shrink-0 gap-1 border-border px-1.5 py-0 text-[10px] font-medium", statusTone)}>
-          <StatusIcon className={cn("h-3 w-3", isRunning && "motion-safe:animate-spin motion-reduce:transition-none")} aria-hidden="true" />
+          <StatusIcon className={cn("h-3 w-3", isRunning && "animate-spin")} aria-hidden="true" />
           {statusLabel}
         </Badge>
         {duration && <span className="execution-subagent-duration shrink-0 text-[10px] tabular-nums text-muted-foreground">{duration}</span>}
