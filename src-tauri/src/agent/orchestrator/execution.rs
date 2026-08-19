@@ -564,6 +564,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
 
         Ok(AgentResponse {
             content: Some(response.content),
+            final_answer: None,
             tool_calls: vec![],
             reasoning: None,
             handoff: None,

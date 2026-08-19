@@ -273,6 +273,11 @@ pub struct SubagentStepPayload {
     /// child's complete answer as a chat message instead of the short summary.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub result_content: Option<String>,
+    /// Intermediate commentary the child produced between its tool calls, each
+    /// tagged with the event sequence it preceded so the panel can interleave
+    /// the child's thinking with its tool cards in execution order.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub intermediate_content: Option<Vec<SubagentCommentarySegment>>,
     /// Error message when the sub-agent fails.
     pub error: Option<String>,
     pub duration_ms: u64,
@@ -281,6 +286,14 @@ pub struct SubagentStepPayload {
     /// Tool-call ids executed by the child runner (optional, may be populated
     /// incrementally as the child runs).
     pub child_tool_call_ids: Option<Vec<String>>,
+}
+
+/// One slice of sub-agent commentary, tagged with the event sequence it
+/// preceded so the frontend can interleave text with the child's tool cards.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubagentCommentarySegment {
+    pub sequence: u64,
+    pub text: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -45,6 +45,11 @@ pub struct Runner {
     pub(super) event_sequence: Arc<AtomicU64>,
     /// Child tool ids collected by a spawned runner for its completion summary.
     pub(super) child_tool_call_ids: Arc<tokio::sync::Mutex<Vec<String>>>,
+    /// Intermediate assistant commentary a spawned runner produced alongside its
+    /// tool calls, tagged with the run's event sequence so the Agents panel can
+    /// interleave the child's thinking between its tool cards. Root runs stream
+    /// this text live and never populate it.
+    pub(super) intermediate_commentary: Arc<tokio::sync::Mutex<Vec<(u64, String)>>>,
     /// Optional shared inbox for parent→child message injection. When set,
     /// the runner drains any queued `ChatMessage`s into its conversation at
     /// the start of each iteration, allowing a parent agent/orchestrator to
@@ -75,6 +80,7 @@ impl Clone for Runner {
             parent_tool_call_id: self.parent_tool_call_id.clone(),
             event_sequence: self.event_sequence.clone(),
             child_tool_call_ids: self.child_tool_call_ids.clone(),
+            intermediate_commentary: self.intermediate_commentary.clone(),
             message_inbox: self.message_inbox.clone(),
         }
     }
@@ -110,6 +116,7 @@ impl Runner {
             parent_tool_call_id: Arc::new(std::sync::RwLock::new(None)),
             event_sequence: Arc::new(AtomicU64::new(0)),
             child_tool_call_ids: Arc::new(tokio::sync::Mutex::new(Vec::new())),
+            intermediate_commentary: Arc::new(tokio::sync::Mutex::new(Vec::new())),
             message_inbox: None,
         }
     }
@@ -238,12 +245,40 @@ impl Runner {
         self
     }
 
+    pub fn with_intermediate_commentary(
+        mut self,
+        intermediate_commentary: Arc<tokio::sync::Mutex<Vec<(u64, String)>>>,
+    ) -> Self {
+        self.intermediate_commentary = intermediate_commentary;
+        self
+    }
+
+    /// Record a slice of child commentary against a sequence position. No-op for
+    /// the root run (its text streams live) and for empty text.
+    pub(super) async fn record_intermediate_commentary(&self, sequence: u64, text: &str) {
+        if self.depth == 0 {
+            return;
+        }
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            return;
+        }
+        let mut commentary = self.intermediate_commentary.lock().await;
+        commentary.push((sequence, trimmed.to_string()));
+    }
+
     pub(super) fn parent_tool_call_id(&self) -> Option<String> {
         self.parent_tool_call_id.read().ok().and_then(|slot| slot.clone())
     }
 
     pub(super) fn next_event_sequence(&self) -> u64 {
         self.event_sequence.fetch_add(1, Ordering::Relaxed)
+    }
+
+    /// The sequence the next event will use, without consuming it. Used to tag
+    /// child commentary so it sorts just before the tool cards that follow.
+    pub(super) fn peek_event_sequence(&self) -> u64 {
+        self.event_sequence.load(Ordering::Relaxed)
     }
 
     pub(super) async fn record_child_tool_call_id(&self, tool_call_id: String) {
@@ -310,8 +345,9 @@ impl Runner {
             parent_tool_call_id: Arc::new(std::sync::RwLock::new(None)),
             event_sequence: Arc::new(AtomicU64::new(0)),
             child_tool_call_ids: Arc::new(tokio::sync::Mutex::new(Vec::new())),
+            intermediate_commentary: Arc::new(tokio::sync::Mutex::new(Vec::new())),
             // Children get their own inbox (if any) via with_message_inbox;
             // do not inherit the parent's inbox.
             message_inbox: None,
-        }    }
+        }    }
 }

@@ -195,6 +195,8 @@ export interface SubagentStepEventPayload {
   resultSummary?: string;
   result_content?: string;
   resultContent?: string;
+  intermediate_content?: Array<{ sequence: number; text: string }>;
+  intermediateContent?: Array<{ sequence: number; text: string }>;
   error?: string;
   duration_ms: number;
   durationMs?: number;

@@ -638,6 +638,7 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
               status: effectiveStatus,
               resultSummary: payload.result_summary || payload.resultSummary || existing?.subagent?.resultSummary,
               resultContent: payload.result_content || payload.resultContent || existing?.subagent?.resultContent,
+              intermediateContent: payload.intermediate_content || payload.intermediateContent || existing?.subagent?.intermediateContent,
               error: payload.error || existing?.subagent?.error,
               durationMs: typeof payload.duration_ms === "number" ? payload.duration_ms : payload.durationMs ?? existing?.subagent?.durationMs,
               timestamp: existing?.subagent?.timestamp ?? timestamp,
@@ -666,6 +667,7 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
           status: payload.status,
           resultSummary: payload.result_summary || payload.resultSummary,
           resultContent: payload.result_content || payload.resultContent,
+          intermediateContent: payload.intermediate_content || payload.intermediateContent,
           error: payload.error,
           durationMs: typeof payload.duration_ms === "number" ? payload.duration_ms : payload.durationMs,
           timestamp: (() => {

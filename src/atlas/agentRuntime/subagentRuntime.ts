@@ -12,6 +12,7 @@ export interface ScopedSubagentRecord {
   status: ScopedSubagentStatus;
   resultSummary?: string;
   resultContent?: string;
+  intermediateContent?: { sequence: number; text: string }[];
   error?: string;
   durationMs?: number;
   timestamp?: number;
@@ -88,6 +89,7 @@ export function mergeScopedSubagentRecords(
     status: (existingTerminal || incomingTerminal) && !recoveredStaleCanResolve ? status : incomingStatus,
     resultSummary: incoming.resultSummary ?? existing.resultSummary,
     resultContent: incoming.resultContent ?? existing.resultContent,
+    intermediateContent: incoming.intermediateContent ?? existing.intermediateContent,
     error: incoming.error ?? existing.error,
     durationMs: incoming.durationMs ?? existing.durationMs,
     // Lifecycle timestamps represent the child start, not the latest event.
@@ -111,6 +113,7 @@ function recordFromStep(step: Step): ScopedSubagentRecord | undefined {
     status: normalizeScopedSubagentStatus(subagent.status, subagent.recoveryState),
     resultSummary: subagent.resultSummary,
     resultContent: subagent.resultContent,
+    intermediateContent: subagent.intermediateContent,
     error: subagent.error,
     durationMs: subagent.durationMs,
     timestamp: subagent.timestamp,
@@ -169,6 +172,7 @@ export function scopedSubagentToStep(record: ScopedSubagentRecord, previous?: St
     recoveryState: record.status === "stale" ? "stale" : previousSubagent?.recoveryState,
     resultSummary: record.resultSummary,
     resultContent: record.resultContent,
+    intermediateContent: record.intermediateContent,
     error: record.error,
     durationMs: record.durationMs,
     timestamp: record.timestamp,

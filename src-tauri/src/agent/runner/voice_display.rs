@@ -263,6 +263,7 @@ impl Runner {
                     {
                         Ok(()) => Ok(crate::agent::types::AgentResponse {
                             content: None,
+                            final_answer: None,
                             tool_calls: Vec::new(),
                             reasoning: None,
                             handoff: None,

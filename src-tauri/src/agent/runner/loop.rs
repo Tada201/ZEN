@@ -329,6 +329,7 @@ impl Runner {
                 }));
                 return Ok(AgentResponse {
                     content: Some("Agent run cancelled.".to_string()),
+                    final_answer: None,
                     tool_calls: vec![],
                     reasoning: None,
                     handoff: None,
@@ -338,6 +339,11 @@ impl Runner {
                 });
             }
             iteration += 1;
+            // Snapshot the sequence at iteration start, before the LLM stream can
+            // fire early tools that consume sequences. Commentary tagged with this
+            // value sorts before every tool this iteration emits (early or not),
+            // so the Agents panel interleaves think→call in true order.
+            let iteration_start_sequence = self.peek_event_sequence();
 
             // ── Drain any parent→child injected messages into the conversation ──
             // A parent agent/orchestrator can push messages into this runner's
@@ -430,6 +436,7 @@ impl Runner {
                 self.trigger_background_embedding(&chat_id);
                 return Ok(AgentResponse {
                     content: Some(accumulated_commentary),
+                    final_answer: None,
                     tool_calls: vec![],
                     reasoning: None,
                     handoff: None,
@@ -799,6 +806,7 @@ impl Runner {
                     self.trigger_background_embedding(&chat_id);
                     return Ok(AgentResponse {
                         content: Some(accumulated_commentary),
+                        final_answer: None,
                         tool_calls: vec![],
                         reasoning: None,
                         handoff: None,
@@ -919,6 +927,14 @@ impl Runner {
                     }
                     accumulated_commentary.push_str(&visible_response_content);
                 }
+                // The child's real final answer is just this terminal turn's
+                // text, not the accumulated per-iteration commentary. Capturing
+                // it separately stops the Agents panel from repeating every
+                // interleaved segment inside the final reply block.
+                let final_answer = {
+                    let trimmed = visible_response_content.trim();
+                    (!trimmed.is_empty()).then(|| trimmed.to_string())
+                };
 
                 // Auto-inject image markdown for generate_image tool results (current run only)
                 // so images render in the chat and are persisted in the DB.
@@ -988,6 +1004,7 @@ impl Runner {
 
                 return Ok(AgentResponse {
                     content: Some(accumulated_commentary),
+                    final_answer,
                     tool_calls: vec![],
                     reasoning: None,
                     handoff: None,
@@ -1022,6 +1039,15 @@ impl Runner {
                     accumulated_commentary.push('\n');
                 }
                 accumulated_commentary.push_str(&visible_response_content);
+                // A child runner suppresses live text, so its commentary between
+                // tool calls would otherwise be lost. Tag it with the sequence
+                // captured at iteration start so it sorts before every tool this
+                // iteration emits (including early tools already streamed).
+                self.record_intermediate_commentary(
+                    iteration_start_sequence,
+                    &visible_response_content,
+                )
+                .await;
             }
 
             let serialized_tool_calls = if !models_tool_calls.is_empty() {

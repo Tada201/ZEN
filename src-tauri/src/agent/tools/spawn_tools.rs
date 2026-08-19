@@ -434,6 +434,31 @@ fn handoff_fields_from_input(input: &Value) -> (Option<String>, Vec<String>, Vec
     )
 }
 
+/// Drain the child's recorded commentary into bounded, sequence-ordered
+/// segments for the completion event. Returns None when the child produced no
+/// interleaved text so the payload field stays absent.
+async fn collect_intermediate_segments(
+    commentary: &Arc<tokio::sync::Mutex<Vec<(u64, String)>>>,
+) -> Option<Vec<crate::agent::event_bus::SubagentCommentarySegment>> {
+    const MAX_SEGMENTS: usize = 40;
+    const MAX_SEGMENT_CHARS: usize = 4_000;
+    let raw = commentary.lock().await;
+    if raw.is_empty() {
+        return None;
+    }
+    let mut sorted: Vec<(u64, String)> = raw.clone();
+    sorted.sort_by_key(|(sequence, _)| *sequence);
+    let segments: Vec<crate::agent::event_bus::SubagentCommentarySegment> = sorted
+        .into_iter()
+        .take(MAX_SEGMENTS)
+        .map(|(sequence, text)| crate::agent::event_bus::SubagentCommentarySegment {
+            sequence,
+            text: text.chars().take(MAX_SEGMENT_CHARS).collect(),
+        })
+        .collect();
+    (!segments.is_empty()).then_some(segments)
+}
+
 /// Tool that spawns a child agent runner for parallel sub-tasks.
 /// The child agent runs with its own conversation context and bounded iterations,
 /// then returns its final response as a tool result.
@@ -556,6 +581,8 @@ impl SpawnAgentTool {
         let message_inbox: Arc<tokio::sync::Mutex<VecDeque<crate::db::models::ChatMessage>>> =
             Arc::new(tokio::sync::Mutex::new(VecDeque::new()));
         let child_tool_call_ids = Arc::new(tokio::sync::Mutex::new(Vec::new()));
+        let intermediate_commentary: Arc<tokio::sync::Mutex<Vec<(u64, String)>>> =
+            Arc::new(tokio::sync::Mutex::new(Vec::new()));
         {
             let state = app.state::<AppState>();
             let mut queues = state.subagent_message_queues.lock().await;
@@ -579,6 +606,7 @@ impl SpawnAgentTool {
             .with_trace_id(spawn_id.clone())
             .with_parent_tool_call_id(parent_tool_call_id.clone())
             .with_child_tool_call_ids(child_tool_call_ids.clone())
+            .with_intermediate_commentary(intermediate_commentary.clone())
             .with_memory_scope(memory_scope)
             .with_message_inbox(message_inbox);
 
@@ -682,6 +710,7 @@ impl SpawnAgentTool {
                     status: "running".to_string(),
                     result_summary: None,
                     result_content: None,
+                    intermediate_content: None,
                     error: None,
                     duration_ms: 0,
                     timestamp: chrono::Utc::now().to_rfc3339(),
@@ -725,6 +754,7 @@ impl SpawnAgentTool {
 
         match result {
             Ok(response) => {
+                let final_answer = response.final_answer.clone();
                 let content = response
                     .content
                     .unwrap_or_else(|| "Sub-agent completed with no output.".to_string());
@@ -732,17 +762,27 @@ impl SpawnAgentTool {
                 let validated = validate_subagent_output(&content);
                 let status_str = validated.status.as_str();
                 let summary = validated.summary.clone();
-                // The panel renders the child's full answer as a chat message.
+                // The panel's final reply must be only the child's terminal-turn
+                // answer, not the accumulated per-iteration commentary — the
+                // interleaved segments already render those. Prefer final_answer;
+                // fall back to full_content for adapters that don't set it.
                 // Bound it so a runaway child cannot bloat the parent event/DB.
                 const MAX_RESULT_CONTENT: usize = 16_000;
                 let result_content = {
-                    let full = validated.full_content.trim();
-                    if full.is_empty() {
+                    let source = final_answer
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .unwrap_or_else(|| validated.full_content.trim());
+                    if source.is_empty() {
                         None
                     } else {
-                        Some(full.chars().take(MAX_RESULT_CONTENT).collect::<String>())
+                        Some(source.chars().take(MAX_RESULT_CONTENT).collect::<String>())
                     }
                 };
+                // Interleaved commentary the child produced between tool calls.
+                // Bound the total so a chatty child can't bloat the event/DB.
+                let intermediate_content = collect_intermediate_segments(&intermediate_commentary).await;
 
                 // Try to preserve any structured JSON the child returned, but wrap it
                 // with validation metadata so callers can tell whether the result is
@@ -797,6 +837,7 @@ impl SpawnAgentTool {
                             status: status_str.to_string(),
                             result_summary: Some(summary.clone()),
                             result_content: result_content.clone(),
+                            intermediate_content: intermediate_content.clone(),
                             error: None,
                             duration_ms: spawn_duration_ms,
                             timestamp: chrono::Utc::now().to_rfc3339(),
@@ -860,6 +901,7 @@ impl SpawnAgentTool {
                             status: terminal_status.to_string(),
                             result_summary: None,
                             result_content: None,
+                            intermediate_content: collect_intermediate_segments(&intermediate_commentary).await,
                             error: Some(error_text.clone()),
                             duration_ms: spawn_duration_ms,
                             timestamp: chrono::Utc::now().to_rfc3339(),

@@ -340,6 +340,8 @@ export interface SubagentStepData {
   resultSummary?: string;
   /** Full bounded final output, rendered as the child's chat reply. */
   resultContent?: string;
+  /** Commentary between the child's tool calls, tagged with event sequence. */
+  intermediateContent?: { sequence: number; text: string }[];
   error?: string;
   durationMs?: number;
   timestamp?: number;

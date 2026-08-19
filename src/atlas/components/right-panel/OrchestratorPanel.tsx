@@ -216,18 +216,47 @@ function buildSubagentConversation(item: SubagentItem): { prompt: Message; reply
   const orderedTools = [...item.childTools].sort(
     (a, b) => (a.sequence ?? a.startTime ?? 0) - (b.sequence ?? b.startTime ?? 0),
   );
-  const toolSteps: Step[] = orderedTools.map((tool) => ({
-    type: "tool-call",
-    toolCall: tool,
-    status: tool.status === "error" ? "error" : tool.status === "running" ? "running" : "completed",
-    timestamp: tool.startTime,
-  }));
+  // Interleave the child's between-tool commentary with its tool cards using
+  // the backend event sequence. A text segment tagged sequence N sorts just
+  // before the tool at sequence N, reproducing the child's real execution
+  // order (think → call → think → call) instead of a flat tool list.
+  type Ordered = { sequence: number; kind: "tool" | "text"; tool?: ToolCall; text?: string };
+  const ordered: Ordered[] = [
+    ...orderedTools.map((tool, i) => ({
+      sequence: tool.sequence ?? tool.startTime ?? i,
+      kind: "tool" as const,
+      tool,
+    })),
+    ...(subagent.intermediateContent || []).map((segment) => ({
+      sequence: segment.sequence,
+      kind: "text" as const,
+      text: segment.text,
+    })),
+  ].sort((a, b) => a.sequence - b.sequence || (a.kind === "text" ? -1 : 1));
+
+  const midSteps: Step[] = ordered.map((entry) =>
+    entry.kind === "tool"
+      ? {
+          type: "tool-call",
+          toolCall: entry.tool!,
+          status: entry.tool!.status === "error" ? "error" : entry.tool!.status === "running" ? "running" : "completed",
+          timestamp: entry.tool!.startTime,
+        }
+      : { type: "text", content: entry.text! },
+  );
   // Prefer the child's full final answer; fall back to the short summary the
   // list row already shows so a reply always renders when the child finished.
   const finalText = subagent.resultContent?.trim() || item.response?.trim() || "";
-  const steps: Step[] = finalText
-    ? [...toolSteps, { type: "text", content: finalText }]
-    : toolSteps;
+  // Only append the final answer when it adds something the interleaved
+  // commentary didn't already show. The backend now sends just the terminal
+  // turn as resultContent, which usually equals the last commentary segment;
+  // treat containment (either direction) as a duplicate so it isn't repeated.
+  const lastText = [...midSteps].reverse().find((s) => s.type === "text")?.content?.trim() || "";
+  const duplicatesLast = Boolean(finalText) && Boolean(lastText)
+    && (lastText.includes(finalText) || finalText.includes(lastText));
+  const steps: Step[] = finalText && !duplicatesLast
+    ? [...midSteps, { type: "text", content: finalText }]
+    : midSteps;
 
   const prompt: Message = {
     id: `${item.id}:prompt`,

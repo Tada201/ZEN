@@ -237,6 +237,7 @@ impl Orchestrator {
                             "Orchestration was cancelled by the user after reviewing the plan."
                                 .to_string(),
                         ),
+                        final_answer: None,
                         tool_calls: vec![],
                         reasoning: None,
                         handoff: None,
@@ -452,6 +453,7 @@ impl Orchestrator {
                 content: Some(
                     "Orchestration cancelled before any tasks could complete.".to_string(),
                 ),
+                final_answer: None,
                 tool_calls: vec![],
                 reasoning: None,
                 handoff: None,

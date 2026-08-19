@@ -322,6 +322,11 @@ function compactSubagent(subagent: SubagentStepData | undefined): SubagentStepDa
     // redactor: same secret-scrub + size bound so a large reply can't bloat the
     // persisted trace or leak credentials echoed back by the child.
     resultContent: subagent.resultContent ? redactTerminalOutput(subagent.resultContent) : subagent.resultContent,
+    // Interleaved child commentary: same redact + per-segment cap so a chatty
+    // child can't bloat the persisted trace or leak secrets echoed in text.
+    intermediateContent: subagent.intermediateContent
+      ?.slice(0, 40)
+      .map((segment) => ({ sequence: segment.sequence, text: redactTerminalOutput(segment.text) })),
     // Redact/cap the subagent error for the same reason as action/tool
     // errors: the raw message can carry stack traces, env vars, or
     // credentials echoed back by a failing child agent.

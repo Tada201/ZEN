@@ -491,6 +491,11 @@ pub struct ClarificationOptionMeta {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentResponse {
     pub content: Option<String>,
+    /// Just the final turn's answer text (not the accumulated per-iteration
+    /// commentary). Sub-agent rendering uses this so the panel's final reply
+    /// isn't a duplicate of the interleaved commentary segments.
+    #[serde(default)]
+    pub final_answer: Option<String>,
     pub tool_calls: Vec<ToolCall>,
     pub reasoning: Option<String>,
     pub handoff: Option<String>, // Target agent ID
