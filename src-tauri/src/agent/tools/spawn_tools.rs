@@ -681,6 +681,7 @@ impl SpawnAgentTool {
                     task: task.to_string(),
                     status: "running".to_string(),
                     result_summary: None,
+                    result_content: None,
                     error: None,
                     duration_ms: 0,
                     timestamp: chrono::Utc::now().to_rfc3339(),
@@ -731,6 +732,17 @@ impl SpawnAgentTool {
                 let validated = validate_subagent_output(&content);
                 let status_str = validated.status.as_str();
                 let summary = validated.summary.clone();
+                // The panel renders the child's full answer as a chat message.
+                // Bound it so a runaway child cannot bloat the parent event/DB.
+                const MAX_RESULT_CONTENT: usize = 16_000;
+                let result_content = {
+                    let full = validated.full_content.trim();
+                    if full.is_empty() {
+                        None
+                    } else {
+                        Some(full.chars().take(MAX_RESULT_CONTENT).collect::<String>())
+                    }
+                };
 
                 // Try to preserve any structured JSON the child returned, but wrap it
                 // with validation metadata so callers can tell whether the result is
@@ -784,6 +796,7 @@ impl SpawnAgentTool {
                             task: task.to_string(),
                             status: status_str.to_string(),
                             result_summary: Some(summary.clone()),
+                            result_content: result_content.clone(),
                             error: None,
                             duration_ms: spawn_duration_ms,
                             timestamp: chrono::Utc::now().to_rfc3339(),
@@ -846,6 +859,7 @@ impl SpawnAgentTool {
                             task: task.to_string(),
                             status: terminal_status.to_string(),
                             result_summary: None,
+                            result_content: None,
                             error: Some(error_text.clone()),
                             duration_ms: spawn_duration_ms,
                             timestamp: chrono::Utc::now().to_rfc3339(),

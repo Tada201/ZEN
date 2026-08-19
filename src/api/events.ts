@@ -193,6 +193,8 @@ export interface SubagentStepEventPayload {
   status: "running" | "completed" | "failed" | "cancelled" | "incomplete" | "uncertain";
   result_summary?: string;
   resultSummary?: string;
+  result_content?: string;
+  resultContent?: string;
   error?: string;
   duration_ms: number;
   durationMs?: number;

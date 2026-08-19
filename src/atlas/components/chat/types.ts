@@ -338,6 +338,8 @@ export interface SubagentStepData {
   status: "running" | "completed" | "failed" | "cancelled" | "incomplete" | "uncertain";
   recoveryState?: "stale";
   resultSummary?: string;
+  /** Full bounded final output, rendered as the child's chat reply. */
+  resultContent?: string;
   error?: string;
   durationMs?: number;
   timestamp?: number;

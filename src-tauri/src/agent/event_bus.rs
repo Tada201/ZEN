@@ -269,6 +269,10 @@ pub struct SubagentStepPayload {
     pub status: String,
     /// Short result summary when the sub-agent completes successfully.
     pub result_summary: Option<String>,
+    /// Full final output text (bounded) so the Agents panel can render the
+    /// child's complete answer as a chat message instead of the short summary.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result_content: Option<String>,
     /// Error message when the sub-agent fails.
     pub error: Option<String>,
     pub duration_ms: u64,

@@ -19,6 +19,7 @@ function hasChanged(a: ScopedSubagentRecord | undefined, b: ScopedSubagentRecord
   if (!a) return true;
   return a.status !== b.status
     || a.resultSummary !== b.resultSummary
+    || a.resultContent !== b.resultContent
     || a.error !== b.error
     || a.durationMs !== b.durationMs
     || a.timestamp !== b.timestamp
@@ -48,6 +49,7 @@ export function upsertScopedSubagentFromStep(chatId: string, step: Step, silent 
     task: subagent.task,
     status: subagent.recoveryState === "stale" ? "stale" : subagent.status,
     resultSummary: subagent.resultSummary,
+    resultContent: subagent.resultContent,
     error: subagent.error,
     durationMs: subagent.durationMs,
     timestamp: subagent.timestamp,

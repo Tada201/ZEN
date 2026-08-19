@@ -6,10 +6,9 @@ import { useUIStore } from "@/lib/stores/useUIStore";
 import { cn } from "@/lib/utils";
 import type { Message, Step, SubagentStepData, ToolCall } from "@/atlas/components/chat/types";
 import { selectDelegationChildTools, buildDelegationTree } from "@/atlas/agentRuntime/delegationTree";
-import { AgentExecutionTrace } from "@/atlas/components/chat/AgentExecutionTrace";
-import { MarkdownContent } from "@/atlas/components/chat/MarkdownContent";
+import { UserMessage } from "@/atlas/components/chat/UserMessage";
+import { AssistantMessage } from "@/atlas/components/chat/AssistantMessage";
 import { buildAgentDelegationLaneModel, type AgentDelegationLaneModel } from "@/atlas/components/chat/agentDelegationLaneModel";
-import { presentExecutionError } from "@/atlas/agentRuntime/executionError";
 
 type SubagentItem = {
   id: string;
@@ -181,16 +180,19 @@ function CompactSubagentRow({ item, selected, onSelect }: { item: SubagentItem; 
   const Icon = running ? Loader2 : failed || needsReview || stale ? CircleAlert : Check;
   const fileCount = item.childTools.filter(isFileTool).length;
   const hasElapsed = typeof item.subagent.timestamp === "number" || typeof item.subagent.durationMs === "number";
-  const summary = item.response || item.subagent.task || "No summary yet";
+  const title = item.subagent.task || item.subagent.agentName;
+  // Only show a subtitle when it adds information. With no resultSummary the
+  // summary falls back to the task, which would just repeat the title verbatim.
+  const summary = item.response && item.response !== title ? item.response : "";
   return (
     <button type="button" onClick={onSelect} className={cn("group flex w-full items-start gap-2 border-b border-border px-4 py-3 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", selected && "bg-muted")} aria-current={selected ? "true" : undefined}>
       <Icon className={cn("mt-0.5 h-3.5 w-3.5 shrink-0", running && "motion-safe:animate-spin motion-reduce:transition-none text-primary", failed && "text-destructive", (needsReview || stale) && "text-warning", !running && !failed && !needsReview && !stale && "text-success")} aria-hidden="true" />
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-2">
-          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-foreground">{item.subagent.task || item.subagent.agentName}</span>
+          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-foreground">{title}</span>
           <span className={cn("shrink-0 text-[11px]", running && "text-primary", failed && "text-destructive", (needsReview || stale) && "text-warning", !running && !failed && !needsReview && !stale && "text-success")}>{statusLabel(item.subagent.status, stale)}</span>
         </span>
-        <span className="mt-1 block truncate text-[12px] text-muted-foreground">{summary}</span>
+        {summary && <span className="mt-1 block truncate text-[12px] text-muted-foreground">{summary}</span>}
         <span className="mt-1 flex items-center gap-1 font-mono text-[10px] text-muted-foreground"><span>{item.childTools.length} {item.childTools.length === 1 ? "step" : "steps"}{fileCount ? ` · ${fileCount} files flagged` : ""}</span>{hasElapsed && <><span aria-hidden="true">·</span><ElapsedSubagentTime startTime={item.subagent.timestamp} durationMs={item.subagent.durationMs} running={running} /></>}
 </span>
       </span>
@@ -199,16 +201,65 @@ function CompactSubagentRow({ item, selected, onSelect }: { item: SubagentItem; 
   );
 }
 
+/**
+ * Reconstruct a subagent's run as a normal chat exchange so the panel reuses
+ * the exact main-timeline renderers (UserMessage + AssistantMessage) instead of
+ * a bespoke trace view. The prompt sent to the child becomes the user turn; its
+ * owned tool calls + final summary become one assistant turn.
+ *
+ * generativeUI is forced to 0: subagent output must never render premium/GenUI
+ * cards, per the product rule that only the main agent surfaces those.
+ */
+function buildSubagentConversation(item: SubagentItem): { prompt: Message; reply: Message } {
+  const { subagent } = item;
+  const running = isSubagentRunning(subagent);
+  const orderedTools = [...item.childTools].sort(
+    (a, b) => (a.sequence ?? a.startTime ?? 0) - (b.sequence ?? b.startTime ?? 0),
+  );
+  const toolSteps: Step[] = orderedTools.map((tool) => ({
+    type: "tool-call",
+    toolCall: tool,
+    status: tool.status === "error" ? "error" : tool.status === "running" ? "running" : "completed",
+    timestamp: tool.startTime,
+  }));
+  // Prefer the child's full final answer; fall back to the short summary the
+  // list row already shows so a reply always renders when the child finished.
+  const finalText = subagent.resultContent?.trim() || item.response?.trim() || "";
+  const steps: Step[] = finalText
+    ? [...toolSteps, { type: "text", content: finalText }]
+    : toolSteps;
+
+  const prompt: Message = {
+    id: `${item.id}:prompt`,
+    sessionId: item.message.sessionId,
+    role: "user",
+    content: subagent.task || subagent.agentName,
+    createdAt: subagent.timestamp,
+  };
+  const reply: Message = {
+    id: `${item.id}:reply`,
+    sessionId: item.message.sessionId,
+    role: "assistant",
+    content: finalText,
+    steps,
+    toolCalls: orderedTools,
+    model: subagent.agentName,
+    createdAt: subagent.timestamp,
+    generativeUI: 0,
+    status: running ? "sending" : subagent.status === "failed" ? "failed" : subagent.status === "cancelled" ? "cancelled" : "sent",
+    error: subagent.error,
+    recoveryState: subagent.recoveryState === "stale" ? "recovered" : undefined,
+  };
+  return { prompt, reply };
+}
+
 function SubagentDetail({ item, onBack, onSelectSubagent, onOpenArtifact }: { item: SubagentItem; onBack: () => void; onSelectSubagent: (id: string) => void; onOpenArtifact: (artifact: NonNullable<Message["artifact"]>) => void }) {
   const { subagent } = item;
   const stale = subagent.recoveryState === "stale";
   const running = isSubagentRunning(subagent);
   const needsReview = subagent.status === "incomplete" || subagent.status === "uncertain";
-  const response = item.response || "";
   const hasElapsed = typeof subagent.timestamp === "number" || typeof subagent.durationMs === "number";
-  const errorPresentation = subagent.error
-    ? presentExecutionError(subagent.error, { context: "subagent", recoverable: true })
-    : null;
+  const { prompt, reply } = buildSubagentConversation(item);
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
       <div className="flex shrink-0 items-start gap-2 border-b border-border px-4 py-3">
@@ -220,9 +271,9 @@ function SubagentDetail({ item, onBack, onSelectSubagent, onOpenArtifact }: { it
           <p className="mt-0.5 truncate text-[12px] text-muted-foreground">{subagent.task}</p>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+      <div className="min-h-0 flex-1 overflow-y-auto py-3">
         {item.children && item.children.length > 0 && (
-          <section aria-labelledby="nested-subagents-heading" className="mb-3">
+          <section aria-labelledby="nested-subagents-heading" className="mb-3 px-4">
             <h3 id="nested-subagents-heading" className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Nested subagents</h3>
             <div className="overflow-hidden rounded-md border border-border bg-card">
               {item.children.map((child) => (
@@ -231,8 +282,8 @@ function SubagentDetail({ item, onBack, onSelectSubagent, onOpenArtifact }: { it
             </div>
           </section>
         )}
-        {item.childTools.length > 0 && <AgentExecutionTrace toolCalls={item.childTools} executionSteps={item.message.steps || []} sessionId={item.message.sessionId} onOpenArtifact={onOpenArtifact} preferCompact />}
-        {(errorPresentation || response) && <div className="mt-4 border-t border-border pt-4">{errorPresentation ? <div className="rounded-md border border-destructive bg-muted p-3" role="alert"><p className="text-[12px] font-medium text-destructive">{errorPresentation.title}</p><p className="mt-1 text-[12px] leading-5 text-foreground">{errorPresentation.summary}</p>{errorPresentation.action !== "none" && <p className="mt-1 text-[11px] text-muted-foreground">Next: {errorPresentation.actionLabel}</p>}</div> : <MarkdownContent content={response} isStreaming={running} onOpenArtifact={onOpenArtifact} chatId={item.message.sessionId} />}</div>}
+        <UserMessage message={prompt} compact />
+        <AssistantMessage message={reply} compact onOpenArtifact={onOpenArtifact} />
       </div>
     </div>
   );

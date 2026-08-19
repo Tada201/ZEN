@@ -230,6 +230,10 @@ function compactMetadata(metadata: ActionMeta | undefined): ActionMeta | undefin
     "traceStatus",
     "progressPercent",
     "status",
+    // Per-turn GenUI capability. This local_queued marker is the only
+    // durable carrier of the flag (the row metadata is saved as None), so
+    // dropping it here disables OpenUI rendering after reload.
+    "generativeUI",
   ];
   for (const key of keepKeys) {
     const value = metadata[key];
@@ -314,6 +318,10 @@ function compactSubagent(subagent: SubagentStepData | undefined): SubagentStepDa
     task: subagent.task,
     status: subagent.status,
     resultSummary: subagent.resultSummary,
+    // The full child answer is rendered in the Agents panel. Reuse the terminal
+    // redactor: same secret-scrub + size bound so a large reply can't bloat the
+    // persisted trace or leak credentials echoed back by the child.
+    resultContent: subagent.resultContent ? redactTerminalOutput(subagent.resultContent) : subagent.resultContent,
     // Redact/cap the subagent error for the same reason as action/tool
     // errors: the raw message can carry stack traces, env vars, or
     // credentials echoed back by a failing child agent.
