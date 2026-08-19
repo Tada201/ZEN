@@ -34,7 +34,9 @@ assert(reasoning.includes("}, 1000);"), "reasoning timer must align with display
 assert(reasoning.includes("transitionDisclosure") && reasoning.includes("toggleDisclosure"), "reasoning disclosure lifecycle should use the shared transition policy");
 assert(reasoning.includes("}, [isThinking]);"), "reasoning timer must not restart when disclosure is toggled");
 assert(delegation.includes("transitionDisclosure") && delegation.includes("toggleDisclosure"), "delegation lanes must use the shared disclosure transition policy");
-assert(subagent.includes("transitionDisclosure") && subagent.includes("toggleDisclosure"), "subagent cards must use the shared disclosure transition policy");
+// The inline subagent marker is static (no foldout) — it opens the Agents
+// panel on click rather than expanding in place, so it has no disclosure state.
+assert(subagent.includes("openSubagentInPanel"), "inline subagent marker must open the Agents panel instead of expanding");
 assert(trace.includes("transitionDisclosure") && trace.includes("toggleDisclosure"), "grouped execution traces must use the shared disclosure transition policy");
 assert(actionTrace.includes("isRunning && \"text-foreground\""), "active action labels should use a stable semantic foreground color");
 assert(!actionTrace.includes("text-premium-shimmer"), "execution action labels must not use animated shimmer");

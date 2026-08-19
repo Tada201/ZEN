@@ -33,7 +33,7 @@ includesAll(detail, ["DiffCard", "Open full diff", "parseUnifiedDiff"], "file di
 includesAll(content, ["TerminalContent", "SearchContent", "ImageContent", "ArtifactContent"], "tool content routing");
 includesAll(card, ["Approval context", "Retry", "Approve", "Deny"], "tool card actions");
 includesAll(generic, ["Tool failed", "Input parameters", "Raw result"], "tool detail states");
-includesAll(subagent, ["resultSummary", "childToolCalls", "AgentExecutionTrace"], "subagent surface");
+includesAll(subagent, ["openSubagentInPanel", "childToolCalls", "statusLabel"], "subagent surface");
 includesAll(genui, ["Suspense", "Technical details", "ChartCardFallback", "CardMotion", "PremiumCardBody"], "GenUI fallback/lifecycle");
 includesAll(agentStep, ["CardShell", "motion-safe:animate-spin"], "agent step card");
 includesAll(shell, ["CardMotion"], "premium shell motion");

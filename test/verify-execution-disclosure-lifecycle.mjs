@@ -70,7 +70,6 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 const owners = [
   read("src/atlas/components/chat/AgentExecutionTrace.tsx"),
   read("src/atlas/components/chat/AgentDelegationLane.tsx"),
-  read("src/atlas/components/chat/SubagentExecutionCard.tsx"),
   read("src/atlas/components/chat/ReasoningBlock.tsx"),
 ];
 for (const source of owners) {

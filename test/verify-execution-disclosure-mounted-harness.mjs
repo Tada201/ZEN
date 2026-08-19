@@ -24,11 +24,14 @@ for (const [name, source] of [
   ["reasoning", reasoning],
   ["tool group", trace],
   ["delegation", delegation],
-  ["subagent", subagent],
 ]) {
   assert(source.includes("transitionDisclosure"), `${name} owner must retain lifecycle transition policy`);
   assert(source.includes("toggleDisclosure"), `${name} owner must retain user disclosure ownership`);
 }
+// The inline subagent marker is intentionally not a disclosure owner: it is a
+// minimal `Subagent: <name> | <status>` row that opens the Agents panel on
+// click. The full trace + disclosure lives in the panel, not the timeline.
+assert(subagent.includes("openSubagentInPanel"), "inline subagent marker must open the Agents panel");
 
 for (const caseId of ["reasoning", "tool-group", "delegation", "subagent"]) {
   assert(harness.includes(`caseId=\"${caseId}\"`), `harness must mount the ${caseId} lifecycle case`);
