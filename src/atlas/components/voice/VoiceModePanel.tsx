@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Bot, Captions, CaptionsOff, Sparkles, Terminal } from "lucide-react";
-import { useEffect, useState, memo } from "react";
+import { useEffect, useRef, useState, memo } from "react";
 import { cn } from "@/lib/utils";
 import type { TtftMetricSnapshot } from "@/lib/ttft";
 import { VoiceDiagnosticsPanel } from "./VoiceDiagnosticsPanel";
@@ -54,7 +54,7 @@ interface VoiceModePanelProps {
 
 const stateColors: Record<VoiceState, string> = {
   initializing: "text-amber-400 bg-amber-400/10 border-amber-500/20",
-  listening: "text-purple-400 bg-purple-400/10 border-purple-500/20",
+  listening: "text-primary bg-primary/10 border-primary/20",
   processing: "text-blue-400 bg-blue-400/10 border-blue-500/20",
   speaking: "text-emerald-400 bg-emerald-400/10 border-emerald-500/20",
   idle: "text-muted-foreground bg-muted/10 border-border/20",
@@ -115,13 +115,32 @@ export function VoiceModePanelInner({
   whisperBackendDetail = "",
 }: VoiceModePanelProps) {
   const [captionsVisible, setCaptionsVisible] = useState(true);
+  const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!captionsAvailable) setCaptionsVisible(false);
   }, [captionsAvailable]);
+  // Full-screen overlay: pull focus in on open so keyboard users land inside,
+  // and let Escape leave (onRequestClose guards against closing mid-recording).
+  useEffect(() => {
+    if (voiceModeOpen) rootRef.current?.focus();
+  }, [voiceModeOpen]);
   const ttftLabel = ttftMetric?.ttftMs != null ? `${Math.round(ttftMetric.ttftMs)}ms` : "—";
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background p-3 text-foreground transition-all duration-300 md:p-4">
+    <div
+      ref={rootRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Voice mode"
+      tabIndex={-1}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          onRequestClose();
+        }
+      }}
+      className="fixed inset-x-0 bottom-0 top-[var(--titlebar-height)] z-50 flex flex-col bg-background p-3 text-foreground transition-opacity duration-300 outline-none md:p-4"
+    >
 
       {/* 1. Top Bar — Agent | Speech | TTS | STT | Status */}
       <header className="z-10 flex w-full items-center justify-between gap-3 border-b border-border/5 pb-2">
@@ -199,7 +218,7 @@ export function VoiceModePanelInner({
           <button
             type="button"
             onClick={onRequestClose}
-            className="rounded border border-border/15 bg-card/5 px-3 py-1 text-[11px] font-mono text-muted-foreground transition-all hover:border-red-500/30 hover:bg-red-500/20 hover:text-red-400"
+            className="rounded border border-border/15 bg-card/5 px-3 py-1 text-[11px] font-mono text-muted-foreground transition-colors hover:border-red-500/30 hover:bg-red-500/20 hover:text-red-400"
             title="Close Overlay"
           >
             DISCONNECT
@@ -305,7 +324,7 @@ export function VoiceModePanelInner({
             <span>{agentActivity.displayAgentRunning ? "DISPLAY" : "IDLE"}</span>
           </div>
           {agentActivity.otherAgentCount > 0 && (
-            <div className="flex h-9 items-center rounded-full border border-violet-300/25 bg-violet-300/10 px-3 text-violet-100" title={`${agentActivity.otherAgentCount} additional agent${agentActivity.otherAgentCount === 1 ? "" : "s"} running`}>
+            <div className="flex h-9 items-center rounded-full border border-border/25 bg-muted/10 px-3 text-muted-foreground" title={`${agentActivity.otherAgentCount} additional agent${agentActivity.otherAgentCount === 1 ? "" : "s"} running`}>
               +{agentActivity.otherAgentCount} AGENT{agentActivity.otherAgentCount === 1 ? "" : "S"}
             </div>
           )}

@@ -57,7 +57,7 @@ export function ProviderCard({
   return (
     <div
       className={cn(
-        "rounded-xl border transition-all duration-150",
+        "rounded-xl border transition-colors duration-150",
         enabled
           ? "border-border bg-muted/30"
           : "border-border/[0.03] bg-muted/20 opacity-60",

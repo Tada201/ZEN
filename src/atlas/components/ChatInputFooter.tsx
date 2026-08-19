@@ -1,4 +1,4 @@
-import { ArrowUp, Bookmark, BookmarkCheck, Mic, Pause, Play, Square } from "lucide-react";
+import { ArrowUp, Bookmark, BookmarkCheck, Mic, Pause, Play } from "lucide-react";
 import { cn } from "@/lib/utils/style";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import type { ComposerLayoutMode, PremiumChatInputProps } from "./chat/input/PremiumChatInputTypes";
@@ -8,14 +8,18 @@ import { PinnedActionBar } from "./chat/input/PinnedActionBar";
 import { PermissionModeMenu } from "./PermissionModeMenu";
 import { ContextTrigger } from "./ContextTrigger";
 import { PlusActionMenu } from "./chat/input/PlusActionMenu";
+import { ComposerSubmitLoader } from "./chat/input/ComposerSubmitLoader";
 
 /**
  * `ChatInputFooter` — the bottom toolbar of the chat input composer:
  * the inline model picker (only when not already pinned to the
  * sidebar header), the permission-mode menu, the pinned action bar,
  * the context-badge trigger, the voice-mode mic, the transport controls
- * (Pause / Resume / Stop while a run is active), and the submit button
- * (send when idle, queue while streaming). Carved out of
+ * (Pause / Resume while a run is active), and the submit button. The
+ * submit button is one element across all states: it sends when idle,
+ * morphs into a pulsing 3×3 matrix that doubles as Stop while a run is
+ * active with an empty input, and returns to a queue-send arrow the moment
+ * the user types a follow-up mid-run. Carved out of
  * `PremiumChatInput.tsx` so the composer stays
  * under the 350-line warning limit.
  *
@@ -231,38 +235,54 @@ export const ChatInputFooter = (props: ChatInputFooterProps) => {
             <span className="composer-footer-action-label">Resume</span>
           </button>
         )}
-        {props.isLoading && props.onAbort && (
-          <button
-            onClick={props.onAbort}
-            type="button"
-            className="flex items-center justify-center gap-1 rounded-md border border-destructive px-1.5 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/10"
-            aria-label="Stop response"
-            title="Stop this response and keep the partial work"
-          >
-            <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-            <span className="composer-footer-action-label">Stop</span>
-          </button>
-        )}
-        <button
-          onClick={() => void props.onSend()}
-          type="button"
-          disabled={!props.hasContent}
-          aria-label={props.isLoading ? "Queue message" : "Send message"}
-          title={props.isLoading ? "Queue this message — it sends when the current turn finishes" : "Send message"}
-          className={cn(
-            "composer-submit relative p-1",
-            isWelcome ? "rounded-md" : "rounded-full",
-            props.hasContent
-              ? isWelcome
-                ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                : "bg-primary text-primary-foreground shadow-sm"
-              : "bg-muted text-muted-foreground cursor-not-allowed",
-          )}
-        >
-          {/* Icon is identical across send/queue states by design: the button
-              keeps one meaning, so no icon swap or motion is warranted. */}
-          <ArrowUp className="h-4 w-4 stroke-[3px]" />
-        </button>
+        {(() => {
+          // One button, three meanings:
+          //  • idle → Send (needs content)
+          //  • running + empty input → Stop (the matrix IS the stop target)
+          //  • running + typed follow-up → Queue send
+          const running = !!props.isLoading;
+          const stopMode = running && !props.hasContent && !!props.onAbort;
+          const label = stopMode
+            ? "Stop response"
+            : running
+              ? "Queue message"
+              : "Send message";
+          const title = stopMode
+            ? "Stop this response and keep the partial work"
+            : running
+              ? "Queue this message — it sends when the current turn finishes"
+              : "Send message";
+          return (
+            <button
+              onClick={() => {
+                if (stopMode) props.onAbort?.();
+                else void props.onSend();
+              }}
+              type="button"
+              disabled={!stopMode && !props.hasContent}
+              data-running={stopMode || undefined}
+              aria-label={label}
+              title={title}
+              className={cn(
+                "composer-submit relative p-1",
+                isWelcome ? "rounded-md" : "rounded-full",
+                stopMode
+                  ? ""
+                  : props.hasContent
+                    ? isWelcome
+                      ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                      : "bg-primary text-primary-foreground shadow-sm"
+                    : "bg-muted text-muted-foreground cursor-not-allowed",
+              )}
+            >
+              {stopMode ? (
+                <ComposerSubmitLoader />
+              ) : (
+                <ArrowUp className="h-4 w-4 stroke-[3px]" />
+              )}
+            </button>
+          );
+        })()}
       </div>
     </div>
   );

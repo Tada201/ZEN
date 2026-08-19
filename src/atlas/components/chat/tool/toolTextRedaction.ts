@@ -28,11 +28,11 @@ export function redactToolText(value: string): string {
  */
 export function sanitizeAssistantError(value: string): string {
   const redacted = redactToolText(value || "")
-    .split(/\\r?\\n/)
+    .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => line && !/^at\\s+/i.test(line))
+    .filter((line) => line && !/^at\s+/i.test(line))
     .join(" ")
-    .replace(/\\s+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
   if (!redacted) return "The agent stopped unexpectedly.";
   if (/api[_-]?key|authorization|invalid[_ -]?api|authentication|unauthorized/i.test(redacted)) {

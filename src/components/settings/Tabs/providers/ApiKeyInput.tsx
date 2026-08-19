@@ -43,7 +43,7 @@ export function ApiKeyInput({
         placeholder={placeholder}
         disabled={disabled}
         className="pr-20 h-8 text-[12px] bg-muted/40 border-border font-mono
-          focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all
+          focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-colors
           placeholder:text-foreground/80"
       />
       <div className="absolute right-1 flex items-center gap-0.5">

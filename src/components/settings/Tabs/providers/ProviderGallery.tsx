@@ -75,14 +75,14 @@ export function ProviderGallery({
                         onClick={onRefresh}
                         disabled={refreshing}
                         title="Refresh model catalog"
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
                     >
                         <WorkbenchIcon name="lucide:refresh-cw" size={14} className={cn(refreshing && "animate-spin")} />
                     </button>
                     <button
                         type="button"
                         onClick={onAddCustom}
-                        className="flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 text-[12px] font-medium text-primary-foreground hover:bg-primary/90"
+                        className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 text-[12px] font-medium text-primary-foreground hover:bg-primary/90"
                     >
                         <WorkbenchIcon name="lucide:plus" size={14} />
                         Custom
@@ -112,7 +112,7 @@ export function ProviderGallery({
                                                 index === 0 && "sm:col-start-1"
                                             )}
                                         >
-                                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-background">
+                                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background">
                                                 {PROVIDER_ICONS[provider.id] || <WorkbenchIcon name={provider.icon || "lucide:cpu"} size={16} />}
                                             </span>
                                             <span className="min-w-0 flex-1">

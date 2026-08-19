@@ -11,7 +11,7 @@ export function secretKeysIn(text: string): string[] {
 }
 
 const INPUT_CLASS =
-  'h-8 px-3 rounded-lg border border-border bg-background text-[11px] font-mono focus:outline-none focus:border-brand-purple/50';
+  'h-8 px-3 rounded-lg border border-border bg-background text-[11px] font-mono focus:outline-none focus:border-primary/50';
 const LABEL_CLASS =
   'text-[9px] uppercase tracking-wider font-semibold text-muted-foreground';
 
@@ -31,7 +31,7 @@ export const McpSecretFields = memo(({ keys, stored, values, onChange }: Props) 
   return (
     <div className="space-y-2 rounded-lg border border-border bg-background/40 p-2">
       <div className="flex items-center gap-1.5">
-        <WorkbenchIcon name="lucide:key-round" size={11} className="text-brand-purple" />
+        <WorkbenchIcon name="lucide:key-round" size={11} className="text-primary" />
         <span className={LABEL_CLASS}>Secret values (stored in OS keyring)</span>
       </div>
       <p className="text-[10px] text-muted-foreground/80 leading-snug">

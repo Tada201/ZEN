@@ -125,7 +125,7 @@ export const McpServerRow = memo(
 
     return (
       <div
-        className={`border border-border rounded-xl p-3 bg-card space-y-2 transition-colors hover:border-brand-purple/30 ${
+        className={`border border-border rounded-xl p-3 bg-card space-y-2 transition-colors hover:border-primary/30 ${
           disabled ? 'opacity-55' : ''
         }`}
       >
@@ -165,7 +165,7 @@ export const McpServerRow = memo(
                 checked={!disabled}
                 disabled={busy}
                 onChange={(e) => onToggleEnabled(server, e.target.checked)}
-                className="h-3 w-3 accent-brand-purple cursor-pointer"
+                className="h-3 w-3 accent-primary cursor-pointer"
               />
               <span className="text-[8px] uppercase tracking-wider text-muted-foreground">
                 {disabled ? 'Off' : 'On'}
@@ -176,7 +176,7 @@ export const McpServerRow = memo(
               size="sm"
               onClick={() => onEdit(server)}
               disabled={busy}
-              className="h-6 w-6 p-0 text-muted-foreground hover:text-brand-purple"
+              className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
               title={`Edit ${server.name}`}
             >
               <WorkbenchIcon name="lucide:pencil" size={12} />

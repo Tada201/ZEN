@@ -91,7 +91,7 @@ function entryToConfig(e: McpServerEntry): Record<string, unknown> {
 }
 
 const INPUT_CLASS =
-  'h-8 px-3 rounded-lg border border-border bg-background text-[11px] font-mono focus:outline-none focus:border-brand-purple/50';
+  'h-8 px-3 rounded-lg border border-border bg-background text-[11px] font-mono focus:outline-none focus:border-primary/50';
 const LABEL_CLASS =
   'text-[9px] uppercase tracking-wider font-semibold text-muted-foreground';
 
@@ -281,7 +281,7 @@ export const McpServerForm = memo(({ editing, busy, onSubmit, onCancel }: Props)
               }}
               className={`h-6 px-2 rounded-md text-[9px] uppercase tracking-wider font-semibold transition-colors ${
                 mode === m
-                  ? 'bg-brand-purple/15 text-brand-purple'
+                  ? 'bg-primary/15 text-primary'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -301,7 +301,7 @@ export const McpServerForm = memo(({ editing, busy, onSubmit, onCancel }: Props)
             onChange={(e) => setJsonText(e.target.value)}
             placeholder={'{\n  "my-server": {\n    "command": "npx",\n    "args": ["-y", "server"]\n  }\n}'}
             rows={8}
-            className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[11px] font-mono focus:outline-none focus:border-brand-purple/50 resize-y"
+            className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[11px] font-mono focus:outline-none focus:border-primary/50 resize-y"
           />
         </div>
       ) : (
@@ -402,7 +402,7 @@ export const McpServerForm = memo(({ editing, busy, onSubmit, onCancel }: Props)
               onChange={(e) => setEnvJson(e.target.value)}
               placeholder={'{\n  "API_TOKEN": "${secret:MCP_TOKEN}"\n}'}
               rows={4}
-              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[11px] font-mono focus:outline-none focus:border-brand-purple/50 resize-y"
+              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[11px] font-mono focus:outline-none focus:border-primary/50 resize-y"
             />
           )}
         </div>
@@ -460,7 +460,7 @@ function ScopeSelect({
       value={scope}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value as McpScope)}
-      className="h-8 px-3 rounded-lg border border-border bg-background text-[11px] font-mono focus:outline-none focus:border-brand-purple/50 w-full disabled:opacity-60"
+      className="h-8 px-3 rounded-lg border border-border bg-background text-[11px] font-mono focus:outline-none focus:border-primary/50 w-full disabled:opacity-60"
     >
       <option value="workspace">Workspace (this project)</option>
       <option value="user">Global (all projects)</option>

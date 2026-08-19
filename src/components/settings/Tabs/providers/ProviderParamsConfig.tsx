@@ -159,7 +159,7 @@ export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string
                                         <>
                                             <button 
                                                 onClick={() => resetParam(param.id, param.default)}
-                                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted/50 rounded transition-all text-muted-foreground/70 hover:text-muted-foreground"
+                                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted/50 rounded transition-colors text-muted-foreground/70 hover:text-muted-foreground"
                                                 title="Reset to default"
                                             >
                                                 <WorkbenchIcon name="lucide:rotate-ccw" size={10} />
@@ -197,7 +197,7 @@ export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string
                                         step={param.step}
                                         value={providerParams[param.id] ?? param.default}
                                         onChange={(e) => handleParamChange(param.id, parseFloat(e.target.value))}
-                                        className="w-full h-0.5 bg-muted rounded-full appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400 transition-all"
+                                        className="w-full h-0.5 bg-muted rounded-full appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400 transition-colors"
                                     />
                                 </div>
                             )}
@@ -227,7 +227,7 @@ export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string
                                     <div className="flex items-center gap-2 shrink-0">
                                         <button 
                                             onClick={() => resetParam(param.id, param.default)}
-                                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted/50 rounded transition-all text-muted-foreground/70 hover:text-muted-foreground"
+                                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted/50 rounded transition-colors text-muted-foreground/70 hover:text-muted-foreground"
                                             title="Reset to default"
                                         >
                                             <WorkbenchIcon name="lucide:rotate-ccw" size={10} />
@@ -249,7 +249,7 @@ export const ProviderParamsConfig = memo(({ providerKey }: { providerKey: string
                                         step={param.step}
                                         value={providerParams[param.id] ?? param.default}
                                         onChange={(e) => handleParamChange(param.id, parseFloat(e.target.value))}
-                                        className="w-full h-0.5 bg-muted rounded-full appearance-none cursor-pointer accent-blue-500/50 hover:accent-blue-400 transition-all"
+                                        className="w-full h-0.5 bg-muted rounded-full appearance-none cursor-pointer accent-blue-500/50 hover:accent-blue-400 transition-colors"
                                     />
                                 </div>
                             </div>

@@ -141,7 +141,7 @@ function FieldLabel({ htmlFor, children, detail }: { htmlFor: string; children: 
 
 function Toggle({ label, detail, checked, onChange }: { label: string; detail: string; checked: boolean; onChange: (value: boolean) => void }) {
   return (
-    <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border bg-card px-3 py-2.5 hover:bg-muted">
+    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card px-3 py-2.5 hover:bg-muted">
       <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" />
       <span className="min-w-0">
         <span className="block text-xs font-medium text-foreground">{label}</span>
@@ -210,7 +210,7 @@ function VoiceDisplayModelEditor({
         </div>
       </header>
 
-      {error && <div className="rounded-md border border-destructive bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">{error}</div>}
+      {error && <div className="rounded-lg border border-destructive bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">{error}</div>}
 
       <section className="space-y-3 rounded-lg border border-border bg-card p-4" aria-labelledby="voice-display-model-heading">
         <div>
@@ -235,8 +235,8 @@ function VoiceDisplayModelEditor({
       </section>
 
       <footer className="flex items-center justify-end gap-2 border-t border-border pt-4">
-        <button type="button" onClick={onCancel} className="h-9 rounded-md border border-border bg-card px-3 text-xs font-medium text-foreground hover:bg-muted">Cancel</button>
-        <button type="button" onClick={() => void save()} disabled={saving || fetchingModels} className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:pointer-events-none disabled:opacity-60">
+        <button type="button" onClick={onCancel} className="h-9 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground hover:bg-muted">Cancel</button>
+        <button type="button" onClick={() => void save()} disabled={saving || fetchingModels} className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:pointer-events-none disabled:opacity-60">
           {saving && <WorkbenchIcon name="codicon:loading" className="h-3.5 w-3.5 animate-spin" />}
           {saving ? "Saving…" : "Save model"}
         </button>
@@ -355,7 +355,7 @@ export function AgentEditor({
         </div>
       </header>
 
-      {error && <div className="rounded-md border border-destructive bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">{error}</div>}
+      {error && <div className="rounded-lg border border-destructive bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">{error}</div>}
 
       <section className="space-y-3" aria-labelledby="agent-basics-heading">
         <div><h4 id="agent-basics-heading" className="text-sm font-semibold text-foreground">Basics</h4><p className="text-xs text-muted-foreground">How this specialist appears in Zen.</p></div>
@@ -375,12 +375,12 @@ export function AgentEditor({
           <div className="space-y-1.5"><FieldLabel htmlFor="agent-context">Context tokens</FieldLabel><WorkbenchInput id="agent-context" type="number" min={1024} value={draft.context_window ?? ""} onChange={(event) => update("context_window", event.target.value ? Number(event.target.value) : null)} placeholder="Inherit" /></div>
           <div className="space-y-1.5"><FieldLabel htmlFor="agent-memory">Max messages</FieldLabel><WorkbenchInput id="agent-memory" type="number" min={1} value={draft.max_messages_in_memory ?? ""} onChange={(event) => update("max_messages_in_memory", event.target.value ? Number(event.target.value) : null)} placeholder="Inherit" /></div>
         </div>
-        <div><h5 className="mb-2 text-xs font-medium text-foreground">Allowed tools <span className="font-normal text-muted-foreground">({draft.tool_ids.length} selected)</span></h5>{toolsLoading ? <p className="text-xs text-muted-foreground">Loading tool capabilities…</p> : <div className="grid gap-2 sm:grid-cols-2">{tools.map((tool) => { const selected = draft.tool_ids.includes(tool.id); return <label key={tool.id} className={cn("flex cursor-pointer items-start gap-2 rounded-md border px-2.5 py-2", selected ? "border-primary bg-muted" : "border-border bg-card hover:bg-muted")}><input type="checkbox" checked={selected} onChange={() => toggleTool(tool.id)} className="mt-0.5 h-4 w-4 accent-primary" /><span className="min-w-0"><span className="block truncate text-xs font-medium text-foreground">{tool.name}</span><span className="block truncate text-[10px] text-muted-foreground">{tool.description}</span></span></label>; })}</div>}</div>
+        <div><h5 className="mb-2 text-xs font-medium text-foreground">Allowed tools <span className="font-normal text-muted-foreground">({draft.tool_ids.length} selected)</span></h5>{toolsLoading ? <p className="text-xs text-muted-foreground">Loading tool capabilities…</p> : <div className="grid gap-2 sm:grid-cols-2">{tools.map((tool) => { const selected = draft.tool_ids.includes(tool.id); return <label key={tool.id} className={cn("flex cursor-pointer items-start gap-2 rounded-lg border px-2.5 py-2", selected ? "border-primary bg-muted" : "border-border bg-card hover:bg-muted")}><input type="checkbox" checked={selected} onChange={() => toggleTool(tool.id)} className="mt-0.5 h-4 w-4 accent-primary" /><span className="min-w-0"><span className="block truncate text-xs font-medium text-foreground">{tool.name}</span><span className="block truncate text-[10px] text-muted-foreground">{tool.description}</span></span></label>; })}</div>}</div>
       </section>
 
       <section className="space-y-3" aria-labelledby="agent-behavior-heading">
         <div><h4 id="agent-behavior-heading" className="text-sm font-semibold text-foreground">Behavior</h4><p className="text-xs text-muted-foreground">The prompt is isolated from the parent conversation and receives the delegated task.</p></div>
-        <div className="space-y-1.5"><FieldLabel htmlFor="agent-instructions">System prompt</FieldLabel><textarea id="agent-instructions" value={draft.instructions} onChange={(event) => update("instructions", event.target.value)} placeholder="Describe this subagent's role, workflow, and output format…" className="min-h-44 w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-xs leading-relaxed text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-primary/20" required /></div>
+        <div className="space-y-1.5"><FieldLabel htmlFor="agent-instructions">System prompt</FieldLabel><textarea id="agent-instructions" value={draft.instructions} onChange={(event) => update("instructions", event.target.value)} placeholder="Describe this subagent's role, workflow, and output format…" className="min-h-44 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-xs leading-relaxed text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-primary/20" required /></div>
         <Toggle label="Load workspace AGENTS.md" detail="Append the workspace-root instructions to this subagent's system prompt." checked={draft.inject_agents_md} onChange={(value) => update("inject_agents_md", value)} />
       </section>
 
@@ -391,10 +391,10 @@ export function AgentEditor({
           <Toggle label="Show as a user agent" detail="Make this profile available for direct selection in future agent workflows." checked={draft.user_invocable} onChange={(value) => update("user_invocable", value)} />
           <Toggle label="Allow nested delegation" detail="Permit this subagent to spawn child agents. Off by default to prevent recursion." checked={draft.allow_nested_delegation} onChange={(value) => update("allow_nested_delegation", value)} />
         </div>
-        {draft.allow_nested_delegation && <div className="space-y-2"><h5 className="text-xs font-medium text-foreground">Allowed child agents</h5>{availableChildren.length === 0 ? <p className="text-xs text-muted-foreground">No other agent profiles are available.</p> : <div className="grid gap-2 sm:grid-cols-2">{availableChildren.map((child) => <label key={child.id} className="flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-2"><input type="checkbox" checked={draft.allowed_agent_ids.includes(child.id)} onChange={() => toggleChild(child.id)} className="h-4 w-4 accent-primary" /><span className="truncate text-xs text-foreground">{child.name}</span></label>)}</div>}</div>}
+        {draft.allow_nested_delegation && <div className="space-y-2"><h5 className="text-xs font-medium text-foreground">Allowed child agents</h5>{availableChildren.length === 0 ? <p className="text-xs text-muted-foreground">No other agent profiles are available.</p> : <div className="grid gap-2 sm:grid-cols-2">{availableChildren.map((child) => <label key={child.id} className="flex items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-2"><input type="checkbox" checked={draft.allowed_agent_ids.includes(child.id)} onChange={() => toggleChild(child.id)} className="h-4 w-4 accent-primary" /><span className="truncate text-xs text-foreground">{child.name}</span></label>)}</div>}</div>}
       </section>
 
-      <footer className="flex items-center justify-end gap-2 border-t border-border pt-4"><button type="button" onClick={onCancel} className="h-9 rounded-md border border-border bg-card px-3 text-xs font-medium text-foreground hover:bg-muted">Cancel</button><button type="submit" disabled={saving || toolsLoading} className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:pointer-events-none disabled:opacity-60">{saving && <WorkbenchIcon name="codicon:loading" className="h-3.5 w-3.5 animate-spin" />}{saving ? "Saving…" : isEditing ? "Save changes" : "Create subagent"}</button></footer>
+      <footer className="flex items-center justify-end gap-2 border-t border-border pt-4"><button type="button" onClick={onCancel} className="h-9 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground hover:bg-muted">Cancel</button><button type="submit" disabled={saving || toolsLoading} className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:pointer-events-none disabled:opacity-60">{saving && <WorkbenchIcon name="codicon:loading" className="h-3.5 w-3.5 animate-spin" />}{saving ? "Saving…" : isEditing ? "Save changes" : "Create subagent"}</button></footer>
     </form>
   );
 }

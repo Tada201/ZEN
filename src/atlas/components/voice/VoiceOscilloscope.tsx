@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { useReducedMotion } from "@/lib/motion";
 import { VOICE_PTT_TOGGLE_EVENT } from "./usePushToTalk";
 
 interface VoiceOscilloscopeProps {
@@ -75,6 +76,7 @@ export const VoiceOscilloscope: React.FC<VoiceOscilloscopeProps> = ({
   const lastProgressRef = useRef(0);
   const [expanded, setExpanded] = useState(false);
   const [limitProgress, setLimitProgress] = useState(0);
+  const reducedMotion = useReducedMotion();
   const refs = useRef({ isAiSpeaking, isActive, isCapturing, amplitude, playbackEnergy });
 
   useEffect(() => { refs.current = { isAiSpeaking, isActive, isCapturing, amplitude, playbackEnergy }; }, [isAiSpeaking, isActive, isCapturing, amplitude, playbackEnergy]);
@@ -95,8 +97,7 @@ export const VoiceOscilloscope: React.FC<VoiceOscilloscopeProps> = ({
       const rect = canvas.getBoundingClientRect();
       canvas.width = Math.max(1, Math.floor(rect.width * pixelRatio));
       canvas.height = Math.max(1, Math.floor(rect.height * pixelRatio));
-    };
-    const drawLayer = (layer: typeof layers[number], time: number, energy: number, width: number, height: number, fill = false) => {
+    };    const drawLayer = (layer: typeof layers[number], time: number, energy: number, width: number, height: number, fill = false) => {
       const centerY = height / 2;
       const maxAmp = height * 0.4;
       const points: Array<[number, number]> = [];
@@ -198,30 +199,31 @@ export const VoiceOscilloscope: React.FC<VoiceOscilloscopeProps> = ({
       rafRef.current = requestAnimationFrame(draw);
     };
     window.addEventListener("resize", resize);
+    // Motion off: the static MicGlyph is the resting indicator, so skip the
+    // continuous canvas loop entirely (CSS motion policy can't stop rAF).
+    if (reducedMotion) {
+      return () => window.removeEventListener("resize", resize);
+    }
     rafRef.current = requestAnimationFrame(draw);
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", resize);
     };
-  }, [analyserRef, voiceInputMode]);
+  }, [analyserRef, voiceInputMode, reducedMotion]);
 
   const togglePtt = () => {
     if (!voiceInputMode || !isActive) return;
     window.dispatchEvent(new Event(VOICE_PTT_TOGGLE_EVENT));
   };
 
-  return (
-    <button
-      type="button"
-      onClick={togglePtt}
-      className={cn(
-        "relative h-[70px] overflow-hidden border border-border/20 bg-card/[0.025] p-2 text-primary-foreground shadow-[0_0_24px_hsl(var(--foreground) / 0.04)] transition-[width,border-radius,background-color,box-shadow] duration-500 ease-[cubic-bezier(0.34,1.4,0.64,1)]",
-        expanded ? "w-[280px] rounded-[35px] bg-card/[0.035]" : "w-[70px] rounded-[22px]",
-        voiceInputMode ? "cursor-pointer hover:border-border/45" : "cursor-default",
-      )}
-      title={voiceInputMode ? (isCapturing ? "Stop speaking" : "Click or hold Space to speak") : "Voice activity mode"}
-      aria-label={voiceInputMode ? (isCapturing ? "Stop speaking" : "Start speaking") : "Voice waveform"}
-    >
+  const interactive = voiceInputMode;
+  const shellClass = cn(
+    "relative h-[70px] overflow-hidden border border-border/20 bg-card/[0.025] p-2 text-primary-foreground shadow-[0_0_24px_hsl(var(--foreground) / 0.04)] transition-[width,border-radius,background-color,box-shadow] duration-500 ease-[cubic-bezier(0.34,1.4,0.64,1)]",
+    expanded ? "w-[280px] rounded-full bg-card/[0.035]" : "w-[70px] rounded-full",
+    interactive ? "cursor-pointer hover:border-border/45" : "cursor-default",
+  );
+  const inner = (
+    <>
       <div
         className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-80"
         style={{
@@ -236,7 +238,29 @@ export const VoiceOscilloscope: React.FC<VoiceOscilloscopeProps> = ({
       <span className={cn("absolute inset-0 flex items-center justify-center transition-opacity duration-200", expanded ? "opacity-0" : "opacity-100")}>
         <MicGlyph />
       </span>
-      <canvas ref={canvasRef} className={cn("block h-full w-full transition-opacity duration-300", expanded ? "opacity-100" : "opacity-0")} />
+      <canvas ref={canvasRef} aria-hidden="true" className={cn("block h-full w-full transition-opacity duration-300", expanded ? "opacity-100" : "opacity-0")} />
+    </>
+  );
+
+  // VAD mode has no click action, so render a non-interactive shell instead of
+  // an inert button that traps keyboard/AT focus.
+  if (!interactive) {
+    return (
+      <div className={shellClass} role="img" aria-label="Voice waveform">
+        {inner}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={togglePtt}
+      className={shellClass}
+      title={isCapturing ? "Stop speaking" : "Click or hold Space to speak"}
+      aria-label={isCapturing ? "Stop speaking" : "Start speaking"}
+    >
+      {inner}
     </button>
   );
 };

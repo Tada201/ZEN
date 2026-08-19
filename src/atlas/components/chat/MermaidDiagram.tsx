@@ -168,7 +168,15 @@ export function MermaidDiagram({
     setRepairing(true);
     setRepairFailed(null);
     try {
-      const fixed = await chatApi.repairMermaid(renderCode, rawError);
+      // Mermaid parser errors carry the useful message on the first lines; the
+      // tail is internal stack frames the repair model does not need and that
+      // would leak internal paths. Send only the leading non-stack lines.
+      const trimmedError = rawError
+        .split(/\r?\n/)
+        .filter((line) => !/^\s*at\s+/.test(line))
+        .slice(0, 8)
+        .join("\n");
+      const fixed = await chatApi.repairMermaid(renderCode, trimmedError);
 
       // Persist the fix into the stored assistant message (content + execution
       // timeline + live store) so it survives app reloads; falls back to a

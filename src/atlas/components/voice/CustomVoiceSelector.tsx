@@ -146,7 +146,7 @@ export const CustomVoiceSelector = memo(({ disabled }: CustomVoiceSelectorProps)
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-[11px] font-bold text-primary-foreground">
-          <Volume2 size={12} className="text-brand-purple" />
+          <Volume2 size={12} className="text-primary" />
           <span className="uppercase tracking-wider">Piper Voice Models</span>
           <span className="text-[10px] font-mono text-muted-foreground">
             {voices.length} available
@@ -211,7 +211,7 @@ export const CustomVoiceSelector = memo(({ disabled }: CustomVoiceSelectorProps)
                 className={cn(
                   "flex items-center gap-3 rounded-md border px-3 py-2 transition-colors",
                   isActive
-                    ? "border-brand-purple/40 bg-brand-purple/5"
+                    ? "border-primary/40 bg-primary/5"
                     : "border-border/[0.04] bg-card/30 hover:bg-card/60",
                 )}
               >
@@ -226,7 +226,7 @@ export const CustomVoiceSelector = memo(({ disabled }: CustomVoiceSelectorProps)
                     className={cn(
                       "h-3.5 w-3.5 shrink-0 rounded-full border-2 transition-colors",
                       isActive
-                        ? "border-brand-purple bg-brand-purple"
+                        ? "border-primary bg-primary"
                         : "border-border bg-transparent",
                     )}
                   />

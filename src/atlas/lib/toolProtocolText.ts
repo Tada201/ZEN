@@ -15,8 +15,8 @@ function isToolProtocolFence(fence: string): boolean {
     return Boolean(
       value &&
       typeof value === "object" &&
-      ((typeof value.tool === "string" && (value.args === undefined || typeof value.args === "object")) ||
-       (typeof value.name === "string" && typeof value.arguments === "object"))
+      ((typeof value.tool === "string" && typeof value.args === "object" && value.args !== null) ||
+       (typeof value.name === "string" && typeof value.arguments === "object" && value.arguments !== null))
     );
   } catch {
     return false;
@@ -106,9 +106,13 @@ export function stripToolProtocolText(text: string): string {
     return isToolProtocolFence(match) ? "" : match;
   });
 
-  // 2. Strip unclosed markdown tool blocks at the very end
+  // 2. Strip unclosed markdown tool blocks at the very end. Require BOTH a
+  //    name/tool key AND an args/arguments key so legitimate JSON examples that
+  //    merely contain a "name" field (config/API docs) are not swallowed.
   result = result.replace(/```(?:json|tool)?\s*\{[^`]*$/i, (match) => {
-    if (match.includes('"tool"') || match.includes('"name"')) return "";
+    const hasName = match.includes('"tool"') || match.includes('"name"');
+    const hasArgs = match.includes('"args"') || match.includes('"arguments"');
+    if (hasName && hasArgs) return "";
     return match;
   });
 

@@ -85,7 +85,7 @@ export const ApiKeyConfig = React.memo(({ providerKey, displayName, settingKey, 
                     placeholder={placeholder}
                     onChangeText={handleUpdate}
                     onBlur={handleBlur}
-                    className="w-full h-9 rounded-lg border border-border bg-background pr-10 font-mono text-xs transition-all focus:border-primary"
+                    className="w-full h-9 rounded-lg border border-border bg-background pr-10 font-mono text-xs transition-colors focus:border-primary"
                 />
                 <WorkbenchButton
                     variant="ghost"

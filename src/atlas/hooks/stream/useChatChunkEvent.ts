@@ -17,7 +17,7 @@ import {
   replaceTextStepsWithContent,
   type ChunkBuffer,
 } from "./chatChunkBuffer";
-import { reconcileStrayToolLedgers } from "./strayToolLedger";
+import { reconcileStrayToolLedgers, clearRecoveryTools } from "./strayToolLedger";
 import { persistExecutionCheckpointForEvent, flushPendingCheckpoints } from "./persistExecutionCheckpoint";
 import { createAgentRuntimeBridge } from "@/atlas/agentRuntime/runtimeBridge";
 import { normalizeChatDeltaEvent, normalizeChatDoneEvent, normalizeChatErrorEvent } from "@/atlas/agentRuntime/normalizeEvent";
@@ -250,12 +250,6 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
           requestAnimationFrame(() => {
             ttftMark(chatId, 'firstRender');
           });
-        }
-
-        if (isFirstChunk) {
-          requestAnimationFrame(() => {
-            ttftMark(chatId, 'firstRender');
-          });
         } else if (!chunkRafRef.current) {
           chunkRafRef.current = requestAnimationFrame(flushAllChunkBuffers);
         }
@@ -274,6 +268,10 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         // after flushing; doing so discarded the final reasoning fragment.
         flushAllChunkBuffers();
         clearChunkTrackingForChat(chatId, chunkBuffersRef.current, firstChunkDeltas.current);
+        // Release the per-run scheduler now the run is terminal. The bridge's
+        // schedulers Map is otherwise never pruned, leaking one entry (plus its
+        // event queue) per turn over a long session.
+        if (normalizedDone) runtimeBridge?.clear(normalizedDone.runId, normalizedDone.chatId, normalizedDone.messageId);
 
         // Clear the thinking flag after the drain. Late thought chunks are
         // routed by backend message_id and may still extend the completed
@@ -487,6 +485,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         if (normalizedError) runtimeBridge?.dispatchTerminal(normalizedError);
         flushAllChunkBuffers();
         clearChunkTrackingForChat(chatId, chunkBuffersRef.current, firstChunkDeltas.current);
+        if (normalizedError) runtimeBridge?.clear(normalizedError.runId, normalizedError.chatId, normalizedError.messageId);
         console.error("[chat:error]", errorMessage);
         ttftReport(chatId, "error");
         let appliedToSendingAssistant = false;
@@ -568,6 +567,9 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
       researchCompletionTimersRef.current = {};
       flushAllChunkBuffers();
       flushPendingCheckpoints();
+      // Drop any recovery tools that never found an owner so the module-level
+      // map does not survive the listener lifecycle across remounts.
+      clearRecoveryTools();
     };
   }, [queryClient, flushAllChunkBuffers, resetHeartbeatTimeout, clearHeartbeatTimeout]);
 }

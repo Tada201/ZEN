@@ -207,7 +207,7 @@ export const OutputConfig = memo(() => {
                     <div className="flex items-center justify-between gap-3">
                         <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-2 text-[12px] font-bold text-foreground">
-                                <Volume2 size={12} className="text-brand-purple" />
+                                <Volume2 size={12} className="text-primary" />
                                 <span className="uppercase tracking-wider">Speaker Test</span>
                             </div>
                             <span className="text-[11px] text-muted-foreground">

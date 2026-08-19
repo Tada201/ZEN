@@ -81,7 +81,7 @@ export const McpConsentDialog = memo(
             checked={ack}
             disabled={busy}
             onChange={(e) => setAck(e.target.checked)}
-            className="h-3 w-3 accent-brand-purple cursor-pointer"
+            className="h-3 w-3 accent-primary cursor-pointer"
           />
           <span className="text-[10px] text-muted-foreground">
             I trust this server and understand what it can access.

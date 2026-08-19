@@ -24,7 +24,7 @@ export const SkillCard = memo(({ skill, onToggle }: SkillCardProps) => {
       className={cn(
         "rounded-xl border-2 transition-all duration-300",
         skill.enabled
-          ? "bg-muted/60 border-brand-purple/20"
+          ? "bg-muted/60 border-primary/20"
           : "bg-muted/40 border-border opacity-60"
       )}
     >
@@ -46,7 +46,7 @@ export const SkillCard = memo(({ skill, onToggle }: SkillCardProps) => {
                 {skill.scope}
               </span>
             </div>
-            <span className="text-[11px] font-mono text-brand-purple">{skill.invocation_syntax}</span>
+            <span className="text-[11px] font-mono text-primary">{skill.invocation_syntax}</span>
           </div>
           <WorkbenchSwitch
             checked={skill.enabled}

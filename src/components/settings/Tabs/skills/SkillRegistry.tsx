@@ -66,7 +66,7 @@ export const SkillRegistry = memo(({ skills: propSkills, onToggle: propOnToggle 
   if (loading) {
     return (
       <div className="col-span-full py-20 flex flex-col items-center justify-center gap-4">
-        <WorkbenchIcon name="codicon:loading" size={32} className="animate-spin text-brand-purple" />
+        <WorkbenchIcon name="codicon:loading" size={32} className="animate-spin text-primary" />
         <p className="text-[11px] text-muted-foreground italic">Synchronizing skill registry...</p>
       </div>
     );
@@ -89,9 +89,9 @@ export const SkillRegistry = memo(({ skills: propSkills, onToggle: propOnToggle 
         <div className="flex flex-col items-center gap-2 text-center">
           <h3 className="text-[14px] font-bold text-foreground uppercase tracking-tight">No Skills Detected</h3>
           <p className="text-[11px] text-muted-foreground leading-relaxed max-w-md">
-            Add <code className="text-brand-purple font-mono bg-brand-purple/5 px-1 rounded">SKILL.md</code> files to{" "}
-            <code className="text-brand-purple font-mono bg-brand-purple/5 px-1 rounded">.agents/skills/</code> in your workspace
-            or <code className="text-brand-purple font-mono bg-brand-purple/5 px-1 rounded">~/.zen/skills/</code> for user-wide skills.
+            Add <code className="text-primary font-mono bg-primary/5 px-1 rounded">SKILL.md</code> files to{" "}
+            <code className="text-primary font-mono bg-primary/5 px-1 rounded">.agents/skills/</code> in your workspace
+            or <code className="text-primary font-mono bg-primary/5 px-1 rounded">~/.zen/skills/</code> for user-wide skills.
           </p>
         </div>
       </div>

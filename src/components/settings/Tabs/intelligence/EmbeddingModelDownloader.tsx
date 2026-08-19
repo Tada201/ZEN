@@ -171,11 +171,11 @@ export const EmbeddingModelDownloader = memo(({
                                 <div className={cn(
                                     "flex items-center gap-2 px-3 py-1 rounded border",
                                     ollamaStatus?.has_embedding_model
-                                        ? "bg-brand-purple/10 border-brand-purple/20"
+                                        ? "bg-primary/10 border-primary/20"
                                         : "bg-muted/60 border-border"
                                 )}>
-                                    <WorkbenchIcon name="codicon:pulse" size={12} className={cn(ollamaStatus?.has_embedding_model ? "text-brand-purple" : "text-muted-foreground")} />
-                                    <span className={cn("text-[10px] font-bold uppercase tracking-wider", ollamaStatus?.has_embedding_model ? "text-brand-purple" : "text-muted-foreground")}>
+                                    <WorkbenchIcon name="codicon:pulse" size={12} className={cn(ollamaStatus?.has_embedding_model ? "text-primary" : "text-muted-foreground")} />
+                                    <span className={cn("text-[10px] font-bold uppercase tracking-wider", ollamaStatus?.has_embedding_model ? "text-primary" : "text-muted-foreground")}>
                                         {ollamaStatus?.has_embedding_model ? 'Ready' : 'Pending'}
                                     </span>
                                 </div>
@@ -221,7 +221,7 @@ export const EmbeddingModelDownloader = memo(({
                                     <div className="flex flex-col gap-1 flex-1 text-left">
                                         <div className="flex items-center gap-2">
                                             <span className="text-[12px] font-bold text-foreground">{model.name}</span>
-                                            <span className="text-[9px] font-black text-brand-purple bg-brand-purple/10 px-1.5 py-0.5 rounded border border-brand-purple/20 uppercase tracking-tighter">
+                                            <span className="text-[9px] font-black text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20 uppercase tracking-tighter">
                                                 {model.category}
                                             </span>
                                         </div>
@@ -287,14 +287,14 @@ export const EmbeddingModelDownloader = memo(({
                         >
                             <div className="flex flex-col gap-4">
                                 <div className="flex justify-between items-end">
-                                    <span className="text-[28px] font-black font-mono text-brand-purple leading-none">
+                                    <span className="text-[28px] font-black font-mono text-primary leading-none">
                                         {getProgressPercent()}%
                                     </span>
                                 </div>
 
                                 <div className="h-2 bg-muted rounded-full overflow-hidden border border-border">
                                     <motion.div
-                                        className="h-full bg-brand-purple shadow-[0_0_10px_hsl(var(--primary) / 0.3)]"
+                                        className="h-full bg-primary shadow-[0_0_10px_hsl(var(--primary) / 0.3)]"
                                         initial={{ width: 0 }}
                                         animate={{ width: `${getProgressPercent()}%` }}
                                         transition={{ duration: 0.4, ease: "circOut" }}
@@ -307,7 +307,7 @@ export const EmbeddingModelDownloader = memo(({
                                         <span className="text-[10px] text-foreground/80">/</span>
                                         <span className="text-[10px] font-mono font-bold text-muted-foreground">{formatBytes(downloadProgress.total_bytes)}</span>
                                     </div>
-                                    <span className="text-[10px] font-black text-brand-purple/60 bg-brand-purple/10 px-2 py-0.5 rounded border border-brand-purple/10">OLLAMA-API-v1</span>
+                                    <span className="text-[10px] font-black text-primary/60 bg-primary/10 px-2 py-0.5 rounded border border-primary/10">OLLAMA-API-v1</span>
                                 </div>
                             </div>
                         </SettingsCard>
@@ -369,7 +369,7 @@ export const EmbeddingModelDownloader = memo(({
                         ].map((step, i) => (
                             <div key={i} className="flex gap-4 items-start text-left">
                                 <div className="w-5 h-5 rounded bg-muted border border-border flex items-center justify-center shrink-0 mt-0.5 shadow-inner">
-                                    <span className="text-[9px] font-black text-brand-purple font-mono">{i + 1}</span>
+                                    <span className="text-[9px] font-black text-primary font-mono">{i + 1}</span>
                                 </div>
                                 <p className="text-[12px] text-muted-foreground flex-1 leading-relaxed font-medium m-0">{step}</p>
                             </div>

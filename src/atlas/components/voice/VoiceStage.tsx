@@ -144,7 +144,7 @@ function BoardBlock({ block, focused = false }: { block: VoiceStageBlock; focuse
           className="flex items-center gap-3 p-3 rounded-lg bg-card/[0.02] border border-border/[0.04] hover:bg-card/[0.04] transition-colors group"
         >
           {block.thumbnail && isSafeGeneratedHref(block.thumbnail) && (
-            <img src={block.thumbnail} alt="" className="w-12 h-12 rounded-md object-cover shrink-0" loading="lazy" />
+            <img src={block.thumbnail} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" loading="lazy" />
           )}
           <div className="min-w-0">
             <div className="text-xs font-semibold text-primary-foreground/70 truncate group-hover:text-primary-foreground/90 transition-colors">{block.title}</div>
@@ -163,7 +163,7 @@ function BoardBlock({ block, focused = false }: { block: VoiceStageBlock; focuse
             <span className="text-[10px] font-bold text-primary-foreground/60 tabular-nums">{pct}%</span>
           </div>
           <div className="h-1.5 rounded-full bg-card/[0.06] overflow-hidden">
-            <div className="h-full rounded-full bg-primary/60 transition-all duration-500" style={{ width: `${pct}%` }} />
+            <div className="h-full rounded-full bg-primary/60 transition-colors duration-500" style={{ width: `${pct}%` }} />
           </div>
         </div>
       );
@@ -305,13 +305,13 @@ export function VoiceStage({ voiceState }: VoiceStageProps) {
                     title="Restore board grid"
                     aria-label="Restore board grid"
                     onClick={() => focus(null)}
-                    className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-md border border-border/15 bg-background/80 text-primary-foreground/70 shadow-sm hover:text-primary-foreground"
+                    className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-lg border border-border/15 bg-background/80 text-primary-foreground/70 shadow-sm hover:text-primary-foreground"
                   >
                     <Minimize2 className="h-4 w-4" />
                   </button>
                 )}
                 {layout !== "focus" && (
-                  <div onClick={(event) => event.stopPropagation()} className="sticky bottom-1 ml-auto mr-1 flex w-fit items-center gap-0.5 rounded-md border border-border/10 bg-background/85 p-0.5 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                  <div onClick={(event) => event.stopPropagation()} className="sticky bottom-1 ml-auto mr-1 flex w-fit items-center gap-0.5 rounded-lg border border-border/10 bg-background/85 p-0.5 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                     <button type="button" title="Focus widget" aria-label="Focus widget" onClick={() => focus(block.id)} className="flex h-7 w-7 items-center justify-center text-primary-foreground/65 hover:text-primary-foreground"><Maximize2 className="h-3.5 w-3.5" /></button>
                     <button type="button" title="Reduce width" aria-label="Reduce widget width" onClick={() => resizeBlock(block.id, span.colSpan - 1, span.rowSpan)} className="flex h-7 w-7 items-center justify-center text-primary-foreground/65 hover:text-primary-foreground"><Minus className="h-3.5 w-3.5" /></button>
                     <span className="min-w-12 text-center font-mono text-[10px] text-primary-foreground/55">{coordinates ? `#${coordinates.cell} ` : ""}{span.colSpan}×{span.rowSpan}</span>

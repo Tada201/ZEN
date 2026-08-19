@@ -86,7 +86,7 @@ export const UpdatesSettings = memo(() => {
                 <WorkbenchIcon name="codicon:archive" size={14} className="text-muted-foreground" />
                 <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-widest">Version</span>
               </div>
-              <span className="text-2xl font-bold text-brand-purple font-mono">v{currentVersion || '...'}</span>
+              <span className="text-2xl font-bold text-primary font-mono">v{currentVersion || '...'}</span>
             </div>
 
             <div className="flex-1 p-4 bg-muted border border-border rounded-xl flex flex-col gap-2">
@@ -121,14 +121,14 @@ export const UpdatesSettings = memo(() => {
             </AnimatePresence>
 
             {updateAvailable && (
-              <div className="p-4 bg-brand-purple/10 border border-brand-purple/20 rounded-xl flex flex-col gap-4">
+              <div className="p-4 bg-primary/10 border border-primary/20 rounded-xl flex flex-col gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-brand-purple/20 flex items-center justify-center border border-brand-purple/30">
-                    <WorkbenchIcon name="codicon:check-all" size={20} className="text-brand-purple" />
+                  <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center border border-primary/30">
+                    <WorkbenchIcon name="codicon:check-all" size={20} className="text-primary" />
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-sm font-extrabold text-brand-purple-bright">Update Available</span>
-                    <span className="text-xs text-brand-purple/80 font-mono">A newer version is available</span>
+                    <span className="text-sm font-extrabold text-primary">Update Available</span>
+                    <span className="text-xs text-primary/80 font-mono">A newer version is available</span>
                   </div>
                 </div>
 
@@ -136,7 +136,7 @@ export const UpdatesSettings = memo(() => {
                   variant="secondary"
                   onClick={() => {}}
                   disabled={isDownloading}
-                  className="w-full h-10 gap-2 border-brand-purple/30 hover:bg-brand-purple/20 text-brand-purple"
+                  className="w-full h-10 gap-2 border-primary/30 hover:bg-primary/20 text-primary"
                 >
                   <WorkbenchIcon name="codicon:cloud-download" size={16} />
                   <span className="text-xs font-extrabold uppercase tracking-tight">
@@ -147,7 +147,7 @@ export const UpdatesSettings = memo(() => {
                 {isDownloading && (
                   <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
                     <motion.div
-                      className="h-full bg-brand-purple"
+                      className="h-full bg-primary"
                       initial={{ width: 0 }}
                       animate={{ width: `${downloadProgress}%` }}
                       transition={{ duration: 0.3 }}

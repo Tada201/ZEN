@@ -247,7 +247,7 @@ export const MicrophoneConfig = memo(() => {
                                 {status === 'recording' ? (
                                     <Volume2 size={12} className="text-success" />
                                 ) : (
-                                    <Mic size={12} className="text-brand-purple" />
+                                    <Mic size={12} className="text-primary" />
                                 )}
                                 <span className="uppercase tracking-wider">
                                     {status === 'recording' ? 'Recording' : status === 'playing' ? 'Playing back' : 'Mic Test'}

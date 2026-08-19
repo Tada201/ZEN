@@ -78,7 +78,7 @@ export const ModelConfig = React.memo(({ providerKey, displayName, requiresKey, 
                                 onChange={event => setQuery(event.target.value)}
                                 placeholder="Filter models"
                                 aria-label={`Filter ${displayName} models`}
-                                className="h-7 w-full rounded-md border border-border bg-background pl-7 pr-2 text-[11px] text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/50"
+                                className="h-7 w-full rounded-lg border border-border bg-background pl-7 pr-2 text-[11px] text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/50"
                             />
                         </div>
                     )}
@@ -86,7 +86,7 @@ export const ModelConfig = React.memo(({ providerKey, displayName, requiresKey, 
                         type="button"
                         onClick={() => { void fetchModels(providerKey, true); }}
                         disabled={fetchingModels || (requiresKey && !apiKeyPresent)}
-                        className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border px-2 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-border px-2 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                         title="Refresh this provider's model catalog"
                     >
                         <WorkbenchIcon name="lucide:refresh-cw" size={11} className={fetchingModels ? 'animate-spin' : ''} />

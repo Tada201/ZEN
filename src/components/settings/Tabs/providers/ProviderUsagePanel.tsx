@@ -87,7 +87,7 @@ export function ProviderUsagePanel({ models }: ProviderUsagePanelProps) {
 
       <div className="mt-4 flex items-center justify-between gap-3">
         <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Usage trend</div>
-        <div className="flex rounded-md border border-border p-0.5" aria-label="Usage time range">
+        <div className="flex rounded-lg border border-border p-0.5" aria-label="Usage time range">
           {PERIODS.map((period) => (
             <button
               key={period.days}

@@ -167,9 +167,9 @@ export function McpElicitationModal({ request, pending = 0, onResolved }: Props)
         <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted">
           <div className="flex items-center gap-3">
             {isUrl ? (
-              <Globe size={16} className="text-brand-purple" />
+              <Globe size={16} className="text-primary" />
             ) : (
-              <MessageSquare size={16} className="text-brand-purple" />
+              <MessageSquare size={16} className="text-primary" />
             )}
             <span
               id="mcp-elicit-title"
@@ -292,7 +292,7 @@ function Field({
 }) {
   const inputClass = cn(
     'w-full px-3 py-2 bg-background border border-border rounded-lg',
-    'text-[12px] text-foreground focus:outline-none focus:border-brand-purple',
+    'text-[12px] text-foreground focus:outline-none focus:border-primary',
   );
   return (
     <div className="flex flex-col gap-1.5">
@@ -311,7 +311,7 @@ function Field({
             checked={Boolean(value)}
             disabled={disabled}
             onChange={(e) => onChange(e.target.checked)}
-            className="h-3.5 w-3.5 accent-brand-purple cursor-pointer"
+            className="h-3.5 w-3.5 accent-primary cursor-pointer"
           />
           <span className="text-[11px] text-foreground">Enabled</span>
         </label>

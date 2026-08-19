@@ -25,7 +25,7 @@ export function ResearchAgentCard({
     );
 
     return (
-        <div className="rounded-lg border border-primary/15 bg-gradient-to-b from-purple-500/5 to-transparent p-2.5 transition-all duration-200 hover:border-primary/25">
+            <div className="rounded-lg border border-primary/15 bg-gradient-to-b from-muted/40 to-transparent p-2.5 transition-all duration-200 hover:border-primary/25">
             <div className="flex items-center justify-between mb-1.5">
                 <div className="flex items-center gap-1.5">
                     <div className="flex h-5 w-5 items-center justify-center rounded-md bg-primary/15">
@@ -84,7 +84,7 @@ export function ResearchAgentCard({
                                 step.status === "completed"
                                     ? "text-foreground"
                                     : step.status === "running"
-                                        ? "text-purple-200 font-medium"
+                                        ? "text-foreground font-medium"
                                         : step.status === "error"
                                             ? "text-destructive"
                                             : "text-muted-foreground",
@@ -111,7 +111,7 @@ export function ResearchAgentCard({
             {agent.total > 0 && !agent.allDone && !isComplete && (
                 <div className="mt-1.5 h-0.5 bg-background/30 rounded-full overflow-hidden">
                     <div
-                        className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500 ease-out rounded-full"
+                        className="h-full bg-primary transition-all duration-500 ease-out rounded-full"
                         style={{ width: `${(agent.completed / agent.total) * 100}%` }}
                     />
                 </div>

@@ -32,7 +32,6 @@ const DENSITY_STORAGE_KEY = "ui-Zen-density";
 
 function applyThemeVariables(vars: Record<string, string>) {
   const root = document.documentElement;
-  // Write the raw HSL triples directly. The @theme block in index.css points
   // Tailwind utilities at these via `hsl(var(--token))`, so writing here flips
   // both `hsl(var(--token))` references AND Tailwind utility classes (bg-background,
   // text-foreground, border-border, ...) at runtime. No duplicate --color-* writes
@@ -40,6 +39,11 @@ function applyThemeVariables(vars: Record<string, string>) {
   Object.entries(vars).forEach(([key, value]) => {
     root.style.setProperty(key, value);
   });
+  // Contrast foreground for the primary fill. A light primary (grayscale OLED
+  // theme uses --primary ≈ 0 0% 98%) needs a dark label or a primary button
+  // renders white-on-white. Derive from the primary's lightness.
+  const primaryL = Number.parseFloat(vars["--primary"]?.split(" ")[2] ?? "0");
+  const primaryFg = primaryL >= 55 ? "0 0% 6%" : "0 0% 100%";
   // Semantic aliases for tokens the presets don't define explicitly. These map
   // to existing preset values so components can rely on a complete token set.
   const aliases: Record<string, string | undefined> = {
@@ -54,7 +58,7 @@ function applyThemeVariables(vars: Record<string, string>) {
     "--sidebar-accent-foreground": vars["--foreground"],
     "--sidebar-primary": vars["--primary"],
     "--sidebar-ring": vars["--ring"],
-    "--primary-foreground": "0 0% 100%",
+    "--primary-foreground": primaryFg,
     "--destructive-foreground": "0 0% 100%",
     "--success-foreground": "0 0% 100%",
     "--warning-foreground": "0 0% 100%",
@@ -167,6 +171,8 @@ export function ZenThemeProvider({ children }: { children: ReactNode }) {
       root.style.setProperty("--ring", nextAccent);
       root.style.setProperty("--sidebar-primary", nextAccent);
       root.style.setProperty("--sidebar-ring", nextAccent);
+      const l = Number.parseFloat(nextAccent.split(" ")[2] ?? "0");
+      root.style.setProperty("--primary-foreground", l >= 55 ? "0 0% 6%" : "0 0% 100%");
     }
 
     const nextStyleMode = configuredStyleMode || "subtle";
@@ -184,6 +190,8 @@ export function ZenThemeProvider({ children }: { children: ReactNode }) {
     root.style.setProperty("--ring", hsl);
     root.style.setProperty("--sidebar-primary", hsl);
     root.style.setProperty("--sidebar-ring", hsl);
+    const l = Number.parseFloat(hsl.split(" ")[2] ?? "0");
+    root.style.setProperty("--primary-foreground", l >= 55 ? "0 0% 6%" : "0 0% 100%");
   }, [updateSetting]);
 
   const setRadius = useCallback((r: RadiusPreset) => {

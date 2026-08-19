@@ -22,7 +22,7 @@ export const ConnectionStatus = memo(({ providerKey, providerName }: ConnectionS
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: reducedMotion ? 0 : motionDurations.fast, ease: motionEasings.standard }}
             className={cn(
-                "flex items-center gap-3 p-3 rounded-lg border transition-all",
+                "flex items-center gap-3 p-3 rounded-lg border transition-colors",
                 connectionStatus === 'success' 
                     ? "bg-success/5 border-emerald-500/10 text-success" 
                     : "bg-destructive/5 border-destructive/10 text-destructive"

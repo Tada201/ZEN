@@ -60,7 +60,6 @@ export function SubagentExecutionCard({
 }: SubagentExecutionCardProps) {
   const subagent = step.subagent;
   const openSubagentInPanel = useUIStore((state) => state.openSubagentInPanel);
-  const openRunInspector = useUIStore((state) => state.openRunInspector);
   // Keep hooks unconditional while streamed reconciliation fills in the
   // subagent payload. The render guard stays after lifecycle state is set up.
   const scopedRuntimeSubagent = useScopedSubagent(sessionId, subagent?.spawnId);
@@ -225,20 +224,13 @@ export function SubagentExecutionCard({
       <FoldOutCardContent>
         <div className="px-3 pb-3 pt-1">
           {sessionId && resolvedSubagent?.spawnId && (
-            <div className="mb-2 flex flex-wrap gap-2">
+            <div className="mb-2">
               <button
                 type="button"
                 onClick={() => openSubagentInPanel(sessionId, resolvedSubagent.spawnId)}
                 className="inline-flex h-7 items-center rounded-md border border-border bg-background px-2.5 text-[11px] font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 Open agent trace
-              </button>
-              <button
-                type="button"
-                onClick={() => openRunInspector(sessionId, messageId, resolvedSubagent.spawnId)}
-                className="inline-flex h-7 items-center rounded-md border border-border bg-background px-2.5 text-[11px] font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                Open Run Inspector
               </button>
             </div>
           )}

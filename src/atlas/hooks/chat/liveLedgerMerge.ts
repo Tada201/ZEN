@@ -133,11 +133,17 @@ export function mergeLiveToolState(fetched: Message, existing?: Message): Messag
   const preserveLiveReasoning = liveReasoning.trim().length > fetchedReasoning.trim().length;
   const preserveLiveTerminalStatus = preserveLiveContent && existing?.status === "sent" && fetched.status !== "sent";
 
+  // The per-turn GenUI capability lives only in the timeline; a refetch that
+  // races the steps_json checkpoint write comes back without it. Keep the live
+  // flag so the OpenUI renderer gate survives the chat:done → refetch handoff.
+  const preserveLiveGenerativeUI = fetched.generativeUI == null && existing?.generativeUI != null;
+
   return {
     ...fetched,
     ...(preserveLiveContent ? { content: liveContent } : {}),
     ...(preserveLiveReasoning ? { reasoning: liveReasoning } : {}),
     ...(preserveLiveTerminalStatus ? { status: "sent" as const, error: undefined } : {}),
+    ...(preserveLiveGenerativeUI ? { generativeUI: existing?.generativeUI } : {}),
     toolCalls,
     steps,
   };

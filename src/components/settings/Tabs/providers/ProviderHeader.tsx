@@ -29,7 +29,7 @@ export const ProviderHeader = React.memo(({ currentProvider }: ProviderHeaderPro
 
             <div className="flex items-center gap-1.5 shrink-0">
                 <span className={cn(
-                    "inline-flex items-center gap-1.5 px-2 h-5.5 rounded-md text-[10px] font-bold uppercase tracking-wider",
+                    "inline-flex items-center gap-1.5 px-2 h-5.5 rounded-lg text-[10px] font-bold uppercase tracking-wider",
                     connectionStatus === 'success' && "bg-success/10 text-success",
                     connectionStatus === 'error' && "bg-destructive/10 text-destructive",
                     connectionStatus !== 'success' && connectionStatus !== 'error' && "bg-warning/10 text-warning"
@@ -44,7 +44,7 @@ export const ProviderHeader = React.memo(({ currentProvider }: ProviderHeaderPro
                 </span>
 
                 <button
-                    className="h-7 px-2.5 text-[11px] font-bold rounded-md border border-border/60 hover:bg-muted transition-colors disabled:opacity-50"
+                    className="h-7 px-2.5 text-[11px] font-bold rounded-lg border border-border/60 hover:bg-muted transition-colors disabled:opacity-50"
                     onClick={() => runConnectionTest(currentProvider.key)}
                     disabled={testingConnection}
                 >
@@ -52,7 +52,7 @@ export const ProviderHeader = React.memo(({ currentProvider }: ProviderHeaderPro
                 </button>
 
                 {currentProvider.apiKeyLink && (
-                    <a href={currentProvider.apiKeyLink} target="_blank" rel="noreferrer" className="h-7 px-2 text-[11px] font-bold rounded-md border border-border/60 hover:bg-muted transition-colors inline-flex items-center gap-1 text-muted-foreground/60 hover:text-foreground">
+                    <a href={currentProvider.apiKeyLink} target="_blank" rel="noreferrer" className="h-7 px-2 text-[11px] font-bold rounded-lg border border-border/60 hover:bg-muted transition-colors inline-flex items-center gap-1 text-muted-foreground/60 hover:text-foreground">
                         Docs
                         <WorkbenchIcon name="lucide:external-link" size={10} />
                     </a>

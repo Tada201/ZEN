@@ -12,7 +12,7 @@ interface VoiceSubtitleBoxProps {
 const speakerConfig = {
   user: {
     label: "YOU",
-    badgeClass: "border-purple-400/30 bg-purple-400/10 text-purple-300",
+    badgeClass: "border-primary/30 bg-primary/10 text-primary",
     textClass: "text-foreground",
     fallback: "Listening...",
   },
@@ -36,7 +36,13 @@ export function VoiceSubtitleBox({ speaker, userText, aiText }: VoiceSubtitleBox
   const displayText = text || config.fallback;
 
   return (
-    <div className="flex w-full items-start gap-3 h-[48px] overflow-hidden">
+    <div
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      aria-label={`${config.label}: ${displayText}`}
+      className="flex w-full items-start gap-3 h-[48px] overflow-hidden"
+    >
       <span className={cn(
         "shrink-0 select-none rounded border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.2em] mt-0.5 transition-colors duration-300",
         config.badgeClass,

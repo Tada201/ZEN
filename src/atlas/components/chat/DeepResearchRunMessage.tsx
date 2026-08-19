@@ -237,7 +237,7 @@ export function DeepResearchRunMessage({
                             <div className="ml-auto flex items-center gap-2">
                                 <div className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 border border-border text-[10px] font-mono text-primary">
                                     <span className="relative flex h-1.5 w-1.5">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
                                         <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
                                     </span>
                                     {formatElapsed(elapsed)}
@@ -287,7 +287,7 @@ export function DeepResearchRunMessage({
                             {steps.length > 0 && (
                                 <div className="w-full h-1 bg-muted rounded-full overflow-hidden mt-1">
                                     <div
-                                        className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-500 ease-out relative"
+                                        className="h-full bg-primary transition-all duration-500 ease-out relative"
                                         style={{ width: `${progressPercent}%` }}
                                     >
                                         {!isComplete && (
