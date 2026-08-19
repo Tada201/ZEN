@@ -172,15 +172,42 @@ impl<'a> Default for UpdateMessage<'a> {
 }
 
 pub async fn update_message(pool: &SqlitePool, msg: &UpdateMessage<'_>) -> ZenResult<()> {
-    use sqlx::Row;
+    // This transaction reads (prev tokens/tool_calls) before it writes. A plain
+    // BEGIN DEFERRED takes a read snapshot first, then tries to promote to a
+    // writer — under WAL, a concurrent commit in between fails that promotion
+    // with SQLITE_BUSY_SNAPSHOT (517), which busy_timeout does NOT retry.
+    // BEGIN IMMEDIATE takes the write lock up front, so a busy database waits
+    // (covered by busy_timeout) instead of erroring with "database is locked".
+    let mut conn = pool.acquire().await?;
+    sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
 
-    let mut tx = pool.begin().await?;
+    // Raw BEGIN bypasses sqlx transaction tracking, so a mid-transaction error
+    // would return an open-write-tx connection to the pool and poison the next
+    // BEGIN IMMEDIATE. Run the body fallibly, then explicitly ROLLBACK on error.
+    let result = update_message_inner(&mut conn, msg).await;
+    match result {
+        Ok(()) => {
+            sqlx::query("COMMIT").execute(&mut *conn).await?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+            Err(e)
+        }
+    }
+}
+
+async fn update_message_inner(
+    conn: &mut sqlx::SqliteConnection,
+    msg: &UpdateMessage<'_>,
+) -> ZenResult<()> {
+    use sqlx::Row;
 
     // 1. Get original message to find previous token counts & tool calls
     let original =
         sqlx::query("SELECT tokens_in, tokens_out, tool_calls FROM messages WHERE id = ?")
             .bind(msg.id)
-            .fetch_optional(&mut *tx)
+            .fetch_optional(&mut *conn)
             .await?;
 
     let mut prev_tokens_in = 0;
@@ -231,7 +258,7 @@ pub async fn update_message(pool: &SqlitePool, msg: &UpdateMessage<'_>) -> ZenRe
     .bind(msg.metadata)
     .bind(msg.steps_json)
     .bind(msg.id)
-    .execute(&mut *tx)
+    .execute(&mut *conn)
     .await?;
 
     // 3. Update chat with the token delta
@@ -249,10 +276,8 @@ pub async fn update_message(pool: &SqlitePool, msg: &UpdateMessage<'_>) -> ZenRe
     .bind(delta_in)
     .bind(delta_out)
     .bind(msg.chat_id)
-    .execute(&mut *tx)
+    .execute(&mut *conn)
     .await?;
-
-    tx.commit().await?;
 
     Ok(())
 }
