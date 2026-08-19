@@ -71,9 +71,10 @@ export function GenericContent({ outputPreview, input, toolCall }: GenericConten
   const failureSource = outputPreview.errorMessage || outputPreview.stderr || outputPreview.summary || "The tool did not complete successfully.";
   const failure = presentExecutionError(failureSource, { context: "tool" });
   const failureMessage = failure.summary;
-  const outputText = redactToolText(isFailure
-    ? failureMessage
-    : outputPreview.content || outputPreview.summary || outputPreview.raw);
+  // On success show the humanized content; `raw` is telemetry, never the body.
+  // On failure the alert below already carries the message, so the output panel
+  // stays empty and we don't print the same summary twice.
+  const outputText = isFailure ? "" : redactToolText(outputPreview.content || outputPreview.summary || "");
 
   return (
     <div className="flex flex-col gap-2">
@@ -100,28 +101,15 @@ export function GenericContent({ outputPreview, input, toolCall }: GenericConten
         </details>
       )}
 
-      {(outputText || isFailure) && (
-        <OutputBlock content={outputText} label={isFailure ? "Error" : "Output"} />
-      )}
+      {outputText && <OutputBlock content={outputText} label="Output" />}
 
-      {isFailure && (
+      {isFailure && failure.technicalDetails && failure.technicalDetails !== failureMessage && (
         <details className="overflow-hidden rounded-md border border-border bg-card">
           <summary className="cursor-pointer select-none bg-muted px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Technical details
           </summary>
           <pre className="max-h-40 overflow-auto border-t border-border bg-background px-2.5 py-2 font-mono text-[10px] leading-relaxed text-muted-foreground">
             {failure.technicalDetails}
-          </pre>
-        </details>
-      )}
-
-      {isFailure && outputPreview.raw && (
-        <details className="overflow-hidden rounded-md border border-border bg-card">
-          <summary className="cursor-pointer select-none bg-muted px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-            Raw result
-          </summary>
-          <pre className="max-h-40 overflow-auto border-t border-border bg-background px-2.5 py-2 font-mono text-[10px] leading-relaxed text-muted-foreground">
-            {redactToolText(outputPreview.raw).slice(0, 1800)}
           </pre>
         </details>
       )}

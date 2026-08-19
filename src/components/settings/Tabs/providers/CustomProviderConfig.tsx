@@ -10,6 +10,7 @@ import { ProviderIcon } from '@/lib/providerIcons';
 import { cn } from '@/lib/utils/style';
 import { isSecretPresentValue, settingsApi } from '@/api';
 import type { CustomProviderApiFormat, ModelInfo } from '@/lib/types/provider';
+import { presentExecutionError } from '@/atlas/agentRuntime/executionError';
 
 interface CustomProviderConfigProps {
     providerId: string;
@@ -55,7 +56,7 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             setSaveError(message);
-            toast.error(`Connection to ${displayName} failed: ${message}`);
+            toast.error(`Connection to ${displayName} failed: ${presentExecutionError(error, { context: "transport" }).summary}`);
         } finally {
             setIsPinging(false);
         }
@@ -107,7 +108,7 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                     onClick={handlePing}
                     disabled={isPinging}
                     className={cn(
-                        "flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all",
+                        "flex items-center gap-1.5 px-2 py-1 rounded-lg border transition-colors",
                         isPinging
                             ? "bg-muted border-border text-muted-foreground cursor-wait"
                             : "bg-primary/10 border-primary/20 text-primary hover:bg-primary/20"
@@ -119,14 +120,14 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                  <button
                     onClick={() => toggleCustomProvider(providerId)}
                     className={cn(
-                        "flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all",
+                        "flex items-center gap-1.5 px-2 py-1 rounded-lg border transition-colors",
                         isEnabled
                             ? "bg-success/10 border-emerald-500/20 text-success"
                             : "bg-muted border-border text-muted-foreground"
                     )}
                 >
                     <div className={cn(
-                        "w-1 h-1 rounded-full transition-all",
+                        "w-1 h-1 rounded-full transition-colors",
                         isEnabled ? "bg-success shadow-[0_0_8px_hsl(var(--primary) / 0.4)]" : "bg-muted-foreground/20"
                     )} />
                     <span className="text-[9px] font-bold uppercase tracking-widest">{isEnabled ? 'ACTIVE' : 'OFF'}</span>
@@ -258,7 +259,7 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                 </div>
             </div>
 
-            <details className="rounded-md border border-border bg-background p-3">
+            <details className="rounded-lg border border-border bg-background p-3">
                 <summary className="cursor-pointer text-[11px] font-medium text-foreground">Advanced headers</summary>
                 <textarea
                     value={headersText}
@@ -276,7 +277,7 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                             setSaveError(error instanceof Error ? error.message : String(error));
                         }
                     }}
-                    className="mt-3 min-h-20 w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-[12px] outline-none"
+                    className="mt-3 min-h-20 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 font-mono text-[12px] outline-none"
                 />
             </details>
 
@@ -294,7 +295,7 @@ export const CustomProviderConfig = memo(({ providerId, displayName, baseUrl, ap
                 />
             </div>
 
-            {saveError && <div className="rounded-md border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-[11px] text-destructive">{saveError}</div>}
+            {saveError && <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-[11px] text-destructive">{saveError}</div>}
 
             <div className="flex justify-end border-t border-border pt-3">
                 <WorkbenchButton

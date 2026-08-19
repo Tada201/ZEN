@@ -30,8 +30,16 @@ interface ToolCallCardProps {
   ledgerRow?: boolean;
 }
 
-export function humanizeToolName(name: string) {
+export function humanizeToolName(name: string, input?: Record<string, unknown>) {
   const lower = name.toLowerCase();
+  // Delegation and MCP passthrough tools name themselves after plumbing
+  // (`tool_exec`, `spawn_agent`), so resolve the human-facing action from the
+  // nested call or a fixed label instead of showing the wrapper verbatim.
+  if (lower.includes("spawn_agent") || lower.includes("delegate")) return "Delegated task";
+  if (lower === "tool_exec" && input) {
+    const inner = input.tool_id || input.tool || input.name;
+    if (typeof inner === "string" && inner.trim()) return humanizeToolName(inner);
+  }
   if (lower.includes("search") || lower.includes("web")) {
     return "Web search";
   }
@@ -207,16 +215,24 @@ export function ToolCallCard({
   }, [effectiveStatus, outputPreview.files]);
   const actionText = [
     isStale ? "Interrupted" : humanizeToolAction(name, effectiveStatus),
-    fileTarget || humanizeToolName(name),
+    fileTarget || humanizeToolName(name, inputRecord),
     deltaLabel,
   ].filter(Boolean).join(" ");
+  // Collapsed subtitle stays a short "target · status" line — the raw output
+  // preview belongs in the expanded body, not the row. Failures keep their
+  // humanized summary since that is the actionable part.
+  const statusWord = isStale ? "Interrupted"
+    : effectiveStatus === "running" ? "Running"
+    : effectiveStatus === "awaiting_approval" ? "Needs approval"
+    : effectiveStatus === "error" ? "Failed"
+    : "Done";
   const summary = isStale
     ? outputPreview.summary || target || "Interrupted before completion"
     : isDelegatedSubagentFailure
       ? "Subagent failed · See Agents panel"
       : errorPresentation?.summary || (effectiveStatus === "running"
       ? compactText(streamingPreview || target || "Working...")
-      : outputPreview.summary || target || humanizeToolName(name));
+      : [fileTarget || target || humanizeToolName(name, inputRecord), statusWord].filter(Boolean).join(" · "));
   const durationLabel = formatDuration(durationMs);
   const canUndo = effectiveStatus === "completed" && !isOutputFailure && Boolean(chatId && checkpoint?.available && checkpointAvailable) && !isUndone;
 
@@ -271,7 +287,11 @@ export function ToolCallCard({
             <div className="codex-surface-muted border-l-2 border-l-warning px-2 py-1.5">
               <div className="text-[11px] font-medium leading-5 text-warning">Approval context</div>
               {approvalContext.description && (
-                <div className="text-[12px] leading-relaxed text-foreground">{approvalContext.description}</div>
+                <div className="text-[12px] leading-relaxed text-foreground line-clamp-6 break-words">
+                  {approvalContext.description.length > 600
+                    ? `${approvalContext.description.slice(0, 599)}…`
+                    : approvalContext.description}
+                </div>
               )}
               {approvalContext.riskLevel && (
                 <div className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">{approvalContext.riskLevel} risk</div>

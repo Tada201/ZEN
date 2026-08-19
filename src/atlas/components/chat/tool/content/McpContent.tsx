@@ -3,7 +3,7 @@ import { Check, Copy, Plug, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ToolCall } from "../../types";
 import type { ToolOutputPreview } from "../toolOutputPreview";
-import { Panel } from "./primitives";
+import { Panel, CollapsiblePanel } from "./primitives";
 import { asRecord, firstString, formatStructuredValue, parseStructuredValue, redactStructuredValue } from "./structuredToolData";
 
 interface McpContentProps { toolCall: ToolCall; outputPreview: ToolOutputPreview; input: Record<string, unknown>; }
@@ -37,7 +37,7 @@ export function McpContent({ toolCall, outputPreview, input }: McpContentProps) 
   // strip — the card title already carries the humanized action.
   const identity = <span className="flex min-w-0 items-center gap-1.5">{isError ? <TriangleAlert className="h-3 w-3 shrink-0 text-destructive" aria-hidden="true" /> : <Plug className="h-3 w-3 shrink-0 text-primary" aria-hidden="true" />}<span className="min-w-0 truncate font-mono text-[10px] tracking-normal text-muted-foreground">{tool}</span></span>;
   return <div className="flex flex-col gap-2">
-    <Panel label="Invocation" action={identity}><div className="group relative"><pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-background p-2 pr-8 font-mono text-[11px] leading-relaxed text-foreground">{argsText}</pre><CopyValue value={argsText} /></div></Panel>
-    <Panel label={isError ? "Error" : "Result"}><div className="group relative"><pre className={`max-h-56 overflow-auto whitespace-pre-wrap break-words rounded bg-background p-2 pr-8 font-mono text-[11px] leading-relaxed ${isError ? "text-destructive" : "text-foreground"}`}>{resultText || "No result payload"}</pre><CopyValue value={resultText} /></div></Panel>
+    <Panel label={isError ? "Error" : "Result"} action={identity}><div className="group relative"><pre className={`max-h-56 overflow-auto whitespace-pre-wrap break-words rounded bg-background p-2 pr-8 font-mono text-[11px] leading-relaxed ${isError ? "text-destructive" : "text-foreground"}`}>{resultText || "No result payload"}</pre><CopyValue value={resultText} /></div></Panel>
+    <CollapsiblePanel label="Invocation"><div className="group relative"><pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-background p-2 pr-8 font-mono text-[11px] leading-relaxed text-foreground">{argsText}</pre><CopyValue value={argsText} /></div></CollapsiblePanel>
   </div>;
 }

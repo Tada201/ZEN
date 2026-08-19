@@ -120,7 +120,7 @@ export function ImageGallery({ images }: { images: Array<{ src: string; alt: str
       toast.success(`Image saved to workspace: ${savedPath}`, { id: toastId });
     } catch (err: any) {
       console.error(err);
-      toast.error(`Failed to export image: ${err?.message || err}`, { id: toastId });
+      toast.error(`Failed to export image: ${presentExecutionError(err, { context: "persistence" }).summary}`, { id: toastId });
     } finally {
       setExporting(false);
     }

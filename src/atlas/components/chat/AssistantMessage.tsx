@@ -81,8 +81,8 @@ function RenderPremiumCard({ card }: { card: ParsedCard }) {
   // native. The trigger's data-state-aware rounded corners (closed = full,
   // open = top only) keep the visual frame continuous across states.
   return (
-    <FoldOutCard className="rounded-2xl border border-border bg-card overflow-hidden">
-      <FoldOutCardTrigger className="data-[state=closed]:rounded-2xl data-[state=open]:rounded-t-2xl hover:bg-muted transition-colors">
+    <FoldOutCard className="rounded-xl border border-border bg-card overflow-hidden">
+      <FoldOutCardTrigger className="data-[state=closed]:rounded-xl data-[state=open]:rounded-t-xl hover:bg-muted transition-colors">
         {getFoldOutSummary(card)}
       </FoldOutCardTrigger>
       <FoldOutCardContent>{body}</FoldOutCardContent>
@@ -245,7 +245,12 @@ export function AssistantMessage({
       })
     : null;
   const inlineError = errorPresentation?.summary || "";
-  const technicalError = message.metadata?.errorTechnicalDetails || errorPresentation?.technicalDetails || "";
+  // Persisted `errorTechnicalDetails` is raw provider text; run it back through
+  // the humanizer so stack noise is stripped and it's redacted + length-capped
+  // before it reaches the DOM.
+  const technicalError = message.metadata?.errorTechnicalDetails
+    ? presentExecutionError(message.metadata.errorTechnicalDetails, { context: "assistant", category: message.metadata?.errorCategory }).technicalDetails
+    : errorPresentation?.technicalDetails || "";
   const tracePersistencePresentation = message.metadata?.tracePersistence === "failed"
     ? presentExecutionError(message.metadata.tracePersistenceError || "Trace checkpoint failed", {
         context: "persistence",
@@ -510,7 +515,7 @@ export function AssistantMessage({
 
             {message.artifact && message.artifact.type !== "openui" && (
               <div 
-                className="flex items-center gap-3 rounded-md border border-border bg-card p-3 cursor-pointer hover:bg-muted transition-all group/art"
+                className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 cursor-pointer hover:bg-muted transition-colors group/art"
                 onClick={() => onOpenArtifact(message.artifact!)}
               >
                 <div className={cn(
@@ -543,7 +548,7 @@ export function AssistantMessage({
                 size="sm"
                 variant="ghost"
                 type="button"
-                className="h-7 px-2.5 text-[11px] font-medium text-muted-foreground hover:text-foreground bg-transparent border border-border hover:bg-muted gap-1.5 transition-all"
+                className="h-7 px-2.5 text-[11px] font-medium text-muted-foreground hover:text-foreground bg-transparent border border-border hover:bg-muted gap-1.5 transition-colors"
                 onClick={() => copy(message.content)}
               >
                 {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
@@ -554,7 +559,7 @@ export function AssistantMessage({
                   size="sm"
                   variant="ghost"
                   type="button"
-                  className="h-7 px-2.5 text-[11px] font-medium text-muted-foreground hover:text-foreground bg-transparent border border-border hover:bg-muted gap-1.5 transition-all"
+                  className="h-7 px-2.5 text-[11px] font-medium text-muted-foreground hover:text-foreground bg-transparent border border-border hover:bg-muted gap-1.5 transition-colors"
                   onClick={() => onRetry(message.id)}
                 >
                   <RefreshCcw className="h-3 w-3" />

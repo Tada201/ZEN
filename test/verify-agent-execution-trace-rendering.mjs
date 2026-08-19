@@ -72,8 +72,8 @@ assert(
   cardSource.includes("actionText") &&
     cardSource.includes("isExpanded") &&
     genericContentSource.includes("Input parameters") &&
-    genericContentSource.includes("Raw result"),
-  "collapsed tool cards should stay single-row while the renderer owns explicit detail disclosures",
+    !genericContentSource.includes("Raw result"),
+  "collapsed tool cards stay single-row; the expanded body shows input + humanized output without dumping a raw telemetry block",
 );
 assert(
   assistantMessageSource.includes("visibleGroupedSteps") &&

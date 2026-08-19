@@ -4,6 +4,7 @@ import { AppDialog } from "@/components/ui/AppDialog";
 import { chatApi } from "@/api/chatApi";
 import { toast } from "sonner";
 import { toAssetUrl } from "@/lib/utils/assetUrl";
+import { presentExecutionError } from "../../agentRuntime/executionError";
 
 export function InteractiveImage({ src, alt }: { src: string; alt: string }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -19,7 +20,7 @@ export function InteractiveImage({ src, alt }: { src: string; alt: string }) {
       toast.success(`Image saved to workspace: ${savedPath}`, { id: toastId });
     } catch (err: any) {
       console.error(err);
-      toast.error(`Failed to export image: ${err?.message || err}`, { id: toastId });
+      toast.error(`Failed to export image: ${presentExecutionError(err, { context: "persistence" }).summary}`, { id: toastId });
     } finally {
       setExporting(false);
     }

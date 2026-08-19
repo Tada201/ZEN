@@ -10,6 +10,7 @@ import { createOptimisticChatMessages } from "./optimisticChatMessages";
 import { preloadOpenUISystemPrompt } from "../../components/genui/promptLoader";
 import { useVoiceStageStore } from "../../components/voice/voiceStageStore";
 import { buildVoiceDisplayContext } from "../../components/voice/voiceDisplayContext";
+import { presentExecutionError } from "../../agentRuntime/executionError";
 
 export function useSendMessage(
   currentSessionId: string | null,
@@ -118,12 +119,20 @@ export function useSendMessage(
     try {
       let systemPrompt: string | null = null;
       let systemPromptMode: "append" | "replace" | null = null;
+      let genUiPrompt: string | null = null;
       if (generativeUIEnabled) {
-        systemPrompt = await preloadOpenUISystemPrompt();
+        genUiPrompt = await preloadOpenUISystemPrompt();
+        systemPrompt = genUiPrompt;
       }
       if (data.systemPrompt?.trim()) {
         systemPrompt = data.systemPrompt;
         systemPromptMode = data.systemPromptMode ?? "append";
+
+        // A user prompt overwrites the GenUI contract in both append and
+        // replace modes, silently disabling GenUI. Keep it by prepending.
+        if (genUiPrompt) {
+          systemPrompt = `${genUiPrompt}\n\n${systemPrompt}`;
+        }
 
         if (systemPromptMode === "replace") {
           const boardBlocks = useVoiceStageStore.getState().document.widgets;
@@ -192,7 +201,7 @@ export function useSendMessage(
       });
       useChatStore.getState().setActiveAssistantForChat(targetSessionId, null);
       useChatStore.getState().setStreamingForChat(targetSessionId, false);
-      toast.error(errorMessage);
+      toast.error(presentExecutionError(errorMessage, { context: "transport" }).summary);
     }
   }, [currentSessionId, ensureSession, setSessionMessages]);
 

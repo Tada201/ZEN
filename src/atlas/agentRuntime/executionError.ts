@@ -56,11 +56,16 @@ function toErrorText(value: unknown): string {
   }
 }
 
+// Drop stack-frame noise so the humanized details stay a single readable line:
+// "at fn (file:line:col)" frames, bare "file.js:line:col" locations, and Node
+// internal frames all describe where — not what — and only bury the message.
+const STACK_LINE = /^(at\s+|.*\)?\s*\(?[^\s(]+:\d+:\d+\)?$|node:internal\/)/i;
+
 function compactTechnicalDetails(value: string) {
   return redactToolText(value || "")
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => line && !/^at\s+/i.test(line))
+    .filter((line) => line && !STACK_LINE.test(line))
     .join(" ")
     .replace(/\s+/g, " ")
     .trim()
@@ -100,7 +105,7 @@ function copyFor(category: ExecutionErrorCategory, context: ExecutionErrorContex
     case "malformed": return { title: "Invalid tool result", summary: "The agent returned a result that Zen could not understand.", retryable: true, action: "retry" as const, actionLabel: "Retry" };
     case "tool_failed": return { title: "Tool failed", summary: details ? `The ${context === "subagent" ? "delegated task" : "tool"} did not complete successfully.` : "The tool did not complete successfully.", retryable: true, action: "retry" as const, actionLabel: "Retry" };
     case "provider": return { title: "Provider error", summary: "The provider could not complete the request.", retryable: true, action: "retry" as const, actionLabel: "Retry" };
-    default: return { title: "Operation failed", summary: details.length > 280 ? `${details.slice(0, 279)}…` : details || "The agent stopped unexpectedly.", retryable: true, action: "retry" as const, actionLabel: "Retry" };
+    default: return { title: "Operation failed", summary: "The operation could not be completed.", retryable: true, action: "retry" as const, actionLabel: "Retry" };
   }
 }
 

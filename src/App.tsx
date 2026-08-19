@@ -14,6 +14,7 @@ import { useMcpElicitations } from "./hooks/useMcpElicitations";
 import { McpElicitationModal } from "./components/Zen/modals/McpElicitationModal";
 
 import { WorkspaceApp } from "./atlas/sections/WorkspaceSection";
+import { presentExecutionError } from "./atlas/agentRuntime/executionError";
 import { EXECUTION_DISCLOSURE_HARNESS_QUERY } from "./atlas/components/chat/executionDisclosureHarnessContract";
 import { REASONING_BLOCK_PREVIEW_QUERY } from "./atlas/components/chat/reasoningBlockPreviewContract";
 import { PREMIUM_CHAT_INPUT_FIXTURE_QUERY } from "./atlas/components/chat/premiumChatInputFixtureContract";
@@ -47,16 +48,24 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   }
   render() {
     if (this.state.error) {
+      const details = presentExecutionError(this.state.error, { context: "renderer" });
       return (
         <div className="flex h-screen w-screen items-center justify-center bg-background text-muted-foreground">
           <div className="flex flex-col items-center gap-4 text-center max-w-md px-4">
             <span className="text-muted-foreground/70 text-xs font-mono uppercase tracking-widest">FATAL SYSTEM PANIC</span>
             <p className="text-sm font-sans tracking-wide text-foreground">
-              An unrecoverable exception occurred in Zen UI.
+              {details.summary}
             </p>
-            <pre className="p-4 bg-muted/40 rounded border border-border text-[10px] font-mono text-muted-foreground overflow-auto w-full max-h-[160px] text-left">
-              {this.state.error.message}
-            </pre>
+            {details.technicalDetails && details.technicalDetails !== details.summary && (
+              <details className="w-full text-left">
+                <summary className="cursor-pointer text-[10px] uppercase tracking-widest text-muted-foreground/70 hover:text-foreground">
+                  Technical details
+                </summary>
+                <pre className="mt-2 p-4 bg-muted/40 rounded border border-border text-[10px] font-mono text-muted-foreground overflow-auto w-full max-h-[160px]">
+                  {details.technicalDetails}
+                </pre>
+              </details>
+            )}
             <button
               onClick={() => { this.setState({ error: null }); window.location.reload(); }}
               className="px-4 py-2 text-xs uppercase tracking-widest border border-border rounded hover:bg-muted transition-colors"

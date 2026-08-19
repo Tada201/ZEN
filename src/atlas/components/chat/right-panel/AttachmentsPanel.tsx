@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { documentsApi, type BackendDocument } from "@/api/documentsApi";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { cn } from "@/lib/utils";
+import { presentExecutionError } from "../../../agentRuntime/executionError";
 
 /**
  * `AttachmentsPanel` — right-rail view listing the active chat's uploaded
@@ -52,7 +53,7 @@ export function AttachmentsPanel() {
     try {
       setDocs(await documentsApi.listChatAttachments(activeChatId));
     } catch (e) {
-      toast.error(`Couldn't load attachments: ${e instanceof Error ? e.message : String(e)}`);
+      toast.error(`Couldn't load attachments: ${presentExecutionError(e, { context: "persistence" }).summary}`);
     } finally {
       setLoading(false);
     }
@@ -93,7 +94,7 @@ export function AttachmentsPanel() {
         setPreviewText("");
       }
     } catch (e) {
-      toast.error(`Couldn't delete: ${e instanceof Error ? e.message : String(e)}`);
+      toast.error(`Couldn't delete: ${presentExecutionError(e, { context: "persistence" }).summary}`);
     }
   }, [selectedId]);
 

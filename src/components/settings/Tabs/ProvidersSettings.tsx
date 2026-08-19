@@ -12,6 +12,7 @@ import { ApiKeyConfig } from './providers/ApiKeyConfig';
 import { EndpointConfig } from './providers/EndpointConfig';
 import { ModelConfig } from './providers/ModelConfig';
 import { CustomProviderConfig } from './providers/CustomProviderConfig';
+import { presentExecutionError } from '@/atlas/agentRuntime/executionError';
 import { ConnectionStatus } from './providers/ConnectionStatus';
 import { ProviderParamsConfig } from './providers/ProviderParamsConfig';
 import { ProviderGallery } from './providers/ProviderGallery';
@@ -228,7 +229,7 @@ export const ProvidersSettings = memo(() => {
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             setAddForm(prev => ({ ...prev, testStatus: 'error', discoveredModels: [], validationError: message }));
-            toast.error(`Custom provider test failed: ${message}`);
+            toast.error(`Custom provider test failed: ${presentExecutionError(err, { context: "transport" }).summary}`);
         }
     }, [addForm]);
 
@@ -262,7 +263,7 @@ export const ProvidersSettings = memo(() => {
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             setAddForm(prev => ({ ...prev, validationError: message }));
-            toast.error(`Could not register provider: ${message}`);
+            toast.error(`Could not register provider: ${presentExecutionError(err, { context: "transport" }).summary}`);
         }
     }, [addForm, addCustomProvider]);
 

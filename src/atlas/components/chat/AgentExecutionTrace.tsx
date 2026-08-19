@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState, memo } from "react";
 import { cn } from "@/lib/utils";
 import type { ArtifactData, Step, ToolCall } from "./types";
-import { ToolCallCard, humanizeToolAction } from "./ToolCallCard";
+import { ToolCallCard, humanizeToolAction, humanizeToolName } from "./ToolCallCard";
 import { resolveToolApproval } from "./approvalActions";
 import { buildAgentExecutionTraceModel } from "./agentExecutionTraceModel";
-import { buildToolOutputPreview as buildToolOutputPreviewImported } from "./tool/toolOutputPreview";
 import { isToolVisibleInChat } from "./assistantMessageParts";
 import { FoldOutCard, FoldOutCardContent } from "@/components/ui/fold-out-card";
 import { ExecutionRow, getExecutionStatusLabel } from "./tool/ExecutionRow";
@@ -20,26 +19,7 @@ import {
 } from "./executionDisclosure";
 
 function compactToolDisplayName(tool: ToolCall): string {
-  const name = tool.name.toLowerCase();
-  const input = toToolInputRecord(tool.input);
-  const args = input.arguments && typeof input.arguments === "object" && !Array.isArray(input.arguments)
-    ? input.arguments as Record<string, unknown>
-    : {};
-  const innerTool = String(input.tool_id || input.tool || input.name || "").toLowerCase();
-  const hasSearchArgs = Boolean(input.query || args.query || input.url || args.url);
-  const outputLooksLikeSearch = Boolean(tool.output && buildToolOutputPreviewImported(tool.output).results.length > 0);
-
-  if (
-    name.includes("search") ||
-    name.includes("web") ||
-    innerTool.includes("search") ||
-    innerTool.includes("web") ||
-    (name === "tool_exec" && (hasSearchArgs || outputLooksLikeSearch))
-  ) {
-    return "Web search";
-  }
-
-  return tool.name;
+  return humanizeToolName(tool.name, toToolInputRecord(tool.input));
 }
 
 function isEmptyObject(value: unknown) {

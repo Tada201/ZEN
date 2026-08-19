@@ -1,5 +1,6 @@
 import { toolsApi } from "@/api";
 import { toast } from "sonner";
+import { presentExecutionError } from "../../agentRuntime/executionError";
 
 /** Resolve a backend-owned approval; the renderer never decides permission policy. */
 export async function resolveToolApproval(
@@ -13,7 +14,7 @@ export async function resolveToolApproval(
     return true;
   } catch (error) {
     console.error("resolve_tool_approval failed:", error);
-    toast.error(error instanceof Error ? error.message : "Approval could not be resolved");
+    toast.error(presentExecutionError(error, { context: "approval" }).summary);
     return false;
   }
 }

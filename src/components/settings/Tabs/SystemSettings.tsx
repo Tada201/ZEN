@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { backupApi } from "@/api/backupApi";
 import { toast } from "sonner";
+import { presentExecutionError } from "@/atlas/agentRuntime/executionError";
 import { Progress } from "@/components/ui/progress";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -74,7 +75,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
         await systemApi.relaunchApp();
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Cleanup failed");
+      toast.error(error instanceof Error ? presentExecutionError(error, { context: "persistence" }).summary : "Cleanup failed");
       setCleanupMessage("Cleanup failed. Close active work and retry.");
     } finally {
       setCleanupBusy(false);
@@ -224,7 +225,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
                     const result = await backupApi.exportBackup(destination, { includeMedia: false, includeIndexes: false });
                     toast.success(`Zen backup exported (${Math.round(result.bytes / 1024)} KB).`);
                   } catch (error) {
-                    toast.error(error instanceof Error ? error.message : "Backup export failed");
+                    toast.error(error instanceof Error ? presentExecutionError(error, { context: "persistence" }).summary : "Backup export failed");
                   } finally { setBackupBusy(false); }
                 }}
               >{backupBusy ? "Exporting…" : "Export backup"}</WorkbenchButton>
@@ -242,7 +243,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
                     setRestoreInfo(result);
                     setRestoreDialogOpen(true);
                   } catch (error) {
-                    toast.error(error instanceof Error ? error.message : "Backup inspection failed");
+                    toast.error(error instanceof Error ? presentExecutionError(error, { context: "persistence" }).summary : "Backup inspection failed");
                   }
                 }}
               >Inspect backup</WorkbenchButton>
@@ -313,7 +314,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
                       await systemApi.relaunchApp();
                     }
                   } catch (error) {
-                    toast.error(error instanceof Error ? error.message : "Cleanup failed");
+                    toast.error(error instanceof Error ? presentExecutionError(error, { context: "persistence" }).summary : "Cleanup failed");
                     setCleanupMessage("Cleanup failed. Close active work and retry.");
                   } finally {
                     setCleanupBusy(false);
@@ -365,7 +366,7 @@ export function SystemSettings({ settings, onUpdate }: SystemSettingsProps) {
                 await systemApi.exportDiagnostics(destination);
                 toast.success("Diagnostics exported without secrets or user data.");
               } catch (error) {
-                toast.error(error instanceof Error ? error.message : "Could not export diagnostics");
+                toast.error(error instanceof Error ? presentExecutionError(error, { context: "persistence" }).summary : "Could not export diagnostics");
               }
             }}
           >

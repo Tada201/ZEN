@@ -120,12 +120,19 @@ export function TerminalContent({ toolCall, outputPreview }: TerminalContentProp
             </details>
           )}
           {hasStderr && !failure && (
-            <TruncatedOutput
-              content={stderr}
-              headLines={4}
-              tailLines={4}
-              className="mt-2 border-l-2 border-l-destructive bg-muted p-2 font-mono text-[11px] leading-relaxed text-destructive"
-            />
+            <details className="mt-2 overflow-hidden rounded-md border border-border bg-card">
+              <summary className="cursor-pointer select-none bg-muted px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                Stderr
+              </summary>
+              <div className="border-t border-border p-2">
+                <TruncatedOutput
+                  content={stderr}
+                  headLines={4}
+                  tailLines={4}
+                  className="border-l-2 border-l-destructive bg-muted p-2 font-mono text-[11px] leading-relaxed text-destructive"
+                />
+              </div>
+            </details>
           )}
           {!stdout && !hasStderr && !failure && (
             <div className="text-[11px] text-muted-foreground">{isRunning ? "Waiting for output..." : "No output"}</div>
