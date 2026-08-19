@@ -253,9 +253,21 @@ impl Runner {
         self
     }
 
-    /// Record a slice of child commentary against a sequence position. No-op for
-    /// the root run (its text streams live) and for empty text.
-    pub(super) async fn record_intermediate_commentary(&self, sequence: u64, text: &str) {
+    /// Record a slice of child commentary against a sequence position, then emit
+    /// a live `running` sub-agent step carrying the cumulative commentary so the
+    /// Agents panel fills in the child's thinking as it happens instead of only
+    /// at completion. No-op for the root run (its text streams live) and for
+    /// empty text. `task` is left empty: the frontend preserves it from the
+    /// initial running step, and status stays `running` here (terminal status is
+    /// owned by the spawn tool's completion emit).
+    pub(super) async fn record_and_emit_intermediate_commentary(
+        &self,
+        sequence: u64,
+        text: &str,
+        chat_id: &str,
+        agent_id: &str,
+        agent_name: &str,
+    ) {
         if self.depth == 0 {
             return;
         }
@@ -263,8 +275,34 @@ impl Runner {
         if trimmed.is_empty() {
             return;
         }
-        let mut commentary = self.intermediate_commentary.lock().await;
-        commentary.push((sequence, trimmed.to_string()));
+        let segments = {
+            let mut commentary = self.intermediate_commentary.lock().await;
+            commentary.push((sequence, trimmed.to_string()));
+            crate::agent::event_bus::SubagentCommentarySegment::snapshot(&commentary)
+        };
+        // spawn_id == the child runner's trace_id; required to route the step to
+        // the right panel card. Without it the frontend drops the event, so skip
+        // the emit rather than create an orphan.
+        let Some(spawn_id) = self.trace_id() else {
+            return;
+        };
+        AgentEvent::SubagentStep(crate::agent::event_bus::SubagentStepPayload {
+            chat_id: chat_id.to_string(),
+            spawn_id,
+            parent_tool_call_id: self.parent_tool_call_id(),
+            agent_id: agent_id.to_string(),
+            agent_name: agent_name.to_string(),
+            task: String::new(),
+            status: "running".to_string(),
+            result_summary: None,
+            result_content: None,
+            intermediate_content: segments,
+            error: None,
+            duration_ms: 0,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            child_tool_call_ids: None,
+        })
+        .emit_via(&self.app, &self.on_event);
     }
 
     pub(super) fn parent_tool_call_id(&self) -> Option<String> {

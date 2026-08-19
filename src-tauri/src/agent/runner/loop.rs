@@ -1042,10 +1042,14 @@ impl Runner {
                 // A child runner suppresses live text, so its commentary between
                 // tool calls would otherwise be lost. Tag it with the sequence
                 // captured at iteration start so it sorts before every tool this
-                // iteration emits (including early tools already streamed).
-                self.record_intermediate_commentary(
+                // iteration emits (including early tools already streamed), and
+                // emit it live so the Agents panel fills in as the child works.
+                self.record_and_emit_intermediate_commentary(
                     iteration_start_sequence,
                     &visible_response_content,
+                    &chat_id,
+                    &current_agent.id,
+                    &current_agent.name,
                 )
                 .await;
             }

@@ -440,23 +440,8 @@ fn handoff_fields_from_input(input: &Value) -> (Option<String>, Vec<String>, Vec
 async fn collect_intermediate_segments(
     commentary: &Arc<tokio::sync::Mutex<Vec<(u64, String)>>>,
 ) -> Option<Vec<crate::agent::event_bus::SubagentCommentarySegment>> {
-    const MAX_SEGMENTS: usize = 40;
-    const MAX_SEGMENT_CHARS: usize = 4_000;
     let raw = commentary.lock().await;
-    if raw.is_empty() {
-        return None;
-    }
-    let mut sorted: Vec<(u64, String)> = raw.clone();
-    sorted.sort_by_key(|(sequence, _)| *sequence);
-    let segments: Vec<crate::agent::event_bus::SubagentCommentarySegment> = sorted
-        .into_iter()
-        .take(MAX_SEGMENTS)
-        .map(|(sequence, text)| crate::agent::event_bus::SubagentCommentarySegment {
-            sequence,
-            text: text.chars().take(MAX_SEGMENT_CHARS).collect(),
-        })
-        .collect();
-    (!segments.is_empty()).then_some(segments)
+    crate::agent::event_bus::SubagentCommentarySegment::snapshot(&raw)
 }
 
 /// Tool that spawns a child agent runner for parallel sub-tasks.

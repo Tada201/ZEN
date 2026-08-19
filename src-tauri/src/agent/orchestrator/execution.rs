@@ -2,6 +2,7 @@ use anyhow::Result;
 use serde_json::json;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use tauri::Manager;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
@@ -85,6 +86,12 @@ impl Orchestrator {
             extra_tool_ids,
             extra_instructions,
         } = params;
+        // Stable identity for this task's sub-agent card. Reused as the child
+        // runner's trace_id (so its tool events + progress chunks correlate to
+        // one card) and as the spawn_id on every lifecycle event, so the panel
+        // collapses spawn/running/complete into a single canonical record and
+        // suppresses the legacy action lanes for the same task.
+        let task_spawn_id = task.id.clone();
         // Get agent definition
         let mut agent = self
             .agent_registry
@@ -137,6 +144,9 @@ impl Orchestrator {
         if let Some(ref channel) = self.on_event {
             runner = runner.with_channel(channel.clone());
         }
+        // Correlate every child event (tool start/complete, progress chunk,
+        // commentary) with this task's canonical sub-agent card.
+        runner = runner.with_trace_id(task_spawn_id.clone());
 
         // Pass db_pool if available
         if let Some(ref db_pool) = self.db_pool {
@@ -181,7 +191,9 @@ impl Orchestrator {
                 task: task.description.clone(),
                 status: "spawned".to_string(),
                 duration_ms: None,
-                spawn_id: None,
+                // Match the canonical SubagentStep's spawn_id so the panel
+                // suppresses this legacy lane instead of rendering a duplicate.
+                spawn_id: Some(task_spawn_id.clone()),
             }),
             approval_request: None,
             ..Default::default()
@@ -192,7 +204,10 @@ impl Orchestrator {
             agent.name,
             task.description.chars().take(80).collect::<String>()
         );
-        let spawn_id = if let Some(ref pool) = self.db_pool {
+        // The persisted spawn action's DB id. No longer used as the card key
+        // (task_spawn_id owns that now) but the persist call still records the
+        // timeline row, so keep the emit and drop the binding.
+        if let Some(ref pool) = self.db_pool {
             runner::persist_and_emit_action(ActionPersistParams {
                 app: &self.app,
                 db_pool: pool,
@@ -205,7 +220,7 @@ impl Orchestrator {
                 tool_call_id: None,
                 channel: &self.on_event,
             })
-            .await?
+            .await?;
         } else {
             runner::emit_action_only(ActionEmitParams {
                 app: &self.app,
@@ -215,15 +230,57 @@ impl Orchestrator {
                 content: spawn_content,
                 meta: spawn_meta,
                 channel: &self.on_event,
-            })?
+            })?;
         };
+
+        // Canonical sub-agent card for this task. Sharing task_spawn_id across
+        // running/completed/failed lets the panel collapse them into one row and
+        // suppress the legacy action lanes (which otherwise render duplicate
+        // cards plus phantom "step N"/agent-name rows).
+        let emit_subagent_step = |status: &str,
+                                  result_summary: Option<String>,
+                                  error: Option<String>,
+                                  duration_ms: u64| {
+            AgentEvent::SubagentStep(crate::agent::event_bus::SubagentStepPayload {
+                chat_id: chat_id.to_string(),
+                spawn_id: task_spawn_id.clone(),
+                parent_tool_call_id: None,
+                agent_id: agent_id.to_string(),
+                agent_name: agent.name.clone(),
+                task: task.description.clone(),
+                status: status.to_string(),
+                result_summary,
+                result_content: None,
+                intermediate_content: None,
+                error,
+                duration_ms,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                child_tool_call_ids: None,
+            })
+            .emit_via(&self.app, &self.on_event);
+        };
+        emit_subagent_step("running", None, None, 0);
+
+        // Register a per-task cancellation token so the Agents panel's Stop
+        // button (cancel_subagent, keyed by spawn_id) can halt one orchestrator
+        // task without aborting the whole run. Child of the parent token so a
+        // parent abort still cascades.
+        let task_token = token.child_token();
+        {
+            let app_state = self.app.state::<crate::commands::AppState>();
+            app_state
+                .subagent_cancellation_tokens
+                .lock()
+                .await
+                .insert(task_spawn_id.clone(), task_token.clone());
+        }
 
         let start_time = std::time::Instant::now();
         // Run the agent with tokio::select! to handle parent cancellation
         let result = tokio::select! {
             biased;
-            _ = token.cancelled() => {
-                Err(anyhow::anyhow!("Parent cancelled — orchestration task aborted"))
+            _ = task_token.cancelled() => {
+                Err(anyhow::anyhow!("Sub-agent task cancelled by user"))
             }
             res = runner.run(
                 provider,
@@ -232,10 +289,18 @@ impl Orchestrator {
                 task_messages,
                 agent.clone(),
                 config,
-                token.clone(),
+                task_token.clone(),
             ) => res
         };
         let duration_ms = start_time.elapsed().as_millis() as u64;
+        {
+            let app_state = self.app.state::<crate::commands::AppState>();
+            app_state
+                .subagent_cancellation_tokens
+                .lock()
+                .await
+                .remove(&task_spawn_id);
+        }
 
         match result {
             Ok(response) => {
@@ -255,7 +320,7 @@ impl Orchestrator {
                         task: task.description.clone(),
                         status: "completed".to_string(),
                         duration_ms: Some(duration_ms),
-                        spawn_id: Some(spawn_id),
+                        spawn_id: Some(task_spawn_id.clone()),
                     }),
                     approval_request: None,
                     ..Default::default()
@@ -288,6 +353,14 @@ impl Orchestrator {
                     });
                 }
 
+                let result_summary = response
+                    .content
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(|value| value.chars().take(500).collect::<String>());
+                emit_subagent_step("completed", result_summary, None, duration_ms);
+
                 Ok(response)
             }
             Err(e) => {
@@ -307,7 +380,7 @@ impl Orchestrator {
                         task: task.description.clone(),
                         status: "failed".to_string(),
                         duration_ms: Some(duration_ms),
-                        spawn_id: Some(spawn_id),
+                        spawn_id: Some(task_spawn_id.clone()),
                     }),
                     approval_request: None,
                     ..Default::default()
@@ -340,6 +413,14 @@ impl Orchestrator {
                         channel: &self.on_event,
                     });
                 }
+
+                let error_text = e.to_string();
+                let terminal_status = if error_text.contains("cancelled by user") {
+                    "cancelled"
+                } else {
+                    "failed"
+                };
+                emit_subagent_step(terminal_status, None, Some(error_text), duration_ms);
 
                 Err(e)
             }

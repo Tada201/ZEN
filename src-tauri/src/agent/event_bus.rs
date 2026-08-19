@@ -296,6 +296,33 @@ pub struct SubagentCommentarySegment {
     pub text: String,
 }
 
+impl SubagentCommentarySegment {
+    /// Number of commentary slices carried in one payload.
+    pub const MAX_SEGMENTS: usize = 40;
+    /// Per-slice character bound so a chatty child can't bloat the event/DB.
+    pub const MAX_SEGMENT_CHARS: usize = 4_000;
+
+    /// Sort raw `(sequence, text)` pairs and bound them into wire segments.
+    /// Single source of truth for both the live per-iteration emit and the
+    /// final completion payload. `None` when there is no commentary yet.
+    pub fn snapshot(raw: &[(u64, String)]) -> Option<Vec<Self>> {
+        if raw.is_empty() {
+            return None;
+        }
+        let mut sorted = raw.to_vec();
+        sorted.sort_by_key(|(sequence, _)| *sequence);
+        let segments: Vec<Self> = sorted
+            .into_iter()
+            .take(Self::MAX_SEGMENTS)
+            .map(|(sequence, text)| Self {
+                sequence,
+                text: text.chars().take(Self::MAX_SEGMENT_CHARS).collect(),
+            })
+            .collect();
+        (!segments.is_empty()).then_some(segments)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolStartPayload {
     pub tool_name: String,
