@@ -24,6 +24,17 @@ export function normalizeChatChunkType(type?: string): string {
   return type === "reasoning" ? "thought" : type || "text";
 }
 
+// Every text/reasoning step gets a stable id at creation so React keys by
+// identity, not list index. A tool card inserted between two text runs then
+// keeps each run mounted instead of remounting and splitting mid-character
+// (see getExecutionStepKey). Runtime-owned parts already carry `runtime:<id>`;
+// this covers the legacy chunk-buffer and chat:done finalization paths.
+let localStepSeq = 0;
+function mintStepId(prefix: string): string {
+  localStepSeq += 1;
+  return `local:${prefix}:${localStepSeq}`;
+}
+
 const firstChunkTypesMap = new Map<string, Set<string>>();
 
 /**
@@ -96,7 +107,7 @@ function applyDeltaSegment(message: Message, delta: string, chunkType: string, o
     const lastStep = prevSteps[lastStepIdx];
     const steps = lastStep && lastStep.type === "reasoning"
       ? prevSteps.map((s, i) => i === lastStepIdx ? { ...s, content: (s.content || "") + delta } : s)
-      : [...prevSteps, { type: "reasoning" as const, content: delta }];
+      : [...prevSteps, { type: "reasoning" as const, content: delta, eventId: mintStepId("reasoning") }];
 
     return {
       ...message,
@@ -110,7 +121,7 @@ function applyDeltaSegment(message: Message, delta: string, chunkType: string, o
   const lastStep = prevSteps[lastStepIdx];
   const steps = lastStep && lastStep.type === "text"
     ? prevSteps.map((s, i) => i === lastStepIdx ? { ...s, content: (s.content || "") + delta } : s)
-    : [...prevSteps, { type: "text" as const, content: delta }];
+    : [...prevSteps, { type: "text" as const, content: delta, eventId: mintStepId("text") }];
 
   return {
     ...message,
@@ -183,13 +194,31 @@ function splitInlineThinkContent(content: string): { content: string; reasoning:
   };
 }
 
+// The canonical id for the tail text `chat:done` may add beyond what streamed
+// live. Stable (not freshly minted) so re-running finalization reconciles the
+// SAME row instead of appending a duplicate / remounting a new React identity.
+const FINAL_TAIL_EVENT_ID = "local:final-tail";
+
+function nextTailSequence(steps: Step[]): number {
+  let max = -1;
+  for (const step of steps) {
+    const sequence = step.sequence
+      ?? (step.type === "tool-call" ? step.toolCall?.sequence : undefined)
+      ?? step.metadata?.sequence;
+    if (typeof sequence === "number" && Number.isFinite(sequence) && sequence > max) max = sequence;
+  }
+  return max + 1;
+}
+
 function reconcileFinalTextSteps(steps: Step[], finalContent: string): Step[] {
   const textStepLengths = steps
     .filter((step) => step.type === "text")
     .map((step) => (step.content || "").length);
 
   if (textStepLengths.length === 0) {
-    return finalContent ? [...steps, { type: "text", content: finalContent }] : steps;
+    return finalContent
+      ? [...steps, { type: "text", content: finalContent, eventId: FINAL_TAIL_EVENT_ID, sequence: nextTailSequence(steps) }]
+      : steps;
   }
 
   const nextSteps: Step[] = [];
@@ -213,13 +242,21 @@ function reconcileFinalTextSteps(steps: Step[], finalContent: string): Step[] {
   }
 
   // chat:done is the canonical response boundary. If the provider's final
-  // payload contains text that was not delivered in a live chunk, append that
-  // tail as a new final text step. Keeping it after the existing execution
-  // timeline preserves tool ordering instead of moving post-tool prose ahead
-  // of the tool cards.
+  // payload contains text that was not delivered in a live chunk, reconcile it
+  // as ONE stable, sequenced tail part rather than an anonymous per-call row:
+  // a fixed eventId keeps its React identity across re-finalization, and an
+  // explicit end sequence lets orderSteps place it after the tool timeline
+  // deterministically instead of relying on the array-index fallback (R4).
   const missingTail = finalContent.slice(contentOffset);
   if (missingTail) {
-    nextSteps.push({ type: "text", content: missingTail });
+    const existingTailIdx = nextSteps.findIndex(
+      (step) => step.type === "text" && step.eventId === FINAL_TAIL_EVENT_ID,
+    );
+    if (existingTailIdx !== -1) {
+      nextSteps[existingTailIdx] = { ...nextSteps[existingTailIdx], content: missingTail };
+    } else {
+      nextSteps.push({ type: "text", content: missingTail, eventId: FINAL_TAIL_EVENT_ID, sequence: nextTailSequence(steps) });
+    }
   }
 
   return nextSteps;
@@ -246,7 +283,7 @@ export function replaceTextStepsWithContent(message: Message, content: string): 
         return { ...step, content: normalizedReasoning };
       });
     }
-    return [{ type: "reasoning" as const, content: normalizedReasoning }, ...nextSteps];
+    return [{ type: "reasoning" as const, content: normalizedReasoning, eventId: mintStepId("reasoning") }, ...nextSteps];
   };
 
   const hasExecutionTimeline = steps.some((step) => step.type !== "text" && step.type !== "reasoning");
@@ -280,7 +317,7 @@ export function replaceTextStepsWithContent(message: Message, content: string): 
     };
   }
 
-  const textStep: Step = { type: "text", content: normalizedContent };
+  const textStep: Step = { type: "text", content: normalizedContent, eventId: mintStepId("text") };
   const firstTextIndex = steps.findIndex((step) => step.type === "text");
   if (firstTextIndex === -1) {
     return {

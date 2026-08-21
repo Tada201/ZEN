@@ -73,7 +73,6 @@ const allowedColorLiteralFiles = new Set([
   "src/components/widgets/system/MemoryWidget.tsx",
   "src/components/widgets/system/LatencyWidget.tsx",
   "src/components/widgets/system/system-widgets.css",
-  "src/components/widgets/orchestrator/agent-orchestrator.css",
   "src/components/widgets/workbench/InteractiveDrawingCanvas.tsx",
   "src/components/widgets/workbench/drawingCanvasUtils.ts",
   "src/components/widgets/workbench/MathPlotExpressionItem.tsx",
@@ -138,9 +137,6 @@ const allowedColorLiteralFiles = new Set([
   "src/atlas/components/chat/ArtifactPanel.tsx",
   // Domain: workspace layout overlay
   "src/atlas/layouts/WorkspaceLayout.tsx",
-  // Domain: agent orchestrator state visualization
-  "src/components/widgets/orchestrator/AgentOrchestratorPanel.tsx",
-  "src/components/widgets/orchestrator/AgentOrchestratorLiveSession.tsx",
   // Domain: system metric widgets (colored indicators)
   "src/components/widgets/system/CpuWidget.tsx",
   "src/components/widgets/system/GpuWidget.tsx",

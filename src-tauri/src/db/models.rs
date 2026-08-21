@@ -440,10 +440,10 @@ pub struct ModelInfo {
     pub supports_vision: Option<bool>,
     #[serde(default)]
     pub supports_tools: Option<bool>,
-    #[serde(default)]
-    pub supports_reasoning: Option<bool>,
-    #[serde(default)]
-    pub reasoning_config_type: Option<String>,
+    /// Resolved reasoning capability (SSOT). Replaces the former
+    /// `supports_reasoning` + `reasoning_config_type` pair.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<crate::llm::ReasoningCapability>,
 }
 
 // ─── Provider Config (for switching providers via IPC) ───

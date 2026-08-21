@@ -12,7 +12,14 @@ function getOrCreatePart(
   event: Extract<AgentRunEvent, { kind: "text-delta" | "reasoning-delta" }>,
 ): AgentPart {
   const type = event.kind === "text-delta" ? "text" : "reasoning";
-  const id = partIdentity(record.runId, record.chatId, event.messageId, event.partId, type);
+  // A provider rarely sends an explicit part_id, so synthesize a stable one
+  // from the run's event sequence. Consecutive deltas of one prose segment
+  // share a sequence (streaming consumes none), while text that resumes AFTER
+  // a tool carries a higher sequence — so this opens a NEW part at the tool
+  // boundary instead of folding post-tool prose back into the pre-tool block.
+  const partKey = event.partId
+    ?? (typeof event.sequence === "number" ? `${type}@${event.sequence}` : undefined);
+  const id = partIdentity(record.runId, record.chatId, event.messageId, partKey, type);
   const existing = record.parts.find((part) => part.partId === id);
   if (existing) return existing;
 
@@ -71,15 +78,21 @@ export function reduceAgentRun(record: AgentTurnRecord | undefined, event: Agent
       next.status = "draining";
       next.finishReason = event.finishReason;
       if (event.content !== undefined) {
-        const textPart = next.parts.find((part) => part.type === "text");
-        // Never shrink: a partial/missing `content` tail must not truncate
-        // text already streamed via deltas. Canonical content wins only when
-        // it is at least as long as what we accumulated.
-        if (textPart) {
+        const textParts = next.parts.filter((part) => part.type === "text");
+        // With post-tool text splitting, `content` is the concatenation of
+        // every text part, so it can only be reconciled against a single-part
+        // turn. When prose was split across tool boundaries the deltas already
+        // carry the full text per part; overwriting the first part with the
+        // whole answer would duplicate it, so leave the parts untouched.
+        if (textParts.length === 1) {
+          const textPart = textParts[0];
+          // Never shrink: a partial/missing `content` tail must not truncate
+          // text already streamed via deltas. Canonical content wins only when
+          // it is at least as long as what we accumulated.
           if (event.content.length >= textPart.receivedText.length) {
             textPart.receivedText = event.content;
           }
-        } else {
+        } else if (textParts.length === 0) {
           next.parts.push({
             type: "text",
             partId: partIdentity(next.runId, next.chatId, next.messageId, undefined, "text"),

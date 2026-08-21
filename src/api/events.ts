@@ -157,6 +157,9 @@ export interface ChatChunkEventPayload {
   type?: string;
   /** Backend assistant row ID used to keep late chunks on their original turn. */
   message_id?: string;
+  /** Runner event sequence at emit time; lets the frontend open a new text part
+   * when prose resumes after a tool instead of merging it into the pre-tool block. */
+  sequence?: number;
 }
 
 export interface ChatDoneEventPayload {

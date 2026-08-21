@@ -5,16 +5,16 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { ThinkingConfig } from './ThinkingConfig';
 import { useOverflow } from '@/atlas/hooks/useOverflow';
+import type { ReasoningCapability } from '@/lib/types/provider';
 
 interface PinnedActionBarProps {
   pinnedActions: string[];
   togglePin: (id: string) => void;
-  supportsReasoning: boolean;
+  reasoningCapability: ReasoningCapability;
   isThinking: boolean;
   setIsThinking: (val: boolean) => void;
-  reasoningConfigType: 'none' | 'effort' | 'budget';
-  thinkingEffort: "low" | "medium" | "high";
-  setThinkingEffort: (val: "low" | "medium" | "high") => void;
+  thinkingEffort: string;
+  setThinkingEffort: (val: string) => void;
   thinkingBudget: number;
   setThinkingBudget: (val: number) => void;
   isWebSearch: boolean;
@@ -34,10 +34,9 @@ const unpinButtonClass = "absolute top-0 right-0 rounded-full border border-bord
 export const PinnedActionBar = memo(({
   pinnedActions,
   togglePin,
-  supportsReasoning,
+  reasoningCapability,
   isThinking,
   setIsThinking,
-  reasoningConfigType,
   thinkingEffort,
   setThinkingEffort,
   thinkingBudget,
@@ -53,6 +52,10 @@ export const PinnedActionBar = memo(({
 }: PinnedActionBarProps) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const isOverflowing = useOverflow(containerRef);
+  const showReasoning =
+    reasoningCapability.support === 'always_on' ||
+    reasoningCapability.support === 'toggleable' ||
+    reasoningCapability.support === 'tunable';
   const isCompactMode = isCompact || isOverflowing;
   if (pinnedActions.length === 0) return null;
 
@@ -61,7 +64,7 @@ export const PinnedActionBar = memo(({
       <div className="composer-scroll-rail flex min-w-max items-center gap-1 overflow-x-auto no-scrollbar">
         <AnimatePresence mode="sync">
           {pinnedActions.map((actionId) => {
-            if (actionId === 'thinking' && supportsReasoning) {
+            if (actionId === 'thinking' && showReasoning) {
               return (
                 <motion.div key="thinking" initial={{ opacity: 0, y: -2 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -2 }}>
                   <Popover>
@@ -91,9 +94,9 @@ export const PinnedActionBar = memo(({
                     </div>
                     <PopoverContent className="composer-popover composer-popover--bounded w-80 p-3" side="top" align="center">
                       <ThinkingConfig
+                        capability={reasoningCapability}
                         isThinking={isThinking}
                         setIsThinking={setIsThinking}
-                        reasoningConfigType={reasoningConfigType}
                         thinkingEffort={thinkingEffort}
                         setThinkingEffort={setThinkingEffort}
                         thinkingBudget={thinkingBudget}

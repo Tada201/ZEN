@@ -108,4 +108,11 @@ impl LlmProvider for LmStudioProvider {
             .iter()
             .any(|arch| name_lower.contains(arch))
     }
+
+    fn reasoning_capability(&self, _model: &str) -> crate::llm::ReasoningCapability {
+        // Zen drives /v1/chat/completions, which ignores per-request reasoning.
+        // Capability is surfaced from the model listing (provider-managed); at
+        // request time there is nothing Zen can send, so `unknown` is honest.
+        crate::llm::ReasoningCapability::unknown()
+    }
 }

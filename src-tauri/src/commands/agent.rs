@@ -27,6 +27,9 @@ pub struct AgentInfoResponse {
     pub is_builtin: bool,
     pub user_editable: bool,
     pub config_mode: String,
+    /// Per-agent reasoning effort chosen in the Subagents page, stored under
+    /// `agent_reasoning.<id>`. Empty/absent means "inherit" (no override).
+    pub reasoning_effort: Option<String>,
 }
 
 async fn validate_profile_tools(state: &AppState, profile: &AgentProfile) -> ZenResult<()> {
@@ -42,6 +45,21 @@ async fn validate_profile_tools(state: &AppState, profile: &AgentProfile) -> Zen
 }
 
 fn agent_response(state: &AppState, profile: AgentProfile) -> AgentInfoResponse {
+    agent_response_with_model(state, profile, None, None)
+}
+
+/// Build the response, optionally overlaying a per-agent model selection stored
+/// under `agent_model.<id>` and a per-agent reasoning effort stored under
+/// `agent_reasoning.<id>`. Built-in profiles reject edits, so their persisted
+/// model/effort live in those settings rather than on the profile; overlaying
+/// them here lets the settings card show and pre-select the chosen model and
+/// thinking level through the same fields custom agents already use.
+fn agent_response_with_model(
+    state: &AppState,
+    profile: AgentProfile,
+    configured_model: Option<(Option<String>, String)>,
+    configured_reasoning: Option<String>,
+) -> AgentInfoResponse {
     let is_builtin = state.agent_registry.is_builtin(&profile.agent.id);
     let is_model_only = matches!(profile.config_mode, AgentConfigMode::ModelOnly);
     let config_mode = match profile.config_mode {
@@ -49,6 +67,10 @@ fn agent_response(state: &AppState, profile: AgentProfile) -> AgentInfoResponse 
         AgentConfigMode::ReadOnly => "read_only",
         AgentConfigMode::Full if is_builtin => "read_only",
         AgentConfigMode::Full => "full",
+    };
+    let (model_override, model_provider) = match configured_model {
+        Some((provider, model)) => (Some(model), provider),
+        None => (profile.agent.model_override, profile.model_provider),
     };
     AgentInfoResponse {
         id: profile.agent.id,
@@ -58,8 +80,8 @@ fn agent_response(state: &AppState, profile: AgentProfile) -> AgentInfoResponse 
         instructions: if is_model_only { String::new() } else { profile.agent.instructions },
         tool_ids: profile.agent.tool_ids.clone(),
         tool_count: profile.agent.tool_ids.len(),
-        model_override: profile.agent.model_override,
-        model_provider: profile.model_provider,
+        model_override,
+        model_provider,
         max_iterations: profile.agent.max_iterations,
         context_window: profile.agent.context_window,
         max_messages_in_memory: profile.agent.max_messages_in_memory,
@@ -73,17 +95,100 @@ fn agent_response(state: &AppState, profile: AgentProfile) -> AgentInfoResponse 
         is_builtin,
         user_editable: !is_builtin,
         config_mode: config_mode.to_string(),
+        reasoning_effort: configured_reasoning.filter(|value| !value.trim().is_empty()),
     }
 }
 
 #[tauri::command]
 pub async fn list_agents(state: State<'_, AppState>) -> ZenResult<Vec<AgentInfoResponse>> {
-    Ok(state
-        .agent_registry
-        .list_profiles()
-        .into_iter()
-        .map(|profile| agent_response(&state, profile))
-        .collect())
+    let mut responses = Vec::new();
+    for profile in state.agent_registry.list_profiles() {
+        // Overlay any per-agent model chosen in settings so the card reflects
+        // the persisted selection for built-ins (which cannot store it on the
+        // profile). Only applied when the profile has no override of its own.
+        let configured = if profile.agent.model_override.is_none() {
+            state
+                .settings_manager
+                .get(&format!("agent_model.{}", profile.agent.id))
+                .await
+                .ok()
+                .flatten()
+                .and_then(|raw| crate::agent::tools::spawn_tools::parse_provider_model(&raw))
+        } else {
+            None
+        };
+        let configured_reasoning = state
+            .settings_manager
+            .get(&format!("agent_reasoning.{}", profile.agent.id))
+            .await
+            .ok()
+            .flatten();
+        responses.push(agent_response_with_model(&state, profile, configured, configured_reasoning));
+    }
+    Ok(responses)
+}
+
+/// Persist the model a specific agent should run on, stored under
+/// `agent_model.<id>` as a canonical `provider::model` string (or a bare model
+/// id). This is how built-in agents (generalist / explore) get a durable model
+/// selection without editing their fixed profiles. Passing `None`/empty clears
+/// the selection so the agent falls back to inheriting the parent turn's model.
+#[tauri::command]
+pub async fn set_agent_model(
+    state: State<'_, AppState>,
+    agent_id: String,
+    model: Option<String>,
+) -> ZenResult<()> {
+    let agent_id = agent_id.trim();
+    if agent_id.is_empty() || agent_id.len() > 128
+        || !agent_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return Err(crate::error::ZenError::Custom("Invalid agent id.".to_string()));
+    }
+    if state.agent_registry.get(agent_id).is_none() {
+        return Err(crate::error::ZenError::Custom("Agent not found.".to_string()));
+    }
+    let value = model.unwrap_or_default();
+    if value.len() > 256 || value.chars().any(|c| c == '\n' || c == '\r') {
+        return Err(crate::error::ZenError::Custom("Invalid model selection.".to_string()));
+    }
+    state
+        .settings_manager
+        .set(format!("agent_model.{agent_id}"), value)
+        .await
+        .map_err(|error| crate::error::ZenError::Custom(error.to_string()))
+}
+
+/// Persist the reasoning effort a specific agent should run at, stored under
+/// `agent_reasoning.<id>` as one of the canonical effort levels
+/// (minimal/low/medium/high/xhigh/max) or empty to inherit. Like the per-agent
+/// model, this gives built-ins a durable thinking level without editing their
+/// fixed profiles. Passing `None`/empty clears it so the agent inherits.
+#[tauri::command]
+pub async fn set_agent_reasoning(
+    state: State<'_, AppState>,
+    agent_id: String,
+    effort: Option<String>,
+) -> ZenResult<()> {
+    let agent_id = agent_id.trim();
+    if agent_id.is_empty() || agent_id.len() > 128
+        || !agent_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return Err(crate::error::ZenError::Custom("Invalid agent id.".to_string()));
+    }
+    if state.agent_registry.get(agent_id).is_none() {
+        return Err(crate::error::ZenError::Custom("Agent not found.".to_string()));
+    }
+    let value = effort.unwrap_or_default();
+    // Bounded, single-token effort level; reject anything that isn't a plain word.
+    if value.len() > 16 || !value.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return Err(crate::error::ZenError::Custom("Invalid reasoning effort.".to_string()));
+    }
+    state
+        .settings_manager
+        .set(format!("agent_reasoning.{agent_id}"), value)
+        .await
+        .map_err(|error| crate::error::ZenError::Custom(error.to_string()))
 }
 
 #[tauri::command]
@@ -134,33 +239,6 @@ pub async fn delete_agent(state: State<'_, AppState>, agent_id: String) -> ZenRe
         .agent_registry
         .delete_user_profile(&agent_id)
         .map_err(crate::error::ZenError::Custom)
-}
-
-#[tauri::command]
-pub async fn spawn_agent(
-    state: State<'_, AppState>,
-    agent_id: String,
-    _message: String,
-    _options: Option<serde_json::Value>,
-) -> ZenResult<String> {
-    let agent = state
-        .agent_registry
-        .get(&agent_id)
-        .ok_or_else(|| {
-            crate::error::ZenError::Custom(format!("Agent '{}' not found in registry", agent_id))
-        })?;
-
-    let instance = state
-        .swarm
-        .spawn_agent(agent)
-        .await
-        .map_err(|e| crate::error::ZenError::Custom(e.to_string()))?;
-
-    Ok(format!(
-        "Agent '{}' spawned successfully (instance: {})",
-        instance.config.name,
-        instance.id()
-    ))
 }
 
 #[derive(Debug, Serialize)]

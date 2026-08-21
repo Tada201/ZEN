@@ -20,8 +20,6 @@ import { resolveToolApproval } from "./approvalActions";
 import { CHAT_STATUS_PHASES } from "@/api/chatStatus";
 import { Step } from "./types";
 import { AssistantTaskPlanPreview } from "./AssistantTaskPlanPreview";
-import { AgentDelegationLane } from "./AgentDelegationLane";
-import { buildAgentDelegationLaneModel } from "./agentDelegationLaneModel";
 import { humanizeToolName } from "./ToolCallCard";
 export { ResearchTimeline } from "./ResearchTimeline";
 
@@ -247,7 +245,6 @@ export function AgentActionStepInner({ step, isStreaming }: { step: Step; isStre
   const canExpand = hasActionDetails(step);
   const eventTime = formatActionTime(step.timestamp);
   const chips = getActionChips(step);
-  const delegationLane = buildAgentDelegationLaneModel(step);
   const statusLabel = step.status === "completed"
       ? "Complete"
       : step.status === "error"
@@ -257,10 +254,6 @@ export function AgentActionStepInner({ step, isStreaming }: { step: Step; isStre
           : step.status === "running"
             ? "Running"
             : step.status;
-
-  if (delegationLane) {
-    return <AgentDelegationLane lane={delegationLane} />;
-  }
 
   return (
     <div className="font-sans">

@@ -1,3 +1,47 @@
+export type ReasoningSupport =
+    | 'unsupported'
+    | 'always_on'
+    | 'toggleable'
+    | 'tunable'
+    | 'unknown';
+
+export type ReasoningProtocol =
+    | 'openai_effort'
+    | 'anthropic_adaptive'
+    | 'anthropic_budget'
+    | 'gemini_level'
+    | 'gemini_budget'
+    | 'ollama_think'
+    | 'none';
+
+export type ControlAvailability = 'none' | 'zen' | 'provider_managed';
+export type ReasoningVisibility = 'none' | 'summary' | 'trace' | 'tokens';
+export type ReasoningSource =
+    | 'api_metadata'
+    | 'provider_endpoint'
+    | 'registry'
+    | 'heuristic'
+    | 'unknown';
+export type ReasoningConfidence = 'authoritative' | 'probable' | 'unknown';
+
+/** Backend-resolved reasoning capability (SSOT). Mirrors the Rust
+ *  `ReasoningCapability`; the composer reasoning UI is generated from it. */
+export interface ReasoningCapability {
+    support: ReasoningSupport;
+    protocol: ReasoningProtocol;
+    controlAvailability: ControlAvailability;
+    levels?: string[];
+    defaultLevel?: string;
+    minBudget?: number;
+    maxBudget?: number;
+    stepBudget?: number;
+    defaultBudget?: number;
+    canDisable: boolean;
+    reasoningVisibility: ReasoningVisibility;
+    source: ReasoningSource;
+    confidence: ReasoningConfidence;
+}
+
 export interface ModelInfo {
     id: string;
     name: string;
@@ -8,8 +52,7 @@ export interface ModelInfo {
     contextWindow?: number;
     maxTokens?: number;
     capabilities?: string[];
-    supportsReasoning?: boolean;
-    reasoningConfigType?: 'none' | 'effort' | 'budget';
+    reasoning?: ReasoningCapability;
     state?: 'ready' | 'loading' | 'missing' | 'unloaded';
 }
 
@@ -52,37 +95,38 @@ export type ProviderParameterId =
     | 'seed'
     | 'stop';
 
-/** Canonical provider/model controls used by both settings and request builders. */
+/** Canonical provider parameter controls used by settings and request builders.
+ *  Reasoning capability is NOT declared here — it is resolved per-model by the
+ *  backend (see `ModelInfo.reasoning`); provider-wide reasoning defaults would
+ *  contradict that source of truth. */
 export interface ProviderCapabilityProfile {
     parameters: readonly ProviderParameterId[];
-    supportsReasoning: boolean;
     supportsTools: boolean;
     supportsVision: boolean;
 }
 
 export const PROVIDER_CAPABILITY_PROFILES: Record<string, ProviderCapabilityProfile> = {
-    openai: { parameters: ['temperature', 'topP', 'maxTokens', 'presencePenalty', 'frequencyPenalty', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
-    anthropic: { parameters: ['temperature', 'topP', 'topK', 'maxTokens', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
-    google: { parameters: ['temperature', 'topP', 'topK', 'maxTokens', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
-    gemini: { parameters: ['temperature', 'topP', 'topK', 'maxTokens', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
-    ollama: { parameters: ['temperature', 'topP', 'topK', 'maxTokens', 'repeatPenalty', 'seed', 'stop'], supportsReasoning: false, supportsTools: true, supportsVision: true },
-    lmstudio: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsReasoning: false, supportsTools: true, supportsVision: true },
-    nine_router: { parameters: ['temperature', 'topP', 'topK', 'maxTokens', 'repeatPenalty', 'presencePenalty', 'frequencyPenalty', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
-    mistral: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
-    groq: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
-    deepseek: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: false },
-    xai: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
-    openrouter: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
-    opencode: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
-    mimo: { parameters: ['temperature', 'topP', 'maxTokens', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: false },
-    together: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
-    perplexity: { parameters: ['temperature', 'topP', 'maxTokens', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: false },
-    kilocode: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsReasoning: true, supportsTools: true, supportsVision: true },
+    openai: { parameters: ['temperature', 'topP', 'maxTokens', 'presencePenalty', 'frequencyPenalty', 'seed', 'stop'], supportsTools: true, supportsVision: true },
+    anthropic: { parameters: ['temperature', 'topP', 'topK', 'maxTokens', 'stop'], supportsTools: true, supportsVision: true },
+    google: { parameters: ['temperature', 'topP', 'topK', 'maxTokens', 'stop'], supportsTools: true, supportsVision: true },
+    gemini: { parameters: ['temperature', 'topP', 'topK', 'maxTokens', 'stop'], supportsTools: true, supportsVision: true },
+    ollama: { parameters: ['temperature', 'topP', 'topK', 'maxTokens', 'repeatPenalty', 'seed', 'stop'], supportsTools: true, supportsVision: true },
+    lmstudio: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsTools: true, supportsVision: true },
+    nine_router: { parameters: ['temperature', 'topP', 'topK', 'maxTokens', 'repeatPenalty', 'presencePenalty', 'frequencyPenalty', 'seed', 'stop'], supportsTools: true, supportsVision: true },
+    mistral: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsTools: true, supportsVision: true },
+    groq: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsTools: true, supportsVision: true },
+    deepseek: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsTools: true, supportsVision: false },
+    xai: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsTools: true, supportsVision: true },
+    openrouter: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsTools: true, supportsVision: true },
+    opencode: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsTools: true, supportsVision: true },
+    mimo: { parameters: ['temperature', 'topP', 'maxTokens', 'stop'], supportsTools: true, supportsVision: false },
+    together: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsTools: true, supportsVision: true },
+    perplexity: { parameters: ['temperature', 'topP', 'maxTokens', 'stop'], supportsTools: true, supportsVision: false },
+    kilocode: { parameters: ['temperature', 'topP', 'maxTokens', 'seed', 'stop'], supportsTools: true, supportsVision: true },
 };
 
 export const DEFAULT_PROVIDER_CAPABILITY_PROFILE: ProviderCapabilityProfile = {
     parameters: ['temperature', 'topP', 'maxTokens', 'stop'],
-    supportsReasoning: false,
     supportsTools: true,
     supportsVision: false,
 };

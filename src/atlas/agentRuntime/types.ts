@@ -134,6 +134,26 @@ function stepSequence(step: Step, fallback: number): number {
 }
 
 /**
+ * The single canonical ordering for an assistant timeline. Sorts by the
+ * backend `sequence` (tool/action/subagent/runtime-text all carry it after the
+ * Phase-1/2 wiring), falling back to arrival order for any step that still
+ * lacks one. The sort is stable — equal keys keep their original index — so an
+ * id-less legacy step never jumps a neighbour it truly arrived beside.
+ *
+ * This is the SSOT consumed by three places that previously ordered
+ * independently: the live runtime/step merge, the render path
+ * (AssistantMessage), and the persistence projection. Sharing one comparator
+ * is what makes the live timeline and the reloaded timeline identical.
+ */
+export function orderSteps(steps: Step[]): Step[] {
+  return steps
+    .map((step, index) => ({ step, index }))
+    .sort((left, right) =>
+      stepSequence(left.step, left.index) - stepSequence(right.step, right.index) || left.index - right.index)
+    .map(({ step }) => step);
+}
+
+/**
  * Merge canonical streamed prose with the execution steps owned by the chat
  * event reducers. Runtime text/reasoning steps are replaced on every flush so
  * a reveal frame cannot duplicate text; tool/action/subagent steps remain in
@@ -144,18 +164,18 @@ export function mergeRuntimeTextPartsIntoSteps(parts: AgentPart[], existingSteps
   const retainedSteps = existingSteps.filter((step) =>
     !(step.type === "text" || step.type === "reasoning") || !step.eventId?.startsWith("runtime:"),
   );
-  const merged = [...retainedSteps, ...runtimeSteps];
-  return merged
-    .map((step, index) => ({ step, index }))
-    .sort((left, right) => stepSequence(left.step, left.index) - stepSequence(right.step, right.index) || left.index - right.index)
-    .map(({ step }) => step);
+  return orderSteps([...retainedSteps, ...runtimeSteps]);
 }
 
 export function projectAgentTurnToMessage(
   record: AgentTurnRecord,
   base: Message,
 ): Message {
-  const text = record.parts.find((part): part is AgentTextPart => part.type === "text");
+  const text = record.parts
+    .filter((part): part is AgentTextPart => part.type === "text")
+    .sort((left, right) => left.sequence - right.sequence)
+    .map((part) => part.visibleText)
+    .join("");
   const reasoning = record.parts
     .filter((part): part is AgentReasoningPart => part.type === "reasoning")
     .map((part) => part.visibleText)
@@ -171,7 +191,7 @@ export function projectAgentTurnToMessage(
 
   return {
     ...base,
-    content: text?.visibleText || "",
+    content: text || "",
     reasoning: reasoning || undefined,
     steps: steps.length > 0 ? steps : base.steps,
     status,

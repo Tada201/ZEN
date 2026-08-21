@@ -120,6 +120,7 @@ impl Orchestrator {
             &self.agent_registry,
             agent_id,
             Some(model),
+            Some(model),
             None,
         )?;
         // Keep the per-turn agent copy, including inherited tools and
@@ -147,6 +148,14 @@ impl Orchestrator {
         // Correlate every child event (tool start/complete, progress chunk,
         // commentary) with this task's canonical sub-agent card.
         runner = runner.with_trace_id(task_spawn_id.clone());
+        // Isolate the task's memory from the parent chat. Without a scope the
+        // runner counts as a parent itself, so a task failure would emit
+        // ChatError and mark the orchestrator's own response failed — the same
+        // protection direct spawn_agent children get in spawn_tools.rs.
+        runner = runner.with_memory_scope(crate::agent::tools::child_runner::subagent_memory_scope(
+            agent_id,
+            &task.description,
+        ));
 
         // Pass db_pool if available
         if let Some(ref db_pool) = self.db_pool {
@@ -272,7 +281,7 @@ impl Orchestrator {
                 .subagent_cancellation_tokens
                 .lock()
                 .await
-                .insert(task_spawn_id.clone(), task_token.clone());
+                .insert(task_spawn_id.clone(), (chat_id.to_string(), task_token.clone()));
         }
 
         let start_time = std::time::Instant::now();
@@ -562,6 +571,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                     delta: chunk_text.clone(),
                     r#type: chunk_type.to_string(),
                     message_id: message_id_for_callback.clone(),
+                    sequence: None,
                 })
                 .emit_via(&app_clone_2, &maybe_channel_clone);
             }
@@ -589,6 +599,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                         r#type: old_type.to_string(),
                         done: false,
                         message_id: message_id_for_callback.clone(),
+                        sequence: None,
                     })
                     .emit_via(&app_clone_2, &maybe_channel_clone);
 
@@ -612,6 +623,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                             r#type: current_type.to_string(),
                             done: false,
                             message_id: message_id_for_callback.clone(),
+                            sequence: None,
                         })
                         .emit_via(&app_clone_2, &maybe_channel_clone);
                     }
@@ -634,6 +646,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                     r#type: current_type.to_string(),
                     done: true,
                     message_id: orchestrator_message_id.map(str::to_owned),
+                    sequence: None,
                 }));
             }
         }

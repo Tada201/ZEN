@@ -373,6 +373,7 @@ impl Runner {
                     r#type: "text".to_string(),
                     done: false,
                     message_id: None,
+                    sequence: Some(self.peek_event_sequence()),
                 }));
 
                 if !accumulated_commentary.is_empty() {
@@ -673,7 +674,7 @@ impl Runner {
                 Err(e) => {
                     // Check if we already tried escalation inside call_llm_with_escalation
                     // If we did, the error message will reflect that.
-                    tracing::error!("LLM chat_stream failed: {}", e);
+                    tracing::error!(model = %model, "LLM chat_stream failed: {}", e);
 
                     let error_text = e.to_string();
                     if let Some(ref db) = self.db_pool {
@@ -689,14 +690,25 @@ impl Runner {
                         .await;
                     }
 
-                    // Emit error event to unlock the chat UI
-                    self.emit(AgentEvent::ChatError(ChatErrorPayload {
+                    // A sub-agent shares the parent's chat id, so a raw
+                    // ChatError here would mark the parent's assistant message
+                    // failed and tear down its stream over a child's failure.
+                    // The spawn tool already reports child failures through its
+                    // own terminal subagent-step and agent:complete events.
+                    self.emit_owned_chat_error(ChatErrorPayload {
                         chat_id: chat_id.clone(),
                         error: error_text,
                         recoverable: false,
-                    }));
+                    });
 
-                    return Err(e).context("LLM chat_stream failed after all attempts");
+                    // Name the model in the context: the most common cause of a
+                    // hard stream failure is a model the provider does not
+                    // accept, and the generic wording sent past debugging
+                    // sessions looking for transient network faults.
+                    return Err(e).context(format!(
+                        "LLM stream failed for model '{}'",
+                        model
+                    ));
                 }
             };
 
@@ -762,6 +774,7 @@ impl Runner {
                         r#type: "text".to_string(),
                         done: false,
                         message_id: None,
+                        sequence: Some(self.peek_event_sequence()),
                     }));
 
                     if !accumulated_commentary.is_empty() {

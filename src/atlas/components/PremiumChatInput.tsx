@@ -18,7 +18,7 @@ import { useRenderLogger } from "@/hooks/useRenderLogger";
 import { useAttachments } from "./AttachmentPills";
 import {
   useChatInputModes,
-  useAutoDisableThinking,
+  useReconcileThinking,
 } from "./useChatInputModes";
 import { useAutoResizeTextarea } from "./useAutoResizeTextarea";
 import { useSendHandler } from "./useSendHandler";
@@ -187,13 +187,21 @@ export const PremiumChatInput = memo(
     // Canonical lookup: models.find(m => m.id === selectedModelId && m.provider === selectedProvider)
     const {
       selectedModelInfo,
-      supportsReasoning,
-      reasoningConfigType,
+      capability: reasoningCapability,
+      showControl: showReasoningControl,
     } = useReasoningCapabilities(models, selectedModelId, selectedProvider);
     const supportsImageGen = Boolean(
       selectedModelInfo?.available && selectedModelInfo.capabilities.includes("image-gen"),
     );
-    useAutoDisableThinking(supportsReasoning, isThinking, setIsThinking);
+    useReconcileThinking({
+      capability: reasoningCapability,
+      isThinking,
+      setIsThinking,
+      thinkingEffort,
+      setThinkingEffort,
+      thinkingBudget,
+      setThinkingBudget,
+    });
     useEffect(() => {
       if (!supportsImageGen && isImageGenEnabled) setIsImageGenEnabled(false);
     }, [isImageGenEnabled, setIsImageGenEnabled, supportsImageGen]);
@@ -206,9 +214,9 @@ export const PremiumChatInput = memo(
         actionId === "search" ||
         actionId === "research" ||
         actionId === "genui" ||
-        (actionId === "thinking" && supportsReasoning),
+        (actionId === "thinking" && showReasoningControl),
       ),
-      [pinnedActions, supportsReasoning],
+      [pinnedActions, showReasoningControl],
     );
     // ── Slash apply (extracted hook) ──
     const applySlashSuggestion = useSlashApply(setMessage, textareaRef);
@@ -234,8 +242,7 @@ export const PremiumChatInput = memo(
         isDeepResearch,
         isImageGenEnabled: supportsImageGen && isImageGenEnabled,
         internalGenerativeUI,
-        supportsReasoning,
-        reasoningConfigType,
+        reasoningCapability,
         buildThinkingPayload,
         onSend,
         convertFiles,
@@ -246,7 +253,7 @@ export const PremiumChatInput = memo(
         message, selectedFiles, isLoading, isPaused, onAbort, onResume, activeChatId,
         selectedModelId, selectedProvider, selectedModelInfo,
         isWebSearch, isDeepResearch, isImageGenEnabled, supportsImageGen,
-        internalGenerativeUI, supportsReasoning, reasoningConfigType,
+        internalGenerativeUI, reasoningCapability,
         buildThinkingPayload, onSend,
         convertFiles, resetMessage, clearFiles,
       ],
@@ -326,10 +333,9 @@ export const PremiumChatInput = memo(
         onOpenModelSelector,
         pinnedActions: visiblePinnedActions,
         togglePin,
-        supportsReasoning,
+        reasoningCapability,
         isThinking,
         setIsThinking,
-        reasoningConfigType,
         thinkingEffort,
         setThinkingEffort,
         thinkingBudget,
@@ -368,8 +374,8 @@ export const PremiumChatInput = memo(
         layoutMode, selectedModelOpen, setModelMenuOpen,
         models, selectedModelId, selectedProvider,
         onSelectModel, onOpenModelSelector,
-        visiblePinnedActions, togglePin, supportsReasoning,
-        isThinking, setIsThinking, reasoningConfigType,
+        visiblePinnedActions, togglePin, reasoningCapability,
+        isThinking, setIsThinking,
         thinkingEffort, setThinkingEffort, thinkingBudget, setThinkingBudget,
         isWebSearch, setIsWebSearch, isDeepResearch, setIsDeepResearch,
         internalGenerativeUI, setGenerativeUIInternal,

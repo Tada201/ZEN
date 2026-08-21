@@ -6,6 +6,10 @@ const assistantParts = read("src/atlas/components/chat/assistantMessageParts.ts"
 const messageTypes = read("src/atlas/components/chat/types.ts");
 const runtimeTypes = read("src/atlas/agentRuntime/types.ts");
 const runtimeBridge = read("src/atlas/hooks/stream/useChatChunkEvent.ts");
+const assistantMessage = read("src/atlas/components/chat/AssistantMessage.tsx");
+const persistProjection = read("src/atlas/hooks/stream/projectStepsForPersistence.ts");
+const assistantLogic = read("src/atlas/components/chat/AssistantMessage.logic.ts");
+const chunkBuffer = read("src/atlas/hooks/stream/chatChunkBuffer.ts");
 const traceQueries = read("src-tauri/src/db/queries/execution_trace.rs");
 const traceCrud = read("src-tauri/src/commands/chat/crud.rs");
 const sendCommand = read("src-tauri/src/commands/chat/send.rs");
@@ -28,6 +32,41 @@ assert(
 assert(
   runtimeBridge.includes("steps: mergeRuntimeTextPartsIntoSteps(record.parts, current.steps)"),
   "live runtime flushes must retain thinking/text order beside execution rows",
+);
+
+// One canonical ordering (T3): a single orderSteps() comparator is the SSOT
+// shared by the runtime merge, the render path, and the persistence projection
+// so the live timeline and the reloaded timeline sort identically.
+assert(
+  runtimeTypes.includes("export function orderSteps(steps: Step[]): Step[]"),
+  "runtime must expose a single shared orderSteps() ordering projection",
+);
+assert(
+  runtimeTypes.includes("return orderSteps([...retainedSteps, ...runtimeSteps])"),
+  "runtime merge must order through the shared orderSteps() projection",
+);
+assert(
+  assistantMessage.includes("orderSteps(message.steps)") &&
+    assistantMessage.includes('from "@/atlas/agentRuntime/types"'),
+  "render path must order steps through the same shared projection before grouping",
+);
+assert(
+  persistProjection.includes("orderSteps(steps)") &&
+    persistProjection.includes('from "@/atlas/agentRuntime/types"'),
+  "persistence must project steps in the same canonical order the UI renders",
+);
+
+// Stable identity (T1): text/reasoning steps key by a minted id, never the
+// list index, so a tool card inserted between two text runs cannot remount and
+// split the prose.
+assert(
+  assistantLogic.includes("if (step.eventId) return `${step.type}-${step.eventId}`"),
+  "text/reasoning rows must key by their stable step id, not the list index",
+);
+assert(
+  chunkBuffer.includes("mintStepId(") &&
+    chunkBuffer.includes('return `local:${prefix}:${localStepSeq}`'),
+  "chunk buffer must mint a stable id for every text/reasoning step it creates",
 );
 assert(
   messageTypes.includes("normalizedSteps && normalizedSteps.length > 0") &&

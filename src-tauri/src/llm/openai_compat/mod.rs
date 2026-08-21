@@ -21,7 +21,7 @@ use crate::llm::LlmProvider;
 #[derive(Clone, Debug)]
 pub struct ModelCapabilities {
     pub supports_tools: bool,
-    pub supports_reasoning: bool,
+    pub reasoning: crate::llm::ReasoningCapability,
 }
 
 /// OpenAI-compatible API provider.
@@ -244,5 +244,9 @@ impl LlmProvider for OpenAiCompatProvider {
 
     fn supports_tools(&self, model: &str) -> bool {
         self.do_supports_tools(model)
+    }
+
+    fn reasoning_capability(&self, model: &str) -> crate::llm::ReasoningCapability {
+        self.do_reasoning_capability(model)
     }
 }

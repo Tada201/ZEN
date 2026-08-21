@@ -149,7 +149,6 @@ export function ExecutionRow({
   if (!clickable) {
     return (
       <div
-        aria-expanded={expanded}
         aria-busy={resolvedStatus === "running"}
         data-status={resolvedStatus}
         className={containerClassName}
@@ -193,10 +192,7 @@ export function ExecutionRow({
         />
       )}
       <span className="execution-row-copy min-w-0 flex-1 items-baseline gap-2 py-1.5 pl-0.5">
-        <span className={cn(
-          "execution-row-title min-w-0 truncate text-[12px] font-medium leading-5",
-          resolvedStatus === "running" ? "animate-shimmer-text" : "text-foreground",
-        )}>
+        <span className="execution-row-title min-w-0 truncate text-[12px] font-medium leading-5 text-foreground">
           {title}
         </span>
         {subtitle && (
@@ -283,10 +279,7 @@ function ExecutionRowContent({
         />
       )}
       <span className="execution-row-copy min-w-0 flex-1 items-baseline gap-2 py-1.5 pl-0.5">
-        <span className={cn(
-          "execution-row-title min-w-0 truncate text-[12px] font-medium leading-5",
-          resolvedStatus === "running" ? "animate-shimmer-text" : "text-foreground",
-        )}>
+        <span className="execution-row-title min-w-0 truncate text-[12px] font-medium leading-5 text-foreground">
           {title}
         </span>
         {subtitle && (

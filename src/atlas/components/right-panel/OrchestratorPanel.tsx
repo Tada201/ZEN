@@ -8,9 +8,8 @@ import { toast } from "sonner";
 import { chatApi } from "@/api";
 import type { Message, Step, SubagentStepData, ToolCall } from "@/atlas/components/chat/types";
 import { selectDelegationChildTools, buildDelegationTree } from "@/atlas/agentRuntime/delegationTree";
-import { agentIconName, latestChildActivity } from "@/atlas/agentRuntime/agentIcon";
+import { subagentPhaseLabel, runningActivityLine, isActiveSubagentStatus } from "@/atlas/agentRuntime/subagentPhase";
 import { upsertScopedSubagent } from "@/atlas/agentRuntime/scopedSubagentStore";
-import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 import { UserMessage } from "@/atlas/components/chat/UserMessage";
 import { AssistantMessage } from "@/atlas/components/chat/AssistantMessage";
 import { buildAgentDelegationLaneModel, type AgentDelegationLaneModel } from "@/atlas/components/chat/agentDelegationLaneModel";
@@ -29,14 +28,7 @@ type SubagentItem = {
 
 const EMPTY_MESSAGES: Message[] = [];
 
-function statusLabel(status: SubagentStepData["status"], stale = false) {
-  if (stale) return "Interrupted";
-  if (status === "running") return "Working";
-  if (status === "failed") return "Failed";
-  if (status === "cancelled") return "Cancelled";
-  if (status === "incomplete" || status === "uncertain") return "Needs review";
-  return "Completed";
-}
+const statusLabel = (status: SubagentStepData["status"], stale = false) => subagentPhaseLabel(status, stale);
 
 function formatElapsed(durationMs: number) {
   const totalSeconds = Math.floor(Math.max(0, durationMs) / 1000);
@@ -64,15 +56,11 @@ function ElapsedSubagentTime({ startTime, durationMs, running }: { startTime?: n
   if (typeof elapsedMs !== "number" || elapsedMs < 0) return null;
 
   const label = formatElapsed(elapsedMs);
-  return <span className="shrink-0 font-mono tabular-nums text-[10px] text-muted-foreground" aria-label={`Elapsed ${label}`}>{label}</span>;
-}
-
-function isFileTool(tool: ToolCall) {
-  return /read|write|edit|patch|create|delete|file/i.test(tool.name);
+  return <span className="shrink-0 font-mono tabular-nums text-[11px] text-muted-foreground" aria-label={`Elapsed ${label}`}>{label}</span>;
 }
 
 function isSubagentRunning(subagent: SubagentStepData) {
-  return subagent.status === "running" && subagent.recoveryState !== "stale";
+  return isActiveSubagentStatus(subagent.status) && subagent.recoveryState !== "stale";
 }
 
 function toSubagentFromLane(lane: AgentDelegationLaneModel, timestamp?: number): SubagentStepData {
@@ -202,44 +190,51 @@ function filterSubagentItems(items: SubagentItem[], clearedAt?: number): Subagen
   });
 }
 
-function CompactSubagentRow({ item, selected, onSelect, onStop, stopping }: { item: SubagentItem; selected: boolean; onSelect: () => void; onStop?: () => void; stopping?: boolean }) {
+function CompactSubagentRow({ item, selected, onSelect, onStop, stopping, stopError }: { item: SubagentItem; selected: boolean; onSelect: () => void; onStop?: () => void; stopping?: boolean; stopError?: boolean }) {
   const stale = item.subagent.recoveryState === "stale";
   const running = isSubagentRunning(item.subagent);
   const failed = item.subagent.status === "failed";
   const needsReview = item.subagent.status === "incomplete" || item.subagent.status === "uncertain";
   const StatusIcon = running ? Loader2 : failed || needsReview || stale ? CircleAlert : Check;
-  const fileCount = item.childTools.filter(isFileTool).length;
   const hasElapsed = typeof item.subagent.timestamp === "number" || typeof item.subagent.durationMs === "number";
   const title = item.subagent.task || item.subagent.agentName;
-  // While running, show the child's live action ("Searching · news"); once
-  // ended fall back to the result summary. Never repeat the title verbatim.
-  const liveActivity = running ? latestChildActivity(item.childTools) : "";
+  // While running, always show a live line ("Searching · news" or a stable
+  // "Preparing…" fallback) so the row never jumps height between the two- and
+  // three-line layouts; once ended fall back to the result summary. Never
+  // repeat the title verbatim.
   const endedSummary = item.response && item.response !== title ? item.response : "";
-  const summary = liveActivity || endedSummary;
+  const summary = running ? runningActivityLine(item.childTools) : endedSummary;
+  const phase = statusLabel(item.subagent.status, stale);
   return (
-    <div className={cn("group flex w-full items-start gap-2 border-b border-border px-4 py-3 transition-colors hover:bg-muted", selected && "bg-muted")}>
+    <div className={cn("group flex w-full flex-wrap items-start gap-2 border-b border-border px-4 py-3 transition-colors hover:bg-muted", selected && "bg-muted")}>
+      {/* One announcement per row. The visible status and activity text stay
+          silent so a single transition isn't read out twice. */}
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {`${item.subagent.agentName}: ${phase}${summary ? `. ${summary}` : ""}`}
+      </span>
       <button type="button" onClick={onSelect} className="flex min-w-0 flex-1 items-start gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-current={selected ? "true" : undefined}>
-        <span className="relative mt-0.5 shrink-0">
-          <WorkbenchIcon name={agentIconName(item.subagent.agentId, item.subagent.agentName)} size={16} className="text-muted-foreground" />
-          <StatusIcon className={cn("absolute -bottom-1 -right-1 h-3 w-3 rounded-full bg-background", running && "animate-spin text-primary", failed && "text-destructive", (needsReview || stale) && "text-warning", !running && !failed && !needsReview && !stale && "text-success")} aria-hidden="true" />
-        </span>
+        <StatusIcon className={cn("mt-0.5 h-4 w-4 shrink-0", running && "animate-spin text-primary", failed && "text-destructive", (needsReview || stale) && "text-warning", !running && !failed && !needsReview && !stale && "text-success")} aria-hidden="true" />
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-2">
             <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-foreground">{title}</span>
-            <span className={cn("shrink-0 text-[11px]", running && "text-primary", failed && "text-destructive", (needsReview || stale) && "text-warning", !running && !failed && !needsReview && !stale && "text-success")}>{statusLabel(item.subagent.status, stale)}</span>
+            <span className={cn("shrink-0 text-[11px]", running && "text-primary", failed && "text-destructive", (needsReview || stale) && "text-warning", !running && !failed && !needsReview && !stale && "text-success")}>{phase}</span>
           </span>
           {summary && <span className="mt-1 block truncate text-[12px] text-muted-foreground">{summary}</span>}
-          <span className="mt-1 flex items-center gap-1 font-mono text-[10px] text-muted-foreground"><span>{item.childTools.length} {item.childTools.length === 1 ? "step" : "steps"}{fileCount ? ` · ${fileCount} files flagged` : ""}</span>{hasElapsed && <><span aria-hidden="true">·</span><ElapsedSubagentTime startTime={item.subagent.timestamp} durationMs={item.subagent.durationMs} running={running} /></>}
-</span>
+          {hasElapsed && <span className="mt-1 flex items-center gap-1 font-mono text-[11px] text-muted-foreground"><ElapsedSubagentTime startTime={item.subagent.timestamp} durationMs={item.subagent.durationMs} running={running} /></span>}
         </span>
       </button>
       {running && onStop
         ? (
-          <button type="button" onClick={onStop} disabled={stopping} className="mt-0.5 inline-flex h-6 shrink-0 items-center gap-1 rounded border border-destructive/40 px-1.5 text-[10px] font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" aria-label={`Stop ${item.subagent.agentName}`} title={`Stop ${item.subagent.agentName}`}>
+          <button type="button" onClick={onStop} disabled={stopping} className="mt-0.5 inline-flex h-7 shrink-0 items-center gap-1 rounded border border-destructive/40 px-2 text-[11px] font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" aria-label={`Stop ${item.subagent.agentName}`} title={`Stop ${item.subagent.agentName}`}>
             {stopping ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : <Square className="h-3 w-3 fill-current" aria-hidden="true" />}
           </button>
         )
         : <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />}
+      {stopError && (
+        <p className="w-full text-[11px] text-destructive" role="alert">
+          Couldn’t stop this agent — it may still be running. Try again.
+        </p>
+      )}
     </div>
   );
 }
@@ -325,23 +320,38 @@ function buildSubagentConversation(item: SubagentItem): { prompt: Message; reply
   return { prompt, reply };
 }
 
-function SubagentDetail({ item, onBack, onSelectSubagent, onOpenArtifact }: { item: SubagentItem; onBack: () => void; onSelectSubagent: (id: string) => void; onOpenArtifact: (artifact: NonNullable<Message["artifact"]>) => void }) {
+function SubagentDetail({ item, onBack, onSelectSubagent, onOpenArtifact, onStop, stopping, stopError }: { item: SubagentItem; onBack: () => void; onSelectSubagent: (id: string) => void; onOpenArtifact: (artifact: NonNullable<Message["artifact"]>) => void; onStop?: () => void; stopping?: boolean; stopError?: boolean }) {
   const { subagent } = item;
   const stale = subagent.recoveryState === "stale";
   const running = isSubagentRunning(subagent);
+  const failed = subagent.status === "failed";
   const needsReview = subagent.status === "incomplete" || subagent.status === "uncertain";
+  const StatusIcon = running ? Loader2 : failed || needsReview || stale ? CircleAlert : Check;
+  const statusTone = running ? "text-primary" : failed ? "text-destructive" : needsReview || stale ? "text-warning" : "text-success";
   const hasElapsed = typeof subagent.timestamp === "number" || typeof subagent.durationMs === "number";
   const { prompt, reply } = buildSubagentConversation(item);
+  const taskLabel = subagent.task?.trim() || subagent.agentName;
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
-      <div className="flex shrink-0 items-start gap-2 border-b border-border px-4 py-3">
-        <button type="button" onClick={onBack} className="mt-0.5 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Back to subagents"><ArrowLeft className="h-4 w-4" /></button>
+      <div className="flex shrink-0 flex-wrap items-start gap-2 border-b border-border px-4 py-3">
+        <button type="button" onClick={onBack} className="mt-0.5 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Back to subagents"><ArrowLeft className="h-4 w-4" aria-hidden="true" /></button>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2"><WorkbenchIcon name={agentIconName(subagent.agentId, subagent.agentName)} size={16} className="text-primary" /><h2 className="truncate text-[14px] font-semibold text-foreground">{subagent.agentName}</h2><span className={cn("text-[11px]", running ? "text-primary" : subagent.status === "failed" ? "text-destructive" : needsReview || stale ? "text-warning" : "text-success")}>{running ? "Working" : subagent.status === "completed" ? "Done" : statusLabel(subagent.status, stale)}</span>
+          <div className="flex items-center gap-2"><StatusIcon className={cn("h-4 w-4 shrink-0", statusTone, running && "animate-spin")} aria-hidden="true" /><h2 className="truncate text-[14px] font-semibold text-foreground">{taskLabel}</h2><span className={cn("shrink-0 text-[11px]", statusTone)} aria-live={running ? "polite" : undefined}>{statusLabel(subagent.status, stale)}</span>
 {hasElapsed && <><span aria-hidden="true" className="text-muted-foreground">·</span><ElapsedSubagentTime startTime={subagent.timestamp} durationMs={subagent.durationMs} running={running} /></>}
 </div>
-          <p className="mt-0.5 truncate text-[12px] text-muted-foreground">{subagent.task}</p>
+          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{subagent.agentName}</p>
         </div>
+        {running && onStop && (
+          <button type="button" onClick={onStop} disabled={stopping} className="mt-0.5 inline-flex h-7 shrink-0 items-center gap-1 rounded border border-destructive/40 px-2 text-[11px] font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" aria-label={`Stop ${subagent.agentName}`} title={`Stop ${subagent.agentName}`}>
+            {stopping ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : <Square className="h-3 w-3 fill-current" aria-hidden="true" />}
+            Stop
+          </button>
+        )}
+        {stopError && (
+          <p className="w-full text-[11px] text-destructive" role="alert">
+            Couldn’t stop this agent — it may still be running. Try again.
+          </p>
+        )}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto py-3">
         {item.children && item.children.length > 0 && (
@@ -375,6 +385,7 @@ export function OrchestratorPanel() {
   const setArtifactPanelOpen = useUIStore((state) => state.setArtifactPanelOpen);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [stoppingId, setStoppingId] = useState<string | null>(null);
+  const [stopErrorId, setStopErrorId] = useState<string | null>(null);
   const clearedAt = activeChatId ? subagentHistoryClearedAtByChat[activeChatId] : undefined;
   const allSubagentItems = useMemo(() => buildSubagentItems(messages), [messages]);
   const allItemsBeforeClear = useMemo(() => flattenSubagentItems(allSubagentItems), [allSubagentItems]);
@@ -418,6 +429,7 @@ export function OrchestratorPanel() {
     if (!activeChatId || stoppingId) return;
     const spawnId = item.subagent.spawnId;
     setStoppingId(spawnId);
+    setStopErrorId(null);
     try {
       const cancelled = await chatApi.cancelSubagent(activeChatId, spawnId);
       if (cancelled) {
@@ -427,13 +439,15 @@ export function OrchestratorPanel() {
         toast.info("That subagent has already finished.");
       }
     } catch {
-      toast.error("Could not stop the subagent.");
+      // Keep the row visibly active and surface a durable, retryable message —
+      // a toast is easy to miss while supervising several agents.
+      setStopErrorId(spawnId);
     } finally {
       setStoppingId(null);
     }
   };
 
-  if (selected) return <SubagentDetail item={selected} onBack={() => { setSelectedId(null); clearFocusedSubagent(); }} onSelectSubagent={setSelectedId} onOpenArtifact={handleOpenArtifact} />;
+  if (selected) return <SubagentDetail item={selected} onBack={() => { setSelectedId(null); clearFocusedSubagent(); }} onSelectSubagent={setSelectedId} onOpenArtifact={handleOpenArtifact} onStop={() => { void handleStopSubagent(selected); }} stopping={stoppingId === selected.subagent.spawnId} stopError={stopErrorId === selected.subagent.spawnId} />;
 
   if (isHistoryLoading || isHistoryReconciling) {
     const label = isHistoryReconciling ? "Restoring delegated work…" : "Loading delegated work…";
@@ -455,7 +469,7 @@ export function OrchestratorPanel() {
         <div className="flex min-w-0 items-center gap-2">
           <Bot className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
           <h2 className="truncate text-[13px] font-semibold text-foreground">Agents</h2>
-          {allItems.length > 0 && <span className="text-[10px] tabular-nums text-muted-foreground">{allItems.length}</span>}
+          {allItems.length > 0 && <span className="text-[11px] tabular-nums text-muted-foreground">{allItems.length}</span>}
         </div>
         {ended.length > 0 && activeChatId && (
           <button
@@ -473,7 +487,7 @@ export function OrchestratorPanel() {
       <div className="min-h-0 flex-1 overflow-y-auto">
         {isHistoryRefreshing && <div className="flex items-center gap-2 border-b border-border bg-muted px-4 py-2 text-[11px] text-muted-foreground" role="status" aria-live="polite"><Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />Refreshing saved execution history…</div>}
         {recoveredCount > 0 && <div className="border-b border-warning bg-muted px-4 py-2 text-[11px] leading-5 text-foreground" role="status"><span className="font-medium text-warning">Reload reconciliation:</span>{" "}{recoveredCount} subagent {recoveredCount === 1 ? "run was" : "runs were"} interrupted before reload. The saved trace remains available for review.</div>}
-        {running.length > 0 && <section aria-labelledby="running-subagents-heading"><h2 id="running-subagents-heading" className="px-4 pb-2 pt-4 text-[12px] font-medium text-muted-foreground">Running · {running.length}</h2>{running.map((item) => <CompactSubagentRow key={item.id} item={item} selected={false} onSelect={() => setSelectedId(item.id)} onStop={() => { void handleStopSubagent(item); }} stopping={stoppingId === item.subagent.spawnId} />)}</section>}
+        {running.length > 0 && <section aria-labelledby="running-subagents-heading"><h2 id="running-subagents-heading" className="px-4 pb-2 pt-4 text-[12px] font-medium text-muted-foreground">Running · {running.length}</h2>{running.map((item) => <CompactSubagentRow key={item.id} item={item} selected={false} onSelect={() => setSelectedId(item.id)} onStop={() => { void handleStopSubagent(item); }} stopping={stoppingId === item.subagent.spawnId} stopError={stopErrorId === item.subagent.spawnId} />)}</section>}
         {ended.length > 0 && <section aria-labelledby="ended-subagents-heading"><h2 id="ended-subagents-heading" className="px-4 pb-2 pt-3 text-[12px] font-medium text-muted-foreground">Ended · {ended.length}</h2>{ended.map((item) => <CompactSubagentRow key={item.id} item={item} selected={false} onSelect={() => setSelectedId(item.id)} />)}</section>}
         {items.length === 0 && <div className="border-t border-border px-4 py-6 text-center"><Bot className="mx-auto h-5 w-5 text-muted-foreground" aria-hidden="true" /><p className="mt-2 text-[13px] text-foreground">{hiddenEndedCount > 0 ? "Past delegated work cleared" : "No delegated work in this chat"}</p><p className="mt-1 text-[12px] leading-5 text-muted-foreground">{hiddenEndedCount > 0 ? "New subagent runs will appear here." : "Subagents will appear here when Zen delegates a task."}</p></div>}
       </div>

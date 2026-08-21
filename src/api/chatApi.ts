@@ -120,7 +120,7 @@ export interface SendMessageRequest extends Record<string, unknown> {
   stop?: unknown;
   thinking?: {
     enabled: boolean;
-    effort?: "low" | "medium" | "high";
+    effort?: string;
     budgetTokens?: number;
   } | null;
   deepResearch?: boolean;

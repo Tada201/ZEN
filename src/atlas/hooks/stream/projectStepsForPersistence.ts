@@ -1,4 +1,5 @@
 import type { Step, ToolCall, ActionMeta, SubagentStepData } from "../../components/chat/types";
+import { orderSteps } from "@/atlas/agentRuntime/types";
 
 /**
  * Projects the live `assistant.steps` timeline down to a small UI-only
@@ -23,12 +24,13 @@ import type { Step, ToolCall, ActionMeta, SubagentStepData } from "../../compone
  *    (phase, agentName, iteration, resultSummary, error). Heavy metadata
  *    (toolResult.rawResult, toolResult.args, toolCall.args) is dropped.
  *  - `subagent`: spawnId, agentName, task, status, resultSummary, error,
- *    durationMs. Child transcripts are dropped.
+ *    durationMs, plus a bounded/redacted `resultContent` and `intermediateContent`
+ *    (each capped and secret-scrubbed) so the Agents panel can replay the child's
+ *    answer and interleaved commentary after reload.
  *
  * What is excluded:
  *  - Raw tool arguments (full input objects)
  *  - Full non-shell tool output (diffs/base64/large payloads)
- *  - Subagent child transcripts
  *  - Oversized reasoning blocks
  */
 const REASONING_CAP = 4000;
@@ -342,7 +344,10 @@ function compactSubagent(subagent: SubagentStepData | undefined): SubagentStepDa
 export function projectStepsForPersistence(steps: Step[] | undefined): Step[] {
   if (!steps || steps.length === 0) return [];
 
-  return steps.map((step): Step => {
+  // Persist in the same canonical order the live timeline renders, so a
+  // reloaded message replays byte-identical to what was on screen. Ordering
+  // before compaction keeps the sequence fields intact for the comparator.
+  const compacted = orderSteps(steps).map((step): Step => {
     switch (step.type) {
       case "text":
         return { ...step };
@@ -373,4 +378,5 @@ export function projectStepsForPersistence(steps: Step[] | undefined): Step[] {
         return step;
     }
   });
+  return compacted;
 }

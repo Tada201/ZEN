@@ -7,6 +7,7 @@ const runtime = read("src/atlas/agentRuntime/subagentRuntime.ts");
 const scopedStore = read("src/atlas/agentRuntime/scopedSubagentStore.ts");
 const card = read("src/atlas/components/chat/SubagentExecutionCard.tsx");
 const panel = read("src/atlas/components/right-panel/OrchestratorPanel.tsx");
+const phaseVocabulary = read("src/atlas/agentRuntime/subagentPhase.ts");
 const assistant = read("src/atlas/components/chat/AssistantMessage.tsx");
 const assistantLogic = read("src/atlas/components/chat/AssistantMessage.logic.ts");
 const types = read("src/atlas/components/chat/types.ts");
@@ -34,17 +35,19 @@ assert(card.includes("childAgents?: Step[]"), "subagent cards must accept nested
 assert(card.includes("delegationTree?: DelegationTree"), "nested cards must resolve child delegation records from the shared tree");
 assert(card.includes("Nested delegated agents"), "nested delegations must render under their parent card");
 assert(card.includes("marginInlineStart"), "nested delegations must communicate hierarchy without flooding the timeline");
-// The inline marker is intentionally minimal: `Subagent: <name> | <status>`
-// with the full trace + child tools living in the Agents panel. Clicking the
-// name opens that panel. Child-tool rendering is no longer inline.
-assert(card.includes("openSubagentInPanel"), "inline subagent name must open the Agents panel");
-assert(card.includes("Subagent:"), "inline marker must label the delegated agent");
+// The inline marker is intentionally minimal: a status icon + the delegated
+// task label + status word, with the full trace + child tools living in the
+// Agents panel. Clicking the task opens that agent's trace directly.
+assert(card.includes("openSubagentInPanel"), "inline subagent marker must open the focused agent trace in the Agents panel");
+assert(card.includes("resolvedSubagent.task"), "inline marker must lead with the delegated task, not the internal agent name");
 
 assert(panel.includes("buildDelegationTree"), "Agents panel must consume the canonical delegation tree");
 assert(panel.includes("selectDelegationChildTools"), "Agents panel must use authoritative child-tool ownership");
 assert(panel.includes("Nested subagents"), "Agents panel must preserve nested delegation hierarchy");
 assert(panel.includes("flattenSubagentItems"), "focused nested agents must remain selectable in the detail view");
-assert(panel.includes("Needs review"), "Agents panel must distinguish incomplete child output");
+assert(panel.includes("subagentPhaseLabel"), "Agents panel must take its status wording from the shared phase vocabulary");
+assert(phaseVocabulary.includes("Needs review") && phaseVocabulary.includes('case "incomplete"') && phaseVocabulary.includes('case "uncertain"'), "the shared phase vocabulary must distinguish incomplete child output");
+assert(panel.includes('item.subagent.status === "incomplete" || item.subagent.status === "uncertain"'), "Agents panel rows must style incomplete child output as needing review");
 assert(panel.includes("function ElapsedSubagentTime"), "running subagents must expose a dedicated elapsed timer");
 assert(panel.includes("window.setInterval(() => setNow(Date.now()), 1000)"), "elapsed timers should tick at most once per second");
 assert(panel.includes("window.clearInterval(interval)"), "elapsed timers must clean up their interval");

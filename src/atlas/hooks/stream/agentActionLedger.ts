@@ -365,12 +365,17 @@ export function normalizeMetadata(kind: string, payload: AgentActionEventPayload
 }
 
 export function createActionStep(payload: AgentActionEventPayload, kind: string): Step {
+  const metadata = normalizeMetadata(kind, payload);
   return {
     type: "action",
     kind,
     content: summarizeAction(payload, kind),
     status: inferStatus(kind, payload),
-    metadata: normalizeMetadata(kind, payload),
+    metadata,
+    // Mirror the backend sequence onto the step so a single canonical ordering
+    // pass can place this action relative to tool/text steps without reaching
+    // into metadata. Actions arrive in browser order otherwise (R1).
+    sequence: metadata.sequence,
     timestamp: toEpoch(payload.timestamp),
     eventId: getActionEventId(payload, kind),
   };

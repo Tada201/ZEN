@@ -3,9 +3,11 @@ pub mod lmstudio;
 pub mod ollama;
 pub mod openai_compat;
 pub mod provider_meta;
+pub mod reasoning;
 pub mod registry;
 pub mod tool_name_codec;
 
+pub use reasoning::{ReasoningCapability, ReasoningIntent, ResolvedReasoningRequest};
 pub use registry::ProviderRegistry;
 pub use tool_name_codec::ToolNameCodec;
 
@@ -35,8 +37,12 @@ pub struct ChatRequestConfig {
     pub seed: Option<i64>,
     pub stop: Option<Vec<String>>,
     pub json_schema: Option<serde_json::Value>,
-    pub reasoning_effort: Option<String>,
-    pub thinking_budget: Option<i64>,
+    /// The resolved reasoning request for this call. Populated by the reasoning
+    /// resolver before the provider encoder runs so encoders switch on
+    /// `capability.protocol` instead of re-deriving intent. When `None`, no
+    /// reasoning was requested or resolvable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_reasoning: Option<ResolvedReasoningRequest>,
     pub enable_prompt_caching: bool,
 }
 
@@ -105,6 +111,15 @@ pub trait LlmProvider: Send + Sync {
     /// instead of passing them as structured tool definitions.
     fn supports_tools(&self, _model: &str) -> bool {
         true
+    }
+
+    /// Resolve the reasoning capability for a model at request time. The
+    /// default resolves from the version-aware registry / heuristics keyed by
+    /// nothing (providers that cache richer metadata override this). This is
+    /// the single entry point the send command uses to normalize generic
+    /// reasoning intent — no capability logic lives in the command layer.
+    fn reasoning_capability(&self, _model: &str) -> ReasoningCapability {
+        ReasoningCapability::unknown()
     }
 }
 

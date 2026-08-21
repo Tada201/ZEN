@@ -114,7 +114,9 @@ function normalizeModelInfo(model: BackendModelInfo): ModelInfo {
     const capabilities = new Set(model.capabilities?.length ? model.capabilities : ["text"]);
     if (model.supportsVision) capabilities.add("vision");
     if (model.supportsTools) capabilities.add("tools");
-    if (model.supportsReasoning) capabilities.add("reasoning");
+    if (model.reasoning && model.reasoning.support !== "unsupported" && model.reasoning.support !== "unknown") {
+        capabilities.add("reasoning");
+    }
 
     return {
         ...model,

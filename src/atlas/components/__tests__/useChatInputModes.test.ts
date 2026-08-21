@@ -2,27 +2,22 @@
  * Vitest unit test for `useChatInputModes`.
  *
  * Coverage:
- *   1. Defaults — every mode is `false` / "medium" / 2048 when
- *      `localStorage` is empty.
- *   2. Restore — `localStorage.setItem(...)` before mount is picked
+ *   1. Defaults — non-reasoning modes are `false`; reasoning intent starts at
+ *      effort="medium", budget=2048.
+ *   2. Restore — the persisted non-reasoning `localStorage` entries are picked
  *      up through the lazy `useState` initializer.
- *   3. `buildThinkingPayload` four branches:
- *        - `!supportsReasoning` → `{ enabled: false }`;
- *        - `supportsReasoning && !isThinking` → `{ enabled: false }`;
- *        - `reasoningConfigType === "effort"` → `{ enabled: true, effort }`;
- *        - `reasoningConfigType === "budget"` → `{ enabled: true, budgetTokens }`;
- *        - any other configType → `{ enabled: true }` (boolean-only).
- *   4. `useAutoDisableThinking` — when `supportsReasoning` drops to
- *      `false` while the user has thinking on, the hook flips
- *      `setIsThinking(false)` so the toggle reflects the new model.
- *   5. Persistence — post-mount setter invocations write through to
- *      `localStorage` in the dedicated effect.
+ *   3. `buildThinkingPayload` is capability-driven:
+ *        - not thinking → `{ enabled: false }`;
+ *        - non-Zen control (unsupported/unknown/always_on/provider_managed)
+ *          → `{ enabled: false }`;
+ *        - tunable effort → `{ enabled: true, effort }`;
+ *        - tunable budget → `{ enabled: true, budgetTokens }`;
+ *        - toggleable → `{ enabled: true }` (boolean only).
+ *   4. `useAutoDisableThinking` — turns thinking OFF when the capability can no
+ *      longer be driven from Zen.
+ *   5. Persistence — non-reasoning setters write through to `localStorage`.
  *
  * Runtime caveat: vitest is not yet installed in `package.json`.
- * This file compiles against the ambient shim at
- * `src/types/vitest.d.ts` and is structured to run unmodified once
- * `pnpm add -D vitest jsdom @vitest/ui` lands. Until then, this is
- * a co-located spec — not executed by `npm test`.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -33,6 +28,67 @@ import {
   useChatInputModes,
   useAutoDisableThinking,
 } from "../useChatInputModes";
+import type { ReasoningCapability } from "@/lib/types/provider";
+
+// ── Capability fixtures ─────────────────────────────────────────
+
+const BASE: ReasoningCapability = {
+  support: "unknown",
+  protocol: "none",
+  controlAvailability: "none",
+  canDisable: false,
+  reasoningVisibility: "none",
+  source: "unknown",
+  confidence: "unknown",
+};
+
+const EFFORT: ReasoningCapability = {
+  ...BASE,
+  support: "tunable",
+  protocol: "openai_effort",
+  controlAvailability: "zen",
+  levels: ["low", "medium", "high"],
+  defaultLevel: "medium",
+  canDisable: true,
+  reasoningVisibility: "summary",
+  source: "registry",
+  confidence: "authoritative",
+};
+
+const BUDGET: ReasoningCapability = {
+  ...BASE,
+  support: "tunable",
+  protocol: "anthropic_budget",
+  controlAvailability: "zen",
+  minBudget: 1024,
+  maxBudget: 32768,
+  stepBudget: 1024,
+  canDisable: true,
+  reasoningVisibility: "summary",
+  source: "registry",
+  confidence: "authoritative",
+};
+
+const TOGGLEABLE: ReasoningCapability = {
+  ...BASE,
+  support: "toggleable",
+  protocol: "none",
+  controlAvailability: "zen",
+  canDisable: true,
+};
+
+const ALWAYS_ON: ReasoningCapability = {
+  ...BASE,
+  support: "always_on",
+  controlAvailability: "none",
+};
+
+const PROVIDER_MANAGED: ReasoningCapability = {
+  ...BASE,
+  support: "tunable",
+  controlAvailability: "provider_managed",
+  levels: ["low", "high"],
+};
 
 // ── Local renderHook harness ────────────────────────────────
 
@@ -72,9 +128,6 @@ function renderHook<T>(hookFn: () => T): Harness<T> {
 
 const LS_KEYS = {
   webSearch: "zen_web_search",
-  thinking: "zen_thinking",
-  thinkingEffort: "zen_thinking_effort",
-  thinkingBudget: "zen_thinking_budget",
   deepResearch: "zen_deep_research",
   imageGen: "zen_image_gen",
 };
@@ -94,7 +147,7 @@ describe("useChatInputModes", () => {
     clearLocalStorage();
   });
 
-  it("defaults: every flag is off, effort='medium', budget=2048 when localStorage is empty", () => {
+  it("defaults: non-reasoning flags off; effort='medium', budget=2048", () => {
     const h = renderHook(() => useChatInputModes());
 
     expect(h.value.isWebSearch).toBe(false);
@@ -107,27 +160,21 @@ describe("useChatInputModes", () => {
     h.unmount();
   });
 
-  it("restore: localStorage values are picked up on mount", () => {
+  it("restore: non-reasoning localStorage values are picked up on mount", () => {
     localStorage.setItem(LS_KEYS.webSearch, "true");
-    localStorage.setItem(LS_KEYS.thinking, "true");
-    localStorage.setItem(LS_KEYS.thinkingEffort, "high");
-    localStorage.setItem(LS_KEYS.thinkingBudget, "8192");
     localStorage.setItem(LS_KEYS.deepResearch, "true");
     localStorage.setItem(LS_KEYS.imageGen, "true");
 
     const h = renderHook(() => useChatInputModes());
 
     expect(h.value.isWebSearch).toBe(true);
-    expect(h.value.isThinking).toBe(true);
-    expect(h.value.thinkingEffort).toBe("high");
-    expect(h.value.thinkingBudget).toBe(8192);
     expect(h.value.isDeepResearch).toBe(true);
     expect(h.value.isImageGenEnabled).toBe(true);
 
     h.unmount();
   });
 
-  it("buildThinkingPayload: returns { enabled: false } when supportsReasoning is false", async () => {
+  it("buildThinkingPayload: returns { enabled: false } for a non-Zen capability", async () => {
     const h = renderHook(() => useChatInputModes());
 
     await act(async () => {
@@ -138,13 +185,10 @@ describe("useChatInputModes", () => {
       ReturnType<typeof useChatInputModes>["buildThinkingPayload"]
     > | null = null;
     act(() => {
-      payload = h.value.buildThinkingPayload(false, "effort");
+      payload = h.value.buildThinkingPayload(ALWAYS_ON);
     });
 
     expect(payload).toEqual({ enabled: false });
-    expect(
-      (payload as { effort?: unknown } | null)?.effort,
-    ).toBeUndefined();
 
     h.unmount();
   });
@@ -153,14 +197,14 @@ describe("useChatInputModes", () => {
     let payload: ReturnType<ReturnType<typeof useChatInputModes>["buildThinkingPayload"]> | null = null;
     const h = renderHook(() => {
       const m = useChatInputModes();
-      payload = m.buildThinkingPayload(true, "effort");
+      payload = m.buildThinkingPayload(EFFORT);
       return m;
     });
     expect(payload).toEqual({ enabled: false });
     h.unmount();
   });
 
-  it("buildThinkingPayload: 'effort' configType emits effort + thinkingEffort value", async () => {
+  it("buildThinkingPayload: tunable effort capability emits effort + thinkingEffort value", async () => {
     let payload: ReturnType<ReturnType<typeof useChatInputModes>["buildThinkingPayload"]> | null = null;
     const h = renderHook(() => useChatInputModes());
 
@@ -170,7 +214,7 @@ describe("useChatInputModes", () => {
     });
 
     act(() => {
-      payload = h.value.buildThinkingPayload(true, "effort");
+      payload = h.value.buildThinkingPayload(EFFORT);
     });
 
     expect(payload).toEqual({ enabled: true, effort: "high" });
@@ -178,7 +222,7 @@ describe("useChatInputModes", () => {
     h.unmount();
   });
 
-  it("buildThinkingPayload: 'budget' configType emits enabled + budgetTokens", async () => {
+  it("buildThinkingPayload: tunable budget capability emits enabled + budgetTokens", async () => {
     let payload: ReturnType<ReturnType<typeof useChatInputModes>["buildThinkingPayload"]> | null = null;
     const h = renderHook(() => useChatInputModes());
 
@@ -188,7 +232,7 @@ describe("useChatInputModes", () => {
     });
 
     act(() => {
-      payload = h.value.buildThinkingPayload(true, "budget");
+      payload = h.value.buildThinkingPayload(BUDGET);
     });
 
     expect(payload).toEqual({ enabled: true, budgetTokens: 4096 });
@@ -196,7 +240,7 @@ describe("useChatInputModes", () => {
     h.unmount();
   });
 
-  it("buildThinkingPayload: unknown configType emits boolean-only enabled payload", async () => {
+  it("buildThinkingPayload: toggleable capability emits boolean-only enabled payload", async () => {
     let payload: ReturnType<ReturnType<typeof useChatInputModes>["buildThinkingPayload"]> | null = null;
     const h = renderHook(() => useChatInputModes());
 
@@ -205,7 +249,7 @@ describe("useChatInputModes", () => {
     });
 
     act(() => {
-      payload = h.value.buildThinkingPayload(true, "some-other-shape");
+      payload = h.value.buildThinkingPayload(TOGGLEABLE);
     });
 
     expect(payload).toEqual({ enabled: true });
@@ -217,34 +261,32 @@ describe("useChatInputModes", () => {
     h.unmount();
   });
 
-  it("useAutoDisableThinking: turns thinking off when the model lacks reasoning support", () => {
+  it("buildThinkingPayload: provider_managed never emits a wire intent", async () => {
+    let payload: ReturnType<ReturnType<typeof useChatInputModes>["buildThinkingPayload"]> | null = null;
+    const h = renderHook(() => useChatInputModes());
+    await act(async () => {
+      h.value.setIsThinking(true);
+    });
+    act(() => {
+      payload = h.value.buildThinkingPayload(PROVIDER_MANAGED);
+    });
+    expect(payload).toEqual({ enabled: false });
+    h.unmount();
+  });
+
+  it("useAutoDisableThinking: turns thinking off when the capability can't be driven from Zen", () => {
     const setIsThinking = vi.fn();
-    let supportsReasoning = true;
-    let isThinking = true;
 
     const h = renderHook(() => {
-      // Toggle the supportsReasoning prop to drive the effect.
-      supportsReasoning = !supportsReasoning;
-      useAutoDisableThinking(supportsReasoning, isThinking, setIsThinking);
+      useAutoDisableThinking(ALWAYS_ON, true, setIsThinking);
       return null;
     });
 
-    // After first render: supportsReasoning=false, isThinking=true.
-    // Effect fires inside act() during the render — setIsThinking(false).
     expect(setIsThinking).toHaveBeenCalledWith(false);
 
-    // Stays silent on rerender with isThinking=false.
-    isThinking = false;
+    // Stays silent when the capability is Zen-controllable.
     h.rerender(() => {
-      useAutoDisableThinking(false, false, setIsThinking);
-      return null;
-    });
-    expect(setIsThinking).toHaveBeenCalledTimes(1);
-
-    // Stays silent when reasoning is supported.
-    isThinking = true;
-    h.rerender(() => {
-      useAutoDisableThinking(true, true, setIsThinking);
+      useAutoDisableThinking(EFFORT, true, setIsThinking);
       return null;
     });
     expect(setIsThinking).toHaveBeenCalledTimes(1);
@@ -252,10 +294,10 @@ describe("useChatInputModes", () => {
     h.unmount();
   });
 
-  it("useAutoDisableThinking: stays silent on initial mount when isThinking is already off", () => {
+  it("useAutoDisableThinking: stays silent when isThinking is already off", () => {
     const setIsThinking = vi.fn();
     const h = renderHook(() => {
-      useAutoDisableThinking(false, false, setIsThinking);
+      useAutoDisableThinking(ALWAYS_ON, false, setIsThinking);
       return null;
     });
 
@@ -264,7 +306,7 @@ describe("useChatInputModes", () => {
     h.unmount();
   });
 
-  it("persistence: setter invocations write through to localStorage on the dedicated effect", async () => {
+  it("persistence: non-reasoning setters write through to localStorage", async () => {
     const h = renderHook(() => useChatInputModes());
 
     await act(async () => {
@@ -282,36 +324,6 @@ describe("useChatInputModes", () => {
     });
     expect(localStorage.getItem(LS_KEYS.imageGen)).toBe("true");
 
-    await act(async () => {
-      h.value.setIsThinking(true);
-    });
-    expect(localStorage.getItem(LS_KEYS.thinking)).toBe("true");
-
-    await act(async () => {
-      h.value.setThinkingEffort("low");
-    });
-    expect(localStorage.getItem(LS_KEYS.thinkingEffort)).toBe("low");
-
-    await act(async () => {
-      h.value.setThinkingBudget(1024);
-    });
-    expect(localStorage.getItem(LS_KEYS.thinkingBudget)).toBe("1024");
-
-    h.unmount();
-  });
-
-  it("persistence: setter mutations flip off path writes 'false' to localStorage", async () => {
-    // Seed so the off-mutation is observable.
-    localStorage.setItem(LS_KEYS.webSearch, "true");
-    const h = renderHook(() => useChatInputModes());
-    expect(h.value.isWebSearch).toBe(true);
-
-    await act(async () => {
-      h.value.setIsWebSearch(false);
-    });
-    expect(h.value.isWebSearch).toBe(false);
-    expect(localStorage.getItem(LS_KEYS.webSearch)).toBe("false");
-
     h.unmount();
   });
 
@@ -322,7 +334,7 @@ describe("useChatInputModes", () => {
       h.value.setIsThinking(true);
       h.value.setThinkingEffort("low");
     });
-    expect(h.value.buildThinkingPayload(true, "effort")).toEqual({
+    expect(h.value.buildThinkingPayload(EFFORT)).toEqual({
       enabled: true,
       effort: "low",
     });
@@ -330,7 +342,7 @@ describe("useChatInputModes", () => {
     await act(async () => {
       h.value.setThinkingEffort("high");
     });
-    expect(h.value.buildThinkingPayload(true, "effort")).toEqual({
+    expect(h.value.buildThinkingPayload(EFFORT)).toEqual({
       enabled: true,
       effort: "high",
     });

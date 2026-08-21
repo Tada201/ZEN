@@ -309,7 +309,7 @@ mod tests {
         let entry = create_memory_entry(
             session_id,
             "This is a test finding from the research agent",
-            "ZEN-DOCS",
+            "Explore",
             Some("{\"source\": \"web_search\"}"),
         );
 

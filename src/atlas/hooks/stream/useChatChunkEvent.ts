@@ -55,14 +55,21 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         if (assistantIdx === -1) return prev;
         const current = prev[assistantIdx];
         const next = [...prev];
-        const text = record.parts.find((part) => part.type === "text");
+        // Text can now span multiple parts (a new part opens when prose resumes
+        // after a tool), so the message-level content is the concatenation of
+        // every visible text part in sequence, not just the first.
+        const text = record.parts
+          .filter((part) => part.type === "text")
+          .sort((a, b) => a.sequence - b.sequence)
+          .map((part) => part.visibleText)
+          .join("");
         const reasoning = record.parts
           .filter((part) => part.type === "reasoning")
           .map((part) => part.visibleText)
           .join("");
         next[assistantIdx] = {
           ...current,
-          content: text?.visibleText || current.content,
+          content: text || current.content,
           reasoning: reasoning || current.reasoning,
           // Keep the canonical runtime reveal visible inside the same ordered
           // timeline as tool/action steps. Previously this callback updated

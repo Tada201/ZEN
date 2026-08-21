@@ -246,16 +246,18 @@ checkAll(assert, [
 
   // ── ASSISTANTMESSAGETRACE ────────────────────────────────────────────────
   // Consumer-side: must actively import humanizeToolName from ToolCallCard
-  // (noun SSOT) AND AgentDelegationLane so the delegation leaf stays
-  // reachable. Must NOT expose `serializeActionDetails` (raw JSON scrub) and
-  // must carry a `Technical details` disclosure over the argsPreview. Plus
-  // the cross-cutting legacy-name pin.
+  // (noun SSOT). The legacy AgentDelegationLane was retired from the parent
+  // timeline — subagent delegation now renders only through the canonical
+  // SubagentExecutionCard (in AssistantMessage) and the Agents panel — so
+  // AssistantMessageTrace must NOT reintroduce the lane inline. Must NOT expose
+  // `serializeActionDetails` (raw JSON scrub) and must carry a `Technical
+  // details` disclosure over the argsPreview. Plus the legacy-name pin.
   {
     context: "AssistantMessageTrace.tsx",
     source: actionTraceSource,
     pins: [
       pinActiveImport("humanizeToolName", "ToolCallCard", "AssistantMessageTrace must import humanizeToolName from ToolCallCard (chat_status noun SSOT)"),
-      pinActiveImport("AgentDelegationLane", "AgentDelegationLane", "AssistantMessageTrace must import AgentDelegationLane (path-style agnostic: relative './AgentDelegationLane' or aliased '@/atlas/components/chat/AgentDelegationLane') so the delegation leaf stays reachable"),
+      pinAbsent("AgentDelegationLane", "AssistantMessageTrace must NOT render the retired AgentDelegationLane inline; delegation belongs to SubagentExecutionCard and the Agents panel"),
       legacyNameAbsent,
       pinAbsent("serializeActionDetails", "action rows should not expose internal JSON event payloads"),
       pinContains("Issue", "action rows should expose the user-readable issue label"),

@@ -1,12 +1,11 @@
-import { Ban, Check, CircleAlert, Loader2, X } from "lucide-react";
+import { Ban, Check, ChevronRight, CircleAlert, Loader2, X } from "lucide-react";
+import { useState } from "react";
 import { useScopedSubagent } from "@/atlas/agentRuntime/scopedSubagentStore";
-import { agentIconName } from "@/atlas/agentRuntime/agentIcon";
+import { subagentPhaseLabel } from "@/atlas/agentRuntime/subagentPhase";
 import type { DelegationNode, DelegationTree } from "@/atlas/agentRuntime/delegationTree";
 import { cn } from "@/lib/utils";
 import { presentExecutionError } from "@/atlas/agentRuntime/executionError";
 import { useUIStore } from "@/lib/stores/useUIStore";
-import { Badge } from "@/components/ui/badge";
-import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
 import type { ArtifactData, Step, ToolCall } from "./types";
 
 interface SubagentExecutionCardProps {
@@ -60,16 +59,9 @@ export function SubagentExecutionCard({
   const isCancelled = status === "cancelled";
   const isFailed = status === "failed" || isCancelled;
   const needsReview = status === "incomplete" || status === "uncertain";
-  const isCompleted = status === "completed";
   const duration = formatDuration(resolvedSubagent.durationMs);
 
-  const statusLabel = isStale ? "Interrupted"
-    : isRunning ? "Working"
-    : isCancelled ? "Cancelled"
-    : isFailed ? "Failed"
-    : needsReview ? "Needs review"
-    : isCompleted ? "Complete"
-    : "Subagent";
+  const statusLabel = isStale ? "Interrupted" : subagentPhaseLabel(status, isStale);
 
   const StatusIcon = isRunning ? Loader2
     : isCancelled ? Ban
@@ -87,6 +79,12 @@ export function SubagentExecutionCard({
     if (sessionId && resolvedSubagent.spawnId) openSubagentInPanel(sessionId, resolvedSubagent.spawnId);
   };
 
+  // Show the delegated task, not the internal agent name — the task is what the
+  // user recognizes. Lead with the status icon (working/done/failed) rather than
+  // a generic agent glyph, matching Claude Code / Cursor agent rows. The agent
+  // name is kept only in the accessible label for screen-reader context.
+  const taskLabel = resolvedSubagent.task?.trim() || resolvedSubagent.agentName;
+
   // Failures stay in the Agents panel by default; only surface inline when the
   // caller opts in (showError), so the main timeline isn't flooded with a
   // child's raw error.
@@ -98,33 +96,32 @@ export function SubagentExecutionCard({
     <div className="execution-subagent" style={{ marginInlineStart: `${Math.min(delegation?.depth || 0, 4) * 12}px` }}>
       <div
         className="flex min-h-9 items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5"
-        aria-label={`${resolvedSubagent.agentName}, ${statusLabel}${duration ? `, Duration ${duration}` : ""}`}
+        aria-label={`${resolvedSubagent.agentName}, ${statusLabel}${duration ? `, Duration ${duration}` : ""}. Task: ${taskLabel}`}
       >
-        <WorkbenchIcon
-          name={agentIconName(resolvedSubagent.agentId, resolvedSubagent.agentName)}
-          size={15}
-          className="shrink-0 text-muted-foreground"
-        />
-        <span className="shrink-0 text-[12px] text-muted-foreground">Subagent:</span>
+        <StatusIcon className={cn("h-4 w-4 shrink-0", statusTone, isRunning && "animate-spin")} aria-hidden="true" />
         {canOpen ? (
           <button
             type="button"
             onClick={openPanel}
             className="min-w-0 flex-1 truncate text-left text-[12px] font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm"
-            title={`Open ${resolvedSubagent.agentName} in the Agents panel`}
+            title={`Open this agent’s execution trace`}
           >
-            {resolvedSubagent.agentName}
+            {taskLabel}
           </button>
         ) : (
-          <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-foreground">{resolvedSubagent.agentName}</span>
+          <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-foreground">{taskLabel}</span>
         )}
-        <span aria-hidden="true" className="shrink-0 text-muted-foreground">|</span>
-        <Badge variant="outline" className={cn("shrink-0 gap-1 border-border px-1.5 py-0 text-[10px] font-medium", statusTone)}>
-          <StatusIcon className={cn("h-3 w-3", isRunning && "animate-spin")} aria-hidden="true" />
-          {statusLabel}
-        </Badge>
-        {duration && <span className="execution-subagent-duration shrink-0 text-[10px] tabular-nums text-muted-foreground">{duration}</span>}
+        <span className={cn("shrink-0 text-[11px] font-medium", statusTone)}>{statusLabel}</span>
+        {duration && <span className="execution-subagent-duration shrink-0 text-[11px] tabular-nums text-muted-foreground">{duration}</span>}
       </div>
+
+      {/* Announce every lifecycle transition — not just running — so a screen
+          reader hears the child finish/fail, matching the Agents panel's
+          persistent live region. A plain aria-live on the status word only
+          fired while running. */}
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {`${taskLabel}: ${statusLabel}`}
+      </span>
 
       {errorPresentation && (
         <div className="mt-1.5 rounded-md border border-destructive bg-muted p-2.5 text-[12px] leading-relaxed text-destructive" role="alert">
@@ -134,7 +131,7 @@ export function SubagentExecutionCard({
               <div className="font-medium">{errorPresentation.title}</div>
               <div className="mt-0.5 text-[11px] leading-relaxed text-foreground">{errorPresentation.summary}</div>
               {errorPresentation.action !== "none" && (
-                <div className="mt-1 text-[10px] text-muted-foreground">Next: {errorPresentation.actionLabel}</div>
+                <div className="mt-1 text-[11px] text-muted-foreground">Next: {errorPresentation.actionLabel}</div>
               )}
             </div>
           </div>
@@ -149,6 +146,55 @@ export function SubagentExecutionCard({
       )}
 
       {childAgents.length > 0 && (
+        <NestedAgentsDisclosure
+          childAgents={childAgents}
+          childToolCalls={childToolCalls}
+          delegationTree={delegationTree}
+          messageId={messageId}
+          sessionId={sessionId}
+          showError={showError}
+          onOpenArtifact={onOpenArtifact}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Nested delegated agents are collapsed behind a count by default so the parent
+ * timeline shows delegation, not a recursive execution tree. Expanding reveals
+ * the same minimal markers.
+ */
+function NestedAgentsDisclosure({
+  childAgents,
+  childToolCalls,
+  delegationTree,
+  messageId,
+  sessionId,
+  showError,
+  onOpenArtifact,
+}: {
+  childAgents: Step[];
+  childToolCalls?: ToolCall[];
+  delegationTree?: DelegationTree;
+  messageId?: string;
+  sessionId?: string;
+  showError: boolean;
+  onOpenArtifact: (artifact: ArtifactData) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="mt-1.5">
+      <button
+        type="button"
+        onClick={() => setExpanded((prev) => !prev)}
+        aria-expanded={expanded}
+        className="inline-flex items-center gap-1 rounded-sm text-[11px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        <ChevronRight className={cn("h-3 w-3 transition-transform duration-200 motion-reduce:transition-none", expanded && "rotate-90")} aria-hidden="true" />
+        {childAgents.length} nested {childAgents.length === 1 ? "agent" : "agents"}
+      </button>
+      {expanded && (
         <div className="mt-1.5 space-y-1.5" aria-label="Nested delegated agents">
           {childAgents.map((childStep) => (
             <SubagentExecutionCard

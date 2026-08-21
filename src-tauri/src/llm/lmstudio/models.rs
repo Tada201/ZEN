@@ -39,16 +39,14 @@ impl super::LmStudioProvider {
                             .as_deref()
                             .map(Self::arch_supports_tools)
                             .unwrap_or(false);
-                        // Detect that the model reasons, but map config type to
-                        // "none" (native, no tunable control) — NOT "effort":
-                        // LM Studio's /v1/chat/completions ignores per-request
-                        // reasoning_effort (lmstudio-bug-tracker #988) and nested
-                        // reasoning.effort only exists on the separate
-                        // /v1/responses endpoint (#1250), which Zen does not
-                        // integrate. An effort UI would send a parameter the
-                        // server silently drops, recreating a placebo toggle.
-                        let (supports_reasoning, reasoning_config_type) =
-                            reasoning_metadata_from_capabilities(&m);
+                        // Detect that the model reasons via allowed_options, but
+                        // mark it provider-managed with no wire protocol: Zen
+                        // drives /v1/chat/completions, which ignores per-request
+                        // reasoning (lmstudio-bug-tracker #988); reasoning.effort
+                        // only exists on the separate /v1/responses endpoint
+                        // (#1250), which Zen does not integrate. A Zen control
+                        // would send a parameter the server silently drops.
+                        let reasoning = reasoning_capability_from_entry(&m);
 
                         ModelInfo {
                             id: m.id.clone(),
@@ -65,8 +63,7 @@ impl super::LmStudioProvider {
                             state: m.state,
                             supports_vision: Some(is_vlm),
                             supports_tools: Some(has_native_tools),
-                            supports_reasoning,
-                            reasoning_config_type,
+                            reasoning: Some(reasoning),
                         }
                     })
                     .collect();
@@ -157,8 +154,7 @@ impl super::LmStudioProvider {
                     supports_tools: None,  // Inferred via arch in supports_tools()
                     // Only /api/v0/models exposes reasoning capabilities; the v1
                     // payload has no equivalent field, so reasoning stays unknown.
-                    supports_reasoning: None,
-                    reasoning_config_type: None,
+                    reasoning: None,
                 }
             })
             .collect();
@@ -200,93 +196,85 @@ impl super::LmStudioProvider {
                 supports_tools: None,
                 // OpenAI-compat /v1/models carries no capability metadata;
                 // only /api/v0/models exposes reasoning capabilities.
-                supports_reasoning: None,
-                reasoning_config_type: None,
+                reasoning: None,
             })
             .collect())
     }
 }
 
-/// Derive (supports_reasoning, reasoning_config_type) from a v0 model entry's
-/// capabilities payload. Reports (Some(true), Some("none")) — the model
-/// reasons natively with no tunable control from Zen — when allowed_options is
-/// present, non-empty, and offers an active mode ("on", "low", "medium",
-/// "high"). Returns (None, None) otherwise (unknown rather than false, since
-/// older builds simply omit the field).
-fn reasoning_metadata_from_capabilities(
+/// Resolve a v0 model entry's reasoning capability. LM Studio's
+/// `allowed_options` are forwarded to the resolver, which classifies the model
+/// as provider-managed (Zen's /v1/chat/completions can't drive it) rather than
+/// inventing a wire control. Absent capabilities → `unknown`.
+fn reasoning_capability_from_entry(
     entry: &LmStudioModelEntry,
-) -> (Option<bool>, Option<String>) {
-    let has_active_mode = entry
+) -> crate::llm::ReasoningCapability {
+    let allowed: Option<Vec<String>> = entry
         .capabilities
         .as_ref()
         .and_then(|c| c.reasoning.as_ref())
-        .and_then(|r| r.allowed_options.as_deref())
-        .is_some_and(|opts| {
-            !opts.is_empty()
-                && opts
-                    .iter()
-                    .any(|o| matches!(o.as_str(), "on" | "low" | "medium" | "high"))
-        });
-
-    if has_active_mode {
-        (Some(true), Some("none".to_string()))
-    } else {
-        (None, None)
-    }
+        .and_then(|r| r.allowed_options.clone());
+    crate::llm::reasoning::resolver::resolve(
+        "lmstudio",
+        &entry.id,
+        &crate::llm::reasoning::resolver::RawReasoningMetadata {
+            allowed_options: allowed.as_deref(),
+            ..Default::default()
+        },
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::llm::reasoning::{ControlAvailability, ReasoningSupport};
 
     fn entry_from_json(json: &str) -> LmStudioModelEntry {
         serde_json::from_str(json).unwrap()
     }
 
     #[test]
-    fn reasoning_metadata_absent_capabilities_stays_unknown() {
-        // Older builds omit the field entirely; behavior must be unchanged.
+    fn reasoning_absent_capabilities_stays_unknown() {
         let entry = entry_from_json(r#"{"id":"qwen3","type":"llm","arch":"qwen3"}"#);
-        assert_eq!(
-            reasoning_metadata_from_capabilities(&entry),
-            (None, None)
-        );
+        let cap = reasoning_capability_from_entry(&entry);
+        assert_eq!(cap.support, ReasoningSupport::Unknown);
     }
 
     #[test]
-    fn reasoning_metadata_on_off_options_detected() {
+    fn reasoning_on_off_options_are_provider_managed() {
         let entry = entry_from_json(
             r#"{"id":"m","capabilities":{"reasoning":{"allowed_options":["off","on"]}}}"#,
         );
-        assert_eq!(
-            reasoning_metadata_from_capabilities(&entry),
-            (Some(true), Some("none".to_string()))
-        );
+        let cap = reasoning_capability_from_entry(&entry);
+        assert_eq!(cap.control_availability, ControlAvailability::ProviderManaged);
+        assert_ne!(cap.support, ReasoningSupport::Unsupported);
     }
 
     #[test]
-    fn reasoning_metadata_graded_options_detected() {
+    fn reasoning_graded_options_are_provider_managed_tunable() {
         let entry = entry_from_json(
             r#"{"id":"m","capabilities":{"reasoning":{"allowed_options":["off","on","low","medium","high"]}}}"#,
         );
-        assert_eq!(
-            reasoning_metadata_from_capabilities(&entry),
-            (Some(true), Some("none".to_string()))
-        );
+        let cap = reasoning_capability_from_entry(&entry);
+        assert_eq!(cap.control_availability, ControlAvailability::ProviderManaged);
+        assert_eq!(cap.support, ReasoningSupport::Tunable);
     }
 
     #[test]
-    fn reasoning_metadata_off_only_or_empty_stays_unknown() {
+    fn reasoning_off_only_or_empty_stays_unknown() {
         let off_only = entry_from_json(
             r#"{"id":"m","capabilities":{"reasoning":{"allowed_options":["off"]}}}"#,
         );
         assert_eq!(
-            reasoning_metadata_from_capabilities(&off_only),
-            (None, None)
+            reasoning_capability_from_entry(&off_only).support,
+            ReasoningSupport::Unknown
         );
 
         let empty =
             entry_from_json(r#"{"id":"m","capabilities":{"reasoning":{"allowed_options":[]}}}"#);
-        assert_eq!(reasoning_metadata_from_capabilities(&empty), (None, None));
+        assert_eq!(
+            reasoning_capability_from_entry(&empty).support,
+            ReasoningSupport::Unknown
+        );
     }
 }

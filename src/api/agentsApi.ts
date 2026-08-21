@@ -22,6 +22,7 @@ export interface AgentInfo {
   is_builtin: boolean;
   user_editable: boolean;
   config_mode: "full" | "model_only" | "read_only";
+  reasoning_effort?: string | null;
 }
 
 export interface AgentProfileDraft {
@@ -53,6 +54,8 @@ export const agentsApi = {
     callCommand<boolean>("delete_agent", { agentId }),
   setVoiceDisplayModel: (model: string | null) =>
     callCommand<void>("set_voice_display_model", { model }),
-  spawnAgent: (agentId: string, message: string, options: Record<string, unknown> = {}) =>
-    callCommand<string>("spawn_agent", { agentId, message, options }),
+  setAgentModel: (agentId: string, model: string | null) =>
+    callCommand<void>("set_agent_model", { agentId, model }),
+  setAgentReasoning: (agentId: string, effort: string | null) =>
+    callCommand<void>("set_agent_reasoning", { agentId, effort }),
 };

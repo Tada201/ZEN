@@ -15,12 +15,22 @@ function key(chatId: string, spawnId: string) {
   return `${chatId}:${spawnId}`;
 }
 
+function commentaryFingerprint(record: ScopedSubagentRecord): string {
+  const segments = record.intermediateContent;
+  if (!segments || segments.length === 0) return "";
+  // Length alone misses in-place edits (a corrected or reordered segment that
+  // keeps the count). Fingerprint the count plus the last segment's identity so
+  // a same-length change still notifies subscribers.
+  const last = segments[segments.length - 1];
+  return `${segments.length}:${last.sequence}:${last.text.length}`;
+}
+
 function hasChanged(a: ScopedSubagentRecord | undefined, b: ScopedSubagentRecord): boolean {
   if (!a) return true;
   return a.status !== b.status
     || a.resultSummary !== b.resultSummary
     || a.resultContent !== b.resultContent
-    || (a.intermediateContent?.length || 0) !== (b.intermediateContent?.length || 0)
+    || commentaryFingerprint(a) !== commentaryFingerprint(b)
     || a.error !== b.error
     || a.durationMs !== b.durationMs
     || a.timestamp !== b.timestamp

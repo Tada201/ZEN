@@ -379,7 +379,9 @@ pub struct AppState {
         Arc<tokio::sync::Mutex<HashMap<String, crate::services::tool::PendingToolApproval>>>,
     pub pending_orchestrator_approvals:
         Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<bool>>>>,
-    pub subagent_cancellation_tokens: Arc<tokio::sync::Mutex<HashMap<String, CancellationToken>>>,
+    /// Per-sub-agent cancellation tokens, paired with the owning `chat_id` so a
+    /// cancel request can be verified against the chat that spawned it.
+    pub subagent_cancellation_tokens: Arc<tokio::sync::Mutex<HashMap<String, (String, CancellationToken)>>>,
     /// Per-sub-agent message inbox for parent→child message injection.
     /// Keyed by the sub-agent's `spawn_id`, the queue holds `ChatMessage`s
     /// that the child runner drains into its conversation each iteration.

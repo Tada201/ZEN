@@ -14,7 +14,9 @@ export interface PremiumChatInputProps {
     webSearch: boolean;
     thinking: {
       enabled: boolean;
-      effort?: "low" | "medium" | "high";
+      /** Generic effort level (provider-specific values like minimal/xhigh/max
+       *  are allowed; the backend clamps to the model's real level set). */
+      effort?: string;
       budgetTokens?: number;
     };
     deepResearch: boolean;

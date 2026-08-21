@@ -11,7 +11,10 @@ const subagent = read("src/atlas/components/chat/SubagentExecutionCard.tsx");
 const actionTrace = read("src/atlas/components/chat/AssistantMessageTrace.tsx");
 const deepResearch = read("src/atlas/components/chat/DeepResearchRunMessage.tsx");
 const disclosure = read("src/atlas/components/chat/executionDisclosure.ts");
-const rightPanel = read("src/atlas/components/right-panel/RightPanelInsights.tsx");
+// RightPanelInsights was retired; the Agents panel now projects saved traces by
+// replaying AssistantMessage, so the "no removed presentation prop" rule applies
+// to that projection instead.
+const rightPanel = read("src/atlas/components/right-panel/OrchestratorPanel.tsx");
 
 assert(assistantLogic.includes("function getExecutionStepKey"), "assistant should centralize stable execution step identity");
 assert(assistantLogic.includes("toolBatchId") && assistantLogic.includes("executionId") && assistantLogic.includes("runId"), "live group keys should prefer canonical execution identity");
@@ -23,8 +26,8 @@ const executionGroupBlock = assistant.match(/<ExecutionGroup[\s\S]*?\/>/)?.[0] |
 const subagentBlock = assistant.match(/<SubagentExecutionCard[\s\S]*?\/>/)?.[0] || "";
 assert(!executionGroupBlock.includes("isStreaming="), "ExecutionGroup must not receive the removed presentation prop");
 assert(!subagentBlock.includes("isStreaming="), "SubagentExecutionCard must not receive the removed presentation prop");
-const rightPanelExecutionGroupBlock = rightPanel.match(/<ExecutionGroup[\s\S]*?\/>/)?.[0] || "";
-assert(!rightPanelExecutionGroupBlock.includes("isStreaming="), "right-panel ExecutionGroup projections must not pass the removed presentation prop");
+const rightPanelAssistantBlock = rightPanel.match(/<AssistantMessage[\s\S]*?\/>/)?.[0] || "";
+assert(!rightPanelAssistantBlock.includes("isStreaming="), "right-panel trace projections must not pass the removed presentation prop");
 assert(!assistant.includes("slide-in-from-top-1"), "assistant trace motion must not use directional entrance slides");
 assert(assistant.includes("animate-in fade-in duration-150"), "assistant trace updates should use a short opacity-only entrance");
 assert(!trace.includes("animationDelay") && !trace.includes("slide-in-from-top-2"), "tool rows must not use index-based staggered waterfall motion");

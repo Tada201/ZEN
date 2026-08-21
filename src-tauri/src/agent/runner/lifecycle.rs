@@ -333,6 +333,27 @@ impl Runner {
         event.emit_via(&self.app, &self.on_event);
     }
 
+    /// Emit a terminal chat error only when this runner owns the chat. A
+    /// sub-agent runs under the parent's chat id, so an unconditional
+    /// `ChatError` marks the parent's assistant message failed and stops its
+    /// stream because a child failed. Child failures already reach the UI
+    /// through the spawn tool's terminal subagent-step / `agent:complete`
+    /// events.
+    pub(super) fn emit_owned_chat_error(
+        &self,
+        payload: crate::agent::event_bus::ChatErrorPayload,
+    ) {
+        if self.should_persist_to_parent_chat() {
+            self.emit(AgentEvent::ChatError(payload));
+        } else {
+            tracing::warn!(
+                chat_id = %payload.chat_id,
+                "Sub-agent run failed; leaving the parent chat stream intact: {}",
+                payload.error
+            );
+        }
+    }
+
     /// Mint a fresh per-run correlation id and store it on the runner.
     /// Called once at the top of `run()`. The returned value is also used
     /// to seed the run's tracing span / logs.

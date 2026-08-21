@@ -39,8 +39,9 @@ const useToolEvents = readFileSync(new URL("../src/atlas/hooks/stream/useToolEve
 const toolCallCard = readFileSync(new URL("../src/atlas/components/chat/ToolCallCard.tsx", import.meta.url), "utf8");
 const toolOutputPreview = readFileSync(new URL("../src/atlas/components/chat/tool/toolOutputPreview.ts", import.meta.url), "utf8");
 const generalistAgent = readFileSync(new URL("../src-tauri/resources/agents/generalist.json", import.meta.url), "utf8");
-const researcherAgent = readFileSync(new URL("../src-tauri/resources/agents/researcher.json", import.meta.url), "utf8");
-const operationalAgent = readFileSync(new URL("../src-tauri/resources/agents/operational_expert.json", import.meta.url), "utf8");
+// ZEN-DOCS (researcher) and ZEN-TAC (operational_expert) were retired; the
+// shipped defaults are generalist, explore, and voice_display.
+const exploreAgent = readFileSync(new URL("../src-tauri/resources/agents/explore.json", import.meta.url), "utf8");
 
 // The MCP HTTP transport (mcp/server.rs + mcp/http.rs) was removed in cf2f785
 // ("MCP server -> client"); MCP now runs over stdio only, so per-launch HTTP
@@ -188,8 +189,7 @@ assert(
 );
 for (const [name, agent] of [
   ["generalist", generalistAgent],
-  ["researcher", researcherAgent],
-  ["operational_expert", operationalAgent],
+  ["explore", exploreAgent],
 ]) {
   const parsed = JSON.parse(agent);
   assert(parsed.instructions.includes("Tool Use Protocol"), `${name} should include the shared tool protocol`);
@@ -197,6 +197,15 @@ for (const [name, agent] of [
   assert(!parsed.instructions.includes("tools_search") && !parsed.instructions.includes("list_tools"), `${name} should not teach stale progressive discovery tools`);
 }
 assert(!JSON.parse(generalistAgent).tool_ids.includes("tools_search") && !JSON.parse(generalistAgent).tool_ids.includes("list_tools"), "generalist allowlist should not include stale progressive discovery tools");
+// Explore is read-only by construction: no write/edit/patch/command tools and
+// no delegation, so a search delegation can never mutate the workspace.
+{
+  const explore = JSON.parse(exploreAgent);
+  for (const forbidden of ["write_file", "edit_file", "apply_patch", "run_command", "spawn_agent", "manage_board"]) {
+    assert(!explore.tool_ids.includes(forbidden), `explore must not be granted the mutating tool '${forbidden}'`);
+  }
+  assert(explore.allow_nested_delegation === false, "explore must not delegate further");
+}
 
 console.log("tool system final hardening ok");
 

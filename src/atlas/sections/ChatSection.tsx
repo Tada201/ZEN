@@ -73,7 +73,7 @@ export function ChatApp({ fullScreen: _fullScreen }: { fullScreen?: boolean }) {
     webSearch?: boolean;
     thinking?: {
       enabled: boolean;
-      effort?: "low" | "medium" | "high";
+      effort?: string;
       budgetTokens?: number;
     };
     deepResearch?: boolean;

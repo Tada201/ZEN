@@ -19,7 +19,7 @@ assert.equal(packageJson.scripts["test:phase-14-composer-hardening"], "node test
 assert(packageJson.scripts["test:agentic-workbench"].includes("npm run test:phase-14-composer-hardening"));
 
 assert(input.includes("visiblePinnedActions"), "capability pins must be filtered at the composer boundary");
-assert(input.includes("actionId === \"thinking\" && supportsReasoning"), "unsupported reasoning pins must not render as blank controls");
+assert(input.includes("actionId === \"thinking\" && showReasoningControl"), "unsupported reasoning pins must not render as blank controls");
 assert(!input.includes("pinnedActions: visiblePinnedActions, togglePin"), "memo dependency arrays must contain values, not object-property syntax");
 assert(pinned.includes("if (pinnedActions.length === 0) return null"), "an empty pinned rail must not reserve layout space");
 assert(pinned.includes("composer-pinned-rail"), "the pinned rail must not masquerade as the outer action rail");

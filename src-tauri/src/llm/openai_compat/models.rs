@@ -170,23 +170,6 @@ impl OpenAiCompatProvider {
         fallback
     }
 
-    fn reasoning_metadata_from_parameters(
-        supported_parameters: Option<&[String]>,
-    ) -> Option<(Option<bool>, Option<String>)> {
-        let parameters = supported_parameters?;
-        if Self::parameter_supported(parameters, "reasoning_effort") {
-            return Some((Some(true), Some("effort".to_string())));
-        }
-        if Self::parameter_supported(parameters, "reasoning") {
-            return Some((Some(true), Some("budget".to_string())));
-        }
-        if Self::parameter_supported(parameters, "include_reasoning") {
-            return Some((Some(true), Some("none".to_string())));
-        }
-
-        Some((Some(false), None))
-    }
-
     pub async fn do_list_models(&self) -> ZenResult<Vec<ModelInfo>> {
         let provider_lower = self.provider_name.to_lowercase();
 
@@ -207,13 +190,28 @@ impl OpenAiCompatProvider {
             return Ok(hardcoded_models
                 .into_iter()
                 .map(|(id, name, ctx)| {
+                    // MiMo models reason natively with no Zen-facing control.
+                    let reasoning = crate::llm::ReasoningCapability {
+                        support: crate::llm::reasoning::ReasoningSupport::AlwaysOn,
+                        protocol: crate::llm::reasoning::ReasoningProtocol::None,
+                        control_availability:
+                            crate::llm::reasoning::ControlAvailability::None,
+                        can_disable: false,
+                        reasoning_visibility:
+                            crate::llm::reasoning::ReasoningVisibility::Trace,
+                        source: crate::llm::reasoning::ReasoningSource::Registry,
+                        confidence: crate::llm::reasoning::ReasoningConfidence::Authoritative,
+                        ..crate::llm::ReasoningCapability::unknown()
+                    }
+                    .normalized();
+
                     // Populate capability cache for runtime request gating
                     if let Ok(mut cache) = self.model_capabilities.write() {
                         cache.insert(
                             id.to_string(),
                             ModelCapabilities {
                                 supports_tools: true,
-                                supports_reasoning: true,
+                                reasoning: reasoning.clone(),
                             },
                         );
                     }
@@ -233,8 +231,7 @@ impl OpenAiCompatProvider {
                         state: None,
                         supports_vision: Some(false),
                         supports_tools: Some(true),
-                        supports_reasoning: Some(true),
-                        reasoning_config_type: Some("none".to_string()),
+                        reasoning: Some(reasoning),
                     }
                 })
                 .collect());
@@ -302,37 +299,6 @@ impl OpenAiCompatProvider {
             let id = id.to_lowercase();
             id.ends_with("-free") || id == "big-pickle" || id.contains("/big-pickle")
         };
-        let reasoning_metadata = |id: &str| -> (Option<bool>, Option<String>) {
-            let id = id.to_lowercase();
-            match provider_lower.as_str() {
-                "openai" => {
-                    if id.starts_with("o1")
-                        || id.starts_with("o3")
-                        || id.starts_with("o4")
-                        || id.starts_with("gpt-5")
-                    {
-                        (Some(true), Some("effort".to_string()))
-                    } else {
-                        (Some(false), None)
-                    }
-                }
-                "google" | "gemini" => {
-                    if id.contains("gemini-2.5") || id.contains("gemini-3") {
-                        (Some(true), Some("budget".to_string()))
-                    } else {
-                        (Some(false), None)
-                    }
-                }
-                "deepseek" => {
-                    if id.contains("reasoner") || id.contains("r1") {
-                        (Some(true), Some("none".to_string()))
-                    } else {
-                        (Some(false), None)
-                    }
-                }
-                _ => (None, None),
-            }
-        };
 
         let mut models: Vec<ModelInfo> = body
             .data
@@ -380,11 +346,17 @@ impl OpenAiCompatProvider {
                     !model_id_lower.contains("vision-only"),
                 );
 
-                let (supports_reasoning, reasoning_config_type) =
-                    match Self::reasoning_metadata_from_parameters(supported_parameters) {
-                        Some(metadata) => metadata,
-                        None => reasoning_metadata(&m.id),
-                    };
+                // Resolve reasoning capability: authoritative API metadata first,
+                // then the version-aware registry / heuristics keyed by provider.
+                let reasoning = crate::llm::reasoning::resolver::resolve(
+                    &provider_lower,
+                    &m.id,
+                    &crate::llm::reasoning::resolver::RawReasoningMetadata {
+                        supported_parameters,
+                        is_aggregator: Self::provider_is_mixed_router(&provider_lower),
+                        ..Default::default()
+                    },
+                );
 
                 // Populate capability cache for runtime request gating.
                 if let Ok(mut cache) = self.model_capabilities.write() {
@@ -392,7 +364,7 @@ impl OpenAiCompatProvider {
                         m.id.clone(),
                         ModelCapabilities {
                             supports_tools,
-                            supports_reasoning: supports_reasoning.unwrap_or(false),
+                            reasoning: reasoning.clone(),
                         },
                     );
                 }
@@ -414,8 +386,7 @@ impl OpenAiCompatProvider {
                     state: None,
                     supports_vision: Some(supports_vision),
                     supports_tools: Some(supports_tools),
-                    supports_reasoning,
-                    reasoning_config_type,
+                    reasoning: Some(reasoning),
                 }
             })
             .collect();

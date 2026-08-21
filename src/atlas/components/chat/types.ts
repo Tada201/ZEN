@@ -365,7 +365,7 @@ export type Step = {
 
 export type ThinkingConfig = {
   enabled: boolean;
-  effort?: "low" | "medium" | "high";
+  effort?: string;
   budgetTokens?: number;
 };
 

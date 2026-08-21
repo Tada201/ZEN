@@ -25,15 +25,15 @@ pub struct AnthropicProvider {
 
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 
-fn anthropic_reasoning_metadata(model_id: &str) -> (Option<bool>, Option<String>) {
-    let id = model_id.to_lowercase();
-    if id.contains("opus-4-7") || id.contains("4-7-opus") {
-        return (Some(true), Some("none".to_string()));
-    }
-    if id.contains("claude-4") || id.contains("4-6") || id.contains("4-5") || id.contains("3-7") {
-        return (Some(true), Some("budget".to_string()));
-    }
-    (Some(false), None)
+/// Resolve an Anthropic model's reasoning capability via the version-aware
+/// registry. Newer Claude families (4.5/4.6/4.7) use adaptive thinking; 3.7
+/// uses manual budget; older/unknown families fall back to `unknown`.
+fn anthropic_reasoning_metadata(model_id: &str) -> crate::llm::ReasoningCapability {
+    crate::llm::reasoning::resolver::resolve(
+        "anthropic",
+        model_id,
+        &crate::llm::reasoning::resolver::RawReasoningMetadata::default(),
+    )
 }
 
 /// Hardcoded context-length lookup for known Anthropic models, used when the
@@ -54,13 +54,6 @@ fn anthropic_context_length_from_id(model_id: &str) -> Option<u64> {
     }
     // 200K-context models (Claude 4.5 Sonnet, 3.7 Sonnet, 3.5 Sonnet, Haiku 4.5, etc.)
     Some(200_000)
-}
-
-fn supports_manual_thinking_budget(model_id: &str) -> bool {
-    matches!(
-        anthropic_reasoning_metadata(model_id).1.as_deref(),
-        Some("budget")
-    )
 }
 
 // ─── Anthropic API Types (Request) ───
@@ -85,6 +78,8 @@ struct AnthropicChatRequest {
     tools: Option<Vec<AnthropicTool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     thinking: Option<AnthropicThinking>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    output_config: Option<AnthropicOutputConfig>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -106,8 +101,16 @@ struct AnthropicSystemBlock {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct AnthropicThinking {
     #[serde(rename = "type")]
-    thinking_type: String, // "enabled"
-    budget_tokens: i64,
+    thinking_type: String, // "enabled" (manual budget) | "adaptive"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    budget_tokens: Option<i64>,
+}
+
+/// Adaptive-thinking effort selector (Claude 4.5+).
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct AnthropicOutputConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    effort: Option<String>, // "low" | "medium" | "high"
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -348,8 +351,7 @@ impl LlmProvider for AnthropicProvider {
                             state: None,
                             supports_vision: Some(true),
                             supports_tools: Some(true),
-                            supports_reasoning: anthropic_reasoning_metadata(&item.id).0,
-                            reasoning_config_type: anthropic_reasoning_metadata(&item.id).1,
+                            reasoning: Some(anthropic_reasoning_metadata(&item.id)),
                         });
                     }
                     if !models.is_empty() {
@@ -381,8 +383,7 @@ impl LlmProvider for AnthropicProvider {
                 state: None,
                 supports_vision: Some(true),
                 supports_tools: Some(true),
-                supports_reasoning: Some(true),
-                reasoning_config_type: Some("none".to_string()),
+                reasoning: Some(anthropic_reasoning_metadata("claude-4-7-opus-20260416")),
             },
             ModelInfo {
                 id: "claude-4-6-opus-20260219".to_string(),
@@ -399,8 +400,7 @@ impl LlmProvider for AnthropicProvider {
                 state: None,
                 supports_vision: Some(true),
                 supports_tools: Some(true),
-                supports_reasoning: Some(true),
-                reasoning_config_type: Some("budget".to_string()),
+                reasoning: Some(anthropic_reasoning_metadata("claude-4-6-opus-20260219")),
             },
             ModelInfo {
                 id: "claude-4-6-sonnet-20260219".to_string(),
@@ -417,8 +417,7 @@ impl LlmProvider for AnthropicProvider {
                 state: None,
                 supports_vision: Some(true),
                 supports_tools: Some(true),
-                supports_reasoning: Some(true),
-                reasoning_config_type: Some("budget".to_string()),
+                reasoning: Some(anthropic_reasoning_metadata("claude-4-6-sonnet-20260219")),
             },
             ModelInfo {
                 id: "claude-4-5-sonnet-20251210".to_string(),
@@ -435,8 +434,7 @@ impl LlmProvider for AnthropicProvider {
                 state: None,
                 supports_vision: Some(true),
                 supports_tools: Some(true),
-                supports_reasoning: Some(true),
-                reasoning_config_type: Some("budget".to_string()),
+                reasoning: Some(anthropic_reasoning_metadata("claude-4-5-sonnet-20251210")),
             },
             ModelInfo {
                 id: "claude-3-7-sonnet-20250219".to_string(),
@@ -453,8 +451,7 @@ impl LlmProvider for AnthropicProvider {
                 state: None,
                 supports_vision: Some(true),
                 supports_tools: Some(true),
-                supports_reasoning: Some(true),
-                reasoning_config_type: Some("budget".to_string()),
+                reasoning: Some(anthropic_reasoning_metadata("claude-3-7-sonnet-20250219")),
             },
             ModelInfo {
                 id: "claude-3-5-sonnet-20241022".to_string(),
@@ -471,8 +468,7 @@ impl LlmProvider for AnthropicProvider {
                 state: None,
                 supports_vision: Some(true),
                 supports_tools: Some(true),
-                supports_reasoning: Some(false),
-                reasoning_config_type: None,
+                reasoning: Some(anthropic_reasoning_metadata("claude-3-5-sonnet-20241022")),
             },
             ModelInfo {
                 id: "claude-3-5-haiku-20241022".to_string(),
@@ -489,8 +485,7 @@ impl LlmProvider for AnthropicProvider {
                 state: None,
                 supports_vision: None,
                 supports_tools: None,
-                supports_reasoning: Some(false),
-                reasoning_config_type: None,
+                reasoning: Some(anthropic_reasoning_metadata("claude-3-5-haiku-20241022")),
             },
         ];
         Ok(models)
@@ -643,14 +638,33 @@ impl LlmProvider for AnthropicProvider {
             }
         }
 
-        // 4. Thinking budget
-        let thinking = config
-            .thinking_budget
-            .filter(|budget| *budget > 0 && supports_manual_thinking_budget(model))
-            .map(|budget| AnthropicThinking {
-                thinking_type: "enabled".to_string(),
-                budget_tokens: budget,
-            });
+        // 4. Reasoning — driven by the resolved protocol so we never send a
+        // manual budget to an adaptive-only model (or vice versa).
+        use crate::llm::reasoning::ReasoningProtocol;
+        let (thinking, output_config) = match config.resolved_reasoning.as_ref() {
+            Some(r) if r.enabled => match r.capability.protocol {
+                ReasoningProtocol::AnthropicAdaptive => (
+                    Some(AnthropicThinking {
+                        thinking_type: "adaptive".to_string(),
+                        budget_tokens: None,
+                    }),
+                    r.effort.clone().map(|effort| AnthropicOutputConfig {
+                        effort: Some(effort),
+                    }),
+                ),
+                ReasoningProtocol::AnthropicBudget => (
+                    r.budget_tokens
+                        .filter(|budget| *budget > 0)
+                        .map(|budget| AnthropicThinking {
+                            thinking_type: "enabled".to_string(),
+                            budget_tokens: Some(budget),
+                        }),
+                    None,
+                ),
+                _ => (None, None),
+            },
+            _ => (None, None),
+        };
 
         let request = AnthropicChatRequest {
             model: model.to_string(),
@@ -664,6 +678,7 @@ impl LlmProvider for AnthropicProvider {
             stop_sequences: config.stop,
             tools: anthropic_tools,
             thinking,
+            output_config,
         };
 
         info!(model = model, "Starting Anthropic chat stream");
@@ -957,31 +972,40 @@ impl LlmProvider for AnthropicProvider {
             Err(_) => false,
         }
     }
+
+    fn reasoning_capability(&self, model: &str) -> crate::llm::ReasoningCapability {
+        anthropic_reasoning_metadata(model)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::llm::reasoning::{ReasoningProtocol, ReasoningSupport};
 
     #[test]
-    fn latest_native_reasoning_models_do_not_send_manual_thinking_budget() {
-        assert_eq!(
-            anthropic_reasoning_metadata("claude-4-7-opus-20260416"),
-            (Some(true), Some("none".to_string()))
-        );
-        assert!(!supports_manual_thinking_budget("claude-4-7-opus-20260416"));
+    fn adaptive_models_use_adaptive_protocol_not_budget() {
+        let cap = anthropic_reasoning_metadata("claude-4-7-opus-20260416");
+        assert_eq!(cap.protocol, ReasoningProtocol::AnthropicAdaptive);
+        assert!(cap.min_budget.is_none(), "adaptive must not carry a budget range");
     }
 
     #[test]
-    fn budget_reasoning_models_can_send_manual_thinking_budget() {
-        assert!(supports_manual_thinking_budget(
-            "claude-4-6-sonnet-20260219"
-        ));
-        assert!(supports_manual_thinking_budget(
-            "claude-3-7-sonnet-20250219"
-        ));
-        assert!(!supports_manual_thinking_budget(
-            "claude-3-5-sonnet-20241022"
-        ));
+    fn claude_37_uses_manual_budget_protocol() {
+        let cap = anthropic_reasoning_metadata("claude-3-7-sonnet-20250219");
+        assert_eq!(cap.protocol, ReasoningProtocol::AnthropicBudget);
+        assert!(cap.min_budget.is_some());
+    }
+
+    #[test]
+    fn claude_46_is_adaptive() {
+        let cap = anthropic_reasoning_metadata("claude-4-6-sonnet-20260219");
+        assert_eq!(cap.protocol, ReasoningProtocol::AnthropicAdaptive);
+    }
+
+    #[test]
+    fn claude_35_has_no_configurable_reasoning() {
+        let cap = anthropic_reasoning_metadata("claude-3-5-sonnet-20241022");
+        assert_eq!(cap.support, ReasoningSupport::Unsupported);
     }
 }

@@ -81,6 +81,15 @@ describe("AssistantMessage.logic", () => {
     it("keeps action and subagent event ids stable", () => {
       expect(getExecutionStepKey({ type: "action", eventId: "action-1" }, 3)).toBe("action-action-1");
       expect(getExecutionStepKey({ type: "subagent", eventId: "sub-1" }, 2)).toBe("subagent-sub-1");
+    });
+
+    it("keys text/reasoning by their stable step id, not the list index", () => {
+      // A tool card inserted between two text runs must not remount the prose:
+      // identity comes from the minted eventId, so the same text keeps its key
+      // even as its index shifts.
+      expect(getExecutionStepKey({ type: "text", eventId: "local:text:7" }, 5)).toBe("text-local:text:7");
+      expect(getExecutionStepKey({ type: "reasoning", eventId: "runtime:p1" }, 0)).toBe("reasoning-runtime:p1");
+      // Only an id-less legacy step falls back to the index.
       expect(getExecutionStepKey({ type: "text" }, 1)).toBe("text-1");
     });
   });

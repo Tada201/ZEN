@@ -530,6 +530,76 @@ html[data-motion="off"] #root .composer-matrix-cell {
   line-height: 1.3;
 }
 
+/* Reasoning-effort ladder skin (ThinkingConfig · EffortSlider). A recessed pill
+   rail with stop markers behind it and a wide grooved thumb. Two variables drive
+   everything, both written from JS: `--effort-ratio` (0…1) per pointer move, and
+   `--effort-travel`, the thumb's px travel, on mount/resize. Travel must be px,
+   not a %, because a % inside translateX resolves against the 32px thumb box, not
+   the rail. Colors use semantic tokens so the eDEX/light presets keep working. */
+.effort-track {
+  position: relative;
+  height: 26px;
+  border-radius: var(--radius-full, 9999px);
+  padding: 0 5px;
+  background: hsl(var(--muted));
+  box-shadow: inset 0 1px 3px hsl(var(--background) / 0.4);
+  cursor: grab;
+  touch-action: none;
+  --effort-travel: 0px;
+}
+.effort-track[data-dragging] { cursor: grabbing; }
+.effort-track:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+
+/* Full-height fill ending under the thumb's centre: 21px = 5px padding + half the
+   thumb. `width` (not scaleX) so the round right cap never squashes to an ellipse. */
+.effort-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(21px + var(--effort-travel) * var(--effort-ratio, 0));
+  border-radius: var(--radius-full, 9999px);
+  background: linear-gradient(90deg, hsl(var(--muted-foreground) / 0.4), hsl(var(--muted-foreground) / 0.85));
+}
+/* Inset so each 3px marker's centre lands on a thumb-centre stop: 21px - 1.5px. */
+.effort-stops { position: absolute; inset: 0 19.5px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
+.effort-stops span { width: 3px; height: 3px; border-radius: var(--radius-full, 9999px); background: hsl(var(--muted-foreground) / 0.35); transition: background-color 140ms ease; }
+/* Reached markers are lit by JS toggling data-lit in `paint`, so no React render
+   is needed mid-drag and the level set can be any length. */
+.effort-stops span[data-lit="true"] { background: hsl(var(--foreground) / 0.7); }
+
+.effort-thumb {
+  position: absolute;
+  top: 50%;
+  left: 5px;
+  width: 32px;
+  height: 32px;
+  margin-top: -16px;
+  border-radius: var(--radius-full, 9999px);
+  background: linear-gradient(180deg, hsl(var(--card)), hsl(var(--muted)));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 2px 6px hsl(var(--background) / 0.5), inset 0 1px 0 hsl(var(--foreground) / 0.08);
+  transform: translateX(calc(var(--effort-travel) * var(--effort-ratio, 0)));
+  will-change: transform;
+}
+/* Three vertical grip lines drawn as a repeating gradient. */
+.effort-thumb::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 13px;
+  height: 13px;
+  transform: translate(-50%, -50%);
+  background: repeating-linear-gradient(90deg, hsl(var(--muted-foreground) / 0.7) 0 1px, transparent 1px 6px);
+  opacity: 0.8;
+}
+.effort-track:hover .effort-thumb { filter: brightness(1.06); }
+
+/* Motion only on release. During a drag the thumb *is* the pointer; easing it
+   there fights the pointer and reads as lag. The global html[data-motion="off"]
+   policy still silences these transitions when motion is disabled. */
+.effort-track:not([data-dragging]) .effort-fill { transition: width 200ms cubic-bezier(0.16, 1, 0.3, 1); }
+.effort-track:not([data-dragging]) .effort-thumb { transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1); }
+
 .composer-submit {
   display: inline-flex;
   min-height: var(--zen-control-size);

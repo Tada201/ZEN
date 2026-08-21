@@ -36,15 +36,45 @@ pub(crate) struct ResolvedAgent {
     pub allowed_agent_ids: Vec<String>,
 }
 
+/// Treat blank strings and the `inherit` sentinel as "no selection" so a child
+/// never inherits an unusable model id. Callers pass values straight from tool
+/// arguments and agent JSON, both of which can be empty or null.
+fn selected_model(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|model| !model.is_empty() && !model.eq_ignore_ascii_case("inherit"))
+        .map(str::to_string)
+}
+
+/// Map a retired built-in agent id onto its current replacement so explicit
+/// `spawn_agent { agent_id: "researcher" }` calls (from older prompts, persisted
+/// plans, or user habit) keep working after the roster was trimmed to
+/// generalist / explore / voice_display. Unknown ids pass through unchanged and
+/// still produce the normal "not found" error.
+fn canonical_agent_id(agent_id: &str) -> &str {
+    match agent_id {
+        // ZEN-DOCS / research specialist folded into the read-only Explore agent.
+        "researcher" | "ZEN-DOCS" => "explore",
+        // ZEN-TAC operational specialist retired; general coordinator absorbs it.
+        "operational_expert" | "ZEN-TAC" => "generalist",
+        other => other,
+    }
+}
+
 /// Resolve which model and iteration limit to use for a given agent.
 ///
-/// Priority: explicit override > agent JSON > active DB setting.
+/// Priority: explicit override > agent JSON > `fallback_model` (the model the
+/// parent turn is running on). Built-in profiles ship with `model_override:
+/// null`, so without the fallback a child would launch with an empty model id
+/// and the provider would reject the request.
 pub(crate) fn resolve_agent(
     agent_registry: &AgentRegistry,
     agent_id: &str,
     explicit_model: Option<&str>,
+    fallback_model: Option<&str>,
     explicit_max_steps: Option<u64>,
 ) -> Result<ResolvedAgent> {
+    let agent_id = canonical_agent_id(agent_id);
     let profile = agent_registry.get_profile(agent_id).ok_or_else(|| {
         anyhow::anyhow!(
             "Agent '{}' not found. Available: {:?}",
@@ -56,18 +86,27 @@ pub(crate) fn resolve_agent(
         anyhow::bail!("Agent '{}' is not available for model invocation", agent_id);
     }
     let allowed_agent_ids = profile.allowed_agent_ids.clone();
-    let model_provider = if explicit_model.is_some() {
+    let explicit = selected_model(explicit_model);
+    // A profile's paired provider only applies to the profile's own model. When
+    // the caller names a model explicitly, or the child falls back to the
+    // parent's model, keep the parent's active provider instead.
+    let model_provider = if explicit.is_some() {
         None
     } else {
         profile.model_provider.clone()
     };
     let agent = profile.agent;
 
-    let model = if let Some(m) = explicit_model {
-        m.to_string()
-    } else {
-        agent.model_override.clone().unwrap_or_default()
-    };
+    let model = explicit
+        .or_else(|| selected_model(agent.model_override.as_deref()))
+        .or_else(|| selected_model(fallback_model))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "No model configured for agent '{}'. Select a model in Settings → Models, \
+                 set the agent's model override, or pass 'model' in the spawn request.",
+                agent_id
+            )
+        })?;
 
     let effective_max_steps = if let Some(s) = explicit_max_steps {
         s as usize
@@ -108,6 +147,7 @@ pub(crate) fn resolve_adhoc_agent(
     requested_tools: &[String],
     caller_tool_ids: &[String],
     explicit_model: Option<&str>,
+    fallback_model: Option<&str>,
     explicit_max_steps: Option<u64>,
 ) -> Result<ResolvedAgent> {
     if instructions.trim().is_empty() {
@@ -151,9 +191,14 @@ pub(crate) fn resolve_adhoc_agent(
         model_tier: crate::agent::types::ModelTier::default(),
     };
 
-    let model = explicit_model
-        .map(str::to_string)
-        .unwrap_or_default();
+    let model = selected_model(explicit_model)
+        .or_else(|| selected_model(fallback_model))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "No model configured for the ad-hoc sub-agent. Select a model in \
+                 Settings → Models or pass 'model' in the spawn request."
+            )
+        })?;
     let effective_max_steps = explicit_max_steps.map(|s| s as usize).unwrap_or(10).max(1);
 
     Ok(ResolvedAgent {
@@ -354,7 +399,7 @@ mod tests {
             .map(|a| a.tool_ids.clone())
             .unwrap_or_default();
         let resolved =
-            resolve_adhoc_agent(&reg, None, "do a thing", &[], &caller_tools, None, None).unwrap();
+            resolve_adhoc_agent(&reg, None, "do a thing", &[], &caller_tools, None, Some("parent-model"), None).unwrap();
 
         // Inherits coordinator tools but never delegation tools.
         assert!(resolved.agent.tool_ids.contains(&"web_search".to_string()));
@@ -377,7 +422,7 @@ mod tests {
             "spawn_agent".to_string(),
         ];
         let resolved =
-            resolve_adhoc_agent(&reg, Some("Scout"), "scout", &requested, &caller_tools, None, None).unwrap();
+            resolve_adhoc_agent(&reg, Some("Scout"), "scout", &requested, &caller_tools, None, Some("parent-model"), None).unwrap();
 
         assert_eq!(resolved.agent.tool_ids, vec!["web_search".to_string()]);
         assert_eq!(resolved.agent.name, "Scout");
@@ -390,6 +435,46 @@ mod tests {
             .get("generalist")
             .map(|a| a.tool_ids.clone())
             .unwrap_or_default();
-        assert!(resolve_adhoc_agent(&reg, None, "   ", &[], &caller_tools, None, None).is_err());
+        assert!(resolve_adhoc_agent(&reg, None, "   ", &[], &caller_tools, None, Some("parent-model"), None).is_err());
+    }
+
+    #[test]
+    fn builtin_profile_inherits_parent_model_when_override_is_null() {
+        let reg = registry_with_generalist();
+        let resolved = resolve_agent(&reg, "generalist", None, Some("parent-model"), None).unwrap();
+        assert_eq!(resolved.model, "parent-model");
+    }
+
+    #[test]
+    fn blank_and_inherit_sentinels_never_become_the_model() {
+        let reg = registry_with_generalist();
+        let resolved = resolve_agent(&reg, "generalist", Some("  "), Some("parent-model"), None).unwrap();
+        assert_eq!(resolved.model, "parent-model");
+
+        let resolved = resolve_agent(&reg, "generalist", Some("inherit"), Some("parent-model"), None).unwrap();
+        assert_eq!(resolved.model, "parent-model");
+    }
+
+    #[test]
+    fn spawn_fails_when_no_model_is_available_anywhere() {
+        let reg = registry_with_generalist();
+        assert!(resolve_agent(&reg, "generalist", None, None, None).is_err());
+        let caller_tools: Vec<String> = reg
+            .get("generalist")
+            .map(|a| a.tool_ids.clone())
+            .unwrap_or_default();
+        assert!(resolve_adhoc_agent(&reg, None, "scout", &[], &caller_tools, None, None, None).is_err());
+    }
+
+    #[test]
+    fn retired_agent_ids_alias_onto_current_profiles() {
+        assert_eq!(canonical_agent_id("researcher"), "explore");
+        assert_eq!(canonical_agent_id("ZEN-DOCS"), "explore");
+        assert_eq!(canonical_agent_id("operational_expert"), "generalist");
+        assert_eq!(canonical_agent_id("ZEN-TAC"), "generalist");
+        // Unknown / current ids pass through untouched.
+        assert_eq!(canonical_agent_id("explore"), "explore");
+        assert_eq!(canonical_agent_id("generalist"), "generalist");
+        assert_eq!(canonical_agent_id("nonexistent"), "nonexistent");
     }
 }

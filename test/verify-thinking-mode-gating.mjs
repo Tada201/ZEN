@@ -6,109 +6,125 @@ const reasoningCapsSource = readFileSync(new URL("../src/atlas/components/useRea
 const chatInputModesSource = readFileSync(new URL("../src/atlas/components/useChatInputModes.ts", import.meta.url), "utf8");
 const providerTypesSource = readFileSync(new URL("../src/lib/types/provider.ts", import.meta.url), "utf8");
 const querySource = readFileSync(new URL("../src/atlas/hooks/chat/useChatQueries.ts", import.meta.url), "utf8");
-const modelSelectorSource = readFileSync(new URL("../src/atlas/components/ModelSelector.tsx", import.meta.url), "utf8");
 const dbModelsSource = readFileSync(new URL("../src-tauri/src/db/models.rs", import.meta.url), "utf8");
-const openAiModelsSource = readFileSync(new URL("../src-tauri/src/llm/openai_compat/models.rs", import.meta.url), "utf8");
 const pinnedSource = readFileSync(new URL("../src/atlas/components/chat/input/PinnedActionBar.tsx", import.meta.url), "utf8");
 const plusSource = readFileSync(new URL("../src/atlas/components/chat/input/PlusActionMenu.tsx", import.meta.url), "utf8");
 const thinkingConfigSource = readFileSync(new URL("../src/atlas/components/chat/input/ThinkingConfig.tsx", import.meta.url), "utf8");
 const chatCommandSource = readFileSync(new URL("../src-tauri/src/commands/chat/send.rs", import.meta.url), "utf8");
-const openAiStreamSource = readFileSync(new URL("../src-tauri/src/llm/openai_compat/stream.rs", import.meta.url), "utf8");
 const anthropicSource = readFileSync(new URL("../src-tauri/src/llm/anthropic.rs", import.meta.url), "utf8");
+const resolverSource = readFileSync(new URL("../src-tauri/src/llm/reasoning/resolver.rs", import.meta.url), "utf8");
+const reasoningModSource = readFileSync(new URL("../src-tauri/src/llm/reasoning/mod.rs", import.meta.url), "utf8");
+const registrySource = readFileSync(new URL("../src-tauri/src/llm/reasoning/registry.rs", import.meta.url), "utf8");
 
+// The frontend model type carries a single backend-resolved capability object,
+// NOT the retired supportsReasoning/reasoningConfigType pair.
 assert(
-  providerTypesSource.includes("supportsReasoning?: boolean") &&
-    providerTypesSource.includes("reasoningConfigType?: 'none' | 'effort' | 'budget'"),
-  "frontend model type should carry provider-discovered reasoning metadata",
+  providerTypesSource.includes("reasoning?: ReasoningCapability") &&
+    providerTypesSource.includes("export interface ReasoningCapability") &&
+    !providerTypesSource.includes("supportsReasoning") &&
+    !providerTypesSource.includes("reasoningConfigType"),
+  "frontend model type should carry a single resolved ReasoningCapability object",
+);
+
+// The provider capability profiles no longer declare a provider-wide reasoning
+// default — reasoning is per-model, owned by the backend resolver.
+assert(
+  !providerTypesSource.includes("supportsReasoning: false") &&
+    !providerTypesSource.includes("supportsReasoning: true"),
+  "provider profiles must not hardcode reasoning support (backend owns it)",
 );
 
 assert(
-  dbModelsSource.includes("pub supports_reasoning: Option<bool>") &&
-    dbModelsSource.includes("pub reasoning_config_type: Option<String>"),
-  "backend model metadata should expose reasoning support and config type",
+  dbModelsSource.includes("pub reasoning: Option<crate::llm::ReasoningCapability>") &&
+    !dbModelsSource.includes("pub supports_reasoning") &&
+    !dbModelsSource.includes("pub reasoning_config_type"),
+  "backend ModelInfo should expose one resolved reasoning capability",
 );
 
 assert(
-  querySource.includes("supportsReasoning: model.supportsReasoning") &&
-    querySource.includes("reasoningConfigType: model.reasoningConfigType") &&
-    modelSelectorSource.includes("supportsReasoning?: boolean") &&
-    modelSelectorSource.includes('reasoningConfigType?: "none" | "effort" | "budget"'),
-  "chat model mapping should preserve provider reasoning metadata",
+  querySource.includes("model.reasoning") &&
+    !querySource.includes("supportsReasoning: model.supportsReasoning"),
+  "chat model mapping should preserve the resolved reasoning capability",
 );
 
-// Reasoning-capability derivation was carved out of PremiumChatInput.tsx into
-// useReasoningCapabilities.ts (keeps the composer under the 350-line budget).
+// UI derivation reads the capability object; the composer renders from it.
 assert(
-  reasoningCapsSource.includes("selectedModelInfo.supportsReasoning === true") &&
-    reasoningCapsSource.includes('return "none";') &&
+  reasoningCapsSource.includes("selectedModelInfo?.reasoning") &&
+    reasoningCapsSource.includes('capability.support === "tunable"') &&
     inputSource.includes("useReasoningCapabilities("),
-  "chat input should render Thinking from provider metadata, not local model-name guesses",
+  "chat input should render Thinking from the resolved capability, not name guesses",
 );
 
-// buildThinkingPayload moved into useChatInputModes.ts (mode ownership).
-// 'none' models have no tunable reasoning parameter and send.rs only
-// forwards effort/budget, so the fallthrough must report enabled:false —
-// an enabled:true claim would send nothing on the wire.
+// buildThinkingPayload emits generic intent only; it never branches on a
+// provider protocol and never claims enabled for a non-Zen capability.
 assert(
   chatInputModesSource.includes("const buildThinkingPayload = useCallback(") &&
-    chatInputModesSource.includes('if (reasoningConfigType === "effort")') &&
-    chatInputModesSource.includes('if (reasoningConfigType === "budget")') &&
-    chatInputModesSource.includes("no tunable reasoning parameter") &&
+    chatInputModesSource.includes('capability.controlAvailability !== "zen"') &&
     chatInputModesSource.includes("return { enabled: false };") &&
-    !chatInputModesSource.includes("return { enabled: true };") &&
-    inputSource.includes("buildThinkingPayload"),
-  "chat input should only send reasoning parameters supported by the selected model metadata",
+    !chatInputModesSource.includes("anthropic") &&
+    !chatInputModesSource.includes("gemini"),
+  "buildThinkingPayload should emit generic intent, never provider protocols",
 );
 
-// The on/off toggle is a placebo for reasoningConfigType 'none' (nothing is
-// sent on the wire), so ThinkingConfig must render it only for tunable
-// types; the 'none' informational note shows at full opacity with no toggle.
+// ThinkingConfig renders each capability state; no legacy config-type strings.
 assert(
-  thinkingConfigSource.includes("{isTunable && (") &&
-    thinkingConfigSource.includes("isTunable && !isThinking") &&
-    thinkingConfigSource.includes("reasoningConfigType === 'none'") &&
-    thinkingConfigSource.includes("aria-pressed={isThinking}"),
-  "reasoning on/off toggle must render only when the model exposes a tunable reasoning parameter",
-);
-assert(
-  !thinkingConfigSource.includes("Enabling it ensures"),
-  "the 'none' note must not promise that toggling changes model behavior",
+  thinkingConfigSource.includes("capability.support === 'always_on'") &&
+    thinkingConfigSource.includes("controlAvailability === 'provider_managed'") &&
+    thinkingConfigSource.includes("capability.levels") &&
+    !thinkingConfigSource.includes("reasoningConfigType"),
+  "ThinkingConfig must render every capability state from the resolved object",
 );
 
+// The chip renders for any visible support state, driven by the object.
 assert(
-  !inputSource.includes("modelSupportsReasoning(") &&
-    !inputSource.includes("const isReasoningProvider = ['openai', 'anthropic', 'google', 'deepseek', 'ollama', 'lmstudio']"),
-  "chat input should not maintain hardcoded provider/model reasoning inference",
+  pinnedSource.includes("reasoningCapability.support === 'always_on'") &&
+    plusSource.includes("showReasoning"),
+  "thinking controls should render from the resolved capability support state",
 );
 
+// send.rs stays a thin adapter: it forwards generic intent through the
+// resolver's normalize_request and never re-derives protocol or budget.
 assert(
-  openAiModelsSource.includes("let reasoning_metadata = |id: &str|") &&
-    anthropicSource.includes("fn anthropic_reasoning_metadata(model_id: &str)") &&
-    anthropicSource.includes("manual extended thinking") === false,
-  "provider adapters should own provider-specific reasoning metadata",
+  chatCommandSource.includes("ReasoningIntent") &&
+    chatCommandSource.includes("llm_provider.reasoning_capability(&active_model)") &&
+    chatCommandSource.includes("capability.normalize_request(&intent)") &&
+    !chatCommandSource.includes("config.reasoning_effort = t.effort"),
+  "send.rs should normalize generic intent via the resolver, not inline policy",
 );
 
+// The resolver is the SSOT: detection order + normalize_request live here, and
+// include_reasoning must not be treated as always_on.
 assert(
-  pinnedSource.includes("actionId === 'thinking' && supportsReasoning") &&
-    plusSource.includes("!pinnedActions.includes('thinking') && supportsReasoning"),
-  "thinking controls should only render when selected model supports reasoning",
+  resolverSource.includes("pub fn resolve(") &&
+    resolverSource.includes("from_supported_parameters") &&
+    resolverSource.includes("include_reasoning") &&
+    resolverSource.includes("visibility signal"),
+  "resolver should own detection order and treat include_reasoning as visibility only",
 );
 
+// Capability invariants + normalize_request live in the reasoning module.
 assert(
-  chatCommandSource.includes("if let Some(t) = thinking") &&
-    chatCommandSource.includes("if t.enabled") &&
-    chatCommandSource.includes("config.reasoning_effort = t.effort") &&
-    chatCommandSource.includes("config.thinking_budget = t.budget_tokens"),
-  "backend should only forward reasoning parameters when thinking is enabled",
+  reasoningModSource.includes("pub fn normalize_request(") &&
+    reasoningModSource.includes("ResolvedReasoningRequest") &&
+    reasoningModSource.includes("AlwaysOn =>"),
+  "reasoning module should own normalize_request and capability invariants",
 );
 
+// Anthropic resolves via the registry and encodes both adaptive + budget.
 assert(
-  openAiStreamSource.includes("config.reasoning_effort.clone()") &&
-    anthropicSource.includes("let thinking = config") &&
-    anthropicSource.includes(".thinking_budget") &&
-    anthropicSource.includes("supports_manual_thinking_budget(model)") &&
-    anthropicSource.includes("thinking: Option<AnthropicThinking>"),
-  "provider adapters should forward supported reasoning config fields",
+  anthropicSource.includes("fn anthropic_reasoning_metadata(model_id: &str)") &&
+    anthropicSource.includes("AnthropicAdaptive") &&
+    anthropicSource.includes("AnthropicBudget") &&
+    anthropicSource.includes('thinking_type: "adaptive"'),
+  "Anthropic should encode adaptive and budget thinking by resolved protocol",
+);
+
+// Registry classifies newer Claude as adaptive, 3.7 as budget.
+assert(
+  registrySource.includes("anthropic_adaptive") &&
+    registrySource.includes("anthropic_budget") &&
+    registrySource.includes("GeminiLevel"),
+  "registry should carry version-aware protocols",
 );
 
 console.log("thinking mode gating verifier passed");

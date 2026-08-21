@@ -203,6 +203,13 @@ pub async fn send_message(
         }
     };
 
+    // Freeze this session's inherited model the first time it's known. Only
+    // writes when the chat row has no model yet (created while "No Model" was
+    // selected, or a legacy null row); an already-set session model is never
+    // rewritten, so a mid-session Settings switch can't retarget an existing
+    // session's subagents — only a new session picks up the new selection.
+    let _ = queries::set_chat_model_if_unset(&db, &chat_id, &active_model).await;
+
     info!(
         chat_id = %chat_id,
         resolved_provider_name = %resolved_provider_name,
@@ -248,11 +255,17 @@ pub async fn send_message(
         ..ChatRequestConfig::default()
     };
 
-    if let Some(t) = thinking {
-        if t.enabled {
-            config.reasoning_effort = t.effort;
-            config.thinking_budget = t.budget_tokens;
-        }
+    if let Some(t) = thinking.as_ref() {
+        // Normalize generic reasoning intent against the model's resolved
+        // capability. All capability/protocol logic lives in the provider +
+        // reasoning resolver; the command only forwards intent.
+        let intent = crate::llm::ReasoningIntent {
+            enabled: t.enabled,
+            effort: t.effort.clone(),
+            budget_tokens: t.budget_tokens,
+        };
+        let capability = llm_provider.reasoning_capability(&active_model);
+        config.resolved_reasoning = Some(capability.normalize_request(&intent));
     }
 
     let token = CancellationToken::new();
@@ -553,6 +566,22 @@ Always use these specialized code blocks for visual scenarios:
         let active_model_inner = configured_research_model.unwrap_or_else(|| active_model.clone());
         let content_inner = content.clone();
         let provider_clone = llm_provider.clone();
+        // Deep Research may run on a different model family than the active
+        // chat model. Re-normalize the generic thinking intent against the
+        // model that will actually serve the request — reusing the active
+        // model's resolved capability could send the wrong effort/budget
+        // protocol (e.g. adaptive effort to a budget-only model).
+        let mut research_config = config.clone();
+        research_config.resolved_reasoning = thinking.as_ref().map(|t| {
+            let intent = crate::llm::ReasoningIntent {
+                enabled: t.enabled,
+                effort: t.effort.clone(),
+                budget_tokens: t.budget_tokens,
+            };
+            provider_clone
+                .reasoning_capability(&active_model_inner)
+                .normalize_request(&intent)
+        });
         let cancel_tokens_clone = cancel_tokens.clone();
         let pause_controls_clone = pause_controls.clone();
         let db_clone = db.clone();
@@ -617,7 +646,7 @@ Always use these specialized code blocks for visual scenarios:
                     chat_id: chat_id_inner.clone(),
                     model: active_model_inner,
                     query: content_inner,
-                    config,
+                    config: research_config,
                     token,
                     max_rounds,
                     max_urls_per_round,

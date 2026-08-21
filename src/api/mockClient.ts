@@ -488,9 +488,17 @@ const mockCommands: Record<string, (args: any) => any> = {
     const selection = settings.voiceDisplayAgentModel || "";
     const [provider, ...modelParts] = selection.split("::");
     const model = modelParts.length > 0 ? modelParts.join("::") : selection;
+    const withConfiguredModel = (agent: any) => {
+      const reasoning = (settings as Record<string, string>)[`agent_reasoning.${agent.id}`] || null;
+      const raw = (settings as Record<string, string>)[`agent_model.${agent.id}`] || "";
+      if (!raw || agent.model_override) return { ...agent, reasoning_effort: reasoning };
+      const [prov, ...parts] = raw.split("::");
+      const mdl = parts.length > 0 ? parts.join("::") : raw;
+      return { ...agent, model_override: mdl || null, model_provider: parts.length > 0 ? prov : null, reasoning_effort: reasoning };
+    };
     return [
       { ...mockVoiceDisplayAgent, model_override: model || null, model_provider: modelParts.length > 0 ? provider : null },
-      ...agents.filter((agent) => agent.id !== mockVoiceDisplayAgent.id),
+      ...agents.filter((agent) => agent.id !== mockVoiceDisplayAgent.id).map(withConfiguredModel),
     ];
   },
   create_agent: ({ profile }: { profile: any }) => {
@@ -529,6 +537,14 @@ const mockCommands: Record<string, (args: any) => any> = {
   },
   set_voice_display_model: ({ model }: { model: string | null }) => {
     settings.voiceDisplayAgentModel = model || "";
+    saveData(KEY_SETTINGS, settings);
+  },
+  set_agent_model: ({ agentId, model }: { agentId: string; model: string | null }) => {
+    (settings as Record<string, string>)[`agent_model.${agentId}`] = model || "";
+    saveData(KEY_SETTINGS, settings);
+  },
+  set_agent_reasoning: ({ agentId, effort }: { agentId: string; effort: string | null }) => {
+    (settings as Record<string, string>)[`agent_reasoning.${agentId}`] = effort || "";
     saveData(KEY_SETTINGS, settings);
   },
   get_agent_config: () => ({}),

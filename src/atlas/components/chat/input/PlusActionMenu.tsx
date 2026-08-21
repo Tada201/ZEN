@@ -11,7 +11,8 @@ interface PlusActionMenuProps {
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
   pinnedActions: string[];
   togglePin: (id: string) => void;
-  supportsReasoning: boolean;
+  /** Whether the Thinking capability should be offered (resolved upstream). */
+  showReasoning: boolean;
   isThinking: boolean;
   setIsThinking: (val: boolean) => void;
   isDeepResearch: boolean;
@@ -33,7 +34,7 @@ export const PlusActionMenu = memo(({
   onFileSelect,
   pinnedActions,
   togglePin,
-  supportsReasoning,
+  showReasoning,
   isThinking,
   setIsThinking,
   isDeepResearch,
@@ -162,7 +163,7 @@ export const PlusActionMenu = memo(({
                 <div className="mx-1.5 my-0.5 h-px bg-border" />
 
                 <div className="composer-popover-header px-2 py-1 uppercase">Capabilities</div>
-                {!pinnedActions.includes('thinking') && supportsReasoning && (
+                {!pinnedActions.includes('thinking') && showReasoning && (
                   <MenuItem
                     icon={Lightbulb}
                     label="Thinking"

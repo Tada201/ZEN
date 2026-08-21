@@ -52,6 +52,28 @@ pub async fn get_chat(pool: &SqlitePool, id: &str) -> ZenResult<Chat> {
     Ok(chat)
 }
 
+/// Freeze a chat's session model the first time it is known: sets `chats.model`
+/// to `model` only when the column is currently NULL or blank. Chats created
+/// with a model keep it; a chat that started model-less (e.g. created while
+/// "No Model" was selected) locks onto the model used for its first send. A
+/// later Settings model switch never rewrites an already-set session model, so
+/// an existing session's subagents keep inheriting the model the session was
+/// created/first-run with — only a new session picks up the newly selected one.
+pub async fn set_chat_model_if_unset(pool: &SqlitePool, id: &str, model: &str) -> ZenResult<()> {
+    if model.trim().is_empty() {
+        return Ok(());
+    }
+    sqlx::query(
+        "UPDATE chats SET model = ? WHERE id = ? AND (model IS NULL OR trim(model) = '')",
+    )
+    .bind(model)
+    .bind(id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+
 // --- Chat Session Management (Phase 1) ---
 
 use crate::db::models::{ChatFolder, SearchResult};

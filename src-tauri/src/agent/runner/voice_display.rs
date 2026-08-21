@@ -75,6 +75,7 @@ impl Runner {
                 &agent_registry,
                 DISPLAY_AGENT_ID,
                 Some(&selected_model),
+                Some(&selected_model),
                 Some(max_turns as u64),
             ) {
                 Ok(resolved) => resolved,

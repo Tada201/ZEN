@@ -109,11 +109,16 @@ pub async fn cancel_subagent(
     return Err(ZenError::Custom("A chat id and subagent id are required".to_string()));
   }
 
-  let token = state
-    .subagent_cancellation_tokens
-    .lock()
-    .await
-    .remove(&spawn_id);
+  let mut tokens = state.subagent_cancellation_tokens.lock().await;
+  // Verify the spawn belongs to this chat before cancelling so a leaked or
+  // guessed spawn_id cannot halt another chat's child.
+  let owned = matches!(tokens.get(&spawn_id), Some((owner, _)) if owner == &chat_id);
+  if !owned {
+    info!(chat_id = %chat_id, spawn_id = %spawn_id, "Subagent was already complete, unavailable, or owned by another chat");
+    return Ok(false);
+  }
+  let token = tokens.remove(&spawn_id).map(|(_, token)| token);
+  drop(tokens);
   if let Some(token) = token {
     token.cancel();
     info!(chat_id = %chat_id, spawn_id = %spawn_id, "Cancelled delegated subagent");

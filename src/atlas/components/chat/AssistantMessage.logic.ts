@@ -162,6 +162,12 @@ export function getExecutionStepKey(
   }
   if (step.type === "action" && step.eventId) return `action-${step.eventId}`;
   if (step.type === "subagent" && step.eventId) return `subagent-${step.eventId}`;
+  // Text/reasoning steps carry a stable id minted at creation (runtime part id
+  // or a locally minted `local:` id). Keying by that id — never the visible
+  // list index — keeps React identity fixed when a tool card is inserted
+  // between text runs, so the streamed prose above/below a tool no longer
+  // remounts and splits mid-character.
+  if (step.eventId) return `${step.type}-${step.eventId}`;
   return `${step.type}-${index}`;
 }
 

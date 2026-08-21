@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import type { ReasoningCapability } from "@/lib/types/provider";
 
 export type Model = {
   id: string;
@@ -18,8 +19,7 @@ export type Model = {
   available: boolean;
   contextWindow?: number;
   inputPricePerMToken?: number;
-  supportsReasoning?: boolean;
-  reasoningConfigType?: "none" | "effort" | "budget";
+  reasoning?: ReasoningCapability;
 };
 
 interface ModelSettingsContentProps {

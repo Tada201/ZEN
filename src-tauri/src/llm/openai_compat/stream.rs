@@ -34,8 +34,27 @@ impl OpenAiCompatProvider {
         self.model_capabilities
             .read()
             .ok()
-            .and_then(|cache| cache.get(model).map(|caps| caps.supports_reasoning))
+            .and_then(|cache| cache.get(model).map(|caps| caps.reasoning.is_visible()))
             .unwrap_or(false)
+    }
+
+    /// Heuristic match for a provider error body that indicates the reasoning
+    /// parameter we sent is not supported by this model/endpoint. Used only to
+    /// downgrade cached capability confidence — never to retry.
+    fn looks_like_unsupported_reasoning_error(body: &str) -> bool {
+        let b = body.to_lowercase();
+        let mentions_reasoning = b.contains("reasoning")
+            || b.contains("thinking")
+            || b.contains("budget_tokens")
+            || b.contains("reasoning_effort")
+            || b.contains("thinking_level");
+        let mentions_rejection = b.contains("unsupported")
+            || b.contains("not supported")
+            || b.contains("unknown parameter")
+            || b.contains("unrecognized")
+            || b.contains("invalid parameter")
+            || b.contains("does not support");
+        mentions_reasoning && mentions_rejection
     }
 
     fn is_gemini_compat(&self) -> bool {
@@ -68,32 +87,48 @@ impl OpenAiCompatProvider {
     fn openrouter_reasoning_from_config(
         config: &crate::llm::ChatRequestConfig,
     ) -> Option<serde_json::Value> {
-        if config.reasoning_effort.is_none() && config.thinking_budget.is_none() {
+        let r = config.resolved_reasoning.as_ref()?;
+        if !r.enabled {
             return None;
         }
-
         let mut reasoning = serde_json::Map::new();
-        if let Some(effort) = &config.reasoning_effort {
+        if let Some(effort) = &r.effort {
             reasoning.insert("effort".to_string(), Value::String(effort.clone()));
         }
-        if let Some(budget) = config.thinking_budget {
+        if let Some(budget) = r.budget_tokens {
             reasoning.insert("max_tokens".to_string(), Value::Number(budget.into()));
         }
-
+        if reasoning.is_empty() {
+            return None;
+        }
         Some(Value::Object(reasoning))
     }
 
     fn gemini_extra_body_from_config(
         config: &crate::llm::ChatRequestConfig,
     ) -> Option<serde_json::Value> {
-        if config.reasoning_effort.is_none() && config.thinking_budget.is_none() {
+        use crate::llm::reasoning::ReasoningProtocol;
+        let r = config.resolved_reasoning.as_ref()?;
+        if !r.enabled {
             return None;
         }
 
         let mut thinking_config = serde_json::Map::new();
         thinking_config.insert("include_thoughts".to_string(), Value::Bool(true));
-        if let Some(budget) = config.thinking_budget {
-            thinking_config.insert("thinking_budget".to_string(), Value::Number(budget.into()));
+        match r.capability.protocol {
+            ReasoningProtocol::GeminiLevel => {
+                if let Some(level) = &r.effort {
+                    thinking_config
+                        .insert("thinking_level".to_string(), Value::String(level.clone()));
+                }
+            }
+            ReasoningProtocol::GeminiBudget => {
+                if let Some(budget) = r.budget_tokens {
+                    thinking_config
+                        .insert("thinking_budget".to_string(), Value::Number(budget.into()));
+                }
+            }
+            _ => {}
         }
 
         Some(serde_json::json!({
@@ -458,6 +493,13 @@ impl OpenAiCompatProvider {
         };
 
         let allow_reasoning = !self.is_nine_router() || self.model_supports_reasoning(model);
+        // OpenAI-style top-level `reasoning_effort` comes from the resolved
+        // request; OpenRouter/Gemini use their own encoders above.
+        let resolved_effort = config
+            .resolved_reasoning
+            .as_ref()
+            .filter(|r| r.enabled)
+            .and_then(|r| r.effort.clone());
         let request = OpenAiChatRequest {
             model: model.to_string(),
             messages: oai_messages,
@@ -472,10 +514,10 @@ impl OpenAiCompatProvider {
             stop: config.stop.clone(),
             tools: oai_tools,
             response_format,
-            reasoning_effort: if is_openrouter || !allow_reasoning {
+            reasoning_effort: if is_openrouter || is_gemini_compat || !allow_reasoning {
                 None
             } else {
-                config.reasoning_effort.clone()
+                resolved_effort
             },
             reasoning: None,
             extra_body: None,
@@ -518,6 +560,29 @@ impl OpenAiCompatProvider {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
             error!(status = %status, body = %body, "Chat request failed");
+
+            // If we sent a reasoning parameter and the provider rejected it as
+            // unsupported, downgrade the cached capability to uncertain so the
+            // UI stops offering it — but never silently retry with another shape.
+            let sent_reasoning = config
+                .resolved_reasoning
+                .as_ref()
+                .is_some_and(|r| r.enabled);
+            if sent_reasoning && Self::looks_like_unsupported_reasoning_error(&body) {
+                if let Ok(mut cache) = self.model_capabilities.write() {
+                    if let Some(caps) = cache.get_mut(model) {
+                        caps.reasoning.confidence =
+                            crate::llm::reasoning::ReasoningConfidence::Unknown;
+                    }
+                }
+                return Err(ZenError::Custom(format!(
+                    "{} rejected the reasoning setting for '{}' as unsupported. \
+                     Reasoning has been marked unavailable for this model; retry without it. \
+                     ({}: {})",
+                    self.provider_name, model, status, body
+                )));
+            }
+
             return Err(ZenError::Custom(format!(
                 "{} returned {}: {}",
                 self.provider_name, status, body
@@ -797,6 +862,22 @@ impl OpenAiCompatProvider {
         // 2. Provider-level policy for unknown models
         self.provider_tool_policy()
     }
+
+    /// Resolve reasoning capability at request time. Prefer the cache populated
+    /// by `list_models()`; if the model is cold, fall back to the resolver with
+    /// no metadata (registry/heuristics keyed by provider+id).
+    pub fn do_reasoning_capability(&self, model: &str) -> crate::llm::ReasoningCapability {
+        if let Ok(cache) = self.model_capabilities.read() {
+            if let Some(caps) = cache.get(model) {
+                return caps.reasoning.clone();
+            }
+        }
+        crate::llm::reasoning::resolver::resolve(
+            &self.provider_name.to_lowercase(),
+            model,
+            &crate::llm::reasoning::resolver::RawReasoningMetadata::default(),
+        )
+    }
 }
 
 impl OpenAiCompatProvider {
@@ -856,6 +937,37 @@ mod tests {
             images: None,
             tool_calls: None,
             tool_call_id: None,
+        }
+    }
+
+    /// Build a resolved reasoning request carrying the given protocol + effort.
+    fn resolved_effort(
+        protocol: crate::llm::reasoning::ReasoningProtocol,
+        effort: &str,
+    ) -> crate::llm::ResolvedReasoningRequest {
+        resolved_effort_budget(protocol, Some(effort), None)
+    }
+
+    /// Build a resolved reasoning request with an explicit protocol + optional
+    /// effort/budget, mirroring what the resolver hands the encoders.
+    fn resolved_effort_budget(
+        protocol: crate::llm::reasoning::ReasoningProtocol,
+        effort: Option<&str>,
+        budget_tokens: Option<i64>,
+    ) -> crate::llm::ResolvedReasoningRequest {
+        use crate::llm::reasoning::{ControlAvailability, ReasoningCapability, ReasoningSupport};
+        let capability = ReasoningCapability {
+            support: ReasoningSupport::Tunable,
+            protocol,
+            control_availability: ControlAvailability::Zen,
+            can_disable: true,
+            ..ReasoningCapability::unknown()
+        };
+        crate::llm::ResolvedReasoningRequest {
+            capability,
+            enabled: true,
+            effort: effort.map(|e| e.to_string()),
+            budget_tokens,
         }
     }
 
@@ -1129,23 +1241,38 @@ mod tests {
             .find(|model| model.id == "anthropic/claude-sonnet-4")
             .unwrap();
         assert_eq!(claude.supports_tools, Some(true));
-        assert_eq!(claude.supports_reasoning, Some(true));
-        assert_eq!(claude.reasoning_config_type.as_deref(), Some("budget"));
+        // `reasoning` supported_parameter → tunable (budget-capable) via API metadata.
+        let claude_cap = claude.reasoning.as_ref().unwrap();
+        assert_eq!(
+            claude_cap.support,
+            crate::llm::reasoning::ReasoningSupport::Tunable
+        );
 
         let gpt = models
             .iter()
             .find(|model| model.id == "openai/gpt-4o-mini")
             .unwrap();
         assert_eq!(gpt.supports_tools, Some(false));
-        assert_eq!(gpt.supports_reasoning, Some(false));
-        assert_eq!(gpt.reasoning_config_type, None);
+        // Metadata present but no reasoning params → authoritatively unsupported.
+        assert_eq!(
+            gpt.reasoning.as_ref().unwrap().support,
+            crate::llm::reasoning::ReasoningSupport::Unsupported
+        );
 
         let r1 = models
             .iter()
             .find(|model| model.id == "deepseek/deepseek-r1")
             .unwrap();
-        assert_eq!(r1.supports_reasoning, Some(true));
-        assert_eq!(r1.reasoning_config_type.as_deref(), Some("none"));
+        // `include_reasoning` is visibility-only; support stays unknown.
+        let r1_cap = r1.reasoning.as_ref().unwrap();
+        assert_eq!(
+            r1_cap.support,
+            crate::llm::reasoning::ReasoningSupport::Unknown
+        );
+        assert_eq!(
+            r1_cap.reasoning_visibility,
+            crate::llm::reasoning::ReasoningVisibility::Summary
+        );
 
         assert!(provider.supports_tools("anthropic/claude-sonnet-4"));
         assert!(!provider.supports_tools("openai/gpt-4o-mini"));
@@ -1167,7 +1294,11 @@ mod tests {
 
         let models = provider.list_models().await?;
         assert_eq!(models[0].supports_tools, Some(false));
-        assert_eq!(models[0].supports_reasoning, None);
+        // No metadata + not in registry → unknown.
+        assert_eq!(
+            models[0].reasoning.as_ref().unwrap().support,
+            crate::llm::reasoning::ReasoningSupport::Unknown
+        );
         assert!(!provider.supports_tools("unknown/router-model"));
         Ok(())
     }
@@ -1190,7 +1321,10 @@ mod tests {
 
         let models = provider.list_models().await?;
         assert_eq!(models[0].supports_tools, Some(true));
-        assert_eq!(models[0].supports_reasoning, None);
+        assert_eq!(
+            models[0].reasoning.as_ref().unwrap().support,
+            crate::llm::reasoning::ReasoningSupport::Unknown
+        );
         assert!(provider.supports_tools("nvidia/parakeet-ctc-1.1b-asr"));
         // Cold-cache path (unknown model) still resolves to true for 9router.
         assert!(provider.supports_tools("some/unlisted-model"));
@@ -1217,7 +1351,10 @@ mod tests {
                 vec![user_message("hello")],
                 None,
                 crate::llm::ChatRequestConfig {
-                    reasoning_effort: Some("high".to_string()),
+                    resolved_reasoning: Some(resolved_effort(
+                        crate::llm::reasoning::ReasoningProtocol::OpenaiEffort,
+                        "high",
+                    )),
                     ..crate::llm::ChatRequestConfig::default()
                 },
                 Box::new(|_| {}),
@@ -1266,8 +1403,11 @@ mod tests {
                 vec![user_message("think")],
                 None,
                 crate::llm::ChatRequestConfig {
-                    reasoning_effort: Some("high".to_string()),
-                    thinking_budget: Some(4096),
+                    resolved_reasoning: Some(resolved_effort_budget(
+                        crate::llm::reasoning::ReasoningProtocol::OpenaiEffort,
+                        Some("high"),
+                        Some(4096),
+                    )),
                     ..crate::llm::ChatRequestConfig::default()
                 },
                 Box::new(|_| {}),
@@ -1303,7 +1443,11 @@ mod tests {
                 vec![user_message("think")],
                 None,
                 crate::llm::ChatRequestConfig {
-                    thinking_budget: Some(2048),
+                    resolved_reasoning: Some(resolved_effort_budget(
+                        crate::llm::reasoning::ReasoningProtocol::GeminiBudget,
+                        None,
+                        Some(2048),
+                    )),
                     ..crate::llm::ChatRequestConfig::default()
                 },
                 Box::new(|_| {}),
@@ -1321,6 +1465,50 @@ mod tests {
             body["extra_body"]["google"]["thinking_config"]["thinking_budget"],
             2048
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_gemini_3_sends_thinking_level_not_budget() -> ZenResult<()> {
+        let server = MockServer::start().await;
+        let provider = OpenAiCompatProvider::new(&server.uri(), "test-key", "google");
+
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: [DONE]\n\n",
+                "text/event-stream",
+            ))
+            .mount(&server)
+            .await;
+
+        provider
+            .chat_stream(
+                "gemini-3-pro-preview",
+                vec![user_message("think")],
+                None,
+                crate::llm::ChatRequestConfig {
+                    resolved_reasoning: Some(resolved_effort_budget(
+                        crate::llm::reasoning::ReasoningProtocol::GeminiLevel,
+                        Some("high"),
+                        None,
+                    )),
+                    ..crate::llm::ChatRequestConfig::default()
+                },
+                Box::new(|_| {}),
+                tokio_util::sync::CancellationToken::new(),
+            )
+            .await?;
+
+        let requests = server.received_requests().await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&requests[0].body)?;
+        assert_eq!(
+            body["extra_body"]["google"]["thinking_config"]["thinking_level"],
+            "high"
+        );
+        assert!(body["extra_body"]["google"]["thinking_config"]
+            .get("thinking_budget")
+            .is_none());
         Ok(())
     }
 

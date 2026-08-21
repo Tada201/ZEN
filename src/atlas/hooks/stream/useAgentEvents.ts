@@ -20,12 +20,6 @@ import {
   rememberTaskListChats,
   rememberWorkflowChat,
 } from "./taskWorkflowRouting";
-import {
-  syncAgentCompleteToActivity,
-  syncAgentHandoffToActivity,
-  syncAgentSpawnToActivity,
-  syncTaskToActivity,
-} from "./agentActivitySync";
 import { focusActiveAgentsPanel, shouldFocusAgentsForSpawn } from "./agentPanelFocus";
 
 const INLINE_ACTION_KINDS = new Set([
@@ -372,20 +366,14 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
           // surface or has explicitly dismissed Agents for this run.
           focusActiveAgentsPanel();
         }
-        const chatId = getAgentChatId(agentChatIdsRef.current, event.payload, useChatStore.getState());
-        if (chatId) syncAgentSpawnToActivity(chatId, event.payload);
         appendAgentActionStep(event.payload, "agent_spawn");
       });
 
       const unlistenAgentComplete = await listenAppEvent("agent:complete", (event) => {
-        const chatId = getAgentChatId(agentChatIdsRef.current, event.payload, useChatStore.getState());
-        if (chatId) syncAgentCompleteToActivity(chatId, event.payload);
         appendAgentActionStep(event.payload, "agent_complete");
       });
 
       const unlistenAgentHandoff = await listenAppEvent("agent:handoff", (event) => {
-        const chatId = getAgentChatId(agentChatIdsRef.current, event.payload, useChatStore.getState());
-        if (chatId) syncAgentHandoffToActivity(chatId, event.payload);
         appendAgentActionStep(event.payload, "agent_handoff");
       });
 
@@ -426,41 +414,22 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
       });
 
       const unlistenTaskStarted = await listenAppEvent("task:started", (event) => {
-        const chatId = getTaskChatId(taskChatIdsRef.current, useChatStore.getState(), event.payload);
-        if (chatId) syncTaskToActivity(chatId, event.payload, "in_progress");
         appendTaskActionStep(event.payload, "task_started");
       });
 
       const unlistenTaskCreated = await listenAppEvent("task:created", (event) => {
-        const chatId = getTaskChatId(taskChatIdsRef.current, useChatStore.getState(), event.payload);
-        if (chatId) syncTaskToActivity(chatId, event.payload, "pending");
         appendTaskActionStep(event.payload, "task_created");
       });
 
       const unlistenTaskUpdated = await listenAppEvent("task:updated", (event) => {
-        const chatId = getTaskChatId(taskChatIdsRef.current, useChatStore.getState(), event.payload);
-        if (chatId) {
-          const normalizedStatus = event.payload.status === "completed"
-            ? "completed"
-            : event.payload.status === "failed" || event.payload.status === "error"
-              ? "failed"
-              : event.payload.status === "pending"
-                ? "pending"
-                : "in_progress";
-          syncTaskToActivity(chatId, event.payload, normalizedStatus);
-        }
         appendTaskActionStep(event.payload, "task_updated");
       });
 
       const unlistenTaskCompleted = await listenAppEvent("task:completed", (event) => {
-        const chatId = getTaskChatId(taskChatIdsRef.current, useChatStore.getState(), event.payload);
-        if (chatId) syncTaskToActivity(chatId, event.payload, "completed");
         appendTaskActionStep(event.payload, "task_completed");
       });
 
       const unlistenTaskFailed = await listenAppEvent("task:failed", (event) => {
-        const chatId = getTaskChatId(taskChatIdsRef.current, useChatStore.getState(), event.payload);
-        if (chatId) syncTaskToActivity(chatId, event.payload, "failed");
         appendTaskActionStep(event.payload, "task_failed");
       });
 
@@ -469,15 +438,6 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
         const chatId = getTaskPlanChatId(useChatStore.getState(), payload);
         if (!chatId) return;
         rememberTaskListChats(taskChatIdsRef.current, payload.tasks, chatId);
-        (payload.tasks || []).forEach((task) => {
-          syncTaskToActivity(chatId, task, task.status === "completed"
-            ? "completed"
-            : task.status === "failed" || task.status === "error"
-              ? "failed"
-              : task.status === "running" || task.status === "in_progress"
-                ? "in_progress"
-                : "pending");
-        });
         // An empty list is the backend's explicit checklist clear; render one
         // completed "Checklist cleared" step instead of the vague
         // perpetually-running "Task list updated" fallback.
@@ -590,11 +550,22 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
         if (!spawnId.trim()) return;
 
         useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
-          const targetIdx = getActiveAssistantIndex(
+          let targetIdx = getActiveAssistantIndex(
             prev,
             undefined,
             payload.parent_tool_call_id || payload.parentToolCallId,
           );
+          // A late lifecycle event (typically the terminal completed/failed/
+          // cancelled step) can arrive after the parent assistant has been
+          // finalized, so no "active" row is found. Fall back to the message
+          // that already holds this spawn's running step so the panel doesn't
+          // stay stuck at "running"; matching by the stable spawn eventId keeps
+          // the update scoped to the correct child.
+          if (targetIdx === -1) {
+            targetIdx = prev.findIndex((m) =>
+              m.role === "assistant" && m.steps?.some((s) => s.type === "subagent" && s.eventId === spawnId),
+            );
+          }
           if (targetIdx === -1) return prev;
 
           const next = [...prev];
@@ -624,14 +595,38 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
                 ? "completed"
                 : effectiveStatus;
           const incomingChildToolCallIds = payload.child_tool_call_ids || payload.childToolCallIds || [];
+          // Anchor the delegation card at the sequence of the parent spawn
+          // tool-call so a single canonical ordering pass keeps it beside the
+          // tool that launched it, instead of floating to the end on the
+          // MAX_SAFE_INTEGER fallback. The backend subagent-step payload carries
+          // no sequence of its own, so reuse the spawn tool's.
+          const parentToolCallId = payload.parent_tool_call_id || payload.parentToolCallId || existing?.subagent?.parentToolCallId;
+          const parentSequence = parentToolCallId
+            ? steps.find((s) => s.type === "tool-call" && s.toolCall?.id === parentToolCallId)?.toolCall?.sequence
+            : undefined;
+          // Orchestrator tasks have no parent tool-call. Anchor them to the
+          // live timeline anyway: reuse the matching spawn action's sequence
+          // when it carries one, else sit just after the highest sequenced
+          // step seen so far — later-arriving synthesis text owns higher
+          // sequences, so the card stays beside its task instead of drifting
+          // past everything on the MAX_SAFE_INTEGER fallback.
+          const orchestratorSequence = (() => {
+            const spawnAction = steps.find((s) => s.type === "action" && s.metadata?.spawn?.spawnId === spawnId);
+            if (typeof spawnAction?.sequence === "number" && Number.isFinite(spawnAction.sequence)) return spawnAction.sequence;
+            const sequenced = steps
+              .map((s) => s.sequence ?? (s.type === "tool-call" ? s.toolCall?.sequence : undefined) ?? s.metadata?.sequence)
+              .filter((n): n is number => typeof n === "number" && Number.isFinite(n));
+            return sequenced.length > 0 ? Math.max(...sequenced) + 1 : undefined;
+          })();
           const subagentStep: Step = {
             type: "subagent",
             eventId,
             status: effectiveNormalizedStatus,
+            sequence: existing?.sequence ?? parentSequence ?? orchestratorSequence,
             timestamp: existing?.subagent?.timestamp ?? timestamp,
             subagent: {
               spawnId,
-              parentToolCallId: payload.parent_tool_call_id || payload.parentToolCallId || existing?.subagent?.parentToolCallId,
+              parentToolCallId,
               agentId: payload.agent_id || existing?.subagent?.agentId || "",
               agentName: payload.agent_name || existing?.subagent?.agentName || "",
               task: payload.task || existing?.subagent?.task || "",

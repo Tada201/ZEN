@@ -1,20 +1,19 @@
 import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
 
+// The legacy `src/components/widgets/orchestrator/` panel was retired; the
+// Agents panel (OrchestratorPanel) is the only live delegation surface, so the
+// stable-selector contract now applies to it.
 const source = readFileSync(
-  new URL('../src/components/widgets/orchestrator/AgentOrchestratorPanel.tsx', import.meta.url),
-  'utf8',
-);
-const modelSource = readFileSync(
-  new URL('../src/components/widgets/orchestrator/agentOrchestratorModel.ts', import.meta.url),
+  new URL('../src/atlas/components/right-panel/OrchestratorPanel.tsx', import.meta.url),
   'utf8',
 );
 
-assert(modelSource.includes('export const EMPTY_MESSAGES: Message[] = [];'), 'AgentOrchestratorPanel should use a stable empty message array');
+assert(source.includes('const EMPTY_MESSAGES: Message[] = [];'), 'Agents panel should use a stable empty message array');
 assert(
-  source.includes('s.sessionMessages[activeSessionId] ?? EMPTY_MESSAGES : EMPTY_MESSAGES'),
-  'AgentOrchestratorPanel store selector should not allocate a new empty array per snapshot',
+  source.includes('state.sessionMessages[activeChatId] ?? EMPTY_MESSAGES : EMPTY_MESSAGES'),
+  'Agents panel store selector should not allocate a new empty array per snapshot',
 );
-assert(!source.includes('s.sessionMessages[activeSessionId] ?? []'), 'AgentOrchestratorPanel must not return fresh [] from Zustand selector');
+assert(!source.includes('state.sessionMessages[activeChatId] ?? []'), 'Agents panel must not return fresh [] from Zustand selector');
 
 console.log('agent panel stable selector verifier passed');

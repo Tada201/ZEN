@@ -14,15 +14,7 @@ const traceSource = readFileSync(
   'utf8',
 );
 const panelSource = readFileSync(
-  new URL('../src/components/widgets/orchestrator/AgentOrchestratorPanel.tsx', import.meta.url),
-  'utf8',
-);
-const panelModelSource = readFileSync(
-  new URL('../src/components/widgets/orchestrator/agentOrchestratorModel.ts', import.meta.url),
-  'utf8',
-);
-const liveSessionSource = readFileSync(
-  new URL('../src/components/widgets/orchestrator/AgentOrchestratorLiveSession.tsx', import.meta.url),
+  new URL('../src/atlas/components/right-panel/OrchestratorPanel.tsx', import.meta.url),
   'utf8',
 );
 
@@ -51,10 +43,13 @@ assert(
   'agent execution trace should force-open on approval/error/running while always rendering the full expandable tool list',
 );
 
+// The right panel remains the detailed delegation surface: the retired legacy
+// orchestrator widget is gone, so this asserts the Agents panel keeps a stable
+// message selector and its own running/ended breakdown.
 assert(
-  liveSessionSource.includes('Agent lanes') &&
-    liveSessionSource.includes('Recent tools') &&
-    /const\s+sessionMessages\s*=\s*useChatStore\(s\s*=>[\s\S]*?activeSessionId\s*\?\s*s\.sessionMessages\[activeSessionId\]\s*\?\?\s*EMPTY_MESSAGES\s*:\s*EMPTY_MESSAGES/.test(panelSource),
+  panelSource.includes('Running ·') &&
+    panelSource.includes('Ended ·') &&
+    /const\s+messages\s*=\s*useChatStore\(\(state\)\s*=>[\s\S]*?activeChatId\s*\?\s*state\.sessionMessages\[activeChatId\]\s*\?\?\s*EMPTY_MESSAGES\s*:\s*EMPTY_MESSAGES/.test(panelSource),
   'right panel should remain the detailed live execution surface',
 );
 

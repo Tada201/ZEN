@@ -113,7 +113,7 @@ export const ModelConfig = React.memo(({ providerKey, displayName, requiresKey, 
                                 <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-muted-foreground">
                                     {model.contextWindow ? <span>{formatContextWindow(model.contextWindow)} context</span> : null}
                                     {model.maxTokens ? <span>{formatContextWindow(model.maxTokens)} output</span> : null}
-                                    {model.supportsReasoning ? <span className="text-primary/80">reasoning</span> : null}
+                                    {model.reasoning && model.reasoning.support !== "unsupported" && model.reasoning.support !== "unknown" ? <span className="text-primary/80">reasoning</span> : null}
                                 </div>
                                 {model.capabilities?.length ? <div className="mt-1 truncate text-[10px] text-muted-foreground">{model.capabilities.join(' · ')}</div> : null}
                             </button>

@@ -16,6 +16,22 @@ use uuid::Uuid;
 
 const MAX_PARALLEL_SUBAGENTS: usize = 8;
 
+/// Ceiling on sub-agent runs executing concurrently across the whole process.
+/// The per-call wave path already caps one batch at `MAX_PARALLEL_SUBAGENTS`,
+/// but nested delegation and multiple concurrent parent turns are otherwise
+/// unbounded and can exhaust provider rate limits. Every `do_spawn` acquires a
+/// permit before running its child and releases it on completion.
+const MAX_GLOBAL_CONCURRENT_SUBAGENTS: usize = 16;
+
+static SUBAGENT_CONCURRENCY: std::sync::LazyLock<Arc<tokio::sync::Semaphore>> =
+    std::sync::LazyLock::new(|| Arc::new(tokio::sync::Semaphore::new(MAX_GLOBAL_CONCURRENT_SUBAGENTS)));
+
+/// Wall-clock ceiling for a single sub-agent run. Bounds the direct spawn path
+/// (and the parallel-wave path) so a child whose provider/tool hangs without
+/// observing cancellation cannot leave the parent tool call and the Agents
+/// panel stuck at "Working" indefinitely.
+const SUBAGENT_TIMEOUT_SECONDS: u64 = 600;
+
 /// A single agent request inside a parallel spawn batch, with optional
 /// dependency declarations.
 #[derive(Debug, Clone)]
@@ -181,22 +197,24 @@ struct CompletionParams<'a> {
     duration_ms: u64,
 }
 
-/// Classification for sub-agent execution outcomes.
+/// Classification for sub-agent output validation.
+///
+/// Only `Completed` and `Incomplete` are produced: a run that returns `Ok` with
+/// non-empty text is `Completed` (failure-marker heuristics attach advisory
+/// notes rather than downgrading it), and empty output is `Incomplete`. Genuine
+/// run failures are reported separately as the terminal `"failed"`/`"cancelled"`
+/// status on the spawn result, not through this enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SubagentStatus {
     Completed,
-    Failed,
     Incomplete,
-    Uncertain,
 }
 
 impl SubagentStatus {
     fn as_str(&self) -> &'static str {
         match self {
             SubagentStatus::Completed => "completed",
-            SubagentStatus::Failed => "failed",
             SubagentStatus::Incomplete => "incomplete",
-            SubagentStatus::Uncertain => "uncertain",
         }
     }
 }
@@ -212,9 +230,11 @@ struct ValidatedOutput {
 
 /// Validate and normalize the raw output from a child agent.
 ///
-/// - Empty/whitespace-only output is marked as `Incomplete`.
-/// - Output containing explicit error/failure markers is marked as `Failed`.
-/// - Otherwise the output is treated as `Completed`.
+/// This runs only after the child runner returned `Ok` — the run's terminal
+/// status is the primary success signal. Text heuristics are advisory: a phrase
+/// like "unable to reproduce" or "error:" in a legitimate answer must not flip a
+/// successful run to `Failed`, so failure markers only attach notes. Genuinely
+/// empty output is still `Incomplete` because there is nothing to return.
 fn validate_subagent_output(content: &str) -> ValidatedOutput {
     let trimmed = content.trim();
     if trimmed.is_empty() {
@@ -240,39 +260,26 @@ fn validate_subagent_output(content: &str) -> ValidatedOutput {
     ];
 
     let mut notes = Vec::new();
-    let mut failed = false;
     for marker in failure_markers {
         if lower.contains(marker) {
-            notes.push(format!("Output contains failure marker: '{}'", marker));
-            failed = true;
+            notes.push(format!(
+                "Output mentions '{}' — verify the result actually satisfies the task.",
+                marker
+            ));
         }
     }
 
-    if failed {
-        return ValidatedOutput {
-            status: SubagentStatus::Failed,
-            summary: trimmed.chars().take(500).collect::<String>(),
-            full_content: content.to_string(),
-            notes,
-        };
-    }
-
-    // Heuristic: very short outputs are uncertain.
+    // Advisory only: a short answer may be perfectly valid, so note it without
+    // downgrading the runner's successful terminal status.
     if trimmed.len() < 30 {
         notes.push("Output was very short; verify it satisfies the success criteria.".to_string());
-        return ValidatedOutput {
-            status: SubagentStatus::Uncertain,
-            summary: trimmed.to_string(),
-            full_content: content.to_string(),
-            notes,
-        };
     }
 
     ValidatedOutput {
         status: SubagentStatus::Completed,
         summary: trimmed.chars().take(500).collect::<String>(),
         full_content: content.to_string(),
-        notes: Vec::new(),
+        notes,
     }
 }
 
@@ -312,6 +319,7 @@ fn classify_spawn_error(error: &str) -> ErrorClass {
         || lower.contains("forbidden")
         || lower.contains("invalid")
         || lower.contains("not found")
+        || lower.contains("no model configured")
     {
         ErrorClass::Permanent
     } else {
@@ -321,6 +329,94 @@ fn classify_spawn_error(error: &str) -> ErrorClass {
 
 fn optional_string(value: Option<&Value>) -> Option<&str> {
     value.and_then(Value::as_str).filter(|text| !text.trim().is_empty())
+}
+
+/// The model a child should inherit when neither the spawn request nor the
+/// agent profile names one. Built-in profiles ship with `model_override: null`,
+/// so this is the normal path rather than an edge case. Prefers the chat's own
+/// model over the globally selected one so a child matches the turn that
+/// spawned it.
+async fn inherited_model_for_child(app: &AppHandle, chat_id: &str) -> Option<String> {
+    let state = app.state::<AppState>();
+    let db = state.db().await.ok()?;
+    let chat_model = crate::db::queries::get_chat(&db, chat_id)
+        .await
+        .ok()
+        .and_then(|chat| chat.model)
+        .map(|model| model.trim().to_string())
+        .filter(|model| !model.is_empty());
+    if chat_model.is_some() {
+        return chat_model;
+    }
+    crate::db::queries::get_setting(&db, "active_model")
+        .await
+        .ok()
+        .flatten()
+        .map(|model| model.trim().to_string())
+        .filter(|model| !model.is_empty())
+}
+
+/// Split a `provider::model` selection (the canonical form the settings UI
+/// stores). Returns `(provider, model)` where a bare model id yields `None` for
+/// the provider (meaning "use the active provider"). Returns `None` when there
+/// is no usable model id.
+pub(crate) fn parse_provider_model(raw: &str) -> Option<(Option<String>, String)> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    match raw.split_once("::") {
+        Some((provider, model)) => {
+            let model = model.trim();
+            if model.is_empty() {
+                return None;
+            }
+            let provider = provider.trim();
+            Some((
+                (!provider.is_empty()).then(|| provider.to_string()),
+                model.to_string(),
+            ))
+        }
+        None => Some((None, raw.to_string())),
+    }
+}
+
+/// The user-selected model for a specific registered agent, stored by the
+/// Subagents settings page under `agent_model.<id>` as a canonical
+/// `provider::model` string. Built-in profiles reject edits, so this per-agent
+/// setting is how a built-in (generalist / explore) gets a persisted model
+/// without mutating its fixed profile. `None` when unset or blank.
+async fn configured_agent_model(app: &AppHandle, agent_id: &str) -> Option<(Option<String>, String)> {
+    if agent_id.trim().is_empty() {
+        return None;
+    }
+    let state = app.state::<AppState>();
+    let raw = state
+        .settings_manager
+        .get(&format!("agent_model.{agent_id}"))
+        .await
+        .ok()
+        .flatten()?;
+    parse_provider_model(&raw)
+}
+
+/// The user-selected reasoning effort for a specific registered agent, stored by
+/// the Subagents settings page under `agent_reasoning.<id>` as a canonical effort
+/// level. `None` when unset or blank, meaning the child inherits (no reasoning
+/// override is applied).
+async fn configured_agent_reasoning(app: &AppHandle, agent_id: &str) -> Option<String> {
+    if agent_id.trim().is_empty() {
+        return None;
+    }
+    let state = app.state::<AppState>();
+    state
+        .settings_manager
+        .get(&format!("agent_reasoning.{agent_id}"))
+        .await
+        .ok()
+        .flatten()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 fn optional_string_list(value: Option<&Value>) -> Vec<String> {
@@ -527,6 +623,28 @@ impl SpawnAgentTool {
             anyhow::bail!("This subagent is not allowed to invoke agent '{}'", agent_id);
         }
 
+        // Built-in profiles ship without a model override, so a child must be
+        // able to inherit the model the parent turn is running on. Prefer the
+        // chat's own model, then the globally selected one. Resolving this
+        // before `resolve_agent` keeps the "no model anywhere" case a single
+        // actionable error instead of an opaque provider rejection.
+        let inherited_model = inherited_model_for_child(&app, &chat_id).await;
+
+        // A per-agent model chosen in the Subagents settings page (stored under
+        // `agent_model.<id>`) lets a built-in like generalist/explore run on a
+        // specific model without editing its fixed profile. An explicit `model`
+        // in the spawn call still wins for that one run; otherwise the
+        // configured selection takes priority over the inherited parent model
+        // and carries its own provider.
+        let configured_model = if explicit_model.is_some() || adhoc_instructions.is_some() {
+            None
+        } else {
+            configured_agent_model(&app, agent_id).await
+        };
+        let effective_explicit: Option<String> = explicit_model
+            .map(str::to_string)
+            .or_else(|| configured_model.as_ref().map(|(_, model)| model.clone()));
+
         let mut resolved = if let Some(instructions) = adhoc_instructions {
             child_runner::resolve_adhoc_agent(
                 &self.agent_registry,
@@ -535,16 +653,25 @@ impl SpawnAgentTool {
                 &adhoc_tools,
                 &caller_tool_ids,
                 explicit_model,
+                inherited_model.as_deref(),
                 explicit_max_steps,
             )?
         } else {
             child_runner::resolve_agent(
                 &self.agent_registry,
                 agent_id,
-                explicit_model,
+                effective_explicit.as_deref(),
+                inherited_model.as_deref(),
                 explicit_max_steps,
             )?
         };
+        // Pin the provider paired with a configured per-agent model. resolve_agent
+        // clears model_provider whenever an explicit model is supplied (so it
+        // falls back to the active provider); the configured selection may name a
+        // provider other than the active one, so restore it here.
+        if let Some((Some(provider), _)) = configured_model.as_ref() {
+            resolved.model_provider = Some(provider.clone());
+        }
         child_runner::inject_workspace_agents_md(&app, &mut resolved).await;
 
         let handoff = child_runner::build_subagent_handoff(
@@ -568,11 +695,6 @@ impl SpawnAgentTool {
         let child_tool_call_ids = Arc::new(tokio::sync::Mutex::new(Vec::new()));
         let intermediate_commentary: Arc<tokio::sync::Mutex<Vec<(u64, String)>>> =
             Arc::new(tokio::sync::Mutex::new(Vec::new()));
-        {
-            let state = app.state::<AppState>();
-            let mut queues = state.subagent_message_queues.lock().await;
-            queues.insert(spawn_id.clone(), message_inbox.clone());
-        }
 
         let mut child_runner_instance =
             child_runner::build_child_runner(child_runner::ChildRunnerParams {
@@ -593,7 +715,7 @@ impl SpawnAgentTool {
             .with_child_tool_call_ids(child_tool_call_ids.clone())
             .with_intermediate_commentary(intermediate_commentary.clone())
             .with_memory_scope(memory_scope)
-            .with_message_inbox(message_inbox);
+            .with_message_inbox(message_inbox.clone());
 
         let state = app.state::<AppState>();
         let provider = if let Some(provider_name) = resolved.model_provider.as_deref() {
@@ -602,6 +724,44 @@ impl SpawnAgentTool {
         } else {
             state.provider().await?
         };
+
+        // Apply the per-agent reasoning effort chosen in the Subagents page (when
+        // an explicit/ad-hoc run hasn't overridden the agent). Normalized through
+        // the model's resolved capability so an unsupported level is clamped or
+        // dropped rather than sent raw. Empty means inherit → no override.
+        let child_config = {
+            let mut cfg = crate::llm::ChatRequestConfig::default();
+            let configured_effort = if explicit_model.is_some() || adhoc_instructions.is_some() {
+                None
+            } else {
+                configured_agent_reasoning(&app, agent_id).await
+            };
+            if let Some(effort) = configured_effort {
+                let capability = provider.reasoning_capability(&resolved.model);
+                let intent = crate::llm::ReasoningIntent {
+                    enabled: true,
+                    effort: Some(effort),
+                    budget_tokens: None,
+                };
+                cfg.resolved_reasoning = Some(capability.normalize_request(&intent));
+            }
+            cfg
+        };
+        tracing::info!(
+            spawn_id = %spawn_id,
+            agent_id = %agent_id,
+            model = %resolved.model,
+            model_provider = resolved.model_provider.as_deref().unwrap_or("<active>"),
+            "Spawning sub-agent"
+        );
+
+        // Register the inbox only after all fallible setup (runner build,
+        // provider resolution) has succeeded. Registering earlier leaked an
+        // orphaned queue whenever an early `?` return skipped the cleanup path.
+        {
+            let mut queues = state.subagent_message_queues.lock().await;
+            queues.insert(spawn_id.clone(), message_inbox);
+        }
 
         // Register this sub-agent instance with the SwarmCoordinator so the
         // swarm view stays consistent with actual running sub-agents.
@@ -617,7 +777,9 @@ impl SpawnAgentTool {
             description: resolved.agent.description.clone(),
             model_tier: resolved.agent.model_tier,
         };
-        let _ = state.swarm.spawn_agent(swarm_agent).await;
+        if let Err(e) = state.swarm.spawn_agent(swarm_agent).await {
+            tracing::warn!(spawn_id = %spawn_id, "Swarm registration failed: {}", e);
+        }
 
         // Emit spawn start
         let spawn_meta = ActionMeta {
@@ -656,7 +818,7 @@ impl SpawnAgentTool {
         let subagent_token = CancellationToken::new();
         {
             let mut tokens = state.subagent_cancellation_tokens.lock().await;
-            tokens.insert(spawn_id.clone(), subagent_token.clone());
+            tokens.insert(spawn_id.clone(), (chat_id.clone(), subagent_token.clone()));
         }
 
         let _ = app.emit(
@@ -707,6 +869,10 @@ impl SpawnAgentTool {
 
         // Run child agent with cancellation support
         let spawn_start = std::time::Instant::now();
+        // Bound global concurrent child runs. Acquired here (not at registration)
+        // so queued children still show as running in the panel while waiting for
+        // a slot, and the permit is released the moment this run finishes.
+        let _permit = SUBAGENT_CONCURRENCY.clone().acquire_owned().await.ok();
         let result = tokio::select! {
             biased;
             _ = token.cancelled() => {
@@ -715,13 +881,16 @@ impl SpawnAgentTool {
             _ = subagent_token.cancelled() => {
                 Err(anyhow::anyhow!("Sub-agent task cancelled by user"))
             }
+            _ = tokio::time::sleep(std::time::Duration::from_secs(SUBAGENT_TIMEOUT_SECONDS)) => {
+                Err(anyhow::anyhow!("Sub-agent timed out after {} seconds", SUBAGENT_TIMEOUT_SECONDS))
+            }
             res = child_runner_instance.run(
                 provider.as_ref(),
                 chat_id.clone(),
                 resolved.model,
                 child_messages,
                 resolved.agent.clone(),
-                crate::llm::ChatRequestConfig::default(),
+                child_config,
                 CancellationToken::child_token(&token),
             ) => res
         };
@@ -832,7 +1001,9 @@ impl SpawnAgentTool {
                         },
                     ));
 
-                let _ = state.swarm.terminate_agent(&spawn_id).await;
+                if let Err(e) = state.swarm.terminate_agent(&spawn_id).await {
+                    tracing::warn!(spawn_id = %spawn_id, "Swarm termination failed: {}", e);
+                }
 
                 Ok(json!({
                     "spawn_id": spawn_id,
@@ -847,7 +1018,8 @@ impl SpawnAgentTool {
             }
             Err(e) => {
                 let error_text = e.to_string();
-                let was_cancelled = error_text.contains("Sub-agent task cancelled by user");
+                let was_cancelled = error_text.contains("Sub-agent task cancelled by user")
+                    || error_text.contains("Parent cancelled — sub-agent aborted");
                 let terminal_status = if was_cancelled { "cancelled" } else { "failed" };
                 let error_class = classify_spawn_error(&error_text);
                 let retry_hint = match error_class {
@@ -896,7 +1068,9 @@ impl SpawnAgentTool {
                         },
                     ));
 
-                let _ = state.swarm.terminate_agent(&spawn_id).await;
+                if let Err(e) = state.swarm.terminate_agent(&spawn_id).await {
+                    tracing::warn!(spawn_id = %spawn_id, "Swarm termination failed: {}", e);
+                }
 
                 Ok(json!({
                     "spawn_id": spawn_id,
@@ -921,12 +1095,12 @@ impl AgentTool for SpawnAgentTool {
 
     fn description(&self) -> &str {
         "Spawn one or more sub-agents for specialized tasks. Either name a built-in specialist \
-         via 'agent_id' (e.g. 'researcher', 'operational_expert') or define an ad-hoc agent inline \
-         with 'instructions' (and optionally a 'tools' subset). A batch runs in dependency-aware \
-         waves: agents without dependencies run in parallel, and agents that declare 'depends_on' \
-         wait for their prerequisites. Use '{{agent_id}}' placeholders in task/context to inject \
-         a previous agent's summary. Results include all sub-agent outputs, including failures, \
-         so successful siblings are not discarded."
+         via 'agent_id' ('explore' for read-only search and research) or define an ad-hoc agent \
+         inline with 'instructions' (and optionally a 'tools' subset). A batch runs in \
+         dependency-aware waves: agents without dependencies run in parallel, and agents that \
+         declare 'depends_on' wait for their prerequisites. Use '{{agent_id}}' placeholders in \
+         task/context to inject a previous agent's summary. Results include all sub-agent \
+         outputs, including failures, so successful siblings are not discarded."
     }
 
     fn input_schema(&self) -> Value {
@@ -935,7 +1109,7 @@ impl AgentTool for SpawnAgentTool {
             "properties": {
                 "agent_id": {
                     "type": "string",
-                    "description": "ID of a built-in specialist (e.g. 'researcher', 'operational_expert'). Omit to define an ad-hoc agent via 'instructions'."
+                    "description": "ID of a built-in specialist ('explore' for read-only search, discovery, and research). Omit to define an ad-hoc agent via 'instructions'."
                 },
                 "instructions": {
                     "type": "string",
@@ -1160,7 +1334,6 @@ impl AgentTool for SpawnAgentTool {
 
                 // Run each sub-agent with its own timeout so one slow agent does
                 // not block the whole batch indefinitely.
-                const SUBAGENT_TIMEOUT_SECONDS: u64 = 600;
                 let timeout = std::time::Duration::from_secs(SUBAGENT_TIMEOUT_SECONDS);
                 let wave_results: Vec<(usize, String, Value)> =
                     futures::future::join_all(wave_futures.into_iter().map(|(idx, id, fut)| async move {
@@ -1221,28 +1394,46 @@ impl AgentTool for SpawnAgentTool {
             let failed = results_in_order.len() - completed;
 
             // Build a merged summary of all sub-agent results for easy consumption
-            // by the parent LLM.
+            // by the parent LLM. Failed children carry no `summary`, so fall back
+            // to a bounded slice of their error text — otherwise the parent sees
+            // an empty line and re-derives the raw failure from `results`.
             let merged_summary: Vec<String> = results_in_order
                 .iter()
                 .enumerate()
                 .map(|(index, result)| {
                     let status = result.get("status").and_then(Value::as_str).unwrap_or("unknown");
-                    let summary = result
+                    let detail = result
                         .get("summary")
                         .and_then(Value::as_str)
+                        .filter(|s| !s.trim().is_empty())
+                        .or_else(|| result.get("error").and_then(Value::as_str))
                         .unwrap_or("")
                         .chars()
                         .take(200)
                         .collect::<String>();
-                    format!("[{}] {}: {}", index + 1, status, summary)
+                    format!("[{}] {}: {}", index + 1, status, detail)
                 })
                 .collect();
+
+            // Lead with a single clean `result` string. `runner/loop.rs` unwraps
+            // this field for the parent's tool context; without it the parent is
+            // handed the whole JSON blob (raw child errors included) and tends to
+            // echo it verbatim into its visible reply as a fenced text dump.
+            let overall = if completed == results_in_order.len() {
+                format!("All {} sub-agents completed.", results_in_order.len())
+            } else if completed == 0 {
+                format!("All {} sub-agents failed.", results_in_order.len())
+            } else {
+                format!("{} of {} sub-agents completed; {} failed.", completed, results_in_order.len(), failed)
+            };
+            let result_text = format!("{}\n{}", overall, merged_summary.join("\n"));
 
             return Ok(json!({
                 "status": if completed == results_in_order.len() { "completed" } else if completed == 0 { "error" } else { "partial" },
                 "parallel": true,
                 "completed": completed,
                 "failed": failed,
+                "result": result_text,
                 "results": results_in_order,
                 "merged_summary": merged_summary,
                 "waves": wave_summaries,

@@ -7,7 +7,7 @@ import { normalizeTaskDisplayStatus, normalizeTaskText } from '@/lib/tasks/taskS
 export interface Task {
   id: string;
   description: string;
-  assignedTo: string; // "ZEN", "ZEN-TAC", "ZEN-DOCS", "ZEN-COSMOS"
+  assignedTo: string; // Agent display name, e.g. "ZEN" or "Explore"
   status: 'pending' | 'in-progress' | 'completed' | 'failed';
   progress: number; // 0-100
   error?: string;

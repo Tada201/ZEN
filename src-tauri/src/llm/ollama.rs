@@ -94,16 +94,19 @@ struct OllamaChatChunk {
 }
 
 fn ollama_think_from_config(config: &crate::llm::ChatRequestConfig) -> Option<OllamaThink> {
-    if let Some(effort) = config.reasoning_effort.as_deref() {
+    // Only emit `think` when the resolver produced an OllamaThink request.
+    use crate::llm::reasoning::ReasoningProtocol;
+    let r = config.resolved_reasoning.as_ref()?;
+    if !r.enabled || r.capability.protocol != ReasoningProtocol::OllamaThink {
+        return None;
+    }
+    if let Some(effort) = r.effort.as_deref() {
         let effort = effort.to_lowercase();
         if matches!(effort.as_str(), "low" | "medium" | "high") {
             return Some(OllamaThink::Level(effort));
         }
-
-        return Some(OllamaThink::Bool(true));
     }
-
-    config.thinking_budget.map(|_| OllamaThink::Bool(true))
+    Some(OllamaThink::Bool(true))
 }
 
 #[derive(Deserialize)]
@@ -247,23 +250,29 @@ impl LlmProvider for OllamaProvider {
             .models
             .into_iter()
             .zip(context_lengths)
-            .map(|(m, max_context_length)| ModelInfo {
-                id: m.name.clone(),
-                name: m.name,
-                size: m.size,
-                modified_at: m.modified_at,
-                display_name: None,
-                description: None,
-                provider: Some("ollama".to_string()),
-                model_type: None,
-                arch: None,
-                quantization: None,
-                max_context_length,
-                state: None,
-                supports_vision: None,
-                supports_tools: None,
-                supports_reasoning: None,
-                reasoning_config_type: None,
+            .map(|(m, max_context_length)| {
+                let reasoning = crate::llm::reasoning::resolver::resolve(
+                    "ollama",
+                    &m.name,
+                    &crate::llm::reasoning::resolver::RawReasoningMetadata::default(),
+                );
+                ModelInfo {
+                    id: m.name.clone(),
+                    name: m.name,
+                    size: m.size,
+                    modified_at: m.modified_at,
+                    display_name: None,
+                    description: None,
+                    provider: Some("ollama".to_string()),
+                    model_type: None,
+                    arch: None,
+                    quantization: None,
+                    max_context_length,
+                    state: None,
+                    supports_vision: None,
+                    supports_tools: None,
+                    reasoning: Some(reasoning),
+                }
             })
             .collect();
 
@@ -534,6 +543,14 @@ impl LlmProvider for OllamaProvider {
             Err(_) => false,
         }
     }
+
+    fn reasoning_capability(&self, model: &str) -> crate::llm::ReasoningCapability {
+        crate::llm::reasoning::resolver::resolve(
+            "ollama",
+            model,
+            &crate::llm::reasoning::resolver::RawReasoningMetadata::default(),
+        )
+    }
 }
 
 #[cfg(test)]
@@ -753,7 +770,7 @@ mod tests {
     #[test]
     fn test_ollama_request_uses_top_level_think_bool() {
         let config = crate::llm::ChatRequestConfig {
-            thinking_budget: Some(1024),
+            resolved_reasoning: Some(ollama_resolved(None)),
             ..Default::default()
         };
         let request = OllamaChatRequest {
@@ -786,10 +803,32 @@ mod tests {
         assert!(body["options"].get("thinking_budget").is_none());
     }
 
+    /// Build a resolved reasoning request that targets the Ollama `think`
+    /// protocol, mirroring what the resolver produces for a think-capable model.
+    fn ollama_resolved(effort: Option<&str>) -> crate::llm::ResolvedReasoningRequest {
+        use crate::llm::reasoning::{
+            ControlAvailability, ReasoningCapability, ReasoningProtocol, ReasoningSupport,
+        };
+        let capability = ReasoningCapability {
+            support: ReasoningSupport::Tunable,
+            protocol: ReasoningProtocol::OllamaThink,
+            control_availability: ControlAvailability::Zen,
+            levels: Some(vec!["low".into(), "medium".into(), "high".into()]),
+            can_disable: true,
+            ..ReasoningCapability::unknown()
+        };
+        crate::llm::ResolvedReasoningRequest {
+            capability,
+            enabled: true,
+            effort: effort.map(|e| e.to_string()),
+            budget_tokens: None,
+        }
+    }
+
     #[test]
     fn test_ollama_request_maps_supported_think_level() {
         let config = crate::llm::ChatRequestConfig {
-            reasoning_effort: Some("high".to_string()),
+            resolved_reasoning: Some(ollama_resolved(Some("high"))),
             ..Default::default()
         };
 

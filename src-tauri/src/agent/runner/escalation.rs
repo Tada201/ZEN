@@ -414,6 +414,49 @@ impl Runner {
                             let cloud_provider = crate::llm::make_provider(&cloud_config);
                             let fallback_model =
                                 crate::llm::default_model_for_provider(&cloud_config.provider_type);
+                            // There is intentionally no hardcoded default model, so
+                            // this can be empty. Sending model:"" to the cloud
+                            // provider would fail the same way the local model just
+                            // did — surface an actionable message instead of
+                            // burning another failed request.
+                            if fallback_model.trim().is_empty() {
+                                tracing::warn!(
+                                    provider = %cloud_config.provider_type,
+                                    "Cloud escalation has no configured model; cannot retry"
+                                );
+                                self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
+                                    chat_id: chat_id.to_string(),
+                                    message: format!(
+                                        "⚠️ No model selected for {} — choose one in Settings > Models to enable cloud fallback",
+                                        cloud_config.display_name
+                                    ),
+                                    iteration: Some(0),
+                                    phase: Some(ChatStatusPhase::PROVIDER_MISSING.to_string()),
+                                    metadata: None,
+                                }));
+                                let error_text = format!(
+                                    "Local model failed and no model is configured for cloud provider '{}' to escalate to. Select a model in Settings > Models.",
+                                    cloud_config.display_name
+                                );
+                                if let Some(ref db) = self.db_pool {
+                                    persist_chat_failure(
+                                        db,
+                                        chat_id,
+                                        model,
+                                        assistant_message_id,
+                                        "",
+                                        &error_text,
+                                        false,
+                                    )
+                                    .await;
+                                }
+                                self.emit_owned_chat_error(ChatErrorPayload {
+                                    chat_id: chat_id.to_string(),
+                                    error: error_text,
+                                    recoverable: false,
+                                });
+                                return Err(e);
+                            }
                             tracing::info!("Retrying with cloud model: {}", fallback_model);
 
                             match self
@@ -465,11 +508,11 @@ impl Runner {
                                         )
                                         .await;
                                     }
-                                    self.emit(AgentEvent::ChatError(ChatErrorPayload {
+                                    self.emit_owned_chat_error(ChatErrorPayload {
                                         chat_id: chat_id.to_string(),
                                         error: error_text,
                                         recoverable: true,
-                                    }));
+                                    });
                                     Err(e)
                                 }
                             }
@@ -496,11 +539,11 @@ impl Runner {
                                 )
                                 .await;
                             }
-                            self.emit(AgentEvent::ChatError(ChatErrorPayload {
+                            self.emit_owned_chat_error(ChatErrorPayload {
                                 chat_id: chat_id.to_string(),
                                 error: error_text,
                                 recoverable: false,
-                            }));
+                            });
                             Err(e)
                         }
                     }
@@ -518,11 +561,11 @@ impl Runner {
                         )
                         .await;
                     }
-                    self.emit(AgentEvent::ChatError(ChatErrorPayload {
+                    self.emit_owned_chat_error(ChatErrorPayload {
                         chat_id: chat_id.to_string(),
                         error: error_text,
                         recoverable: false,
-                    }));
+                    });
                     Err(e)
                 }
             }
@@ -870,6 +913,7 @@ impl Runner {
                             delta: chunk_text.clone(),
                             r#type: chunk_type.to_string(),
                             message_id: Some(msg_id_for_chunks.clone()),
+                            sequence: Some(early_runner.peek_event_sequence()),
                         })
                         .emit_via(&app_clone, &on_event_clone);
                     }
@@ -900,6 +944,7 @@ impl Runner {
                                 r#type: old_type.to_string(),
                                 done: false,
                                 message_id: Some(msg_id_for_chunks.clone()),
+                                sequence: Some(early_runner.peek_event_sequence()),
                             })
                             .emit_via(&app_clone, &on_event_clone);
                         }
@@ -928,6 +973,7 @@ impl Runner {
                                     r#type: current_type.to_string(),
                                     done: false,
                                     message_id: Some(msg_id_for_chunks.clone()),
+                                    sequence: Some(early_runner.peek_event_sequence()),
                                 })
                                 .emit_via(&app_clone, &on_event_clone);
                             }
@@ -949,6 +995,7 @@ impl Runner {
                     r#type: current_type.to_string(),
                     done: false,
                     message_id: Some(msg_id.clone()),
+                    sequence: Some(self.peek_event_sequence()),
                 })
                 .emit_via(app, &self.on_event);
             }

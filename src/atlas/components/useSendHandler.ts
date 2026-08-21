@@ -37,6 +37,7 @@ import { useCallback } from "react";
 import { toast } from "sonner";
 import type { Attachment } from "./chat/types";
 import type { ThinkingPayload } from "./chat/input/PremiumChatInputTypes";
+import type { ReasoningCapability } from "@/lib/types/provider";
 import { executeGoalCommand, parseGoalCommand } from "./chat/input/slashGoal";
 import { executeCompactCommand, parseCompactCommand } from "./chat/input/slashCompact";
 import { usePromptQueueStore } from "@/lib/stores/promptQueueStore";
@@ -66,10 +67,9 @@ export interface UseSendHandlerCtx {
   isDeepResearch: boolean;
   isImageGenEnabled: boolean;
   internalGenerativeUI: boolean;
-  supportsReasoning: boolean;
-  reasoningConfigType: string;
-  /** Reasoning payload builder from `useChatInputModes`. */
-  buildThinkingPayload: (supportsReasoning: boolean, reasoningConfigType: string) => ThinkingPayload;
+  reasoningCapability: ReasoningCapability;
+  /** Reasoning payload builder from `useChatInputModes` (generic intent). */
+  buildThinkingPayload: (capability: ReasoningCapability) => ThinkingPayload;
   /** Composer callbacks. */
   onSend: (args: {
     message: string;
@@ -152,7 +152,7 @@ export function useSendHandler(ctx: UseSendHandlerCtx): UseSendHandlerResult {
         model: selectedModelId || selectedModelInfo?.id || "No Model",
         provider: selectedProvider || selectedModelInfo?.provider || "ollama",
         webSearch: ctx.isWebSearch,
-        thinking: ctx.buildThinkingPayload(ctx.supportsReasoning, ctx.reasoningConfigType),
+        thinking: ctx.buildThinkingPayload(ctx.reasoningCapability),
         deepResearch: ctx.isDeepResearch,
         generativeUI: ctx.internalGenerativeUI,
         imageGen: ctx.isImageGenEnabled,
@@ -184,7 +184,7 @@ export function useSendHandler(ctx: UseSendHandlerCtx): UseSendHandlerResult {
       imageGen: ctx.isImageGenEnabled,
       files: ctx.selectedFiles,
       attachments,
-      thinking: ctx.buildThinkingPayload(ctx.supportsReasoning, ctx.reasoningConfigType),
+      thinking: ctx.buildThinkingPayload(ctx.reasoningCapability),
       provider: providerId,
     });
 
@@ -212,7 +212,7 @@ export function useSendHandler(ctx: UseSendHandlerCtx): UseSendHandlerResult {
         imageGen: ctx.isImageGenEnabled,
         files: [],
         attachments: [],
-        thinking: ctx.buildThinkingPayload(ctx.supportsReasoning, ctx.reasoningConfigType),
+        thinking: ctx.buildThinkingPayload(ctx.reasoningCapability),
         provider: providerId,
       });
     },

@@ -3,16 +3,16 @@ import { humanizeToolName } from "../components/chat/ToolCallCard";
 import { toToolInputRecord } from "../components/chat/tool/toToolInputRecord";
 
 /**
- * Single source of truth for per-agent iconography. Keyed by agent id, values
- * are Iconify/codicon names consumed by `WorkbenchIcon`. Falls back to a
- * generic board icon for ad-hoc/unknown agents.
+ * Single source of truth for per-agent iconography. Keyed by agent id (and
+ * display name, since legacy persisted traces carry only the name), values are
+ * Iconify/codicon names consumed by `WorkbenchIcon`. Falls back to a generic
+ * board icon for ad-hoc/unknown agents.
  */
 const AGENT_ICONS: Record<string, string> = {
   generalist: "codicon:circuit-board",
-  tactical_expert: "codicon:target",
-  researcher: "codicon:search",
-  space_observer: "codicon:telescope",
-  "ZEN-DOCS": "codicon:book",
+  explore: "codicon:search",
+  voice_display: "codicon:preview",
+  Explore: "codicon:search",
 };
 
 export function agentIconName(agentId?: string, agentName?: string): string {

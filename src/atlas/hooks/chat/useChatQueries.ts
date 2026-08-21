@@ -4,7 +4,6 @@ import { chatApi, providersApi, type BackendChat, type BackendFolder, type Backe
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { IS_TAURI } from "@/api/tauriClient";
 import { useTaskStore } from "@/lib/stores/taskStore";
-import { useAgentActivityStore } from "@/lib/stores/agentActivityStore";
 import { useVoiceStageStore } from "@/atlas/components/voice/voiceStageStore";
 import { useUIStore, setActiveSessionId as setUISessionId } from "@/lib/stores/useUIStore";
 import { useSettingsStore } from "@/lib/stores/useSettingsStore";
@@ -255,7 +254,7 @@ function markRecoveredMessage(message: Message): Message {
 }
 
 const EMPTY_ARRAY: Message[] = [];
-const MODEL_CATALOG_CACHE_KEY = "zen_model_catalog_cache_v1";
+const MODEL_CATALOG_CACHE_KEY = "zen_model_catalog_cache_v2";
 type BackendModelInfo = ModelInfo & {
   maxContextLength?: number;
   supportsVision?: boolean;
@@ -267,7 +266,9 @@ function modelInfoToModel(model: ModelInfo): Model {
   const capabilities = new Set(backendModel.capabilities?.length ? backendModel.capabilities : ["text"]);
   if (backendModel.supportsVision) capabilities.add("vision");
   if (backendModel.supportsTools) capabilities.add("tools");
-  if (backendModel.supportsReasoning) capabilities.add("reasoning");
+  if (model.reasoning && model.reasoning.support !== "unsupported" && model.reasoning.support !== "unknown") {
+    capabilities.add("reasoning");
+  }
 
   return {
     id: model.id,
@@ -278,8 +279,7 @@ function modelInfoToModel(model: ModelInfo): Model {
     capabilities: Array.from(capabilities),
     available: model.state !== "missing",
     contextWindow: backendModel.contextWindow ?? backendModel.maxContextLength,
-    supportsReasoning: model.supportsReasoning,
-    reasoningConfigType: model.reasoningConfigType,
+    reasoning: model.reasoning,
   };
 }
 
@@ -719,13 +719,6 @@ export function useChatQueries() {
 
       useTaskStore.getState().setActiveChatId(currentSessionId);
       useTaskStore.getState().clearTasksForChat(prev);
-
-      const agentStore = useAgentActivityStore.getState();
-      agentStore.clearTasksForChat(prev);
-      agentStore.clearActivitiesForChat(prev);
-      if (agentStore.pendingPlan?.chatId === prev) {
-        agentStore.setPendingPlan(null);
-      }
 
       // Voice board is session-bound — clear widgets, retained boards,
       // and close lifecycle so stale visualizations don't leak. Skip the

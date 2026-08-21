@@ -15,6 +15,8 @@ interface ModelSearchDropdownProps {
   onSelectModel: (id: string, provider: string) => void;
   onOpenModelSelector?: () => void;
   isCompact?: boolean;
+  /** Extra classes for the trigger button (e.g. a boxed look on settings cards). */
+  triggerClassName?: string;
 }
 
 /** Progressive-disclosure stages: each pick collapses the prior column. */
@@ -57,6 +59,7 @@ export const ModelSearchDropdown = memo(({
   onSelectModel,
   onOpenModelSelector,
   isCompact,
+  triggerClassName,
 }: ModelSearchDropdownProps) => {
   const reducedMotion = useReducedMotion();
   const [modelSearch, setModelSearch] = useState('');
@@ -68,6 +71,27 @@ export const ModelSearchDropdown = memo(({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const wasOpenRef = useRef(false);
   const listboxId = `composer-model-listbox-${useId().replace(/:/g, '')}`;
+
+  // The panel is anchored to the trigger, but the trigger can sit at the bottom
+  // of the composer or high inside a Settings pane. Choose side/alignment from
+  // the trigger's viewport position on open so the panel never opens off-screen
+  // or over unrelated Settings content. Falls back to the composer-friendly
+  // top/left when unmeasured.
+  const [placement, setPlacement] = useState<{ side: 'top' | 'bottom'; align: 'left' | 'right' }>(
+    { side: 'top', align: 'left' },
+  );
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const PANEL_H = 400; // search + 320px body + footer, approximate
+    const PANEL_W = 600;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const side = spaceBelow >= PANEL_H || spaceBelow >= rect.top ? 'bottom' : 'top';
+    const align = rect.left + PANEL_W > window.innerWidth - 8 ? 'right' : 'left';
+    setPlacement({ side, align });
+  }, [isOpen]);
 
   const searching = deferredModelSearch.trim().length > 0;
 
@@ -219,6 +243,7 @@ export const ModelSearchDropdown = memo(({
         className={cn(
           'composer-control text-[13px] font-semibold shrink-0',
           isCompact ? 'max-w-[40px] min-w-0' : 'max-w-[160px] min-w-[100px]',
+          triggerClassName,
         )}
       >
         <ProviderIcon provider={selectedModelInfo.provider} className="w-3.5 h-3.5 shrink-0" />
@@ -233,14 +258,18 @@ export const ModelSearchDropdown = memo(({
             <motion.div
               role="dialog"
               aria-label="Select AI model"
-              initial={reducedMotion ? false : { opacity: 0, y: -10 }}
+              initial={reducedMotion ? false : { opacity: 0, y: placement.side === 'top' ? -10 : 10 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={reducedMotion ? undefined : { opacity: 0, y: -10 }}
+              exit={reducedMotion ? undefined : { opacity: 0, y: placement.side === 'top' ? -10 : 10 }}
               transition={reducedMotion ? { duration: 0 } : {
                 duration: motionDurations.fast,
                 ease: motionEasings.standard,
               }}
-              className="composer-popover absolute bottom-full left-0 z-[120] mb-1 flex w-[600px] max-w-[calc(100vw-1rem)] flex-col overflow-hidden font-sans"
+              className={cn(
+                'composer-popover absolute z-[120] flex w-[600px] max-w-[calc(100vw-1rem)] flex-col overflow-hidden font-sans',
+                placement.side === 'top' ? 'bottom-full mb-1' : 'top-full mt-1',
+                placement.align === 'right' ? 'right-0' : 'left-0',
+              )}
             >
               {/* Search header spans full width */}
               <div className="composer-toolbar border-b px-2 py-1.5">

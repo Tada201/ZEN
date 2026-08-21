@@ -256,61 +256,28 @@ const TIER2_KEYWORDS: &[&str] = &[
     "website",
 ];
 
-/// Keywords that indicate specific agent needs
+/// Keywords that indicate specific agent needs. Only agents that actually ship
+/// in `resources/agents/` belong here — a recommendation naming a profile the
+/// registry cannot resolve is worse than defaulting to ZEN. `voice_display` is
+/// excluded because it is started automatically after a voice response and is
+/// never a routing target.
 const AGENT_KEYWORDS: &[(&str, &str)] = &[
-    ("security", "ZEN-TAC"),
-    ("operational", "ZEN-TAC"),
-    ("military", "ZEN-TAC"),
-    ("geofence", "ZEN-TAC"),
-    ("flight", "ZEN-TAC"),
-    ("aircraft", "ZEN-TAC"),
-    ("tracking", "ZEN-TAC"),
-    ("map", "ZEN-TAC"),
-    ("geolocation", "ZEN-TAC"),
-    ("weather", "ZEN-TAC"),
-    ("earthquake", "ZEN-TAC"),
-    ("radar", "ZEN-TAC"),
-    ("sonar", "ZEN-TAC"),
-    ("surveillance", "ZEN-TAC"),
-    ("coordinates", "ZEN-TAC"),
-    ("location", "ZEN-TAC"),
-    ("route", "ZEN-TAC"),
-    ("navy", "ZEN-TAC"),
-    ("vessel", "ZEN-TAC"),
-    ("ship", "ZEN-TAC"),
-    ("port", "ZEN-TAC"),
-    ("boundary", "ZEN-TAC"),
-    ("zone", "ZEN-TAC"),
-    ("document", "ZEN-DOCS"),
-    ("research", "ZEN-DOCS"),
-    ("search", "ZEN-DOCS"),
-    ("knowledge base", "ZEN-DOCS"),
-    ("uploaded file", "ZEN-DOCS"),
-    ("local file", "ZEN-DOCS"),
-    ("analyze", "ZEN-DOCS"),
-    ("information", "ZEN-DOCS"),
-    ("facts", "ZEN-DOCS"),
-    ("sources", "ZEN-DOCS"),
-    ("reference", "ZEN-DOCS"),
-    ("citation", "ZEN-DOCS"),
-    ("space", "ZEN-COSMOS"),
-    ("astronomy", "ZEN-COSMOS"),
-    ("star", "ZEN-COSMOS"),
-    ("planet", "ZEN-COSMOS"),
-    ("satellite", "ZEN-COSMOS"),
-    ("iss", "ZEN-COSMOS"),
-    ("orbit", "ZEN-COSMOS"),
-    ("constellation", "ZEN-COSMOS"),
-    ("telescope", "ZEN-COSMOS"),
-    ("galaxy", "ZEN-COSMOS"),
-    ("nebula", "ZEN-COSMOS"),
-    ("moon", "ZEN-COSMOS"),
-    ("mars", "ZEN-COSMOS"),
-    ("solar", "ZEN-COSMOS"),
-    ("eclipse", "ZEN-COSMOS"),
-    ("asteroid", "ZEN-COSMOS"),
-    ("comet", "ZEN-COSMOS"),
-    ("meteor", "ZEN-COSMOS"),
+    ("document", "Explore"),
+    ("documents", "Explore"),
+    ("research", "Explore"),
+    ("search", "Explore"),
+    ("find", "Explore"),
+    ("locate", "Explore"),
+    ("knowledge base", "Explore"),
+    ("uploaded file", "Explore"),
+    ("local file", "Explore"),
+    ("codebase", "Explore"),
+    ("analyze", "Explore"),
+    ("information", "Explore"),
+    ("facts", "Explore"),
+    ("sources", "Explore"),
+    ("reference", "Explore"),
+    ("citation", "Explore"),
     ("code", "ZEN"),
     ("program", "ZEN"),
     ("general", "ZEN"),
@@ -714,8 +681,19 @@ mod tests {
     #[test]
     fn test_agent_detection() {
         let result = ComplexityRouter::classify("Research security vulnerabilities in the system");
-        // Should recommend a specialized agent based on keywords
-        assert!(result.recommended_agent == "ZEN-TAC" || result.recommended_agent == "ZEN-DOCS");
+        // Research/search intent must route to the shipped Explore specialist.
+        assert_eq!(result.recommended_agent, "Explore");
+    }
+
+    #[test]
+    fn recommended_agents_are_limited_to_shipped_profiles() {
+        for (_, agent) in AGENT_KEYWORDS {
+            assert!(
+                *agent == "ZEN" || *agent == "Explore",
+                "AGENT_KEYWORDS must only name profiles that ship in resources/agents/, found '{}'",
+                agent
+            );
+        }
     }
 
     #[test]

@@ -14,7 +14,7 @@ assert(textarea.includes('e.key === "Enter"') && textarea.includes("!e.shiftKey"
 assert((textarea.match(/nativeEvent\.isComposing/g) ?? []).length >= 2, "send and slash selection must both guard IME composition");
 assert(textarea.includes('e.key === "ArrowDown"') && textarea.includes('e.key === "ArrowUp"') && textarea.includes('e.key === "Escape"'), "slash command navigation must cover arrows and Escape");
 assert(textarea.includes("aria-controls={slashIsPopoverOpen ? slashListboxId") && textarea.includes("aria-autocomplete={slashIsPopoverOpen ? \"list\""), "textarea must announce the active slash interaction");
-assert(input.includes("supportsImageGen") && input.includes("useAutoDisableThinking"), "capability-gated controls must derive from the selected model");
+assert(input.includes("supportsImageGen") && input.includes("useReconcileThinking"), "capability-gated controls must derive from the selected model");
 assert(plus.includes("supportsImageGen &&") && plus.includes("setIsImageGenEnabled?."), "image generation must not appear or toggle when unsupported");
 assert(model.includes("onSelectModel(model.id, model.provider)") && model.includes("setIsOpen(false)"), "model selection must preserve provider routing and close the picker");
 assert(pinned.includes("setIsWebSearch(!isWebSearch)") && pinned.includes("setIsDeepResearch(!isDeepResearch)"), "pinned capability toggles must remain wired to their state owners");

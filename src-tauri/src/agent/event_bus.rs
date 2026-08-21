@@ -191,6 +191,13 @@ pub struct ChatChunkPayload {
     pub done: bool,
     /// Optional message_id for deterministic routing to the correct assistant
     pub message_id: Option<String>,
+    /// Runner event sequence at emit time. Constant while a single LLM stream
+    /// segment produces text (no `next_event_sequence` is consumed during
+    /// streaming), and higher after that iteration's tools run — so the
+    /// frontend can open a NEW text part when prose resumes after a tool
+    /// instead of folding it back into the pre-tool block.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sequence: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -201,6 +208,9 @@ pub struct ChatChunkFirstPayload {
     pub r#type: String,
     /// Optional message_id for deterministic routing to the correct assistant
     pub message_id: Option<String>,
+    /// See `ChatChunkPayload::sequence`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sequence: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -311,11 +321,15 @@ impl SubagentCommentarySegment {
         }
         let mut sorted = raw.to_vec();
         sorted.sort_by_key(|(sequence, _)| *sequence);
-        let segments: Vec<Self> = sorted
-            .into_iter()
-            .take(Self::MAX_SEGMENTS)
+        // Keep the NEWEST slices once the cap is exceeded: the tail is the
+        // thinking a long-running child still needs on the panel; dropping
+        // from the head would freeze it on its earliest commentary. Output
+        // stays ascending so consumers see monotonic sequences.
+        let start = sorted.len().saturating_sub(Self::MAX_SEGMENTS);
+        let segments: Vec<Self> = sorted[start..]
+            .iter()
             .map(|(sequence, text)| Self {
-                sequence,
+                sequence: *sequence,
                 text: text.chars().take(Self::MAX_SEGMENT_CHARS).collect(),
             })
             .collect();
@@ -787,14 +801,22 @@ impl AgentEvent {
         let payload = self.payload();
 
         if let Some(ref ch) = channel {
-            let _ = ch.send(payload);
+            if let Err(e) = ch.send(payload) {
+                tracing::warn!(
+                    "Failed to emit event '{}' via direct channel: {}",
+                    self.event_name(),
+                    e
+                );
+            }
         } else {
             let event_name = self.event_name();
             let flat_payload = match payload.get("payload") {
                 Some(p) => p.clone(),
                 None => payload,
             };
-            let _ = app.emit(event_name, flat_payload);
+            if let Err(e) = app.emit(event_name, flat_payload) {
+                tracing::warn!("Failed to emit event '{}' via app handle: {}", event_name, e);
+            }
         }
     }
 }

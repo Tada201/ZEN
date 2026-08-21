@@ -172,16 +172,27 @@ function buildCtx(overrides: Partial<UseSendHandlerCtx> = {}): UseSendHandlerCtx
     isDeepResearch: false,
     isImageGenEnabled: false,
     internalGenerativeUI: false,
-    supportsReasoning: true,
-    reasoningConfigType: "effort",
+    reasoningCapability: {
+      support: "tunable",
+      protocol: "openai_effort",
+      controlAvailability: "zen",
+      levels: ["low", "medium", "high"],
+      defaultLevel: "medium",
+      canDisable: true,
+      reasoningVisibility: "summary",
+      source: "registry",
+      confidence: "authoritative",
+    },
     buildThinkingPayload: vi.fn(
       (
-        supportsReasoning: boolean,
-        reasoningConfigType?: string,
-      ): { enabled: boolean; effort?: "low" | "medium" | "high" } => ({
-        enabled: supportsReasoning,
+        capability: { controlAvailability: string; support: string },
+      ): { enabled: boolean; effort?: string } => ({
+        enabled:
+          capability.controlAvailability === "zen" &&
+          capability.support === "tunable",
         effort:
-          supportsReasoning && reasoningConfigType === "effort"
+          capability.controlAvailability === "zen" &&
+          capability.support === "tunable"
             ? "medium"
             : undefined,
       }),

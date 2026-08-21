@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils/style";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import type { ComposerLayoutMode, PremiumChatInputProps } from "./chat/input/PremiumChatInputTypes";
 import type { ThinkingEffortLevel } from "./useChatInputModes";
+import type { ReasoningCapability } from "@/lib/types/provider";
 import { ModelSearchDropdown } from "./chat/input/ModelSearchDropdown";
 import { PinnedActionBar } from "./chat/input/PinnedActionBar";
 import { PermissionModeMenu } from "./PermissionModeMenu";
@@ -24,17 +25,14 @@ import { ComposerSubmitLoader } from "./chat/input/ComposerSubmitLoader";
  * under the 350-line warning limit.
  *
  * Type notes:
- *   * `reasoningConfigType` is the literal union PinnedActionBar
- *     accepts; the composing input narrows the model's value to that
- *     exact union before passing through.
+ *   * `reasoningCapability` is the backend-resolved capability object; the
+ *     pinned bar / add-menu render their reasoning affordance from it.
  *   * `thinkingEffort` / `setThinkingEffort` use the explicit
  *     `ThinkingEffortLevel` alias so contravariant function-arg
  *     compatibility is preserved when forwarding to PinnedActionBar.
  *   * `onSelectModel` is required because `PremiumChatInputProps`
  *     declares it as such.
  */
-
-type ReasoningConfigTypeLiteral = "none" | "effort" | "budget";
 
 export interface ChatInputFooterProps {
   layoutMode: ComposerLayoutMode;
@@ -57,10 +55,9 @@ export interface ChatInputFooterProps {
   // Pinned bar
   pinnedActions: string[];
   togglePin: (id: string) => void;
-  supportsReasoning: boolean;
+  reasoningCapability: ReasoningCapability;
   isThinking: boolean;
   setIsThinking: (v: boolean) => void;
-  reasoningConfigType: ReasoningConfigTypeLiteral;
   thinkingEffort: ThinkingEffortLevel;
   setThinkingEffort: (v: ThinkingEffortLevel) => void;
   thinkingBudget: number;
@@ -92,6 +89,10 @@ export const ChatInputFooter = (props: ChatInputFooterProps) => {
   const isWelcome = props.layoutMode === "welcome";
   const isCompact = props.layoutMode === "sidebar" || props.layoutMode === "narrow";
   const isSidebar = props.layoutMode === "sidebar";
+  const showReasoning =
+    props.reasoningCapability.support === "always_on" ||
+    props.reasoningCapability.support === "toggleable" ||
+    props.reasoningCapability.support === "tunable";
   const handleMicClick = () => {
     const state = useUIStore.getState();
     if (state.voiceModeOpen) {
@@ -127,7 +128,7 @@ export const ChatInputFooter = (props: ChatInputFooterProps) => {
             onFileSelect={props.handleFileChange}
             pinnedActions={props.pinnedActions}
             togglePin={props.togglePin}
-            supportsReasoning={props.supportsReasoning}
+            showReasoning={showReasoning}
             isThinking={props.isThinking}
             setIsThinking={props.setIsThinking}
             isDeepResearch={props.isDeepResearch}
@@ -159,10 +160,9 @@ export const ChatInputFooter = (props: ChatInputFooterProps) => {
         <PinnedActionBar
           pinnedActions={props.pinnedActions}
           togglePin={props.togglePin}
-          supportsReasoning={props.supportsReasoning}
+          reasoningCapability={props.reasoningCapability}
           isThinking={props.isThinking}
           setIsThinking={props.setIsThinking}
-          reasoningConfigType={props.reasoningConfigType}
           thinkingEffort={props.thinkingEffort}
           setThinkingEffort={props.setThinkingEffort}
           thinkingBudget={props.thinkingBudget}

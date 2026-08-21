@@ -25,7 +25,7 @@ export function useSendMessage(
     webSearch?: boolean;
     thinking?: {
       enabled: boolean;
-      effort?: "low" | "medium" | "high";
+      effort?: string;
       budgetTokens?: number;
     };
     deepResearch?: boolean;

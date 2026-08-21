@@ -1,35 +1,27 @@
 /**
- * `useChatInputModes` — owns the per-chat-input mode toggles +
- * persistence + reasoning payload builder. Carved out of
- * `PremiumChatInput.tsx` so the composer no longer carries ~60 lines of
- * `useState`/`useEffect` plumbing for six related booleans / numbers /
- * strings.
+ * `useChatInputModes` — owns the per-chat-input mode toggles + persistence +
+ * the generic reasoning payload builder. Carved out of `PremiumChatInput.tsx`.
  *
- * Single source of truth for:
- *   * `isWebSearch`, `isThinking`, `thinkingEffort`, `thinkingBudget`,
- *     `isDeepResearch`, `isImageGenEnabled` — each mirrors a
- *     `zen_<name>` localStorage entry so the user's last selection
- *     survives across reloads.
- *   * The auto-disable effect that turns thinking OFF when the active
- *     model lacks reasoning support (`supportsReasoning === false`).
- *   * `buildThinkingPayload(supportsReasoning, reasoningConfigType)` —
- *     maps the modes above to a `ThinkingPayload` the LLM client
- *     understands, picking the right envelope per `reasoningConfigType`
- *     (`effort` / `budget`); `none` models have no tunable parameter, so
- *     they report `enabled: false` rather than an on state that sends
- *     nothing on the wire.
+ * Reasoning is capability-driven: the composer only holds a generic intent
+ * (on/off + a chosen effort level + a chosen budget). The active model's
+ * backend-resolved `ReasoningCapability` decides how that intent is presented
+ * and, ultimately, encoded on the wire — that logic lives in the backend
+ * resolver, never here. `buildThinkingPayload` therefore emits only generic
+ * fields (`enabled` / `effort` / `budgetTokens`); it never chooses a protocol.
  *
- * The hook returns getters + setters + builder. Callers should destructure
- * the shape they care about; doing so also gives the correct memo
- * semantics (the returned setters are stable across renders because they
- * are wrapped in `useCallback` with empty deps).
+ * Non-reasoning modes (`isWebSearch`, `isDeepResearch`, `isImageGenEnabled`)
+ * each mirror a `zen_<name>` localStorage entry. Reasoning intent is
+ * reconciled centrally on capability change (see `useReconcileThinking`):
+ * thinking turns off for models Zen can't drive, and the chosen effort/budget
+ * is clamped into the model's supported range so a value carried from a
+ * previous model can never leak an invalid request.
  */
 
 import { useCallback, useEffect, useState } from "react";
 import type { ThinkingPayload } from "./chat/input/PremiumChatInputTypes";
+import type { ReasoningCapability } from "@/lib/types/provider";
 
-export type ThinkingEffortLevel = "low" | "medium" | "high";
-export type ReasoningConfigType = "effort" | "budget" | "none" | string | undefined;
+export type ThinkingEffortLevel = string;
 
 export interface ChatInputModesState {
   isWebSearch: boolean;
@@ -45,24 +37,23 @@ export interface ChatInputModesState {
   isImageGenEnabled: boolean;
   setIsImageGenEnabled: (val: boolean) => void;
   /**
-   * Build the LLM `ThinkingPayload` from the current modes and the
-   * model's reasoning capability flags. Returns `{ enabled: false }`
-   * when reasoning isn't supported, thinking is OFF, or the model
-   * exposes no tunable reasoning parameter (`none`).
+   * Build the generic `ThinkingPayload` from the current intent and the
+   * model's resolved capability. Returns `{ enabled: false }` whenever the
+   * capability can't be driven from Zen (unsupported / unknown / always-on /
+   * provider-managed) or thinking is off.
    */
-  buildThinkingPayload: (
-    supportsReasoning: boolean,
-    reasoningConfigType?: ReasoningConfigType,
-  ) => ThinkingPayload;
+  buildThinkingPayload: (capability: ReasoningCapability) => ThinkingPayload;
 }
 
 const LS_KEYS = {
   webSearch: "zen_web_search",
+  deepResearch: "zen_deep_research",
+  imageGen: "zen_image_gen",
+  // Reasoning intent survives reloads; without these a refresh silently
+  // resets the user's thinking toggle/effort/budget to defaults.
   thinking: "zen_thinking",
   thinkingEffort: "zen_thinking_effort",
   thinkingBudget: "zen_thinking_budget",
-  deepResearch: "zen_deep_research",
-  imageGen: "zen_image_gen",
 } as const;
 
 const DEFAULT_THINKING_BUDGET = 2048;
@@ -77,14 +68,12 @@ export function useChatInputModes(): ChatInputModesState {
     isClient() ? localStorage.getItem(LS_KEYS.thinking) === "true" : false,
   );
   const [thinkingEffort, setThinkingEffort] = useState<ThinkingEffortLevel>(() => {
-    if (!isClient()) return "medium";
-    const saved = localStorage.getItem(LS_KEYS.thinkingEffort);
-    return saved === "low" || saved === "medium" || saved === "high" ? saved : "medium";
+    const stored = isClient() ? localStorage.getItem(LS_KEYS.thinkingEffort) : null;
+    return stored && stored.trim() ? stored : "medium";
   });
   const [thinkingBudget, setThinkingBudget] = useState<number>(() => {
-    if (!isClient()) return DEFAULT_THINKING_BUDGET;
-    const saved = localStorage.getItem(LS_KEYS.thinkingBudget);
-    return saved ? parseInt(saved, 10) : DEFAULT_THINKING_BUDGET;
+    const parsed = Number(isClient() ? localStorage.getItem(LS_KEYS.thinkingBudget) : NaN);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_THINKING_BUDGET;
   });
   const [isDeepResearch, setIsDeepResearch] = useState<boolean>(() =>
     isClient() ? localStorage.getItem(LS_KEYS.deepResearch) === "true" : false,
@@ -93,43 +82,43 @@ export function useChatInputModes(): ChatInputModesState {
     isClient() ? localStorage.getItem(LS_KEYS.imageGen) === "true" : false,
   );
 
-  // Mirror every mode into localStorage. One effect per mode keeps the
-  // dependency arrays tight and avoids serialising unrelated state.
   useEffect(() => {
     if (isClient()) localStorage.setItem(LS_KEYS.webSearch, String(isWebSearch));
   }, [isWebSearch]);
-  useEffect(() => {
-    if (isClient()) localStorage.setItem(LS_KEYS.thinking, String(isThinking));
-  }, [isThinking]);
-  useEffect(() => {
-    if (isClient()) localStorage.setItem(LS_KEYS.thinkingEffort, thinkingEffort);
-  }, [thinkingEffort]);
-  useEffect(() => {
-    if (isClient())
-      localStorage.setItem(LS_KEYS.thinkingBudget, String(thinkingBudget));
-  }, [thinkingBudget]);
   useEffect(() => {
     if (isClient()) localStorage.setItem(LS_KEYS.deepResearch, String(isDeepResearch));
   }, [isDeepResearch]);
   useEffect(() => {
     if (isClient()) localStorage.setItem(LS_KEYS.imageGen, String(isImageGenEnabled));
   }, [isImageGenEnabled]);
+  useEffect(() => {
+    if (isClient()) {
+      localStorage.setItem(LS_KEYS.thinking, String(isThinking));
+      localStorage.setItem(LS_KEYS.thinkingEffort, thinkingEffort);
+      localStorage.setItem(LS_KEYS.thinkingBudget, String(thinkingBudget));
+    }
+  }, [isThinking, thinkingEffort, thinkingBudget]);
 
   const buildThinkingPayload = useCallback(
-    (supportsReasoning: boolean, reasoningConfigType?: ReasoningConfigType): ThinkingPayload => {
-      if (!supportsReasoning || !isThinking) {
-        return { enabled: false };
-      }
+    (capability: ReasoningCapability): ThinkingPayload => {
+      // Only "tunable"/"toggleable" reasoning that Zen can drive yields a wire
+      // intent. Every other state (unsupported/unknown/always_on/off/
+      // provider_managed) resolves to disabled, so the backend never receives
+      // a parameter the model can't honor.
+      if (!isThinking) return { enabled: false };
+      if (capability.controlAvailability !== "zen") return { enabled: false };
 
-      if (reasoningConfigType === "effort") {
+      if (capability.support === "toggleable") {
+        return { enabled: true };
+      }
+      if (capability.support === "tunable") {
+        const usesBudget =
+          capability.minBudget != null || capability.maxBudget != null;
+        if (usesBudget) {
+          return { enabled: true, budgetTokens: thinkingBudget };
+        }
         return { enabled: true, effort: thinkingEffort };
       }
-
-      if (reasoningConfigType === "budget") {
-        return { enabled: true, budgetTokens: thinkingBudget };
-      }
-
-      // 'none': no tunable reasoning parameter — nothing is sent on the wire, so the payload must not claim enabled.
       return { enabled: false };
     },
     [isThinking, thinkingEffort, thinkingBudget],
@@ -152,22 +141,75 @@ export function useChatInputModes(): ChatInputModesState {
   };
 }
 
+interface ReconcileArgs {
+  capability: ReasoningCapability;
+  isThinking: boolean;
+  setIsThinking: (val: boolean) => void;
+  thinkingEffort: string;
+  setThinkingEffort: (val: string) => void;
+  thinkingBudget: number;
+  setThinkingBudget: (val: number) => void;
+}
+
 /**
- * Tiny companion hook: when the active model loses reasoning support,
- * turn thinking OFF. Returns the latest effective `isThinking` value
- * (kept in sync with what the user typed if the model still supports
- * reasoning). Used by `PremiumChatInput` alongside `useChatInputModes`.
+ * Central model-switch reconciliation for reasoning intent. Runs whenever the
+ * active model's capability changes: disables thinking for models Zen can't
+ * drive, and clamps the chosen effort/budget into the model's supported range.
  */
-export function useAutoDisableThinking(
-  supportsReasoning: boolean,
+export function useReconcileThinking({
+  capability,
+  isThinking,
+  setIsThinking,
+  thinkingEffort,
+  setThinkingEffort,
+  thinkingBudget,
+  setThinkingBudget,
+}: ReconcileArgs): void {
+  useEffect(() => {
+    const zenControllable =
+      capability.controlAvailability === "zen" &&
+      (capability.support === "toggleable" || capability.support === "tunable");
+
+    if (!zenControllable) {
+      if (isThinking) setIsThinking(false);
+      return;
+    }
+
+    // Clamp effort into the model's real level set (seed the model's default
+    // when the carried value isn't valid here).
+    const levels = capability.levels;
+    if (levels && levels.length > 0 && !levels.includes(thinkingEffort)) {
+      setThinkingEffort(capability.defaultLevel ?? levels[Math.floor(levels.length / 2)]);
+    }
+
+    // Clamp budget into the model's supported range. Seed the model's own
+    // default budget when the carried value falls outside it, rather than
+    // pinning to a bound, so a fresh budget model opens at its intended level.
+    const min = capability.minBudget;
+    const max = capability.maxBudget;
+    let clamped = thinkingBudget;
+    if ((min != null && clamped < min) || (max != null && clamped > max)) {
+      clamped = capability.defaultBudget ?? clamped;
+    }
+    if (min != null && clamped < min) clamped = min;
+    if (max != null && clamped > max) clamped = max;
+    if (clamped !== thinkingBudget) setThinkingBudget(clamped);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [capability]);
+}
+
+// Back-compat alias: the composer previously called `useAutoDisableThinking`.
+export const useAutoDisableThinking = (
+  capability: ReasoningCapability,
   isThinking: boolean,
   setIsThinking: (val: boolean) => void,
-): void {
+): void => {
   useEffect(() => {
-    if (!supportsReasoning && isThinking) {
-      setIsThinking(false);
-    }
-  }, [supportsReasoning, isThinking, setIsThinking]);
-}
+    const zenControllable =
+      capability.controlAvailability === "zen" &&
+      (capability.support === "toggleable" || capability.support === "tunable");
+    if (!zenControllable && isThinking) setIsThinking(false);
+  }, [capability, isThinking, setIsThinking]);
+};
 
 export default useChatInputModes;

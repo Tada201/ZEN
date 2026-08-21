@@ -32,6 +32,7 @@ import {
 import { ExecutionGroup } from "./ExecutionGroup";
 import { SubagentExecutionCard } from "./SubagentExecutionCard";
 import { buildDelegationTree } from "@/atlas/agentRuntime/delegationTree";
+import { orderSteps } from "@/atlas/agentRuntime/types";
 import {
   FoldOutCard,
   FoldOutCardContent,
@@ -207,7 +208,8 @@ export function AssistantMessage({
   const executionGroupFallbackKeyCacheRef = useRef(new Map<string, string>());
   const groupedSteps = useMemo(() => {
     const legacyStep = legacyMessageToActionStep(message);
-    return groupAssistantSteps(message.steps?.length ? message.steps : legacyStep ? [legacyStep] : undefined);
+    const source = message.steps?.length ? orderSteps(message.steps) : legacyStep ? [legacyStep] : undefined;
+    return groupAssistantSteps(source);
   }, [message]);
 
   const groupedToolCalls = useMemo(() => {

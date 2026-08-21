@@ -130,7 +130,14 @@ export function SmoothMarkdown({
         // Backlog-aware catch-up: a large backlog drains progressively faster
         // (up to the frame cap) instead of trickling out at base rate.
         ? Math.min(40, Math.max(1, Math.ceil(configuredSpeed * elapsed / 16) * (1 + remaining / 320)))
-        : Math.min(180, Math.max(configuredSpeed, Math.ceil(remaining / 10)));
+        // Instant mode is a single reveal layer: the runtime scheduler
+        // (runScheduler.revealAgentRun, 180 chars/frame) already paces the
+        // streamed text into `content`, so re-throttling it here stacks a
+        // second cadence and produces the delay-then-burst stutter (R6).
+        // Reveal the whole pending target in one frame; the runtime scheduler
+        // stays the sole bounded reveal. The reveal loop, suffix reconciliation
+        // and onComplete drain are all preserved.
+        : remaining;
       const next = target.slice(0, currentVisible.length + perFrame);
       displayedContentRef.current = next;
       setDisplayedContent(next);
