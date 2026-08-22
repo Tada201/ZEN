@@ -748,6 +748,7 @@ impl AgentEvent {
         let payload = self.payload();
 
         if let Some(ref ch) = channel {
+            crate::agent::event_snapshot::record(self.event_name(), &payload);
             if let Err(e) = ch.send(payload) {
                 tracing::warn!(
                     "Failed to emit event '{}' via direct channel: {}",
@@ -761,6 +762,7 @@ impl AgentEvent {
                 Some(p) => p.clone(),
                 None => payload,
             };
+            crate::agent::event_snapshot::record(event_name, &flat_payload);
             if let Err(e) = app.emit(event_name, flat_payload) {
                 tracing::warn!("Failed to emit event '{}' via app handle: {}", event_name, e);
             }
@@ -831,6 +833,7 @@ impl EventBus {
                         }
                         .unwrap_or(serde_json::Value::Null);
 
+                        crate::agent::event_snapshot::record(event_name, &payload);
                         if let Err(e) = app.emit(event_name, payload) {
                             tracing::warn!(
                                 "Failed to bridge event '{}' to Tauri: {}",

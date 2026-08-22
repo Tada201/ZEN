@@ -9,6 +9,13 @@ edition = "2021"
 name = "tauri_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# Diagnostic-only (BIG_MIGRATION.md Phase 0, risk R5): appends
+# {event, payload-shape} JSONL lines to $ZEN_EVENT_SNAPSHOT_PATH for
+# event-contract diffing across migration phases. Never enabled in CI or
+# release builds; compiles to an inlined no-op when off.
+event-snapshot = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

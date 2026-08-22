@@ -5,6 +5,7 @@ pub mod chat_status;
 pub mod clarification;
 pub mod deep_research;
 pub mod event_bus;
+pub mod event_snapshot;
 pub mod hooks;
 pub mod instance;
 pub mod middleware;
