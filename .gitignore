@@ -121,3 +121,6 @@ EXAMPLE_NO_EDITS/
 mockup-web/
 cargo-clippy-error.md
 CI_CD_logs/
+
+# Frozen pre-migration backend snapshot (BIG_MIGRATION reference; never edit/build)
+Zen_rs_old/
