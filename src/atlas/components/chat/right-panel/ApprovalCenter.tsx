@@ -79,13 +79,16 @@ function ApprovalCard({ approval, onResolved }: { approval: PendingApproval; onR
 }
 
 export function ApprovalCenter() {
-  const sessionMessages = useChatStore((state) => state.sessionMessages);
+  // collectPendingApprovals returns a stable reference while the pending set
+  // is unchanged, so this narrow selector avoids re-rendering on every
+  // streaming frame (unlike subscribing to the whole sessionMessages map).
+  const allPending = useChatStore((state) => collectPendingApprovals(state.sessionMessages));
   const setActiveSession = useChatStore((state) => state.setActiveSession);
   const setRightPanelOpen = useUIStore((state) => state.setRightPanelOpen);
   const [resolvedIds, setResolvedIds] = useState<Set<string>>(() => new Set());
   const pending = useMemo(
-    () => collectPendingApprovals(sessionMessages).filter((approval) => !resolvedIds.has(approval.toolCall.id)),
-    [sessionMessages, resolvedIds],
+    () => allPending.filter((approval) => !resolvedIds.has(approval.toolCall.id)),
+    [allPending, resolvedIds],
   );
 
   const openChat = (chatId: string) => {

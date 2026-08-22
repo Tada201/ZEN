@@ -58,6 +58,41 @@ pub fn truncate_to_budget(content: &str, max_tokens: usize) -> String {
     out
 }
 
+/// Tail-preserving counterpart to `truncate_to_budget`, for layers whose most
+/// relevant content sits at the end (conversation summaries: the current
+/// summary rides last, older history leads). Keeps the largest suffix within
+/// the budget and prepends the truncation marker, so a tight budget drops the
+/// oldest material first.
+pub fn truncate_to_budget_tail(content: &str, max_tokens: usize) -> String {
+    if max_tokens == 0 {
+        return String::new();
+    }
+    if estimate_tokens(content) <= max_tokens {
+        return content.to_string();
+    }
+    let chars: Vec<char> = content.chars().collect();
+    if chars.is_empty() {
+        return String::new();
+    }
+    let mut low = 0usize;
+    let mut high = chars.len();
+    while low < high {
+        let mid = low + (high - low).div_ceil(2);
+        let suffix: String = chars[chars.len() - mid..].iter().collect();
+        if estimate_tokens(&suffix) <= max_tokens {
+            low = mid;
+        } else {
+            high = mid - 1;
+        }
+    }
+    if low == 0 {
+        return String::new();
+    }
+    let mut out = String::from("[...truncated for context budget...]\n\n");
+    out.extend(chars[chars.len() - low..].iter());
+    out
+}
+
 /// Push `section` onto `target` if its token count fits within the remaining
 /// budget. Returns `true` if the section was pushed, `false` if it would
 /// exceed the budget (in which case `target` is left untouched and
@@ -748,7 +783,7 @@ mod text_tool_call_tests {
 
 #[cfg(test)]
 mod budget_tests {
-    use super::{estimate_tokens, MiddlewareBudgets, truncate_to_budget};
+    use super::{estimate_tokens, truncate_to_budget, truncate_to_budget_tail, MiddlewareBudgets};
 
     #[test]
     fn truncate_to_budget_keeps_content_when_within_budget() {
@@ -798,6 +833,37 @@ mod budget_tests {
             .unwrap_or(out.len());
         let prefix = &out[..prefix_end];
         assert!(estimate_tokens(prefix) <= 50);
+    }
+
+    #[test]
+    fn truncate_to_budget_tail_keeps_content_when_within_budget() {
+        let content = "hello world";
+        let out = truncate_to_budget_tail(content, 100);
+        assert_eq!(out, content);
+    }
+
+    #[test]
+    fn truncate_to_budget_tail_keeps_suffix_and_drops_head() {
+        let head = "o".repeat(4_000); // old material
+        let tail = "CURRENT".to_string(); // most recent block
+        let content = format!("{}{}", head, tail);
+        let out = truncate_to_budget_tail(&content, 50);
+        assert!(out.contains("CURRENT"), "tail (current summary) must survive");
+        assert!(out.starts_with("[...truncated for context budget...]"));
+        let marker_end = out
+            .find("\n\n")
+            .map(|idx| idx + 2)
+            .unwrap_or(0);
+        let suffix = &out[marker_end..];
+        assert!(estimate_tokens(suffix) <= 50);
+        // The dropped material must come from the head, not the tail.
+        assert!(suffix.len() < content.len());
+    }
+
+    #[test]
+    fn truncate_to_budget_tail_handles_zero_budget_and_empty_content() {
+        assert!(truncate_to_budget_tail("anything", 0).is_empty());
+        assert!(truncate_to_budget_tail("", 100).is_empty());
     }
 
     #[test]

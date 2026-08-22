@@ -538,6 +538,11 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
 
         clearChunkTrackingForChat(chatId, chunkBuffersRef.current, firstChunkDeltas.current);
         clearHeartbeatTimeout(chatId);
+        // The reset carries only the chat id, so a later chat:done/chat:error
+        // for the same run may never arrive — release the chat's scheduler
+        // entries here the same way the terminal handlers do (no-op when the
+        // run already cleared itself).
+        runtimeBridge?.clearForChat(chatId);
         useChatStore.getState().setStreamingForChat(chatId, false);
       });
 

@@ -111,7 +111,7 @@ const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
       return <FileTree content={codeStr} />;
     }
     return (
-      <CodeBlock language={lang || 'text'} code={codeStr} onOpenArtifact={onOpenArtifact} />
+      <CodeBlock language={lang || 'text'} code={codeStr} isStreaming={isStreaming} onOpenArtifact={onOpenArtifact} />
     );
   }
 
@@ -251,7 +251,7 @@ export function MarkdownContent({
           return <FileTree content={codeStr} />;
         }
         return (
-          <CodeBlock language={match[1]} code={codeStr} onOpenArtifact={onOpenArtifact} />
+          <CodeBlock language={match[1]} code={codeStr} isStreaming={isStreaming} onOpenArtifact={onOpenArtifact} />
         );
       }
       return (

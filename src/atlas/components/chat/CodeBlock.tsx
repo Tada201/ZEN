@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from "react";
 import { Copy, Check, PanelRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ArtifactData } from "./types";
-import { getLanguageGrammarName, highlightToHtml } from "./prismHighlight";
+import { getLanguageGrammarName, highlightToHtml, escapeHtml } from "./prismHighlight";
 
 export function useCopy() {
   const [copied, setCopied] = useState(false);
@@ -18,18 +18,23 @@ export function useCopy() {
 export function CodeBlock({
   code,
   language,
+  isStreaming,
   onOpenArtifact,
 }: {
   code: string;
   language?: string;
+  /** True while the source fence is still streaming. Prism re-tokenizes the
+   *  whole string on every change, so a growing block renders escaped plain
+   *  text and is colorized once when the fence completes. */
+  isStreaming?: boolean;
   onOpenArtifact?: (a: ArtifactData) => void;
 }) {
   const { copied, copy } = useCopy();
   const normalizedLanguage = getLanguageGrammarName(language ?? "plaintext");
 
   const highlightedHtml = useMemo(
-    () => highlightToHtml(code, language),
-    [code, language],
+    () => (isStreaming ? escapeHtml(code) : highlightToHtml(code, language)),
+    [code, language, isStreaming],
   );
 
   return (

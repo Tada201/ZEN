@@ -24,6 +24,15 @@ export type DelegationTree = {
   roots: Step[];
 };
 
+// Shared by the no-subagent fast path below. Consumers only read from it, so
+// one frozen instance serves every streaming frame without reallocation.
+const EMPTY_DELEGATION_TREE: DelegationTree = {
+  nodes: new Map<string, DelegationNode>(),
+  steps: new Map<string, Step>(),
+  childrenByParent: new Map<string, Step[]>(),
+  roots: [],
+};
+
 function isTerminal(tool: ToolCall) {
   return tool.status === "completed" || tool.status === "error";
 }
@@ -106,6 +115,10 @@ export function buildDelegationTree(
   steps: Step[] | undefined,
   tools: ToolCall[] | undefined,
 ): DelegationTree {
+  // Most turns never spawn a subagent, but streaming replaces the steps array
+  // reference on every reveal frame — skip the whole multi-pass build unless a
+  // subagent step actually exists.
+  if (!steps?.some((step) => step.type === "subagent")) return EMPTY_DELEGATION_TREE;
   const subagentSteps = canonicalSubagentSteps(steps);
   const records = projectScopedSubagents(subagentSteps);
   const stepById = new Map<string, Step>();

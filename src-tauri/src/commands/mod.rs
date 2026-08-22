@@ -602,7 +602,7 @@ impl AppState {
             )),
             tool_service: tool_service.clone(),
             checkpoints,
-            swarm: Arc::new(SwarmCoordinator::new(event_bus.clone())),
+            swarm: Arc::new(SwarmCoordinator::new()),
             orchestrator: InitState::new(),
             geofence_engine: Arc::new(crate::services::gtsm::geofence::GeofenceEngine::new()),
             gtsm_cache: Arc::new(crate::services::gtsm::cache::GtsmCache::new()),

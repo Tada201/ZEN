@@ -15,10 +15,8 @@ import { normalizeScopedSubagentStatus } from "@/atlas/agentRuntime/subagentRunt
 import {
   getTaskChatId,
   getTaskPlanChatId,
-  getWorkflowChatId,
   rememberTaskChat,
   rememberTaskListChats,
-  rememberWorkflowChat,
 } from "./taskWorkflowRouting";
 import { focusActiveAgentsPanel, shouldFocusAgentsForSpawn } from "./agentPanelFocus";
 
@@ -31,14 +29,8 @@ const INLINE_ACTION_KINDS = new Set([
   "error",
   "system",
   "orchestrator_progress",
-  "workflow_started",
-  "workflow_completed",
-  "workflow_failed",
-  "task_started",
   "task_created",
   "task_updated",
-  "task_completed",
-  "task_failed",
   "task_list_updated",
   "task_complexity_analyzed",
 ]);
@@ -99,7 +91,6 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
   const unlistenRefs = useRef<UnlistenFn[]>([]);
   const taskChatIdsRef = useRef<Map<string, string>>(new Map());
   const agentChatIdsRef = useRef<Map<string, string>>(new Map());
-  const workflowChatIdsRef = useRef<Map<string, string>>(new Map());
   const agentChunkBufferRef = useRef<Array<{ chatId: string; payload: AgentActionEventPayload }>>([]);
   const agentChunkFrameRef = useRef<number | null>(null);
   const lifecycleBufferRef = useRef<Array<{ chatId: string; payload: AgentActionEventPayload; kind: string }>>([]);
@@ -132,13 +123,6 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
     const chatId = getTaskChatId(taskChatIdsRef.current, useChatStore.getState(), payload);
     if (!chatId) return;
     rememberTaskChat(taskChatIdsRef.current, payload, chatId);
-    appendLifecycleStep(chatId, { ...payload, chat_id: chatId }, kind);
-  };
-
-  const appendWorkflowActionStep = (payload: AgentActionEventPayload, kind: string) => {
-    const chatId = getWorkflowChatId(workflowChatIdsRef.current, useChatStore.getState(), payload);
-    if (!chatId) return;
-    rememberWorkflowChat(workflowChatIdsRef.current, payload, chatId);
     appendLifecycleStep(chatId, { ...payload, chat_id: chatId }, kind);
   };
 
@@ -201,8 +185,6 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
             rememberAgentChat(agentChatIdsRef.current, payload, chatId);
           } else if (kind.startsWith("task_")) {
             rememberTaskChat(taskChatIdsRef.current, payload, chatId);
-          } else if (kind.startsWith("workflow_")) {
-            rememberWorkflowChat(workflowChatIdsRef.current, payload, chatId);
           }
           appendLifecycleStep(chatId, { ...payload, chat_id: chatId }, kind);
           return;
@@ -401,36 +383,12 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
         bufferAgentChunk(chatId, { ...actionPayload, chat_id: chatId });
       });
 
-      const unlistenWorkflowStarted = await listenAppEvent("workflow:started", (event) => {
-        appendWorkflowActionStep(event.payload, "workflow_started");
-      });
-
-      const unlistenWorkflowCompleted = await listenAppEvent("workflow:completed", (event) => {
-        appendWorkflowActionStep(event.payload, "workflow_completed");
-      });
-
-      const unlistenWorkflowFailed = await listenAppEvent("workflow:failed", (event) => {
-        appendWorkflowActionStep(event.payload, "workflow_failed");
-      });
-
-      const unlistenTaskStarted = await listenAppEvent("task:started", (event) => {
-        appendTaskActionStep(event.payload, "task_started");
-      });
-
       const unlistenTaskCreated = await listenAppEvent("task:created", (event) => {
         appendTaskActionStep(event.payload, "task_created");
       });
 
       const unlistenTaskUpdated = await listenAppEvent("task:updated", (event) => {
         appendTaskActionStep(event.payload, "task_updated");
-      });
-
-      const unlistenTaskCompleted = await listenAppEvent("task:completed", (event) => {
-        appendTaskActionStep(event.payload, "task_completed");
-      });
-
-      const unlistenTaskFailed = await listenAppEvent("task:failed", (event) => {
-        appendTaskActionStep(event.payload, "task_failed");
       });
 
       const unlistenTaskListUpdated = await listenAppEvent("task:list_updated", (event) => {
@@ -693,14 +651,8 @@ export function useAgentEvents({ resetHeartbeatTimeout }: { resetHeartbeatTimeou
         unlistenAgentComplete,
         unlistenAgentHandoff,
         unlistenAgentChunk,
-        unlistenWorkflowStarted,
-        unlistenWorkflowCompleted,
-        unlistenWorkflowFailed,
-        unlistenTaskStarted,
         unlistenTaskCreated,
         unlistenTaskUpdated,
-        unlistenTaskCompleted,
-        unlistenTaskFailed,
         unlistenTaskListUpdated,
         unlistenTaskComplexityAnalyzed,
         unlistenContextDrift,

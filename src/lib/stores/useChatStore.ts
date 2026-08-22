@@ -175,13 +175,13 @@ export const useChatStore = create<ChatState>()(
 
       setSessionMessages: (chatId, messages) => set((state) => {
         touchSessionLru(chatId);
-        const next = {
-          ...state.sessionMessages,
-          [chatId]: typeof messages === 'function'
-            ? messages(state.sessionMessages[chatId] ?? EMPTY_ARRAY)
-            : messages,
-        };
-        return { sessionMessages: evictStaleSessions(next) };
+        const prev = state.sessionMessages[chatId] ?? EMPTY_ARRAY;
+        const next = typeof messages === 'function' ? messages(prev) : messages;
+        // No-op when the updater kept the array identity: streaming paths call
+        // this every reveal frame, so an unchanged ref must not produce a new
+        // sessionMessages object (it would re-render every subscriber).
+        if (next === prev) return state;
+        return { sessionMessages: evictStaleSessions({ ...state.sessionMessages, [chatId]: next }) };
       }),
 
       clearSessionMessages: (chatId) => set((state) => {
@@ -214,14 +214,12 @@ export const useChatStore = create<ChatState>()(
         const { activeSessionId } = get();
         if (!activeSessionId) return;
         touchSessionLru(activeSessionId);
-        set((state) => ({
-          sessionMessages: evictStaleSessions({
-            ...state.sessionMessages,
-            [activeSessionId]: typeof messages === 'function'
-              ? messages(state.sessionMessages[activeSessionId] ?? EMPTY_ARRAY)
-              : messages,
-          }),
-        }));
+        set((state) => {
+          const prev = state.sessionMessages[activeSessionId] ?? EMPTY_ARRAY;
+          const next = typeof messages === 'function' ? messages(prev) : messages;
+          if (next === prev) return state;
+          return { sessionMessages: evictStaleSessions({ ...state.sessionMessages, [activeSessionId]: next }) };
+        });
       },
 
       setIsStreaming: (isStreaming) => {

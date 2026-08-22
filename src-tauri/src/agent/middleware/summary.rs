@@ -11,8 +11,9 @@
 //! `summary_budget` is the hard cap on the total injected text. The
 //! previous-session summaries (oldest dropped first) are concatenated
 //! with the current-session summary and then truncated to the budget
-//! via `truncate_to_budget`. The truncation keeps the head, so the
-//! most recent summary should be ordered last in the block. `usize::MAX`
+//! via `truncate_to_budget_tail`, which keeps the tail — so a tight
+//! budget drops the oldest summary first and the current (most
+//! relevant) summary survives. `usize::MAX`
 //! means unbounded (the historical behaviour before per-layer budgets).
 
 use super::core::{ContextMiddleware, ContextSectionId, EnrichmentContext, SectionStatus};
@@ -36,7 +37,7 @@ impl ContextMiddleware for SummaryMiddleware {
     }
 
     async fn enrich(&self, ctx: &mut EnrichmentContext) -> ZenResult<()> {
-        use crate::agent::runner::helpers::truncate_to_budget;
+        use crate::agent::runner::helpers::truncate_to_budget_tail;
 
         // Gate 1: summarisation must be enabled.
         if !ctx.summarization_enabled {
@@ -94,12 +95,13 @@ impl ContextMiddleware for SummaryMiddleware {
             return Ok(());
         }
 
-        // Concatenate and truncate. Order: oldest first, current last.
-        // `truncate_to_budget` keeps the head, so the oldest summary
-        // is at risk of being cut. That's acceptable: the current
-        // summary is the most relevant block.
+        // Concatenate and truncate. Order: oldest first, current last. The
+        // current summary is the most relevant block, so truncation must drop
+        // from the oldest side — `truncate_to_budget_tail` keeps the tail. A
+        // head-keeping truncate here would cut the current summary first,
+        // the exact opposite of the intent.
         let combined = summary_blocks.join("\n\n");
-        let truncated = truncate_to_budget(&combined, self.summary_budget);
+        let truncated = truncate_to_budget_tail(&combined, self.summary_budget);
         let was_truncated = truncated != combined;
 
         // Record each summary block individually before concatenating so

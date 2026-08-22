@@ -431,14 +431,6 @@ export interface TaskEventPayload extends AgentActionEventPayload {
   updates?: Partial<TaskEventPayload>;
 }
 
-export interface TaskCompletedEventPayload extends TaskEventPayload {
-  result?: {
-    is_error?: boolean;
-    content?: string;
-    [key: string]: unknown;
-  };
-}
-
 export interface TaskListUpdatedEventPayload {
   chat_id?: string | null;
   tasks?: TaskEventPayload[];
@@ -510,14 +502,8 @@ export interface AppEventPayloadMap {
   "agent:complete": AgentActionEventPayload;
   "agent:handoff": AgentActionEventPayload;
   "agent:chunk": AgentChunkEventPayload;
-  "workflow:started": AgentActionEventPayload;
-  "workflow:completed": AgentActionEventPayload;
-  "workflow:failed": AgentActionEventPayload;
-  "task:started": AgentActionEventPayload;
   "task:created": TaskEventPayload;
   "task:updated": TaskEventPayload;
-  "task:completed": TaskCompletedEventPayload;
-  "task:failed": AgentActionEventPayload;
   "task:list_updated": TaskListUpdatedEventPayload;
   "task:complexity_analyzed": TaskComplexityAnalyzedEventPayload;
   "goal:updated": GoalUpdatedEventPayload;

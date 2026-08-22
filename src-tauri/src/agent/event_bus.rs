@@ -65,39 +65,6 @@ pub enum AgentEvent {
     #[serde(rename = "tool:complete")]
     ToolComplete(ToolCompletePayload),
 
-    // --- Workflow & Task Events ---
-    #[serde(rename = "workflow:started")]
-    WorkflowStarted {
-        workflow_id: String,
-        total_tasks: usize,
-    },
-    #[serde(rename = "workflow:completed")]
-    WorkflowCompleted {
-        workflow_id: String,
-        tasks_completed: usize,
-        duration_ms: u64,
-    },
-    #[serde(rename = "workflow:failed")]
-    WorkflowFailed { workflow_id: String, error: String },
-    #[serde(rename = "task:started")]
-    TaskStarted {
-        task_id: String,
-        agent_id: String,
-        description: String,
-    },
-    #[serde(rename = "task:completed")]
-    TaskCompleted {
-        task_id: String,
-        agent_id: String,
-        duration_ms: u64,
-    },
-    #[serde(rename = "task:failed")]
-    TaskFailed {
-        task_id: String,
-        agent_id: String,
-        error: String,
-    },
-
     #[serde(rename = "tool:authorization_request")]
     ToolAuthorizationRequest(ToolAuthorizationPayload),
 
@@ -110,15 +77,6 @@ pub enum AgentEvent {
 
     #[serde(rename = "artifact:complete")]
     ArtifactComplete(ArtifactCompletePayload),
-
-    // Legacy/Internal Events (keeping for compatibility)
-    #[serde(rename = "agent:spawned")]
-    AgentSpawned {
-        agent_id: String,
-        agent_type: String,
-    },
-    #[serde(rename = "agent:terminated")]
-    AgentTerminated { agent_id: String },
 
     // ─── Context Viewer Events ──────────────────────────────────────
     // Per-iteration breakdown of the LLM context window: which sections
@@ -752,12 +710,7 @@ impl AgentEvent {
     pub fn event_name(&self) -> &'static str {
         match self {
             AgentEvent::AgentSpawn(_) => "agent:spawn",
-            // Legacy swarm bookkeeping must not masquerade as a second rich
-            // frontend spawn event. The dedicated spawn event above carries
-            // the chat and stable spawn identity.
-            AgentEvent::AgentSpawned { .. } => "agent:spawned",
             AgentEvent::AgentComplete(_) => "agent:complete",
-            AgentEvent::AgentTerminated { .. } => "agent:terminated",
             AgentEvent::AgentHandoff(_) => "agent:handoff",
             AgentEvent::AgentChunk(_) => "agent:chunk",
             AgentEvent::OrchestratorStart(_) => "orchestrator:start",
@@ -772,12 +725,6 @@ impl AgentEvent {
             AgentEvent::SubagentStep(_) => "chat:subagent-step",
             AgentEvent::ToolStart(_) => "tool:start",
             AgentEvent::ToolComplete(_) => "tool:complete",
-            AgentEvent::WorkflowStarted { .. } => "workflow:started",
-            AgentEvent::WorkflowCompleted { .. } => "workflow:completed",
-            AgentEvent::WorkflowFailed { .. } => "workflow:failed",
-            AgentEvent::TaskStarted { .. } => "task:started",
-            AgentEvent::TaskCompleted { .. } => "task:completed",
-            AgentEvent::TaskFailed { .. } => "task:failed",
             AgentEvent::ToolAuthorizationRequest(_) => "tool:authorization_request",
             AgentEvent::ArtifactStart(_) => "artifact:start",
             AgentEvent::ArtifactDelta(_) => "artifact:delta",
@@ -851,12 +798,19 @@ impl EventBus {
                 match rx.recv().await {
                     Ok(event) => {
                         let event_name = event.event_name();
-                        // For global events, we emit the payload directly
-                        // This matches what listen<T> expects in the frontend
+                        // Every variant flattens its payload directly — this
+                        // matches what listen<T> expects in the frontend. A
+                        // catch-all arm used to double-wrap any variant listed
+                        // here and silently broke the frontend router (most
+                        // recently `agent:chunk`, whose sub-agent progress
+                        // chunks were dropped); the match is now exhaustive so
+                        // a new variant must choose its payload shape
+                        // explicitly.
                         let payload = match &event {
                             AgentEvent::AgentSpawn(p) => serde_json::to_value(p),
                             AgentEvent::AgentComplete(p) => serde_json::to_value(p),
                             AgentEvent::AgentHandoff(p) => serde_json::to_value(p),
+                            AgentEvent::AgentChunk(p) => serde_json::to_value(p),
                             AgentEvent::OrchestratorStart(p) => serde_json::to_value(p),
                             AgentEvent::OrchestratorProgress(p) => Ok(p.clone()),
                             AgentEvent::ChatChunk(p) => serde_json::to_value(p),
@@ -874,7 +828,6 @@ impl EventBus {
                             AgentEvent::ArtifactDelta(p) => serde_json::to_value(p),
                             AgentEvent::ArtifactComplete(p) => serde_json::to_value(p),
                             AgentEvent::ContextBreakdown(p) => serde_json::to_value(p),
-                            _ => serde_json::to_value(&event),
                         }
                         .unwrap_or(serde_json::Value::Null);
 

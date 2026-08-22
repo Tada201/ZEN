@@ -342,29 +342,34 @@ pub async fn fork_chat(
     let new_id = Uuid::new_v4().to_string();
     let new_title = format!("{} (Fork)", old_chat.title);
 
+    // Both writes share one transaction: a failure between the chat insert and
+    // the message copy would otherwise leave a permanently empty forked chat.
+    let mut tx = pool.begin().await?;
+
     // Create new chat
     sqlx::query("INSERT INTO chats (id, title, model, pinned, workspace_root) VALUES (?, ?, ?, 0, ?)")
         .bind(&new_id)
         .bind(&new_title)
         .bind(&old_chat.model)
         .bind(&old_chat.workspace_root)
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
 
     // Copy messages
     sqlx::query(
         r#"INSERT INTO messages (id, chat_id, role, content, model, is_complete, tool_calls, tool_call_id, images, attachments, tokens_in, tokens_out, created_at)
            SELECT lower(hex(randomblob(16))), ?, role, content, model, is_complete, tool_calls, tool_call_id, images, attachments, tokens_in, tokens_out, created_at
-           FROM messages 
+           FROM messages
            WHERE chat_id = ? AND created_at <= (SELECT created_at FROM messages WHERE id = ?)
            ORDER BY created_at ASC"#
     )
     .bind(&new_id)
     .bind(chat_id)
     .bind(up_to_message_id)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
 
+    tx.commit().await?;
     get_chat(pool, &new_id).await
 }
 

@@ -8,8 +8,9 @@ use crate::agent::hooks::HookRegistry;
 use crate::agent::tools::child_runner;
 use crate::agent::tools::AgentTool;
 use crate::agent::tools::ToolRegistry;
-use crate::agent::types::{ActionMeta, AgentRegistry, MessageKind, SpawnMeta};
+use crate::agent::types::AgentRegistry;
 use crate::commands::AppState;
+use crate::error::ZenError;
 use anyhow::Result;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -140,21 +141,6 @@ impl DependencyGraph {
             waves,
         })
     }
-}
-
-/// Skip emitting a `chat:message` event for the spawn announcement.
-/// The dedicated `agent:spawn` lifecycle event is the source of
-/// truth and reaches the agents panel; a redundant `chat:message`
-/// would trigger the frontend's full `setSessionMessages` reducer
-/// and stutter the main chat.
-fn should_emit_inline_chat_message_for_spawn() -> bool {
-    false
-}
-
-/// Skip emitting a `chat:message` event for the completion announcement.
-/// Same reason as above; the agents panel consumes `agent:complete`.
-fn should_emit_inline_chat_message_for_complete() -> bool {
-    false
 }
 
 /// Parameters for spawning a child agent.
@@ -301,30 +287,95 @@ impl ErrorClass {
     }
 }
 
-/// Classify an error message into a structured error class.
-fn classify_spawn_error(error: &str) -> ErrorClass {
-    let lower = error.to_lowercase();
-    if lower.contains("cancelled")
-        || lower.contains("timeout")
-        || lower.contains("timed out")
-        || lower.contains("connection")
-        || lower.contains("rate limit")
-        || lower.contains("503")
-        || lower.contains("502")
-        || lower.contains("504")
-    {
-        ErrorClass::Transient
-    } else if lower.contains("permission")
-        || lower.contains("not authorized")
-        || lower.contains("forbidden")
-        || lower.contains("invalid")
-        || lower.contains("not found")
-        || lower.contains("no model configured")
-    {
-        ErrorClass::Permanent
-    } else {
-        ErrorClass::Retryable
+/// Typed failure cause for a sub-agent run, constructed at the known failure
+/// sites inside `do_spawn`. Carrying the cause structurally means downstream
+/// classification (cancelled-vs-failed terminal status, retry hints) reads
+/// the marker instead of re-matching our own error wording, which silently
+/// broke whenever a message changed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SpawnFailure {
+    /// The user stopped this sub-agent explicitly.
+    UserCancelled,
+    /// The parent run was cancelled or aborted, taking the child with it.
+    ParentCancelled,
+    /// The child exceeded `SUBAGENT_TIMEOUT_SECONDS`.
+    Timeout,
+}
+
+#[derive(Debug)]
+struct SpawnFailureError {
+    kind: SpawnFailure,
+    message: String,
+}
+
+impl SpawnFailureError {
+    fn new(kind: SpawnFailure, message: impl Into<String>) -> Self {
+        Self { kind, message: message.into() }
     }
+}
+
+impl std::fmt::Display for SpawnFailureError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for SpawnFailureError {}
+
+/// Structurally classify a sub-agent failure.
+///
+/// Known spawn failures (cancellation, timeout) map directly from their typed
+/// marker; provider errors classify from their `ZenError` shape — HTTP status
+/// class, reqwest failure kind, or explicit variants like `NoModelSelected`.
+/// Anything opaque falls into the generic `Retryable` bucket instead of
+/// guessing from message wording.
+fn classify_spawn_error(error: &anyhow::Error) -> ErrorClass {
+    for cause in error.chain() {
+        if let Some(failure) = cause.downcast_ref::<SpawnFailureError>() {
+            return match failure.kind {
+                SpawnFailure::UserCancelled
+                | SpawnFailure::ParentCancelled
+                | SpawnFailure::Timeout => ErrorClass::Transient,
+            };
+        }
+        if let Some(zen) = cause.downcast_ref::<ZenError>() {
+            match zen {
+                ZenError::Aborted => return ErrorClass::Transient,
+                ZenError::NoModelSelected | ZenError::ContextTooLarge(..) => {
+                    return ErrorClass::Permanent;
+                }
+                ZenError::Http(http) => {
+                    if let Some(status) = http.status() {
+                        if status.as_u16() == 429 || status.is_server_error() {
+                            return ErrorClass::Transient;
+                        }
+                        // Other 4xx (401/403/404/400…): the request itself is
+                        // wrong; retrying unchanged cannot help.
+                        return ErrorClass::Permanent;
+                    }
+                    if http.is_timeout() || http.is_connect() {
+                        return ErrorClass::Transient;
+                    }
+                    return ErrorClass::Retryable;
+                }
+                // Other variants carry no class signal — keep walking the
+                // chain so a wrapped provider error deeper in still counts.
+                _ => continue,
+            };
+        }
+    }
+    ErrorClass::Retryable
+}
+
+/// Terminal status for a failed sub-agent run: cancellation is surfaced as
+/// `cancelled` (not `failed`) only when the typed marker says so.
+fn spawn_failure_status(error: &anyhow::Error) -> &'static str {
+    let cancelled = error.chain().any(|cause| {
+        cause.downcast_ref::<SpawnFailureError>().is_some_and(|failure| {
+            matches!(failure.kind, SpawnFailure::UserCancelled | SpawnFailure::ParentCancelled)
+        })
+    });
+    if cancelled { "cancelled" } else { "failed" }
 }
 
 fn optional_string(value: Option<&Value>) -> Option<&str> {
@@ -781,65 +832,29 @@ impl SpawnAgentTool {
             tracing::warn!(spawn_id = %spawn_id, "Swarm registration failed: {}", e);
         }
 
-        // Emit spawn start
-        let spawn_meta = ActionMeta {
-            agent_id: agent_id.to_string(),
-            agent_name: resolved.agent.name.clone(),
-            iteration: 0,
-            depth: 0,
-            progress_percent: None,
-            tool_call: None,
-            tool_result: None,
-            handoff: None,
-            spawn: Some(SpawnMeta {
-                parent_agent: label.to_string(),
-                child_agent: resolved.agent.name.clone(),
-                task: task.to_string(),
-                status: "spawned".to_string(),
-                duration_ms: None,
-                spawn_id: Some(spawn_id.clone()),
-            }),
-            approval_request: None,
-            ..Default::default()
-        };
-
-        if should_emit_inline_chat_message_for_spawn() {
-            let _ = app.emit(
-                "chat:message",
-                json!({
-                    "chat_id": chat_id,
-                    "kind": MessageKind::AgentSpawn.to_string(),
-                    "content": format!("{} to {} for: {}", label, resolved.agent.name, task.chars().take(80).collect::<String>()),
-                    "metadata": spawn_meta,
-                }),
-            );
-        }
-
         let subagent_token = CancellationToken::new();
         {
             let mut tokens = state.subagent_cancellation_tokens.lock().await;
             tokens.insert(spawn_id.clone(), (chat_id.clone(), subagent_token.clone()));
         }
 
-        let _ = app.emit(
-            "agent:spawn",
-            json!({
-                "spawn_id": spawn_id,
-                "parent_agent": label,
-                "child_agent_id": resolved.agent.id,
-                "child_agent_name": resolved.agent.name,
-                "task": task,
-                "chat_id": chat_id,
-            }),
-        );
-
+        // Single typed spawn emission on the event bus: the bridge flattens
+        // `AgentSpawn` to the exact `agent:spawn` payload shape the frontend
+        // listens for (card creation, agents-panel focus, voice activity).
         state
             .agent
             .event_bus
-            .emit(crate::agent::event_bus::AgentEvent::AgentSpawned {
-                agent_id: resolved.agent.id.clone(),
-                agent_type: resolved.agent.name.clone(),
-            });
+            .emit(crate::agent::event_bus::AgentEvent::AgentSpawn(
+                crate::agent::event_bus::AgentSpawnPayload {
+                    spawn_id: spawn_id.clone(),
+                    parent_agent: label.to_string(),
+                    child_agent_id: resolved.agent.id.clone(),
+                    child_agent_name: resolved.agent.name.clone(),
+                    task: task.to_string(),
+                    chat_id: chat_id.clone(),
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                },
+            ));
 
         // Emit a chat-visible sub-agent step so the inline timeline can render
         // the delegated task from start through completion.
@@ -876,13 +891,22 @@ impl SpawnAgentTool {
         let result = tokio::select! {
             biased;
             _ = token.cancelled() => {
-                Err(anyhow::anyhow!("Parent cancelled — sub-agent aborted"))
+                Err(anyhow::Error::new(SpawnFailureError::new(
+                    SpawnFailure::ParentCancelled,
+                    "Parent cancelled — sub-agent aborted",
+                )))
             }
             _ = subagent_token.cancelled() => {
-                Err(anyhow::anyhow!("Sub-agent task cancelled by user"))
+                Err(anyhow::Error::new(SpawnFailureError::new(
+                    SpawnFailure::UserCancelled,
+                    "Sub-agent task cancelled by user",
+                )))
             }
             _ = tokio::time::sleep(std::time::Duration::from_secs(SUBAGENT_TIMEOUT_SECONDS)) => {
-                Err(anyhow::anyhow!("Sub-agent timed out after {} seconds", SUBAGENT_TIMEOUT_SECONDS))
+                Err(anyhow::Error::new(SpawnFailureError::new(
+                    SpawnFailure::Timeout,
+                    format!("Sub-agent timed out after {} seconds", SUBAGENT_TIMEOUT_SECONDS),
+                )))
             }
             res = child_runner_instance.run(
                 provider.as_ref(),
@@ -1018,10 +1042,8 @@ impl SpawnAgentTool {
             }
             Err(e) => {
                 let error_text = e.to_string();
-                let was_cancelled = error_text.contains("Sub-agent task cancelled by user")
-                    || error_text.contains("Parent cancelled — sub-agent aborted");
-                let terminal_status = if was_cancelled { "cancelled" } else { "failed" };
-                let error_class = classify_spawn_error(&error_text);
+                let terminal_status = spawn_failure_status(&e);
+                let error_class = classify_spawn_error(&e);
                 let retry_hint = match error_class {
                     ErrorClass::Transient => "This looks like a transient error (network, timeout, rate limit). You may retry the same task.",
                     ErrorClass::Permanent => "This looks like a permanent error (permission, invalid input, not found). Review the task before retrying.",
@@ -1332,38 +1354,26 @@ impl AgentTool for SpawnAgentTool {
                     wave_futures.push((original_idx, node.id.clone(), fut));
                 }
 
-                // Run each sub-agent with its own timeout so one slow agent does
-                // not block the whole batch indefinitely.
-                let timeout = std::time::Duration::from_secs(SUBAGENT_TIMEOUT_SECONDS);
+                // `do_spawn` already races SUBAGENT_TIMEOUT_SECONDS against
+                // the child run internally (alongside both cancellation
+                // tokens), and an outer timeout would abort the future before
+                // its cleanup path removes the token/inbox registrations — so
+                // the inner bound is the single timeout for the batch too.
                 let wave_results: Vec<(usize, String, Value)> =
                     futures::future::join_all(wave_futures.into_iter().map(|(idx, id, fut)| async move {
-                        match tokio::time::timeout(timeout, fut).await {
-                            Ok(Ok((original_idx, id, result))) => (original_idx, id, result),
-                            Ok(Err(error)) => {
+                        match fut.await {
+                            Ok((original_idx, id, result)) => (original_idx, id, result),
+                            Err(error) => {
+                                let class = classify_spawn_error(&error);
                                 let text = error.to_string();
-                                let class = classify_spawn_error(&text);
                                 (
                                     idx,
                                     id,
                                     json!({
-                                        "status": "error",
+                                        "status": spawn_failure_status(&error),
                                         "error": text,
                                         "error_class": class.as_str(),
                                         "retry_hint": "This sub-agent failed. Consider retrying with a narrower task.",
-                                    }),
-                                )
-                            }
-                            Err(_) => {
-                                let text = format!("Sub-agent timed out after {} seconds", SUBAGENT_TIMEOUT_SECONDS);
-                                let class = classify_spawn_error(&text);
-                                (
-                                    idx,
-                                    id,
-                                    json!({
-                                        "status": "error",
-                                        "error": text,
-                                        "error_class": class.as_str(),
-                                        "retry_hint": "This sub-agent timed out. Consider retrying with a narrower task.",
                                     }),
                                 )
                             }
@@ -1514,59 +1524,12 @@ fn emit_completion_events(params: CompletionParams<'_>) -> Result<()> {
         result_summary,
         duration_ms,
     } = params;
-    let state = app.state::<AppState>();
 
-    // Emit chat:message completion
-    let complete_meta = ActionMeta {
-        agent_id: agent_id.to_string(),
-        agent_name: agent_name.to_string(),
-        iteration: 0,
-        depth: 0,
-        progress_percent: None,
-        tool_call: None,
-        tool_result: None,
-        handoff: None,
-        spawn: Some(SpawnMeta {
-            parent_agent: label.to_string(),
-            child_agent: agent_name.to_string(),
-            task: task.to_string(),
-            status: status.to_string(),
-            duration_ms: Some(duration_ms),
-            spawn_id: Some(spawn_id.to_string()),
-        }),
-        approval_request: None,
-        ..Default::default()
-    };
-
-    let content = if status == "completed" {
-        format!("{} completed in {}ms", agent_name, duration_ms)
-    } else {
-        format!(
-            "✗ {} session failed: {}",
-            agent_name,
-            error.unwrap_or("unknown")
-        )
-    };
-
-    if should_emit_inline_chat_message_for_complete() {
-        let _ = app.emit(
-            "chat:message",
-            json!({
-                "chat_id": chat_id,
-                "kind": MessageKind::AgentSpawn.to_string(),
-                "content": content,
-                "metadata": complete_meta,
-            }),
-        );
-    }
-
-    state
-        .agent
-        .event_bus
-        .emit(crate::agent::event_bus::AgentEvent::AgentTerminated {
-            agent_id: agent_id.to_string(),
-        });
-
+    // `agent:complete` stays a raw app emit: its payload is richer than the
+    // typed `AgentCompletePayload` (spawn_id, parent/child identity, task,
+    // result summary) and the frontend's `appendAgentActionStep` reads those
+    // fields directly. Migrating it requires extending the typed payload
+    // first; the spawn side already went through the event bus.
     let _ = app.emit(
         "agent:complete",
         json!({
@@ -1592,9 +1555,59 @@ mod tests {
     use super::*;
 
     #[test]
-    fn spawn_completion_skips_chat_message_kind() {
-        assert!(!should_emit_inline_chat_message_for_spawn());
-        assert!(!should_emit_inline_chat_message_for_complete());
+    fn user_cancelled_spawn_maps_to_cancelled_status_and_transient_class() {
+        let error = anyhow::Error::new(SpawnFailureError::new(
+            SpawnFailure::UserCancelled,
+            "Sub-agent task cancelled by user",
+        ));
+        assert_eq!(spawn_failure_status(&error), "cancelled");
+        assert_eq!(classify_spawn_error(&error), ErrorClass::Transient);
+    }
+
+    #[test]
+    fn parent_cancelled_spawn_maps_to_cancelled_status() {
+        let error = anyhow::Error::new(SpawnFailureError::new(
+            SpawnFailure::ParentCancelled,
+            "Parent cancelled — sub-agent aborted",
+        ));
+        assert_eq!(spawn_failure_status(&error), "cancelled");
+    }
+
+    #[test]
+    fn timeout_spawn_maps_to_failed_status_and_transient_class() {
+        let error = anyhow::Error::new(SpawnFailureError::new(
+            SpawnFailure::Timeout,
+            "Sub-agent timed out after 300 seconds",
+        ));
+        assert_eq!(spawn_failure_status(&error), "failed");
+        assert_eq!(classify_spawn_error(&error), ErrorClass::Transient);
+    }
+
+    #[test]
+    fn provider_shape_classifies_without_matching_wording() {
+        // NoModelSelected is permanent regardless of its message text.
+        let no_model = anyhow::Error::new(ZenError::NoModelSelected);
+        assert_eq!(classify_spawn_error(&no_model), ErrorClass::Permanent);
+        // Aborted (user stop) is transient.
+        let aborted = anyhow::Error::new(ZenError::Aborted);
+        assert_eq!(classify_spawn_error(&aborted), ErrorClass::Transient);
+    }
+
+    #[test]
+    fn opaque_error_falls_back_to_retryable_and_failed_status() {
+        let opaque = anyhow::anyhow!("provider exploded in a novel way");
+        assert_eq!(classify_spawn_error(&opaque), ErrorClass::Retryable);
+        assert_eq!(spawn_failure_status(&opaque), "failed");
+    }
+
+    #[test]
+    fn typed_marker_survives_anyhow_context_wrapping() {
+        let inner = anyhow::Error::new(SpawnFailureError::new(
+            SpawnFailure::UserCancelled,
+            "Sub-agent task cancelled by user",
+        ));
+        let wrapped = inner.context("while running child agent");
+        assert_eq!(spawn_failure_status(&wrapped), "cancelled");
     }
 
     fn make_agent_request(id: &str, depends_on: &[&str]) -> AgentRequest {

@@ -90,19 +90,6 @@ export const useTaskStore = create<TaskState>((set, get) => {
       get().updateTask(id, updates as Partial<Task>);
     });
 
-    // Listen for task completion
-    listenAppEvent('task:completed', (event) => {
-      const { taskId, result } = event.payload;
-      const id = taskId || event.payload.task_id || event.payload.id;
-      if (!id) return;
-      get().updateTask(id, {
-        status: result?.is_error ? 'failed' : 'completed',
-        progress: 100,
-        error: result?.is_error ? result.content : undefined,
-        updatedAt: Date.now(),
-      });
-    });
-
     listenAppEvent('task:list_updated', (event) => {
       const { chat_id, tasks } = event.payload;
       if (!chat_id || !Array.isArray(tasks)) return;

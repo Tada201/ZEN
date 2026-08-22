@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -27,6 +27,103 @@ const TYPEWRITER_IMMEDIATE_LAG_CHARS = 24;
 // combined with subagent-driven store updates caused main-thread
 // re-parses to dominate the render budget.
 export const DEFAULT_TICK_MS = 48;
+
+// Below this length a single ReactMarkdown parse is cheaper than the
+// segmentation machinery, so short blocks keep the one-parse path.
+const SEGMENTATION_MIN_LENGTH = 400;
+
+const LIST_ITEM_LINE = /^ {0,3}(?:[-*+]|\d{1,9}[.)])(?:\s|$)/;
+const LIST_CONTINUATION_LINE = /^ {2,}\S/;
+const INDENTED_CODE_LINE = /^(?: {4}|\t)/;
+
+function firstNonEmptyLine(chunk: string): string | null {
+  for (const line of chunk.split('\n')) {
+    if (line.trim()) return line;
+  }
+  return null;
+}
+
+function lastNonEmptyLine(chunk: string): string | null {
+  const lines = chunk.split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].trim()) return lines[i];
+  }
+  return null;
+}
+
+function hasOddDollarMath(chunk: string): boolean {
+  let count = 0;
+  let index = chunk.indexOf('$$');
+  while (index !== -1) {
+    count += 1;
+    index = chunk.indexOf('$$', index + 2);
+  }
+  return count % 2 === 1;
+}
+
+/**
+ * Splits streaming markdown into blank-line-separated segments so every
+ * completed segment can be memoized by string identity and never re-parsed
+ * while the reveal grows. Chunks that one remark parse would join into a
+ * single node (loose lists, display math, indented code) stay merged, so
+ * per-segment rendering matches the unsplit parse. The final segment is the
+ * active tail: it re-parses per reveal step, but its length is bounded to one
+ * paragraph instead of the whole message.
+ */
+export function segmentStreamingMarkdown(content: string): string[] {
+  const chunks = content.split(/\n{2,}/);
+  if (chunks.length <= 1) return chunks;
+
+  const segments: string[] = [];
+  let current = chunks[0];
+  let lastLine = lastNonEmptyLine(chunks[0]);
+  let mathOpen = hasOddDollarMath(chunks[0]);
+  let inList = lastLine !== null && LIST_ITEM_LINE.test(lastLine);
+  let inIndentedCode = lastLine !== null && INDENTED_CODE_LINE.test(lastLine);
+
+  for (let i = 1; i < chunks.length; i++) {
+    const next = chunks[i];
+    const firstLine = firstNonEmptyLine(next);
+    const mustMerge = mathOpen
+      || (inList && firstLine !== null && (LIST_ITEM_LINE.test(firstLine) || LIST_CONTINUATION_LINE.test(firstLine)))
+      || (inIndentedCode && firstLine !== null && INDENTED_CODE_LINE.test(firstLine));
+    if (mustMerge) {
+      current += '\n\n' + next;
+    } else {
+      segments.push(current);
+      current = next;
+    }
+    if (hasOddDollarMath(next)) mathOpen = !mathOpen;
+    lastLine = lastNonEmptyLine(next);
+    inList = lastLine !== null && LIST_ITEM_LINE.test(lastLine);
+    inIndentedCode = lastLine !== null && INDENTED_CODE_LINE.test(lastLine);
+  }
+  segments.push(current);
+  return segments;
+}
+
+interface MarkdownSegmentProps {
+  content: string;
+  remarkPlugins: any;
+  rehypePlugins: any;
+  components?: Components;
+}
+
+// Memoized by string identity: streaming growth is append-only, so completed
+// segments keep their exact string and React skips re-parsing them entirely.
+const StableMarkdownSegment = memo(
+  function StableMarkdownSegment({ content, remarkPlugins, rehypePlugins, components }: MarkdownSegmentProps) {
+    return (
+      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components}>
+        {content}
+      </ReactMarkdown>
+    );
+  },
+  (prev, next) => prev.content === next.content
+    && prev.remarkPlugins === next.remarkPlugins
+    && prev.rehypePlugins === next.rehypePlugins
+    && prev.components === next.components,
+);
 
 function normalizeMathMarkdown(content: string): string {
   return content
@@ -171,18 +268,39 @@ export function SmoothMarkdown({
     [displayContent],
   );
 
+  // While streaming, completed paragraphs render as memoized segments and
+  // only the active tail re-parses per reveal step. At rest (or below the
+  // length threshold) the full string takes a single canonical parse so the
+  // final layout is exactly the unsplit rendering.
+  const segments = useMemo(() => {
+    if (!isStreaming || normalizedContent.length < SEGMENTATION_MIN_LENGTH) return null;
+    return segmentStreamingMarkdown(normalizedContent);
+  }, [isStreaming, normalizedContent]);
+
   return (
     <div
       className="smooth-markdown text-sm leading-[1.6] prose prose-invert max-w-full"
       data-streaming={isStreaming ? "true" : undefined}
     >
-      <ReactMarkdown
-        remarkPlugins={remarkPlugins}
-        rehypePlugins={rehypePlugins}
-        components={components}
-      >
-        {normalizedContent}
-      </ReactMarkdown>
+      {segments === null ? (
+        <ReactMarkdown
+          remarkPlugins={remarkPlugins}
+          rehypePlugins={rehypePlugins}
+          components={components}
+        >
+          {normalizedContent}
+        </ReactMarkdown>
+      ) : (
+        segments.map((segment, index) => (
+          <StableMarkdownSegment
+            key={index}
+            content={segment}
+            remarkPlugins={remarkPlugins}
+            rehypePlugins={rehypePlugins}
+            components={components}
+          />
+        ))
+      )}
       {isStreaming && (
         <span className="streaming-cursor" aria-hidden="true" />
       )}

@@ -6,21 +6,30 @@ export interface AgentRuntimeBridge {
   dispatchTerminal: (event: AgentRunEvent) => void;
   get: (runId: string, chatId: string, messageId?: string) => AgentTurnRecord | undefined;
   clear: (runId: string, chatId: string, messageId?: string) => void;
+  /** Drop every scheduler entry for a chat whose stream the backend reset
+   *  without a terminal event; the per-run `clear` can't be keyed because the
+   *  reset payload carries only the chat id. */
+  clearForChat: (chatId: string) => void;
 }
 
 export function createAgentRuntimeBridge(
   onFlush: (record: AgentTurnRecord) => void,
 ): AgentRuntimeBridge {
-  const schedulers = new Map<string, ReturnType<typeof createAgentRunScheduler>>();
+  const schedulers = new Map<string, {
+    scheduler: ReturnType<typeof createAgentRunScheduler>;
+    chatId: string;
+    runIds: Set<string>;
+  }>();
 
   const getScheduler = (event: Pick<AgentRunEvent, "runId" | "chatId" | "messageId">) => {
     const key = streamIdentity(event.runId, event.chatId, event.messageId);
-    let scheduler = schedulers.get(key);
-    if (!scheduler) {
-      scheduler = createAgentRunScheduler(onFlush);
-      schedulers.set(key, scheduler);
+    let entry = schedulers.get(key);
+    if (!entry) {
+      entry = { scheduler: createAgentRunScheduler(onFlush), chatId: event.chatId, runIds: new Set() };
+      schedulers.set(key, entry);
     }
-    return { key, scheduler };
+    entry.runIds.add(event.runId);
+    return { key, scheduler: entry.scheduler };
   };
 
   return {
@@ -33,12 +42,19 @@ export function createAgentRuntimeBridge(
       scheduler.flushNow(event.runId);
     },
     get(runId, chatId, messageId) {
-      return schedulers.get(streamIdentity(runId, chatId, messageId))?.get(runId);
+      return schedulers.get(streamIdentity(runId, chatId, messageId))?.scheduler.get(runId);
     },
     clear(runId, chatId, messageId) {
       const key = streamIdentity(runId, chatId, messageId);
-      schedulers.get(key)?.clear(runId);
+      schedulers.get(key)?.scheduler.clear(runId);
       schedulers.delete(key);
+    },
+    clearForChat(chatId) {
+      for (const [key, entry] of schedulers) {
+        if (entry.chatId !== chatId) continue;
+        for (const runId of entry.runIds) entry.scheduler.clear(runId);
+        schedulers.delete(key);
+      }
     },
   };
 }

@@ -1,9 +1,7 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::info;
 
-use crate::agent::event_bus::{AgentEvent, EventBus};
 use crate::agent::instance::AgentInstance;
 use crate::agent::types::Agent;
 
@@ -13,14 +11,18 @@ pub use types::{SwarmError, SwarmState};
 
 pub struct SwarmCoordinator {
     agents: RwLock<HashMap<String, AgentInstance>>,
-    event_bus: Arc<EventBus>,
+}
+
+impl Default for SwarmCoordinator {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SwarmCoordinator {
-    pub fn new(event_bus: Arc<EventBus>) -> Self {
+    pub fn new() -> Self {
         Self {
             agents: RwLock::new(HashMap::new()),
-            event_bus,
         }
     }
 
@@ -40,11 +42,6 @@ impl SwarmCoordinator {
             agents.insert(agent_id.clone(), instance.clone());
         }
 
-        self.event_bus.emit(AgentEvent::AgentSpawned {
-            agent_id: agent_id.clone(),
-            agent_type: config.name.clone(),
-        });
-
         info!(agent_id = %agent_id, "Spawned new agent in swarm");
         Ok(instance)
     }
@@ -57,10 +54,6 @@ impl SwarmCoordinator {
 
         instance.terminate();
         agents.remove(agent_id);
-
-        self.event_bus.emit(AgentEvent::AgentTerminated {
-            agent_id: agent_id.to_string(),
-        });
 
         info!(agent_id = %agent_id, "Terminated agent in swarm");
         Ok(())
@@ -93,14 +86,13 @@ impl SwarmCoordinator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::event_bus::EventBus;
     use crate::agent::types::ModelTier;
 
     fn test_agent() -> Agent {
         Agent {
             id: "test-agent".to_string(),
             name: "TestAgent".to_string(),
-            description: Some("Test agent for unit tests".to_string()),
+            description: Some("Test agent for unit tests.".to_string()),
             instructions: "You are a test agent.".to_string(),
             tool_ids: vec!["test_tool".to_string()],
             model_override: None,
@@ -113,8 +105,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_spawn_agent() {
-        let event_bus = Arc::new(EventBus::new(256));
-        let coordinator = SwarmCoordinator::new(event_bus);
+        let coordinator = SwarmCoordinator::new();
         let result = coordinator.spawn_agent(test_agent()).await;
         assert!(result.is_ok());
         let agents = coordinator.get_agents().await;
@@ -123,8 +114,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_terminate_agent() {
-        let event_bus = Arc::new(EventBus::new(256));
-        let coordinator = SwarmCoordinator::new(event_bus);
+        let coordinator = SwarmCoordinator::new();
         let agent = coordinator.spawn_agent(test_agent()).await.unwrap();
         let result = coordinator.terminate_agent(&agent.config.id).await;
         assert!(result.is_ok());

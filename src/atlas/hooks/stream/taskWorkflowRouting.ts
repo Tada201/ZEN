@@ -2,7 +2,6 @@ import type { AgentActionEventPayload, TaskEventPayload } from "@/api/events";
 import { getActiveStreamingChatId, getDirectOrActiveStreamingChatId, type ActiveStreamState } from "./activeStreamRouting";
 
 type TaskRoutingPayload = Pick<AgentActionEventPayload, "chat_id" | "chatId" | "task_id" | "taskId" | "id">;
-type WorkflowRoutingPayload = Pick<AgentActionEventPayload, "chat_id" | "chatId" | "workflow_id" | "id">;
 
 export function getTaskId(payload: TaskRoutingPayload): string | undefined {
   return payload.task_id || payload.taskId || payload.id;
@@ -37,30 +36,6 @@ export function getTaskChatId(
   const taskId = getTaskId(payload);
   if (taskId) {
     const mapped = cache.get(taskId);
-    if (mapped) return mapped;
-  }
-
-  return getActiveStreamingChatId(state);
-}
-
-export function rememberWorkflowChat(
-  cache: Map<string, string>,
-  payload: WorkflowRoutingPayload,
-  chatId?: string | null,
-) {
-  if (chatId && payload.workflow_id) cache.set(payload.workflow_id, chatId);
-}
-
-export function getWorkflowChatId(
-  cache: Map<string, string>,
-  state: ActiveStreamState,
-  payload: WorkflowRoutingPayload,
-): string | undefined {
-  const direct = payload.chat_id || payload.chatId;
-  if (direct) return direct;
-
-  if (payload.workflow_id) {
-    const mapped = cache.get(payload.workflow_id);
     if (mapped) return mapped;
   }
 

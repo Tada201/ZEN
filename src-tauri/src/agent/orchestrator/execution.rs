@@ -631,9 +631,35 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
             }
         });
 
-        let response = provider
+        let response = match provider
             .chat_stream(model, synth_messages, None, config, on_chunk, token)
-            .await?;
+            .await
+        {
+            Ok(response) => response,
+            Err(stream_error) => {
+                // Flush what the model produced before the failure instead of
+                // discarding the batched buffer (mirrors escalation.rs, which
+                // flushes unconditionally regardless of stream outcome).
+                if let Ok(mut data) = buffer.lock() {
+                    if !data.0.is_empty() {
+                        let text = std::mem::take(&mut data.0);
+                        let current_type = data.1;
+                        let _ = self.emit(AgentEvent::ChatChunk(ChatChunkPayload {
+                            chat_id: chat_id.to_string(),
+                            delta: text,
+                            r#type: current_type.to_string(),
+                            done: false,
+                            message_id: orchestrator_message_id.map(str::to_owned),
+                            sequence: None,
+                        }));
+                    }
+                }
+                if let Ok(mut det) = detector.lock() {
+                    det.flush();
+                }
+                return Err(stream_error.into());
+            }
+        };
 
         // Final flush: Send any remaining tokens in the buffer
         if let Ok(mut data) = buffer.lock() {

@@ -3,6 +3,8 @@ import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import { listen } from '@tauri-apps/api/event';
 import { terminalApi } from '@/api/terminalApi';
+import { useAnimationsEnabled } from '@/lib/motion';
+import { useSettingsStore } from '@/lib/stores/useSettingsStore';
 import '@xterm/xterm/css/xterm.css';
 
 interface XTermSessionViewProps {
@@ -21,6 +23,9 @@ interface TerminalOutputEvent {
 const MIN_COLS = 10;
 const MIN_ROWS = 5;
 
+/** Longest a hidden tab's raw PTY backlog may grow between forced drains. */
+const HIDDEN_FLUSH_INTERVAL_MS = 1_000;
+
 function getErrorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
@@ -30,6 +35,23 @@ export function XTermSessionView({ chatId, sessionId, active, onError }: XTermSe
   const hostRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  // Mirrors `active` for callbacks that fire outside render (the PTY output
+  // listener keeps running while the tab is display:none in the workbench).
+  const activeRef = useRef(active);
+  activeRef.current = active;
+  // Installed by the initializer; cancels the hidden-tab drain timer and
+  // flushes buffered PTY output the moment the tab becomes visible.
+  const activateOutputRef = useRef<(() => void) | null>(null);
+  const animationsEnabled = useAnimationsEnabled();
+
+  // xterm's cursor-blink timer runs regardless of the app motion policy, so
+  // keep the option in sync with the preference (read non-reactively at
+  // construction, then updated here when it changes).
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    terminal.options.cursorBlink = animationsEnabled;
+  }, [animationsEnabled]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -42,7 +64,7 @@ export function XTermSessionView({ chatId, sessionId, active, onError }: XTermSe
       if (disposed) return;
       try {
     const terminal = new Terminal({
-      cursorBlink: true,
+      cursorBlink: useSettingsStore.getState().animationsEnabled,
       cursorStyle: 'block',
       fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, "Courier New", monospace',
       fontSize: 13,
@@ -103,8 +125,12 @@ export function XTermSessionView({ chatId, sessionId, active, onError }: XTermSe
     const outputBuffer: string[] = [];
     let replaySequence = Number.POSITIVE_INFINITY;
     let frame = 0;
+    let hiddenDrainTimer: ReturnType<typeof setTimeout> | undefined;
     const flushOutput = () => {
-      frame = 0;
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+        frame = 0;
+      }
       const chunk = outputBuffer.splice(0).join('');
       if (chunk) terminal.write(chunk);
     };
@@ -167,7 +193,27 @@ export function XTermSessionView({ chatId, sessionId, active, onError }: XTermSe
 
     const enqueueOutput = (data: string) => {
       outputBuffer.push(data);
+      if (!activeRef.current) {
+        // Hidden tabs skip the per-frame write loop entirely; the backlog is
+        // parsed in one call on activation. The timer only bounds how long
+        // raw chunks may accumulate for a long-running background build.
+        if (!hiddenDrainTimer) {
+          hiddenDrainTimer = setTimeout(() => {
+            hiddenDrainTimer = undefined;
+            flushOutput();
+          }, HIDDEN_FLUSH_INTERVAL_MS);
+        }
+        return;
+      }
       if (!frame) frame = window.requestAnimationFrame(flushOutput);
+    };
+
+    activateOutputRef.current = () => {
+      if (hiddenDrainTimer) {
+        clearTimeout(hiddenDrainTimer);
+        hiddenDrainTimer = undefined;
+      }
+      if (outputBuffer.length) flushOutput();
     };
 
     let unlisten: (() => void) | undefined;
@@ -190,6 +236,7 @@ export function XTermSessionView({ chatId, sessionId, active, onError }: XTermSe
 
     cleanup = () => {
       if (frame) window.cancelAnimationFrame(frame);
+      if (hiddenDrainTimer) clearTimeout(hiddenDrainTimer);
       if (resizeTimer) clearTimeout(resizeTimer);
       input.dispose();
       terminal.attachCustomKeyEventHandler(() => true);
@@ -199,6 +246,7 @@ export function XTermSessionView({ chatId, sessionId, active, onError }: XTermSe
       terminal.dispose();
       terminalRef.current = null;
       fitRef.current = null;
+      activateOutputRef.current = null;
     };
       } catch (error) {
         onError(`Terminal renderer failed to initialize: ${getErrorMessage(error)}`);
@@ -223,6 +271,9 @@ export function XTermSessionView({ chatId, sessionId, active, onError }: XTermSe
     const fit = fitRef.current;
     const terminal = terminalRef.current;
     if (!fit || !terminal) return;
+    // Write any PTY output that buffered while this tab was hidden before
+    // the terminal is refitted and focused.
+    activateOutputRef.current?.();
     window.requestAnimationFrame(() => {
       try {
         fit.fit();

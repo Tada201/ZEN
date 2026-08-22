@@ -150,7 +150,7 @@ export function ChartBlock({ content, isStreaming, chatId, messageId }: ChartBlo
   }
 
   if (isStreaming || !renderSpec) {
-    return <CodeBlock code={content} language="json" />;
+    return <CodeBlock code={content} language="json" isStreaming={isStreaming} />;
   }
 
   const { type, data, keys, xAxis, colors = DEFAULT_CHART_COLORS, title } = renderSpec;

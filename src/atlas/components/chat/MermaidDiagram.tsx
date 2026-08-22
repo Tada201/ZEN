@@ -224,7 +224,7 @@ export function MermaidDiagram({
           <span className="w-2 h-2 rounded-full bg-warning animate-pulse" />
           <span>Rendering Mermaid Diagram...</span>
         </div>
-        <CodeBlock code={code} language="mermaid" />
+        <CodeBlock code={code} language="mermaid" isStreaming={isStreaming} />
       </div>
     );
   }
