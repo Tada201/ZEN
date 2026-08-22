@@ -1,3 +1,29 @@
+[workspace]
+# `crates/*` joins members in Phase 2 when zen-core exists — this Cargo
+# version rejects member globs that match no package directory.
+members = [".", "policy-tests"]
+resolver = "2"
+
+# Shared dependency versions (BIG_MIGRATION.md Phase 1). Member crates add
+# their own feature sets on top via `{ workspace = true, features = [...] }`
+# so per-crate feature choices stay explicit and no member silently inherits
+# features it does not use.
+[workspace.dependencies]
+serde = "1"
+serde_json = "1"
+tokio = "1"
+tokio-util = "0.7"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "json"] }
+reqwest = { version = "0.12", default-features = false }
+futures = "0.3"
+async-trait = "0.1"
+anyhow = "1.0"
+
 [package]
 name = "zen"
 version = "0.1.0"
@@ -23,25 +49,25 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["protocol-asset", "unstable"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tokio = { version = "1", features = ["full"] }
-tokio-util = "0.7"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 tracing-appender = "0.2"
-thiserror = "2"
-uuid = { version = "1", features = ["v4"] }
-chrono = { version = "0.4", features = ["serde"] }
-sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "json"] }
-reqwest = { version = "0.12", default-features = false, features = ["native-tls", "json", "stream", "multipart"] }
-futures = "0.3"
-async-trait = "0.1"
+thiserror = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+sqlx = { workspace = true }
+reqwest = { workspace = true, features = ["native-tls", "json", "stream", "multipart"] }
+futures = { workspace = true }
+async-trait = { workspace = true }
 sysinfo = "0.38"
 axum = { version = "0.8", features = ["default", "ws"] }
 tower-http = { version = "0.6", features = ["cors"] }
 regex = "1"
-anyhow = "1.0"
+anyhow = { workspace = true }
 dirs = "6.0"
 portable-pty = "0.9"
 tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }

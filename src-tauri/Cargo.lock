@@ -13125,6 +13125,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "zen-policy-tests"
+version = "0.1.0"
+dependencies = [
+ "regex",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "zerocopy"
 version = "0.8.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"

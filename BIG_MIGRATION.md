@@ -322,31 +322,48 @@ member (itself) plus policy-tests. No source files move yet.
 **Prerequisites:** Phase 0 done.
 
 **Tasks**
-- [ ] Edit `src-tauri/Cargo.toml`: add `[workspace]` section with
-      `members = [".", "policy-tests"]`, `resolver = "2"`,
-      and an initially-small `[workspace.dependencies]` table
-      (serde, serde_json, tokio, tokio-util, tracing, tracing-subscriber,
-      thiserror, uuid, chrono, sqlx, reqwest, futures, async-trait, anyhow).
-- [ ] Convert matching `[dependencies]` entries to `{ workspace = true }` form.
-- [ ] Move `[profile.*]` blocks verbatim (dev opt-level 0 / incremental false /
-      debug 1; dev.package."*" opt-level 1; release z/lto/strip/codegen-units 1)
-      — profiles are already in what becomes the root manifest, keep values.
-- [ ] Add `crates/*` to members now (empty dir tolerated) so later phases don't
-      touch `[workspace]` again.
-- [ ] Delete stale `policy-tests/Cargo.lock`, `policy-tests/target/`; fix its
-      manifest if it declared its own workspace; confirm it builds as a member.
-- [ ] Keep lib name `tauri_app_lib`, edition 2021, all features unchanged.
-      `crate-type = ["staticlib","cdylib","rlib"]` stays app-crate-only and
-      `mainLibName` must not drift — Tauri v2 mobile links against that name.
-- [ ] Pin Tauri build machinery to the composition root: only the app member
-      runs `tauri-build`/`generate_context!`; `build.rs`, `tauri.conf.json`,
-      `capabilities/`, `gen/`, `resources/` are never referenced from crates/*.
-- [ ] Sanity-run the app (`npm run tauri dev`) once; boot sequence unchanged.
+- [x] Edit `src-tauri/Cargo.toml`: `[workspace]` added with
+      `members = [".", "policy-tests"]`, `resolver = "2"`, and the
+      `[workspace.dependencies]` table (serde, serde_json, tokio, tokio-util,
+      tracing, tracing-subscriber, thiserror, uuid, chrono, sqlx, reqwest,
+      futures, async-trait, anyhow). **Deviation:** `crates/*` could not be
+      pre-added — this Cargo version rejects member globs matching no package
+      directory ("failed to read crates/*/Cargo.toml"); the glob joins in
+      Phase 2 when zen-core exists. Versions live in the workspace table;
+      per-member feature sets stay at the member (`{ workspace = true,
+      features = [...] }`) so policy-tests' narrower tokio/reqwest features
+      are preserved exactly (no feature unification).
+- [x] Convert matching `[dependencies]` entries to `{ workspace = true }`
+      (14 in zen, 5 in policy-tests).
+- [x] `[profile.*]` blocks kept verbatim in the root manifest (it was already
+      the root-to-be): dev opt-level 0 / incremental false / debug 1;
+      dev.package."*" opt-level 1; release z/lto/strip/codegen-units 1.
+- [x] (see deviation above — `crates/*` deferred to Phase 2)
+- [x] Delete stale `policy-tests/Cargo.lock`, `policy-tests/target/`
+      (manifest never declared its own workspace); it builds as a member.
+      Root `Cargo.lock` diff: +13 lines (the member entry only — zero
+      dependency version churn, R4 feature-unification risk did not
+      materialize).
+- [x] Lib name `tauri_app_lib`, edition 2021, all features unchanged;
+      `crate-type = ["staticlib","cdylib","rlib"]` app-crate-only.
+- [x] Tauri build machinery pinned to the composition root: `build.rs`,
+      `tauri.conf.json`, `capabilities/`, `gen/`, `resources/` are referenced
+      only from the app member (only one package existed to reference them).
+- [ ] Sanity-run the app (`npm run tauri dev`): **deferred to the user's
+      manual visual gate** — no interactive GUI session in the execution
+      environment. Mechanical evidence in lieu: all workspace targets
+      compile (check/clippy/test --no-run green), frontend build green.
 
 **Verification gates**
-- Gate suite green (Section 5).
-- `cargo metadata` lists zen + policy-tests as workspace members.
-- Exactly one target dir (`src-tauri/target`), one Cargo.lock.
+- [x] Gate suite green: `cargo check --workspace --all-targets` ✅,
+      `cargo clippy --workspace --all-targets -- -D warnings` ✅,
+      `cargo test --workspace --no-run` ✅ (all 4 test targets build),
+      `npm run build` ✅. Full `cargo test --workspace` execution is
+      blocked locally by the pre-existing STATUS_ENTRYPOINT_NOT_FOUND
+      loader issue (identical pre- and post-migration) — CI must confirm.
+- [x] `cargo metadata` lists zen + zen-policy-tests as workspace members.
+- [x] Exactly one target dir (`src-tauri/target`), one Cargo.lock.
+- `cargo tree -p <crate> | tauri` guard: N/A until Phase 2 creates crates/*.
 
 **Rollback:** `git checkout pre-workspace-migration -- src-tauri/Cargo.toml policy-tests`.
 
