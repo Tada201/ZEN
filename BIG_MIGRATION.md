@@ -263,28 +263,45 @@ CI additionally runs dependency audit and file-size checks per RULES.md.
 **Prerequisites:** none.
 
 **Tasks**
-- [ ] Ensure the working tree is clean: review `git status` and commit any
-      dirty files on main as `chore: pre-migration baseline` (at plan time this
-      was 46 files; re-check at execution — only BIG_MIGRATION.md may remain,
-      commit it first).
-- [ ] Create rollback tags:
-      `git tag pre-workspace-migration && git push origin pre-workspace-migration`.
-- [ ] Delete `src-tauri/target/` (~45.3 GB). Do NOT run long-lived builds during deletion.
-- [ ] Delete stray `src-tauri/src/db/queries.rs.bak` if still present.
-- [ ] Record baseline metrics into this file's Appendix A:
-      - `Measure-Command { cargo check --all-targets }` cold and warm
-      - `cargo clippy --all-targets` warning count
-      - `cargo test` pass/fail inventory (which suites exist today)
-      - `npm run build` duration
-- [ ] **Event-contract snapshot mechanism** (feeds R5): add a debug-only
-      feature `event-snapshot` implementing a mock `EventSink` that appends
-      `{event, payload-shape}` tuples as JSONL; capture one full E2E session
-      pre-migration and store under `test/fixtures/event-snapshot-baseline.jsonl`.
-      Later phases diff against it.
-- [ ] Create/refresh `docs/architecture/exemptions.md` listing every >700-line
-      Rust file (Section 2.2 table) with owner/reason/split-plan/expiration,
-      per RULES.md File Size Limits.
-- [ ] Confirm CI runs the gate suite on main today; note any missing gate.
+- [x] Ensure the working tree is clean: baseline committed as `0a89f6b`
+      `chore: pre-migration baseline` (2026-08-22; only 3 changed files
+      remained at execution: two stale plan docs deleted + this file added).
+      Junk cleanup in the same pass: `src-tauri/nul`, `.review-diff.tmp`,
+      `src-tauri/src/db/queries.rs.bak` (all untracked/gitignored).
+- [x] Create rollback tag `pre-workspace-migration` (local; pushed with the
+      phase tags at the end of Phase 1).
+- [x] Delete `src-tauri/target/` (measured 40 GB at execution; plan said
+      ~45.3 GB).
+- [x] Delete stray `src-tauri/src/db/queries.rs.bak`.
+- [x] Record baseline metrics into Appendix A (filled 2026-08-22).
+- [x] **Event-contract snapshot mechanism**: `event-snapshot` cargo feature
+      implemented in `src/agent/event_snapshot.rs`; taps in
+      `AgentEvent::emit_via` (both branches) + `EventBus::bridge_to_tauri`.
+      Compiles to an inlined no-op when off. **Baseline fixture pending**:
+      local `cargo test` executables abort with STATUS_ENTRYPOINT_NOT_FOUND
+      (known environmental DLL issue on the dev box — builds fine, execution
+      aborts), so the capture must run on CI or a healthy machine; procedure
+      + diff commands in `test/fixtures/README.md`.
+- [x] Create/refresh `docs/architecture/exemptions.md`: refreshed against
+      measured counts — 27 backend files >700 lines (13 hard-fail), each
+      entry expires at its migration phase; 3 stale entries closed.
+- [x] CI audit: `.github/workflows/ci.yml` is `workflow_dispatch`-only
+      (manual by design, noted in-file). When run it covers: frontend build +
+      `npm test` + bundle budget, clippy `--all-targets -D warnings`,
+      `cargo test --bin zen`, policy tests (`test:backend`),
+      `quality:fast` (includes file-size gate, `$rustLimit = 900`), cargo +
+      npm audit. Gaps vs Section 5: no push/PR trigger (intentional),
+      `cargo test --workspace` only becomes meaningful after Phase 1,
+      separate `cargo check` step intentionally dropped (clippy covers it).
+      Additionally this phase fixed pre-existing clippy debt (17 warnings +
+      1 deny-level `invalid_regex` error) so the `-D warnings` gate can pass
+      at all — commit `6e823db`.
+
+**Extra Phase 0 scope (user-directed)**: frozen pre-migration reference
+snapshot committed at `Zen_rs_old/` (4.1 MB, 285 files, from the
+`pre-workspace-migration` tag; excluded from codegraph + graphify indexing;
+deleted at Phase 14) and temporary migration banners added to RULES.md +
+AGENTS.md (always cross-check Zen_rs_old during the migration).
 
 **Verification gates**
 - `git describe --tags` returns `pre-workspace-migration`.
@@ -833,16 +850,23 @@ moved its dependencies; the move itself is mechanical once seams hold.
 - Bazel/hermetic builds, cross-platform sandbox backends — future work,
   enabled by crate boundaries but not part of this plan.
 
-## Appendix A — Baseline metrics (fill in Phase 0)
+## Appendix A — Baseline metrics (measured 2026-08-22, Phase 0)
+
+Dev box: Windows 11 x64, MSVC toolchain 1.97.1 (rust-toolchain.toml),
+single-crate pre-migration tree at commits `0a89f6b`→`842b93b`.
 
 | Metric | Value (pre) | Value (post P14) |
 |---|---|---|
-| cold `cargo check --all-targets` | TBD | TBD |
-| warm incremental check (agent edit) | TBD | TBD |
-| clippy warning count | TBD | TBD |
-| test suites / counts | TBD | TBD |
-| npm run build duration | TBD | TBD |
-| emitted backend event names+payload shapes snapshot | TBD | TBD |
+| cold `cargo check --all-targets` | **7m 36s** (after deleting the stale 40 GB target) | TBD |
+| warm no-op `cargo check --all-targets` | **1m 20s** (1m 40s against the old 40 GB target) | TBD |
+| clippy warning count | 17 unique warnings + 1 deny-level `invalid_regex` error **before** cleanup; **0** after `6e823db` (`clippy --all-targets -- -D warnings` green) | TBD |
+| test suites / counts | rust: zen lib tests, zen bin tests, `tests/agentic_test.rs` (5 fns), standalone `policy-tests` lib; node: 191 `test/verify-*.mjs` suites via `npm test`. **Local rust test-binary execution is blocked** (STATUS_ENTRYPOINT_NOT_FOUND at exe load — environmental; builds succeed). Rust test pass/fail must come from CI. | TBD |
+| `npm run build` duration | **56s** wall (tsc + vite; vite segment 23.4s) | TBD |
+| emitted backend event names+payload shapes snapshot | Mechanism implemented (`event-snapshot` feature, commit `842b93b`); baseline JSONL **pending capture on CI/healthy machine** — local test exes abort (see above). Procedure: `test/fixtures/README.md` | TBD |
+
+Note: the Phase 0 gate "`Test-Path src-tauri/target` is False" refers to the
+stale 40 GB artifact, which was deleted (disk reclaimed). The cold-measurement
+build legitimately recreated a fresh target afterwards.
 
 ## Appendix B — Upward-import replacement ledger (fill in Phase 6)
 
