@@ -298,7 +298,7 @@ sequenceDiagram
         end
 
         opt delegation
-            R->>R: spawn subagent, MAX_SPAWN_DEPTH = 3
+            R->>R: root agent spawns bounded subagents
             R-->>IPC: agent:spawn / agent:step / agent:done
         end
     end
@@ -526,7 +526,7 @@ per-subagent cancel, per-tool retry, per-tool undo (recovery checkpoint), `/comp
   (`run_command`, `terminal`, `format`, `delete_file`) that is never auto-allowed even in yolo mode.
 - **Per-call audit** to SQLite for 13 privileged operation kinds.
 - **200 KB tool-output truncation** + concurrency semaphore.
-- **Subagent delegation** — `MAX_SPAWN_DEPTH = 3`, per-agent cancel, scoped stream isolation.
+- **Root-only subagent delegation** — only the main runner can spawn; child runners have no delegation capability, with per-agent cancel and scoped stream isolation.
 - **Orchestrator** — LLM task planner (`resources/prompts/orchestrator_planning.txt`) producing 3–7
   tasks with agent assignment, priority, dependencies, complexity 1–10.
 - **4 built-in agents** — `generalist`, `researcher`, `operational_expert`, `voice_display`;
@@ -815,8 +815,11 @@ Also missing: browser **network** capture — only console/error is implemented.
 - `MemoryStatsWidget`, `AgentOrchestratorPanel` (widgets version), `Zen/LayerManager`,
   `SecondaryActivityBar`, `XTermTelemetryDrawer`, `ToolAuthorizationModal`, `GraphCanvas`,
   `DesmosCanvas` (×2), `CanvasPreview`, `MagneticButton`, `KineticText`, `ParticleBurst`,
-  `MarkdownDoc`, `OpenUICanvas`, 5 bootscreen extras, 17 split-out settings sub-config components.
-- `PromptPicker.tsx` + a complete 10-entry curated prompt library — never mounted.
+  5 bootscreen extras, 17 split-out settings sub-config components.
+- Removed 2026-08-22 dead-code sweep: `ChatSection.tsx` (legacy section), `ChatHeader.tsx`,
+  `SimpleText.tsx`, `PromptPicker.tsx` (+ its prompt library), `ChatScrubber.ts` (rename shim),
+  `OpenUICanvas.tsx`, `MarkdownDoc.tsx`, `toolIcons.tsx`, `test_parser.ts`, and the unused
+  `chat:partial` event type.
 - `SuggestedPromptStrip` is DEV-only **and** non-Tauri-only, so the desktop app never shows it.
 - Sidebar **"Automations"** and **"Skills"** buttons are placeholders with tooltip "coming soon".
 

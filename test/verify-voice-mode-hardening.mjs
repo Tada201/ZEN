@@ -20,7 +20,6 @@ const files = {
   settingsSchema: "src/lib/stores/settings/schema.ts",
   audioSlice: "src/lib/stores/settings/createAudioSlice.ts",
   ttft: "src/lib/ttft.ts",
-  chatSection: "src/atlas/sections/ChatSection.tsx",
   workspaceSection: "src/atlas/sections/WorkspaceSection.tsx",
   voicePrompt: "src/atlas/components/voice/voiceModePrompt.ts",
   voiceTextUtils: "src/atlas/components/voice/voiceTextUtils.ts",
@@ -118,7 +117,7 @@ const checks = [
   [
     "voice turns replace the normal chat prompt with a TTS-safe prompt",
     // WorkspaceSection owns the single VoiceModeOverlay mount and the voice
-    // prompt wiring; ChatSection no longer mounts voice (double-subscription).
+    // prompt wiring; the overlay mounts only there (single subscription).
     src.voicePrompt.includes("VOICE_MODE_SYSTEM_PROMPT") &&
       src.voicePrompt.includes("read aloud by text-to-speech") &&
       src.workspaceSection.includes("VOICE_MODE_SYSTEM_PROMPT") &&
@@ -362,10 +361,8 @@ const checks = [
       src.overlay.includes("ttftMetric={ttftMetric}") &&
       src.panel.includes("TtftMetricSnapshot") &&
       src.panel.includes("TTFT") &&
-      // VoiceModeOverlay is mounted only in WorkspaceSection now; ChatSection
-      // explicitly avoids double-mounting (see its comment). The chatId prop
-      // therefore only needs to come from WorkspaceSection.
-      src.chatSection.includes("VoiceModeOverlay intentionally not mounted here") &&
+      // VoiceModeOverlay is mounted only in WorkspaceSection; the chatId prop
+      // must come from there.
       src.workspaceSection.includes("chatId={currentSessionId ?? undefined}"),
   ],
   [
@@ -373,8 +370,8 @@ const checks = [
     src.panel.includes("VoiceOscilloscope") &&
       src.panel.includes("amplitude={amplitude}") &&
       src.panel.includes("isCapturing={!voiceInputMode || pttHeld}") &&
-      src.oscilloscope.includes("w-[70px] rounded-[22px]") &&
-      src.oscilloscope.includes("w-[280px] rounded-[35px]") &&
+      src.oscilloscope.includes("w-[70px] rounded-full") &&
+      src.oscilloscope.includes("w-[280px] rounded-full") &&
       src.oscilloscope.includes("getFloatTimeDomainData") &&
       src.oscilloscope.includes("conic-gradient") &&
       !src.panel.includes("<span>MEM</span>") &&

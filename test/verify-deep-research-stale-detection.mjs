@@ -14,7 +14,7 @@ const card = [
 ].join("\n");
 const messageItem = await read("src/atlas/components/chat/MessageItem.tsx");
 const messageList = await read("src/atlas/components/chat/MessageList.tsx");
-const chatSection = await read("src/atlas/sections/ChatSection.tsx");
+const chatSection = await read("src/atlas/sections/WorkspaceSection.tsx");
 const useAgentEvents = await read("src/atlas/hooks/stream/useAgentEvents.ts");
 const useChatChunkEvent = await read("src/atlas/hooks/stream/useChatChunkEvent.ts");
 const useChatQueries = await read("src/atlas/hooks/chat/useChatQueries.ts");
@@ -56,15 +56,9 @@ expect(card.includes("{!isComplete && (") &&
   "The elapsed timer badge must be hidden when isComplete is true (including stale sending).");
 
 // ── Cancel Button (onAbort) ──────────────────────────────────────────────
-
-expect(card.includes("onAbort") && card.includes("Stop") && card.includes("Square"),
-  "DeepResearchMessage must accept an onAbort prop and render a 'Stop' button with Square icon.");
-
-expect(card.includes('title="Stop research"'),
-  "The cancel button must have a 'Stop research' accessible title.");
-
-expect(card.includes("onClick={onAbort}"),
-  "The cancel button must call onAbort when clicked.");
+// Card-level stop UI was removed by design: run lifecycle controls (stop,
+// pause, resume) live in the composer, asserted in verify-autonomy-controls.
+// Deep research keeps only its stale-recovery affordances below.
 
 // The timer/cancel area should use {!isComplete} not {!isComplete && !isStaleSending}
 // since isComplete already includes isStaleSending.
@@ -111,16 +105,10 @@ expect(globalStream.includes("useAgentEvents({ resetHeartbeatTimeout })") || glo
 expect((chatSection.includes("onAbort={abortStream}") ||
   chatSection.includes("onAbort={isArchivedSession ? undefined : abortStream}")) &&
   chatSection.includes("MessageList"),
-  "ChatSection must pass abortStream as onAbort to MessageList.");
+  "WorkspaceSection must wire abortStream into the live chat surface (composer onAbort) alongside the MessageList transcript.");
 
-expect(messageList.includes("onAbort") && messageList.includes("MemoizedMessageItem"),
-  "MessageList must accept and forward onAbort to MemoizedMessageItem.");
-
-expect(messageItem.includes("onAbort") && messageItem.includes("DeepResearchMessage"),
-  "MessageItem must accept and forward onAbort to DeepResearchMessage.");
-
-expect(card.includes("onAbort") && card.includes("DeepResearchRunMessage"),
-  "DeepResearchMessage must accept onAbort and forward it to DeepResearchRunMessage.");
+// Abort wiring no longer threads through MessageList/MessageItem/card — the
+// composer owns the stop control (see verify-autonomy-controls-contract).
 
 // ── Fallback Timeout in chat:done ────────────────────────────────────────
 

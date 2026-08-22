@@ -485,7 +485,6 @@ export interface AppEventPayloadMap {
   "chat:message": ChatMessageEventPayload;
   "chat:context-drift": ChatContextDriftEventPayload;
   "chat:status": ChatStatusEventPayload;
-  "chat:partial": UnknownRecordEventPayload;
   "globe:navigate": UnknownRecordEventPayload;
   "drawing:ops": UnknownRecordEventPayload;
   "board:update": UnknownRecordEventPayload;

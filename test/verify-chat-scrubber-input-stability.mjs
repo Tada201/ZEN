@@ -2,17 +2,17 @@ import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const chatSection = read("src/atlas/sections/ChatSection.tsx");
+const workspaceSection = read("src/atlas/sections/WorkspaceSection.tsx");
 const messageList = read("src/atlas/components/chat/MessageList.tsx");
 const scrubber = read("src/atlas/components/chat/ChatTimelineScrubber.tsx");
 const input = read("src/atlas/components/PremiumChatInput.tsx");
 const footer = read("src/atlas/components/ChatInputFooter.tsx");
 const resizeHook = read("src/atlas/components/useAutoResizeTextarea.ts");
 
-assert(chatSection.includes("className=\"relative z-30 shrink-0"), "the chat composer must reserve normal-flow space");
-assert(!chatSection.includes("className=\"absolute bottom-0 left-0 right-0"), "the chat composer must not cover transcript rows with an absolute overlay");
-assert(!chatSection.includes("suppressLayoutAnimation"), "the main chat composer should use the intrinsic instant-geometry contract");
-assert(!chatSection.includes("<motion.main"), "the main chat column must not animate width changes through a layout transform");
+assert(workspaceSection.includes('className="w-full shrink-0"'), "the chat composer must reserve normal-flow space");
+assert(!workspaceSection.includes('className="absolute bottom-0 left-0 right-0'), "the chat composer must not cover transcript rows with an absolute overlay");
+assert(!workspaceSection.includes("suppressLayoutAnimation"), "the main chat composer should use the intrinsic instant-geometry contract");
+assert(!workspaceSection.includes("<motion.main"), "the main chat column must not animate width changes through a layout transform");
 
 assert(messageList.includes("new ResizeObserver"), "the message viewport must observe composer-driven size changes");
 assert(messageList.includes("scheduleScrollToBottom"), "scroll pinning must be coalesced through one scheduler");

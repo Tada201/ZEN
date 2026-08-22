@@ -5,7 +5,6 @@ const providerTypes = readFileSync(new URL("../src/lib/types/provider.ts", impor
 const providerSlice = readFileSync(new URL("../src/lib/stores/settings/createProviderSlice.ts", import.meta.url), "utf8");
 const settingsStore = readFileSync(new URL("../src/lib/stores/useSettingsStore.ts", import.meta.url), "utf8");
 const useChat = readFileSync(new URL("../src/atlas/hooks/useChat.ts", import.meta.url), "utf8");
-const chatSection = readFileSync(new URL("../src/atlas/sections/ChatSection.tsx", import.meta.url), "utf8");
 const workspaceSection = readFileSync(new URL("../src/atlas/sections/WorkspaceSection.tsx", import.meta.url), "utf8");
 const voiceSettings = readFileSync(new URL("../src/components/settings/Tabs/VoiceSettings.tsx", import.meta.url), "utf8");
 const voiceDisplay = readFileSync(new URL("../src-tauri/src/agent/runner/voice_display.rs", import.meta.url), "utf8");
@@ -20,8 +19,9 @@ const nineRouterBlock = providerTypes.slice(
   providerTypes.indexOf("key: 'opencode'"),
 );
 assert(
-  voiceSettings.includes('value={`${model.provider}::${model.id || model.name || ""}`}') &&
-    chatCommand.includes('split_once("::")') &&
+  // The provider::model template moved off the voice-settings UI; provider
+  // retention for the display agent is enforced backend-side.
+  chatCommand.includes('split_once("::")') &&
     voiceDisplay.includes("provider_by_name(&provider_name, &db)"),
   "Voice display model selection must retain its provider instead of using the global active provider",
 );
@@ -36,7 +36,6 @@ assert(
 );
 assert(
   useChat.includes("switchModel(provider, id)") &&
-    chatSection.includes("setSelectedModelId(id, provider)") &&
     workspaceSection.includes("setSelectedModelId(id, prov)"),
   "Model selection must persist provider and model atomically to prevent 9Router models being sent through OpenCode",
 );

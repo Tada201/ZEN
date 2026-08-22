@@ -44,9 +44,7 @@
   "src/atlas/components/chat/input/ModelSearchDropdown.tsx": [
     "off-scale h-[320px]",
     "off-scale w-[100px]",
-    "off-scale w-[150px]",
     "off-scale w-[160px]",
-    "off-scale w-[220px]",
     "off-scale w-[600px]"
   ],
   "src/atlas/components/chat/MainWindowLoadingScreen.tsx": [
@@ -149,11 +147,6 @@
     "off-scale w-[0.5px]",
     "raw-hex"
   ],
-  "src/atlas/components/ModelSelector.tsx": [
-    "off-scale h-[600px]",
-    "off-scale w-[200px]",
-    "off-scale w-[280px]"
-  ],
   "src/atlas/components/ModelSettingsContent.tsx": [
     "off-scale h-[280px]",
     "off-scale w-[140px]"
@@ -194,13 +187,8 @@
   "src/atlas/components/voice/board/BoardQr.tsx": [
     "raw-hex"
   ],
-  "src/atlas/components/voice/VoiceDiagnosticsPanel.tsx": [
-    "raw-hex"
-  ],
   "src/atlas/components/voice/VoiceOscilloscope.tsx": [
     "off-scale h-[70px]",
-    "off-scale rounded-[22px]",
-    "off-scale rounded-[35px]",
     "off-scale w-[280px]",
     "off-scale w-[70px]"
   ],
@@ -227,10 +215,6 @@
   "src/atlas/sections/CardsSection.tsx": [
     "off-scale left-[22px]",
     "raw-hex"
-  ],
-  "src/atlas/sections/ChatSection.tsx": [
-    "off-scale w-[256px]",
-    "off-scale w-[700px]"
   ],
   "src/atlas/sections/CombosSection.tsx": [
     "off-scale h-[100px]",
@@ -407,15 +391,6 @@
   "src/components/widgets/memory/MemoryStatsWidget.tsx": [
     "off-scale w-[200px]",
     "raw-hex"
-  ],
-  "src/components/widgets/orchestrator/AgentOrchestratorLiveSession.tsx": [
-    "off-scale w-[96px]"
-  ],
-  "src/components/widgets/orchestrator/AgentWorkspace.tsx": [
-    "off-scale h-[200px]"
-  ],
-  "src/components/widgets/orchestrator/LogEntry.tsx": [
-    "off-scale w-[92px]"
   ],
   "src/components/widgets/system/DiskWidget.tsx": [
     "off-scale w-[80px]"

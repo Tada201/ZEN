@@ -6,7 +6,7 @@ const messageList = readFileSync(
   "utf8",
 );
 const chatSection = readFileSync(
-  new URL("../src/atlas/sections/ChatSection.tsx", import.meta.url),
+  new URL("../src/atlas/sections/WorkspaceSection.tsx", import.meta.url),
   "utf8",
 );
 
@@ -24,8 +24,9 @@ assert(
 );
 
 assert(
-  chatSection.includes("absolute bottom-0 left-0 right-0 z-30"),
-  "floating input and live status area should stack above the message list",
+  chatSection.includes('className="w-full shrink-0"') &&
+    !chatSection.includes('className="absolute bottom-0 left-0 right-0'),
+  "the composer and its live status area must sit in normal flow below the transcript, not float over it",
 );
 
 console.log("streaming layering verifier passed");

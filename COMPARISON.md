@@ -48,7 +48,7 @@ The recommended direction is not a rewrite. Keep ZEN’s production architecture
 |---|---|---|
 | Three-pane workspace shell | **Parity** | `src/atlas/sections/WorkspaceSection.tsx`, `src/atlas/layouts/WorkspaceLayout.tsx` |
 | Resizable sidebar/right panel | **Parity** | `WorkspaceLayout.tsx`, `RightPanel.tsx` |
-| Mobile workspace behavior | **Partial** | `WorkspaceLayout.tsx`, `ChatSection.tsx` |
+| Mobile workspace behavior | **Partial** | `WorkspaceLayout.tsx`, `WorkspaceSection.tsx` |
 | Chat transcript | **Parity / stronger runtime** | `MessageItem.tsx`, `AssistantMessage.tsx`, `MessageList.tsx` |
 | Execution and tool cards | **Parity / stronger runtime** | `AgentExecutionTrace.tsx`, `ToolCallCard.tsx`, `ExecutionRow.tsx` |
 | Approval workflows | **Parity / stronger safety model** | `ApprovalCenter.tsx`, `toolsApi.ts` |
