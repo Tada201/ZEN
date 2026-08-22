@@ -170,14 +170,20 @@ export function SmoothMarkdown({
       : INSTANT_IMMEDIATE_LAG_CHARS;
     if (content !== current && !content.startsWith(current)) {
       // Reconciliation is allowed to replace only the divergent suffix. The
-      // complete canonical answer must still pass through the reveal queue.
-      let commonLength = 0;
-      while (commonLength < current.length && commonLength < content.length && current[commonLength] === content[commonLength]) {
-        commonLength += 1;
+      // complete canonical answer must still pass through the reveal queue —
+      // but only at rest: while streaming, divergence (runtime re-batch, part
+      // reorder) must not shrink the visible text backward, or the reveal
+      // jumps in reverse. The reveal loop snaps to the new target prefix on
+      // its next frame instead.
+      if (!isStreamingRef.current) {
+        let commonLength = 0;
+        while (commonLength < current.length && commonLength < content.length && current[commonLength] === content[commonLength]) {
+          commonLength += 1;
+        }
+        displayedContentRef.current = content.slice(0, commonLength);
+        setDisplayedContent(displayedContentRef.current);
+        holdUntilRef.current = 0;
       }
-      displayedContentRef.current = content.slice(0, commonLength);
-      setDisplayedContent(displayedContentRef.current);
-      holdUntilRef.current = 0;
     }
     targetContentRef.current = content;
     const hasPartialStreamingReveal = content.startsWith(current) && current.length > 0 && content.length - current.length > immediateLag;
@@ -277,6 +283,20 @@ export function SmoothMarkdown({
     return segmentStreamingMarkdown(normalizedContent);
   }, [isStreaming, normalizedContent]);
 
+  // Content-derived keys keep a segment mounted when earlier segments merge or
+  // the tail re-splits — index keys remounted every shifted segment, dropping
+  // rendered state mid-stream. Identical contents get a counted suffix so
+  // duplicate paragraphs cannot collide.
+  const segmentKeys = useMemo(() => {
+    if (!segments) return null;
+    const seen = new Map<string, number>();
+    return segments.map((segment) => {
+      const seenCount = seen.get(segment) ?? 0;
+      seen.set(segment, seenCount + 1);
+      return seenCount === 0 ? segment : `${segment}#${seenCount}`;
+    });
+  }, [segments]);
+
   return (
     <div
       className="smooth-markdown text-sm leading-[1.6] prose prose-invert max-w-full"
@@ -293,7 +313,7 @@ export function SmoothMarkdown({
       ) : (
         segments.map((segment, index) => (
           <StableMarkdownSegment
-            key={index}
+            key={segmentKeys?.[index] ?? index}
             content={segment}
             remarkPlugins={remarkPlugins}
             rehypePlugins={rehypePlugins}

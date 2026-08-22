@@ -77,7 +77,18 @@ export function createAgentRunScheduler(
       const frame = frames.get(runId);
       if (frame !== undefined) cancelFrame(frame);
       frames.delete(runId);
+      const events = pending.get(runId) || [];
       pending.delete(runId);
+      let record = records.get(runId);
+      for (const event of events) record = reduceAgentRun(record, event);
+      if (record) {
+        // Clearing a run must not strand received-but-unrevealed text: the
+        // finalization that follows reads the store, not this record, so drain
+        // the whole reveal budget synchronously or the message tail is lost
+        // until a reload refetches the persisted content.
+        record = revealAgentRun(record, Number.POSITIVE_INFINITY);
+        onFlush?.(record);
+      }
       records.delete(runId);
     },
   };
