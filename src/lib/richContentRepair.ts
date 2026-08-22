@@ -1,6 +1,7 @@
 import { chatApi } from "@/api/chatApi";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import type { Message, Step } from "@/atlas/components/chat/types";
+import { toast } from "sonner";
 
 export function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -82,6 +83,9 @@ export async function persistFencedRepair(params: {
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error("[rich-content] persisting repair failed", err);
+    // The caller keeps the local-only repair; say so instead of failing
+    // silently — otherwise the diagram looks fixed but reverts on reload.
+    toast.info("Repair applied for this session only — it could not be saved to the chat history.");
     return false;
   }
 

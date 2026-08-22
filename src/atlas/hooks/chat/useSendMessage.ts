@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { chatApi, getIpcErrorMessage } from "@/api";
 import { toast } from "sonner";
 import { useChatStore } from "@/lib/stores/useChatStore";
@@ -6,6 +7,7 @@ import { useSettingsStore } from "@/lib/stores/useSettingsStore";
 import { ttftBegin, ttftReport } from "@/lib/ttft";
 import type { Message, Attachment } from "../../components/chat/types";
 import { findWritableAssistantIndex, markMessageAsFailed, supersedeStaleSendingAssistants } from "../stream/messageTarget";
+import { retireStreamTargets } from "../stream/streamSupersession";
 import { createOptimisticChatMessages } from "./optimisticChatMessages";
 import { preloadOpenUISystemPrompt } from "../../components/genui/promptLoader";
 import { useVoiceStageStore } from "../../components/voice/voiceStageStore";
@@ -17,6 +19,7 @@ export function useSendMessage(
   ensureSession?: () => Promise<string>,
 ) {
   const setSessionMessages = useChatStore(state => state.setSessionMessages);
+  const queryClient = useQueryClient();
 
   const handleSendMessage = useCallback(async (data: {
     message: string;
@@ -39,6 +42,13 @@ export function useSendMessage(
     targetSessionId?: string;
     /** Automatic goal-continuation turn (useChatTurnAdvance): quiet timeline row. */
     goalContinuation?: boolean;
+    /** Persisted user message id to regenerate from: re-runs that turn in
+     *  place (no duplicate user row; the old response is truncated away). */
+    regenerateFromMessageId?: string;
+    /** Assistant row ids the caller removed from the local timeline (e.g. the
+     *  regenerate slice). Late stream events carrying these ids must be
+     *  dropped, not grafted onto the new turn. */
+    retiredAssistantIds?: string[];
   }) => {
     let targetSessionId = data.targetSessionId || currentSessionId;
     // Capture fresh-session state BEFORE ensureSession potentially creates a
@@ -99,9 +109,27 @@ export function useSendMessage(
     // Publish the optimistic turn before any abort IPC so a newly activated
     // welcome-to-chat scene mounts with visible content instead of an empty
     // timeline. A fresh session cannot have an active stream, so skip abort.
+    // Regenerate keeps the existing user turn (the caller sliced the timeline
+    // to end with it), so only the fresh assistant row is appended.
+    const isRegenerate = Boolean(data.regenerateFromMessageId);
+
+    // Tombstone every target this send replaces (previous active assistant,
+    // in-flight placeholders, and rows the caller removed locally) so late
+    // events from the superseded run cannot graft onto the new turn.
+    const preSendState = useChatStore.getState();
+    const retiring = new Set<string>(data.retiredAssistantIds ?? []);
+    const previousActiveId = preSendState.getActiveAssistantForChat(targetSessionId);
+    if (previousActiveId) retiring.add(previousActiveId);
+    for (const message of preSendState.sessionMessages[targetSessionId] ?? []) {
+      if (message.role === "assistant" && (message.status === "sending" || message.status === "paused")) {
+        retiring.add(message.id);
+      }
+    }
+    retireStreamTargets(targetSessionId, [...retiring]);
+
     setSessionMessages(targetSessionId, (prev: Message[]) => [
       ...supersedeStaleSendingAssistants(prev),
-      userMessage,
+      ...(isRegenerate ? [] : [userMessage]),
       assistantMessage,
     ]);
 
@@ -172,6 +200,7 @@ export function useSendMessage(
         voiceDisplayContext: systemPromptMode === "replace" ? buildVoiceDisplayContext() : null,
         modelContextWindow,
         messageKind: data.goalContinuation ? "goal_continuation" : null,
+        regenerateFromMessageId: data.regenerateFromMessageId ?? null,
       });
 
       // ── Title maker ─────────────────────────────────────────────────────
@@ -191,16 +220,29 @@ export function useSendMessage(
       const errorMessage = getIpcErrorMessage(e, "Failed to send message");
       console.error("[useChat] 'send_message' IPC command failed:", e);
       ttftReport(targetSessionId, "send-error");
-      setSessionMessages(targetSessionId, (prev: Message[]) => {
-        const next = [...prev];
-        const assistantIdx = findWritableAssistantIndex(next, targetSessionId);
-        if (assistantIdx !== -1) {
-          next[assistantIdx] = markMessageAsFailed(next[assistantIdx], errorMessage);
-        }
-        return next;
-      });
-      useChatStore.getState().setActiveAssistantForChat(targetSessionId, null);
-      useChatStore.getState().setStreamingForChat(targetSessionId, false);
+      if (isRegenerate) {
+        // Regenerate pre-flight failed before truncation — the old turn is
+        // still intact in the DB. Drop the optimistic replacement and refetch
+        // so the previous answer comes back instead of stacking a failed row
+        // on top of a timeline whose old response was already sliced away.
+        setSessionMessages(targetSessionId, (prev: Message[]) =>
+          prev.filter((m) => m.id !== assistantMessage.id),
+        );
+        useChatStore.getState().setActiveAssistantForChat(targetSessionId, null);
+        useChatStore.getState().setStreamingForChat(targetSessionId, false);
+        queryClient.invalidateQueries({ queryKey: ["messages", targetSessionId] });
+      } else {
+        setSessionMessages(targetSessionId, (prev: Message[]) => {
+          const next = [...prev];
+          const assistantIdx = findWritableAssistantIndex(next, targetSessionId);
+          if (assistantIdx !== -1) {
+            next[assistantIdx] = markMessageAsFailed(next[assistantIdx], errorMessage);
+          }
+          return next;
+        });
+        useChatStore.getState().setActiveAssistantForChat(targetSessionId, null);
+        useChatStore.getState().setStreamingForChat(targetSessionId, false);
+      }
       toast.error(presentExecutionError(errorMessage, { context: "transport" }).summary);
     }
   }, [currentSessionId, ensureSession, setSessionMessages]);

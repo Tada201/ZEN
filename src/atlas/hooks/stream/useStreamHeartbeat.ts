@@ -18,16 +18,48 @@ export function clearHeartbeatTimeout(chatId: string): void {
   }
 }
 
+function toolIsActive(status?: string): boolean {
+  return status === "running" || status === "awaiting_approval" || status === "pending";
+}
+
+/** True while any tool on the assistant turn is legitimately in flight —
+ *  a multi-minute command, a deep-research wait, or a tool parked on
+ *  approval. Silence during tool work is not a dead connection. */
+function hasActiveToolWork(assistant: Message): boolean {
+  if (assistant.toolCalls?.some((tc) => toolIsActive(tc.status))) return true;
+  return (
+    assistant.steps?.some(
+      (step) =>
+        step.type === "tool-call" &&
+        (toolIsActive(step.status) || toolIsActive(step.toolCall?.status)),
+    ) ?? false
+  );
+}
+
 export function useStreamHeartbeat() {
   const resetHeartbeatTimeout = useCallback((chatId: string) => {
     clearHeartbeatTimeout(chatId);
-    heartbeatTimeouts[chatId] = setTimeout(() => {
+    const arm = () => {
+      heartbeatTimeouts[chatId] = setTimeout(() => {
+        const store = useChatStore.getState();
+        const messages = store.sessionMessages[chatId] ?? [];
+        const assistantIdx = findWritableAssistantIndex(messages, chatId);
+        const assistant = assistantIdx >= 0 ? messages[assistantIdx] : undefined;
+
+        // Rescue: an executing or approval-parked tool produces no chunks by
+        // design. Reschedule instead of failing the turn mid-work; the tool's
+        // own terminal event re-arms or clears the heartbeat.
+        if (assistant && hasActiveToolWork(assistant)) {
+          arm();
+          return;
+        }
+
         console.warn(`[useStreamHeartbeat] Heartbeat timed out for chat: ${chatId}`);
-        
-        useChatStore.getState().setStreamingForChat(chatId, false);
-        useChatStore.getState().setActiveAssistantForChat(chatId, null);
-        
-        useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {
+
+        store.setStreamingForChat(chatId, false);
+        store.setActiveAssistantForChat(chatId, null);
+
+        store.setSessionMessages(chatId, (prev: Message[]) => {
           const assistantIdx = findWritableAssistantIndex(prev, chatId);
           if (assistantIdx === -1) return prev;
           const assistant = prev[assistantIdx];
@@ -48,6 +80,8 @@ export function useStreamHeartbeat() {
 
         delete heartbeatTimeouts[chatId];
       }, STREAM_HEARTBEAT_TIMEOUT_MS);
+    };
+    arm();
   }, [clearHeartbeatTimeout]);
 
   // Cleanup on unmount

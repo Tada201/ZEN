@@ -143,6 +143,13 @@ export interface SendMessageRequest extends Record<string, unknown> {
    * instead of a user bubble.
    */
   messageKind?: string | null;
+  /**
+   * Regenerate anchor: the persisted user message id to re-run. When set, the
+   * backend truncates that turn's old response instead of inserting a
+   * duplicate user row, and the frontend appends only a fresh assistant
+   * message after the kept user turn.
+   */
+  regenerateFromMessageId?: string | null;
 }
 export const chatApi = {
   listChats: () => callCommand<BackendChat[]>("get_chats"),

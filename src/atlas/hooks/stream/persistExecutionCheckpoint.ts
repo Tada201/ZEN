@@ -109,7 +109,7 @@ export function persistExecutionCheckpointForEvent({
   toolCallId?: string;
   flush?: boolean;
   traceStatus?: TraceStatus;
-}): void {
+}): Promise<void> | undefined {
   if (!messageId || messageId.startsWith("temp-assistant-")) return;
 
   const timelineOwner = findTimelineOwner(
@@ -125,8 +125,9 @@ export function persistExecutionCheckpointForEvent({
   if (existing) clearTimeout(existing.timer);
 
   if (flush) {
-    void writeCheckpoint(key, chatId, messageId, json, traceStatus);
-    return;
+    // Return the write so callers that refetch straight after (chat:done →
+    // invalidateQueries) can await it; writeCheckpoint never rejects.
+    return writeCheckpoint(key, chatId, messageId, json, traceStatus);
   }
 
   const timer = setTimeout(() => {

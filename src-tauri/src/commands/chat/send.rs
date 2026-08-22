@@ -66,6 +66,7 @@ pub async fn send_message(
     voice_display_context: Option<String>,
     model_context_window: Option<i64>,
     message_kind: Option<String>,
+    regenerate_from_message_id: Option<String>,
 ) -> ZenResult<()> {
     info!(
         chat_id = %chat_id,
@@ -96,47 +97,83 @@ pub async fn send_message(
         )));
     }
 
-    // 1. Add user message to DB
+    // 0.5 Regenerate: `regenerate_from_message_id` anchors on the user turn
+    // being re-run. This stage is READ-ONLY validation — the destructive
+    // truncate is deferred to step 2.5, after every fallible pre-flight
+    // (provider/model resolution, history fetch) has succeeded. A failure
+    // below must leave the old turn intact, not truncate it with nothing
+    // replacing it. The persisted anchor row and its content are
+    // authoritative and get reused.
+    let content = match regenerate_from_message_id.as_deref() {
+        Some(anchor_id) => {
+            let anchor = queries::get_message_in_chat(&db, &chat_id, anchor_id)
+                .await?
+                .filter(|m| m.role == "user")
+                .ok_or_else(|| {
+                    crate::error::ZenError::Custom(format!(
+                        "Cannot regenerate: message {} is not a user turn in chat {}.",
+                        anchor_id, chat_id
+                    ))
+                })?;
+            // Refuse stale anchors: regenerating a turn with newer user turns
+            // after it would silently delete those turns and their responses.
+            let later_user_turns =
+                queries::count_later_user_messages(&db, &chat_id, anchor_id).await?;
+            if later_user_turns > 0 {
+                return Err(crate::error::ZenError::Custom(format!(
+                    "Cannot regenerate: {later_user_turns} newer turn(s) exist after this message. Reload the chat and regenerate the latest turn."
+                )));
+            }
+            anchor.content
+        }
+        None => content,
+    };
+
+    // 1. Add user message to DB. Skipped on regenerate — the anchor row already
+    // holds this turn's prompt and attachments, and step 0.5 removed its old
+    // response.
     // Non-image attachments are registered into the chat's attachment store so
     // the agent retrieves them ON DEMAND via list/read tools — their text is no
     // longer stuffed into the prompt (wasteful). Images stay inline for the
     // vision path. On registration success we strip the heavy base64/text from
     // the persisted message row; on failure we keep them so nothing is lost.
     let mut attachments = attachments;
-    if let Some(atts) = attachments.as_mut() {
-        if !atts.is_empty() {
-            match app.path().app_data_dir() {
-                Ok(dir) => {
-                    for att in atts.iter_mut() {
-                        if att.mime_type.starts_with("image/") {
-                            continue;
-                        }
-                        let Some(bytes) = decode_data_url(&att.data) else {
-                            tracing::warn!(name = %att.name, "Attachment data was not a decodable data URL; leaving inline");
-                            continue;
-                        };
-                        match state
-                            .documents
-                            .attach_to_chat(
-                                dir.clone(),
-                                chat_id.clone(),
-                                att.name.clone(),
-                                bytes,
-                            )
-                            .await
-                        {
-                            Ok(_) => {
-                                att.data = String::new();
-                                att.extracted_text = None;
+    if regenerate_from_message_id.is_none() {
+        if let Some(atts) = attachments.as_mut() {
+            if !atts.is_empty() {
+                match app.path().app_data_dir() {
+                    Ok(dir) => {
+                        for att in atts.iter_mut() {
+                            if att.mime_type.starts_with("image/") {
+                                continue;
                             }
-                            Err(e) => {
-                                tracing::warn!(chat_id = %chat_id, name = %att.name, error = %e, "Failed to register chat attachment; keeping inline text fallback");
+                            let Some(bytes) = decode_data_url(&att.data) else {
+                                tracing::warn!(name = %att.name, "Attachment data was not a decodable data URL; leaving inline");
+                                continue;
+                            };
+                            match state
+                                .documents
+                                .attach_to_chat(
+                                    dir.clone(),
+                                    chat_id.clone(),
+                                    att.name.clone(),
+                                    bytes,
+                                )
+                                .await
+                            {
+                                Ok(_) => {
+                                    att.data = String::new();
+                                    att.extracted_text = None;
+                                }
+                                Err(e) => {
+                                    tracing::warn!(chat_id = %chat_id, name = %att.name, error = %e, "Failed to register chat attachment; keeping inline text fallback");
+                                }
                             }
                         }
                     }
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, "Could not resolve app data dir; attachments left inline");
+                    Err(e) => {
+                        tracing::warn!(error = %e, "Could not resolve app data dir; attachments left inline");
+                    }
                 }
             }
         }
@@ -152,31 +189,33 @@ pub async fn send_message(
         }
     });
 
-    info!(chat_id = %chat_id, "Inserting user message into database");
-    queries::add_message(
-        &db,
-        &queries::NewMessage {
-            chat_id: &chat_id,
-            role: "user",
-            content: &content,
-            model: model.as_deref(),
-            is_complete: true,
-            attachments: attachments_json.as_deref(),
-            kind: message_kind.as_deref(),
-            ..Default::default()
-        },
-    )
-    .await?;
-    info!(chat_id = %chat_id, "User message successfully saved to database");
-    let _ = app.emit(
-        "chat:status",
-        json!({
-            "chat_id": chat_id.clone(),
-            "message": "Message saved",
-            "phase": "persisted",
-            "iteration": 0
-        }),
-    );
+    if regenerate_from_message_id.is_none() {
+        info!(chat_id = %chat_id, "Inserting user message into database");
+        queries::add_message(
+            &db,
+            &queries::NewMessage {
+                chat_id: &chat_id,
+                role: "user",
+                content: &content,
+                model: model.as_deref(),
+                is_complete: true,
+                attachments: attachments_json.as_deref(),
+                kind: message_kind.as_deref(),
+                ..Default::default()
+            },
+        )
+        .await?;
+        info!(chat_id = %chat_id, "User message successfully saved to database");
+        let _ = app.emit(
+            "chat:status",
+            json!({
+                "chat_id": chat_id.clone(),
+                "message": "Message saved",
+                "phase": "persisted",
+                "iteration": 0
+            }),
+        );
+    }
 
     // 2. Get active provider and model
     let resolved_provider_name = match provider.as_deref() {
@@ -198,7 +237,11 @@ pub async fn send_message(
         _ => {
             let message =
                 "No model selected. Open Settings → Models to choose a model.".to_string();
-            persist_sync_send_failure(&db, &chat_id, None, &message).await;
+            // On regenerate the old turn is still intact; a persisted failed
+            // row would stack on top of it. The IPC error toast is enough.
+            if regenerate_from_message_id.is_none() {
+                persist_sync_send_failure(&db, &chat_id, None, &message).await;
+            }
             return Err(crate::error::ZenError::Custom(message));
         }
     };
@@ -225,7 +268,11 @@ pub async fn send_message(
         async { queries::get_setting(&db, "system_prompt").await },
     );
     if let Err(ref e) = join_result {
-        persist_sync_send_failure(&db, &chat_id, Some(&active_model), &e.to_string()).await;
+        // See the "No model" branch above: a failed regenerate must not
+        // persist a failed row on top of the still-intact old turn.
+        if regenerate_from_message_id.is_none() {
+            persist_sync_send_failure(&db, &chat_id, Some(&active_model), &e.to_string()).await;
+        }
     }
     let (
         llm_provider,
@@ -237,10 +284,37 @@ pub async fn send_message(
     ) = join_result?;
     info!(
         chat_id = %chat_id,
-        history_count = %history.len(),
+        history_count = history.len(),
         resolved_provider = %resolved_provider_name,
         "Retrieved provider, chat history, and settings in parallel"
     );
+
+    // 2.5 Regenerate truncate: every fallible pre-flight above has succeeded,
+    // so this is the last destructive step before the runner spawns — the
+    // only failures after this point go through the runner's own failed-row
+    // persistence, so the chat can never end up with the old response
+    // deleted and nothing replacing it. History was fetched before
+    // truncation; slice it at the anchor (same ordering as `get_messages`)
+    // instead of re-querying so no new failure mode exists between the
+    // truncate and the spawn.
+    let history = if let Some(anchor_id) = regenerate_from_message_id.as_deref() {
+        let removed = queries::truncate_messages_after(&db, &chat_id, anchor_id).await?;
+        info!(
+            chat_id = %chat_id,
+            anchor = anchor_id,
+            removed,
+            "Regenerate truncated the previous turn"
+        );
+        match history.iter().position(|m| m.id == anchor_id) {
+            Some(idx) => history[..=idx].to_vec(),
+            // Anchor concurrently deleted between validation and truncation;
+            // the truncate's self-join matched nothing, so nothing was
+            // removed — keep the fetched history as-is.
+            None => history,
+        }
+    } else {
+        history
+    };
     // 3. Prepare config
     let mut config = ChatRequestConfig {
         temperature,

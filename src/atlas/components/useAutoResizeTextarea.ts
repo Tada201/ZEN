@@ -17,7 +17,7 @@
  *     racing the next render.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 const DEFAULT_MAX_HEIGHT = 200;
 const DEFAULT_MIN_HEIGHT = 32;
@@ -61,6 +61,16 @@ export function useAutoResizeTextarea({
   const containerRef = useRef<HTMLDivElement>(null);
   const resizeFrameRef = useRef<number | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
+
+  // Measure once synchronously before first paint so `isCompact` doesn't
+  // flash the wide layout for a frame when the composer mounts narrow
+  // (sidebar), then flips. The ResizeObserver below takes over after mount.
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const width = Math.round(el.getBoundingClientRect().width);
+    setContainerWidth((previous) => (previous === 0 ? width : previous));
+  }, []);
 
   // Measure the container. ResizeObserver fires whenever the parent
   // (sidebar vs. full-width vs. responsive collapse) changes shape.

@@ -59,7 +59,10 @@ export function OpenUIRenderer({
 }: OpenUIRendererProps) {
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview");
   const [renderErrors, setRenderErrors] = useState<any[]>([]);
-  const hasStableSurface = !isStreaming && Boolean(content.trim());
+  // Gate on stream state alone: a whitespace-only-but-complete payload is a
+  // valid (if empty) program, and gating on content.trim() left the
+  // "Building interface..." loader up forever after chat:done.
+  const hasStableSurface = !isStreaming;
 
   // Clear errors when content changes (essential for HMR and Retries)
   useEffect(() => {

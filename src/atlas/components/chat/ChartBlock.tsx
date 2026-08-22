@@ -266,7 +266,10 @@ export function ChartBlock({ content, isStreaming, chatId, messageId }: ChartBlo
             {title}
           </div>
         )}
-        <div className="h-[240px] w-full text-muted-foreground/70 dark:text-muted-foreground">
+        {/* min-w-px keeps ResponsiveContainer off a 0-width parent while the
+            artifact split panel animates open — recharts renders nothing (and
+            warns) at width 0, then flashes the chart in on the next measure. */}
+        <div className="h-[240px] w-full min-w-px text-muted-foreground/70 dark:text-muted-foreground">
           <ResponsiveContainer width="100%" height="100%">
             {renderChart()}
           </ResponsiveContainer>

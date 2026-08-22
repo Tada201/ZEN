@@ -173,9 +173,12 @@ export const ReasoningBlock = memo(function ReasoningBlock({ content, isThinking
   const [completedDuration, setCompletedDuration] = useState<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
 
-  // Use deferred content during streaming so ReactMarkdown re-parses at idle time
+  // The live-thinking branch renders plain text (ReactMarkdown is gated
+  // behind !isThinking below), so it must read `content` directly — feeding
+  // it the deferred value visibly throttled the stream. Deferring only helps
+  // the at-rest completion re-parse, where a frame of lag is imperceptible.
   const deferredContent = useDeferredValue(content);
-  const displayContent = isThinking ? deferredContent : content;
+  const displayContent = isThinking ? content : deferredContent;
 
   const stepsCount = useMemo(() => {
     let count = 0;

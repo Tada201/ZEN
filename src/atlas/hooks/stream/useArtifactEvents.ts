@@ -73,9 +73,13 @@ export function useArtifactEvents({ resetHeartbeatTimeout }: UseArtifactEventsPr
         if (!chatId) return;
 
         resetHeartbeatTimeout(chatId);
-        const pending = deltaBuffersRef.current[chatId];
-        if (pending) {
-          delete deltaBuffersRef.current[chatId];
+        // Deltas are buffered under the full `${chatId}:${messageId}:${artifactId}`
+        // key (see artifact:delta); reading by bare chatId here would consume a
+        // different artifact's buffer when two artifacts stream in one chat.
+        const artifactKey = artifactKeysRef.current[chatId];
+        const pending = artifactKey ? deltaBuffersRef.current[artifactKey] : undefined;
+        if (artifactKey && pending) {
+          delete deltaBuffersRef.current[artifactKey];
           useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => applyArtifactDeltaToMessages(prev, pending, chatId));
         }
         useChatStore.getState().setSessionMessages(chatId, (prev: Message[]) => {

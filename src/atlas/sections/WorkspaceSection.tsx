@@ -340,22 +340,34 @@ export function WorkspaceApp() {
     if (failedMsgIndex === -1) return;
 
     let lastUserMsg = null;
+    let lastUserMsgIndex = -1;
     for (let i = failedMsgIndex - 1; i >= 0; i--) {
       if (currentMessages[i].role === "user") {
         lastUserMsg = currentMessages[i];
+        lastUserMsgIndex = i;
         break;
       }
     }
     if (!lastUserMsg?.content) return;
 
     const failedMsg = currentMessages[failedMsgIndex];
-    setMessages(currentMessages.slice(0, failedMsgIndex));
+    // Retry re-runs the turn through the regenerate path: the user row is
+    // reused in place (no duplicate prompt) and the failed response is
+    // truncated away server-side. Removed rows are tombstoned so their late
+    // stream events cannot graft onto the replacement turn.
+    const removedAssistantIds = currentMessages
+      .slice(lastUserMsgIndex + 1)
+      .filter(m => m.role === "assistant")
+      .map(m => m.id);
+    setMessages(currentMessages.slice(0, lastUserMsgIndex + 1));
     handleSendMessageInternal({
       message: lastUserMsg.content,
       model: failedMsg.model || selectedModelId,
       provider: failedMsg.provider || selectedProvider,
       generativeUI: failedMsg.generativeUI != null ? !!failedMsg.generativeUI : generativeUI,
       thinking: failedMsg.thinking || { enabled: false },
+      regenerateFromMessageId: lastUserMsg.id,
+      retiredAssistantIds: removedAssistantIds,
     });
   }, [setMessages, handleSendMessageInternal, selectedModelId, selectedProvider, generativeUI]);
 
@@ -365,13 +377,23 @@ export function WorkspaceApp() {
     if (userMsgIndex === -1) return;
     const userMsg = currentMessages[userMsgIndex];
     if (userMsg.role !== "user" || !userMsg.content) return;
-    // Regenerate is anchored on the user turn: drop everything the agent
-    // produced after this prompt, then re-run with the current model.
-    setMessages(currentMessages.slice(0, userMsgIndex));
+    // Regenerate is anchored on the user turn: the timeline keeps everything
+    // up to and including that prompt, the backend truncates the old response
+    // after it, and the rerun replaces the turn in place — no duplicate user
+    // message, no blanked history while it streams. The removed rows are
+    // tombstoned so late events from the aborted old run are dropped instead
+    // of grafting onto the replacement turn.
+    const removedAssistantIds = currentMessages
+      .slice(userMsgIndex + 1)
+      .filter(m => m.role === "assistant")
+      .map(m => m.id);
+    setMessages(currentMessages.slice(0, userMsgIndex + 1));
     handleSendMessageInternal({
       message: userMsg.content,
       model: selectedModelId,
       provider: selectedProvider,
+      regenerateFromMessageId: userMsg.id,
+      retiredAssistantIds: removedAssistantIds,
     });
   }, [setMessages, selectedModelId, selectedProvider, handleSendMessageInternal]);
 

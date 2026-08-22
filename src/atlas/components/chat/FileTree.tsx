@@ -36,8 +36,11 @@ const TreeItem = ({ node }: TreeItemProps) => {
 
       {node.type === "dir" && isOpen && node.children && (
         <div className="ml-3 border-l border-border pl-1.5 mt-0.5">
-          {node.children.map((child, i) => (
-            <TreeItem key={i} node={child} />
+          {node.children.map((child) => (
+            // Key by name, not index: a streamed delta that inserts a sibling
+            // reorders the list and index keys shift open/close state onto
+            // the wrong node.
+            <TreeItem key={child.name} node={child} />
           ))}
         </div>
       )}
@@ -58,7 +61,7 @@ export const FileTree = ({ content }: { content: string }) => {
       </div>
       <div className="p-2 font-mono">
         {nodes.length > 0 ? (
-          nodes.map((node, i) => <TreeItem key={i} node={node} />)
+          nodes.map((node) => <TreeItem key={node.name} node={node} />)
         ) : (
           <div className="text-[12px] text-muted-foreground italic px-1.5 py-3">
             Invalid tree format

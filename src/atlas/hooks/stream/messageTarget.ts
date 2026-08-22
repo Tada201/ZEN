@@ -1,5 +1,6 @@
 import type { Message } from "../../components/chat/types";
 import { useChatStore } from "@/lib/stores/useChatStore";
+import { isRetiredStreamTarget } from "./streamSupersession";
 
 function assistantHasVisibleContent(message: Message): boolean {
   return Boolean(
@@ -46,6 +47,11 @@ export function findWritableAssistantIndex(messages: Message[], chatId?: string 
       (message.status === "sending" || message.status === "sent" || message.status === "paused"),
     );
     if (exactIdx !== -1) return exactIdx;
+    // A superseded run's late events carry message ids that no longer match
+    // any row (regenerate slice, superseded placeholder). Drop them instead
+    // of falling through to the active assistant below, which would graft
+    // the old run's prose onto the replacement turn.
+    if (isRetiredStreamTarget(chatId, messageId)) return -1;
   }
 
   const activeAssistantId = chatId

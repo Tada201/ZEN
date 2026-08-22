@@ -153,14 +153,23 @@ export function MermaidDiagram({
     }
   }, [svg, zoom, naturalWidth]);
 
-  // Auto-fit wide diagrams to the column on first render; the zoom controls
-  // take over once the user interacts.
+  // Auto-fit wide diagrams to the column on first render AND on container
+  // resize (artifact split drag, right-panel resize); the zoom controls take
+  // over once the user interacts. Without the observer the fit was computed
+  // once from the initial clientWidth and stale zoom persisted after resize.
   useEffect(() => {
-    if (userZoomed || !naturalWidth || !scrollRef.current) return;
-    const containerWidth = Math.max(80, scrollRef.current.clientWidth - 24);
-    if (naturalWidth > containerWidth) {
-      setZoom(Math.max(ZOOM_MIN, containerWidth / naturalWidth));
-    }
+    if (userZoomed || !naturalWidth) return;
+    const node = scrollRef.current;
+    if (!node) return;
+
+    const refit = () => {
+      const containerWidth = Math.max(80, node.clientWidth - 24);
+      setZoom(naturalWidth > containerWidth ? Math.max(ZOOM_MIN, containerWidth / naturalWidth) : 1);
+    };
+    refit();
+    const observer = new ResizeObserver(refit);
+    observer.observe(node);
+    return () => observer.disconnect();
   }, [naturalWidth, userZoomed]);
 
   const handleRepair = useCallback(async () => {

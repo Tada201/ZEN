@@ -357,7 +357,9 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
                 store.setStreamingForChat(chatId, false);
                 store.setActiveAssistantForChat(chatId, null);
                 queryClient.invalidateQueries({ queryKey: ["messages", chatId] });
-                toast.error("Research completed but the final report was not received. Partial results may be available.");
+                // No toast here: the finalized card renders its own
+                // "connection was lost" stale banner, and a toast fired for a
+                // backgrounded chat the user had already switched away from.
               }, 20_000);
             }
             return next;
@@ -399,6 +401,11 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         // full output, base64 blobs, and subagent transcripts are excluded so
         // the DB row stays small and well under the 2 MB backend cap.
         const backendAssistantId = event.payload.message_id;
+        // Final checkpoint write, captured so the invalidation below can
+        // await it: the write used to be fire-and-forget, so the refetch
+        // could read the DB before the terminal steps landed and a fast
+        // reload showed a shorter timeline than was on screen.
+        let finalCheckpoint: Promise<void> | undefined;
         // Reconcile whenever a backend id is known — even if the assistant was
         // already remapped to it by an earlier chat:message. Gating on
         // `backendAssistantId !== assistantIdBeforeFinalize` skipped the merge
@@ -416,7 +423,7 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         // MUST skip persistence here rather than fabricating an optimistic ID
         // (persisting with a fake ID would attach steps to the wrong DB row).
         if (backendAssistantId) {
-          persistExecutionCheckpointForEvent({
+          finalCheckpoint = persistExecutionCheckpointForEvent({
             chatId,
             messageId: backendAssistantId,
             flush: true,
@@ -427,8 +434,20 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         // Stop streaming after setSessionMessages unless we're in a
         // deep_research handoff (shouldStopStreaming === false).
         if (shouldStopStreaming) {
-          useChatStore.getState().setStreamingForChat(chatId, false);
-          useChatStore.getState().setActiveAssistantForChat(chatId, null);
+          // Only tear down chat-scoped stream state when this terminal event
+          // belongs to the run the chat is currently streaming. A superseded
+          // run's late chat:done (regenerate mid-stream, rapid re-send) must
+          // not unhook the replacement run's active assistant or clear its
+          // streaming flag.
+          const activeAssistantId = useChatStore.getState().getActiveAssistantForChat(chatId);
+          const belongsToActiveRun =
+            !activeAssistantId ||
+            activeAssistantId === assistantIdBeforeFinalize ||
+            activeAssistantId === backendAssistantId;
+          if (belongsToActiveRun) {
+            useChatStore.getState().setStreamingForChat(chatId, false);
+            useChatStore.getState().setActiveAssistantForChat(chatId, null);
+          }
         }
 
         // Skip query invalidation for deep_research — the chat:message
@@ -437,7 +456,13 @@ export function useChatChunkEvent({ resetHeartbeatTimeout, clearHeartbeatTimeout
         const currentMessages = useChatStore.getState().sessionMessages[chatId];
         const hasDeepResearch = currentMessages?.some((m) => m.kind === "deep_research");
         if (!hasDeepResearch) {
-          queryClient.invalidateQueries({ queryKey: ["messages", chatId] });
+          // Invalidate only after the final checkpoint settles (it never
+          // rejects) so the refetch cannot read a pre-completion row.
+          void Promise.resolve(finalCheckpoint)
+            .catch(() => undefined)
+            .finally(() => {
+              queryClient.invalidateQueries({ queryKey: ["messages", chatId] });
+            });
         } else {
           // Cancel any fallback timeout since chat:message arrived or
           // the research had content (finalized above).

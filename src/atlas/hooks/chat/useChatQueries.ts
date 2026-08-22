@@ -612,6 +612,15 @@ export function useChatQueries() {
       if (hasChanged) {
         setSessionMessages(currentSessionId, merged);
       }
+
+      // Prune a stale active-assistant pointer (a crash-reload can leave one
+      // in sessionStorage). If no merged row matches it, late stream events
+      // would otherwise fall through the routing fallbacks and corrupt a
+      // future turn in this chat.
+      const activeAssistantId = useChatStore.getState().getActiveAssistantForChat(currentSessionId);
+      if (activeAssistantId && !merged.some((m) => m.id === activeAssistantId)) {
+        useChatStore.getState().setActiveAssistantForChat(currentSessionId, null);
+      }
     } else if (!currentSessionId) {
       const chatStore = useChatStore.getState();
       const currentMessages = chatStore.activeSessionId ? (chatStore.sessionMessages[chatStore.activeSessionId] ?? []) : [];
