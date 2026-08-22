@@ -15,6 +15,29 @@ they are.
 The rebuild goal is not a rewrite. The goal is one obvious path for every
 responsibility.
 
+## ⚠️ TEMPORARY: Cargo Workspace Migration In Progress
+
+> **Status flag — remove at Phase 14 when `migration/complete` is tagged.**
+>
+> The `src-tauri` backend is being converted from a single crate into a Cargo
+> workspace per [BIG_MIGRATION.md](BIG_MIGRATION.md) (Phases 0–14). Until the
+> migration completes:
+>
+> 1. Read BIG_MIGRATION.md before any backend (`src-tauri/`) change and work
+>    only within the current phase. Never stack phases; every phase must end
+>    green with the gate suite (BIG_MIGRATION.md §5) and a
+>    `migration/phase-NN-done` tag.
+> 2. **Always cross-check [Zen_rs_old/](Zen_rs_old/)** — the frozen
+>    pre-migration snapshot of the backend (created 2026-08-22 from
+>    `pre-workspace-migration`) — whenever the original structure, module
+>    layout, line numbers, or behavior of a backend module is in doubt.
+>    BIG_MIGRATION.md §2 cites file:line evidence against that tree, not the
+>    live one. Never build, edit, or import from Zen_rs_old; it is reference
+>    data only.
+> 3. Once extraction phases begin, new backend subsystems default to new
+>    crates under `src-tauri/crates/`; resist adding code to the app crate.
+>    No crate under `crates/` may depend on `tauri`.
+
 ## Non-Negotiable Rules
 
 1. Do not add business logic to Tauri commands.

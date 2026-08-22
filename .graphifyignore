@@ -11,3 +11,6 @@ public/
 *.gif
 *.webp
 src-tauri/icons/
+
+# Frozen pre-migration backend snapshot (BIG_MIGRATION reference only)
+Zen_rs_old/
