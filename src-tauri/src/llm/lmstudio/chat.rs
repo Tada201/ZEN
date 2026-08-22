@@ -137,7 +137,7 @@ impl super::LmStudioProvider {
 
         info!(model = model, "LM Studio chat stream starting");
 
-        let resp = self.client.post(&url).json(&request).send().await?;
+        let resp = self.client.post(&url).json(&request).send().await.map_err(crate::error::http_err)?;
 
         if !resp.status().is_success() {
             let status = resp.status();
@@ -167,7 +167,7 @@ impl super::LmStudioProvider {
                 debug!("LM Studio stream cancelled by client");
                 break;
             }
-            let bytes = chunk_result.map_err(ZenError::Http)?;
+            let bytes = chunk_result.map_err(crate::error::http_err)?;
             byte_buffer.extend_from_slice(&bytes);
 
             while let Some(newline_pos) = byte_buffer.iter().position(|&b| b == b'\n') {
@@ -335,7 +335,7 @@ impl super::LmStudioProvider {
             input: text.to_string(),
         };
 
-        let resp = self.client.post(&url).json(&request).send().await?;
+        let resp = self.client.post(&url).json(&request).send().await.map_err(crate::error::http_err)?;
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
@@ -345,7 +345,7 @@ impl super::LmStudioProvider {
             )));
         }
 
-        let body: OpenAiEmbedResponse = resp.json().await?;
+        let body: OpenAiEmbedResponse = resp.json().await.map_err(crate::error::http_err)?;
         body.data
             .into_iter()
             .next()

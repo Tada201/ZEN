@@ -1,56 +1,34 @@
-use serde::Serialize;
+//! App-side error boundary (BIG_MIGRATION.md Phase 2).
+//!
+//! `ZenError` now lives in zen-core and is DB/HTTP/tauri-agnostic; this
+//! module re-exports it unchanged so every `crate::error::…` call site keeps
+//! compiling, and owns the boundary conversions that keep `sqlx`, `reqwest`,
+//! and `anyhow` out of zen-core. zen-db (Phase 3) will take over the sqlx
+//! `#[from]` sugar with its own error type.
 
-pub type ZenResult<T> = Result<T, ZenError>;
+pub use zen_core::error::{AppError, AppResult, ZenError, ZenResult};
 
-#[derive(Debug, thiserror::Error)]
-pub enum ZenError {
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
+/// Map a raw `sqlx::Error` into the DB-agnostic core variant (message is
+/// rendered identically to the pre-split `#[from]` shape).
+pub fn db_err(e: sqlx::Error) -> ZenError {
+    ZenError::Database(e.to_string())
+}
 
-    #[error("Database error: {0}")]
-    Database(#[from] sqlx::Error),
+/// Map a raw `reqwest::Error` into the core HTTP variant, preserving the
+/// retry-classification signals (status code / timeout / connect) that
+/// `reqwest::Error` would have exposed.
+pub fn http_err(e: reqwest::Error) -> ZenError {
+    ZenError::Http(zen_core::error::HttpError {
+        message: e.to_string(),
+        status: e.status().map(|s| s.as_u16()),
+        timeout: e.is_timeout(),
+        connect: e.is_connect(),
+    })
+}
 
-    #[error("Database initialization error: {0}")]
-    DatabaseError(String),
-
-    #[error("HTTP error: {0}")]
-    Http(#[from] reqwest::Error),
-
-    #[error("JSON error: {0}")]
-    Json(#[from] serde_json::Error),
-
-    #[error("Ollama not connected")]
-    OllamaNotConnected,
-
-    #[error("No model selected")]
-    NoModelSelected,
-
-    #[error("Context too large: {0} tokens exceeds limit of {1}")]
-    ContextTooLarge(usize, usize),
-
-    #[error("Generation aborted by user")]
-    Aborted,
-
-    #[error("System is initializing, please wait...")]
-    Initializing,
-
-    #[error("Internal error: {0}")]
-    Internal(String),
-
-    #[error("Swarm error: {0}")]
-    Swarm(String),
-
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
-
-    #[error("{0}")]
-    Custom(String),
-
-    #[error("Deadline exceeded: {0}")]
-    Timeout(String),
-
-    #[error("Cache miss: {0}")]
-    CacheMiss(String),
+/// Map an `anyhow::Error` into the core Other variant.
+pub fn other_err(e: anyhow::Error) -> ZenError {
+    ZenError::Other(e.to_string())
 }
 
 impl From<crate::agent::swarm::SwarmError> for ZenError {
@@ -58,23 +36,3 @@ impl From<crate::agent::swarm::SwarmError> for ZenError {
         ZenError::Swarm(e.to_string())
     }
 }
-
-impl From<String> for ZenError {
-    fn from(s: String) -> Self {
-        ZenError::Custom(s)
-    }
-}
-
-// Tauri requires command errors to be serializable
-impl Serialize for ZenError {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&self.to_string())
-    }
-}
-
-// Also keep AppError for backward compatibility if needed, or just alias it
-pub type AppError = ZenError;
-pub type AppResult<T> = ZenResult<T>;

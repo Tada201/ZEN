@@ -381,35 +381,52 @@ phase DEFINES seams; adoption happens in later phases.
 **Prerequisites:** Phase 1.
 
 **Tasks**
-- [ ] **Pre-task (review finding #2):** `src/error.rs:9` contains
-      `Database(#[from] sqlx::Error)` — zen-core must stay sqlx-free, so split
-      first: `zen-core::error` becomes DB-agnostic (`Database(String)` or a
-      boxed source); zen-db gets its own `zen_db::Error` carrying
-      `#[from] sqlx::Error`; app converts at the boundary. Do this inside this
-      phase so the gate never sees a broken intermediate.
-- [ ] Create `src-tauri/crates/zen-core` with strict deps:
-      serde, serde_json, tokio (macros/rt optional), tracing, thiserror, uuid,
-      chrono. NO reqwest, NO sqlx, NO tauri.
-- [ ] Move `src/error.rs` → `zen-core/src/error.rs` (post-split); re-export
-      from app crate (`pub use zen_core::error::*;`) so call sites compile untouched.
-- [ ] Audit `src/models/` and move only cross-domain DTO/event payload types
-      used by ≥2 future crates; leave single-consumer types where they are.
-      Per §3.3, `ToolInfo` and a `ProviderConfig` DTO land here now — llm
-      modules already share them across future crate lines.
-- [ ] Define ports (traits) in `zen-core/src/ports.rs`:
-      - `EventSink` (emit typed backend events; impl in app wraps AppHandle)
-      - `SecretStore` (get/set/delete; impl wraps keyring SecretService)
-      - `SettingsStore` (get/set non-secret settings)
-      - `AuditSink` (record privileged-op audit events)
-- [ ] Define shared context struct(s) domain code will receive instead of
-      AppState (name it `AgentContext` later in Phase 6; core only defines the
-      shape of sinks here).
-- [ ] Set `publish = false`, `edition.workspace = true` pattern via inheritance
-      or literal 2021.
+- [x] **Pre-task (review finding #2) — extended in execution:** error.rs
+      carried not only `Database(#[from] sqlx::Error)` but also
+      `Http(#[from] reqwest::Error)` and `Other(#[from] anyhow::Error)`, plus
+      an upward `From<agent::swarm::SwarmError>` impl. All split in this
+      phase: `zen_core::error::ZenError` is DB/HTTP/tauri-agnostic
+      (`Database(String)`, `Http(HttpError)`, `Other(String)`); the app's
+      `src/error.rs` re-exports core + owns boundary helpers
+      (`db_err`/`http_err`/`other_err`) and the swarm `From` impl.
+      `HttpError` carries `{message, status, timeout, connect}` signals
+      because the subagent retry classifier (spawn_tools.rs) consumed
+      `reqwest::Error` internals (`status()/is_timeout()/is_connect()`) —
+      classification behavior is preserved byte-for-byte.
+      Conversion sweep: 262 db `.await?` sites (sed + compiler-discriminated;
+      6 non-sqlx sites reverted), ~30 llm reqwest sites, 4 terminal anyhow
+      sites, 3 `needless_question_mark` lint follow-ups. zen-db (Phase 3)
+      takes over the sqlx `#[from]` sugar with its own error type.
+- [x] Create `src-tauri/crates/zen-core`. Deps kept BELOW the plan ceiling
+      (serde + derive, serde_json, thiserror, async-trait — only what is
+      used; tokio/tracing/uuid/chrono join when contents need them).
+      NO reqwest, NO sqlx, NO tauri (tree-verified).
+- [x] `src/error.rs` → `zen-core/src/error.rs` (post-split); app re-exports
+      `pub use zen_core::error::{AppError, AppResult, ZenError, ZenResult};`
+      so all 79 error-importing files compile untouched.
+- [x] models audit: `models/` holds only `SystemMetrics` (consumed by app
+      commands/hardware service AND the future zen-tools sys-metrics tool →
+      moved). `ToolInfo` (was tools/mod.rs — single def, llm re-used via
+      `crate::tools::ToolInfo`) and `ProviderConfig` (was db/models.rs —
+      already a pure wire DTO, zero sqlx derives) moved verbatim; old paths
+      re-export. No single-consumer types were moved.
+- [x] Ports defined in `zen-core/src/ports.rs`: `EventSink`, `SecretStore`,
+      `SettingsStore`, `AuditSink` + `AuditEvent` DTO. Adoption is Phase 6.
+- [x] Shared sink bundle defined: `CoreSinks` (Arc'd trait objects) — the
+      shape Phase 6 threads as `AgentContext`.
+- [x] `publish = false`, literal edition 2021.
 
 **Verification gates**
-- `cargo tree -p zen-core` contains no tauri/sqlx/reqwest.
-- Gate suite green; app behavior unchanged.
+- [x] `cargo tree -p zen-core` dependency subtree contains no
+      tauri/sqlx/reqwest (the initial "1 match" was the `src-tauri` path
+      string in the header line — dep lines: 0 matches).
+- [x] Gate suite green: `cargo check --workspace --all-targets` ✅,
+      `cargo clippy --workspace --all-targets -- -D warnings` ✅,
+      `cargo test --workspace --no-run` ✅ (5 test executables, including
+      zen-core's own — which RUNS locally: the STATUS_ENTRYPOINT_NOT_FOUND
+      issue is specific to tauri-linked test binaries, not cargo test
+      itself), `npm run build` ✅, `cargo metadata` members:
+      zen, zen-core, zen-policy-tests.
 
 **Rollback:** remove crate + reverts of the two moved files.
 

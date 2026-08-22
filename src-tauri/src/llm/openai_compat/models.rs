@@ -292,7 +292,7 @@ impl OpenAiCompatProvider {
             )));
         }
 
-        let body: OpenAiModelsResponse = resp.json().await?;
+        let body: OpenAiModelsResponse = resp.json().await.map_err(crate::error::http_err)?;
 
         let provider_lower = self.provider_name.to_lowercase();
         let opencode_free_model = |id: &str| {

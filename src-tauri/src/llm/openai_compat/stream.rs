@@ -310,7 +310,7 @@ impl OpenAiCompatProvider {
             .header("Content-Type", "application/json")
             .json(&body)
             .send()
-            .await?;
+            .await.map_err(crate::error::http_err)?;
 
         if !resp.status().is_success() {
             return Err(ZenError::Custom(format!(
@@ -319,7 +319,7 @@ impl OpenAiCompatProvider {
             )));
         }
 
-        let data: serde_json::Value = resp.json().await?;
+        let data: serde_json::Value = resp.json().await.map_err(crate::error::http_err)?;
         let jwt = data["jwt"]
             .as_str()
             .ok_or_else(|| ZenError::Custom("No JWT in response".into()))?
@@ -608,7 +608,7 @@ impl OpenAiCompatProvider {
                 debug!("Stream cancelled by client");
                 break;
             }
-            let bytes = chunk_result?;
+            let bytes = chunk_result.map_err(crate::error::http_err)?;
             buffer.push_str(&String::from_utf8_lossy(&bytes));
 
             // SSE format: lines starting with "data: " followed by JSON
@@ -792,7 +792,7 @@ impl OpenAiCompatProvider {
             .json(&request)
             .timeout(std::time::Duration::from_secs(60))
             .send()
-            .await?;
+            .await.map_err(crate::error::http_err)?;
 
         if !resp.status().is_success() {
             let status = resp.status();
@@ -803,7 +803,7 @@ impl OpenAiCompatProvider {
             )));
         }
 
-        let body: OpenAiEmbedResponse = resp.json().await?;
+        let body: OpenAiEmbedResponse = resp.json().await.map_err(crate::error::http_err)?;
         body.data
             .into_iter()
             .next()

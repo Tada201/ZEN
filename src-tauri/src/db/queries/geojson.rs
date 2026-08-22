@@ -21,7 +21,7 @@ pub async fn list_geojson_layers_page(
     .bind(limit.clamp(1, MAX_GTSM_GEOJSON_LAYERS + 1))
     .bind(offset.max(0))
     .fetch_all(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(layers)
 }
 
@@ -53,7 +53,7 @@ pub async fn save_geojson_layer(pool: &SqlitePool, layer: &GtsmGeojsonLayer) -> 
     .bind(&layer.created_at)
     .bind(&layer.updated_at)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -61,6 +61,6 @@ pub async fn delete_geojson_layer(pool: &SqlitePool, id: &str) -> ZenResult<()> 
     sqlx::query("DELETE FROM gtsm_geojson_layers WHERE id = ?")
         .bind(id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(())
 }

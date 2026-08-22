@@ -25,12 +25,12 @@ pub async fn init_pool(db_path: &Path) -> ZenResult<SqlitePool> {
     // must wait for the active writer instead of failing immediately with
     // SQLITE_BUSY ("database is locked"). Keep this policy here so every
     // database caller receives the same connection behavior.
-    let connect_options = SqliteConnectOptions::from_str(&db_url)?
+    let connect_options = SqliteConnectOptions::from_str(&db_url).map_err(crate::error::db_err)?
         .busy_timeout(Duration::from_secs(10));
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
         .connect_with(connect_options)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     // Run migrations (embedded SQL)
     run_migrations(&pool).await?;
@@ -45,22 +45,22 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
     // statement in a multi-statement string, silently ignoring the rest.
     sqlx::query("PRAGMA journal_mode = WAL;")
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     sqlx::query("PRAGMA foreign_keys = ON;")
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     sqlx::query("PRAGMA synchronous = NORMAL;")
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     sqlx::query("PRAGMA cache_size = -64000;")
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     sqlx::query("PRAGMA temp_store = MEMORY;")
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     sqlx::query("PRAGMA mmap_size = 268435456;")
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     sqlx::query(
         r#"
@@ -76,7 +76,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     // Attempt to add columns if the DB already exists from an older version
     let _ = sqlx::query("ALTER TABLE chats ADD COLUMN pinned INTEGER DEFAULT 0;")
@@ -108,7 +108,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     // Attempt to add columns if the DB already exists from an older version
     let _ = sqlx::query("ALTER TABLE messages ADD COLUMN tokens_in INTEGER;")
@@ -153,7 +153,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
 
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id, created_at);")
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     sqlx::query(
         r#"
@@ -170,10 +170,10 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_workbench_tabs_chat ON workbench_tabs(chat_id, position);")
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     sqlx::query(
         r#"
@@ -193,20 +193,20 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     // Migration Fix: Ensure 'documents' table status CHECK constraint includes 'workspace'
     let table_sql: String =
         sqlx::query_scalar("SELECT sql FROM sqlite_master WHERE type='table' AND name='documents'")
             .fetch_optional(pool)
-            .await?
+            .await.map_err(crate::error::db_err)?
             .unwrap_or_default();
 
     if (!table_sql.is_empty() && !table_sql.contains("'workspace'")) || table_sql.is_empty() {
         // Double check if documents_old exists (implies a failed previous migration)
         let old_table_exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='documents_old')")
             .fetch_one(pool)
-            .await?;
+            .await.map_err(crate::error::db_err)?;
 
         if !table_sql.contains("'workspace'") || old_table_exists {
             info!("Upgrading 'documents' table schema to support 'workspace' status (Old table exists: {})", old_table_exists);
@@ -242,7 +242,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
 
             migration_query.push_str("COMMIT; PRAGMA foreign_keys = ON;");
 
-            sqlx::query(&migration_query).execute(pool).await?;
+            sqlx::query(&migration_query).execute(pool).await.map_err(crate::error::db_err)?;
             info!("'documents' table migration completed successfully");
         }
     }
@@ -264,11 +264,11 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_chunks_doc ON document_chunks(document_id);")
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     sqlx::query(
         r#"
@@ -284,7 +284,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     sqlx::query(
         r#"
@@ -297,7 +297,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     sqlx::query(
         r#"
@@ -314,7 +314,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     sqlx::query(
         r#"
@@ -330,7 +330,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     let _ = sqlx::query(
         "CREATE INDEX IF NOT EXISTS idx_audit_events_timestamp ON audit_events(timestamp DESC);",
@@ -350,7 +350,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     // Attempt to add columns if the DB already exists from an older version
     let _ =
@@ -387,7 +387,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     // Indexes for efficient history queries
     let _ = sqlx::query(
@@ -415,7 +415,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     let _ = sqlx::query(
         "CREATE INDEX IF NOT EXISTS idx_graph_sessions_chat ON graph_sessions(chat_id);",
@@ -438,7 +438,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     let _ = sqlx::query(
         "CREATE INDEX IF NOT EXISTS idx_drawing_canvases_chat ON drawing_canvases(chat_id);",
@@ -468,7 +468,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     // ── GTSM Custom Markers ──
     sqlx::query(
@@ -488,7 +488,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     // ── Phase 1: Chat Session Management ──
     sqlx::query(
@@ -506,7 +506,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     sqlx::query(
         r#"
@@ -520,7 +520,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     let _ = sqlx::query("CREATE INDEX IF NOT EXISTS idx_chat_folder_members_chat_id ON chat_folder_members(chat_id);").execute(pool).await;
     let _ = sqlx::query("CREATE INDEX IF NOT EXISTS idx_chat_folder_members_folder_id ON chat_folder_members(folder_id);").execute(pool).await;
@@ -536,7 +536,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "UPDATE chats SET is_archived = 0 WHERE is_archived = 1 AND archived_at IS NULL;",
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     let _ = sqlx::query(
         "CREATE INDEX IF NOT EXISTS idx_chats_archived ON chats(is_archived, archived_at);",
@@ -589,7 +589,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     sqlx::query(
         r#"
@@ -600,7 +600,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     sqlx::query(
         r#"
@@ -611,7 +611,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     sqlx::query(
         r#"
@@ -624,7 +624,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     // ── Phase 2: Enhanced Features ──
     sqlx::query(
@@ -644,7 +644,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     // ── Phase 3: Differentiators (Tags) ──
     sqlx::query(
@@ -661,7 +661,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     // Clarification requests for agent interaction
     sqlx::query(
@@ -680,7 +680,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     // ── Artifacts Persistence ──
     sqlx::query(
@@ -700,7 +700,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     // Restore accidentally dropped index for artifacts
     let _ = sqlx::query("CREATE INDEX IF NOT EXISTS idx_artifacts_chat_id ON artifacts(chat_id);")
@@ -722,7 +722,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     let _ = sqlx::query(
         "CREATE INDEX IF NOT EXISTS idx_orchestration_plans_chat ON orchestration_plans(chat_id);",
@@ -735,7 +735,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='orchestration_plans'",
     )
     .fetch_optional(pool)
-    .await?
+    .await.map_err(crate::error::db_err)?
     .unwrap_or_default();
 
     if !plan_table_sql.is_empty() && !plan_table_sql.contains("'planning'") {
@@ -743,11 +743,11 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
 
         sqlx::query("PRAGMA foreign_keys = OFF;")
             .execute(pool)
-            .await?;
-        sqlx::query("BEGIN TRANSACTION;").execute(pool).await?;
+            .await.map_err(crate::error::db_err)?;
+        sqlx::query("BEGIN TRANSACTION;").execute(pool).await.map_err(crate::error::db_err)?;
         sqlx::query("ALTER TABLE orchestration_plans RENAME TO orchestration_plans_old;")
             .execute(pool)
-            .await?;
+            .await.map_err(crate::error::db_err)?;
         sqlx::query(r#"
             CREATE TABLE orchestration_plans (
                 id          TEXT PRIMARY KEY,
@@ -758,17 +758,17 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
                 created_at  TEXT DEFAULT (datetime('now')),
                 updated_at  TEXT DEFAULT (datetime('now'))
             );
-        "#).execute(pool).await?;
+        "#).execute(pool).await.map_err(crate::error::db_err)?;
         sqlx::query("INSERT INTO orchestration_plans SELECT * FROM orchestration_plans_old;")
             .execute(pool)
-            .await?;
+            .await.map_err(crate::error::db_err)?;
         sqlx::query("DROP TABLE orchestration_plans_old;")
             .execute(pool)
-            .await?;
-        sqlx::query("COMMIT;").execute(pool).await?;
+            .await.map_err(crate::error::db_err)?;
+        sqlx::query("COMMIT;").execute(pool).await.map_err(crate::error::db_err)?;
         sqlx::query("PRAGMA foreign_keys = ON;")
             .execute(pool)
-            .await?;
+            .await.map_err(crate::error::db_err)?;
         info!("'orchestration_plans' table migration completed successfully");
     }
 
@@ -790,7 +790,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     let _ = sqlx::query(
         "CREATE INDEX IF NOT EXISTS idx_orchestration_tasks_plan ON orchestration_tasks(plan_id);",
@@ -812,7 +812,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     sqlx::query(
         r#"
@@ -827,7 +827,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     sqlx::query(
         r#"
@@ -843,7 +843,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     // ── Hierarchical Memory Migrations ──
     sqlx::query(
@@ -859,7 +859,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     let _ = sqlx::query(
         "CREATE INDEX IF NOT EXISTS idx_conversation_summaries_chat ON conversation_summaries(chat_id);"
@@ -901,10 +901,10 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_execution_traces_chat ON execution_traces(chat_id, updated_at);")
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     sqlx::query(
         r#"
@@ -934,7 +934,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     // Additive migration for databases created before bounded output previews
     // became part of the canonical trace contract.
     let _ = sqlx::query("ALTER TABLE execution_trace_events ADD COLUMN run_id TEXT;")
@@ -954,7 +954,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         .await;
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_execution_trace_events_trace ON execution_trace_events(trace_id, sequence);")
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     // Register legacy rows without rewriting user-visible history. This is
     // idempotent and lets the next checkpoint upgrade each trace to v2 event
@@ -977,7 +977,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     // Thread-scoped goals: one persistent objective row per chat, driven by
     // the `/goal` slash command. `turns_count` counts automatic continuation
@@ -995,7 +995,7 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     info!("Database migrations complete");
     Ok(())

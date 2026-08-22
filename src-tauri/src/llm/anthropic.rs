@@ -691,7 +691,7 @@ impl LlmProvider for AnthropicProvider {
             .header("content-type", "application/json")
             .json(&request)
             .send()
-            .await?;
+            .await.map_err(crate::error::http_err)?;
 
         if !resp.status().is_success() {
             let status = resp.status();
@@ -723,7 +723,7 @@ impl LlmProvider for AnthropicProvider {
                 debug!("Anthropic stream cancelled by client");
                 break;
             }
-            let bytes = chunk_result?;
+            let bytes = chunk_result.map_err(crate::error::http_err)?;
             buffer.push_str(&String::from_utf8_lossy(&bytes));
 
             // SSE format: "event: <type>\ndata: <json>\n\n"

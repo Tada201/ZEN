@@ -27,7 +27,7 @@ pub async fn list_geofences_page(
     .bind(limit.clamp(1, MAX_GTSM_GEOFENCE_ITEMS + 1))
     .bind(offset.max(0))
     .fetch_all(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(geofences)
 }
 
@@ -58,7 +58,7 @@ pub async fn save_geofence(pool: &SqlitePool, geofence: &GtsmGeofence) -> ZenRes
     .bind(geofence.box_west)
     .bind(geofence.alert_enabled)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -66,7 +66,7 @@ pub async fn delete_geofence(pool: &SqlitePool, id: &str) -> ZenResult<()> {
     sqlx::query("DELETE FROM gtsm_geofences WHERE id = ?")
         .bind(id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -89,7 +89,7 @@ pub async fn list_markers_page(
     .bind(limit.clamp(1, MAX_GTSM_MARKER_ITEMS + 1))
     .bind(offset.max(0))
     .fetch_all(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(markers)
 }
 
@@ -114,7 +114,7 @@ pub async fn save_marker(pool: &SqlitePool, marker: &GtsmMarker) -> ZenResult<()
     .bind(&marker.icon)
     .bind(&marker.metadata)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -122,7 +122,7 @@ pub async fn delete_marker(pool: &SqlitePool, id: &str) -> ZenResult<()> {
     sqlx::query("DELETE FROM gtsm_markers WHERE id = ?")
         .bind(id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -158,7 +158,7 @@ pub async fn record_snapshot(
     }
 
     let now = chrono::Utc::now().timestamp();
-    let mut tx = pool.begin().await?;
+    let mut tx = pool.begin().await.map_err(crate::error::db_err)?;
 
     for (entity_id, lat, lon, alt, metadata) in &entities {
         sqlx::query(
@@ -172,10 +172,10 @@ pub async fn record_snapshot(
         .bind(alt)
         .bind(metadata)
         .execute(&mut *tx)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     }
 
-    tx.commit().await?;
+    tx.commit().await.map_err(crate::error::db_err)?;
     tracing::debug!(
         "Recorded {} {} snapshots at timestamp {}",
         entities.len(),
@@ -209,7 +209,7 @@ pub async fn query_history_page(
     .bind(entity_type)
     .bind(timestamp)
     .fetch_optional(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     let nearest = match nearest_ts {
         Some(ts) => ts,
@@ -227,7 +227,7 @@ pub async fn query_history_page(
     .bind(limit.clamp(1, MAX_TELEMETRY_HISTORY_ITEMS + 1))
     .bind(offset.max(0))
     .fetch_all(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     Ok(rows)
 }
@@ -269,7 +269,7 @@ pub async fn query_entity_track_page(
     .bind(limit.clamp(1, MAX_ENTITY_TRACK_POINTS + 1))
     .bind(offset.max(0))
     .fetch_all(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     Ok(rows)
 }
@@ -278,7 +278,7 @@ pub async fn get_available_timerange(pool: &SqlitePool) -> Result<Option<(i64, i
     let row: Option<(i64, i64)> =
         sqlx::query_as("SELECT MIN(timestamp), MAX(timestamp) FROM telemetry_snapshots")
             .fetch_optional(pool)
-            .await?;
+            .await.map_err(crate::error::db_err)?;
 
     Ok(row)
 }
@@ -289,7 +289,7 @@ pub async fn cleanup_old_snapshots(pool: &SqlitePool, max_age_hours: i64) -> Res
     let result = sqlx::query("DELETE FROM telemetry_snapshots WHERE timestamp < ?")
         .bind(cutoff)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     let deleted = result.rows_affected();
     if deleted > 0 {
@@ -306,12 +306,12 @@ pub async fn cleanup_old_snapshots(pool: &SqlitePool, max_age_hours: i64) -> Res
 pub async fn get_storage_stats(pool: &SqlitePool) -> Result<(i64, i64)> {
     let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM telemetry_snapshots")
         .fetch_one(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     let entities: i64 =
         sqlx::query_scalar("SELECT COUNT(DISTINCT entity_id) FROM telemetry_snapshots")
             .fetch_one(pool)
-            .await?;
+            .await.map_err(crate::error::db_err)?;
 
     Ok((total, entities))
 }

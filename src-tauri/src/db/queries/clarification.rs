@@ -23,7 +23,7 @@ pub async fn add_clarification_request(
     .bind(options_json)
     .bind(created_at)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     Ok(())
 }
@@ -45,7 +45,7 @@ pub async fn update_clarification_response(
     .bind(responded_at)
     .bind(chat_id)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     Ok(())
 }

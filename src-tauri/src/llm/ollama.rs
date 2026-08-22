@@ -222,10 +222,10 @@ impl LlmProvider for OllamaProvider {
                 debug!(url = %alt_url, "Trying 127.0.0.1 fallback for Ollama model listing");
                 match self.client.get(&alt_url).send().await {
                     Ok(resp) => resp,
-                    Err(_) => return Err(e.into()), // Return original error if fallback also fails
+                    Err(_) => return Err(crate::error::http_err(e)), // Return original error if fallback also fails
                 }
             }
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(crate::error::http_err(e)),
         };
 
         if !resp.status().is_success() {
@@ -233,7 +233,7 @@ impl LlmProvider for OllamaProvider {
             return Err(ZenError::OllamaNotConnected);
         }
 
-        let body: OllamaModelsResponse = resp.json().await?;
+        let body: OllamaModelsResponse = resp.json().await.map_err(crate::error::http_err)?;
 
         // `/api/tags` carries no context window, so probe `/api/show` for each
         // model to read its real `<arch>.context_length`. Run concurrently so N
@@ -370,7 +370,7 @@ impl LlmProvider for OllamaProvider {
 
         info!(model = model, "Starting Ollama chat stream");
 
-        let resp = self.client.post(&url).json(&request).send().await?;
+        let resp = self.client.post(&url).json(&request).send().await.map_err(crate::error::http_err)?;
 
         if !resp.status().is_success() {
             let status = resp.status();
@@ -403,7 +403,7 @@ impl LlmProvider for OllamaProvider {
                 debug!("Ollama stream cancelled by client");
                 break;
             }
-            let bytes = chunk_result?;
+            let bytes = chunk_result.map_err(crate::error::http_err)?;
             buffer.push_str(&String::from_utf8_lossy(&bytes));
 
             // Process complete lines
@@ -486,13 +486,13 @@ impl LlmProvider for OllamaProvider {
             input: text.to_string(),
         };
 
-        let resp = self.client.post(&url).json(&request).send().await?;
+        let resp = self.client.post(&url).json(&request).send().await.map_err(crate::error::http_err)?;
 
         if !resp.status().is_success() {
             return Err(ZenError::Custom("Embedding request failed".into()));
         }
 
-        let body: OllamaEmbedResponse = resp.json().await?;
+        let body: OllamaEmbedResponse = resp.json().await.map_err(crate::error::http_err)?;
         body.embeddings
             .into_iter()
             .next()
@@ -512,11 +512,11 @@ impl LlmProvider for OllamaProvider {
             model: model.to_string(),
             input: texts.iter().map(|t| t.to_string()).collect(),
         };
-        let resp = self.client.post(&url).json(&request).send().await?;
+        let resp = self.client.post(&url).json(&request).send().await.map_err(crate::error::http_err)?;
         if !resp.status().is_success() {
             return Err(ZenError::Custom("Batch embedding request failed".into()));
         }
-        let body: OllamaEmbedResponse = resp.json().await?;
+        let body: OllamaEmbedResponse = resp.json().await.map_err(crate::error::http_err)?;
         if body.embeddings.len() != texts.len() {
             return Err(ZenError::Custom(format!(
                 "Expected {} embeddings, got {}",

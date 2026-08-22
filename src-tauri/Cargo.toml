@@ -1,7 +1,7 @@
 [workspace]
-# `crates/*` joins members in Phase 2 when zen-core exists — this Cargo
-# version rejects member globs that match no package directory.
-members = [".", "policy-tests"]
+# `crates/*` valid since Phase 2 (zen-core); globs matching no package dir
+# are rejected by this Cargo version.
+members = [".", "policy-tests", "crates/*"]
 resolver = "2"
 
 # Shared dependency versions (BIG_MIGRATION.md Phase 1). Member crates add
@@ -23,6 +23,7 @@ reqwest = { version = "0.12", default-features = false }
 futures = "0.3"
 async-trait = "0.1"
 anyhow = "1.0"
+zen-core = { path = "crates/zen-core" }
 
 [package]
 name = "zen"
@@ -63,6 +64,7 @@ sqlx = { workspace = true }
 reqwest = { workspace = true, features = ["native-tls", "json", "stream", "multipart"] }
 futures = { workspace = true }
 async-trait = { workspace = true }
+zen-core = { workspace = true }
 sysinfo = "0.38"
 axum = { version = "0.8", features = ["default", "ws"] }
 tower-http = { version = "0.6", features = ["cors"] }

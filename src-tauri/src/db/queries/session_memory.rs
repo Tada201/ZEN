@@ -30,13 +30,13 @@ pub async fn init_session_memories(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     sqlx::query(
         "CREATE INDEX IF NOT EXISTS idx_session_memories_session_id ON session_memories (session_id)",
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     Ok(())
 }
@@ -67,7 +67,7 @@ pub async fn add_session_memory(pool: &SqlitePool, mem: &NewSessionMemory<'_>) -
     .bind(mem.timestamp)
     .bind(mem.embedding)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     Ok(())
 }
@@ -98,7 +98,7 @@ pub async fn get_session_memory_rows_for_session_page(
     .bind(limit.clamp(1, MAX_SESSION_MEMORY_ROWS + 1))
     .bind(offset.max(0))
     .fetch_all(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     Ok(rows
         .into_iter()
@@ -127,7 +127,7 @@ pub async fn get_session_memory(
     )
     .bind(id)
     .fetch_optional(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     Ok(row.map(|row| SessionMemoryRow {
         id: row.get(0),
@@ -144,7 +144,7 @@ pub async fn delete_session_memory(pool: &SqlitePool, id: &str) -> ZenResult<()>
     sqlx::query("DELETE FROM session_memories WHERE id = ?")
         .bind(id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     Ok(())
 }
@@ -156,7 +156,7 @@ pub async fn delete_session_memories_for_session(
     sqlx::query("DELETE FROM session_memories WHERE session_id = ?")
         .bind(session_id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     Ok(())
 }
@@ -165,18 +165,16 @@ pub async fn count_session_memories_for_session(
     pool: &SqlitePool,
     session_id: &str,
 ) -> ZenResult<i64> {
-    Ok(
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM session_memories WHERE session_id = ?")
-            .bind(session_id)
-            .fetch_one(pool)
-            .await?,
-    )
+    sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM session_memories WHERE session_id = ?")
+        .bind(session_id)
+        .fetch_one(pool)
+        .await
+        .map_err(crate::error::db_err)
 }
 
 pub async fn count_session_memories(pool: &SqlitePool) -> ZenResult<i64> {
-    Ok(
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM session_memories")
-            .fetch_one(pool)
-            .await?,
-    )
+    sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM session_memories")
+        .fetch_one(pool)
+        .await
+        .map_err(crate::error::db_err)
 }

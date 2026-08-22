@@ -448,25 +448,7 @@ pub struct ModelInfo {
 
 // ─── Provider Config (for switching providers via IPC) ───
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProviderConfig {
-    /// "ollama" | "openai" | "openrouter" | "groq" | "together" | "custom"
-    pub provider_type: String,
-    /// API base URL
-    pub base_url: String,
-    /// API key (empty for Ollama)
-    pub api_key: String,
-    /// Display name
-    pub display_name: String,
-    /// Extra headers for the provider
-    #[serde(default)]
-    pub headers: Option<std::collections::HashMap<String, String>>,
-    /// Wire protocol: "openai_chat" (default) | "anthropic_messages".
-    /// Only meaningful for custom providers; built-in arms ignore it.
-    #[serde(default)]
-    pub api_format: Option<String>,
-}
+pub use zen_core::ProviderConfig;
 // ─── Orchestration ───
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

@@ -28,7 +28,7 @@ impl super::LmStudioProvider {
 
         let mut models = match resp {
             Ok(r) if r.status().is_success() => {
-                let body: LmStudioModelsResponse = r.json().await?;
+                let body: LmStudioModelsResponse = r.json().await.map_err(crate::error::http_err)?;
                 let results: Vec<ModelInfo> = body
                     .data
                     .into_iter()
@@ -107,7 +107,7 @@ impl super::LmStudioProvider {
 
     pub async fn list_models_v1(&self) -> ZenResult<Vec<ModelInfo>> {
         let url = format!("{}/api/v1/models", self.base_url);
-        let resp = self.client.get(&url).send().await?;
+        let resp = self.client.get(&url).send().await.map_err(crate::error::http_err)?;
 
         if !resp.status().is_success() {
             return Err(ZenError::Custom(format!(
@@ -116,7 +116,7 @@ impl super::LmStudioProvider {
             )));
         }
 
-        let body: LmStudioV1ModelsResponse = resp.json().await?;
+        let body: LmStudioV1ModelsResponse = resp.json().await.map_err(crate::error::http_err)?;
         let results: Vec<ModelInfo> = body
             .data
             .into_iter()
@@ -164,7 +164,7 @@ impl super::LmStudioProvider {
 
     pub async fn list_models_fallback(&self) -> ZenResult<Vec<ModelInfo>> {
         let url = format!("{}/v1/models", self.base_url);
-        let resp = self.client.get(&url).send().await?;
+        let resp = self.client.get(&url).send().await.map_err(crate::error::http_err)?;
 
         if !resp.status().is_success() {
             let status = resp.status();
@@ -175,7 +175,7 @@ impl super::LmStudioProvider {
             )));
         }
 
-        let body: OpenAiModelsResponse = resp.json().await?;
+        let body: OpenAiModelsResponse = resp.json().await.map_err(crate::error::http_err)?;
         Ok(body
             .data
             .into_iter()

@@ -190,7 +190,7 @@ impl OpenAiCompatProvider {
                 }
                 Err(e) => {
                     let err_msg = e.to_string();
-                    last_error = Some(ZenError::from(e));
+                    last_error = Some(crate::error::http_err(e));
 
                     if can_not_retry_anymore {
                         break;

@@ -15,7 +15,7 @@ pub async fn get_or_create_graph_session(
     let existing = sqlx::query_as::<_, GraphSessionDb>("SELECT * FROM graph_sessions WHERE id = ?")
         .bind(session_id)
         .fetch_optional(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     if let Some(session) = existing {
         return Ok(session);
@@ -30,13 +30,13 @@ pub async fn get_or_create_graph_session(
     .bind(chat_id)
     .bind(name)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     // Fetch the newly created session (non-recursive)
     let session = sqlx::query_as::<_, GraphSessionDb>("SELECT * FROM graph_sessions WHERE id = ?")
         .bind(session_id)
         .fetch_one(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     Ok(session)
 }
@@ -75,7 +75,7 @@ pub async fn save_graph_session(
     .bind(update.history_json)
     .bind(update.session_id)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -86,7 +86,7 @@ pub async fn get_graph_session(
     let session = sqlx::query_as::<_, GraphSessionDb>("SELECT * FROM graph_sessions WHERE id = ?")
         .bind(session_id)
         .fetch_optional(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(session)
 }
 
@@ -94,7 +94,7 @@ pub async fn delete_graph_session(pool: &SqlitePool, session_id: &str) -> ZenRes
     sqlx::query("DELETE FROM graph_sessions WHERE id = ?")
         .bind(session_id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -112,7 +112,7 @@ pub async fn get_or_create_drawing_canvas(
         sqlx::query_as::<_, DrawingCanvasDb>("SELECT * FROM drawing_canvases WHERE id = ?")
             .bind(canvas_id)
             .fetch_optional(pool)
-            .await?;
+            .await.map_err(crate::error::db_err)?;
 
     if let Some(canvas) = existing {
         return Ok(canvas);
@@ -126,14 +126,14 @@ pub async fn get_or_create_drawing_canvas(
     .bind(chat_id)
     .bind(name)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     // Fetch the newly created canvas (non-recursive)
     let canvas =
         sqlx::query_as::<_, DrawingCanvasDb>("SELECT * FROM drawing_canvases WHERE id = ?")
             .bind(canvas_id)
             .fetch_one(pool)
-            .await?;
+            .await.map_err(crate::error::db_err)?;
 
     Ok(canvas)
 }
@@ -153,6 +153,6 @@ pub async fn save_drawing_canvas(
     .bind(background)
     .bind(canvas_id)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(())
 }

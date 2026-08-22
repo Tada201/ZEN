@@ -57,7 +57,7 @@ pub async fn add_message_tx(
         .bind(id).bind(msg.chat_id).bind(msg.role).bind(msg.content).bind(msg.model).bind(msg.is_complete as i32)
         .bind(msg.tool_calls).bind(msg.tool_call_id).bind(msg.images).bind(msg.attachments).bind(msg.tokens_in).bind(msg.tokens_out)
         .bind(msg.kind).bind(msg.metadata).bind(msg.reasoning_details).bind(msg.steps_json)
-        .bind(chrono::Utc::now().to_rfc3339()).execute(&mut **tx).await?;
+        .bind(chrono::Utc::now().to_rfc3339()).execute(&mut **tx).await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -67,7 +67,7 @@ pub async fn add_message(pool: &SqlitePool, msg: &NewMessage<'_>) -> ZenResult<M
         .map(|s| s.to_string())
         .unwrap_or_else(|| Uuid::new_v4().to_string());
 
-    let mut tx = pool.begin().await?;
+    let mut tx = pool.begin().await.map_err(crate::error::db_err)?;
 
     sqlx::query(
         r#"
@@ -96,7 +96,7 @@ pub async fn add_message(pool: &SqlitePool, msg: &NewMessage<'_>) -> ZenResult<M
     .bind(msg.reasoning_details)
     .bind(msg.steps_json)
     .execute(&mut *tx)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     // Update chat metadata: message_count, tokens, updated_at, last_activity
     sqlx::query(
@@ -112,14 +112,14 @@ pub async fn add_message(pool: &SqlitePool, msg: &NewMessage<'_>) -> ZenResult<M
     .bind(msg.tokens_out.unwrap_or(0))
     .bind(msg.chat_id)
     .execute(&mut *tx)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
-    tx.commit().await?;
+    tx.commit().await.map_err(crate::error::db_err)?;
 
     let msg = sqlx::query_as::<_, Message>("SELECT * FROM messages WHERE id = ?")
         .bind(&id)
         .fetch_one(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(msg)
 }
 
@@ -142,7 +142,7 @@ pub async fn update_message_steps(
     .bind(message_id)
     .bind(chat_id)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     if result.rows_affected() == 0 {
         return Err(crate::error::ZenError::Custom(
@@ -165,7 +165,7 @@ pub async fn update_message_content_and_metadata(
         .bind(metadata)
         .bind(id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -180,7 +180,7 @@ pub async fn get_message_in_chat(
         .bind(message_id)
         .bind(chat_id)
         .fetch_optional(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(row)
 }
 
@@ -206,7 +206,7 @@ pub async fn count_later_user_messages(
     .bind(chat_id)
     .bind(anchor_message_id)
     .fetch_one(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(row.0 as u64)
 }
 
@@ -227,8 +227,8 @@ pub async fn truncate_messages_after(
     // BEGIN IMMEDIATE for the same reason as artifacts::update_message: the
     // body writes from the first statement, and a deferred read-to-write
     // promotion can fail with SQLITE_BUSY_SNAPSHOT under concurrent commits.
-    let mut conn = pool.acquire().await?;
-    sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
+    let mut conn = pool.acquire().await.map_err(crate::error::db_err)?;
+    sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await.map_err(crate::error::db_err)?;
 
     let result: ZenResult<u64> = async {
         // Sum the doomed rows' tokens before deleting so chat totals stay
@@ -245,7 +245,7 @@ pub async fn truncate_messages_after(
         .bind(chat_id)
         .bind(anchor_message_id)
         .fetch_one(&mut *conn)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
         let removed = sqlx::query(
             r#"
@@ -263,7 +263,7 @@ pub async fn truncate_messages_after(
         .bind(chat_id)
         .bind(anchor_message_id)
         .execute(&mut *conn)
-        .await?
+        .await.map_err(crate::error::db_err)?
         .rows_affected();
 
         sqlx::query(
@@ -282,7 +282,7 @@ pub async fn truncate_messages_after(
         .bind(tokens.1)
         .bind(chat_id)
         .execute(&mut *conn)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
         Ok(removed)
     }
@@ -290,7 +290,7 @@ pub async fn truncate_messages_after(
 
     match result {
         Ok(removed) => {
-            sqlx::query("COMMIT").execute(&mut *conn).await?;
+            sqlx::query("COMMIT").execute(&mut *conn).await.map_err(crate::error::db_err)?;
             Ok(removed)
         }
         Err(e) => {
@@ -321,7 +321,7 @@ pub async fn update_message_content(
             .bind(message_id)
             .bind(chat_id)
             .execute(pool)
-            .await?
+            .await.map_err(crate::error::db_err)?
         }
         None => {
             sqlx::query(
@@ -331,7 +331,7 @@ pub async fn update_message_content(
             .bind(message_id)
             .bind(chat_id)
             .execute(pool)
-            .await?
+            .await.map_err(crate::error::db_err)?
         }
     };
 

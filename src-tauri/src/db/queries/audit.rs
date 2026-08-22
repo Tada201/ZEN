@@ -17,13 +17,13 @@ pub async fn init_audit_events(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     sqlx::query(
         "CREATE INDEX IF NOT EXISTS idx_audit_events_timestamp ON audit_events(timestamp DESC)",
     )
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     Ok(())
 }
@@ -40,7 +40,7 @@ pub async fn add_audit_event(pool: &SqlitePool, event: &AuditLogEntry) -> ZenRes
     .bind(&event.target)
     .bind(&event.reason)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -51,6 +51,6 @@ pub async fn list_audit_events(pool: &SqlitePool, limit: i64) -> ZenResult<Vec<A
     )
     .bind(limit)
     .fetch_all(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(events)
 }

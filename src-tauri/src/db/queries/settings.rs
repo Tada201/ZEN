@@ -5,14 +5,14 @@ use sqlx::{Row, SqlitePool};
 // --- Settings ---
 
 pub async fn count_settings(pool: &SqlitePool) -> ZenResult<i64> {
-    Ok(sqlx::query("SELECT COUNT(*) AS count FROM settings").fetch_one(pool).await?.get::<i64, _>("count"))
+    Ok(sqlx::query("SELECT COUNT(*) AS count FROM settings").fetch_one(pool).await.map_err(crate::error::db_err)?.get::<i64, _>("count"))
 }
 
 pub async fn get_setting(pool: &SqlitePool, key: &str) -> ZenResult<Option<String>> {
     let result = sqlx::query_as::<_, Setting>("SELECT * FROM settings WHERE key = ?")
         .bind(key)
         .fetch_optional(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(result.map(|s| s.value))
 }
 
@@ -21,7 +21,7 @@ pub async fn get_all_settings(
 ) -> ZenResult<std::collections::HashMap<String, String>> {
     let results = sqlx::query_as::<_, Setting>("SELECT * FROM settings")
         .fetch_all(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     let mut map = std::collections::HashMap::new();
     for s in results {
@@ -38,7 +38,7 @@ pub async fn set_setting(pool: &SqlitePool, key: &str, value: &str) -> ZenResult
     .bind(value)
     .bind(value)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -46,7 +46,7 @@ pub async fn bulk_set_settings(
     pool: &SqlitePool,
     settings: std::collections::HashMap<String, String>,
 ) -> ZenResult<()> {
-    let mut tx = pool.begin().await?;
+    let mut tx = pool.begin().await.map_err(crate::error::db_err)?;
 
     for (key, value) in settings {
         sqlx::query(
@@ -56,15 +56,15 @@ pub async fn bulk_set_settings(
         .bind(&value)
         .bind(&value)
         .execute(&mut *tx)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     }
 
-    tx.commit().await?;
+    tx.commit().await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
 pub async fn clear_settings(pool: &SqlitePool) -> ZenResult<()> {
-    sqlx::query("DELETE FROM settings").execute(pool).await?;
+    sqlx::query("DELETE FROM settings").execute(pool).await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -77,6 +77,6 @@ pub async fn increment_setting(pool: &SqlitePool, key: &str) -> ZenResult<()> {
     )
     .bind(key)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(())
 }

@@ -20,7 +20,7 @@ pub async fn insert_chat_tx(
     model: Option<&str>,
 ) -> ZenResult<()> {
     sqlx::query("INSERT INTO chats (id, title, model, workspace_root) VALUES (?, ?, ?, NULL)")
-        .bind(id).bind(title).bind(model).execute(&mut **tx).await?;
+        .bind(id).bind(title).bind(model).execute(&mut **tx).await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -37,7 +37,7 @@ pub async fn create_chat(
         .bind(model)
         .bind(workspace_root)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     get_chat(pool, &id).await
 }
@@ -48,7 +48,7 @@ pub async fn get_chat(pool: &SqlitePool, id: &str) -> ZenResult<Chat> {
     )
     .bind(id)
     .fetch_one(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(chat)
 }
 
@@ -69,7 +69,7 @@ pub async fn set_chat_model_if_unset(pool: &SqlitePool, id: &str, model: &str) -
     .bind(model)
     .bind(id)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -91,12 +91,12 @@ pub async fn create_chat_folder(
         .bind(color)
         .bind(icon)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     let folder = sqlx::query_as::<_, ChatFolder>("SELECT * FROM chat_folders WHERE id = ?")
         .bind(&id)
         .fetch_one(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(folder)
 }
 
@@ -111,14 +111,14 @@ pub async fn update_chat_folder(
             .bind(n)
             .bind(folder_id)
             .execute(pool)
-            .await?;
+            .await.map_err(crate::error::db_err)?;
     }
     if let Some(c) = color {
         sqlx::query("UPDATE chat_folders SET color = ?, updated_at = datetime('now') WHERE id = ?")
             .bind(c)
             .bind(folder_id)
             .execute(pool)
-            .await?;
+            .await.map_err(crate::error::db_err)?;
     }
     Ok(())
 }
@@ -127,7 +127,7 @@ pub async fn delete_chat_folder(pool: &SqlitePool, folder_id: &str) -> ZenResult
     sqlx::query("DELETE FROM chat_folders WHERE id = ?")
         .bind(folder_id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -137,7 +137,7 @@ pub async fn list_chat_folders(pool: &SqlitePool) -> ZenResult<Vec<ChatFolder>> 
     )
     .bind(MAX_CHAT_FOLDER_ITEMS)
     .fetch_all(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(folders)
 }
 
@@ -149,13 +149,13 @@ pub async fn move_chat_to_folder(
     sqlx::query("DELETE FROM chat_folder_members WHERE chat_id = ?")
         .bind(chat_id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     sqlx::query("INSERT INTO chat_folder_members (folder_id, chat_id) VALUES (?, ?)")
         .bind(folder_id)
         .bind(chat_id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -163,7 +163,7 @@ pub async fn remove_chat_from_folder(pool: &SqlitePool, chat_id: &str) -> ZenRes
     sqlx::query("DELETE FROM chat_folder_members WHERE chat_id = ?")
         .bind(chat_id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -176,7 +176,7 @@ pub async fn set_chat_workspace(
         .bind(workspace_root)
         .bind(chat_id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -184,7 +184,7 @@ pub async fn archive_chat(pool: &SqlitePool, chat_id: &str) -> ZenResult<()> {
     sqlx::query("UPDATE chats SET is_archived = 1, archived_at = datetime('now'), updated_at = datetime('now') WHERE id = ?")
         .bind(chat_id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -192,7 +192,7 @@ pub async fn unarchive_chat(pool: &SqlitePool, chat_id: &str) -> ZenResult<()> {
     sqlx::query("UPDATE chats SET is_archived = 0, archived_at = NULL, updated_at = datetime('now') WHERE id = ?")
         .bind(chat_id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -211,7 +211,7 @@ pub async fn list_archived_chats_page(
     .bind(limit.clamp(1, MAX_ARCHIVED_CHAT_ITEMS + 1))
     .bind(offset.max(0))
     .fetch_all(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(chats)
 }
 
@@ -248,7 +248,7 @@ pub async fn search_chats(
     .bind(&fts_query)
     .bind(limit_val)
     .fetch_all(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     Ok(results)
 }
@@ -270,14 +270,14 @@ pub async fn create_chat_template(
     .bind(system_prompt)
     .bind(default_model)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     let template = sqlx::query_as::<_, crate::db::models::ChatTemplate>(
         "SELECT * FROM chat_templates WHERE id = ?",
     )
     .bind(&id)
     .fetch_one(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(template)
 }
 
@@ -289,7 +289,7 @@ pub async fn list_chat_templates(
     )
     .bind(MAX_CHAT_TEMPLATE_ITEMS)
     .fetch_all(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(templates)
 }
 
@@ -297,7 +297,7 @@ pub async fn delete_chat_template(pool: &SqlitePool, id: &str) -> ZenResult<()> 
     sqlx::query("DELETE FROM chat_templates WHERE id = ?")
         .bind(id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -305,15 +305,15 @@ pub async fn bulk_delete_chats(pool: &SqlitePool, ids: &[String]) -> ZenResult<(
     if ids.is_empty() {
         return Ok(());
     }
-    let mut tx = pool.begin().await?;
+    let mut tx = pool.begin().await.map_err(crate::error::db_err)?;
     let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
     let query = format!("DELETE FROM chats WHERE id IN ({})", placeholders);
     let mut q = sqlx::query(&query);
     for id in ids {
         q = q.bind(id);
     }
-    q.execute(&mut *tx).await?;
-    tx.commit().await?;
+    q.execute(&mut *tx).await.map_err(crate::error::db_err)?;
+    tx.commit().await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -321,15 +321,15 @@ pub async fn bulk_archive_chats(pool: &SqlitePool, ids: &[String]) -> ZenResult<
     if ids.is_empty() {
         return Ok(());
     }
-    let mut tx = pool.begin().await?;
+    let mut tx = pool.begin().await.map_err(crate::error::db_err)?;
     let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
     let query = format!("UPDATE chats SET is_archived = 1, archived_at = datetime('now'), updated_at = datetime('now') WHERE id IN ({})", placeholders);
     let mut q = sqlx::query(&query);
     for id in ids {
         q = q.bind(id);
     }
-    q.execute(&mut *tx).await?;
-    tx.commit().await?;
+    q.execute(&mut *tx).await.map_err(crate::error::db_err)?;
+    tx.commit().await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -344,7 +344,7 @@ pub async fn fork_chat(
 
     // Both writes share one transaction: a failure between the chat insert and
     // the message copy would otherwise leave a permanently empty forked chat.
-    let mut tx = pool.begin().await?;
+    let mut tx = pool.begin().await.map_err(crate::error::db_err)?;
 
     // Create new chat
     sqlx::query("INSERT INTO chats (id, title, model, pinned, workspace_root) VALUES (?, ?, ?, 0, ?)")
@@ -353,7 +353,7 @@ pub async fn fork_chat(
         .bind(&old_chat.model)
         .bind(&old_chat.workspace_root)
         .execute(&mut *tx)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     // Copy messages
     sqlx::query(
@@ -367,9 +367,9 @@ pub async fn fork_chat(
     .bind(chat_id)
     .bind(up_to_message_id)
     .execute(&mut *tx)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
-    tx.commit().await?;
+    tx.commit().await.map_err(crate::error::db_err)?;
     get_chat(pool, &new_id).await
 }
 
@@ -389,7 +389,7 @@ pub async fn add_chat_tag(
     .bind(tag_name)
     .bind(color)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -398,7 +398,7 @@ pub async fn remove_chat_tag(pool: &SqlitePool, chat_id: &str, tag_name: &str) -
         .bind(chat_id)
         .bind(tag_name)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -422,7 +422,7 @@ pub async fn list_chat_tags_page(
     .bind(limit.clamp(1, MAX_CHAT_TAG_ITEMS + 1))
     .bind(offset.max(0))
     .fetch_all(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(tags)
 }
 
@@ -441,7 +441,7 @@ pub async fn list_all_chat_tags_page(
     .bind(limit.clamp(1, MAX_ALL_CHAT_TAG_ITEMS + 1))
     .bind(offset.max(0))
     .fetch_all(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(tags)
 }
 
@@ -460,6 +460,6 @@ pub async fn list_unique_tag_names_page(
     .bind(limit.clamp(1, MAX_UNIQUE_TAG_ITEMS + 1))
     .bind(offset.max(0))
     .fetch_all(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(tags)
 }

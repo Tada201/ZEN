@@ -270,7 +270,7 @@ impl TerminalService {
             cols,
             rows,
             Some(Box::new(on_output)),
-        )?;
+        ).map_err(crate::error::other_err)?;
         self.owners.lock().await.insert(session_id.clone(), chat_id);
         security
             .record_audit(AuditEvent {
@@ -298,7 +298,7 @@ impl TerminalService {
             return Err(ZenError::Custom("Terminal session belongs to another chat".to_string()));
         }
         if let Some(session) = manager.get(&id) {
-            session.write_data(&data).await?;
+            session.write_data(&data).await.map_err(crate::error::other_err)?;
             // Interactive keystrokes are intentionally not audited individually.
             // Session creation and destruction retain the privileged audit trail.
             Ok(())
@@ -318,7 +318,7 @@ impl TerminalService {
             return Err(ZenError::Custom("Terminal session belongs to another chat".to_string()));
         }
         let mut manager = manager.write().await;
-        manager.kill_session(&id)?;
+        manager.kill_session(&id).map_err(crate::error::other_err)?;
         self.owners.lock().await.remove(&id);
         security
             .record_audit(AuditEvent {
@@ -351,7 +351,7 @@ impl TerminalService {
                 cols,
                 pixel_width: 0,
                 pixel_height: 0,
-            })?;
+            }).map_err(crate::error::other_err)?;
             Ok(())
         } else {
             Err(ZenError::Custom("Terminal session not found".to_string()))

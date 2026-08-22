@@ -96,7 +96,7 @@ pub async fn get_provider_usage(
     let models = summaries_query
         .build_query_as::<ModelUsageSummary>()
         .fetch_all(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     let total_requests = models.iter().map(|item| item.requests).sum();
     let total_tokens_in = models.iter().map(|item| item.tokens_in).sum();
@@ -112,7 +112,7 @@ pub async fn get_provider_usage(
     let history = history_query
         .build_query_as::<ModelUsageHistoryItem>()
         .fetch_all(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     let mut daily_query = QueryBuilder::<Sqlite>::new(
         "SELECT strftime('%Y-%m-%d', created_at) AS day, COUNT(*) AS requests, \
@@ -124,7 +124,7 @@ pub async fn get_provider_usage(
     let daily = daily_query
         .build_query_as::<UsageDay>()
         .fetch_all(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
 
     Ok(ProviderUsageSnapshot {
         total_requests,

@@ -3,13 +3,14 @@ use crate::error::ZenResult;
 use sqlx::SqlitePool;
 
 pub async fn list_workbench_tabs(pool: &SqlitePool, chat_id: &str) -> ZenResult<Vec<WorkbenchTab>> {
-    Ok(sqlx::query_as::<_, WorkbenchTab>(
+    sqlx::query_as::<_, WorkbenchTab>(
         "SELECT id, chat_id, view_id, label, position, state_json, created_at, updated_at
          FROM workbench_tabs WHERE chat_id = ? ORDER BY position ASC, created_at ASC",
     )
     .bind(chat_id)
     .fetch_all(pool)
-    .await?)
+    .await
+    .map_err(crate::error::db_err)
 }
 
 pub async fn upsert_workbench_tab(
@@ -34,7 +35,7 @@ pub async fn upsert_workbench_tab(
     .bind(tab.position)
     .bind(&tab.state_json)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -43,6 +44,6 @@ pub async fn delete_workbench_tab(pool: &SqlitePool, chat_id: &str, tab_id: &str
         .bind(chat_id)
         .bind(tab_id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(())
 }

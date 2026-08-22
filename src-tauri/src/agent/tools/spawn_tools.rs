@@ -345,15 +345,15 @@ fn classify_spawn_error(error: &anyhow::Error) -> ErrorClass {
                     return ErrorClass::Permanent;
                 }
                 ZenError::Http(http) => {
-                    if let Some(status) = http.status() {
-                        if status.as_u16() == 429 || status.is_server_error() {
+                    if let Some(status) = http.status {
+                        if status == 429 || (500..=599).contains(&status) {
                             return ErrorClass::Transient;
                         }
                         // Other 4xx (401/403/404/400…): the request itself is
                         // wrong; retrying unchanged cannot help.
                         return ErrorClass::Permanent;
                     }
-                    if http.is_timeout() || http.is_connect() {
+                    if http.timeout || http.connect {
                         return ErrorClass::Transient;
                     }
                     return ErrorClass::Retryable;

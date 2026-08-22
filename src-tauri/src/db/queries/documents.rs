@@ -23,7 +23,7 @@ pub async fn migrate_chat_attachment_columns(pool: &SqlitePool) -> ZenResult<()>
     }
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_documents_chat ON documents(chat_id);")
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -53,7 +53,7 @@ pub async fn add_document(
     .bind(doc.embedding_model)
     .bind(doc.mime_type)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     get_document(pool, doc.id).await
 }
@@ -77,7 +77,7 @@ pub async fn link_document_to_workspace(
     .bind(doc_type)
     .bind(mime_type)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     get_document(pool, id).await
 }
@@ -87,7 +87,7 @@ pub async fn get_document(pool: &SqlitePool, id: &str) -> ZenResult<crate::db::m
         sqlx::query_as::<_, crate::db::models::Document>("SELECT * FROM documents WHERE id = ?")
             .bind(id)
             .fetch_one(pool)
-            .await?;
+            .await.map_err(crate::error::db_err)?;
     Ok(doc)
 }
 
@@ -130,7 +130,7 @@ pub async fn add_chat_attachment(
     .bind(doc.page_count)
     .bind(doc.sheet_names)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
 
     get_document(pool, doc.id).await
 }
@@ -146,7 +146,7 @@ pub async fn list_documents_for_chat(
     .bind(chat_id)
     .bind(MAX_DOCUMENT_LIST_ITEMS)
     .fetch_all(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(docs)
 }
 
@@ -156,7 +156,7 @@ pub async fn count_documents_for_chat(pool: &SqlitePool, chat_id: &str) -> ZenRe
         sqlx::query("SELECT COUNT(*) AS count FROM documents WHERE chat_id = ?")
             .bind(chat_id)
             .fetch_one(pool)
-            .await?
+            .await.map_err(crate::error::db_err)?
             .get::<i64, _>("count"),
     )
 }
@@ -167,7 +167,7 @@ pub async fn count_documents_by_hash(pool: &SqlitePool, content_hash: &str) -> Z
         sqlx::query("SELECT COUNT(*) AS count FROM documents WHERE content_hash = ?")
             .bind(content_hash)
             .fetch_one(pool)
-            .await?
+            .await.map_err(crate::error::db_err)?
             .get::<i64, _>("count"),
     )
 }
@@ -183,7 +183,7 @@ pub async fn delete_documents_for_chat(
     sqlx::query("DELETE FROM documents WHERE chat_id = ?")
         .bind(chat_id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(docs)
 }
 
@@ -202,7 +202,7 @@ pub async fn list_documents_page(
     .bind(limit.clamp(1, MAX_DOCUMENT_LIST_ITEMS + 1))
     .bind(offset.max(0))
     .fetch_all(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(docs)
 }
 
@@ -217,7 +217,7 @@ pub async fn update_document_status(
         .bind(error_msg)
         .bind(id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -238,7 +238,7 @@ pub async fn add_document_chunk(
     .bind(content)
     .bind(token_count)
     .execute(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -246,17 +246,17 @@ pub async fn delete_document(pool: &SqlitePool, id: &str) -> ZenResult<()> {
     sqlx::query("DELETE FROM documents WHERE id = ?")
         .bind(id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
 pub async fn count_chats(pool: &SqlitePool) -> ZenResult<i64> {
-    Ok(sqlx::query("SELECT COUNT(*) AS count FROM chats").fetch_one(pool).await?.get::<i64, _>("count"))
+    Ok(sqlx::query("SELECT COUNT(*) AS count FROM chats").fetch_one(pool).await.map_err(crate::error::db_err)?.get::<i64, _>("count"))
 }
 
 pub async fn list_all_chats_for_backup(pool: &SqlitePool) -> ZenResult<Vec<Chat>> {
     sqlx::query_as::<_, Chat>("SELECT c.id, c.title, c.model, c.created_at, c.updated_at, c.pinned, c.is_archived, c.archived_at, c.message_count, c.total_tokens_in, c.total_tokens_out, c.last_activity, COALESCE(c.folder_id, cfm.folder_id) as folder_id, c.workspace_root FROM chats c LEFT JOIN chat_folder_members cfm ON c.id = cfm.chat_id ORDER BY c.created_at ASC, c.id ASC")
-        .fetch_all(pool).await.map_err(Into::into)
+        .fetch_all(pool).await.map_err(crate::error::db_err)
 }
 
 pub async fn list_chats(pool: &SqlitePool) -> ZenResult<Vec<Chat>> {
@@ -270,7 +270,7 @@ pub async fn list_chats_page(pool: &SqlitePool, limit: i64, offset: i64) -> ZenR
     .bind(limit.clamp(1, MAX_CHAT_LIST_ITEMS + 1))
     .bind(offset.max(0))
     .fetch_all(pool)
-    .await?;
+    .await.map_err(crate::error::db_err)?;
     Ok(chats)
 }
 
@@ -279,7 +279,7 @@ pub async fn update_chat_title(pool: &SqlitePool, id: &str, title: &str) -> ZenR
         .bind(title)
         .bind(id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -287,7 +287,7 @@ pub async fn delete_chat(pool: &SqlitePool, id: &str) -> ZenResult<()> {
     sqlx::query("DELETE FROM chats WHERE id = ?")
         .bind(id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(())
 }
 
@@ -295,6 +295,6 @@ pub async fn toggle_pin_chat(pool: &SqlitePool, id: &str) -> ZenResult<()> {
     sqlx::query("UPDATE chats SET pinned = CASE WHEN pinned = 1 THEN 0 ELSE 1 END WHERE id = ?")
         .bind(id)
         .execute(pool)
-        .await?;
+        .await.map_err(crate::error::db_err)?;
     Ok(())
 }

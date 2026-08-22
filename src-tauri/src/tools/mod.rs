@@ -107,12 +107,7 @@ pub struct ToolDefinition {
 
 // ========== TOOL INFO (backward compat with LLM providers) ==========
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolInfo {
-    pub name: String,
-    pub description: String,
-    pub parameters: serde_json::Value,
-}
+pub use zen_core::ToolInfo;
 
 // ========== TOOL TRAIT v2 ==========
 

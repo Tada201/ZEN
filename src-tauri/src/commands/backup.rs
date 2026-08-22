@@ -168,7 +168,7 @@ pub async fn import_zen_backup(
     let snapshot: BackupSnapshot = serde_json::from_slice(&snapshot_content).map_err(serde_error)?;
     validate_snapshot(&snapshot)?;
     let db = state.db().await?;
-    let mut tx = db.begin().await?;
+    let mut tx = db.begin().await.map_err(crate::error::db_err)?;
     let chat_count = snapshot.chats.len();
     let message_count = snapshot.messages.len();
     for chat in snapshot.chats {
@@ -185,7 +185,7 @@ pub async fn import_zen_backup(
     }
     // Public settings are intentionally exported as metadata only for now;
     // merge restores preserve current machine configuration.
-    tx.commit().await?;
+    tx.commit().await.map_err(crate::error::db_err)?;
     Ok(BackupInspection { format_version: manifest.format_version, app_version: manifest.app_version, created_at: manifest.created_at, categories: manifest.categories, bytes: snapshot_content.len() as u64, secrets_excluded: true, workspace_roots_excluded: true, chat_count, message_count })
 }
 
