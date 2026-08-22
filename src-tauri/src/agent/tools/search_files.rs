@@ -315,6 +315,7 @@ mod search_files_tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::invalid_regex)] // the invalid literal is the test subject
     async fn invalid_regex_is_rejected() {
         // The tool compiles the pattern before walking; an invalid one errors.
         assert!(regex::Regex::new("(unclosed").is_err());

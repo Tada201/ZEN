@@ -291,7 +291,7 @@ fn yaml_scalar(v: &str) -> String {
     let needs_quote = v.is_empty()
         || v.starts_with(|c: char| c.is_whitespace())
         || v.ends_with(|c: char| c.is_whitespace())
-        || v.contains(|c: char| matches!(c, ':' | '#' | '"' | '\'' | '\n' | '[' | ']' | '{' | '}' | '&' | '*' | '!' | '|' | '>' | '%' | '@' | '`'));
+        || v.contains([':', '#', '"', '\'', '\n', '[', ']', '{', '}', '&', '*', '!', '|', '>', '%', '@', '`']);
     if needs_quote {
         // Double-quoted YAML: escape backslash/quote, and fold real newlines and
         // tabs to their `\n`/`\t` escapes so the scalar stays on one line.

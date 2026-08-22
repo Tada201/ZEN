@@ -17,21 +17,13 @@ const MAX_PROMPT_CHARS: usize = 8_000;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub struct McpCapabilitySummary {
     pub tools: bool,
     pub resources: bool,
     pub prompts: bool,
 }
 
-impl Default for McpCapabilitySummary {
-    fn default() -> Self {
-        Self {
-            tools: false,
-            resources: false,
-            prompts: false,
-        }
-    }
-}
 
 /// Safe status vocabulary. Keep this small because it is injected into prompts.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -135,7 +127,7 @@ impl McpDiscoveryService {
         let records = self.records.read().await;
         McpInventory {
             revision: self.revision.load(Ordering::Relaxed),
-            servers: records.values().cloned().take(MAX_INVENTORY_SERVERS).collect(),
+            servers: records.values().take(MAX_INVENTORY_SERVERS).cloned().collect(),
         }
     }
 

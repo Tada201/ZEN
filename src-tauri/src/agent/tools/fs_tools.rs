@@ -241,11 +241,10 @@ fn collect_dir_entries<'a>(
                 "modified_ms": modified_ms,
             }));
 
-            if is_dir && recursive && depth + 1 < LIST_DIR_MAX_DEPTH && !is_ignored_dir(&name) {
-                if collect_dir_entries(root, &entry.path(), recursive, depth + 1, out).await {
+            if is_dir && recursive && depth + 1 < LIST_DIR_MAX_DEPTH && !is_ignored_dir(&name)
+                && collect_dir_entries(root, &entry.path(), recursive, depth + 1, out).await {
                     return true;
                 }
-            }
         }
         false
     })

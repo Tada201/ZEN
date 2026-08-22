@@ -412,7 +412,7 @@ mod tests {
         // A denied server stays disconnected on the next sync and the revocation
         // is persisted.
         assert!(!store.is_approved("srv", &fp).await);
-        assert!(parse_approved(&std::fs::read_to_string(&path).unwrap()).get("srv").is_none());
+        assert!(!parse_approved(&std::fs::read_to_string(&path).unwrap()).contains_key("srv"));
         let _ = std::fs::remove_file(path);
     }
 

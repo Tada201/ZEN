@@ -98,7 +98,7 @@ pub fn extract_ooxml(path: &Path) -> Result<String> {
         }
     }
     // Slides sort lexically as slide1, slide10, slide2 — fix numeric order.
-    parts.sort_by(|a, b| slide_num(a).cmp(&slide_num(b)));
+    parts.sort_by_key(|a| slide_num(a));
 
     let mut out = String::new();
     for part in parts {

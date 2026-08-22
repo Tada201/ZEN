@@ -183,7 +183,7 @@ impl ReasoningCapability {
     ///   * `always_on`  ⇒ `can_disable = false`
     ///   * `unsupported`⇒ `protocol = none`, no control
     ///   * `tunable`    ⇒ must have levels or a budget range; else demote to
-    ///                    `toggleable` (if a protocol/control exists) or `unknown`
+    ///     `toggleable` (if a protocol/control exists) or `unknown`
     pub fn normalized(mut self) -> Self {
         if self.support == ReasoningSupport::AlwaysOn {
             self.can_disable = false;

@@ -917,7 +917,7 @@ fn decode_data_url(data_url: &str) -> Option<Vec<u8>> {
         return None;
     }
     base64::engine::general_purpose::STANDARD
-        .decode(payload[1..].as_bytes())
+        .decode(&payload.as_bytes()[1..])
         .ok()
 }
 

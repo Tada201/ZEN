@@ -39,60 +39,6 @@ pub async fn init_pool(db_path: &Path) -> ZenResult<SqlitePool> {
     Ok(pool)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::init_pool;
-    use crate::db::queries::{add_message, create_chat, NewMessage};
-    use std::time::Duration;
-    use tempfile::tempdir;
-
-    #[tokio::test]
-    async fn waits_for_a_competing_writer_before_returning_database_locked() {
-        let dir = tempdir().expect("temporary database directory");
-        let pool = init_pool(&dir.path().join("zen.db"))
-            .await
-            .expect("database should initialize");
-        let chat = create_chat(&pool, "Lock test", None, None)
-            .await
-            .expect("chat should be created");
-
-        let mut held = pool.begin().await.expect("lock transaction should begin");
-        sqlx::query("UPDATE chats SET title = ? WHERE id = ?")
-            .bind("Writer 1")
-            .bind(&chat.id)
-            .execute(&mut *held)
-            .await
-            .expect("lock transaction should acquire the write lock");
-
-        let writer_pool = pool.clone();
-        let chat_id = chat.id.clone();
-        let pending_writer = tokio::spawn(async move {
-            add_message(
-                &writer_pool,
-                &NewMessage {
-                    chat_id: &chat_id,
-                    role: "user",
-                    content: "Writer 2",
-                    is_complete: true,
-                    ..Default::default()
-                },
-            )
-            .await
-        });
-
-        // Give the second writer a chance to reach SQLite while the first
-        // transaction still owns the lock. Without busy_timeout this returns
-        // SQLITE_BUSY immediately; with the shared connection policy it waits.
-        tokio::time::sleep(Duration::from_millis(50)).await;
-        held.commit().await.expect("first writer should commit");
-
-        pending_writer
-            .await
-            .expect("writer task should not panic")
-            .expect("second writer should wait and then commit");
-    }
-}
-
 /// Run schema migrations inline — no external migration files needed.
 async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
     // Each PRAGMA must be a separate query — sqlx only executes the first
@@ -1053,4 +999,58 @@ async fn run_migrations(pool: &SqlitePool) -> ZenResult<()> {
 
     info!("Database migrations complete");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::init_pool;
+    use crate::db::queries::{add_message, create_chat, NewMessage};
+    use std::time::Duration;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn waits_for_a_competing_writer_before_returning_database_locked() {
+        let dir = tempdir().expect("temporary database directory");
+        let pool = init_pool(&dir.path().join("zen.db"))
+            .await
+            .expect("database should initialize");
+        let chat = create_chat(&pool, "Lock test", None, None)
+            .await
+            .expect("chat should be created");
+
+        let mut held = pool.begin().await.expect("lock transaction should begin");
+        sqlx::query("UPDATE chats SET title = ? WHERE id = ?")
+            .bind("Writer 1")
+            .bind(&chat.id)
+            .execute(&mut *held)
+            .await
+            .expect("lock transaction should acquire the write lock");
+
+        let writer_pool = pool.clone();
+        let chat_id = chat.id.clone();
+        let pending_writer = tokio::spawn(async move {
+            add_message(
+                &writer_pool,
+                &NewMessage {
+                    chat_id: &chat_id,
+                    role: "user",
+                    content: "Writer 2",
+                    is_complete: true,
+                    ..Default::default()
+                },
+            )
+            .await
+        });
+
+        // Give the second writer a chance to reach SQLite while the first
+        // transaction still owns the lock. Without busy_timeout this returns
+        // SQLITE_BUSY immediately; with the shared connection policy it waits.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        held.commit().await.expect("first writer should commit");
+
+        pending_writer
+            .await
+            .expect("writer task should not panic")
+            .expect("second writer should wait and then commit");
+    }
 }

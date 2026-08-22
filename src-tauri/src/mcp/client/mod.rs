@@ -384,12 +384,12 @@ impl McpClient {
         &self.consent
     }
 
-    /// The HTTP handshake helpers (`apply_mcp_headers`, `discover_http_server`,
-    /// `initialize_server`, `send_initialized_notification`,
-    /// `fetch_external_tools`) live in the `http_handshake` child module, and
-    /// `initialize_stdio_server` / `fetch_external_tools_stdio` live in
-    /// `stdio_helpers`, to keep this file under the size cap; all remain
-    /// associated functions so call sites are unchanged.
+    // The HTTP handshake helpers (`apply_mcp_headers`, `discover_http_server`,
+    // `initialize_server`, `send_initialized_notification`,
+    // `fetch_external_tools`) live in the `http_handshake` child module, and
+    // `initialize_stdio_server` / `fetch_external_tools_stdio` live in
+    // `stdio_helpers`, to keep this file under the size cap; all remain
+    // associated functions so call sites are unchanged.
 
     /// Expand a `.mcp.json` string→string map (e.g. `env` / `headers`),
     /// resolving `${env:VAR}` / `$VAR` references from the host at

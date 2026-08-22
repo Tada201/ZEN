@@ -136,7 +136,7 @@ pub(crate) fn unified_diff(path: &Path, old: &str, new: &str) -> (String, usize,
     for change in diff.iter_all_changes() {
         // Remove only the line terminator. `trim_end()` would corrupt
         // meaningful trailing spaces in the preview.
-        let value = change.value().trim_end_matches(|character| character == 13 as char || character == 10 as char);
+        let value = change.value().trim_end_matches([13 as char, 10 as char]);
         match change.tag() {
             ChangeTag::Delete => {
                 diff_lines.push(format!("-{}", value));

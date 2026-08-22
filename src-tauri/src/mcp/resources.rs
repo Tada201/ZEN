@@ -134,7 +134,7 @@ pub fn validate_resource_uri(uri: &str) -> Result<(), String> {
         return Err(format!("resource uri scheme '{}' is not allowed", scheme));
     }
     // Path traversal only matters for schemes that map to a filesystem path.
-    if scheme == "file" && uri.split(|c| c == '/' || c == '\\').any(|seg| seg == "..") {
+    if scheme == "file" && uri.split(['/', '\\']).any(|seg| seg == "..") {
         return Err("file resource uri contains a path traversal segment".to_string());
     }
     Ok(())

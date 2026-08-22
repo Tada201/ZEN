@@ -133,6 +133,7 @@ pub(crate) fn resolve_agent(
 ///
 /// If `caller_tool_ids` is empty, the function falls back to the registry's
 /// "generalist" agent tool set for backward compatibility.
+#[allow(clippy::too_many_arguments)] // restructure into a params struct when agent moves to zen-agent (Phase 11)
 pub(crate) fn resolve_adhoc_agent(
     agent_registry: &AgentRegistry,
     name: Option<&str>,

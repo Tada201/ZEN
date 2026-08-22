@@ -57,17 +57,14 @@ impl ModelTier {
 /// Controls which parts of a built-in profile are configurable in the UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum AgentConfigMode {
+    #[default]
     Full,
     ModelOnly,
     ReadOnly,
 }
 
-impl Default for AgentConfigMode {
-    fn default() -> Self {
-        Self::Full
-    }
-}
 
 /// Persisted profile fields that extend the runtime Agent without forcing every
 /// internal test/runner construction to know about UI and delegation policy.
@@ -157,13 +154,13 @@ impl AgentRegistry {
     /// List all registered agents (for execution and prompt construction).
     pub fn list(&self) -> Vec<Agent> {
         let mut agents: Vec<Agent> = self.agents.read().map(|guard| guard.values().cloned().collect()).unwrap_or_default();
-        agents.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        agents.sort_by_key(|a| a.name.to_lowercase());
         agents
     }
 
     pub fn list_profiles(&self) -> Vec<AgentProfile> {
         let mut profiles: Vec<AgentProfile> = self.profiles.read().map(|guard| guard.values().cloned().collect()).unwrap_or_default();
-        profiles.sort_by(|a, b| a.agent.name.to_lowercase().cmp(&b.agent.name.to_lowercase()));
+        profiles.sort_by_key(|a| a.agent.name.to_lowercase());
         profiles
     }
 

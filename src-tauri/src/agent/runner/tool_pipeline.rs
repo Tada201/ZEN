@@ -252,23 +252,6 @@ pub(super) async fn preprocess_tool_calls(
     (ordered_results, pipeline_calls)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::nested_delegation_denied;
-
-    #[test]
-    fn root_can_delegate() {
-        assert!(!nested_delegation_denied("spawn_agent", true));
-    }
-
-    #[test]
-    fn child_cannot_delegate_directly_or_via_tool_exec_resolution() {
-        assert!(nested_delegation_denied("spawn_agent", false));
-        assert!(nested_delegation_denied("spawn_agent", false));
-        assert!(!nested_delegation_denied("web_search", false));
-    }
-}
-
 pub(super) fn cache_key_for(tool_call: &ToolCall) -> String {
     ToolCache::generate_key(&tool_call.name, &tool_call.args)
 }
@@ -349,5 +332,22 @@ fn compact_tool_output(value: Value) -> Value {
             })
         }
         other => other,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::nested_delegation_denied;
+
+    #[test]
+    fn root_can_delegate() {
+        assert!(!nested_delegation_denied("spawn_agent", true));
+    }
+
+    #[test]
+    fn child_cannot_delegate_directly_or_via_tool_exec_resolution() {
+        assert!(nested_delegation_denied("spawn_agent", false));
+        assert!(nested_delegation_denied("spawn_agent", false));
+        assert!(!nested_delegation_denied("web_search", false));
     }
 }
