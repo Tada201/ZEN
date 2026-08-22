@@ -204,7 +204,7 @@ assert(!JSON.parse(generalistAgent).tool_ids.includes("tools_search") && !JSON.p
   for (const forbidden of ["write_file", "edit_file", "apply_patch", "run_command", "spawn_agent", "manage_board"]) {
     assert(!explore.tool_ids.includes(forbidden), `explore must not be granted the mutating tool '${forbidden}'`);
   }
-  assert(explore.allow_nested_delegation === false, "explore must not delegate further");
+  assert(!Object.keys(explore).some((key) => /nested|allowed_agent/i.test(key)), "explore must not carry retired nested-delegation options");
 }
 
 console.log("tool system final hardening ok");

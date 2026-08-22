@@ -52,8 +52,8 @@ const spawn = readFileSync(
   "utf8",
 );
 check(
-  "spawn suppresses inline chat:message",
-  /should_emit_inline_chat_message_for_spawn/.test(spawn),
+  "spawn emits SubagentStep instead of inline chat:message",
+  /AgentEvent::SubagentStep/.test(spawn) && !spawn.includes("should_emit_inline_chat_message_for_spawn"),
 );
 
 const useAgentEvents = readFileSync(

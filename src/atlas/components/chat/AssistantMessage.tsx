@@ -31,7 +31,6 @@ import {
 } from "./AssistantMessageTrace";
 import { ExecutionGroup } from "./ExecutionGroup";
 import { SubagentExecutionCard } from "./SubagentExecutionCard";
-import { buildDelegationTree } from "@/atlas/agentRuntime/delegationTree";
 import { orderSteps } from "@/atlas/agentRuntime/types";
 import {
   FoldOutCard,
@@ -216,17 +215,13 @@ export function AssistantMessage({
     return groupToolCalls(message.toolCalls);
   }, [message.toolCalls]);
 
-  const delegationTree = useMemo(() => {
-    return buildDelegationTree(message.steps, message.toolCalls);
-  }, [message.steps, message.toolCalls]);
-
   // OpenUI is a per-turn capability, not a renderer-wide content heuristic.
   // Missing/legacy capability metadata is intentionally treated as disabled.
   const allowGenerativeUI = message.generativeUI === 1;
 
   const view = useMemo(
-    () => deriveAssistantMessageViewState({ message, groupedSteps, groupedToolCalls, delegationTree }),
-    [message, groupedSteps, groupedToolCalls, delegationTree],
+    () => deriveAssistantMessageViewState({ message, groupedSteps, groupedToolCalls }),
+    [message, groupedSteps, groupedToolCalls],
   );
   const {
     executionActionSteps,
@@ -401,13 +396,7 @@ export function AssistantMessage({
                         ) : step.type === "subagent" && step.subagent ? (
                           <SubagentExecutionCard
                             step={step}
-                            childToolCalls={message.toolCalls || []}
-                            childAgents={delegationTree.childrenByParent.get(step.subagent.spawnId) || []}
-                            delegation={delegationTree.nodes.get(step.subagent.spawnId)}
-                            delegationTree={delegationTree}
-                            messageId={message.id}
                             sessionId={message.sessionId}
-                            onOpenArtifact={onOpenArtifact}
                           />
                         ) : step.type === "action" ? (
                           <AgentActionStep step={step} isStreaming={message.status === "sending"} />

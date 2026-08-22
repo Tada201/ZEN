@@ -638,8 +638,6 @@ impl SpawnAgentTool {
             relevant_files,
             parent_tool_call_id,
         } = params;
-        child_runner::check_depth(depth)?;
-
         if agent_id == "voice_display" {
             anyhow::bail!(
                 "voice_display is an internal render-only agent started automatically after a voice response; do not spawn it manually"
@@ -649,30 +647,12 @@ impl SpawnAgentTool {
         // Determine the caller's tool ceiling so ad-hoc agents inherit the
         // same authority (minus delegation tools) instead of the hardcoded
         // generalist set.
-        let (caller_tool_ids, allowed_child_agent_ids): (Vec<String>, Vec<String>) = if let Some(ref allowed) = allowed_tools {
+        let caller_tool_ids: Vec<String> = if let Some(ref allowed) = allowed_tools {
             let guard = allowed.lock().await;
-            let child_ids = guard
-                .iter()
-                .filter_map(|value| value.strip_prefix(child_runner::ALLOWED_CHILD_AGENT_PREFIX).map(str::to_string))
-                .collect();
-            let tool_ids = guard
-                .iter()
-                .filter(|value| !value.starts_with(child_runner::ALLOWED_CHILD_AGENT_PREFIX))
-                .cloned()
-                .collect();
-            (tool_ids, child_ids)
+            guard.iter().cloned().collect()
         } else {
-            (Vec::new(), Vec::new())
+            Vec::new()
         };
-
-        // Nested profiles carry their allowed child-agent IDs in an internal
-        // capability marker. The root runner has no markers and remains the
-        // only unrestricted delegation boundary.
-        if !allowed_child_agent_ids.is_empty()
-            && (adhoc_instructions.is_some() || !allowed_child_agent_ids.iter().any(|id| id == agent_id))
-        {
-            anyhow::bail!("This subagent is not allowed to invoke agent '{}'", agent_id);
-        }
 
         // Built-in profiles ship without a model override, so a child must be
         // able to inherit the model the parent turn is running on. Prefer the
@@ -728,10 +708,10 @@ impl SpawnAgentTool {
         let handoff = child_runner::build_subagent_handoff(
             &resolved,
             task,
-            context,              success_criteria,
+            context,
+            success_criteria,
             &constraints,
             &relevant_files,
-            depth,
         );
         let child_messages = child_runner::build_child_messages_from_handoff(&handoff);
         let memory_scope = child_runner::subagent_memory_scope(agent_id, task);

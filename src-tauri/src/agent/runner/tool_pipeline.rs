@@ -55,11 +55,16 @@ fn normalize_direct_tool_args(tool_name: &str, args: &Value) -> Value {
     normalized
 }
 
+pub(super) fn nested_delegation_denied(tool_name: &str, delegation_allowed: bool) -> bool {
+    tool_name == "spawn_agent" && !delegation_allowed
+}
+
 pub(super) async fn preprocess_tool_calls(
     tool_manager: &Arc<ToolManager>,
     tool_calls: &[ToolCall],
     authorized_tool_ids: &[String],
     tools_enabled: bool,
+    delegation_allowed: bool,
 ) -> (Vec<Option<ToolResult>>, Vec<PipelineCall>) {
     let mut ordered_results: Vec<Option<ToolResult>> = vec![None; tool_calls.len()];
     let mut pipeline_calls: Vec<PipelineCall> = Vec::new();
@@ -171,6 +176,14 @@ pub(super) async fn preprocess_tool_calls(
                     continue;
                 }
                 if let Some((real_id, real_args)) = tool_manager.resolve_tool_exec(&tc.args).await {
+                    if nested_delegation_denied(&real_id, delegation_allowed) {
+                        ordered_results[index] = Some(normalize_tool_result(
+                            tc.id.clone(), "tool_exec", "Tool Exec", tc.args.clone(),
+                            json!({"error": "Nested delegation is disabled for sub-agents."}),
+                            true, 0, chrono::Utc::now(),
+                        ));
+                        continue;
+                    }
                     if !authorized_tool_ids.is_empty() {
                         if let AllowlistDecision::Deny { reason } =
                             enforce_tool_allowlist(&allowlist, &real_id, "agent")
@@ -217,6 +230,14 @@ pub(super) async fn preprocess_tool_calls(
                 }
             }
             _ => {
+                if nested_delegation_denied(&tc.name, delegation_allowed) {
+                    ordered_results[index] = Some(normalize_tool_result(
+                        tc.id.clone(), "spawn_agent", "Spawn Agent", tc.args.clone(),
+                        json!({"error": "Nested delegation is disabled for sub-agents."}),
+                        true, 0, chrono::Utc::now(),
+                    ));
+                    continue;
+                }
                 let mut resolved = tc.clone();
                 resolved.args = normalize_direct_tool_args(&resolved.name, &resolved.args);
                 pipeline_calls.push(PipelineCall {
@@ -229,6 +250,23 @@ pub(super) async fn preprocess_tool_calls(
     }
 
     (ordered_results, pipeline_calls)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::nested_delegation_denied;
+
+    #[test]
+    fn root_can_delegate() {
+        assert!(!nested_delegation_denied("spawn_agent", true));
+    }
+
+    #[test]
+    fn child_cannot_delegate_directly_or_via_tool_exec_resolution() {
+        assert!(nested_delegation_denied("spawn_agent", false));
+        assert!(nested_delegation_denied("spawn_agent", false));
+        assert!(!nested_delegation_denied("web_search", false));
+    }
 }
 
 pub(super) fn cache_key_for(tool_call: &ToolCall) -> String {

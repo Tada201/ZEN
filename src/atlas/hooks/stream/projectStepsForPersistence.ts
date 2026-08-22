@@ -335,8 +335,8 @@ function compactSubagent(subagent: SubagentStepData | undefined): SubagentStepDa
     error: subagent.error ? redactErrorSummary(subagent.error) : subagent.error,
     durationMs: subagent.durationMs,
     timestamp: subagent.timestamp,
-    // Preserve explicit ownership so nested delegation can be reconstructed
-    // without relying on legacy trace-id inference after reload.
+    // Preserve explicit ownership so delegation children can be re-owned on
+    // reload without relying on legacy trace-id inference.
     childToolCallIds: [...new Set(subagent.childToolCallIds || [])],
   };
 }

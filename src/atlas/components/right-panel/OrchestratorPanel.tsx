@@ -23,7 +23,6 @@ type SubagentItem = {
   reasoning?: string;
   response?: string;
   lane?: AgentDelegationLaneModel;
-  children?: SubagentItem[];
 };
 
 const EMPTY_MESSAGES: Message[] = [];
@@ -78,7 +77,6 @@ function toSubagentFromLane(lane: AgentDelegationLaneModel, timestamp?: number):
 
 function buildSubagentItems(messages: Message[]): SubagentItem[] {
   const bySpawn = new Map<string, SubagentItem>();
-  const parentBySpawn = new Map<string, string>();
   const canonicalSpawnIds = new Set<string>();
 
   for (const message of messages) {
@@ -87,10 +85,6 @@ function buildSubagentItems(messages: Message[]): SubagentItem[] {
     const toolCalls = message.toolCalls || [];
     const tree = buildDelegationTree(steps, toolCalls);
     tree.nodes.forEach((_, spawnId) => canonicalSpawnIds.add(spawnId));
-
-    tree.nodes.forEach((node, spawnId) => {
-      if (node.parentSpawnId) parentBySpawn.set(spawnId, node.parentSpawnId);
-    });
 
     const addItem = (
       resolved: SubagentStepData,
@@ -112,19 +106,11 @@ function buildSubagentItems(messages: Message[]): SubagentItem[] {
     };
 
     // Subagent lifecycle steps are the canonical panel records. Using the
-    // delegation tree here preserves explicit child-tool ownership and keeps
-    // nested agents out of the flat root list.
+    // delegation tree here preserves explicit child-tool ownership.
     tree.steps.forEach((step, spawnId) => {
       const node = tree.nodes.get(spawnId);
       if (!node || !step.subagent) return;
-      const nestedSpawnToolIds = new Set(
-        node.childAgentIds
-          .map((childId) => tree.nodes.get(childId)?.parentToolCallId)
-          .filter((id): id is string => Boolean(id)),
-      );
-      const childTools = selectDelegationChildTools(node, toolCalls)
-        .filter((tool) => !nestedSpawnToolIds.has(tool.id));
-      addItem(step.subagent, step, childTools);
+      addItem(step.subagent, step, selectDelegationChildTools(node, toolCalls));
     });
 
     // Keep legacy action lanes readable when a persisted trace predates the
@@ -140,15 +126,7 @@ function buildSubagentItems(messages: Message[]): SubagentItem[] {
     }
   }
 
-  const items = [...bySpawn.values()];
-  items.forEach((item) => {
-    item.children = items.filter((child) => parentBySpawn.get(child.id) === item.id);
-  });
-  return items.filter((item) => !parentBySpawn.has(item.id));
-}
-
-function flattenSubagentItems(items: SubagentItem[]): SubagentItem[] {
-  return items.flatMap((item) => [item, ...flattenSubagentItems(item.children || [])]);
+  return [...bySpawn.values()];
 }
 
 /** Optimistically flip a subagent step to cancelled after the backend stop. */
@@ -180,14 +158,9 @@ function subagentRecordTime(item: SubagentItem): number {
 }
 
 function filterSubagentItems(items: SubagentItem[], clearedAt?: number): SubagentItem[] {
-  return items.flatMap((item) => {
-    const children = filterSubagentItems(item.children || [], clearedAt);
-    const keepItem = !clearedAt
-      || isSubagentRunning(item.subagent)
-      || subagentRecordTime(item) > clearedAt;
-    if (!keepItem && children.length === 0) return [];
-    return [{ ...item, children }];
-  });
+  return items.filter((item) => !clearedAt
+    || isSubagentRunning(item.subagent)
+    || subagentRecordTime(item) > clearedAt);
 }
 
 function CompactSubagentRow({ item, selected, onSelect, onStop, stopping, stopError }: { item: SubagentItem; selected: boolean; onSelect: () => void; onStop?: () => void; stopping?: boolean; stopError?: boolean }) {
@@ -320,7 +293,7 @@ function buildSubagentConversation(item: SubagentItem): { prompt: Message; reply
   return { prompt, reply };
 }
 
-function SubagentDetail({ item, onBack, onSelectSubagent, onOpenArtifact, onStop, stopping, stopError }: { item: SubagentItem; onBack: () => void; onSelectSubagent: (id: string) => void; onOpenArtifact: (artifact: NonNullable<Message["artifact"]>) => void; onStop?: () => void; stopping?: boolean; stopError?: boolean }) {
+function SubagentDetail({ item, onBack, onOpenArtifact, onStop, stopping, stopError }: { item: SubagentItem; onBack: () => void; onOpenArtifact: (artifact: NonNullable<Message["artifact"]>) => void; onStop?: () => void; stopping?: boolean; stopError?: boolean }) {
   const { subagent } = item;
   const stale = subagent.recoveryState === "stale";
   const running = isSubagentRunning(subagent);
@@ -354,16 +327,6 @@ function SubagentDetail({ item, onBack, onSelectSubagent, onOpenArtifact, onStop
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto py-3">
-        {item.children && item.children.length > 0 && (
-          <section aria-labelledby="nested-subagents-heading" className="mb-3 px-4">
-            <h3 id="nested-subagents-heading" className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Nested subagents</h3>
-            <div className="overflow-hidden rounded-md border border-border bg-card">
-              {item.children.map((child) => (
-                <CompactSubagentRow key={child.id} item={child} selected={false} onSelect={() => onSelectSubagent(child.id)} />
-              ))}
-            </div>
-          </section>
-        )}
         <UserMessage message={prompt} compact />
         <AssistantMessage message={reply} compact onOpenArtifact={onOpenArtifact} />
       </div>
@@ -388,11 +351,9 @@ export function OrchestratorPanel() {
   const [stopErrorId, setStopErrorId] = useState<string | null>(null);
   const clearedAt = activeChatId ? subagentHistoryClearedAtByChat[activeChatId] : undefined;
   const allSubagentItems = useMemo(() => buildSubagentItems(messages), [messages]);
-  const allItemsBeforeClear = useMemo(() => flattenSubagentItems(allSubagentItems), [allSubagentItems]);
   const items = useMemo(() => filterSubagentItems(allSubagentItems, clearedAt), [allSubagentItems, clearedAt]);
-  const allItems = useMemo(() => flattenSubagentItems(items), [items]);
-  const visibleSubagentIds = useMemo(() => new Set(allItems.map((item) => item.id)), [allItems]);
-  const hiddenEndedCount = allItemsBeforeClear.filter((item) =>
+  const visibleSubagentIds = useMemo(() => new Set(items.map((item) => item.id)), [items]);
+  const hiddenEndedCount = allSubagentItems.filter((item) =>
     !isSubagentRunning(item.subagent) && !visibleSubagentIds.has(item.id),
   ).length;
   const messageQueryKey = ["messages", activeChatId] as const;
@@ -403,8 +364,8 @@ export function OrchestratorPanel() {
   const isHistoryError = Boolean(activeChatId && messages.length === 0 && cachedMessages === undefined && messageQueryState?.status === "error");
   const isHistoryReconciling = Boolean(activeChatId && messages.length === 0 && Array.isArray(cachedMessages) && cachedMessages.length > 0);
   const isHistoryRefreshing = Boolean(activeChatId && messages.length > 0 && messagesFetching);
-  const recoveredCount = allItems.filter((item) => item.subagent.recoveryState === "stale").length;
-  const selected = allItems.find((item) => item.id === selectedId) || null;
+  const recoveredCount = items.filter((item) => item.subagent.recoveryState === "stale").length;
+  const selected = items.find((item) => item.id === selectedId) || null;
 
   useEffect(() => {
     setSelectedId(null);
@@ -416,8 +377,8 @@ export function OrchestratorPanel() {
       setSelectedId(focusedSubagent.spawnId);
       return;
     }
-    if (!selectedId || !allItems.some((item) => item.id === selectedId)) setSelectedId(null);
-  }, [activeChatId, allItems, focusedSubagent, selectedId]);
+    if (!selectedId || !items.some((item) => item.id === selectedId)) setSelectedId(null);
+  }, [activeChatId, items, focusedSubagent, selectedId]);
 
   const handleOpenArtifact = (artifact: NonNullable<Message["artifact"]>) => {
     const known = artifacts.find((candidate) => candidate.id === artifact.id);
@@ -447,7 +408,7 @@ export function OrchestratorPanel() {
     }
   };
 
-  if (selected) return <SubagentDetail item={selected} onBack={() => { setSelectedId(null); clearFocusedSubagent(); }} onSelectSubagent={setSelectedId} onOpenArtifact={handleOpenArtifact} onStop={() => { void handleStopSubagent(selected); }} stopping={stoppingId === selected.subagent.spawnId} stopError={stopErrorId === selected.subagent.spawnId} />;
+  if (selected) return <SubagentDetail item={selected} onBack={() => { setSelectedId(null); clearFocusedSubagent(); }} onOpenArtifact={handleOpenArtifact} onStop={() => { void handleStopSubagent(selected); }} stopping={stoppingId === selected.subagent.spawnId} stopError={stopErrorId === selected.subagent.spawnId} />;
 
   if (isHistoryLoading || isHistoryReconciling) {
     const label = isHistoryReconciling ? "Restoring delegated work…" : "Loading delegated work…";
@@ -469,7 +430,7 @@ export function OrchestratorPanel() {
         <div className="flex min-w-0 items-center gap-2">
           <Bot className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
           <h2 className="truncate text-[13px] font-semibold text-foreground">Agents</h2>
-          {allItems.length > 0 && <span className="text-[11px] tabular-nums text-muted-foreground">{allItems.length}</span>}
+          {items.length > 0 && <span className="text-[11px] tabular-nums text-muted-foreground">{items.length}</span>}
         </div>
         {ended.length > 0 && activeChatId && (
           <button

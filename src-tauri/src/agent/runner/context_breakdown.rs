@@ -598,6 +598,7 @@ mod tests {
             workspace_root: None,
             recall_block: None,
             authorized_tool_ids: Vec::new(),
+            delegation_allowed: false,
             tools_supported: true,
             tools_enabled: true,
             iteration: 1,

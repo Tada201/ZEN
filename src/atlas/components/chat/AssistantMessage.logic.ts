@@ -7,7 +7,6 @@ import {
   type ParentWorkingStatus,
 } from "./assistantMessageParts";
 import { splitReasoningSections, type ReasoningSection } from "@/atlas/components/chat/reasoningSections";
-import type { DelegationTree } from "@/atlas/agentRuntime/delegationTree";
 
 type ReasoningGroupedStep = GroupedAssistantStep & { type: "reasoning"; reasoningSections?: ReasoningSection[] };
 
@@ -328,12 +327,10 @@ export function deriveAssistantMessageViewState({
   message,
   groupedSteps,
   groupedToolCalls,
-  delegationTree,
 }: {
   message: Message;
   groupedSteps: GroupedAssistantStep[];
   groupedToolCalls: ToolCall[];
-  delegationTree: DelegationTree;
 }): AssistantMessageViewState {
   const hasAssistantAnswerText = Boolean(message.content?.trim() || message.reasoning?.trim() || message.artifact);
 
@@ -348,12 +345,6 @@ export function deriveAssistantMessageViewState({
   const visibleGroupedSteps = orderedSteps.filter((step) => {
     if (step.type === "tool-group") {
       return shouldShowToolGroupInTimeline(step, message.status === "sending", hasAssistantAnswerText);
-    }
-    if (step.type === "subagent") {
-      const spawnId = step.subagent?.spawnId;
-      // Nested delegations render inside their parent card so the parent chat
-      // remains a compact delegation ledger instead of a flat agent dump.
-      if (spawnId && delegationTree.nodes.get(spawnId)?.parentSpawnId) return false;
     }
     return step.type !== "action" || isVisibleChatActionStep(step as Step);
   });

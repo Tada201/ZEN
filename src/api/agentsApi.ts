@@ -16,8 +16,6 @@ export interface AgentInfo {
   color?: string | null;
   user_invocable: boolean;
   model_invocable: boolean;
-  allow_nested_delegation: boolean;
-  allowed_agent_ids: string[];
   inject_agents_md: boolean;
   is_builtin: boolean;
   user_editable: boolean;
@@ -39,8 +37,6 @@ export interface AgentProfileDraft {
   color?: string | null;
   user_invocable: boolean;
   model_invocable: boolean;
-  allow_nested_delegation: boolean;
-  allowed_agent_ids: string[];
   inject_agents_md: boolean;
 }
 

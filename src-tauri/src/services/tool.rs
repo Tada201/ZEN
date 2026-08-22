@@ -33,6 +33,7 @@ pub struct AgentToolParams {
     pub token: CancellationToken,
     pub depth: u32,
     pub allowed_tools: Option<Arc<Mutex<HashSet<String>>>>,
+    pub delegation_allowed: bool,
 }
 
 pub struct ToolService {
@@ -556,7 +557,16 @@ impl ToolService {
             token,
             depth,
             allowed_tools,
+            delegation_allowed,
         } = params;
+        if tool_call.name == "spawn_agent" && !delegation_allowed {
+            return crate::agent::types::ToolResult {
+                tool_call_id: tool_call.id,
+                content: serde_json::json!({"error": "Nested delegation is disabled for sub-agents."}),
+                is_error: true,
+                duration_ms: 0,
+            };
+        }
         let tool = if tool.is_some() {
             tool
         } else {

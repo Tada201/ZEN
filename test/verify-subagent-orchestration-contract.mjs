@@ -20,21 +20,18 @@ const tauriLib = read("src-tauri/src/lib.rs");
 const spawnTools = read("src-tauri/src/agent/tools/spawn_tools.rs");
 
 assert(tree.includes("export function buildDelegationTree"), "subagent hierarchy must have one canonical tree builder");
-assert(tree.includes("parentSpawnId"), "delegations must expose an explicit parent delegation edge");
-assert(tree.includes("childToolCallIds"), "delegation ownership must use authoritative child tool ids");
+assert(!tree.includes("childrenByParent"), "root-only delegation must not rebuild nested parent-child trees");
+assert(runtime.includes("childToolCallIds"), "delegation ownership must use authoritative child tool ids");
 assert(tree.includes("selectOwnedChildTools"), "delegation tree must use the shared child-tool ownership selector");
 assert(runtime.includes("const traceMatches = tools.filter((tool) => tool.traceId === record.spawnId)"), "legacy trace-id fallback should remain available for old traces");
 assert(!tree.includes("tool.parentAgentId === record.agentId"), "broad parent-agent matching must not attach sibling tools");
-assert(tree.includes("Math.min(8"), "corrupt nested traces must have a bounded hierarchy depth");
 
 assert(runtime.includes("parentToolCallId: existing.parentToolCallId || incoming.parentToolCallId"), "partial lifecycle updates must preserve parent ownership");
 assert(!runtime.includes("|| tool.parentAgentId === record.agentId"), "runtime child selection must not use broad agent ownership");
 assert(!scopedStore.includes("|| tool.parentAgentId === record.agentId"), "scoped child selection must not use broad agent ownership");
 
-assert(card.includes("childAgents?: Step[]"), "subagent cards must accept nested delegated agents");
-assert(card.includes("delegationTree?: DelegationTree"), "nested cards must resolve child delegation records from the shared tree");
-assert(card.includes("Nested delegated agents"), "nested delegations must render under their parent card");
-assert(card.includes("marginInlineStart"), "nested delegations must communicate hierarchy without flooding the timeline");
+assert(!card.includes("childAgents"), "subagent cards must not render nested delegation disclosure");
+assert(!card.includes("marginInlineStart"), "root-only delegation renders flat, without hierarchy indentation");
 // The inline marker is intentionally minimal: a status icon + the delegated
 // task label + status word, with the full trace + child tools living in the
 // Agents panel. Clicking the task opens that agent's trace directly.
@@ -43,8 +40,7 @@ assert(card.includes("resolvedSubagent.task"), "inline marker must lead with the
 
 assert(panel.includes("buildDelegationTree"), "Agents panel must consume the canonical delegation tree");
 assert(panel.includes("selectDelegationChildTools"), "Agents panel must use authoritative child-tool ownership");
-assert(panel.includes("Nested subagents"), "Agents panel must preserve nested delegation hierarchy");
-assert(panel.includes("flattenSubagentItems"), "focused nested agents must remain selectable in the detail view");
+assert(!panel.includes("Nested subagents"), "Agents panel must not present a nested delegation hierarchy");
 assert(panel.includes("subagentPhaseLabel"), "Agents panel must take its status wording from the shared phase vocabulary");
 assert(phaseVocabulary.includes("Needs review") && phaseVocabulary.includes('case "incomplete"') && phaseVocabulary.includes('case "uncertain"'), "the shared phase vocabulary must distinguish incomplete child output");
 assert(panel.includes('item.subagent.status === "incomplete" || item.subagent.status === "uncertain"'), "Agents panel rows must style incomplete child output as needing review");
@@ -71,12 +67,11 @@ assert(contextHeader.includes("<RunStatusPopover messages={messages} isStreaming
 assert(chatApi.includes('cancelSubagent:') && chatApi.includes('"cancel_subagent"'), "subagent cancellation must use a typed frontend API");
 assert(lifecycle.includes("pub async fn cancel_subagent") && lifecycle.includes("subagent_cancellation_tokens"), "backend cancellation must target one child token");
 assert(tauriLib.includes("commands::chat::cancel_subagent"), "subagent cancellation must be registered with Tauri");
-assert(spawnTools.includes("let terminal_status = if was_cancelled") && spawnTools.includes('status: terminal_status.to_string()'), "user-stopped subagents must finish as cancelled rather than failed");
+assert(spawnTools.includes("let terminal_status = spawn_failure_status(&e)") && spawnTools.includes('status: terminal_status.to_string()'), "user-stopped subagents must finish as cancelled rather than failed");
 
-assert(assistant.includes("buildDelegationTree"), "assistant rendering must consume the canonical delegation tree");
-assert(assistantLogic.includes("parentSpawnId"), "nested subagent rows must be removed from the flat parent timeline");
-assert(assistant.includes("childrenByParent"), "parent cards must receive their nested delegation children");
-assert(assistant.includes("childToolCalls={message.toolCalls || []}"), "child selection must happen centrally rather than through an ad hoc filter");
+assert(!assistant.includes("buildDelegationTree"), "the flat assistant timeline must not rebuild a delegation tree");
+assert(!assistantLogic.includes("parentSpawnId"), "subagent rows must render flat in the parent timeline");
+assert(!assistant.includes("childrenByParent"), "subagent cards must not receive nested delegation children");
 
 assert(types.includes("childToolCallIds?: string[]"), "persisted subagent records must retain child tool relationships");
 

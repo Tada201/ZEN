@@ -10,15 +10,13 @@ use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 
 use crate::agent::hooks::HookRegistry;
-use crate::agent::runner::{Runner, MAX_SPAWN_DEPTH};
+use crate::agent::runner::Runner;
 use crate::agent::tools::handoff_context::{
     build_handoff_context, handoff_to_messages, HandoffContext, HandoffContextInput,
 };
 use crate::agent::tools::ToolRegistry;
 use crate::agent::types::{Agent, AgentRegistry};
 
-/// Internal marker carried in a runner's tool ceiling; never exposed in tool schemas.
-pub(crate) const ALLOWED_CHILD_AGENT_PREFIX: &str = "__zen_allowed_child_agent:";
 use crate::commands::AppState;
 use crate::db::models::ChatMessage;
 use crate::tools::GlobalToolRegistry;
@@ -31,9 +29,7 @@ pub(crate) struct ResolvedAgent {
     pub effective_max_steps: usize,
     pub effective_context_window: Option<usize>,
     pub effective_max_messages: Option<usize>,
-    pub allow_nested_delegation: bool,
     pub inject_agents_md: bool,
-    pub allowed_agent_ids: Vec<String>,
 }
 
 /// Treat blank strings and the `inherit` sentinel as "no selection" so a child
@@ -85,7 +81,6 @@ pub(crate) fn resolve_agent(
     if !profile.model_invocable {
         anyhow::bail!("Agent '{}' is not available for model invocation", agent_id);
     }
-    let allowed_agent_ids = profile.allowed_agent_ids.clone();
     let explicit = selected_model(explicit_model);
     // A profile's paired provider only applies to the profile's own model. When
     // the caller names a model explicitly, or the child falls back to the
@@ -124,9 +119,7 @@ pub(crate) fn resolve_agent(
         effective_max_steps,
         effective_context_window,
         effective_max_messages,
-        allow_nested_delegation: profile.allow_nested_delegation,
         inject_agents_md: profile.inject_agents_md,
-        allowed_agent_ids,
     })
 }
 
@@ -208,9 +201,7 @@ pub(crate) fn resolve_adhoc_agent(
         effective_max_steps,
         effective_context_window: None,
         effective_max_messages: None,
-        allow_nested_delegation: false,
         inject_agents_md: false,
-        allowed_agent_ids: Vec::new(),
     })
 }
 
@@ -222,7 +213,6 @@ pub(crate) fn build_subagent_handoff(
     success_criteria: Option<&str>,
     constraints: &[String],
     relevant_files: &[String],
-    spawn_depth: u32,
 ) -> HandoffContext {
     build_handoff_context(HandoffContextInput {
         agent_name: &resolved.agent.name,
@@ -232,7 +222,6 @@ pub(crate) fn build_subagent_handoff(
         success_criteria,
         constraints,
         relevant_files,
-        spawn_depth,
     })
 }
 
@@ -241,7 +230,7 @@ pub(crate) fn build_child_messages_from_handoff(handoff: &HandoffContext) -> Vec
     handoff_to_messages(handoff)
 }
 
-/// Build a fully configured child `Runner` with depth limits, tool
+/// Build a fully configured child `Runner` with bounded tool
 /// permissions, db_pool, and direct IPC channel inherited from a
 /// temporary parent runner via `Runner::child()`.
 pub(crate) struct ChildRunnerParams<'a> {
@@ -303,16 +292,8 @@ pub(crate) fn build_child_runner(params: ChildRunnerParams<'_>) -> Result<Runner
             .collect(),
         _ => configured_tools,
     };
-    if !resolved.allow_nested_delegation || resolved.allowed_agent_ids.is_empty() {
-        effective_tools.remove("spawn_agent");
-    } else {
-        effective_tools.extend(
-            resolved
-                .allowed_agent_ids
-                .iter()
-                .map(|id| format!("{}{}", ALLOWED_CHILD_AGENT_PREFIX, id)),
-        );
-    }
+    effective_tools.remove("spawn_agent");
+    runner = runner.with_delegation_allowed(false);
     runner = runner.with_allowed_tools(Arc::new(tokio::sync::Mutex::new(effective_tools)));
 
     Ok(runner)
@@ -352,17 +333,6 @@ pub(crate) fn subagent_memory_scope(agent_id: &str, task: &str) -> String {
         .map(|d| d.as_secs())
         .unwrap_or(0);
     format!("subagent:{}:{}:{}", agent_id, timestamp, task_hash)
-}
-
-/// Check depth limit and return error JSON if exceeded.
-pub(crate) fn check_depth(depth: u32) -> Result<()> {
-    if depth >= MAX_SPAWN_DEPTH {
-        return Err(anyhow::anyhow!(
-            "Maximum agent nesting depth ({}) reached. Cannot spawn more sub-agents.",
-            MAX_SPAWN_DEPTH
-        ));
-    }
-    Ok(())
 }
 
 #[cfg(test)]

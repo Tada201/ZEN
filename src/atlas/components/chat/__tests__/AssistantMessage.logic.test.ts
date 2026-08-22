@@ -5,16 +5,8 @@ import {
   isVisibleChatActionStep,
   isVisibleChatStatusStep,
 } from "../AssistantMessage.logic";
-import type { DelegationTree } from "@/atlas/agentRuntime/delegationTree";
 import type { GroupedAssistantStep } from "../assistantMessageParts";
 import type { Message } from "../types";
-
-const emptyDelegationTree: DelegationTree = {
-  nodes: new Map(),
-  steps: new Map(),
-  childrenByParent: new Map(),
-  roots: [],
-};
 
 function message(overrides: Partial<Message> = {}): Message {
   return {
@@ -100,7 +92,6 @@ describe("AssistantMessage.logic", () => {
         message: message({ content: "Done." }),
         groupedSteps: [textStep("Done.")],
         groupedToolCalls: [],
-        delegationTree: emptyDelegationTree,
       });
       expect(view.hasVisibleAnswer).toBe(true);
       expect(view.hasVisibleTextStep).toBe(true);
@@ -114,7 +105,6 @@ describe("AssistantMessage.logic", () => {
         message: message({ status: "sending" }),
         groupedSteps: [{ type: "action", kind: "orchestrator_progress", status: "running" }],
         groupedToolCalls: [],
-        delegationTree: emptyDelegationTree,
       });
       expect(view.hasVisibleAnswer).toBe(false);
       expect(view.hasOnlyLiveProgress).toBe(true);
@@ -128,7 +118,6 @@ describe("AssistantMessage.logic", () => {
           { type: "action", kind: "chat_status", status: "running", metadata: { phase: "agent_streaming" } },
         ],
         groupedToolCalls: [],
-        delegationTree: emptyDelegationTree,
       });
       expect(view.latestChatStatusPhase).toBe("agent_streaming");
       expect(view.parentWorkingStatus).toBe("thinking");

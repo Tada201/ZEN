@@ -58,6 +58,16 @@ fn inline_v2_schemas_for_tier(
 }
 
 impl Runner {
+    fn filter_delegation_tool_ids(
+        tool_ids: impl IntoIterator<Item = String>,
+        delegation_allowed: bool,
+    ) -> Vec<String> {
+        tool_ids
+            .into_iter()
+            .filter(|tool_id| delegation_allowed || tool_id != "spawn_agent")
+            .collect()
+    }
+
     fn execution_run_id(&self, chat_id: &str) -> String {
         chat_id.to_string()
     }
@@ -79,21 +89,25 @@ impl Runner {
             return (Vec::new(), Vec::new());
         }
 
-        let mut authorized_tool_ids: Vec<String> = self
-            .tool_registry
-            .read()
-            .await
-            .list()
-            .into_iter()
-            .filter(|t| current_agent.tool_ids.contains(&t.id().to_string()))
-            .map(|t| t.id().to_string())
-            .collect();
+        let mut authorized_tool_ids = Self::filter_delegation_tool_ids(
+            self.tool_registry
+                .read()
+                .await
+                .list()
+                .into_iter()
+                .filter(|t| current_agent.tool_ids.contains(&t.id().to_string()))
+                .map(|t| t.id().to_string()),
+            self.delegation_allowed,
+        );
 
         // Authorize v2 tools from the permissions registry
         let v2_tools = self.permissions.read().await.executable_tool_names();
-        for tool_id in &current_agent.tool_ids {
-            if v2_tools.contains(tool_id) && !authorized_tool_ids.contains(tool_id) {
-                authorized_tool_ids.push(tool_id.clone());
+        for tool_id in Self::filter_delegation_tool_ids(
+            current_agent.tool_ids.iter().cloned(),
+            self.delegation_allowed,
+        ) {
+            if v2_tools.contains(&tool_id) && !authorized_tool_ids.contains(&tool_id) {
+                authorized_tool_ids.push(tool_id);
             }
         }
 
@@ -165,8 +179,9 @@ impl Runner {
         assistant_message_id: Option<String>,
     ) -> Vec<ToolResult> {
         let tools_enabled = self.config.tools_enabled;
+        let delegation_allowed = self.delegation_allowed;
         let (mut ordered_results, pipeline_calls) =
-            preprocess_tool_calls(&self.tool_manager, tool_calls, authorized_tool_ids, tools_enabled).await;
+            preprocess_tool_calls(&self.tool_manager, tool_calls, authorized_tool_ids, tools_enabled, delegation_allowed).await;
         let run_id = self.execution_run_id(chat_id);
         let trace_id = self.trace_id();
         let parent_agent_id = self.parent_agent_id();
@@ -208,6 +223,7 @@ impl Runner {
                             std::slice::from_ref(&modified),
                             authorized_tool_ids,
                             tools_enabled,
+                            delegation_allowed,
                         )
                         .await;
                         if let Some(Some(result)) = modified_results.into_iter().next() {
@@ -439,6 +455,7 @@ impl Runner {
                                 token: token_inner,
                                 depth,
                                 allowed_tools: Some(allowed_tools),
+                                delegation_allowed,
                             })
                             .await;
                         result.duration_ms = start.elapsed().as_millis() as u64;
@@ -686,6 +703,7 @@ impl Runner {
                                                 token: token_inner,
                                                 depth,
                                                 allowed_tools: Some(allowed_tools),
+                                                delegation_allowed,
                                             },
                                         )
                                         .await;
@@ -889,6 +907,7 @@ impl Runner {
                                 token: token_inner,
                                 depth,
                                 allowed_tools: Some(allowed_tools),
+                                delegation_allowed,
                             })
                             .await;
                         result.duration_ms = start.elapsed().as_millis() as u64;
@@ -1101,6 +1120,19 @@ fn format_tool_result_output(result: &ToolResult) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn child_authorization_removes_delegation_tool() {
+        let tool_ids = vec!["web_search".to_string(), "spawn_agent".to_string()];
+        assert_eq!(
+            Runner::filter_delegation_tool_ids(tool_ids.clone(), false),
+            vec!["web_search".to_string()]
+        );
+        assert_eq!(Runner::filter_delegation_tool_ids(tool_ids, true), vec![
+            "web_search".to_string(),
+            "spawn_agent".to_string(),
+        ]);
+    }
     use std::sync::{Arc, Mutex};
     use tokio::time::{sleep, Duration};
 

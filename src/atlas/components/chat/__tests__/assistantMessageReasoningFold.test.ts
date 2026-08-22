@@ -20,7 +20,6 @@ describe("foldPostAnswerReasoning (via deriveAssistantMessageViewState)", () => 
       message,
       groupedSteps,
       groupedToolCalls: [],
-      delegationTree: { nodes: new Map(), childrenByParent: new Map() } as never,
     });
   };
 

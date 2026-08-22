@@ -3,7 +3,6 @@
 //! Replaces raw parent message dumps with a typed task recipe so child agents
 //! receive only the information they need to complete a delegated task.
 
-use crate::agent::runner::MAX_SPAWN_DEPTH;
 use crate::db::models::ChatMessage;
 use regex::Regex;
 use std::sync::LazyLock;
@@ -39,7 +38,6 @@ pub struct HandoffContext {
     pub constraints: Vec<String>,
     pub success_criteria: String,
     pub parent_summary: Option<String>,
-    pub allow_delegation: bool,
 }
 
 pub struct HandoffContextInput<'a> {
@@ -50,7 +48,6 @@ pub struct HandoffContextInput<'a> {
     pub success_criteria: Option<&'a str>,
     pub constraints: &'a [String],
     pub relevant_files: &'a [String],
-    pub spawn_depth: u32,
 }
 
 pub fn build_handoff_context(input: HandoffContextInput<'_>) -> HandoffContext {
@@ -70,10 +67,6 @@ pub fn build_handoff_context(input: HandoffContextInput<'_>) -> HandoffContext {
         Some(input.caller_context.trim().to_string())
     };
 
-    // `spawn_depth` is the parent's depth; the child runner executes at depth + 1.
-    let child_depth = input.spawn_depth.saturating_add(1);
-    let allow_delegation = child_depth + 1 < MAX_SPAWN_DEPTH;
-
     HandoffContext {
         task: input.task.to_string(),
         role: input.agent_name.to_string(),
@@ -92,7 +85,6 @@ pub fn build_handoff_context(input: HandoffContextInput<'_>) -> HandoffContext {
             .map(str::to_string)
             .unwrap_or_else(|| DEFAULT_SUCCESS_CRITERIA.to_string()),
         parent_summary,
-        allow_delegation,
     }
 }
 
@@ -155,13 +147,7 @@ pub fn render_handoff_prompt(handoff: &HandoffContext) -> String {
     prompt.push_str("2. Use only the tools required for this task\n");
     prompt.push_str("3. Provide a comprehensive, well-structured result\n");
     prompt.push_str("4. Base your work on the task, success criteria, and constraints above\n");
-    if handoff.allow_delegation {
-        prompt.push_str(
-            "5. Do not delegate further work; the parent agent owns delegation through spawn_agent\n",
-        );
-    } else {
-        prompt.push_str("5. Do not spawn or delegate to other agents; complete this task directly\n");
-    }
+    prompt.push_str("5. Do not spawn or delegate to other agents; complete this task directly\n");
 
     prompt
 }
@@ -194,7 +180,6 @@ mod tests {
             success_criteria: None,
             constraints: &[],
             relevant_files: &[],
-            spawn_depth: 0,
         });
 
         let messages = handoff_to_messages(&handoff);
@@ -208,7 +193,7 @@ mod tests {
     }
 
     #[test]
-    fn handoff_blocks_delegation_at_max_depth() {
+    fn handoff_always_blocks_delegation() {
         let handoff = build_handoff_context(HandoffContextInput {
             agent_name: "Worker",
             agent_instructions: "Work.",
@@ -217,10 +202,8 @@ mod tests {
             success_criteria: None,
             constraints: &[],
             relevant_files: &[],
-            spawn_depth: MAX_SPAWN_DEPTH - 1,
         });
 
-        assert!(!handoff.allow_delegation);
         let prompt = render_handoff_prompt(&handoff);
         assert!(prompt.contains("Do not spawn or delegate"));
     }

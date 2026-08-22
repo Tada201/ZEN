@@ -30,9 +30,6 @@ use tokio_util::sync::CancellationToken;
 
 use crate::agent::context_breakdown::compute_context_breakdown;
 
-/// Maximum recursion depth for sub-agent spawning (prevents infinite loops)
-pub const MAX_SPAWN_DEPTH: u32 = 3;
-
 /// Per-iteration `save_assistant_message` calls contend with the parent's
 /// SQLite writer. Children only persist on final completion.
 pub(super) fn should_persist_iteration_state(depth: u32) -> bool {
@@ -514,6 +511,7 @@ impl Runner {
                 workspace_root: chat_workspace_root.clone(),
                 recall_block: cached_recall_context.clone(),
                 authorized_tool_ids: authorized_tool_ids.clone(),
+                delegation_allowed: self.delegation_allowed,
                 tools_supported,
                 tools_enabled: run_config.tools_enabled,
                 iteration,

@@ -26,6 +26,8 @@ pub struct Runner {
     pub depth: u32,
     pub(super) cache: Arc<tokio::sync::Mutex<ToolCache>>,
     pub(super) allowed_tools: Arc<tokio::sync::Mutex<HashSet<String>>>,
+    /// Only the root runner may delegate work to another agent.
+    pub(super) delegation_allowed: bool,
     pub(super) on_event: Option<tauri::ipc::Channel<serde_json::Value>>,
     /// Isolated memory scope for sub-agents. When set, the runner must not
     /// persist intermediate or final assistant messages into the parent chat.
@@ -71,6 +73,7 @@ impl Clone for Runner {
             depth: self.depth,
             cache: self.cache.clone(),
             allowed_tools: self.allowed_tools.clone(),
+            delegation_allowed: self.delegation_allowed,
             on_event: self.on_event.clone(),
             memory_scope: self.memory_scope.clone(),
             // Share the trace slot with the clone: clones are the same logical
@@ -110,6 +113,7 @@ impl Runner {
             // is not cached and mutating tools clear the cache on completion.
             cache: Arc::new(tokio::sync::Mutex::new(ToolCache::new(60))),
             allowed_tools: Arc::new(tokio::sync::Mutex::new(HashSet::new())),
+            delegation_allowed: true,
             on_event: None,
             memory_scope: None,
             trace_id: Arc::new(std::sync::RwLock::new(None)),
@@ -214,6 +218,11 @@ impl Runner {
         allowed_tools: Arc<tokio::sync::Mutex<HashSet<String>>>,
     ) -> Self {
         self.allowed_tools = allowed_tools;
+        self
+    }
+
+    pub fn with_delegation_allowed(mut self, allowed: bool) -> Self {
+        self.delegation_allowed = allowed;
         self
     }
 
@@ -396,6 +405,7 @@ impl Runner {
             depth: self.depth + 1,
             cache: self.cache.clone(),
             allowed_tools: self.allowed_tools.clone(),
+            delegation_allowed: false,
             on_event: None,
             memory_scope: self.memory_scope.clone(),
             // Fresh slot: a child sub-agent run gets its own trace_id when its

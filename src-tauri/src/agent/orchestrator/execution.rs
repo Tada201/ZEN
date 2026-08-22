@@ -140,6 +140,7 @@ impl Orchestrator {
                 allowed_tools: None,
             },
         )?;
+        runner = runner.with_delegation_allowed(false);
 
         // Pass direct channel for high-performance streaming if available
         if let Some(ref channel) = self.on_event {
@@ -437,7 +438,7 @@ impl Orchestrator {
     }
 
     /// Synthesize all task results into a final comprehensive response.
-    /// Streams output to the frontend via chat:partial events.
+    /// Streams output to the frontend via chat:chunk events.
     pub(crate) async fn synthesize_results(
         &self,
         params: SynthesizeParams<'_>,

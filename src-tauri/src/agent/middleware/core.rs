@@ -100,6 +100,10 @@ pub struct EnrichmentContext {
     pub recall_block: Option<String>,
     /// Tool IDs authorised for the current agent/iteration.
     pub authorized_tool_ids: Vec<String>,
+    /// Whether this runner is allowed to delegate work. Only the root runner
+    /// sets this true; child runners carry the false capability into prompt
+    /// construction as well as tool execution.
+    pub delegation_allowed: bool,
     /// Whether the provider supports structured tool calling.
     pub tools_supported: bool,
     /// Whether tools are globally enabled for this run.

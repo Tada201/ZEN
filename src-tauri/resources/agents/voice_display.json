@@ -10,7 +10,6 @@
   "model_tier": "local",
   "user_invocable": false,
   "model_invocable": true,
-  "allow_nested_delegation": false,
   "inject_agents_md": false,
   "config_mode": "model_only"
 }

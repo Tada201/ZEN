@@ -85,10 +85,6 @@ pub struct AgentProfile {
     #[serde(default = "default_true")]
     pub model_invocable: bool,
     #[serde(default)]
-    pub allow_nested_delegation: bool,
-    #[serde(default)]
-    pub allowed_agent_ids: Vec<String>,
-    #[serde(default)]
     pub inject_agents_md: bool,
     /// UI configuration scope. Runtime behavior remains owned by the profile.
     #[serde(default)]
@@ -107,8 +103,6 @@ impl From<Agent> for AgentProfile {
             model_provider: None,
             user_invocable: true,
             model_invocable: true,
-            allow_nested_delegation: false,
-            allowed_agent_ids: Vec::new(),
             inject_agents_md: false,
             config_mode: AgentConfigMode::Full,
         }
@@ -231,12 +225,6 @@ impl AgentRegistry {
         if profile.color.as_deref().is_some_and(|color| !matches!(color, "slate" | "blue" | "violet" | "emerald" | "amber" | "rose")) {
             return Err("Unsupported agent color.".to_string());
         }
-        if profile.allowed_agent_ids.iter().any(|id| id == &profile.agent.id || id.trim().is_empty()) {
-            return Err("An agent cannot allow itself as a child agent.".to_string());
-        }
-        if profile.allowed_agent_ids.iter().any(|id| self.get_profile(id).is_none()) {
-            return Err("Allowed child agents must refer to existing agent profiles.".to_string());
-        }
         Ok(())
     }
 
@@ -262,13 +250,6 @@ impl AgentRegistry {
     pub fn delete_user_profile(&self, id: &str) -> Result<bool, String> {
         if self.is_builtin(id) {
             return Err("Built-in agents cannot be deleted.".to_string());
-        }
-        if self.profiles
-            .read()
-            .map(|profiles| profiles.values().any(|profile| profile.allowed_agent_ids.iter().any(|child_id| child_id == id)))
-            .unwrap_or(false)
-        {
-            return Err("This agent is still allowed as a child by another profile. Remove that delegation link first.".to_string());
         }
         let path = self.user_path(id)?;
         let existed = path.exists();

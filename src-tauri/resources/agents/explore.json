@@ -7,6 +7,5 @@
   "max_iterations": 12,
   "description": "Read-only search agent for file discovery, symbol lookup, codebase questions, and document/web research. Use when the answer requires sweeping several files or sources and only the conclusion is needed.",
   "model_tier": "local",
-  "allow_nested_delegation": false,
   "inject_agents_md": false
 }

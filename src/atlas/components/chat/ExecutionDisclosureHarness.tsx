@@ -295,8 +295,6 @@ export function ExecutionDisclosureHarness() {
               <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Subagent</h2>
               <SubagentExecutionCard
                 step={subagentStep(phase === 0 || phase === 3 ? "running" : "completed")}
-                childToolCalls={toolCalls(phase === 0 || phase === 3 ? "running" : "completed")}
-                onOpenArtifact={noopArtifact}
               />
             </div>
           </LifecycleProbe>

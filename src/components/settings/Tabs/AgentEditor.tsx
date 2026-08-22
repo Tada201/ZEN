@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Bot, ChevronDown, GitBranch, User, X } from "lucide-react";
+import { Bot, ChevronDown, User, X } from "lucide-react";
 import { AgentProfileDraft, AgentInfo } from "@/api";
 import { mapBackendToolMeta, toolsApi, type ToolMeta } from "@/api";
 import { WorkbenchIcon } from "@/components/ui/WorkbenchIcon";
@@ -45,8 +45,6 @@ const EMPTY_DRAFT: AgentDraft = {
   color: "violet",
   user_invocable: false,
   model_invocable: true,
-  allow_nested_delegation: false,
-  allowed_agent_ids: [],
   inject_agents_md: true,
 };
 
@@ -73,8 +71,6 @@ function toDraft(agent?: AgentInfo): AgentDraft {
     color: agent.color || "violet",
     user_invocable: agent.user_invocable,
     model_invocable: agent.model_invocable,
-    allow_nested_delegation: agent.allow_nested_delegation,
-    allowed_agent_ids: agent.allowed_agent_ids,
     inject_agents_md: agent.inject_agents_md,
   };
 }
@@ -301,7 +297,7 @@ function VoiceDisplayModelEditor({
 
 export function AgentEditor({
   agent,
-  agents,
+  agents: _agents,
   modelOnly = false,
   onCancel,
   onSave,
@@ -343,11 +339,6 @@ export function AgentEditor({
     return () => { cancelled = true; };
   }, [agent, draft.tool_ids.length, modelOnly]);
 
-  const availableChildren = useMemo(
-    () => agents.filter((candidate) => candidate.id !== agent?.id),
-    [agent?.id, agents],
-  );
-
   const update = <K extends keyof AgentDraft>(key: K, value: AgentDraft[K]) => {
     setDraft((current) => ({ ...current, [key]: value }));
   };
@@ -356,12 +347,6 @@ export function AgentEditor({
     update("tool_ids", draft.tool_ids.includes(toolId)
       ? draft.tool_ids.filter((id) => id !== toolId)
       : [...draft.tool_ids, toolId]);
-  };
-
-  const toggleChild = (agentId: string) => {
-    update("allowed_agent_ids", draft.allowed_agent_ids.includes(agentId)
-      ? draft.allowed_agent_ids.filter((id) => id !== agentId)
-      : [...draft.allowed_agent_ids, agentId]);
   };
 
   const submit = async (event: FormEvent) => {
@@ -490,12 +475,10 @@ export function AgentEditor({
       <Section
         id="agent-delegation"
         title="Delegation"
-        summary={[draft.model_invocable && "main may invoke", draft.user_invocable && "user-facing", `nested ${draft.allow_nested_delegation ? "on" : "off"}`].filter(Boolean).join(" · ")}
+        summary={[draft.model_invocable && "main may invoke", draft.user_invocable && "user-facing"].filter(Boolean).join(" · ")}
       >
         <SwitchRow icon={<Bot aria-hidden="true" className="h-3.5 w-3.5" />} label="Main agent may invoke" detail="Allow the coordinator to select this profile for delegated tasks." checked={draft.model_invocable} onChange={(value) => update("model_invocable", value)} />
         <SwitchRow icon={<User aria-hidden="true" className="h-3.5 w-3.5" />} label="Show as a user agent" detail="Make this profile available for direct selection in future agent workflows." checked={draft.user_invocable} onChange={(value) => update("user_invocable", value)} />
-        <SwitchRow icon={<GitBranch aria-hidden="true" className="h-3.5 w-3.5" />} label="Allow nested delegation" detail="Permit this subagent to spawn child agents. Off by default to prevent recursion." checked={draft.allow_nested_delegation} onChange={(value) => update("allow_nested_delegation", value)} />
-        {draft.allow_nested_delegation && <div className="space-y-2 pt-1"><h5 className="text-xs font-medium text-foreground">Allowed child agents</h5>{availableChildren.length === 0 ? <p className="text-xs text-muted-foreground">No other agent profiles are available.</p> : <div className="grid gap-x-4 gap-y-0.5 sm:grid-cols-2 lg:grid-cols-3">{availableChildren.map((child) => <label key={child.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-muted"><input type="checkbox" checked={draft.allowed_agent_ids.includes(child.id)} onChange={() => toggleChild(child.id)} className="h-3.5 w-3.5 accent-primary" /><span className="truncate text-xs text-muted-foreground">{child.name}</span></label>)}</div>}</div>}
       </Section>
 
       <footer className="flex items-center justify-end gap-2 border-t border-border pt-4"><button type="button" onClick={onCancel} className="h-9 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground hover:bg-muted">Cancel</button><button type="submit" disabled={saving || toolsLoading} className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:pointer-events-none disabled:opacity-60">{saving && <WorkbenchIcon name="codicon:loading" className="h-3.5 w-3.5 animate-spin" />}{saving ? "Saving…" : isEditing ? "Save changes" : "Create subagent"}</button></footer>

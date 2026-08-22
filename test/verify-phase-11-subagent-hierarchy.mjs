@@ -57,18 +57,19 @@ const tools = [
   { id: "child-tool", name: "web_search", status: "completed", input: {}, output: "", traceId: "spawn-child" },
   { id: "sibling-tool", name: "run_command", status: "completed", input: {}, output: "", traceId: "other" },
 ];
-const nestedSteps = [
+// Legacy traces recorded while nested delegation existed still carry parent
+// fields; root-only delegation renders them flat, one card per spawn.
+const legacyNestedSteps = [
   subagentStep("spawn-parent", "completed", { childToolCallIds: ["spawn-child-tool", "parent-tool"] }),
   subagentStep("spawn-child", "failed", { parentToolCallId: "spawn-child-tool", childToolCallIds: ["child-tool"], error: "child failed" }),
   // Duplicate persisted child lifecycle row must not produce a second card.
   subagentStep("spawn-child", "running", { parentToolCallId: "spawn-child-tool" }),
 ];
-const tree = buildDelegationTree(nestedSteps, tools);
-assert.equal(tree.roots.length, 1, "nested hierarchy must retain one root delegation");
-assert.deepEqual(tree.childrenByParent.get("spawn-parent").map((step) => step.subagent.spawnId), ["spawn-child"], "duplicate child rows must collapse to one nested step");
-assert.equal(tree.nodes.get("spawn-child").parentSpawnId, "spawn-parent", "child parentage must use the explicit parent spawn tool id");
+const tree = buildDelegationTree(legacyNestedSteps, tools);
+assert.equal(tree.roots.length, 2, "legacy nested traces must render flat: every delegation is a root");
+assert.equal(tree.nodes.size, 2, "duplicate child rows must collapse to one node per spawn");
 assert.equal(tree.nodes.get("spawn-child").status, "failed", "out-of-order running child updates must not erase failure");
-assert.equal(tree.nodes.get("spawn-parent").childToolCount, 1, "nested spawn tools must remain available for child hierarchy but not inflate parent work count");
+assert.equal(tree.nodes.get("spawn-parent").childToolCount, 2, "a legacy spawn tool call stays attached to the agent that ran it");
 
 const cyclicSteps = [
   subagentStep("a", "running", { parentToolCallId: "tool-b", childToolCallIds: ["tool-a"] }),
@@ -78,8 +79,7 @@ const cyclicTree = buildDelegationTree(cyclicSteps, [
   { id: "tool-a", name: "spawn_agent", status: "running", input: {}, output: "" },
   { id: "tool-b", name: "spawn_agent", status: "running", input: {}, output: "" },
 ]);
-assert.equal(cyclicTree.roots.length, 1, "cyclic persisted parentage must be broken into a visible root");
-assert(cyclicTree.nodes.get("a").depth <= 8 && cyclicTree.nodes.get("b").depth <= 8, "corrupt depth must remain bounded");
+assert.equal(cyclicTree.roots.length, 2, "corrupt persisted parentage must never hide a delegation row");
 
 const persistence = readFileSync(new URL("../src/atlas/hooks/stream/projectStepsForPersistence.ts", import.meta.url), "utf8");
 const events = readFileSync(new URL("../src/atlas/hooks/stream/useAgentEvents.ts", import.meta.url), "utf8");

@@ -163,8 +163,6 @@ const mockVoiceDisplayAgent = {
   color: "blue",
   user_invocable: false,
   model_invocable: true,
-  allow_nested_delegation: false,
-  allowed_agent_ids: [],
   inject_agents_md: false,
   is_builtin: true,
   user_editable: false,

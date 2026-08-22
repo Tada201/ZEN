@@ -455,7 +455,10 @@ impl ContextMiddleware for SystemPromptMiddleware {
             );
         }
 
-        if ctx.tools_enabled && ctx.authorized_tool_ids.iter().any(|t| t == "spawn_agent") {
+        if ctx.tools_enabled
+            && ctx.delegation_allowed
+            && ctx.authorized_tool_ids.iter().any(|t| t == "spawn_agent")
+        {
             ctx.try_push_section(
                 ContextSectionId::AgentRoles,
                 &mut remaining,
@@ -506,6 +509,12 @@ impl ContextMiddleware for SystemPromptMiddleware {
                     }
                 }
             }
+        } else if ctx.tools_enabled && !ctx.delegation_allowed {
+            ctx.try_push_section(
+                ContextSectionId::AgentRoles,
+                &mut remaining,
+                "\n\n## Delegation Boundary\nYou are a delegated worker, not an orchestrator. Do not spawn, delegate, hand off, transfer, or invoke another agent. Do not use `spawn_agent` or `tool_exec` to create delegated work. Complete the assigned task with the tools exposed to you and report blockers to the parent.\n",
+            );
         }
 
         Ok(())

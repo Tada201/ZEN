@@ -1,24 +1,16 @@
-import { Ban, Check, ChevronRight, CircleAlert, Loader2, X } from "lucide-react";
-import { useState } from "react";
+import { Ban, Check, CircleAlert, Loader2, X } from "lucide-react";
 import { useScopedSubagent } from "@/atlas/agentRuntime/scopedSubagentStore";
 import { subagentPhaseLabel } from "@/atlas/agentRuntime/subagentPhase";
-import type { DelegationNode, DelegationTree } from "@/atlas/agentRuntime/delegationTree";
 import { cn } from "@/lib/utils";
 import { presentExecutionError } from "@/atlas/agentRuntime/executionError";
 import { useUIStore } from "@/lib/stores/useUIStore";
-import type { ArtifactData, Step, ToolCall } from "./types";
+import type { Step } from "./types";
 
 interface SubagentExecutionCardProps {
   step: Step;
-  childToolCalls?: ToolCall[];
-  childAgents?: Step[];
-  delegation?: DelegationNode;
-  delegationTree?: DelegationTree;
-  messageId?: string;
   sessionId?: string;
   /** Keep child-agent failures in the dedicated Agents panel by default. */
   showError?: boolean;
-  onOpenArtifact: (artifact: ArtifactData) => void;
 }
 
 function formatDuration(ms?: number): string {
@@ -32,18 +24,12 @@ function formatDuration(ms?: number): string {
  * Inline subagent marker in the main assistant timeline. Intentionally minimal:
  * `Subagent: <name> · <status>` with the child's icon. The full trace, live
  * activity, and stop control live in the right-side Agents panel — clicking the
- * agent name opens it. Nested child agents render as their own minimal markers.
+ * agent name opens it.
  */
 export function SubagentExecutionCard({
   step,
-  childToolCalls,
-  childAgents = [],
-  delegation,
-  delegationTree,
-  messageId,
   sessionId,
   showError = false,
-  onOpenArtifact,
 }: SubagentExecutionCardProps) {
   const subagent = step.subagent;
   const openSubagentInPanel = useUIStore((state) => state.openSubagentInPanel);
@@ -93,7 +79,7 @@ export function SubagentExecutionCard({
     : null;
 
   return (
-    <div className="execution-subagent" style={{ marginInlineStart: `${Math.min(delegation?.depth || 0, 4) * 12}px` }}>
+    <div className="execution-subagent">
       <div
         className="flex min-h-9 items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5"
         aria-label={`${resolvedSubagent.agentName}, ${statusLabel}${duration ? `, Duration ${duration}` : ""}. Task: ${taskLabel}`}
@@ -142,74 +128,6 @@ export function SubagentExecutionCard({
         <div className="mt-1.5 rounded-md border border-warning bg-muted px-2.5 py-1.5 text-[11px] text-foreground" role="status">
           <span className="font-medium text-warning">Interrupted after reload.</span>{" "}
           <span className="text-muted-foreground">The saved subagent trace is available in the Agents panel.</span>
-        </div>
-      )}
-
-      {childAgents.length > 0 && (
-        <NestedAgentsDisclosure
-          childAgents={childAgents}
-          childToolCalls={childToolCalls}
-          delegationTree={delegationTree}
-          messageId={messageId}
-          sessionId={sessionId}
-          showError={showError}
-          onOpenArtifact={onOpenArtifact}
-        />
-      )}
-    </div>
-  );
-}
-
-/**
- * Nested delegated agents are collapsed behind a count by default so the parent
- * timeline shows delegation, not a recursive execution tree. Expanding reveals
- * the same minimal markers.
- */
-function NestedAgentsDisclosure({
-  childAgents,
-  childToolCalls,
-  delegationTree,
-  messageId,
-  sessionId,
-  showError,
-  onOpenArtifact,
-}: {
-  childAgents: Step[];
-  childToolCalls?: ToolCall[];
-  delegationTree?: DelegationTree;
-  messageId?: string;
-  sessionId?: string;
-  showError: boolean;
-  onOpenArtifact: (artifact: ArtifactData) => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <div className="mt-1.5">
-      <button
-        type="button"
-        onClick={() => setExpanded((prev) => !prev)}
-        aria-expanded={expanded}
-        className="inline-flex items-center gap-1 rounded-sm text-[11px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-      >
-        <ChevronRight className={cn("h-3 w-3 transition-transform duration-200 motion-reduce:transition-none", expanded && "rotate-90")} aria-hidden="true" />
-        {childAgents.length} nested {childAgents.length === 1 ? "agent" : "agents"}
-      </button>
-      {expanded && (
-        <div className="mt-1.5 space-y-1.5" aria-label="Nested delegated agents">
-          {childAgents.map((childStep) => (
-            <SubagentExecutionCard
-              key={childStep.subagent?.spawnId || childStep.eventId}
-              step={childStep}
-              childToolCalls={childToolCalls}
-              childAgents={delegationTree?.childrenByParent.get(childStep.subagent?.spawnId || "") || []}
-              delegation={delegationTree?.nodes.get(childStep.subagent?.spawnId || "")}
-              delegationTree={delegationTree}
-              messageId={messageId}
-              sessionId={sessionId}
-              showError={showError}
-              onOpenArtifact={onOpenArtifact}
-            />
-          ))}
         </div>
       )}
     </div>
