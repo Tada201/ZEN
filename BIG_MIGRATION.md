@@ -723,7 +723,16 @@ zen-agent become extractable. This is the keystone phase: it converts the 25+
 `crate::commands::AppState` / `AppHandle.state::<AppState>()` sites in
 `agent/**` and the services imports in `llm/registry.rs` into injected ports.
 
-**Prerequisites:** Phases 2–5 (ports exist in zen-core).
+**Prerequisites:** Phases 2–5. Note (Phase 5 review correction): the
+`FsPort`/`ProcessPort`/`HttpPort` capability traits were **deferred** during
+Phase 5 via its sanctioned external-registration fallback — zen-core currently
+holds only EventSink/SecretStore/SettingsStore/AuditSink (+ `LazyToolSource`
+in zen-tools). Phase 6 must therefore define any additional ports it actually
+needs rather than assuming they pre-exist. **Carried debt:** Phase 5's
+`crates/zen-tools/src/manager.rs` landed at ~1,145 lines — above the >900
+RULES.md hard-fail. Shrink it (move its 11 tests to `tests/`, or extract the
+discovery core) as part of Phase 6, or file an exemptions.md entry with an
+expiration before starting Phase 6.
 
 **Tasks**
 - [ ] Build an inventory table in this file (Appendix B) listing every upward
