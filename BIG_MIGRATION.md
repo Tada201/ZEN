@@ -544,28 +544,85 @@ operation checks live in one auditable crate.
 **Prerequisites:** Phases 2–3.
 
 **Tasks**
-- [ ] Move policy cores into zen-security:
-      - `src/tools/permission.rs` (1,411 lines) → split DURING move:
-        `risk.rs` (risk levels/classification), `policy.rs` (rules engine),
-        `approval.rs` (decision types).
-      - `services/permissions.rs` logic core → `checks.rs`.
-      - `services/security.rs` logic core (SecurityService internals that don't
-        need AppHandle) → `service.rs`; AppHandle-bound wrapper stays in app.
-      - `services/secret_policy.rs` classification rules → `secrets.rs`.
-- [ ] zen-security deps: zen-core, zen-db (for persisted decisions), serde,
-      tracing, chrono. NO tauri, NO keyring (keyring impl stays in app behind
-      `SecretStore`).
-- [ ] Route all audit emissions through `AuditSink` port; app provides impl.
-- [ ] Move `tools/url_safety` logic into zen-security (`url_safety.rs`) —
-      Phase 8's mcp modules consume it from there (review finding #8).
-- [ ] Update app call sites mechanically (`crate::tools::permission::X` →
-      `zen_security::...`).
+- [x] `src/tools/permission.rs` (1,551 lines) split DURING the move into
+      `crates/zen-security/src/`: `risk.rs` (RiskLevel, 29L), `approval.rs`
+      (PermissionDecision/PermissionContext + build_context + argument
+      redaction, 152L), `policy.rs` (6-layer rules engine, user pattern
+      rules, RegexCache, hardcoded security rules, secure plan-mode path
+      check, + both inline security-regression suites, 1,393L). Anchor-
+      sliced from source by script — git rename detection confirms.
+      `PermissionDecision::from_input` impl lives in policy.rs (rules
+      engine) for its home type in approval.rs, same crate.
+- [x] `src/services/permissions.rs` → `checks.rs` (tool allowlist, verbatim,
+      117L incl. 5 tests).
+- [x] `src/services/security.rs` → `service.rs` (255L): SecurityService +
+      PrivilegedOperation/PermissionRequest/AuditEvent + its own
+      Allow/Ask/Deny PermissionDecision and RiskLevel, verbatim modulo
+      `crate::db::` → `zen_db::` (2 code + 2 test sites). Nothing in the
+      file needed AppHandle — the whole service moved; no app wrapper
+      required. The name-collision risk (two PermissionDecision / two
+      RiskLevel flavors) is handled at the crate root: service items have
+      NO root re-export, consumers spell `zen_security::service::…` —
+      mirroring the old `services::security` vs `tools::permission` split.
+- [x] `src/services/secret_policy.rs` → `secrets.rs` (verbatim, 23L).
+- [x] `src/tools/url_safety.rs` → `url_safety.rs` (verbatim, 348L incl.
+      the IPv6-mapped-IPv4 SSRF suite). Deps grow accordingly: url, tokio
+      (net), reqwest (native-tls pinned-client builders) — allowed; only
+      tauri/keyring are forbidden.
+- [x] zen-security deps: zen-core, zen-db, serde(+derive), serde_json,
+      tracing, chrono, uuid, sqlx, regex, url, reqwest, tokio.
+      NO tauri, NO keyring (tree-verified: 0 real matches).
+- [x] Audit routing: SecurityService remains the single privileged-path
+      audit funnel (RULES.md rule 6 — "all privileged operations must pass
+      through SecurityService"); it now lives in zen-security and writes
+      audit rows via zen-db. App-side `services/audit_sink.rs` provides
+      the `zen_core::ports::AuditSink` impl the plan asked for: persists
+      port-shaped records into the SAME audit table (lossless field
+      mapping, `caller` = `port`), so Phase 6 `CoreSinks` adoption lands
+      rows identical in shape to service emissions. Port impl has
+      allowed+deny persistence test (app-lib test binary — runs on CI;
+      loader-blocked locally like all app unit tests).
+- [x] App call sites: NOT rewritten — six §4.6 shims
+      (`tools/{permission,url_safety,patch_parser}.rs`,
+      `services/{security,permissions,secret_policy}.rs`) re-export the
+      moved symbols so every call site compiles unchanged; shims die in
+      Phase 14.
+- [x] **Execution additions (deviations):**
+      1. **`tools/patch_parser.rs` moved too** (210L, verbatim): the
+         plan-mode write gate parses apply_patch hunks with it, so
+         zen-security needs it in-crate (an app seam would split the
+         security boundary in two). App re-exports from the old path;
+         fs_tools/patch.rs, services/tool.rs, agent/runner/helpers.rs
+         compile unchanged.
+      2. **policy-tests de-mirrored**: the #[path]/include! mirrors for
+         permission/secret_policy/url_safety/patch_parser are replaced by
+         module aliases over the real crate (`pub use zen_security::policy
+         as permission;` …) — tests now exercise the shipped code,
+         compiled once. runtime_resource + the mcp trio stay mirrored
+         until their phases. 33/33 green.
+      3. `pub(crate)` visibility widened to `pub` for build_context,
+         extract_file_target, is_within_plans_root (app boundary shim
+         needs them across the crate edge); doc notes updated. policy.rs
+         re-exports PermissionDecision/RiskLevel so the merged-module
+         import surface (`tools::permission::X`) keeps resolving.
 
 **Verification gates**
-- Existing permission/security unit tests moved & green: `cargo test -p zen-security`.
-- RULES.md privileged-path test quad (allowed/denied/audit/malformed) present
-  for moved logic.
-- Gate suite green.
+- [x] `cargo test -p zen-security` green: **53/53** (mode×risk matrix 18,
+      layer precedence + plan-mode path attacks + regex cache, allowlist 5,
+      SecurityService evaluate/audit-persist 2, URL SSRF suite 10) — runs
+      locally (pure crate). `cargo test -p zen-policy-tests`: **33/33**.
+- [x] RULES.md privileged-path quad for moved logic: allowed/denied
+      (matrix + layer tests), audit (record_audit persistence test moved
+      with service.rs; + ZenAuditSink allow/deny test), malformed
+      (regex_cache_invalid_pattern: invalid user patterns fail closed to
+      no-match; url_safety rejects malformed scheme/host).
+- [x] Gate suite green: `cargo check --workspace --all-targets` ✅,
+      `cargo clippy --workspace --all-targets -- -D warnings` ✅,
+      `cargo test --workspace --no-run` ✅ (**7** executables, +
+      zen-security), `npm run build` ✅, `cargo tree -p zen-security`
+      tauri/keyring guard: 0 real matches (path-string false positives
+      only). App unit tests remain CI-gated by the local loader issue
+      (unchanged).
 
 **Rollback:** revert commit range.
 

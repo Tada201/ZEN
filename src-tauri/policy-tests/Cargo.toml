@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+# Phase 4: permission/secret/url policy moved into the zen-security crate;
+# these tests now exercise the crate directly instead of #[path]-mirroring
+# app source files. runtime_resource + mcp trio stay mirrored until their
+# phases.
+zen-security = { workspace = true }
 regex = "1"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

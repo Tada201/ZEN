@@ -45,12 +45,19 @@ Reason: All multi-phase deep research execution steps live in one file.
 Split or Fix Plan: Move to zen-agent during Phase 11 and split into deep_research/phases/{mod.rs, phase_*.rs}.
 Expires: migration/phase-11-done
 
-File: src-tauri/src/tools/permission.rs (1,551)
+File: src-tauri/crates/zen-security/src/policy.rs (1,393)
 Owner: backend/security
 Rule Exempted: Rust hard file-size limit
-Reason: Canonical permission policy, risk classification, path validation, redaction, and regression matrix currently share one security boundary.
-Split or Fix Plan: Move to zen-security during Phase 4 and split into risk.rs, policy.rs, approval.rs (pure relocation split, no logic edits).
-Expires: migration/phase-04-done
+Reason: Successor of the old src/tools/permission.rs (1,551) after the
+  Phase 4 split into risk/approval/policy. The remaining size is the rules
+  engine plus its inline security-regression suites (mode×risk matrix +
+  layer precedence + plan-mode path-attack tests, ~720 lines of tests);
+  the executable code portion is ~670 lines. Kept together deliberately:
+  the matrix tests pin the same 6-layer chain they test and reference its
+  private helpers.
+Split or Fix Plan: Extract the test modules into zen-security/tests/ during
+  the Phase 12 file-size sweep if crate files are brought under the gate.
+Expires: migration/phase-12-done
 
 File: src-tauri/src/agent/runner/loop.rs (1,434)
 Owner: backend/agent

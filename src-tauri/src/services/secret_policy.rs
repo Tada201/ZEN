@@ -1,23 +1,7 @@
-pub const SECRET_PRESENT_SENTINEL: &str = "__ZEN_SECRET_PRESENT__";
+//! Shim (BIG_MIGRATION.md Phase 4): secret-key classification lives in
+//! the `zen-security` crate (`secrets` module). Re-exports keep call sites
+//! compiling unchanged (relocation doctrine §4.6); deleted in Phase 14.
 
-pub fn redact_if_secret(key: &str, value: &str) -> String {
-    if value.is_empty() || !is_secret_key(key) {
-        return value.to_string();
-    }
-
-    SECRET_PRESENT_SENTINEL.to_string()
-}
-
-pub fn is_secret_placeholder_write(key: &str, value: &str) -> bool {
-    is_secret_key(key) && value == SECRET_PRESENT_SENTINEL
-}
-
-pub fn is_secret_key(key: &str) -> bool {
-    let key = key.to_ascii_lowercase();
-    key.contains("api_key")
-        || key.contains("apikey")
-        || key.contains("token")
-        || key.contains("secret")
-        || key.contains("credential")
-        || key.contains("password")
-}
+pub use zen_security::secrets::{
+    is_secret_key, is_secret_placeholder_write, redact_if_secret, SECRET_PRESENT_SENTINEL,
+};

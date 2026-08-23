@@ -1,17 +1,11 @@
-#[path = "../../src/services/secret_policy.rs"]
-pub mod secret_policy;
-
-pub mod tools {
-    pub mod patch_parser {
-        include!("../../src/tools/patch_parser.rs");
-    }
-}
-
-#[path = "../../src/tools/permission.rs"]
-pub mod permission;
-
-#[path = "../../src/tools/url_safety.rs"]
-pub mod url_safety;
+// Phase 4: permission/secret-policy/url-safety/patch-parser logic lives in
+// the zen-security crate now. The module aliases below preserve the
+// `super::permission` / `super::secret_policy` / `super::url_safety` paths
+// the test bodies were written against, so the tests exercise the same
+// code the app ships (compiled once, no more #[path] mirrors).
+pub use zen_security::policy as permission;
+pub use zen_security::secrets as secret_policy;
+pub use zen_security::url_safety;
 
 #[path = "../../src/services/runtime_resource.rs"]
 pub mod runtime_resource;
