@@ -12,6 +12,7 @@ pub use zen_mcp::{
 };
 pub use zen_mcp::{
     is_external_tool_name, prefixed_external_tool_name, risk_level_from_annotations, McpClient,
-    McpConfigError, McpConfigService, McpScope, McpServerEntry, McpTransport, StdioTransport,
+    McpConfigError, McpConfigService, McpScope, McpServerEntry, McpTransport,
 };
+pub use zen_mcp::stdio::StdioTransport;
 pub use zen_mcp::types::*;
