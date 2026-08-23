@@ -4,7 +4,6 @@
 //! Bodies are read from disk on demand; metadata comes from `SkillsManager`.
 
 use crate::agent::skills::SkillsManager;
-use crate::agent::tools::AgentTool;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -22,7 +21,7 @@ impl SkillTool {
 }
 
 #[async_trait]
-impl AgentTool for SkillTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for SkillTool {
     fn id(&self) -> &str {
         "skill"
     }
@@ -147,6 +146,7 @@ impl AgentTool for SkillTool {
 mod tests {
     use super::*;
     use crate::agent::skills::SkillsManager;
+    use zen_tools::AgentTool as _;
 
     #[test]
     fn schema_is_valid() {

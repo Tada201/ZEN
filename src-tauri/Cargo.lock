@@ -13124,6 +13124,7 @@ dependencies = [
  "zen-core",
  "zen-db",
  "zen-security",
+ "zen-tools",
  "zip 4.6.1",
 ]
 
@@ -13183,6 +13184,22 @@ dependencies = [
  "uuid",
  "zen-core",
  "zen-db",
+]
+
+[[package]]
+name = "zen-tools"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "jsonschema",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "zen-core",
+ "zen-security",
 ]
 
 [[package]]

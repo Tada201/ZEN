@@ -1,4 +1,3 @@
-use crate::agent::tools::AgentTool;
 use crate::commands::AppState;
 use crate::services::{AuditEvent, PermissionDecision, PrivilegedOperation};
 use anyhow::Result;
@@ -12,7 +11,7 @@ use tauri::{AppHandle, Manager};
 pub struct RunCommandTool;
 
 #[async_trait]
-impl AgentTool for RunCommandTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for RunCommandTool {
     fn id(&self) -> &str {
         "run_command"
     }

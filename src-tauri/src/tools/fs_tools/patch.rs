@@ -10,7 +10,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::commands::AppState;
 use crate::tools::permission::RiskLevel;
-use crate::tools::{Tool, ToolError, ToolOutput};
+use crate::tools::{ToolError, ToolOutput};
 
 use super::{
     enforce_content_size, enforce_existing_file_size, read_text_file, unified_diff,
@@ -25,7 +25,7 @@ struct ApplyPatchArgs {
 pub struct ApplyPatchTool;
 
 #[async_trait]
-impl Tool for ApplyPatchTool {
+impl zen_tools::Tool<tauri::AppHandle> for ApplyPatchTool {
     fn name(&self) -> &str {
         "apply_patch"
     }

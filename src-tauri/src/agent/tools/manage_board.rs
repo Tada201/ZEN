@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter};
 
-use crate::agent::tools::AgentTool;
 use anyhow::Result;
 
 const MAX_BOARD_BLOCKS: usize = 12;
@@ -341,7 +340,7 @@ fn validate_operation(operation: &BoardOperation) -> Result<()> {
 }
 
 #[async_trait]
-impl AgentTool for ManageBoardTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for ManageBoardTool {
     fn id(&self) -> &str {
         "manage_board"
     }

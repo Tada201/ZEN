@@ -1,4 +1,3 @@
-use crate::agent::tools::AgentTool;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -37,7 +36,7 @@ struct MapArgs {
 }
 
 #[async_trait]
-impl AgentTool for MapTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for MapTool {
     fn id(&self) -> &str {
         "activate_3d_globe"
     }

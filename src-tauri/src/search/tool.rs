@@ -4,9 +4,8 @@ use serde_json::{json, Value};
 use tauri::AppHandle;
 use tokio_util::sync::CancellationToken;
 
-use crate::agent::tools::AgentTool;
 use crate::tools::permission::RiskLevel;
-use crate::tools::{Tool, ToolError, ToolOutput};
+use crate::tools::{ToolError, ToolOutput};
 
 /// Real WebSearchTool that searches DuckDuckGo (free, no API key required)
 /// and returns parsed results (title, snippet, URL).
@@ -477,7 +476,7 @@ fn parse_duckduckgo_results(html: &str) -> Result<Vec<SearchResult>, String> {
 }
 
 #[async_trait]
-impl AgentTool for WebSearchTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for WebSearchTool {
     fn id(&self) -> &str {
         "web_search"
     }
@@ -528,7 +527,7 @@ impl AgentTool for WebSearchTool {
 }
 
 #[async_trait]
-impl Tool for WebSearchTool {
+impl zen_tools::Tool<tauri::AppHandle> for WebSearchTool {
     fn name(&self) -> &str {
         "web_search"
     }

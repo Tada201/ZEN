@@ -12,7 +12,8 @@ use tauri::{AppHandle, Manager};
 
 use crate::commands::AppState;
 use crate::tools::permission::RiskLevel;
-use crate::tools::{Tool, ToolError, ToolOutput};
+use crate::tools::{ToolError, ToolOutput};
+use zen_tools::Tool;
 
 use super::{
     enforce_content_size, enforce_existing_file_size, read_text_file, unified_diff,
@@ -28,7 +29,7 @@ struct WriteFileArgs {
 pub struct WriteFileTool;
 
 #[async_trait]
-impl Tool for WriteFileTool {
+impl zen_tools::Tool<tauri::AppHandle> for WriteFileTool {
     fn name(&self) -> &str {
         "write_file"
     }
@@ -150,7 +151,7 @@ struct EditFileArgs {
 pub struct EditFileTool;
 
 #[async_trait]
-impl Tool for EditFileTool {
+impl zen_tools::Tool<tauri::AppHandle> for EditFileTool {
     fn name(&self) -> &str {
         "edit_file"
     }

@@ -4,7 +4,7 @@ use serde_json::json;
 use tauri::{AppHandle, Manager};
 use tokio::fs;
 
-use super::{permission::RiskLevel, Tool, ToolError, ToolOutput};
+use super::{permission::RiskLevel, ToolError, ToolOutput};
 use crate::commands::AppState;
 
 pub struct ImageGenerationTool;
@@ -104,7 +104,7 @@ async fn download_and_validate_image(url_str: &str) -> Result<Vec<u8>, ToolError
 }
 
 #[async_trait]
-impl Tool for ImageGenerationTool {
+impl zen_tools::Tool<tauri::AppHandle> for ImageGenerationTool {
     fn name(&self) -> &str {
         "generate_image"
     }

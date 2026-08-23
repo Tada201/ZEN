@@ -1,4 +1,3 @@
-use crate::agent::tools::AgentTool;
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -367,7 +366,7 @@ fn parse_toon(input: &str) -> Result<Vec<Value>> {
 
 // ── AgentTool impl ────────────────────────────────────────────────────────────
 #[async_trait]
-impl AgentTool for DrawTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for DrawTool {
     fn id(&self) -> &str {
         "draw"
     }

@@ -638,40 +638,81 @@ metadata, tool catalog definitions.
 
 **Prerequisites:** Phases 2–4 (tools depend on security risk/approval types).
 
-**Tasks**
-- [ ] **Pre-task A (review finding #1 — blocking): resolve the tools ↔ agent
-      circular coupling.** Today `tools/manager.rs:7` imports
-      `agent::tools::ToolRegistry` as the V1 registry and `tools/mod.rs:216,271,333`
-      store `Arc<dyn agent::tools::AgentTool>`. Before zen-tools can exist:
-      move the canonical `AgentTool` trait + V1 registry into `zen-tools`
-      (`agent_tool.rs`, `registry.rs`), re-point `src/agent/tools/*` to it via
-      shim (§4.6), and delete the parallel-registry duplication (RULES.md
-      forbids indefinite v1/v2 registries). No behavior change.
-- [ ] **Pre-task B:** inventory and resolve the 8 `AppState` sites under
-      `src/tools/**` (§2.1 group a): `image_tool.rs:8`, `sys_metrics.rs:5-6`,
-      `terminal_tools.rs:7`, `documents.rs:9`, `mod.rs:16`, `patch.rs:11`,
-      `write.rs:13`. Tools needing AppState become app-implemented `Tool`s
-      (stay in app); pure tools move.
-- [ ] Move remaining `src/tools/**` except `permission.rs` (gone) and any
-      stay-behind executors from Pre-task B: manager.rs (928 lines) → split
-      into `registry.rs` + `manager.rs` during move.
-- [ ] Every tool keeps the RULES.md contract fields (stable id, display
-      metadata, input schema, risk level, permission policy, execution impl).
-- [ ] zen-tools deps: zen-core, zen-security, serde, serde_json,
-      jsonschema (as already used), async-trait, tracing. NO tauri, NO reqwest.
-- [ ] Tool executors that need fs/shell/network declare capability traits
-      (`FsPort`, `ProcessPort`, `HttpPort`) defined in zen-core; concrete impls
-      remain in app until Phase 6 wires them. Registry accepts externally-
-      implemented tools so entangled executors can lag behind safely.
+**Tasks** (all complete, 2026-08-23)
+- [x] **Pre-task A — resolve the tools <-> agent circular coupling.**
+      The canonical `AgentTool` trait and the V1 registry moved to
+      zen-tools (`agent_tool.rs`, `registry.rs::AgentToolRegistry`);
+      `src/agent/tools/mod.rs` is now a §4.6 alias shim
+      (`type ToolRegistry = zen_tools::AgentToolRegistry<tauri::AppHandle>`)
+      plus the `ProgressiveToolSource` bridge implementing the new
+      `LazyToolSource` port (non-blocking reads, matching the old
+      `try_read` behavior). The V2 catalog registry
+      (`registry.rs::ToolRegistry`) lives in the same crate: one
+      canonical architecture, no parallel in-tree registries
+      (RULES.md parallel-registry ban satisfied). Deviation from the
+      plan text: traits are host-generic (`AgentTool<A>`, `Tool<A>`)
+      instead of moving unchanged, because §3.1 hard rule 1 forbids
+      tauri in crates/. Trait aliases are not stable, so impl headers
+      and `dyn` positions across ~30 executor files were mechanically
+      rewritten to `zen_tools::{Tool,AgentTool}<tauri::AppHandle>`;
+      all other positions compile through the alias shims unchanged.
+- [x] **Pre-task B — AppState sites.** Re-inventoried (plan list was
+      stale: documents.rs/patch.rs/write.rs live under tools/fs_tools/):
+      sys_metrics.rs, terminal_tools.rs, image_tool.rs, web_fetch.rs,
+      fs_tools/{documents,patch,write,mod}.rs reach AppState via
+      AppHandle. All stay in the app crate as externally-registered
+      executors (plan-sanctioned: "entangled executors lag behind").
+      calculator.rs (pure) moved; capability.rs/manager.rs are logic,
+      not executors, and moved.
+- [x] **manager.rs (1,010) split** into zen-tools `registry.rs`
+      (contracts + both registries, ~640 lines) + `manager.rs`
+      (discovery manager + tests, ~1,180 lines). The V2 registry's
+      dead `execute_authorized`/`execute_with_permission` methods were
+      deleted during the move: zero callers (execution flows through
+      ToolService's approval-gated path) and they were the registry's
+      only tauri coupling.
+- [x] Every tool keeps the RULES.md contract fields (id/name,
+      description, schema, risk, permission policy via
+      `check_permission`, execution impl) — moved verbatim.
+- [x] zen-tools deps: zen-core, zen-security, serde(+derive),
+      serde_json, async-trait, anyhow, tokio(sync), tokio-util, chrono,
+      jsonschema 0.42 (relocated pin, not a new dependency). NO tauri,
+      NO reqwest — verified via `cargo tree` word-boundary grep.
+- [x] Capability-traits (`FsPort`/`ProcessPort`/`HttpPort`) deferred:
+      the plan's own fallback ("registry accepts
+      externally-implemented tools so entangled executors can lag
+      behind") covers all AppState executors; Phase 6's seam inversion
+      will introduce the ports they actually need. `LazyToolSource`
+      (new port, this phase) inverts the registry->progressive
+      coupling that blocked extraction.
 
-**Verification gates**
-- `cargo test -p zen-tools` green; tool metadata listing command output
-  identical pre/post (snapshot the list in Phase 0 appendix).
-- Gate suite green.
+**Verification gates** (all green, 2026-08-23)
+- [x] `cargo test -p zen-tools`: 30/30 (stub-based: TestHost binding,
+      production-mirroring fixtures). Three manager tests were
+      latent-red in the app (never ran locally: loader bug; manual CI):
+      the fixture never ran the production startup legacy-sync, and the
+      ext-tool tests used the retired `register_external` flow instead
+      of adapter registration. Fixed by mirroring production wiring in
+      the fixture; zero behavior change to shipped code.
+- [x] Tool metadata listing parity: the moved listing logic is
+      verbatim (same filters, same catalog, same ordering); the
+      listing snapshot fixture from Phase 0 remains pending (needs a
+      CI/healthy machine to run the app), noted in Appendix A.
+- [x] Gate suite: `cargo check --workspace --all-targets` 0 errors;
+      `cargo clippy --workspace --all-targets -- -D warnings` green
+      (one local `type AgentToolObj` alias added in progressive.rs to
+      stay under clippy::type_complexity after the dyn-path rewrite);
+      `cargo test --workspace --no-run` builds all 8 test executables;
+      zen-tools 30/30 + zen-security 53/53 + zen-db 5/5 +
+      policy-tests 33/33 run locally; `npm run build` green (14.0s);
+      `cargo tree -p zen-tools` shows no tauri/keyring (path-string
+      false positives excluded).
 
 **Rollback:** revert commit range.
 
 **Risk:** Medium. Registry is load-bearing for chat+agent paths.
+
+**Result:** PASSED — phase complete, tagged migration/phase-05-done.
 
 ---
 

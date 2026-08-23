@@ -1,4 +1,3 @@
-use crate::agent::tools::AgentTool;
 use crate::agent::tools::ToolRegistry;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -17,7 +16,7 @@ impl ListToolsTool {
 }
 
 #[async_trait]
-impl AgentTool for ListToolsTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for ListToolsTool {
     fn id(&self) -> &str {
         "list_available_tools"
     }

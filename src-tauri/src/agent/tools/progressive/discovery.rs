@@ -6,7 +6,6 @@ use tauri::AppHandle;
 use tokio::sync::RwLock;
 
 use crate::agent::tools::progressive::ProgressiveToolRegistry;
-use crate::agent::tools::AgentTool;
 
 pub(super) struct ToolsSearchTool {
     registry: Weak<RwLock<ProgressiveToolRegistry>>,
@@ -21,7 +20,7 @@ impl ToolsSearchTool {
 }
 
 #[async_trait]
-impl AgentTool for ToolsSearchTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for ToolsSearchTool {
     fn id(&self) -> &str {
         "tools_search"
     }
@@ -108,7 +107,7 @@ impl ListToolsStandalone {
 }
 
 #[async_trait]
-impl AgentTool for ListToolsStandalone {
+impl zen_tools::AgentTool<tauri::AppHandle> for ListToolsStandalone {
     fn id(&self) -> &str {
         "list_tools"
     }

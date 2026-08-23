@@ -5,12 +5,12 @@ use tauri::{AppHandle, Manager};
 use crate::commands::system::get_system_metrics;
 use crate::commands::AppState;
 use crate::tools::permission::RiskLevel;
-use crate::tools::{Tool, ToolError, ToolOutput};
+use crate::tools::{ToolError, ToolOutput};
 
 pub struct SystemMetricsTool;
 
 #[async_trait]
-impl Tool for SystemMetricsTool {
+impl zen_tools::Tool<tauri::AppHandle> for SystemMetricsTool {
     fn name(&self) -> &str {
         "get_system_metrics"
     }

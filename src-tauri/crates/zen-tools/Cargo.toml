@@ -1,0 +1,22 @@
+[package]
+name = "zen-tools"
+version = "0.1.0"
+edition = "2021"
+description = "Canonical tool architecture: Tool/AgentTool traits, registries, discovery manager, capability metadata (BIG_MIGRATION.md Phase 5)"
+
+[dependencies]
+zen-core = { workspace = true }
+zen-security = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+tokio-util = { workspace = true }
+chrono = { workspace = true }
+# Same version pin as the app crate (src-tauri Cargo.toml); not a new
+# dependency, only relocated usage for argument validation.
+jsonschema = "0.42"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }

@@ -6,14 +6,13 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 use tauri::AppHandle;
 
-use crate::agent::tools::AgentTool;
 use crate::canvas::protocol::{generate_error_feedback, generate_feedback, parse_session_action};
 use crate::canvas::session::GraphSession;
 
 pub struct GraphSessionTool;
 
 #[async_trait]
-impl AgentTool for GraphSessionTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for GraphSessionTool {
     fn id(&self) -> &str {
         "graph_session"
     }

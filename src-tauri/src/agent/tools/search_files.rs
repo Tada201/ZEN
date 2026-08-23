@@ -1,5 +1,4 @@
 use crate::agent::tools::fs_tools::is_ignored_dir;
-use crate::agent::tools::AgentTool;
 use crate::commands::AppState;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -62,7 +61,7 @@ fn glob_match(pattern: &str, name: &str) -> bool {
 }
 
 #[async_trait]
-impl AgentTool for SearchFilesTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for SearchFilesTool {
     fn id(&self) -> &str {
         "search_files"
     }

@@ -53,7 +53,7 @@ use tauri::AppHandle;
 
 use crate::mcp::McpClient;
 use crate::tools::permission::RiskLevel;
-use crate::tools::{Tool, ToolAnnotations, ToolError, ToolOutput};
+use crate::tools::{ToolAnnotations, ToolError, ToolOutput};
 
 /// Adapter for a single tool served by an external MCP server.
 ///
@@ -128,7 +128,7 @@ impl McpToolAdapter {
 }
 
 #[async_trait]
-impl Tool for McpToolAdapter {
+impl zen_tools::Tool<tauri::AppHandle> for McpToolAdapter {
     fn name(&self) -> &str {
         &self.prefixed_name
     }

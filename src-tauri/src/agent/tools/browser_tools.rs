@@ -9,7 +9,6 @@
 //!
 //! Windows/WebView2 only; on other platforms every action returns an error.
 
-use crate::agent::tools::AgentTool;
 use crate::commands::AppState;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -25,7 +24,7 @@ impl BrowserTool {
 }
 
 #[async_trait]
-impl AgentTool for BrowserTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for BrowserTool {
     fn id(&self) -> &str {
         "browser"
     }

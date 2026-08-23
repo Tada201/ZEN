@@ -1,3 +1,10 @@
+// Phase 5 Pre-task A (BIG_MIGRATION.md): the canonical `AgentTool` trait and
+// the execution-side registry moved to zen-tools (`agent_tool.rs`,
+// `registry.rs::AgentToolRegistry`). There is no trait alias (trait aliases
+// are not stable): impl headers and `dyn` positions use
+// `zen_tools::AgentTool<tauri::AppHandle>` directly. The old local
+// `ToolRegistry` is re-pointed at zen-tools' `AgentToolRegistry` — the
+// in-tree duplicate registry is gone. Delete this alias in Phase 14.
 pub mod child_runner;
 pub mod handoff_context;
 pub mod browser_tools;
@@ -16,137 +23,52 @@ pub mod spawn_tools;
 pub mod task_tools;
 pub mod terminal_tools;
 
-use anyhow::Result;
-use async_trait::async_trait;
-use serde_json::Value;
-use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 
-#[async_trait]
-pub trait AgentTool: Send + Sync {
-    fn id(&self) -> &str;
-    fn description(&self) -> &str;
-    fn input_schema(&self) -> Value;
-    async fn run(
-        &self,
-        app: tauri::AppHandle,
-        chat_id: String,
-        input: Value,
-        depth: u32,
-        allowed_tools: Option<Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
-        token: tokio_util::sync::CancellationToken,
-    ) -> Result<Value>;
+pub type ToolRegistry = zen_tools::AgentToolRegistry<tauri::AppHandle>;
 
-    /// Context-aware entry point for tools that need the stable call id.
-    /// Mutation recovery wraps legacy tools at the canonical service boundary,
-    /// so existing tools retain the smaller `run` contract by default.
-    #[allow(clippy::too_many_arguments)]
-    async fn run_with_context(
-        &self,
-        app: tauri::AppHandle,
-        chat_id: String,
-        _tool_call_id: String,
-        input: Value,
-        depth: u32,
-        allowed_tools: Option<Arc<tokio::sync::Mutex<std::collections::HashSet<String>>>>,
-        token: tokio_util::sync::CancellationToken,
-    ) -> Result<Value> {
-        self.run(app, chat_id, input, depth, allowed_tools, token).await
-    }
-
-    /// Execution timeout in seconds. Tools can override this for operations
-    /// that need more or less time. Default is 45 seconds.
-    fn timeout_seconds(&self) -> u64 {
-        45
-    }
+/// Bridge from the app's progressive (lazy) registry to the zen-tools
+/// `LazyToolSource` port. Uses non-blocking reads: the former v1 registry
+/// used `try_read` for the same operations, so lock contention behaves
+/// exactly as before (miss → tool treated as not-yet-loadable).
+pub struct ProgressiveToolSource {
+    progressive: Arc<tokio::sync::RwLock<progressive::ProgressiveToolRegistry>>,
 }
 
-#[derive(Clone)]
-pub struct ToolRegistry {
-    tools: HashMap<String, Arc<dyn AgentTool>>,
-    progressive: Option<Arc<RwLock<crate::agent::tools::progressive::ProgressiveToolRegistry>>>,
-}
-
-impl Default for ToolRegistry {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ToolRegistry {
-    pub fn new() -> Self {
-        Self {
-            tools: HashMap::new(),
-            progressive: None,
-        }
-    }
-
-    pub fn with_progressive(
-        progressive: Arc<RwLock<crate::agent::tools::progressive::ProgressiveToolRegistry>>,
+impl ProgressiveToolSource {
+    pub fn new(
+        progressive: Arc<tokio::sync::RwLock<progressive::ProgressiveToolRegistry>>,
     ) -> Self {
-        let mut tools = HashMap::new();
-        if let Ok(prog) = progressive.try_read() {
-            for tool in prog.loaded_tool_ids() {
-                if let Some(t) = prog.get_tool(&tool) {
-                    tools.insert(t.id().to_string(), t);
-                }
-            }
-        }
-        Self {
-            tools,
-            progressive: Some(progressive),
+        Self { progressive }
+    }
+}
+
+impl zen_tools::registry::LazyToolSource<tauri::AppHandle> for ProgressiveToolSource {
+    fn metadata(&self) -> Vec<zen_tools::LazyToolMetadata> {
+        match self.progressive.try_read() {
+            Ok(prog) => prog
+                .get_metadata()
+                .into_iter()
+                .map(|meta| zen_tools::LazyToolMetadata {
+                    id: meta.id,
+                    name: meta.name,
+                    description: meta.description,
+                    category: meta.category,
+                    tags: meta.tags,
+                })
+                .collect(),
+            Err(_) => Vec::new(),
         }
     }
 
-    pub fn progressive(
-        &self,
-    ) -> Option<Arc<RwLock<crate::agent::tools::progressive::ProgressiveToolRegistry>>> {
-        self.progressive.clone()
+    fn get_or_load(&self, id: &str) -> Option<Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>> {
+        self.progressive.try_read().ok()?.get_or_load_tool(id)
     }
 
-    pub fn register(&mut self, tool: Arc<dyn AgentTool>) {
-        self.tools.insert(tool.id().to_string(), tool);
-    }
-
-    pub fn get(&self, id: &str) -> Option<Arc<dyn AgentTool>> {
-        if let Some(tool) = self.tools.get(id) {
-            return Some(tool.clone());
+    fn loaded_ids(&self) -> Vec<String> {
+        match self.progressive.try_read() {
+            Ok(prog) => prog.loaded_tool_ids(),
+            Err(_) => Vec::new(),
         }
-        if let Some(prog_arc) = &self.progressive {
-            if let Ok(prog) = prog_arc.try_read() {
-                if let Some(tool) = prog.get_or_load_tool(id) {
-                    return Some(tool);
-                }
-            }
-        }
-        None
-    }
-
-    pub fn list(&self) -> Vec<Arc<dyn AgentTool>> {
-        let mut result: Vec<Arc<dyn AgentTool>> = self.tools.values().cloned().collect();
-        if let Some(prog_arc) = &self.progressive {
-            if let Ok(prog) = prog_arc.try_read() {
-                for tool_id in prog.loaded_tool_ids() {
-                    if let Some(t) = prog.get_or_load_tool(&tool_id) {
-                        if !result.iter().any(|existing| existing.id() == t.id()) {
-                            result.push(t);
-                        }
-                    }
-                }
-            }
-        }
-        result
-    }
-
-    pub fn list_as_tool_info(&self) -> Vec<crate::tools::ToolInfo> {
-        self.list()
-            .into_iter()
-            .map(|t| crate::tools::ToolInfo {
-                name: t.id().to_string(),
-                description: t.description().to_string(),
-                parameters: t.input_schema(),
-            })
-            .collect()
     }
 }

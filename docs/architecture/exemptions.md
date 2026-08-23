@@ -101,12 +101,14 @@ Reason: Anthropic client, mapping, and event conversion in one file.
 Split or Fix Plan: Move to zen-llm during Phase 7 and split into anthropic/{client.rs, mapping.rs}.
 Expires: migration/phase-07-done
 
-File: src-tauri/src/tools/manager.rs (1,010)
+File: src-tauri/src/tools/manager.rs (1,010) — RESOLVED Phase 5: logic moved
+to zen-tools and split into registry.rs (~640) + manager.rs (~1,180 incl.
+tests); the app file is now a §4.6 re-export shim (8 lines).
 Owner: backend/tools
 Rule Exempted: Rust hard file-size limit
-Reason: V1 tool manager wraps the agent tool registry and metadata catalog in one file.
-Split or Fix Plan: Unify V1/V2 registries (Phase 5 Pre-task A), move to zen-tools, split into registry.rs + manager.rs.
-Expires: migration/phase-05-done
+Reason: (historical) V1 tool manager wrapped the agent tool registry and metadata catalog in one file.
+Split or Fix Plan: Done in Phase 5 (Pre-task A unified the dual registries; manager split into zen-tools registry.rs + manager.rs).
+Expires: resolved migration/phase-05-done
 
 File: src-tauri/src/commands/chat/send.rs (940)
 Owner: backend/commands

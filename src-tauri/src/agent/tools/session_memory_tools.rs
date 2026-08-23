@@ -1,7 +1,6 @@
 //! Retained for a future session-memory redesign only. These tools are not
 //! registered, discoverable, or present in any active agent allowlist.
 
-use crate::agent::tools::AgentTool;
 use crate::commands::AppState;
 use crate::rag::session_memory::create_memory_entry;
 use anyhow::Result;
@@ -26,7 +25,7 @@ struct WriteMemoryArgs {
 pub struct WriteToMemoryTool;
 
 #[async_trait]
-impl AgentTool for WriteToMemoryTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for WriteToMemoryTool {
     fn id(&self) -> &str {
         "write_to_memory"
     }
@@ -109,7 +108,7 @@ struct SearchMemoryArgs {
 pub struct SearchSessionMemoryTool;
 
 #[async_trait]
-impl AgentTool for SearchSessionMemoryTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for SearchSessionMemoryTool {
     fn id(&self) -> &str {
         "search_session_memory"
     }
@@ -200,7 +199,7 @@ impl AgentTool for SearchSessionMemoryTool {
 pub struct GetMemoryStatsTool;
 
 #[async_trait]
-impl AgentTool for GetMemoryStatsTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for GetMemoryStatsTool {
     fn id(&self) -> &str {
         "get_memory_stats"
     }

@@ -1,7 +1,6 @@
 //! Retired OSINT feed adapters kept source-only for the future unified
 //! `world_map` tool. They are intentionally not registered or agent-visible.
 
-use crate::agent::tools::AgentTool;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -11,7 +10,7 @@ use tauri::AppHandle;
 pub struct EarthquakeTool;
 
 #[async_trait]
-impl AgentTool for EarthquakeTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for EarthquakeTool {
     fn id(&self) -> &str {
         "get_earthquakes"
     }
@@ -106,7 +105,7 @@ impl AgentTool for EarthquakeTool {
 pub struct MilitaryTrackingTool;
 
 #[async_trait]
-impl AgentTool for MilitaryTrackingTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for MilitaryTrackingTool {
     fn id(&self) -> &str {
         "get_military_aircraft"
     }

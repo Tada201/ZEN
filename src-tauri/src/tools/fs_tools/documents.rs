@@ -8,14 +8,14 @@ use tauri::{AppHandle, Manager};
 
 use crate::commands::AppState;
 use crate::tools::permission::RiskLevel;
-use crate::tools::{Tool, ToolError, ToolOutput};
+use crate::tools::{ToolError, ToolOutput};
 
 use super::{enforce_existing_file_size, workspace_max_file_bytes};
 
 pub struct ListDocumentsTool;
 
 #[async_trait]
-impl Tool for ListDocumentsTool {
+impl zen_tools::Tool<tauri::AppHandle> for ListDocumentsTool {
     fn name(&self) -> &str {
         "list_documents"
     }
@@ -82,7 +82,7 @@ struct ReadDocumentArgs {
 }
 
 #[async_trait]
-impl Tool for ReadDocumentTool {
+impl zen_tools::Tool<tauri::AppHandle> for ReadDocumentTool {
     fn name(&self) -> &str {
         "read_document_content"
     }
@@ -227,7 +227,7 @@ pub struct GrepDocumentsArgs {
 }
 
 #[async_trait]
-impl Tool for GrepDocumentsTool {
+impl zen_tools::Tool<tauri::AppHandle> for GrepDocumentsTool {
     fn name(&self) -> &str {
         "grep_documents"
     }

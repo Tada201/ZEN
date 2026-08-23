@@ -7,7 +7,6 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
-use crate::agent::tools::AgentTool;
 
 /// Parsed checklist item after tolerant field extraction.
 struct TodoItem {
@@ -56,7 +55,7 @@ fn normalize_status(raw: &str) -> &'static str {
 pub struct WriteTodosTool;
 
 #[async_trait]
-impl AgentTool for WriteTodosTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for WriteTodosTool {
     fn id(&self) -> &str {
         "write_todos"
     }
@@ -209,7 +208,7 @@ impl AgentTool for WriteTodosTool {
 pub struct UpdateGoalTool;
 
 #[async_trait]
-impl AgentTool for UpdateGoalTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for UpdateGoalTool {
     fn id(&self) -> &str {
         "update_goal"
     }

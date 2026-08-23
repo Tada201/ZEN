@@ -447,7 +447,9 @@ impl AppState {
             crate::agent::tools::progressive::ProgressiveToolRegistry::new(),
         ));
         let tool_registry_v1 = Arc::new(RwLock::new(
-            crate::agent::tools::ToolRegistry::with_progressive(progressive.clone()),
+            crate::agent::tools::ToolRegistry::with_lazy_source(Arc::new(
+                crate::agent::tools::ProgressiveToolSource::new(progressive.clone()),
+            )),
         ));
         // SkillsManager uses the OS home dir for ~/.zen/skills/ discovery.
         let skills_manager = Arc::new(
@@ -504,10 +506,9 @@ impl AppState {
         {
             let v1_guard = tool_registry_v1.blocking_read();
             let mut v2_guard = tool_registry_v2.blocking_write();
-            if let Some(prog_arc) = v1_guard.progressive() {
-                let prog = prog_arc.blocking_read();
-                for meta in prog.get_metadata() {
-                    if let Some(tool) = prog.get_or_load_tool(&meta.id) {
+            if let Some(lazy) = v1_guard.lazy_source() {
+                for meta in lazy.metadata() {
+                    if let Some(tool) = lazy.get_or_load(&meta.id) {
                         v2_guard.register_legacy_tool(tool);
                     }
                 }

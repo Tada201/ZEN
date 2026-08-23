@@ -1,4 +1,3 @@
-use crate::agent::tools::AgentTool;
 use crate::commands::AppState;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -14,7 +13,7 @@ use tokio::sync::Mutex;
 pub struct ListDocumentsTool;
 
 #[async_trait]
-impl AgentTool for ListDocumentsTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for ListDocumentsTool {
     fn id(&self) -> &str {
         "list_documents"
     }
@@ -98,7 +97,7 @@ pub(crate) fn is_ignored_dir(name: &str) -> bool {
 }
 
 #[async_trait]
-impl AgentTool for ListDirectoryTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for ListDirectoryTool {
     fn id(&self) -> &str {
         "list_directory"
     }
@@ -306,7 +305,7 @@ fn extracted_sidecar_path(blob_path: Option<&str>, doc_id: &str) -> Option<PathB
 }
 
 #[async_trait]
-impl AgentTool for ReadDocumentTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for ReadDocumentTool {
     fn id(&self) -> &str {
         "read_document_content"
     }
@@ -434,7 +433,7 @@ struct GrepDocumentsArgs {
 }
 
 #[async_trait]
-impl AgentTool for GrepDocumentsTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for GrepDocumentsTool {
     fn id(&self) -> &str {
         "grep_documents"
     }
@@ -535,7 +534,7 @@ struct WriteFileArgs {
 }
 
 #[async_trait]
-impl AgentTool for WriteFileTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for WriteFileTool {
     fn id(&self) -> &str {
         "write_file"
     }
@@ -638,7 +637,7 @@ struct EditFileArgs {
 }
 
 #[async_trait]
-impl AgentTool for EditFileTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for EditFileTool {
     fn id(&self) -> &str {
         "edit_file"
     }
@@ -703,7 +702,7 @@ pub struct EditFileTool;
 /// and `ApplyPatchTool` (defined in `crate::tools::fs_tools::patch`) are
 /// local to this crate.
 #[async_trait]
-impl AgentTool for crate::tools::fs_tools::ApplyPatchTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for crate::tools::fs_tools::ApplyPatchTool {
     fn id(&self) -> &str {
         "apply_patch"
     }
@@ -747,7 +746,7 @@ impl AgentTool for crate::tools::fs_tools::ApplyPatchTool {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("apply_patch requires a 'patch' field"))?
             .to_string();
-        let output = crate::tools::Tool::execute(
+        let output = zen_tools::Tool::<tauri::AppHandle>::execute(
             &crate::tools::fs_tools::ApplyPatchTool,
             app,
             chat_id,

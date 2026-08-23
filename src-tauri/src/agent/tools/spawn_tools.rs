@@ -6,7 +6,6 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::agent::hooks::HookRegistry;
 use crate::agent::tools::child_runner;
-use crate::agent::tools::AgentTool;
 use crate::agent::tools::ToolRegistry;
 use crate::agent::types::AgentRegistry;
 use crate::commands::AppState;
@@ -1090,7 +1089,7 @@ impl SpawnAgentTool {
 }
 
 #[async_trait]
-impl AgentTool for SpawnAgentTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for SpawnAgentTool {
     fn id(&self) -> &str {
         "spawn_agent"
     }

@@ -26,7 +26,7 @@ pub struct AuditResultParams<'a> {
 
 /// Parameters for executing an agent tool call.
 pub struct AgentToolParams {
-    pub tool: Option<Arc<dyn crate::agent::tools::AgentTool>>,
+    pub tool: Option<Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>>,
     pub app: AppHandle,
     pub chat_id: String,
     pub tool_call: crate::agent::types::ToolCall,

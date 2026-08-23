@@ -1,7 +1,6 @@
 //! Retired routing/geocoding adapters kept source-only for the future unified
 //! `world_map` tool. They are intentionally not registered or agent-visible.
 
-use crate::agent::tools::AgentTool;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -25,7 +24,7 @@ struct RouteArgs {
 pub struct RouteTool;
 
 #[async_trait]
-impl AgentTool for RouteTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for RouteTool {
     fn id(&self) -> &str {
         "calculate_route"
     }
@@ -170,7 +169,7 @@ impl AgentTool for RouteTool {
 pub struct GeocodeTool;
 
 #[async_trait]
-impl AgentTool for GeocodeTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for GeocodeTool {
     fn id(&self) -> &str {
         "geocode_search"
     }
@@ -221,7 +220,7 @@ impl AgentTool for GeocodeTool {
 pub struct ReverseGeocodeTool;
 
 #[async_trait]
-impl AgentTool for ReverseGeocodeTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for ReverseGeocodeTool {
     fn id(&self) -> &str {
         "reverse_geocode"
     }

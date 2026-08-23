@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::sync::RwLock;
 
-use crate::agent::tools::AgentTool;
 
 use discovery::{ListToolsStandalone, ToolsSearchTool};
 
@@ -52,14 +51,18 @@ impl ToolMetadata {
     }
 }
 
+/// Host-bound agent tool trait object (trait aliases are not stable;
+/// the long path trips clippy::type_complexity).
+type AgentToolObj = Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>;
+
 pub struct ProgressiveToolRegistry {
     metadata: HashMap<String, ToolMetadata>,
-    loaded_tools: Arc<Mutex<HashMap<String, Arc<dyn AgentTool>>>>,
-    tool_factory: HashMap<String, Box<dyn Fn() -> Arc<dyn AgentTool> + Send + Sync>>,
+    loaded_tools: Arc<Mutex<HashMap<String, AgentToolObj>>>,
+    tool_factory: HashMap<String, Box<dyn Fn() -> AgentToolObj + Send + Sync>>,
 }
 
 #[async_trait]
-impl AgentTool for ProgressiveToolRegistry {
+impl zen_tools::AgentTool<tauri::AppHandle> for ProgressiveToolRegistry {
     fn id(&self) -> &str {
         "progressive_tool_registry"
     }
@@ -127,7 +130,7 @@ impl ProgressiveToolRegistry {
         ));
         self.tool_factory.insert(
             "web_search".to_string(),
-            Box::new(|| Arc::new(crate::search::tool::WebSearchTool) as Arc<dyn AgentTool>),
+            Box::new(|| Arc::new(crate::search::tool::WebSearchTool) as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>),
         );
 
         self.register_metadata(ToolMetadata::new(
@@ -140,7 +143,7 @@ impl ProgressiveToolRegistry {
         ));
         self.tool_factory.insert(
             "web_fetch".to_string(),
-            Box::new(|| Arc::new(crate::tools::web_fetch::WebFetchTool) as Arc<dyn AgentTool>),
+            Box::new(|| Arc::new(crate::tools::web_fetch::WebFetchTool) as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>),
         );
 
         self.register_metadata(ToolMetadata::new(
@@ -164,7 +167,7 @@ impl ProgressiveToolRegistry {
         self.tool_factory.insert(
             "write_todos".to_string(),
             Box::new(|| {
-                Arc::new(crate::agent::tools::task_tools::WriteTodosTool) as Arc<dyn AgentTool>
+                Arc::new(crate::agent::tools::task_tools::WriteTodosTool) as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>
             }),
         );
 
@@ -179,7 +182,7 @@ impl ProgressiveToolRegistry {
         self.tool_factory.insert(
             "update_goal".to_string(),
             Box::new(|| {
-                Arc::new(crate::agent::tools::task_tools::UpdateGoalTool) as Arc<dyn AgentTool>
+                Arc::new(crate::agent::tools::task_tools::UpdateGoalTool) as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>
             }),
         );
 
@@ -194,7 +197,7 @@ impl ProgressiveToolRegistry {
         self.tool_factory.insert(
             "read_document_content".to_string(),
             Box::new(|| {
-                Arc::new(crate::agent::tools::fs_tools::ReadDocumentTool) as Arc<dyn AgentTool>
+                Arc::new(crate::agent::tools::fs_tools::ReadDocumentTool) as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>
             }),
         );
 
@@ -345,7 +348,7 @@ impl ProgressiveToolRegistry {
         self.tool_factory.insert(
             "run_command".to_string(),
             Box::new(|| {
-                Arc::new(crate::agent::tools::terminal_tools::RunCommandTool) as Arc<dyn AgentTool>
+                Arc::new(crate::agent::tools::terminal_tools::RunCommandTool) as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>
             }),
         );
         // Legacy OSINT feed wrappers remain source-only for the future
@@ -353,49 +356,49 @@ impl ProgressiveToolRegistry {
         self.tool_factory.insert(
             "draw".to_string(),
             Box::new(|| {
-                Arc::new(crate::agent::tools::drawing_tools::DrawTool) as Arc<dyn AgentTool>
+                Arc::new(crate::agent::tools::drawing_tools::DrawTool) as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>
             }),
         );
         self.tool_factory.insert(
             "list_documents".to_string(),
             Box::new(|| {
-                Arc::new(crate::agent::tools::fs_tools::ListDocumentsTool) as Arc<dyn AgentTool>
+                Arc::new(crate::agent::tools::fs_tools::ListDocumentsTool) as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>
             }),
         );
         self.tool_factory.insert(
             "list_directory".to_string(),
             Box::new(|| {
-                Arc::new(crate::agent::tools::fs_tools::ListDirectoryTool) as Arc<dyn AgentTool>
+                Arc::new(crate::agent::tools::fs_tools::ListDirectoryTool) as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>
             }),
         );
         self.tool_factory.insert(
             "grep_documents".to_string(),
             Box::new(|| {
-                Arc::new(crate::agent::tools::fs_tools::GrepDocumentsTool) as Arc<dyn AgentTool>
+                Arc::new(crate::agent::tools::fs_tools::GrepDocumentsTool) as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>
             }),
         );
         self.tool_factory.insert(
             "search_files".to_string(),
             Box::new(|| {
-                Arc::new(crate::agent::tools::search_files::SearchFilesTool) as Arc<dyn AgentTool>
+                Arc::new(crate::agent::tools::search_files::SearchFilesTool) as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>
             }),
         );
         self.tool_factory.insert(
             "write_file".to_string(),
             Box::new(|| {
-                Arc::new(crate::agent::tools::fs_tools::WriteFileTool) as Arc<dyn AgentTool>
+                Arc::new(crate::agent::tools::fs_tools::WriteFileTool) as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>
             }),
         );
         self.tool_factory.insert(
             "edit_file".to_string(),
             Box::new(|| {
-                Arc::new(crate::agent::tools::fs_tools::EditFileTool) as Arc<dyn AgentTool>
+                Arc::new(crate::agent::tools::fs_tools::EditFileTool) as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>
             }),
         );
         self.tool_factory.insert(
             "apply_patch".to_string(),
             Box::new(|| {
-                Arc::new(crate::tools::fs_tools::ApplyPatchTool) as Arc<dyn AgentTool>
+                Arc::new(crate::tools::fs_tools::ApplyPatchTool) as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>
             }),
         );
         // Future map tools intentionally have no factories. The eventual
@@ -404,7 +407,7 @@ impl ProgressiveToolRegistry {
         self.tool_factory.insert(
             "graph_session".to_string(),
             Box::new(|| {
-                Arc::new(crate::agent::tools::graph_session::GraphSessionTool) as Arc<dyn AgentTool>
+                Arc::new(crate::agent::tools::graph_session::GraphSessionTool) as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>
             }),
         );
         // Session-memory wrappers remain source-only until their future
@@ -432,7 +435,7 @@ impl ProgressiveToolRegistry {
         self.tool_factory.insert(
             "tools_search".to_string(),
             Box::new(move || {
-                Arc::new(ToolsSearchTool::new(Arc::clone(&registry_arc))) as Arc<dyn AgentTool>
+                Arc::new(ToolsSearchTool::new(Arc::clone(&registry_arc))) as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>
             }),
         );
     }
@@ -443,7 +446,7 @@ impl ProgressiveToolRegistry {
         self.tool_factory.insert(
             "list_tools".to_string(),
             Box::new(move || {
-                Arc::new(ListToolsStandalone::new(Arc::clone(&registry_arc))) as Arc<dyn AgentTool>
+                Arc::new(ListToolsStandalone::new(Arc::clone(&registry_arc))) as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>
             }),
         );
     }
@@ -461,7 +464,7 @@ impl ProgressiveToolRegistry {
             "manage_board".to_string(),
             Box::new(|| {
                 Arc::new(crate::agent::tools::manage_board::ManageBoardTool::new())
-                    as Arc<dyn AgentTool>
+                    as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>
             }),
         );
 
@@ -477,7 +480,7 @@ impl ProgressiveToolRegistry {
                     ar.clone(),
                     hr.clone(),
                     p.clone(),
-                )) as Arc<dyn AgentTool>
+                )) as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>
             }),
         );
 
@@ -486,7 +489,7 @@ impl ProgressiveToolRegistry {
             "skill".to_string(),
             Box::new(move || {
                 Arc::new(crate::agent::tools::skill_tool::SkillTool::new(sm.clone()))
-                    as Arc<dyn AgentTool>
+                    as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>
             }),
         );
     }
@@ -499,11 +502,11 @@ impl ProgressiveToolRegistry {
         self.metadata.values().cloned().collect()
     }
 
-    pub fn get_tool(&self, id: &str) -> Option<Arc<dyn AgentTool>> {
+    pub fn get_tool(&self, id: &str) -> Option<Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>> {
         self.loaded_tools.lock().ok()?.get(id).cloned()
     }
 
-    pub fn get_or_load_tool(&self, id: &str) -> Option<Arc<dyn AgentTool>> {
+    pub fn get_or_load_tool(&self, id: &str) -> Option<Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>> {
         let mut guard = self.loaded_tools.lock().ok()?;
 
         if let Some(tool) = guard.get(id) {

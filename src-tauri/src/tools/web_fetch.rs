@@ -10,13 +10,13 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use url::Url;
 
-use crate::agent::tools::AgentTool;
 
 use super::url_safety::{
     build_pinned_get_request, resolve_redirect_url, validate_public_http_url,
     validate_url_dns_safety, MAX_DIRECT_RESPONSE_BYTES, MAX_OUTPUT_CHARS, MAX_REDIRECTS,
 };
-use super::{permission::RiskLevel, Tool, ToolError, ToolOutput};
+use super::{permission::RiskLevel, ToolError, ToolOutput};
+use zen_tools::Tool;
 
 pub struct WebFetchTool;
 
@@ -329,7 +329,7 @@ async fn nine_router_fetch_fallback(app: &AppHandle, url: &str) -> Result<String
 }
 
 #[async_trait]
-impl Tool for WebFetchTool {
+impl zen_tools::Tool<tauri::AppHandle> for WebFetchTool {
     fn name(&self) -> &str {
         "web_fetch"
     }
@@ -422,7 +422,7 @@ impl Tool for WebFetchTool {
 }
 
 #[async_trait]
-impl AgentTool for WebFetchTool {
+impl zen_tools::AgentTool<tauri::AppHandle> for WebFetchTool {
     fn id(&self) -> &str {
         "web_fetch"
     }
@@ -444,7 +444,7 @@ impl AgentTool for WebFetchTool {
         _allowed_tools: Option<Arc<Mutex<std::collections::HashSet<String>>>>,
         _token: CancellationToken,
     ) -> Result<Value> {
-        Tool::execute(self, app, chat_id, input)
+        zen_tools::Tool::<tauri::AppHandle>::execute(self, app, chat_id, input)
             .await
             .map(|output| output.content)
             .map_err(|e| anyhow::anyhow!("{}", e))

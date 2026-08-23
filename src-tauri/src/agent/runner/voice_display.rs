@@ -1,5 +1,6 @@
 use super::lifecycle::Runner;
-use crate::agent::tools::{child_runner, manage_board::ManageBoardTool, AgentTool};
+use crate::agent::tools::{child_runner, manage_board::ManageBoardTool};
+use zen_tools::AgentTool;
 use crate::commands::AppState;
 use crate::db::models::ChatMessage;
 use std::collections::HashSet;

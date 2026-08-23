@@ -3,7 +3,7 @@ use serde::Deserialize;
 use serde_json::json;
 use tauri::{AppHandle, Manager};
 
-use super::{permission::RiskLevel, Tool, ToolError, ToolOutput};
+use super::{permission::RiskLevel, ToolError, ToolOutput};
 use crate::commands::AppState;
 
 pub struct RunCommandTool;
@@ -16,7 +16,7 @@ struct RunCommandArgs {
 }
 
 #[async_trait]
-impl Tool for RunCommandTool {
+impl zen_tools::Tool<tauri::AppHandle> for RunCommandTool {
     fn name(&self) -> &str {
         "run_command"
     }

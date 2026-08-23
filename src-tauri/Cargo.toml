@@ -26,6 +26,7 @@ anyhow = "1.0"
 zen-core = { path = "crates/zen-core" }
 zen-db = { path = "crates/zen-db" }
 zen-security = { path = "crates/zen-security" }
+zen-tools = { path = "crates/zen-tools" }
 
 [package]
 name = "zen"
@@ -69,6 +70,7 @@ async-trait = { workspace = true }
 zen-core = { workspace = true }
 zen-db = { workspace = true }
 zen-security = { workspace = true }
+zen-tools = { workspace = true }
 sysinfo = "0.38"
 axum = { version = "0.8", features = ["default", "ws"] }
 tower-http = { version = "0.6", features = ["cors"] }
