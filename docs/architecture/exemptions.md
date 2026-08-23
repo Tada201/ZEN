@@ -31,12 +31,15 @@ Reason: Subagent spawn workflow owns registry definitions, handoff construction,
 Split or Fix Plan: Move to zen-agent during Phase 11 and split into spawn/{registry.rs, handlers.rs}.
 Expires: migration/phase-11-done
 
-File: src-tauri/src/llm/openai_compat/stream.rs (1,627)
+File: src-tauri/src/llm/openai_compat/stream.rs (1,627) — RESOLVED Phase 7:
+moved to crates/zen-llm/src/openai_compat/ and split into stream.rs (699),
+stream_events.rs (108), capabilities.rs (136), stream_tests.rs (719, via
+#[path]); the app path is now a §4.6 re-export shim.
 Owner: backend/llm
 Rule Exempted: Rust hard file-size limit
-Reason: OpenAI-compatible SSE parsing, tool-delta accumulation, and reasoning mapping share one streaming module.
-Split or Fix Plan: Move to zen-llm during Phase 7 and split into openai_compat/{stream_events.rs, stream_accumulator.rs, sse_parse.rs}.
-Expires: migration/phase-07-done
+Reason: (historical) OpenAI-compatible SSE parsing, tool-delta accumulation, and reasoning mapping share one streaming module.
+Split or Fix Plan: Done in Phase 7 (split into stream/stream_events/capabilities/stream_tests inside zen-llm).
+Expires: resolved migration/phase-07-done
 
 File: src-tauri/src/agent/deep_research/phases.rs (1,609)
 Owner: backend/agent
@@ -94,12 +97,14 @@ Reason: Escalation policy and flow coordination in one file.
 Split or Fix Plan: Move to zen-agent during Phase 11 and split into runner/escalation/{policy.rs, flow.rs}.
 Expires: migration/phase-11-done
 
-File: src-tauri/src/llm/anthropic.rs (1,011)
+File: src-tauri/src/llm/anthropic.rs (1,011) — RESOLVED Phase 7: moved to
+crates/zen-llm/src/anthropic/ and split into mod.rs (171), wire.rs (193),
+chat.rs (656), mapping.rs (32); the app path is now a §4.6 re-export shim.
 Owner: backend/llm
 Rule Exempted: Rust hard file-size limit
-Reason: Anthropic client, mapping, and event conversion in one file.
-Split or Fix Plan: Move to zen-llm during Phase 7 and split into anthropic/{client.rs, mapping.rs}.
-Expires: migration/phase-07-done
+Reason: (historical) Anthropic client, mapping, and event conversion in one file.
+Split or Fix Plan: Done in Phase 7 (split into anthropic/{mod,wire,chat,mapping} inside zen-llm).
+Expires: resolved migration/phase-07-done
 
 File: src-tauri/src/tools/manager.rs (1,010) — RESOLVED Phase 5: logic moved
 to zen-tools and split into registry.rs (~640) + manager.rs (~1,180 incl.
@@ -118,6 +123,27 @@ Split or Fix Plan: Phase 12 split into validation vs orchestration vs response m
 Expires: migration/phase-12-done
 
 ### Warning band (700–900 lines)
+
+File: src-tauri/crates/zen-llm/src/ollama/mod.rs (739)
+Owner: backend/llm
+Rule Exempted: Rust warning file-size limit
+Reason: Successor of the old src-tauri/src/llm/ollama.rs after the Phase 7
+  split into ollama/{mod,wire}; wire types moved out, the chat_stream body
+  plus its inline wiremock suites remain. Executable code ~470 lines; tests
+  are the bulk.
+Split or Fix Plan: Phase 12 file-size sweep — move the test module to a
+  #[path] sibling (stream_tests precedent) if the gate is tightened to warn.
+Expires: migration/phase-12-done
+
+File: src-tauri/crates/zen-llm/src/openai_compat/stream_tests.rs (719)
+Owner: backend/llm
+Rule Exempted: Rust warning file-size limit
+Reason: Wiremock suite for the openai_compat streaming/list-models surface,
+  relocated wholesale from stream.rs during the Phase 7 split via #[path]
+  (P5 manager-tests precedent). Test-only file.
+Split or Fix Plan: Phase 12 sweep — split by subject (list_models vs
+  streaming vs reasoning) if the warn band is enforced for test files.
+Expires: migration/phase-12-done
 
 File: src-tauri/src/canvas/session.rs (897)
 Owner: backend/canvas
@@ -140,12 +166,14 @@ Reason: AgentEvent contract, artifact tag detection, and the broadcast bus share
 Split or Fix Plan: Port type moves to zen-core in Phase 6; bus impl moves to zen-agent or app bridge at Phase 11 per ownership decision.
 Expires: migration/phase-11-done
 
-File: src-tauri/src/llm/ollama.rs (852)
+File: src-tauri/src/llm/ollama.rs (852) — RESOLVED Phase 7: moved to
+crates/zen-llm/src/ollama/ and split into mod.rs (739, successor entry below)
++ wire.rs (125); the app path is now a §4.6 re-export shim.
 Owner: backend/llm
 Rule Exempted: Rust warning file-size limit
-Reason: Ollama client and streaming in one file.
-Split or Fix Plan: Move to zen-llm during Phase 7 and split into ollama/{client.rs, stream.rs} if natural.
-Expires: migration/phase-07-done
+Reason: (historical) Ollama client and streaming in one file.
+Split or Fix Plan: Done in Phase 7 (split into ollama/{mod,wire} inside zen-llm).
+Expires: resolved migration/phase-07-done
 
 File: src-tauri/src/services/mcp_config.rs (805)
 Owner: backend/mcp

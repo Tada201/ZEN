@@ -4,7 +4,7 @@
 //! on the app, and zen-core must stay reqwest-free. Phase 14 may move this
 //! into a shared adapter crate if a third consumer appears.
 
-use zen_core::{ZenError, ZenResult};
+use zen_core::ZenError;
 
 /// Map a `reqwest::Error` into the core `Http` variant, preserving the
 /// retry-classification signals (status code / timeout / connect) that
@@ -17,6 +17,3 @@ pub fn http_err(e: reqwest::Error) -> ZenError {
         connect: e.is_connect(),
     })
 }
-
-/// Convenience alias so call sites read like the app crate's.
-pub type AppZenResult<T> = ZenResult<T>;

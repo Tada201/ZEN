@@ -841,18 +841,19 @@ now also owns the `llm/registry.rs` port adoption (moved from Phase 6 per the
 
 **Tasks**
 - [x] Move `src/llm/**` → `crates/zen-llm/src/**`. (App keeps a pure
-      re-export shim at `src/llm/mod.rs`; 32 consumer sites compile unchanged.
-      Deleted in Phase 14 sweep.)
-- [x] Split during move (RULES.md hard-fail files):
-      - openai_compat/stream.rs → `stream.rs`(635) + `stream_events.rs`(99,
-        reasoning emitters) + `capabilities.rs`(137, embed/health/tools/
+      re-export shim at `src/llm/mod.rs`; 32 non-`use` consumer reference
+      lines across 18 files compile unchanged. Deleted in Phase 14 sweep.)
+- [x] Split during move (RULES.md hard-fail files; physical line counts):
+      - openai_compat/stream.rs → `stream.rs`(699) + `stream_events.rs`(108,
+        reasoning emitters) + `capabilities.rs`(136, embed/health/tools/
         reasoning surface) + `stream_tests.rs`(719, wiremock suite via
         `#[path]`, P5 manager-tests precedent)
       - anthropic.rs → `anthropic/{mod.rs(client+delegates),
         wire.rs(serde types), chat.rs(list_models/chat_stream bodies as free
         fns over `&AnthropicProvider`), mapping.rs(model-id heuristics)}`
-      - ollama.rs → `ollama/{mod.rs, wire.rs}`. Warn-zone residue: ollama/
-        mod.rs 739, stream_tests 719 (P12 debt sweep).
+      - ollama.rs → `ollama/{mod.rs(739), wire.rs(125)}`. Warn-zone residue:
+        ollama/mod.rs 739, stream_tests 719 — exemption entries added to
+        docs/architecture/exemptions.md (P12 debt sweep).
 - [x] zen-llm deps: zen-core only upward dep (`ToolInfo`/`ProviderConfig`
       per §3.3; chat-wire DTOs ChatMessage/ChatResponse/ModelInfo/
       ReasoningBlock/ToolCall moved to new `zen-core::chat_types`, re-exported

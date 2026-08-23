@@ -14,5 +14,3 @@ pub use zen_llm::{
     ChatRequestConfig, LlmChunk, LlmProvider, ProviderRegistry, ReasoningCapability,
     ReasoningIntent, ResolvedReasoningRequest, ToolNameCodec,
 };
-
-pub use zen_llm as api;
