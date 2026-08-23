@@ -3,10 +3,9 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::Mutex;
 
-use crate::db::models::ProviderConfig;
-use crate::error::{ZenError, ZenResult};
-use crate::llm::{default_base_url, make_provider, LlmProvider};
-use crate::services::{SecretService, SettingsService};
+use zen_core::{ProviderConfig, SecretStore, SettingsStore, ZenError, ZenResult};
+
+use crate::{default_base_url, make_provider, LlmProvider};
 
 /// Cached provider instance with TTL.
 struct CacheEntry {
@@ -15,20 +14,23 @@ struct CacheEntry {
 }
 
 /// Registry that creates [`LlmProvider`] instances from settings backed
-/// by an in-memory [`SettingsService`] cache.
+/// by the app's [`SettingsStore`] implementation.
 ///
 /// Consolidates the per-provider `get_setting` calls that were previously
 /// duplicated inside `create_provider()`.  Adding a new provider now only
 /// requires following the `{provider}_base_url` / `{provider}_api_key`
 /// setting-key convention (or listing an exception in the key helpers).
+///
+/// Phase 7: consumes the `zen-core` store ports instead of concrete app
+/// services, so this crate stays tauri/app-free.
 pub struct ProviderRegistry {
-    settings: Arc<SettingsService>,
-    secrets: Arc<SecretService>,
+    settings: Arc<dyn SettingsStore>,
+    secrets: Arc<dyn SecretStore>,
     cache: Mutex<HashMap<String, CacheEntry>>,
 }
 
 impl ProviderRegistry {
-    pub fn new(settings: Arc<SettingsService>, secrets: Arc<SecretService>) -> Self {
+    pub fn new(settings: Arc<dyn SettingsStore>, secrets: Arc<dyn SecretStore>) -> Self {
         Self {
             settings,
             secrets,
@@ -44,7 +46,7 @@ impl ProviderRegistry {
     /// Return the settings key used for the provider's API key.
     fn api_key_key(provider: &str) -> String {
         let lower = provider.to_lowercase();
-        crate::llm::provider_meta::PROVIDER_CATALOG
+        crate::provider_meta::PROVIDER_CATALOG
             .iter()
             .find(|p| p.name == lower)
             .and_then(|p| p.api_key_key)
@@ -52,7 +54,7 @@ impl ProviderRegistry {
             .unwrap_or_else(|| format!("{}_api_key", lower))
     }
 
-    /// Build a [`ProviderConfig`] from the in-memory settings cache.
+    /// Build a [`ProviderConfig`] from the settings store.
     async fn build_config(&self, provider_name: &str) -> ZenResult<ProviderConfig> {
         let p_type = provider_name.to_lowercase();
         let base_url_key = Self::base_url_key(&p_type);
@@ -60,7 +62,7 @@ impl ProviderRegistry {
 
         let base_url = self
             .settings
-            .get(&base_url_key)
+            .get_setting(&base_url_key)
             .await?
             .unwrap_or_else(|| default_base_url(&p_type));
 
@@ -79,12 +81,12 @@ impl ProviderRegistry {
             .unwrap_or_default();
         let headers = self
             .settings
-            .get(&format!("{}_headers", p_type))
+            .get_setting(&format!("{}_headers", p_type))
             .await?
             .and_then(|value| serde_json::from_str::<HashMap<String, String>>(&value).ok());
         let api_format = self
             .settings
-            .get(&format!("{}_api_format", p_type))
+            .get_setting(&format!("{}_api_format", p_type))
             .await?
             .filter(|value| !value.is_empty());
 

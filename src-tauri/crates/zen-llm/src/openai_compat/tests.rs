@@ -1,6 +1,6 @@
 use super::OpenAiCompatProvider;
-use crate::error::ZenResult;
-use crate::llm::LlmProvider;
+use zen_core::ZenResult;
+use crate::LlmProvider;
 use wiremock::{
     matchers::{method, path},
     Mock, MockServer, ResponseTemplate,
@@ -11,15 +11,19 @@ async fn test_openai_compat_list_models_retries_on_rate_limit() -> ZenResult<()>
     let server = MockServer::start().await;
     let provider = OpenAiCompatProvider::new(&server.uri(), "test-key", "openai");
 
-    // First request gets rate limited
+    // First request gets rate limited, then stops matching so the retry
+    // falls through to the success mock below (first-mounted-wins
+    // precedence; latent test defect surfaced by the Phase 7 gate — see
+    // BIG_MIGRATION.md Appendix E).
     Mock::given(method("GET"))
         .and(path("/v1/models"))
         .respond_with(ResponseTemplate::new(429).insert_header("retry-after", "1"))
+        .up_to_n_times(1)
         .expect(1)
         .mount(&server)
         .await;
 
-    // Second request succeeds
+    // Second request succeeds.
     Mock::given(method("GET"))
         .and(path("/v1/models"))
         .respond_with(

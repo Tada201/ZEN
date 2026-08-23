@@ -8,9 +8,9 @@ pub use types::*;
 use async_trait::async_trait;
 use reqwest::Client;
 
-use crate::db::models::{ChatMessage, ChatResponse, ModelInfo};
-use crate::error::ZenResult;
-use crate::llm::LlmProvider;
+use zen_core::{ChatMessage, ChatResponse, ModelInfo};
+use zen_core::ZenResult;
+use crate::LlmProvider;
 
 /// Dedicated LM Studio provider.
 /// Uses `/api/v0/models` for rich model metadata (type, arch, quantization, state)
@@ -79,9 +79,9 @@ impl LlmProvider for LmStudioProvider {
         &self,
         model: &str,
         messages: Vec<ChatMessage>,
-        tools: Option<Vec<crate::tools::ToolInfo>>,
-        config: crate::llm::ChatRequestConfig,
-        on_chunk: Box<dyn Fn(crate::llm::LlmChunk) + Send>,
+        tools: Option<Vec<zen_core::ToolInfo>>,
+        config: crate::ChatRequestConfig,
+        on_chunk: Box<dyn Fn(crate::LlmChunk) + Send>,
         token: tokio_util::sync::CancellationToken,
     ) -> ZenResult<ChatResponse> {
         self.do_chat_stream(model, messages, tools, config, on_chunk, token)
@@ -109,10 +109,10 @@ impl LlmProvider for LmStudioProvider {
             .any(|arch| name_lower.contains(arch))
     }
 
-    fn reasoning_capability(&self, _model: &str) -> crate::llm::ReasoningCapability {
+    fn reasoning_capability(&self, _model: &str) -> crate::ReasoningCapability {
         // Zen drives /v1/chat/completions, which ignores per-request reasoning.
         // Capability is surfaced from the model listing (provider-managed); at
         // request time there is nothing Zen can send, so `unknown` is honest.
-        crate::llm::ReasoningCapability::unknown()
+        crate::ReasoningCapability::unknown()
     }
 }

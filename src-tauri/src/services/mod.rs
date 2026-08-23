@@ -1,4 +1,5 @@
 pub mod audit_sink;
+pub mod store_ports;
 pub mod checkpoint;
 pub mod compact;
 pub mod data_cleanup;

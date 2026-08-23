@@ -840,23 +840,43 @@ now also owns the `llm/registry.rs` port adoption (moved from Phase 6 per the
 `SecretStore`/`SettingsStore` traits as part of the move.
 
 **Tasks**
-- [ ] Move `src/llm/**` → `crates/zen-llm/src/**`.
-- [ ] Split during move (RULES.md hard-fail files):
-      - openai_compat/stream.rs (1,474) → `openai_compat/{stream_events.rs,
-        stream_accumulator.rs, sse_parse.rs}`
-      - anthropic.rs (946) → `anthropic/{client.rs, mapping.rs}` or client+events
-      - ollama.rs (759) → `ollama/{client.rs, stream.rs}` if natural split exists.
-- [ ] zen-llm deps: zen-core (incl. `ToolInfo`/`ProviderConfig` DTOs per §3.3 —
-      no direct zen-tools/zen-db deps), reqwest (native-tls features as today),
-      tokio, tokio-tungstenite (if used here), futures, serde_json, tracing,
-      tiktoken-rs/tokenizers if token counting lives here today (verify owner).
-- [ ] Provider registry keyed off traits; model discovery endpoints unchanged.
+- [x] Move `src/llm/**` → `crates/zen-llm/src/**`. (App keeps a pure
+      re-export shim at `src/llm/mod.rs`; 32 consumer sites compile unchanged.
+      Deleted in Phase 14 sweep.)
+- [x] Split during move (RULES.md hard-fail files):
+      - openai_compat/stream.rs → `stream.rs`(635) + `stream_events.rs`(99,
+        reasoning emitters) + `capabilities.rs`(137, embed/health/tools/
+        reasoning surface) + `stream_tests.rs`(719, wiremock suite via
+        `#[path]`, P5 manager-tests precedent)
+      - anthropic.rs → `anthropic/{mod.rs(client+delegates),
+        wire.rs(serde types), chat.rs(list_models/chat_stream bodies as free
+        fns over `&AnthropicProvider`), mapping.rs(model-id heuristics)}`
+      - ollama.rs → `ollama/{mod.rs, wire.rs}`. Warn-zone residue: ollama/
+        mod.rs 739, stream_tests 719 (P12 debt sweep).
+- [x] zen-llm deps: zen-core only upward dep (`ToolInfo`/`ProviderConfig`
+      per §3.3; chat-wire DTOs ChatMessage/ChatResponse/ModelInfo/
+      ReasoningBlock/ToolCall moved to new `zen-core::chat_types`, re-exported
+      by zen-db — ProviderConfig precedent). reqwest(native-tls,json,stream),
+      tokio, tokio-util, futures, serde_json, tracing, dashmap/lazy_static/
+      regex/base64 (pins matched to app crate; relocated usage). No tokenizers
+      here (verified). New `util::http_err` twins app `error::http_err`
+      (zen-core stays reqwest-free).
+- [x] Provider registry keyed off traits: `ProviderRegistry` now holds
+      `Arc<dyn SettingsStore>` / `Arc<dyn SecretStore>` (zen-core async ports)
+      instead of concrete services; app impls live in new
+      `src/services/store_ports.rs` so `AppState` passes existing Arcs with
+      zero ctor-site churn (coercion at commands/mod.rs call site).
 
 **Verification gates**
 - Wiremock-based provider tests move into the crate and stay green
-  (`cargo test -p zen-llm`).
-- Manual streaming smoke against one real provider (record which).
-- Gate suite green.
+  (`cargo test -p zen-llm`: 82 passed). NOTE: this was their first-ever
+  execution under any gate (no CI workflow runs cargo test yet — P13); three
+  latent pre-existing failures surfaced and were fixed forward — see
+  Appendix C. Manual streaming smoke against one real provider: pending
+  user-side check before release cut (recorded, non-blocking).
+- Gate suite green (check / clippy -D warnings / crate tests / npm build;
+  guards: 0 tauri deps in zen-llm, 0 raw AppHandle emits in agent core,
+  0 AppState refs in zen-llm).
 
 **Rollback:** revert commit range.
 
@@ -1182,6 +1202,33 @@ Blocking fixes applied in revision 2 of this document:
 - #12/#13 diagram + relocation doctrine → §3.1 redrawn; §4.6 shim doctrine
 - #9/#10/#11/#14 stale numbers refreshed; event-snapshot mechanism specified (Phase 0);
   Tauri build pinning + mobile lib notes added (Phase 1); R8 closed; canvas stays in app.
+
+## Appendix E — Latent pre-existing defects fixed forward (Phase 7)
+
+`cargo test -p zen-llm` was the **first gate ever to execute the provider
+wiremock suites** (no CI workflow runs `cargo test` yet — P13; app-crate test
+binaries abort on this box via the known R-loader bug). Three latent failures
+surfaced; all were stale tests / minor bugs predating the move (moved files
+verified byte-identical modulo import rewrites):
+
+1. `context_window_discovery::test_extract_anthropic` — `RE_ANTHROPIC` always
+   captured the leading input-token count (`188240`) instead of the trailing
+   window (`200000`) for inequality-form messages, contradicting both the
+   pattern's doc comment and its dedicated `_ALT` regex. Fix: try
+   `RE_ANTHROPIC_ALT` before the provider loop (hoisted from dead post-loop
+   fallback position).
+2. `openai_compat list_models` ordering asserts in
+   `test_openai_compat_list_models_parses_all_fields` — written against
+   insertion order; a later "sort alphabetically" change keys on
+   `ModelInfo.name`, which carries the model *id* at that site. Fix: remapped
+   index expectations to sorted order + clarified sort-site comment. The
+   sibling `gemini…is_none()` assertion was likewise stale (window now filled
+   by `infer_context_window` heuristics) → asserted populated.
+3. `test_openai_compat_list_models_retries_on_rate_limit` — wiremock matches
+   first-mounted-first; without `up_to_n_times(1)` the success mock (mounted
+   second) never served and the rate-limit mock absorbed every retry, so the
+   `.expect(1)` verification could not hold. Fix: `up_to_n_times(1)` +
+   `.expect(1)` on the 429 mock, mount order unchanged.
 
 ## Appendix C — Manual E2E verification script
 

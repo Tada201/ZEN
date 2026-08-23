@@ -1,14 +1,14 @@
 use super::ToolCallAccumulator;
-use crate::db::models::{ChatMessage, ChatResponse};
-use crate::error::{ZenError, ZenResult};
-use crate::llm::openai_compat::types::*;
+use zen_core::{ChatMessage, ChatResponse};
+use zen_core::{ZenError, ZenResult};
+use crate::openai_compat::types::*;
 use futures::StreamExt;
 use tracing::{debug, error, info};
 
 impl super::LmStudioProvider {
     fn emit_reasoning_values<'a>(
         values: impl IntoIterator<Item = Option<&'a serde_json::Value>>,
-        on_chunk: &(dyn Fn(crate::llm::LlmChunk) + Send),
+        on_chunk: &(dyn Fn(crate::LlmChunk) + Send),
     ) {
         for thought in values
             .into_iter()
@@ -16,12 +16,12 @@ impl super::LmStudioProvider {
             .filter_map(serde_json::Value::as_str)
         {
             if !thought.is_empty() {
-                on_chunk(crate::llm::LlmChunk::Thought(thought.to_string()));
+                on_chunk(crate::LlmChunk::Thought(thought.to_string()));
             }
         }
     }
 
-    fn emit_reasoning_delta(delta: &OpenAiDelta, on_chunk: &(dyn Fn(crate::llm::LlmChunk) + Send)) {
+    fn emit_reasoning_delta(delta: &OpenAiDelta, on_chunk: &(dyn Fn(crate::LlmChunk) + Send)) {
         Self::emit_reasoning_values(
             [
                 delta.reasoning.as_ref(),
@@ -34,7 +34,7 @@ impl super::LmStudioProvider {
 
     fn emit_reasoning_message(
         message: &OpenAiStreamMessage,
-        on_chunk: &(dyn Fn(crate::llm::LlmChunk) + Send),
+        on_chunk: &(dyn Fn(crate::LlmChunk) + Send),
     ) {
         Self::emit_reasoning_values(
             [
@@ -49,16 +49,16 @@ impl super::LmStudioProvider {
         &self,
         model: &str,
         messages: Vec<ChatMessage>,
-        tools: Option<Vec<crate::tools::ToolInfo>>,
-        config: crate::llm::ChatRequestConfig,
-        on_chunk: Box<dyn Fn(crate::llm::LlmChunk) + Send>,
+        tools: Option<Vec<zen_core::ToolInfo>>,
+        config: crate::ChatRequestConfig,
+        on_chunk: Box<dyn Fn(crate::LlmChunk) + Send>,
         token: tokio_util::sync::CancellationToken,
     ) -> ZenResult<ChatResponse> {
         let url = format!("{}/v1/chat/completions", self.base_url);
 
         // Sanitize tool names to the strict function charset and keep a
         // per-request reverse map so streamed tool calls decode to canonical ids.
-        let mut name_codec = crate::llm::ToolNameCodec::default();
+        let mut name_codec = crate::ToolNameCodec::default();
 
         let oai_messages: Vec<OpenAiMessage> = messages
             .into_iter()
@@ -137,7 +137,7 @@ impl super::LmStudioProvider {
 
         info!(model = model, "LM Studio chat stream starting");
 
-        let resp = self.client.post(&url).json(&request).send().await.map_err(crate::error::http_err)?;
+        let resp = self.client.post(&url).json(&request).send().await.map_err(crate::util::http_err)?;
 
         if !resp.status().is_success() {
             let status = resp.status();
@@ -167,7 +167,7 @@ impl super::LmStudioProvider {
                 debug!("LM Studio stream cancelled by client");
                 break;
             }
-            let bytes = chunk_result.map_err(crate::error::http_err)?;
+            let bytes = chunk_result.map_err(crate::util::http_err)?;
             byte_buffer.extend_from_slice(&bytes);
 
             while let Some(newline_pos) = byte_buffer.iter().position(|&b| b == b'\n') {
@@ -204,7 +204,7 @@ impl super::LmStudioProvider {
 
                             if let Some(content) = &choice.delta.content {
                                 if !content.is_empty() {
-                                    on_chunk(crate::llm::LlmChunk::Text(content.clone()));
+                                    on_chunk(crate::LlmChunk::Text(content.clone()));
                                     full_content.push_str(content);
                                 }
                             }
@@ -226,7 +226,7 @@ impl super::LmStudioProvider {
                                             acc.arguments.push_str(args);
                                         }
                                     }
-                                    on_chunk(crate::llm::LlmChunk::ToolCallDelta {
+                                    on_chunk(crate::LlmChunk::ToolCallDelta {
                                         index: idx,
                                         id: if acc.id.is_empty() {
                                             None
@@ -258,7 +258,7 @@ impl super::LmStudioProvider {
                                             if acc.id.is_empty() {
                                                 acc.id = format!("call_{}", uuid::Uuid::new_v4());
                                             }
-                                            on_chunk(crate::llm::LlmChunk::ToolCallReady {
+                                            on_chunk(crate::LlmChunk::ToolCallReady {
                                                 index: idx,
                                                 id: Some(acc.id.clone()),
                                                 name: name_codec.decode(&acc.name),
@@ -288,7 +288,7 @@ impl super::LmStudioProvider {
             for acc in results_tool_calls {
                 if !acc.name.is_empty() {
                     let tool_name = name_codec.decode(&acc.name);
-                    tcs.push(crate::db::models::ToolCall {
+                    tcs.push(zen_core::ToolCall {
                         id: if acc.id.is_empty() {
                             format!("call_{}", uuid::Uuid::new_v4())
                         } else {
@@ -335,7 +335,7 @@ impl super::LmStudioProvider {
             input: text.to_string(),
         };
 
-        let resp = self.client.post(&url).json(&request).send().await.map_err(crate::error::http_err)?;
+        let resp = self.client.post(&url).json(&request).send().await.map_err(crate::util::http_err)?;
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
@@ -345,7 +345,7 @@ impl super::LmStudioProvider {
             )));
         }
 
-        let body: OpenAiEmbedResponse = resp.json().await.map_err(crate::error::http_err)?;
+        let body: OpenAiEmbedResponse = resp.json().await.map_err(crate::util::http_err)?;
         body.data
             .into_iter()
             .next()
@@ -357,7 +357,7 @@ impl super::LmStudioProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::llm::LlmChunk;
+    use crate::LlmChunk;
     use std::sync::{Arc, Mutex};
 
     #[test]

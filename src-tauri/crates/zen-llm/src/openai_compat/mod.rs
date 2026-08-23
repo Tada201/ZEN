@@ -3,6 +3,8 @@ pub mod models;
 pub mod stream;
 #[cfg(test)]
 pub mod tests;
+mod capabilities;
+mod stream_events;
 pub mod types;
 
 pub use types::*;
@@ -13,15 +15,15 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 use tracing::warn;
 
-use crate::db::models::{ChatMessage, ChatResponse, ModelInfo};
-use crate::error::{ZenError, ZenResult};
-use crate::llm::LlmProvider;
+use zen_core::{ChatMessage, ChatResponse, ModelInfo};
+use zen_core::{ZenError, ZenResult};
+use crate::LlmProvider;
 
 /// Cached model capabilities populated during `list_models()`.
 #[derive(Clone, Debug)]
 pub struct ModelCapabilities {
     pub supports_tools: bool,
-    pub reasoning: crate::llm::ReasoningCapability,
+    pub reasoning: crate::ReasoningCapability,
 }
 
 /// OpenAI-compatible API provider.
@@ -190,7 +192,7 @@ impl OpenAiCompatProvider {
                 }
                 Err(e) => {
                     let err_msg = e.to_string();
-                    last_error = Some(crate::error::http_err(e));
+                    last_error = Some(crate::util::http_err(e));
 
                     if can_not_retry_anymore {
                         break;
@@ -225,9 +227,9 @@ impl LlmProvider for OpenAiCompatProvider {
         &self,
         model: &str,
         messages: Vec<ChatMessage>,
-        tools: Option<Vec<crate::tools::ToolInfo>>,
-        config: crate::llm::ChatRequestConfig,
-        on_chunk: Box<dyn Fn(crate::llm::LlmChunk) + Send>,
+        tools: Option<Vec<zen_core::ToolInfo>>,
+        config: crate::ChatRequestConfig,
+        on_chunk: Box<dyn Fn(crate::LlmChunk) + Send>,
         token: tokio_util::sync::CancellationToken,
     ) -> ZenResult<ChatResponse> {
         self.do_chat_stream(model, messages, tools, config, on_chunk, token)
@@ -246,7 +248,7 @@ impl LlmProvider for OpenAiCompatProvider {
         self.do_supports_tools(model)
     }
 
-    fn reasoning_capability(&self, model: &str) -> crate::llm::ReasoningCapability {
+    fn reasoning_capability(&self, model: &str) -> crate::ReasoningCapability {
         self.do_reasoning_capability(model)
     }
 }

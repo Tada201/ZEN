@@ -1,7 +1,7 @@
 use super::types::*;
-use crate::db::models::ModelInfo;
-use crate::error::{ZenError, ZenResult};
-use crate::llm::openai_compat::types::*;
+use zen_core::ModelInfo;
+use zen_core::{ZenError, ZenResult};
+use crate::openai_compat::types::*;
 use tracing::{debug, info, warn};
 
 impl super::LmStudioProvider {
@@ -28,7 +28,7 @@ impl super::LmStudioProvider {
 
         let mut models = match resp {
             Ok(r) if r.status().is_success() => {
-                let body: LmStudioModelsResponse = r.json().await.map_err(crate::error::http_err)?;
+                let body: LmStudioModelsResponse = r.json().await.map_err(crate::util::http_err)?;
                 let results: Vec<ModelInfo> = body
                     .data
                     .into_iter()
@@ -107,7 +107,7 @@ impl super::LmStudioProvider {
 
     pub async fn list_models_v1(&self) -> ZenResult<Vec<ModelInfo>> {
         let url = format!("{}/api/v1/models", self.base_url);
-        let resp = self.client.get(&url).send().await.map_err(crate::error::http_err)?;
+        let resp = self.client.get(&url).send().await.map_err(crate::util::http_err)?;
 
         if !resp.status().is_success() {
             return Err(ZenError::Custom(format!(
@@ -116,7 +116,7 @@ impl super::LmStudioProvider {
             )));
         }
 
-        let body: LmStudioV1ModelsResponse = resp.json().await.map_err(crate::error::http_err)?;
+        let body: LmStudioV1ModelsResponse = resp.json().await.map_err(crate::util::http_err)?;
         let results: Vec<ModelInfo> = body
             .data
             .into_iter()
@@ -164,7 +164,7 @@ impl super::LmStudioProvider {
 
     pub async fn list_models_fallback(&self) -> ZenResult<Vec<ModelInfo>> {
         let url = format!("{}/v1/models", self.base_url);
-        let resp = self.client.get(&url).send().await.map_err(crate::error::http_err)?;
+        let resp = self.client.get(&url).send().await.map_err(crate::util::http_err)?;
 
         if !resp.status().is_success() {
             let status = resp.status();
@@ -175,7 +175,7 @@ impl super::LmStudioProvider {
             )));
         }
 
-        let body: OpenAiModelsResponse = resp.json().await.map_err(crate::error::http_err)?;
+        let body: OpenAiModelsResponse = resp.json().await.map_err(crate::util::http_err)?;
         Ok(body
             .data
             .into_iter()
@@ -208,16 +208,16 @@ impl super::LmStudioProvider {
 /// inventing a wire control. Absent capabilities → `unknown`.
 fn reasoning_capability_from_entry(
     entry: &LmStudioModelEntry,
-) -> crate::llm::ReasoningCapability {
+) -> crate::ReasoningCapability {
     let allowed: Option<Vec<String>> = entry
         .capabilities
         .as_ref()
         .and_then(|c| c.reasoning.as_ref())
         .and_then(|r| r.allowed_options.clone());
-    crate::llm::reasoning::resolver::resolve(
+    crate::reasoning::resolver::resolve(
         "lmstudio",
         &entry.id,
-        &crate::llm::reasoning::resolver::RawReasoningMetadata {
+        &crate::reasoning::resolver::RawReasoningMetadata {
             allowed_options: allowed.as_deref(),
             ..Default::default()
         },
@@ -227,7 +227,7 @@ fn reasoning_capability_from_entry(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::llm::reasoning::{ControlAvailability, ReasoningSupport};
+    use crate::reasoning::{ControlAvailability, ReasoningSupport};
 
     fn entry_from_json(json: &str) -> LmStudioModelEntry {
         serde_json::from_str(json).unwrap()

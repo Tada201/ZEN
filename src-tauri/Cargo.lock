@@ -13123,6 +13123,7 @@ dependencies = [
  "wiremock",
  "zen-core",
  "zen-db",
+ "zen-llm",
  "zen-security",
  "zen-tools",
  "zip 4.6.1",
@@ -13151,6 +13152,27 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "zen-core",
+]
+
+[[package]]
+name = "zen-llm"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "dashmap",
+ "futures",
+ "lazy_static",
+ "regex",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+ "wiremock",
  "zen-core",
 ]
 

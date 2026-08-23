@@ -94,6 +94,21 @@ pub fn is_context_length_error(error: &str) -> bool {
 ///
 /// Returns `None` if the error does not contain an extractable number.
 pub fn extract_context_window(error: &str) -> Option<u64> {
+    // The Anthropic inequality form ("... 188240 + 21333 > 200000") carries the
+    // window as the trailing right-hand side; RE_ANTHROPIC alone would capture
+    // the leading input-token count instead. Try the anchored pattern first
+    // (latent test fix surfaced by the Phase 7 gate — pre-existing bug, see
+    // BIG_MIGRATION.md Appendix E).
+    if let Some(caps) = RE_ANTHROPIC_ALT.captures(error) {
+        if let Some(m) = caps.get(1) {
+            if let Ok(tokens) = m.as_str().parse::<u64>() {
+                if (1_000..=10_000_000).contains(&tokens) {
+                    return Some(tokens);
+                }
+            }
+        }
+    }
+
     // Try each provider-specific regex in order of specificity.
     let patterns: &[&Regex] = &[
         &RE_OPENAI,
@@ -115,17 +130,6 @@ pub fn extract_context_window(error: &str) -> Option<u64> {
                     if (1_000..=10_000_000).contains(&tokens) {
                         return Some(tokens);
                     }
-                }
-            }
-        }
-    }
-
-    // Anthropic inequality fallback: "> 200000"
-    if let Some(caps) = RE_ANTHROPIC_ALT.captures(error) {
-        if let Some(m) = caps.get(1) {
-            if let Ok(tokens) = m.as_str().parse::<u64>() {
-                if (1_000..=10_000_000).contains(&tokens) {
-                    return Some(tokens);
                 }
             }
         }

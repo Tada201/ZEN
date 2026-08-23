@@ -1,9 +1,9 @@
 use super::ModelCapabilities;
-use crate::db::models::ModelInfo;
-use crate::error::{ZenError, ZenResult};
-use crate::llm::openai_compat::context_window_discovery;
-use crate::llm::openai_compat::types::*;
-use crate::llm::openai_compat::OpenAiCompatProvider;
+use zen_core::ModelInfo;
+use zen_core::{ZenError, ZenResult};
+use crate::openai_compat::context_window_discovery;
+use crate::openai_compat::types::*;
+use crate::openai_compat::OpenAiCompatProvider;
 use std::collections::HashMap;
 use std::sync::RwLock;
 use tracing::{info, warn};
@@ -191,17 +191,17 @@ impl OpenAiCompatProvider {
                 .into_iter()
                 .map(|(id, name, ctx)| {
                     // MiMo models reason natively with no Zen-facing control.
-                    let reasoning = crate::llm::ReasoningCapability {
-                        support: crate::llm::reasoning::ReasoningSupport::AlwaysOn,
-                        protocol: crate::llm::reasoning::ReasoningProtocol::None,
+                    let reasoning = crate::ReasoningCapability {
+                        support: crate::reasoning::ReasoningSupport::AlwaysOn,
+                        protocol: crate::reasoning::ReasoningProtocol::None,
                         control_availability:
-                            crate::llm::reasoning::ControlAvailability::None,
+                            crate::reasoning::ControlAvailability::None,
                         can_disable: false,
                         reasoning_visibility:
-                            crate::llm::reasoning::ReasoningVisibility::Trace,
-                        source: crate::llm::reasoning::ReasoningSource::Registry,
-                        confidence: crate::llm::reasoning::ReasoningConfidence::Authoritative,
-                        ..crate::llm::ReasoningCapability::unknown()
+                            crate::reasoning::ReasoningVisibility::Trace,
+                        source: crate::reasoning::ReasoningSource::Registry,
+                        confidence: crate::reasoning::ReasoningConfidence::Authoritative,
+                        ..crate::ReasoningCapability::unknown()
                     }
                     .normalized();
 
@@ -292,7 +292,7 @@ impl OpenAiCompatProvider {
             )));
         }
 
-        let body: OpenAiModelsResponse = resp.json().await.map_err(crate::error::http_err)?;
+        let body: OpenAiModelsResponse = resp.json().await.map_err(crate::util::http_err)?;
 
         let provider_lower = self.provider_name.to_lowercase();
         let opencode_free_model = |id: &str| {
@@ -348,10 +348,10 @@ impl OpenAiCompatProvider {
 
                 // Resolve reasoning capability: authoritative API metadata first,
                 // then the version-aware registry / heuristics keyed by provider.
-                let reasoning = crate::llm::reasoning::resolver::resolve(
+                let reasoning = crate::reasoning::resolver::resolve(
                     &provider_lower,
                     &m.id,
-                    &crate::llm::reasoning::resolver::RawReasoningMetadata {
+                    &crate::reasoning::resolver::RawReasoningMetadata {
                         supported_parameters,
                         is_aggregator: Self::provider_is_mixed_router(&provider_lower),
                         ..Default::default()
@@ -391,7 +391,9 @@ impl OpenAiCompatProvider {
             })
             .collect();
 
-        // Sort alphabetically for consistent display
+        // Sort alphabetically for consistent display. NOTE: `ModelInfo.name`
+        // carries the model *id* here (display_name holds the human label),
+        // so this orders by id.
         models.sort_by(|a, b| a.name.cmp(&b.name));
 
         info!(

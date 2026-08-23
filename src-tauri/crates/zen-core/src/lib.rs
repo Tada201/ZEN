@@ -14,8 +14,10 @@ pub use ports::{
     AuditEvent, AuditSink, CoreSinks, EventSink, SecretStore, SettingsStore,
 };
 pub use reasoning::ReasoningCapability;
+pub mod chat_types;
 pub mod ports;
 pub mod reasoning;
 mod types;
 
+pub use chat_types::{ChatMessage, ChatResponse, ModelInfo, ReasoningBlock, ToolCall};
 pub use types::{ProviderConfig, SystemMetrics, ToolInfo};

@@ -1,311 +1,26 @@
-use async_trait::async_trait;
+//! Request construction, response mapping and SSE consumption for the
+//! Anthropic Messages API. Bodies moved verbatim from the former trait impl
+//! (`self` renamed to `me`) during the Phase 7 file-split.
+
 use futures::StreamExt;
-use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tracing::{debug, error, info};
 
-use crate::db::models::{ChatMessage, ChatResponse, ModelInfo};
-use crate::error::{ZenError, ZenResult};
-use crate::llm::LlmProvider;
+use super::AnthropicProvider;
+use super::mapping::{anthropic_context_length_from_id, anthropic_reasoning_metadata};
+use super::wire::{
+    AnthropicCacheControl, AnthropicChatRequest, AnthropicContent, AnthropicContentBlock, AnthropicOutputConfig, AnthropicMessage, AnthropicStreamEvent, AnthropicSystem, AnthropicSystemBlock, AnthropicThinking,
+    AnthropicTool, ToolCallAcc,
+};
+use zen_core::{ChatMessage, ChatResponse, ModelInfo, ZenError, ZenResult};
 
-/// Anthropic Messages API provider.
-/// Uses the `/v1/messages` endpoint with `x-api-key` authentication,
-/// Anthropic-specific message format, and `tool_use` content blocks.
-pub struct AnthropicProvider {
-    client: Client,
-    api_key: String,
-    base_url: String,
-    /// `anthropic-version` header value. Constructor default for the built-in
-    /// provider; custom Anthropic-format providers reuse the same default.
-    version: String,
-    /// Label reported in `ModelInfo.provider`. The built-in provider uses
-    /// "anthropic"; custom providers report their own display name.
-    provider_label: String,
-}
-
-const ANTHROPIC_VERSION: &str = "2023-06-01";
-
-/// Resolve an Anthropic model's reasoning capability via the version-aware
-/// registry. Newer Claude families (4.5/4.6/4.7) use adaptive thinking; 3.7
-/// uses manual budget; older/unknown families fall back to `unknown`.
-fn anthropic_reasoning_metadata(model_id: &str) -> crate::llm::ReasoningCapability {
-    crate::llm::reasoning::resolver::resolve(
-        "anthropic",
-        model_id,
-        &crate::llm::reasoning::resolver::RawReasoningMetadata::default(),
-    )
-}
-
-/// Hardcoded context-length lookup for known Anthropic models, used when the
-/// API response does not include `max_input_tokens` (e.g. for retired models
-/// still present in the fallback list).
-fn anthropic_context_length_from_id(model_id: &str) -> Option<u64> {
-    let id = model_id.to_lowercase();
-    // 1M-context models (Claude 4.6+, Sonnet 5, Fable 5, Mythos 5)
-    if id.contains("opus-4-8")
-        || id.contains("opus-4-7")
-        || id.contains("opus-4-6")
-        || id.contains("sonnet-4-6")
-        || id.contains("sonnet-5")
-        || id.contains("fable-5")
-        || id.contains("mythos-5")
-    {
-        return Some(1_000_000);
-    }
-    // 200K-context models (Claude 4.5 Sonnet, 3.7 Sonnet, 3.5 Sonnet, Haiku 4.5, etc.)
-    Some(200_000)
-}
-
-// ─── Anthropic API Types (Request) ───
-
-#[derive(Serialize)]
-struct AnthropicChatRequest {
-    model: String,
-    messages: Vec<AnthropicMessage>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    system: Option<AnthropicSystem>,
-    max_tokens: i64,
-    stream: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    temperature: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    top_p: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    top_k: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    stop_sequences: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    tools: Option<Vec<AnthropicTool>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    thinking: Option<AnthropicThinking>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    output_config: Option<AnthropicOutputConfig>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(untagged)]
-enum AnthropicSystem {
-    String(String),
-    Blocks(Vec<AnthropicSystemBlock>),
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct AnthropicSystemBlock {
-    #[serde(rename = "type")]
-    block_type: String, // "text"
-    text: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    cache_control: Option<AnthropicCacheControl>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct AnthropicThinking {
-    #[serde(rename = "type")]
-    thinking_type: String, // "enabled" (manual budget) | "adaptive"
-    #[serde(skip_serializing_if = "Option::is_none")]
-    budget_tokens: Option<i64>,
-}
-
-/// Adaptive-thinking effort selector (Claude 4.5+).
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct AnthropicOutputConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    effort: Option<String>, // "low" | "medium" | "high"
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct AnthropicCacheControl {
-    #[serde(rename = "type")]
-    cache_type: String, // "ephemeral"
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct AnthropicMessage {
-    role: String,
-    content: AnthropicContent,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(untagged)]
-enum AnthropicContent {
-    Text(String),
-    Blocks(Vec<AnthropicContentBlock>),
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(tag = "type")]
-enum AnthropicContentBlock {
-    #[serde(rename = "text")]
-    Text {
-        text: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        cache_control: Option<AnthropicCacheControl>,
-    },
-    #[serde(rename = "tool_use")]
-    ToolUse {
-        id: String,
-        name: String,
-        input: serde_json::Value,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        cache_control: Option<AnthropicCacheControl>,
-    },
-    #[serde(rename = "tool_result")]
-    ToolResult {
-        tool_use_id: String,
-        content: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        cache_control: Option<AnthropicCacheControl>,
-    },
-    #[serde(rename = "image")]
-    Image {
-        source: AnthropicImageSource,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        cache_control: Option<AnthropicCacheControl>,
-    },
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct AnthropicImageSource {
-    #[serde(rename = "type")]
-    source_type: String, // "base64"
-    media_type: String, // "image/jpeg", "image/png", etc.
-    data: String,
-}
-
-#[derive(Serialize, Debug)]
-struct AnthropicTool {
-    name: String,
-    description: String,
-    input_schema: serde_json::Value,
-}
-
-// ─── Anthropic API Types (Streaming Response) ───
-
-#[derive(Deserialize, Debug)]
-struct AnthropicStreamEvent {
-    #[serde(rename = "type")]
-    event_type: String,
-    #[serde(default)]
-    _index: Option<usize>,
-    #[serde(default)]
-    content_block: Option<AnthropicContentBlockResponse>,
-    #[serde(default)]
-    delta: Option<AnthropicDelta>,
-    #[serde(default)]
-    message: Option<AnthropicMessageResponse>,
-    #[serde(default)]
-    usage: Option<AnthropicUsage>,
-}
-
-#[derive(Deserialize, Debug)]
-struct AnthropicContentBlockResponse {
-    #[serde(rename = "type")]
-    block_type: String,
-    #[serde(default)]
-    id: Option<String>,
-    #[serde(default)]
-    name: Option<String>,
-    #[serde(default)]
-    _text: Option<String>,
-}
-
-#[derive(Deserialize, Debug)]
-struct AnthropicDelta {
-    #[serde(rename = "type")]
-    delta_type: String,
-    #[serde(default)]
-    text: Option<String>,
-    #[serde(default)]
-    partial_json: Option<String>,
-    #[serde(default)]
-    thinking: Option<String>,
-}
-
-#[derive(Deserialize, Debug)]
-struct AnthropicMessageResponse {
-    #[serde(default)]
-    usage: Option<AnthropicUsage>,
-}
-
-#[derive(Deserialize, Debug)]
-struct AnthropicUsage {
-    #[serde(default)]
-    input_tokens: Option<i64>,
-    #[serde(default)]
-    output_tokens: Option<i64>,
-}
-
-// ─── Tool call accumulator for streaming ───
-
-#[derive(Default)]
-struct ToolCallAcc {
-    id: String,
-    name: String,
-    input_json: String,
-    ready_emitted: bool,
-}
-
-impl AnthropicProvider {
-    pub fn new(api_key: &str, base_url: &str) -> Self {
-        Self::with_identity(api_key, base_url, "anthropic")
-    }
-
-    /// Build a provider with a custom label (for custom Anthropic-format
-    /// providers). `provider_label` flows into `ModelInfo.provider`.
-    pub fn with_identity(api_key: &str, base_url: &str, provider_label: &str) -> Self {
-        Self {
-            client: Client::builder()
-                .timeout(std::time::Duration::from_secs(60))
-                .connect_timeout(std::time::Duration::from_secs(10))
-                .build()
-                .expect("Failed to build Anthropic HTTP client"),
-            api_key: api_key.to_string(),
-            base_url: base_url.trim_end_matches('/').to_string(),
-            version: ANTHROPIC_VERSION.to_string(),
-            provider_label: provider_label.to_string(),
-        }
-    }
-
-    fn url(&self, path: &str) -> String {
-        // Accept both Anthropic's host root and compatible gateways that
-        // expose an OpenAI-style `/v1` base URL. The request paths below
-        // already include `/v1`, so avoid producing `/v1/v1/...`.
-        let base_url = self.base_url.strip_suffix("/v1").unwrap_or(&self.base_url);
-        format!("{}{}", base_url, path)
-    }
-
-    fn parse_data_url(&self, data_url: &str) -> Option<AnthropicImageSource> {
-        if !data_url.starts_with("data:") {
-            return None;
-        }
-        let comma_pos = data_url.find(',')?;
-        let header = &data_url[..comma_pos];
-        let data = &data_url[comma_pos + 1..];
-
-        // Header format: "data:image/png;base64"
-        let media_type = header
-            .split(':')
-            .nth(1)
-            .and_then(|h| h.split(';').next())
-            .unwrap_or("image/png");
-
-        Some(AnthropicImageSource {
-            source_type: "base64".to_string(),
-            media_type: media_type.to_string(),
-            data: data.to_string(),
-        })
-    }
-}
-
-#[async_trait]
-impl LlmProvider for AnthropicProvider {
-    async fn list_models(&self) -> ZenResult<Vec<ModelInfo>> {
-        let url = self.url("/v1/models");
-        match self
+pub(crate) async fn list_models(me: &AnthropicProvider) -> ZenResult<Vec<ModelInfo>> {
+        let url = me.url("/v1/models");
+        match me
             .client
             .get(&url)
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", &self.version)
+            .header("x-api-key", &me.api_key)
+            .header("anthropic-version", &me.version)
             .send()
             .await
         {
@@ -341,7 +56,7 @@ impl LlmProvider for AnthropicProvider {
                             name: item.id.clone(),
                             size: None,
                             modified_at: None,
-                            provider: Some(self.provider_label.clone()),
+                            provider: Some(me.provider_label.clone()),
                             model_type: None,
                             arch: None,
                             quantization: None,
@@ -373,7 +88,7 @@ impl LlmProvider for AnthropicProvider {
                 name: "claude-4-7-opus-20260416".to_string(),
                 size: None,
                 modified_at: None,
-                provider: Some(self.provider_label.clone()),
+                provider: Some(me.provider_label.clone()),
                 model_type: None,
                 arch: None,
                 quantization: None,
@@ -390,7 +105,7 @@ impl LlmProvider for AnthropicProvider {
                 name: "claude-4-6-opus-20260219".to_string(),
                 size: None,
                 modified_at: None,
-                provider: Some(self.provider_label.clone()),
+                provider: Some(me.provider_label.clone()),
                 model_type: None,
                 arch: None,
                 quantization: None,
@@ -407,7 +122,7 @@ impl LlmProvider for AnthropicProvider {
                 name: "claude-4-6-sonnet-20260219".to_string(),
                 size: None,
                 modified_at: None,
-                provider: Some(self.provider_label.clone()),
+                provider: Some(me.provider_label.clone()),
                 model_type: None,
                 arch: None,
                 quantization: None,
@@ -424,7 +139,7 @@ impl LlmProvider for AnthropicProvider {
                 name: "claude-4-5-sonnet-20251210".to_string(),
                 size: None,
                 modified_at: None,
-                provider: Some(self.provider_label.clone()),
+                provider: Some(me.provider_label.clone()),
                 model_type: None,
                 arch: None,
                 quantization: None,
@@ -441,7 +156,7 @@ impl LlmProvider for AnthropicProvider {
                 name: "claude-3-7-sonnet-20250219".to_string(),
                 size: None,
                 modified_at: None,
-                provider: Some(self.provider_label.clone()),
+                provider: Some(me.provider_label.clone()),
                 model_type: None,
                 arch: None,
                 quantization: None,
@@ -458,7 +173,7 @@ impl LlmProvider for AnthropicProvider {
                 name: "claude-3-5-sonnet-20241022".to_string(),
                 size: None,
                 modified_at: None,
-                provider: Some(self.provider_label.clone()),
+                provider: Some(me.provider_label.clone()),
                 model_type: None,
                 arch: None,
                 quantization: None,
@@ -475,7 +190,7 @@ impl LlmProvider for AnthropicProvider {
                 name: "claude-3-5-haiku-20241022".to_string(),
                 size: None,
                 modified_at: None,
-                provider: Some(self.provider_label.clone()),
+                provider: Some(me.provider_label.clone()),
                 model_type: None,
                 arch: None,
                 quantization: None,
@@ -491,17 +206,17 @@ impl LlmProvider for AnthropicProvider {
         Ok(models)
     }
 
-    async fn chat_stream(
-        &self,
+pub(crate) async fn chat_stream(
+        me: &AnthropicProvider,
         model: &str,
         messages: Vec<ChatMessage>,
-        tools: Option<Vec<crate::tools::ToolInfo>>,
-        config: crate::llm::ChatRequestConfig,
-        on_chunk: Box<dyn Fn(crate::llm::LlmChunk) + Send>,
+        tools: Option<Vec<zen_core::ToolInfo>>,
+        config: crate::ChatRequestConfig,
+        on_chunk: Box<dyn Fn(crate::LlmChunk) + Send>,
         token: tokio_util::sync::CancellationToken,
     ) -> ZenResult<ChatResponse> {
-        let url = self.url("/v1/messages");
-        let mut name_codec = crate::llm::ToolNameCodec::default(); // sanitize tool names (no ':') + decode map
+        let url = me.url("/v1/messages");
+        let mut name_codec = crate::ToolNameCodec::default(); // sanitize tool names (no ':') + decode map
 
         // Extract system message and convert the rest to Anthropic format
         let mut system_prompt: Option<String> = None;
@@ -563,7 +278,7 @@ impl LlmProvider for AnthropicProvider {
 
                     if let Some(images) = msg.images {
                         for img in images {
-                            if let Some(source) = self.parse_data_url(&img) {
+                            if let Some(source) = me.parse_data_url(&img) {
                                 blocks.push(AnthropicContentBlock::Image {
                                     source,
                                     cache_control: None,
@@ -640,7 +355,7 @@ impl LlmProvider for AnthropicProvider {
 
         // 4. Reasoning — driven by the resolved protocol so we never send a
         // manual budget to an adaptive-only model (or vice versa).
-        use crate::llm::reasoning::ReasoningProtocol;
+        use crate::reasoning::ReasoningProtocol;
         let (thinking, output_config) = match config.resolved_reasoning.as_ref() {
             Some(r) if r.enabled => match r.capability.protocol {
                 ReasoningProtocol::AnthropicAdaptive => (
@@ -683,15 +398,15 @@ impl LlmProvider for AnthropicProvider {
 
         info!(model = model, "Starting Anthropic chat stream");
 
-        let resp = self
+        let resp = me
             .client
             .post(&url)
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", &self.version)
+            .header("x-api-key", &me.api_key)
+            .header("anthropic-version", &me.version)
             .header("content-type", "application/json")
             .json(&request)
             .send()
-            .await.map_err(crate::error::http_err)?;
+            .await.map_err(crate::util::http_err)?;
 
         if !resp.status().is_success() {
             let status = resp.status();
@@ -705,7 +420,7 @@ impl LlmProvider for AnthropicProvider {
 
         let mut full_content = String::new();
         let mut tool_call_accs: Vec<ToolCallAcc> = Vec::new();
-        let mut reasoning_details: Vec<crate::db::models::ReasoningBlock> = Vec::new();
+        let mut reasoning_details: Vec<zen_core::ReasoningBlock> = Vec::new();
         let mut active_tool_index: Option<usize> = None;
         let mut tokens_in: Option<i64> = None;
         let mut tokens_out: Option<i64> = None;
@@ -723,7 +438,7 @@ impl LlmProvider for AnthropicProvider {
                 debug!("Anthropic stream cancelled by client");
                 break;
             }
-            let bytes = chunk_result.map_err(crate::error::http_err)?;
+            let bytes = chunk_result.map_err(crate::util::http_err)?;
             buffer.push_str(&String::from_utf8_lossy(&bytes));
 
             // SSE format: "event: <type>\ndata: <json>\n\n"
@@ -776,7 +491,7 @@ impl LlmProvider for AnthropicProvider {
                                                 ready_emitted: false,
                                             });
                                             active_tool_index = Some(tool_call_accs.len() - 1);
-                                            on_chunk(crate::llm::LlmChunk::ToolCallDelta {
+                                            on_chunk(crate::LlmChunk::ToolCallDelta {
                                                 index: tool_call_accs.len() - 1,
                                                 id: Some(stable_id),
                                                 name: block.name.as_ref().map(|_| name),
@@ -800,7 +515,7 @@ impl LlmProvider for AnthropicProvider {
                                         "text_delta" => {
                                             if let Some(text) = &delta.text {
                                                 if !text.is_empty() {
-                                                    on_chunk(crate::llm::LlmChunk::Text(
+                                                    on_chunk(crate::LlmChunk::Text(
                                                         text.clone(),
                                                     ));
                                                     full_content.push_str(text);
@@ -809,12 +524,12 @@ impl LlmProvider for AnthropicProvider {
                                         }
                                         "thinking_delta" => {
                                             if let Some(thought) = &delta.thinking {
-                                                on_chunk(crate::llm::LlmChunk::Thought(
+                                                on_chunk(crate::LlmChunk::Thought(
                                                     thought.clone(),
                                                 ));
                                                 reasoning_details.push(
-                                                    crate::db::models::ReasoningBlock {
-                                                        provider: self.provider_label.clone(),
+                                                    zen_core::ReasoningBlock {
+                                                        provider: me.provider_label.clone(),
                                                         block_type: "thinking".to_string(),
                                                         text: Some(thought.clone()),
                                                         raw: None,
@@ -828,7 +543,7 @@ impl LlmProvider for AnthropicProvider {
                                                     if let Some(acc) = tool_call_accs.get_mut(idx) {
                                                         acc.input_json.push_str(json_fragment);
                                                         on_chunk(
-                                                            crate::llm::LlmChunk::ToolCallDelta {
+                                                            crate::LlmChunk::ToolCallDelta {
                                                                 index: idx,
                                                                 id: if acc.id.is_empty() {
                                                                     None
@@ -858,7 +573,7 @@ impl LlmProvider for AnthropicProvider {
                                                                 )
                                                             {
                                                                 acc.ready_emitted = true;
-                                                                on_chunk(crate::llm::LlmChunk::ToolCallReady {
+                                                                on_chunk(crate::LlmChunk::ToolCallReady {
                                                                     index: idx,
                                                                     id: if acc.id.is_empty() {
                                                                         None
@@ -906,7 +621,7 @@ impl LlmProvider for AnthropicProvider {
             let mut tcs = Vec::new();
             for acc in tool_call_accs {
                 if !acc.name.is_empty() {
-                    tcs.push(crate::db::models::ToolCall {
+                    tcs.push(zen_core::ToolCall {
                         id: if acc.id.is_empty() {
                             format!("toolu_{}", uuid::Uuid::new_v4())
                         } else {
@@ -939,73 +654,3 @@ impl LlmProvider for AnthropicProvider {
             done: true,
         })
     }
-
-    async fn embed(&self, _model: &str, _text: &str) -> ZenResult<Vec<f32>> {
-        Err(ZenError::Custom(
-            "Anthropic does not offer an embeddings API. Use a different provider for embeddings."
-                .to_string(),
-        ))
-    }
-
-    async fn health_check(&self) -> bool {
-        // Anthropic has no /v1/models endpoint. We try a simple request to validate the key.
-        // A lightweight check: just verify the API key header is accepted.
-        // We'll try hitting /v1/messages with an invalid body — a 400 means key is valid.
-        let url = self.url("/v1/messages");
-        match self
-            .client
-            .post(&url)
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", &self.version)
-            .header("content-type", "application/json")
-            .body("{}")
-            .send()
-            .await
-        {
-            Ok(resp) => {
-                let status = resp.status().as_u16();
-                // 400 = bad request (key valid, body invalid) — healthy
-                // 401 = unauthorized — unhealthy
-                // 200 = somehow worked — healthy
-                status == 400 || status == 200 || status == 422
-            }
-            Err(_) => false,
-        }
-    }
-
-    fn reasoning_capability(&self, model: &str) -> crate::llm::ReasoningCapability {
-        anthropic_reasoning_metadata(model)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::llm::reasoning::{ReasoningProtocol, ReasoningSupport};
-
-    #[test]
-    fn adaptive_models_use_adaptive_protocol_not_budget() {
-        let cap = anthropic_reasoning_metadata("claude-4-7-opus-20260416");
-        assert_eq!(cap.protocol, ReasoningProtocol::AnthropicAdaptive);
-        assert!(cap.min_budget.is_none(), "adaptive must not carry a budget range");
-    }
-
-    #[test]
-    fn claude_37_uses_manual_budget_protocol() {
-        let cap = anthropic_reasoning_metadata("claude-3-7-sonnet-20250219");
-        assert_eq!(cap.protocol, ReasoningProtocol::AnthropicBudget);
-        assert!(cap.min_budget.is_some());
-    }
-
-    #[test]
-    fn claude_46_is_adaptive() {
-        let cap = anthropic_reasoning_metadata("claude-4-6-sonnet-20260219");
-        assert_eq!(cap.protocol, ReasoningProtocol::AnthropicAdaptive);
-    }
-
-    #[test]
-    fn claude_35_has_no_configurable_reasoning() {
-        let cap = anthropic_reasoning_metadata("claude-3-5-sonnet-20241022");
-        assert_eq!(cap.support, ReasoningSupport::Unsupported);
-    }
-}

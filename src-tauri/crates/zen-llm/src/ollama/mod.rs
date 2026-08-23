@@ -1,14 +1,21 @@
+mod wire;
+
+use wire::{
+OllamaChatChunk, OllamaChatRequest, OllamaEmbedBatchRequest,
+    OllamaEmbedRequest, OllamaEmbedResponse, OllamaFunctionCall, OllamaMessage,
+    OllamaModelsResponse, OllamaOptions, OllamaShowRequest, OllamaShowResponse, OllamaThink,
+    OllamaToolCall,
+};
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::db::models::{ChatMessage, ChatResponse, ModelInfo};
-use crate::error::{ZenError, ZenResult};
-use crate::llm::LlmProvider;
+use zen_core::{ChatMessage, ChatResponse, ModelInfo};
+use zen_core::{ZenError, ZenResult};
+use crate::LlmProvider;
 
 /// Ollama HTTP API client.
 pub struct OllamaProvider {
@@ -16,86 +23,10 @@ pub struct OllamaProvider {
     base_url: String,
 }
 
-// ─── Ollama API types ───
 
-#[derive(Serialize)]
-struct OllamaChatRequest {
-    model: String,
-    messages: Vec<OllamaMessage>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    tools: Option<Vec<serde_json::Value>>,
-    stream: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    think: Option<OllamaThink>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    options: Option<OllamaOptions>,
-}
-
-#[derive(Serialize)]
-#[serde(untagged)]
-enum OllamaThink {
-    Bool(bool),
-    Level(String),
-}
-
-#[derive(Serialize)]
-struct OllamaOptions {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    temperature: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    num_predict: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    top_p: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    top_k: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    repeat_penalty: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    seed: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    stop: Option<Vec<String>>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct OllamaMessage {
-    role: String,
-    #[serde(default)]
-    content: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    thinking: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    images: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    tool_calls: Option<Vec<OllamaToolCall>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    tool_call_id: Option<String>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct OllamaToolCall {
-    #[serde(rename = "function")]
-    pub function: OllamaFunctionCall,
-}
-
-#[derive(Serialize, Deserialize)]
-struct OllamaFunctionCall {
-    pub name: String,
-    pub arguments: serde_json::Value,
-}
-
-#[derive(Deserialize)]
-struct OllamaChatChunk {
-    message: Option<OllamaMessage>,
-    done: bool,
-    #[serde(default)]
-    prompt_eval_count: Option<i64>,
-    #[serde(default)]
-    eval_count: Option<i64>,
-}
-
-fn ollama_think_from_config(config: &crate::llm::ChatRequestConfig) -> Option<OllamaThink> {
+fn ollama_think_from_config(config: &crate::ChatRequestConfig) -> Option<OllamaThink> {
     // Only emit `think` when the resolver produced an OllamaThink request.
-    use crate::llm::reasoning::ReasoningProtocol;
+    use crate::reasoning::ReasoningProtocol;
     let r = config.resolved_reasoning.as_ref()?;
     if !r.enabled || r.capability.protocol != ReasoningProtocol::OllamaThink {
         return None;
@@ -109,34 +40,6 @@ fn ollama_think_from_config(config: &crate::llm::ChatRequestConfig) -> Option<Ol
     Some(OllamaThink::Bool(true))
 }
 
-#[derive(Deserialize)]
-struct OllamaModelsResponse {
-    models: Vec<OllamaModelEntry>,
-}
-
-#[derive(Deserialize)]
-struct OllamaModelEntry {
-    name: String,
-    size: Option<u64>,
-    modified_at: Option<String>,
-}
-
-#[derive(Serialize)]
-struct OllamaShowRequest<'a> {
-    model: &'a str,
-}
-
-/// Partial `/api/show` response. `/api/tags` never reports a context window,
-/// but `/api/show` exposes it under `model_info` as an arch-prefixed key
-/// (e.g. `llama.context_length`, `qwen2.context_length`). We only need that
-/// map plus `capabilities` (to skip embedding-only models).
-#[derive(Deserialize)]
-struct OllamaShowResponse {
-    #[serde(default)]
-    model_info: std::collections::HashMap<String, serde_json::Value>,
-    #[serde(default)]
-    capabilities: Vec<String>,
-}
 
 /// Extract the context window from a parsed `/api/show` body.
 ///
@@ -156,22 +59,6 @@ fn context_length_from_show(show: &OllamaShowResponse) -> Option<u64> {
         .filter(|&n| n > 0)
 }
 
-#[derive(Serialize)]
-struct OllamaEmbedRequest {
-    model: String,
-    input: String,
-}
-
-#[derive(Serialize)]
-struct OllamaEmbedBatchRequest {
-    model: String,
-    input: Vec<String>,
-}
-
-#[derive(Deserialize)]
-struct OllamaEmbedResponse {
-    embeddings: Vec<Vec<f32>>,
-}
 
 impl OllamaProvider {
     pub fn new(base_url: &str) -> Self {
@@ -222,10 +109,10 @@ impl LlmProvider for OllamaProvider {
                 debug!(url = %alt_url, "Trying 127.0.0.1 fallback for Ollama model listing");
                 match self.client.get(&alt_url).send().await {
                     Ok(resp) => resp,
-                    Err(_) => return Err(crate::error::http_err(e)), // Return original error if fallback also fails
+                    Err(_) => return Err(crate::util::http_err(e)), // Return original error if fallback also fails
                 }
             }
-            Err(e) => return Err(crate::error::http_err(e)),
+            Err(e) => return Err(crate::util::http_err(e)),
         };
 
         if !resp.status().is_success() {
@@ -233,7 +120,7 @@ impl LlmProvider for OllamaProvider {
             return Err(ZenError::OllamaNotConnected);
         }
 
-        let body: OllamaModelsResponse = resp.json().await.map_err(crate::error::http_err)?;
+        let body: OllamaModelsResponse = resp.json().await.map_err(crate::util::http_err)?;
 
         // `/api/tags` carries no context window, so probe `/api/show` for each
         // model to read its real `<arch>.context_length`. Run concurrently so N
@@ -251,10 +138,10 @@ impl LlmProvider for OllamaProvider {
             .into_iter()
             .zip(context_lengths)
             .map(|(m, max_context_length)| {
-                let reasoning = crate::llm::reasoning::resolver::resolve(
+                let reasoning = crate::reasoning::resolver::resolve(
                     "ollama",
                     &m.name,
-                    &crate::llm::reasoning::resolver::RawReasoningMetadata::default(),
+                    &crate::reasoning::resolver::RawReasoningMetadata::default(),
                 );
                 ModelInfo {
                     id: m.name.clone(),
@@ -283,16 +170,16 @@ impl LlmProvider for OllamaProvider {
         &self,
         model: &str,
         messages: Vec<ChatMessage>,
-        tools: Option<Vec<crate::tools::ToolInfo>>,
-        config: crate::llm::ChatRequestConfig,
-        on_chunk: Box<dyn Fn(crate::llm::LlmChunk) + Send>,
+        tools: Option<Vec<zen_core::ToolInfo>>,
+        config: crate::ChatRequestConfig,
+        on_chunk: Box<dyn Fn(crate::LlmChunk) + Send>,
         token: tokio_util::sync::CancellationToken,
     ) -> ZenResult<ChatResponse> {
         let url = format!("{}/api/chat", self.base_url);
 
         // Sanitize tool names to the strict function charset and keep a
         // per-request reverse map so returned tool calls decode to canonical ids.
-        let mut name_codec = crate::llm::ToolNameCodec::default();
+        let mut name_codec = crate::ToolNameCodec::default();
 
         let ollama_messages: Vec<OllamaMessage> = messages
             .into_iter()
@@ -370,7 +257,7 @@ impl LlmProvider for OllamaProvider {
 
         info!(model = model, "Starting Ollama chat stream");
 
-        let resp = self.client.post(&url).json(&request).send().await.map_err(crate::error::http_err)?;
+        let resp = self.client.post(&url).json(&request).send().await.map_err(crate::util::http_err)?;
 
         if !resp.status().is_success() {
             let status = resp.status();
@@ -383,8 +270,8 @@ impl LlmProvider for OllamaProvider {
         }
 
         let mut full_content = String::new();
-        let mut tool_calls: Vec<crate::db::models::ToolCall> = Vec::new();
-        let mut reasoning_details: Vec<crate::db::models::ReasoningBlock> = Vec::new();
+        let mut tool_calls: Vec<zen_core::ToolCall> = Vec::new();
+        let mut reasoning_details: Vec<zen_core::ReasoningBlock> = Vec::new();
         let mut tokens_in: Option<i64> = None;
         let mut tokens_out: Option<i64> = None;
         let mut stream = resp.bytes_stream();
@@ -403,7 +290,7 @@ impl LlmProvider for OllamaProvider {
                 debug!("Ollama stream cancelled by client");
                 break;
             }
-            let bytes = chunk_result.map_err(crate::error::http_err)?;
+            let bytes = chunk_result.map_err(crate::util::http_err)?;
             buffer.push_str(&String::from_utf8_lossy(&bytes));
 
             // Process complete lines
@@ -420,8 +307,8 @@ impl LlmProvider for OllamaProvider {
                         if let Some(msg) = &chunk.message {
                             if let Some(thinking) = &msg.thinking {
                                 if !thinking.is_empty() {
-                                    on_chunk(crate::llm::LlmChunk::Thought(thinking.clone()));
-                                    reasoning_details.push(crate::db::models::ReasoningBlock {
+                                    on_chunk(crate::LlmChunk::Thought(thinking.clone()));
+                                    reasoning_details.push(zen_core::ReasoningBlock {
                                         provider: "ollama".to_string(),
                                         block_type: "thinking".to_string(),
                                         text: Some(thinking.clone()),
@@ -430,12 +317,12 @@ impl LlmProvider for OllamaProvider {
                                 }
                             }
                             if !msg.content.is_empty() {
-                                on_chunk(crate::llm::LlmChunk::Text(msg.content.clone()));
+                                on_chunk(crate::LlmChunk::Text(msg.content.clone()));
                                 full_content.push_str(&msg.content);
                             }
                             if let Some(tc_list) = &msg.tool_calls {
                                 for tc in tc_list {
-                                    tool_calls.push(crate::db::models::ToolCall {
+                                    tool_calls.push(zen_core::ToolCall {
                                         id: format!("call_{}", Uuid::new_v4()),
                                         name: name_codec.decode(&tc.function.name),
                                         args: tc.function.arguments.clone(),
@@ -486,13 +373,13 @@ impl LlmProvider for OllamaProvider {
             input: text.to_string(),
         };
 
-        let resp = self.client.post(&url).json(&request).send().await.map_err(crate::error::http_err)?;
+        let resp = self.client.post(&url).json(&request).send().await.map_err(crate::util::http_err)?;
 
         if !resp.status().is_success() {
             return Err(ZenError::Custom("Embedding request failed".into()));
         }
 
-        let body: OllamaEmbedResponse = resp.json().await.map_err(crate::error::http_err)?;
+        let body: OllamaEmbedResponse = resp.json().await.map_err(crate::util::http_err)?;
         body.embeddings
             .into_iter()
             .next()
@@ -503,7 +390,7 @@ impl LlmProvider for OllamaProvider {
         &self,
         model: &str,
         texts: &[&str],
-    ) -> crate::error::ZenResult<Vec<Vec<f32>>> {
+    ) -> zen_core::ZenResult<Vec<Vec<f32>>> {
         if texts.is_empty() {
             return Ok(vec![]);
         }
@@ -512,11 +399,11 @@ impl LlmProvider for OllamaProvider {
             model: model.to_string(),
             input: texts.iter().map(|t| t.to_string()).collect(),
         };
-        let resp = self.client.post(&url).json(&request).send().await.map_err(crate::error::http_err)?;
+        let resp = self.client.post(&url).json(&request).send().await.map_err(crate::util::http_err)?;
         if !resp.status().is_success() {
             return Err(ZenError::Custom("Batch embedding request failed".into()));
         }
-        let body: OllamaEmbedResponse = resp.json().await.map_err(crate::error::http_err)?;
+        let body: OllamaEmbedResponse = resp.json().await.map_err(crate::util::http_err)?;
         if body.embeddings.len() != texts.len() {
             return Err(ZenError::Custom(format!(
                 "Expected {} embeddings, got {}",
@@ -544,11 +431,11 @@ impl LlmProvider for OllamaProvider {
         }
     }
 
-    fn reasoning_capability(&self, model: &str) -> crate::llm::ReasoningCapability {
-        crate::llm::reasoning::resolver::resolve(
+    fn reasoning_capability(&self, model: &str) -> crate::ReasoningCapability {
+        crate::reasoning::resolver::resolve(
             "ollama",
             model,
-            &crate::llm::reasoning::resolver::RawReasoningMetadata::default(),
+            &crate::reasoning::resolver::RawReasoningMetadata::default(),
         )
     }
 }
@@ -769,7 +656,7 @@ mod tests {
 
     #[test]
     fn test_ollama_request_uses_top_level_think_bool() {
-        let config = crate::llm::ChatRequestConfig {
+        let config = crate::ChatRequestConfig {
             resolved_reasoning: Some(ollama_resolved(None)),
             ..Default::default()
         };
@@ -805,8 +692,8 @@ mod tests {
 
     /// Build a resolved reasoning request that targets the Ollama `think`
     /// protocol, mirroring what the resolver produces for a think-capable model.
-    fn ollama_resolved(effort: Option<&str>) -> crate::llm::ResolvedReasoningRequest {
-        use crate::llm::reasoning::{
+    fn ollama_resolved(effort: Option<&str>) -> crate::ResolvedReasoningRequest {
+        use crate::reasoning::{
             ControlAvailability, ReasoningCapability, ReasoningProtocol, ReasoningSupport,
         };
         let capability = ReasoningCapability {
@@ -817,7 +704,7 @@ mod tests {
             can_disable: true,
             ..ReasoningCapability::unknown()
         };
-        crate::llm::ResolvedReasoningRequest {
+        crate::ResolvedReasoningRequest {
             capability,
             enabled: true,
             effort: effort.map(|e| e.to_string()),
@@ -827,7 +714,7 @@ mod tests {
 
     #[test]
     fn test_ollama_request_maps_supported_think_level() {
-        let config = crate::llm::ChatRequestConfig {
+        let config = crate::ChatRequestConfig {
             resolved_reasoning: Some(ollama_resolved(Some("high"))),
             ..Default::default()
         };
