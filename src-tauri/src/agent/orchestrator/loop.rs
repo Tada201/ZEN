@@ -37,7 +37,7 @@ impl Orchestrator {
             model_context_window: _,
         } = params;
         info!("Starting orchestrator loop for goal: {}", goal);
-        let _ = crate::commands::wait_for_chat_resume(&self.app, chat_id, &token).await;
+        let _ = self.ctx.wait_for_chat_resume(chat_id, &token).await;
 
         // Create a placeholder assistant message so the backend owns the row
         // ID that `chat:done` will reference. This lets the frontend persist
@@ -464,7 +464,7 @@ impl Orchestrator {
         }
 
         // Phase 4: Synthesize - Combine all results
-        let _ = crate::commands::wait_for_chat_resume(&self.app, chat_id, &token).await;
+        let _ = self.ctx.wait_for_chat_resume(chat_id, &token).await;
         self.emit_progress(
             chat_id,
             OrchestratorPhase::Synthesizing,

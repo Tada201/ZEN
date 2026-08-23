@@ -2,7 +2,6 @@ use super::config::RunConfig;
 use crate::db::models::ChatMessage;
 use crate::db::queries;
 use sqlx::SqlitePool;
-use tauri::{AppHandle, Manager};
 
 pub(super) struct MemoryRunSettings {
     pub run_config: RunConfig,
@@ -96,7 +95,7 @@ pub(super) async fn load_initial_conversation(
 }
 
 pub(super) async fn cached_recall_context(
-    app: &AppHandle,
+    ctx: &crate::services::agent_context::AgentContext,
     chat_id: &str,
     enabled: bool,
 ) -> Option<String> {
@@ -104,8 +103,7 @@ pub(super) async fn cached_recall_context(
         return None;
     }
 
-    let state = app.try_state::<crate::commands::AppState>()?;
-    let Ok(guard) = state.recall_cache.try_lock() else {
+    let Ok(guard) = ctx.recall_cache.try_lock() else {
         tracing::debug!(chat_id = %chat_id, "Recall cache busy; skipping recall on TTFT path");
         return None;
     };

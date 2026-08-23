@@ -4,6 +4,7 @@ use crate::agent::event_bus::AgentEvent;
 use crate::agent::hooks::HookRegistry;
 use crate::agent::tools::ToolRegistry;
 use crate::agent::types::AgentRegistry;
+use crate::services::agent_context::AgentContext;
 use crate::tools::manager::ToolManager;
 use crate::tools::GlobalToolRegistry;
 use sqlx::SqlitePool;
@@ -16,6 +17,8 @@ use crate::db::models::ChatMessage;
 
 pub struct Runner {
     pub(super) app: AppHandle,
+    /// Phase 6 seam: shared service handles (same Arcs as AppState).
+    pub(super) ctx: AgentContext,
     pub(super) tool_registry: Arc<tokio::sync::RwLock<ToolRegistry>>,
     pub(super) agent_registry: Arc<AgentRegistry>,
     pub(super) hook_registry: Arc<HookRegistry>,
@@ -63,6 +66,7 @@ impl Clone for Runner {
     fn clone(&self) -> Self {
         Self {
             app: self.app.clone(),
+            ctx: self.ctx.clone(),
             tool_registry: self.tool_registry.clone(),
             agent_registry: self.agent_registry.clone(),
             hook_registry: self.hook_registry.clone(),
@@ -92,6 +96,7 @@ impl Clone for Runner {
 impl Runner {
     pub fn new(
         app: AppHandle,
+        ctx: AgentContext,
         tool_registry: Arc<tokio::sync::RwLock<ToolRegistry>>,
         agent_registry: Arc<AgentRegistry>,
         hook_registry: Arc<HookRegistry>,
@@ -100,6 +105,7 @@ impl Runner {
     ) -> Self {
         Self {
             app,
+            ctx,
             tool_registry,
             agent_registry,
             hook_registry,
@@ -392,6 +398,7 @@ impl Runner {
     pub fn child(&self, max_iterations: usize) -> Self {
         Self {
             app: self.app.clone(),
+            ctx: self.ctx.clone(),
             tool_registry: self.tool_registry.clone(),
             agent_registry: self.agent_registry.clone(),
             hook_registry: self.hook_registry.clone(),

@@ -32,6 +32,11 @@ pub fn run() {
             let app_handle = app.handle().clone();
             let _start_total = std::time::Instant::now();
 
+            // Phase 6 seam: manage the AgentContext once, after AppState.
+            // Shares every Arc instance with AppState; domain code receives
+            // this instead of reaching up through `state::<AppState>()`.
+            app_handle.manage(crate::services::agent_context::AgentContext::new(&app_handle));
+
             // Initialize MediaService with the resolved app data dir before any command runs.
             if let Err(e) = app.state::<AppState>().media.setup(&app_handle) {
                 tracing::warn!(error = %e, "MediaService setup failed. Wallpaper features will be unavailable until restart.");
@@ -394,6 +399,7 @@ pub fn run() {
                 };
                 let orchestrator = crate::agent::orchestrator::Orchestrator::new(
                     bg_app_handle.clone(),
+                    bg_app_handle.state::<crate::services::agent_context::AgentContext>().inner().clone(),
                     state.agent_registry.clone(),
                     state.tool_registry_v1.clone(),
                     state.hook_registry.clone(),

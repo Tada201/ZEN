@@ -10,12 +10,14 @@
 
 use super::core::{ContextMiddleware, ContextSectionId, EnrichmentContext, SectionStatus};
 use crate::error::ZenResult;
+use crate::services::agent_context::AgentContext;
 use async_trait::async_trait;
 use tauri::AppHandle;
-use tauri::Manager;
 
 pub struct SkillsCatalogMiddleware {
     pub app: AppHandle,
+    /// Phase 6 seam: shared service handles (same Arcs as AppState).
+    pub ctx: AgentContext,
     pub context_window: Option<i64>,
     pub skills_catalog_budget: usize,
 }
@@ -30,10 +32,8 @@ impl ContextMiddleware for SkillsCatalogMiddleware {
     }
 
     async fn enrich(&self, ctx: &mut EnrichmentContext) -> ZenResult<()> {
-        // Pull shared manager from AppState (registered once at startup).
-        let state = self.app.try_state::<crate::commands::AppState>();
-        let Some(state) = state else { return Ok(()) };
-        let mgr = state.skills_manager.clone();
+        // Shared manager handle (same Arc as AppState's; registered at startup).
+        let mgr = self.ctx.skills_manager.clone();
         // Resolve against the chat's workspace, not the process cwd.
         let cwd = ctx
             .workspace_root

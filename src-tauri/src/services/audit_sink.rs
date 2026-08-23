@@ -16,7 +16,9 @@ pub struct ZenAuditSink {
     pool: sqlx::SqlitePool,
 }
 
-fn to_entry(event: AuditEvent) -> AuditLogEntry {
+/// Shared mapping used by both audit sinks (`ZenAuditSink` and the
+/// boot-time `SharedPoolAuditSink` in `agent_context.rs`).
+pub(crate) fn to_entry(event: AuditEvent) -> AuditLogEntry {
     AuditLogEntry {
         id: uuid::Uuid::new_v4().to_string(),
         timestamp: chrono::Utc::now().to_rfc3339(),

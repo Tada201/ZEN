@@ -5,11 +5,11 @@
 //! - Handle user responses
 //! - Resume agent execution with selected options
 
-use crate::commands::AppState;
 use crate::db::queries;
 use crate::error::ZenError;
+use crate::services::agent_context::AgentContext;
 use serde::{Deserialize, Serialize};
-use tauri::{Emitter, State};
+use tauri::State;
 
 /// Clarification request structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,7 +41,7 @@ pub struct ClarificationResponsePayload {
 
 /// Create a new clarification request and store in database
 pub async fn create_clarification_request(
-    app_state: &AppState,
+    app_state: &AgentContext,
     chat_id: &str,
     question: &str,
     clarification_type: &str,
@@ -81,8 +81,7 @@ pub async fn create_clarification_request(
 /// Submit clarification response and resume agent
 #[tauri::command]
 pub async fn submit_clarification_response(
-    state: State<'_, AppState>,
-    app: tauri::AppHandle,
+    state: State<'_, AgentContext>,
     chat_id: String,
     selected_ids: Vec<String>,
 ) -> Result<(), String> {
@@ -100,15 +99,14 @@ pub async fn submit_clarification_response(
         .await
         .map_err(|e| format!("Database error: {}", e))?;
 
-    // Emit event to resume agent execution
-    app.emit(
+    // Emit event to resume agent execution (via the shared EventSink port)
+    state.inner().events.emit(
         "clarification:submitted",
-        ClarificationResponsePayload {
-            chat_id: chat_id.clone(),
-            selected_ids,
-        },
-    )
-    .map_err(|e| format!("Failed to emit event: {}", e))?;
+        &serde_json::json!({
+            "chat_id": chat_id,
+            "selected_ids": selected_ids,
+        }),
+    );
 
     tracing::info!(chat_id = %chat_id, "Agent resumed with clarification response");
     Ok(())

@@ -8,8 +8,8 @@ use tracing::info;
 
 use sqlx::SqlitePool;
 
-use crate::commands::AppState;
 use crate::llm::{ChatRequestConfig, LlmProvider};
+use crate::services::agent_context::AgentContext;
 
 use super::types::{
     Finding, ResearchCategory, ResearchScopeAssessment, DEFAULT_COMPRESSION_INTERVAL, DEFAULT_EXTRACTION_CONCURRENCY,
@@ -22,7 +22,8 @@ use super::types::{
 pub(super) struct IterativeDeepResearcher<'a> {
     pub(super) app: &'a AppHandle,
     pub(super) llm_provider: &'a dyn LlmProvider,
-    pub(super) state: &'a AppState,
+    /// Phase 6 seam: replaces the former `&'a AppState` borrow.
+    pub(super) ctx: &'a AgentContext,
     pub(super) db: &'a SqlitePool,
     pub(super) model: &'a str,
     pub(super) config: &'a ChatRequestConfig,
@@ -78,7 +79,7 @@ impl<'a> IterativeDeepResearcher<'a> {
     pub(super) fn new(
         app: &'a AppHandle,
         llm_provider: &'a dyn LlmProvider,
-        state: &'a AppState,
+        ctx: &'a AgentContext,
         db: &'a SqlitePool,
         model: &'a str,
         config: &'a ChatRequestConfig,
@@ -93,7 +94,7 @@ impl<'a> IterativeDeepResearcher<'a> {
         Self {
             app,
             llm_provider,
-            state,
+            ctx,
             db,
             model,
             config,
@@ -235,7 +236,7 @@ impl<'a> IterativeDeepResearcher<'a> {
         let mut consecutive_empty_rounds: usize = 0;
 
         for round_num in 1..=self.max_rounds {
-            if !crate::commands::wait_for_chat_resume(self.app, self.chat_id, self.token).await {
+            if !self.ctx.wait_for_chat_resume(self.chat_id, self.token).await {
                 return Err("Research cancelled by user.".to_string());
             }
             if self.cancelled() {

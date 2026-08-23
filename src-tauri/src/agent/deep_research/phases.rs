@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use futures::future::join_all;
 use serde_json::json;
-use tauri::Emitter;
 use tokio::sync::Semaphore;
 use tracing::{error, info};
 
@@ -569,9 +568,9 @@ Return ONLY the query string, nothing else."#,
                 .unwrap_or_default();
             // Extract clean sub-question (without "Agent N: " prefix) for badge display
             let clean_sub_q = sub_questions.get(i).map(|sq| sq.as_str()).unwrap_or("");
-            let _ = self_ref.app.emit(
+            self_ref.ctx.events.emit(
                 "chat:research-step",
-                json!({
+                &json!({
                     "chat_id": self_ref.chat_id,
                     "message_id": self_ref.message_id,
                     "text": format!("{}: {}", name, sq_display),
@@ -650,9 +649,9 @@ Return ONLY the query string, nothing else."#,
                     // Use direct app.emit instead of emit_phase so we can
                     // attach agent_index and agent_name for the frontend
                     // split-panel rendering.
-                    let _ = self_ref.app.emit(
+                    self_ref.ctx.events.emit(
                         "chat:research-step",
-                        json!({
+                        &json!({
                             "chat_id": self_ref.chat_id,
                             "message_id": self_ref.message_id,
                             "text": display,
@@ -745,9 +744,9 @@ Return ONLY the query string, nothing else."#,
                                 "error"
                             };
                             let display = if title.is_empty() { &url } else { &title };
-                            let _ = self_ref.app.emit(
+                            self_ref.ctx.events.emit(
                                 "chat:research-step",
-                                json!({
+                                &json!({
                                     "chat_id": self_ref.chat_id,
                                     "message_id": self_ref.message_id,
                                     "text": display,
@@ -772,9 +771,9 @@ Return ONLY the query string, nothing else."#,
                         }
                         None => {
                             let display = if title.is_empty() { &url } else { &title };
-                            let _ = self_ref.app.emit(
+                            self_ref.ctx.events.emit(
                                 "chat:research-step",
-                                json!({
+                                &json!({
                                     "chat_id": self_ref.chat_id,
                                     "message_id": self_ref.message_id,
                                     "text": display,
@@ -852,9 +851,9 @@ Return ONLY the query string, nothing else."#,
                 elapsed % 60
             );
 
-            let _ = self_ref.app.emit(
+            self_ref.ctx.events.emit(
                 "chat:research-step",
-                json!({
+                &json!({
                     "chat_id": self_ref.chat_id,
                     "message_id": self_ref.message_id,
                     "text": evt_text,
@@ -912,7 +911,7 @@ impl<'a> IterativeDeepResearcher<'a> {
         // Race the tool call against the cancellation token so the user's
         // stop action immediately interrupts in-progress searches.
         let result = tokio::select! {
-            result = self.state.tool_service.execute_interactive(
+            result = self.ctx.tool_service.execute_interactive(
                 self.app.clone(),
                 "deep_research",
                 self.chat_id.to_string(),
@@ -947,7 +946,7 @@ impl<'a> IterativeDeepResearcher<'a> {
         // Race the tool call against the cancellation token so the user's
         // stop action immediately interrupts in-progress fetches.
         let result = tokio::select! {
-            result = self.state.tool_service.execute_interactive(
+            result = self.ctx.tool_service.execute_interactive(
                 self.app.clone(),
                 "deep_research",
                 self.chat_id.to_string(),
@@ -1184,7 +1183,7 @@ impl<'a> IterativeDeepResearcher<'a> {
 
         // Race the tool call against the cancellation token.
         let result = tokio::select! {
-            result = self.state.tool_service.execute_interactive(
+            result = self.ctx.tool_service.execute_interactive(
                 self.app.clone(),
                 "deep_research",
                 self.chat_id.to_string(),

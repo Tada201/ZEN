@@ -20,6 +20,7 @@ use crate::agent::hooks::HookRegistry;
 use crate::agent::task::Task;
 use crate::agent::tools::ToolRegistry;
 use crate::agent::types::AgentRegistry;
+use crate::services::agent_context::AgentContext;
 use crate::tools::manager::ToolManager;
 use crate::tools::GlobalToolRegistry;
 use sqlx::SqlitePool;
@@ -27,6 +28,8 @@ use sqlx::SqlitePool;
 /// Orchestrator for managing complex multi-agent workflows
 pub struct Orchestrator {
     app: AppHandle,
+    /// Phase 6 seam: shared service handles (same Arcs as AppState).
+    pub(crate) ctx: AgentContext,
     agent_registry: Arc<AgentRegistry>,
     tool_registry: Arc<tokio::sync::RwLock<ToolRegistry>>,
     hook_registry: Arc<HookRegistry>,
@@ -84,6 +87,7 @@ impl Orchestrator {
     /// Create a new orchestrator
     pub fn new(
         app: AppHandle,
+        ctx: AgentContext,
         agent_registry: Arc<AgentRegistry>,
         tool_registry: Arc<tokio::sync::RwLock<ToolRegistry>>,
         hook_registry: Arc<HookRegistry>,
@@ -92,6 +96,7 @@ impl Orchestrator {
     ) -> Self {
         Self {
             app,
+            ctx,
             agent_registry,
             tool_registry,
             hook_registry,
@@ -127,6 +132,7 @@ impl Orchestrator {
     ) -> Self {
         Self {
             app: self.app.clone(),
+            ctx: self.ctx.clone(),
             agent_registry: self.agent_registry.clone(),
             tool_registry: self.tool_registry.clone(),
             hook_registry: self.hook_registry.clone(),

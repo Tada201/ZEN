@@ -167,13 +167,15 @@ pub type SharedSkillsManager = Arc<SkillsManager>;
 /// chat's captured workspace root when set (canonicalized), else the process
 /// cwd. Agent tools only know their chat_id, so this is the bridge from
 /// chat → discovery root.
-pub async fn cwd_for_chat(app: &tauri::AppHandle, chat_id: &str) -> PathBuf {
-    use tauri::Manager;
+///
+/// Phase 6 seam: reads the DB pool from the shared `AgentContext` instead of
+/// reaching up into `AppState`.
+pub async fn cwd_for_chat(
+    ctx: &crate::services::agent_context::AgentContext,
+    chat_id: &str,
+) -> PathBuf {
     let fallback = || std::env::current_dir().unwrap_or_default();
-    let Some(state) = app.try_state::<crate::commands::AppState>() else {
-        return fallback();
-    };
-    let Ok(db) = state.db().await else {
+    let Ok(db) = ctx.db().await else {
         return fallback();
     };
     crate::db::queries::get_chat(&db, chat_id)

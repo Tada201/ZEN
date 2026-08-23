@@ -15,7 +15,7 @@ use anyhow::Result;
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::AppHandle;
 use tokio::sync::{Mutex, Notify};
 use tokio_util::sync::CancellationToken;
 use tracing::error;
@@ -380,7 +380,9 @@ impl Runner {
 
                 if should_escalate {
                     tracing::info!("Auto-escalating to cloud model...");
-                    let _ = app.emit("chat:stream-reset", json!({ "chat_id": chat_id }));
+                    self.ctx
+                        .events
+                        .emit("chat:stream-reset", &json!({ "chat_id": chat_id }));
                     self.emit(AgentEvent::ChatStatus(ChatStatusPayload {
                         chat_id: chat_id.to_string(),
                         message: "⚡ Local model unavailable - escalating to cloud model"
@@ -1022,28 +1024,30 @@ impl Runner {
     /// Get cloud provider configuration from settings.
     async fn get_cloud_provider_config(
         &self,
-        app: &AppHandle,
+        _app: &AppHandle,
     ) -> Option<crate::db::models::ProviderConfig> {
-        let state = app.state::<crate::commands::AppState>();
+        // Phase 6 seam: settings/secrets flow through the async ports
+        // (same underlying services the AppState fields wrapped).
+        let ctx = &self.ctx;
 
-        let provider_name = state
-            .settings_manager
-            .get("provider")
+        let provider_name = ctx
+            .settings
+            .get_setting("provider")
             .await
             .ok()
             .flatten()
             .unwrap_or_else(|| "ollama".to_string());
 
         if !self.is_local_provider(&provider_name) {
-            let base_url = state
-                .settings_manager
-                .get(&format!("{}_base_url", provider_name))
+            let base_url = ctx
+                .settings
+                .get_setting(&format!("{}_base_url", provider_name))
                 .await
                 .ok()
                 .flatten()
                 .unwrap_or_else(|| crate::llm::default_base_url(&provider_name));
-            let api_key = state
-                .secret_manager
+            let api_key = ctx
+                .secrets
                 .get_secret(&format!("{}_api_key", provider_name))
                 .await
                 .ok()
@@ -1060,17 +1064,17 @@ impl Runner {
         }
 
         for cloud_name in ["anthropic", "openai", "groq", "openrouter"] {
-            if let Some(key) = state
-                .secret_manager
+            if let Some(key) = ctx
+                .secrets
                 .get_secret(&format!("{}_api_key", cloud_name))
                 .await
                 .ok()
                 .flatten()
             {
                 if !key.is_empty() {
-                    let base_url = state
-                        .settings_manager
-                        .get(&format!("{}_base_url", cloud_name))
+                    let base_url = ctx
+                        .settings
+                        .get_setting(&format!("{}_base_url", cloud_name))
                         .await
                         .ok()
                         .flatten()

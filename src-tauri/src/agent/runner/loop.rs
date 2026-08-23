@@ -18,13 +18,11 @@ use crate::agent::event_bus::{
 use crate::agent::middleware::{EnrichmentContext, MiddlewareChain};
 use crate::agent::skills as skills_mod;
 use crate::agent::types::*;
-use crate::commands::AppState;
 use crate::db::models::ChatMessage;
 use crate::llm::LlmProvider;
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::Manager;
 
 use tokio_util::sync::CancellationToken;
 
@@ -122,9 +120,9 @@ impl Runner {
         // The heavy embedding work runs in a background task AFTER the LLM responds.
         // On the first message of a new chat the cache is empty – the recall block is simply absent.
         let cached_recall_context =
-            cached_recall_context(&self.app, &chat_id, use_semantic_recall).await;
+            cached_recall_context(&self.ctx, &chat_id, use_semantic_recall).await;
 
-        // ── C4: mint a fresh per-run monotonic id from AppState.next_run_id ──
+        // ── C4: mint a fresh per-run monotonic id from the shared counter ──
         // The same id is carried on every ContextBreakdownPayload emitted
         // during this run and on the cold-start cache entry, so the
         // frontend dedupes by (chat_id, run_id, iteration) instead of
@@ -132,13 +130,9 @@ impl Runner {
         // same chat gets silently overwritten by a stale, longer
         // earlier run because dedupe only compared iteration numbers.
         let run_id: u64 = self
-            .app
-            .try_state::<crate::commands::AppState>()
-            .map(|s| {
-                s.next_run_id
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-            })
-            .unwrap_or(0);
+            .ctx
+            .next_run_id
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         // Mint a per-run correlation id (UUID). Unlike `run_id`/`chat_id` —
         // which are stable across every turn on a chat — the trace_id is
@@ -209,8 +203,8 @@ impl Runner {
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
         if let Some(latest) = conversation.iter().rev().find(|m| m.role == "user") {
             if !latest.content.is_empty() {
-                if let Some(state) = self.app.try_state::<crate::commands::AppState>() {
-                    let mgr = state.skills_manager.clone();
+                {
+                    let mgr = self.ctx.skills_manager.clone();
                     let outcome = mgr.enabled_skills_for_cwd(&skills_cwd).await;
                     let mut seen: std::collections::HashSet<String> =
                         std::collections::HashSet::new();
@@ -278,7 +272,7 @@ impl Runner {
             // Cooperative pause: wait before the next model/tool boundary.
             // Stop still wins while paused and follows the normal partial-trace
             // cancellation path below.
-            let _ = crate::commands::wait_for_chat_resume(&self.app, &chat_id, &token).await;
+            let _ = self.ctx.wait_for_chat_resume(&chat_id, &token).await;
 
             if token.is_cancelled() {
                 tracing::info!(chat_id = %chat_id, "Agent loop cancelled by client");
@@ -526,6 +520,7 @@ impl Runner {
 
             let chain = MiddlewareChain::default_chain(
                 app_inner.clone(),
+                self.ctx.clone(),
                 self.db_pool.clone(),
                 true,
                 Some(self.config.max_context_tokens as i64),
@@ -569,13 +564,13 @@ impl Runner {
                 breakdown.actual_input_tokens = last_actual_input;
                 breakdown.actual_output_tokens = last_actual_output;
                 // Mirror the latest per-chat breakdown into the
-                // AppState cache so `get_context_breakdown` /
+                // shared cache so `get_context_breakdown` /
                 // `get_context_snapshot` can hydrate the right-panel
-                // on cold start. The cache write is best-effort: if
-                // AppState is missing (rare during early tests) we
-                // still emit on the event bus and continue.
-                if let Some(state) = self.app.try_state::<AppState>() {
-                    let mut cache = state.context_breakdown_cache.write().await;
+                // on cold start. The cache write is best-effort and
+                // cannot fail: the context shares the same Arc the
+                // AppState owns.
+                {
+                    let mut cache = self.ctx.context_breakdown_cache.write().await;
                     cache.insert(breakdown.chat_id.clone(), breakdown.clone());
                 }
                 self.emit(crate::agent::event_bus::AgentEvent::ContextBreakdown(breakdown));
@@ -729,9 +724,9 @@ impl Runner {
             if should_emit_iteration_status(self.depth)
                 && (last_actual_input.is_some() || last_actual_output.is_some())
             {
-                if let Some(state) = self.app.try_state::<AppState>() {
+                {
                     let updated = {
-                        let mut cache = state.context_breakdown_cache.write().await;
+                        let mut cache = self.ctx.context_breakdown_cache.write().await;
                         // Guard on run_id: a stop-and-resend can leave a
                         // newer run's breakdown in the cache under this
                         // chat_id. Only re-stamp when the cached entry

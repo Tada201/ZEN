@@ -20,16 +20,25 @@ pub trait EventSink: Send + Sync {
 
 /// Secret material access (API keys, tokens). The app impl wraps the
 /// OS-keyring-backed `SecretService`; secrets never travel through settings.
+///
+/// Async (Phase 6 re-scope): the real service awaits keyring + audit I/O;
+/// a synchronous port would force blocking calls inside async domain paths,
+/// which is a behavior change. Shape mirrors `SecretService` 1:1.
+#[async_trait::async_trait]
 pub trait SecretStore: Send + Sync {
-    fn get_secret(&self, key: &str) -> ZenResult<Option<String>>;
-    fn set_secret(&self, key: &str, value: &str) -> ZenResult<()>;
-    fn delete_secret(&self, key: &str) -> ZenResult<()>;
+    async fn get_secret(&self, key: &str) -> ZenResult<Option<String>>;
+    async fn set_secret(&self, key: String, value: String) -> ZenResult<()>;
+    async fn delete_secret(&self, key: &str) -> ZenResult<()>;
 }
 
 /// Non-secret preference access. The app impl wraps `SettingsService`.
+///
+/// Async (Phase 6 re-scope): mirrors `SettingsService::{get,set}` which await
+/// the SQLite pool. String-shaped (not `Value`) so adapter mapping is lossless.
+#[async_trait::async_trait]
 pub trait SettingsStore: Send + Sync {
-    fn get_setting(&self, key: &str) -> ZenResult<Option<Value>>;
-    fn set_setting(&self, key: &str, value: Value) -> ZenResult<()>;
+    async fn get_setting(&self, key: &str) -> ZenResult<Option<String>>;
+    async fn set_setting(&self, key: String, value: String) -> ZenResult<()>;
 }
 
 /// A privileged-operation audit record. Emitted for every

@@ -8,7 +8,7 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::sync::Arc;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 pub struct SkillTool {
     manager: Arc<SkillsManager>,
@@ -74,7 +74,15 @@ impl zen_tools::AgentTool<tauri::AppHandle> for SkillTool {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("missing 'action' field"))?;
 
-        let cwd = crate::agent::skills::cwd_for_chat(&_app, &_chat_id).await;
+        // Executor exception (Appendix B): tools keep AppHandle, so the
+        // shared context is fetched from managed state here.
+        let ctx = _app
+            .try_state::<crate::services::agent_context::AgentContext>()
+            .map(|s| s.inner().clone());
+        let cwd = match &ctx {
+            Some(ctx) => crate::agent::skills::cwd_for_chat(ctx, &_chat_id).await,
+            None => std::env::current_dir().unwrap_or_default(),
+        };
 
         match action {
             "list" => {

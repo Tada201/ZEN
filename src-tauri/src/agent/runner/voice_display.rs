@@ -1,14 +1,13 @@
 use super::lifecycle::Runner;
 use crate::agent::tools::{child_runner, manage_board::ManageBoardTool};
 use zen_tools::AgentTool;
-use crate::commands::AppState;
 use crate::db::models::ChatMessage;
 use std::collections::HashSet;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use tauri::{Emitter, Listener, Manager};
+use tauri::Listener;
 use tokio_util::sync::CancellationToken;
 
 const DISPLAY_AGENT_ID: &str = "voice_display";
@@ -31,6 +30,7 @@ impl Runner {
         }
 
         let app = self.app.clone();
+        let ctx = self.ctx.clone();
         let tool_registry = self.tool_registry.clone();
         let agent_registry = self.agent_registry.clone();
         let hook_registry = self.hook_registry.clone();
@@ -47,9 +47,9 @@ impl Runner {
 
         tokio::spawn(async move {
             let spawn_id = uuid::Uuid::new_v4().to_string();
-            let _ = app.emit(
+            ctx.events.emit(
                 "agent:spawn",
-                serde_json::json!({
+                &serde_json::json!({
                     "spawn_id": spawn_id,
                     "agent_id": DISPLAY_AGENT_ID,
                     "child_agent_id": DISPLAY_AGENT_ID,
@@ -60,7 +60,7 @@ impl Runner {
                     "status": "spawned"
                 }),
             );
-            let state = app.state::<AppState>();
+            // Phase 6 seam: shared handles via context (same Arcs as AppState).
             // Voice display is intentionally a fixed-purpose built-in. Its
             // only user-configurable field is the selected model; prompt,
             // tools, context, and turn limits are immutable safety policy.
@@ -137,14 +137,14 @@ impl Runner {
             let provider_name = configured_provider
                 .filter(|value| !value.trim().is_empty())
                 .unwrap_or_else(|| "ollama".to_string());
-            let db = match state.db.get().await {
+            let db = match ctx.db.get().await {
                 Ok(db) => db,
                 Err(error) => {
                     tracing::warn!(error = %error, "Voice display database is unavailable");
                     return;
                 }
             };
-            let provider = match state.provider_by_name(&provider_name, &db).await {
+            let provider = match ctx.provider_by_name(&provider_name, &db).await {
                 Ok(provider) => provider,
                 Err(error) => {
                     tracing::warn!(provider = %provider_name, model = %selected_model, error = %error, "Voice display provider is unavailable");
@@ -287,9 +287,9 @@ impl Runner {
             if let Err(error) = &result {
                 tracing::warn!(error = %error, "Voice display agent run failed");
             }
-            let _ = app.emit(
+            ctx.events.emit(
                 "agent:complete",
-                serde_json::json!({
+                &serde_json::json!({
                     "spawn_id": spawn_id,
                     "agent_id": DISPLAY_AGENT_ID,
                     "child_agent_id": DISPLAY_AGENT_ID,

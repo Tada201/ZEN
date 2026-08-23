@@ -718,10 +718,37 @@ metadata, tool catalog definitions.
 
 ## Phase 6 — Seam inversion sweep (kill AppState reach-throughs)
 
-**Goal:** eliminate every upward import from domain code so zen-llm/zen-mcp/
-zen-agent become extractable. This is the keystone phase: it converts the 25+
-`crate::commands::AppState` / `AppHandle.state::<AppState>()` sites in
-`agent/**` and the services imports in `llm/registry.rs` into injected ports.
+**Goal:** eliminate upward imports from the agent-core domain code so
+zen-llm/zen-mcp/zen-agent become extractable. This is the keystone phase: it
+converts `crate::commands::AppState` / `AppHandle.state::<AppState>()` reach-
+throughs into injected ports and context handles.
+
+> ### ⚠️ Formal re-scope (2026-08-23, after execution recon)
+>
+> Execution recon surfaced three facts that reshape this phase:
+> (1) tauri-linked test binaries cannot run on the dev box (loader bug,
+> exit 127) so the event-parity gate is unavailable here — identical at
+> Phase 11, so waiting does not reduce risk; (2) tool executors receive
+> `AppHandle` through the frozen `AgentTool`/`Tool` trait contracts and were
+> sanctioned to stay app-side in Phase 5; (3) zen-core's `SecretStore`/
+> `SettingsStore` ports were specified sync but real services are async — a
+> port redesign, not a relocation.
+>
+> **Re-scoped definition of done — full sweep of the AGENT CORE only:**
+> runner/, orchestrator/, deep_research/, middleware/, skills/ convert every
+> `AppState` read to context handles and their emits through `EventSink`
+> (byte-identical). **Approved adapter exceptions** (record each in Appendix B):
+> `src/tools/**` executors and `src/agent/tools/*` executors keep `AppHandle`
+> until Phase 11 moves them behind trait-signature changes. **Moved out of
+> Phase 6:** `llm/registry.rs` port adoption → Phase 7 (its forcing function);
+> media seams → Phase 10; MCP construction inversion → Phase 8;
+> `VectorStorePort`/`WebSearchPort` → may defer to Phase 11 (sites are still
+> in-crate until then; record the decision either way).
+>
+> Rationale: deferring the core sweep would turn Phase 11 into a mega-phase
+> (largest extraction + ~100-site live-loop rewrite + hard-fail splits at
+> once). The work happens now, in small green batches, under dedicated
+> rollback discipline. Never stack phases (AGENTS.md rule 0.2).
 
 **Prerequisites:** Phases 2–5. Note (Phase 5 review correction): the
 `FsPort`/`ProcessPort`/`HttpPort` capability traits were **deferred** during
@@ -732,48 +759,67 @@ needs rather than assuming they pre-exist. **Carried debt:** Phase 5's
 `crates/zen-tools/src/manager.rs` landed at ~1,145 lines — above the >900
 RULES.md hard-fail. Shrink it (move its 11 tests to `tests/`, or extract the
 discovery core) as part of Phase 6, or file an exemptions.md entry with an
-expiration before starting Phase 6.
+expiration before starting Phase 6. *(Status: DONE — commit `91d635c`,
+1,145→818 lines, tests 30/30.)*
 
 **Tasks**
-- [ ] Build an inventory table in this file (Appendix B) listing every upward
+- [x] Land async port redesign first: make `SecretStore`/`SettingsStore`
+      `#[async_trait]` in zen-core (real services are async; sync ports would
+      force blocking calls in the hot path = behavior change). Adoption
+      surface is near-zero today — cheapest it will ever be.
+- [x] Build an inventory table in this file (Appendix B) listing every upward
       import site from Section 2.1, its replacement strategy, and status.
-- [ ] Introduce `AgentContext` (app-crate struct or zen-core struct of trait
+- [x] Introduce `AgentContext` (app-crate struct or zen-core struct of trait
       objects): `event_sink: Arc<dyn EventSink>`, `secrets: Arc<dyn SecretStore>`,
       `settings: Arc<dyn SettingsStore>`, `audit: Arc<dyn AuditSink>`,
       plus typed handles for tool service/registry, db pool, workspace root.
       Assembled ONCE in app boot; threaded through runner/orchestrator
       constructors instead of `AppHandle`.
-- [ ] Replace each `self.app.try_state::<AppState>()` / `.state::<AppState>()`
-      site with context fields. No behavior change per site.
-- [ ] `llm/registry.rs`: depend on `SecretStore`/`SettingsStore` traits.
-- [ ] Event emission: replace direct `app.emit(...)` inside domain code with
-      `EventSink`; app impl bridges to tauri emitter (keeps event names/payloads
-      byte-identical — frontend contract untouched).
-- [ ] `wait_for_chat_resume` and similar command-layer helpers called by agent:
+      *(Landed as `src/services/agent_context.rs`; managed alongside AppState
+      in lib.rs setup; shares every Arc instance with AppState.)*
+- [x] Replace each `self.app.try_state::<AppState>()` / `.state::<AppState>()`
+      site in the AGENT CORE (runner, orchestrator, deep_research, middleware,
+      skills) with context fields. No behavior change per site.
+      *(22 direct sites converted; grep guard clean.)*
+- [x] Event emission: replace direct `app.emit(...)` inside agent-core code
+      with `EventSink`; app impl (`TauriEventSink`) bridges byte-identically —
+      frontend contract untouched.
+      *(13 raw sites converted: escalation.rs stream-reset, voice_display
+      spawn/complete, deep_research mod.rs ×3 + phases.rs ×5, clarification.*
+- [x] `wait_for_chat_resume` and similar command-layer helpers called by agent:
       move their logic cores into a service reachable via context handle.
-- [ ] Add media seams too (review finding #6): ~9 AppHandle/emit sites under
-      `services/speech_service|tts_service` get the same treatment — speech/tts
-      logic cores take `EventSink` + `ProcessPort`; app wires them. Required
-      before Phase 10 can run tauri-free.
-- [ ] Construction inversion for MCP (review finding #8): `mcp/env.rs:138-140`
-      and `mcp/elicit.rs:278-292` construct concrete SecretService/
-      SecurityService/SettingsService — pass trait objects in from app instead.
-- [ ] Add rag/search ports for Phase 11 (review finding #5): define
-      `VectorStorePort`, `WebSearchPort` in zen-core; agent sites
-      (`runner/background.rs:476`, `runner/config.rs:85`,
-      `tools/progressive.rs:130,419`) consume the ports; app implements them
-      over zen-rag/search.
-- [ ] After the sweep, grep guards must come up empty:
-      `rg "commands::AppState" src/agent src/llm src/mcp src/tools src/services/speech_service src/services/tts_service`
-      and `rg "AppHandle" src/agent` → no matches outside adapter files listed
-      as approved exceptions in Appendix B.
+      *(Core loop extracted verbatim to `ChatPauseControl::wait_while_paused`;
+      AgentContext method delegates. Legacy commands wrapper remains for
+      out-of-scope callers.)*
+- [x] Carried debt from Phase 5: shrink `crates/zen-tools/src/manager.rs`
+      below 900 lines (commit `91d635c`).
+- ~~Media seams (review finding #6):~~ **moved to Phase 10** per re-scope.
+- ~~MCP construction inversion (review finding #8):~~ **moved to Phase 8**
+  per re-scope.
+- [x] Record tool-executor exception list in Appendix B (files keeping
+      `AppHandle` until Phase 11): `src/tools/**` executors +
+      `src/agent/tools/*` executors.
+- [x] Decide + record: `VectorStorePort`/`WebSearchPort` now or in Phase 11
+      (sites still in-crate either way).
+      *(Decision: defer to Phase 11 — rag/search types stay in-crate until
+      then; no port needed while both sides share a crate.)*
+- [x] After the sweep, grep guards (re-scoped) must come up empty:
+      `rg "commands::AppState" src-tauri/src/agent --glob "!tools/**"`
+      → no matches outside Appendix-B exceptions;
+      raw `app.emit(` in converted agent-core files → zero (all through sink).
 
 **Verification gates**
 - Gate suite green; full chat + agent smoke pass (send message, run one tool,
   approve/deny, sub-agent spawn) — manual test script recorded in Appendix C.
-- Zero upward-import matches (grep guard above).
-- Event payload parity: diff against the Phase 0 event-snapshot fixture
-  (`test/fixtures/event-snapshot-baseline.jsonl`).
+  *(Re-scope note: the event-snapshot parity gate cannot run on the dev box —
+  tauri test exes exit 127. Safety net is byte-identical-by-construction
+  transforms + compiler + clippy per batch. Capture the fixture via CI at
+  first opportunity and diff retroactively before Phase 11.)*
+- Re-scoped grep guards pass: zero `commands::AppState` in agent core outside
+  Appendix-B exceptions.
+- Event payload parity: diff against the Phase 0 event-snapshot fixture when
+  CI capture lands (`test/fixtures/event-snapshot-baseline.jsonl`); until then,
+  rely on construction-time identity (sink wraps the same `app.emit` call).
 
 **Rollback:** revert commit range; seams are additive so partial revert is safe
 per-site (each site is an independent commit ideally).
@@ -788,7 +834,10 @@ replacements, small commits, no logic edits mixed in.
 **Goal:** all provider clients and streaming under one crate; heavy HTTP/SSE
 code stops rebuilding on unrelated changes.
 
-**Prerequisites:** Phase 6 (registry uses SecretStore/SettingsStore traits).
+**Prerequisites:** Phase 6 agent-core sweep complete (re-scoped). This phase
+now also owns the `llm/registry.rs` port adoption (moved from Phase 6 per the
+2026-08-23 re-scope): convert `registry.rs` to the now-async
+`SecretStore`/`SettingsStore` traits as part of the move.
 
 **Tasks**
 - [ ] Move `src/llm/**` → `crates/zen-llm/src/**`.
@@ -1089,16 +1138,37 @@ including the 8 `tools/**` sites and `routing_tools.rs:108`. Columns:
 
 | Site (file:line) | Category (a/b/c) | Replacement (ctx field / port / service handle) | Status |
 |---|---|---|---|
-| agent/clarification.rs:8 | a | ctx.settings/ctx.tools | ☐ |
-| ... full §2.1 transcription at Phase 6 start ... | | | ☐ |
+| agent/clarification.rs:8 | a | ctx.db via `&AgentContext` param (module dormant; command unregistered) | ☑ |
+| agent/deep_research/engine.rs (struct field) | a | `ctx: &'a AgentContext` replaces `state: &'a AppState` | ☑ |
+| agent/deep_research/mod.rs:80 | a | managed `AgentContext` acquired once in `run_deep_research` | ☑ |
+| agent/orchestrator/execution.rs:280,307 | a | `self.ctx.subagent_cancellation_tokens` | ☑ |
+| agent/middleware/system_prompt.rs:87,189,467 | a | `self.ctx.{mcp_discovery, graph_sessions, agent_registry}` | ☑ |
+| agent/middleware/skills.rs:34 | a | `self.ctx.skills_manager` | ☑ |
+| agent/skills/manager.rs:173 (cwd_for_chat) | a | fn takes `&AgentContext`; executor caller fetches managed ctx | ☑ |
+| agent/runner/loop.rs:21,136,212 | a | `self.ctx.{next_run_id, skills_manager}` | ☑ |
+| agent/runner/loop.rs:577,732 | a | `self.ctx.context_breakdown_cache` (no more missing-state branch) | ☑ |
+| agent/runner/background.rs:113-186 | a | ctx clone into spawn task (`documents`, `provider()`, `conversation_store`, `recall_cache`) | ☑ |
+| agent/runner/background.rs:373 (compaction) | a | `CompactionParams.ctx` → `ctx.provider_by_name` | ☑ |
+| agent/runner/background.rs:434-468 (embedding) | a | fn takes `AgentContext` | ☑ |
+| agent/runner/escalation.rs:1027-1088 | c | `ctx.settings` / `ctx.secrets` async ports | ☑ |
+| agent/runner/memory_bootstrap.rs:107 | a | fn takes `&AgentContext`; `ctx.recall_cache.try_lock()` preserved | ☑ |
+| agent/runner/tool_dispatch.rs:427,491,508-539,573,876 | a | `self.ctx.tool_service`, `ctx.session_permissions`, `ctx.db()` | ☑ |
+| agent/runner/voice_display.rs:63,140-153 | a | ctx clone into spawn task (`db`, `provider_by_name`) | ☑ |
+| orchestrator+deep_research wait_for_chat_resume (b) | b | `ctx.wait_for_chat_resume` / runner loop :281 same | ☑ |
+| llm/registry.rs:6,9 (c) | c | **moved to Phase 7** per re-scope | ☐ P7 |
+
+Raw `app.emit(` conversions (all now byte-identical through the sink):
+escalation.rs:383 · voice_display.rs:50,290 · deep_research/mod.rs:41,121,184,272 ·
+deep_research/phases.rs ×5 · clarification.rs (rewritten around sink).
 
 Approved adapter exceptions (files that legitimately keep AppHandle because
-they ARE adapters) must be listed explicitly below before the grep guard is
-considered passing:
+they ARE adapters or Phase-11-scoped executors):
 
 | File | Reason it keeps AppHandle |
 |---|---|
-| TBD at Phase 6 start | |
+| src-tauri/src/agent/event_bus.rs | IS the bus: `emit_via` + snapshot taps own `app.emit` (sanctioned) |
+| src-tauri/src/agent/tools/** (executors) | Phase 5 sanction: executors receive AppHandle via frozen `AgentTool`/`Tool` trait contracts; revisit at Phase 11 |
+| src-tauri/src/services/event_sink.rs | The TauriEventSink bridge itself — wraps `app.emit` by design |
 
 ## Appendix D — Critic review record
 

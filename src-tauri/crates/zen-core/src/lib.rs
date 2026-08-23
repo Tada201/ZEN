@@ -10,6 +10,9 @@
 pub mod error;
 
 pub use error::{ZenError, ZenResult};
+pub use ports::{
+    AuditEvent, AuditSink, CoreSinks, EventSink, SecretStore, SettingsStore,
+};
 pub use reasoning::ReasoningCapability;
 pub mod ports;
 pub mod reasoning;

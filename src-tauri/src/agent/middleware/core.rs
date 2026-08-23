@@ -258,6 +258,7 @@ impl MiddlewareChain {
     /// compatibility.
     pub fn default_chain(
         app: AppHandle,
+        ctx: crate::services::agent_context::AgentContext,
         db_pool: Option<SqlitePool>,
         skills_enabled: bool,
         context_window: Option<i64>,
@@ -267,6 +268,7 @@ impl MiddlewareChain {
         let mut chain = Self::new()
             .add(Box::new(SystemPromptMiddleware {
                 app: app.clone(),
+                ctx: ctx.clone(),
                 system_prompt_budget: budgets.system_prompt,
             }))
             .add(Box::new(RecallMiddleware {
@@ -284,6 +286,7 @@ impl MiddlewareChain {
                 0,
                 Box::new(SkillsCatalogMiddleware {
                     app: app.clone(),
+                    ctx: ctx.clone(),
                     context_window,
                     skills_catalog_budget: budgets.skills_catalog,
                 }),

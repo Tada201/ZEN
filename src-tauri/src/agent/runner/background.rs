@@ -8,7 +8,6 @@ use crate::db::queries;
 use crate::llm::LlmProvider;
 use anyhow::Result;
 use sqlx::SqlitePool;
-use tauri::{AppHandle, Manager};
 use tokio_util::sync::CancellationToken;
 
 // ─── Trigger methods (on Runner) ─────────────────────────────────────────────
@@ -29,14 +28,14 @@ impl Runner {
             let db_clone = db.clone();
             let chat_id_clone = chat_id.to_string();
             let model_clone = model.to_string();
-            let app_clone = self.app.clone();
+            let ctx_clone = self.ctx.clone();
             let compaction_threshold = self.config.compaction_threshold;
             let compaction_token_threshold = self.config.compaction_token_threshold;
             let summarization_token_budget = self.config.summarization_token_budget;
 
             tokio::spawn(async move {
                 if let Err(e) = perform_background_compaction(CompactionParams {
-                    app: app_clone,
+                    ctx: ctx_clone,
                     db: db_clone,
                     chat_id: chat_id_clone,
                     active_model: model_clone,
@@ -60,11 +59,11 @@ impl Runner {
         if let Some(ref db) = self.db_pool {
             let db_clone = db.clone();
             let chat_id_clone = chat_id.to_string();
-            let app_clone = self.app.clone();
+            let ctx_clone = self.ctx.clone();
 
             tokio::spawn(async move {
                 if let Err(e) =
-                    perform_background_embedding(app_clone, db_clone, chat_id_clone).await
+                    perform_background_embedding(ctx_clone, db_clone, chat_id_clone).await
                 {
                     tracing::error!("Background semantic embedding failed: {:?}", e);
                 }
@@ -85,7 +84,7 @@ impl Runner {
         if !semantic_recall_enabled {
             return;
         }
-        let app_clone = self.app.clone();
+        let ctx_clone = self.ctx.clone();
         let chat_id_clone = chat_id.to_string();
         let db_clone = self.db_pool.clone();
 
@@ -110,20 +109,19 @@ impl Runner {
                 _ => return,
             };
 
-            let state = match app_clone.try_state::<crate::commands::AppState>() {
-                Some(s) => s,
-                None => return,
-            };
+            // Phase 6 seam: the context shares the same Arc handles AppState
+            // owns, so there is no "missing state" path to guard anymore.
+            let ctx = ctx_clone;
 
             // Compute embedding for the user message
             let mut query_vector: Option<Vec<f32>> = None;
-            if let Some(ref emb_model) = *state.documents.embedding_model.read().await {
+            if let Some(ref emb_model) = *ctx.documents.embedding_model.read().await {
                 if let Ok(vec) = emb_model.encode(&user_text).await {
                     query_vector = Some(vec);
                 }
             }
             if query_vector.is_none() {
-                if let Ok(provider) = state.provider().await {
+                if let Ok(provider) = ctx.provider().await {
                     let model_name = if let Some(ref db) = db_clone {
                         queries::get_setting(db, "embedding_model")
                             .await
@@ -143,7 +141,7 @@ impl Runner {
                 None => return,
             };
 
-            let store = match state.conversation_store.get().await {
+            let store = match ctx.conversation_store.get().await {
                 Ok(s) => s,
                 Err(_) => return,
             };
@@ -182,7 +180,7 @@ impl Runner {
                 }
             }
 
-            let mut cache = state.recall_cache.lock().await;
+            let mut cache = ctx.recall_cache.lock().await;
             cache.insert(chat_id_clone.clone(), (recall_block, user_text));
             tracing::debug!(chat_id = %chat_id_clone, "Background recall cache refreshed");
         });
@@ -267,7 +265,7 @@ impl Runner {
     /// active window did not exceed the keep window and nothing was
     /// summarized (the caller decides how to report that).
     pub async fn compact_conversation_now(
-        app: AppHandle,
+        ctx: crate::services::agent_context::AgentContext,
         db: SqlitePool,
         chat_id: String,
         active_model: String,
@@ -275,7 +273,7 @@ impl Runner {
         instructions: Option<String>,
     ) -> Result<(usize, usize)> {
         let outcome = perform_background_compaction(CompactionParams {
-            app,
+            ctx,
             db,
             chat_id,
             active_model,
@@ -295,7 +293,7 @@ impl Runner {
 
 /// Summarize old messages and mark them as compacted in SQLite.
 struct CompactionParams {
-    app: AppHandle,
+    ctx: crate::services::agent_context::AgentContext,
     db: SqlitePool,
     chat_id: String,
     active_model: String,
@@ -318,7 +316,7 @@ struct CompactionOutcome {
 
 async fn perform_background_compaction(params: CompactionParams) -> Result<CompactionOutcome> {
     let CompactionParams {
-        app,
+        ctx,
         db,
         chat_id,
         active_model,
@@ -329,6 +327,7 @@ async fn perform_background_compaction(params: CompactionParams) -> Result<Compa
         force,
         instructions,
     } = params;
+    // Phase 6 seam: provider resolution now flows through the shared context.
     let active_msgs = queries::get_active_messages(&db, &chat_id).await?;
 
     let active_chat_msgs: Vec<ChatMessage> = active_msgs
@@ -370,8 +369,7 @@ async fn perform_background_compaction(params: CompactionParams) -> Result<Compa
                 Ok(Some(p)) if !p.is_empty() => p,
                 _ => "ollama".to_string(),
             };
-            let state = app.state::<crate::commands::AppState>();
-            let provider = state.provider_by_name(&resolved_provider_name, &db).await?;
+            let provider = ctx.provider_by_name(&resolved_provider_name, &db).await?;
             let sum_model = summarization_model.unwrap_or(active_model);
 
             let summary = Runner::summarize_messages(
@@ -427,14 +425,11 @@ async fn perform_background_compaction(params: CompactionParams) -> Result<Compa
 
 /// Embed new user messages and upsert their vectors into LanceDB.
 async fn perform_background_embedding(
-    app: AppHandle,
+    ctx: crate::services::agent_context::AgentContext,
     db: SqlitePool,
     chat_id: String,
 ) -> Result<()> {
-    use crate::commands::AppState;
-    let state = app.state::<AppState>();
-
-    let store = match state.conversation_store.get().await {
+    let store = match ctx.conversation_store.get().await {
         Ok(s) => s,
         Err(e) => {
             tracing::warn!("ConversationStore not initialized: {:?}", e);
@@ -459,13 +454,13 @@ async fn perform_background_embedding(
 
     for msg in user_msgs {
         let mut vector = None;
-        if let Some(ref model) = *state.documents.embedding_model.read().await {
+        if let Some(ref model) = *ctx.documents.embedding_model.read().await {
             if let Ok(vec) = model.encode(&msg.content).await {
                 vector = Some(vec);
             }
         }
         if vector.is_none() {
-            if let Ok(provider) = state.provider().await {
+            if let Ok(provider) = ctx.provider().await {
                 if let Ok(vec) = provider.embed(&model_name, &msg.content).await {
                     vector = Some(vec);
                 }

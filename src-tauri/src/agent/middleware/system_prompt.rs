@@ -16,13 +16,15 @@
 
 use super::core::{ContextMiddleware, ContextSectionId, EnrichmentContext, SectionStatus};
 use crate::error::ZenResult;
+use crate::services::agent_context::AgentContext;
 use async_trait::async_trait;
 use std::mem;
 use tauri::AppHandle;
-use tauri::Manager;
 
 pub struct SystemPromptMiddleware {
     pub app: AppHandle,
+    /// Phase 6 seam: shared service handles (same Arcs as AppState).
+    pub ctx: AgentContext,
     pub system_prompt_budget: usize,
 }
 
@@ -84,11 +86,11 @@ impl ContextMiddleware for SystemPromptMiddleware {
         // explicit empty state. It is status metadata, not instructions from
         // an external server, and is bounded/redacted by the discovery service.
         if ctx.tools_enabled {
-            if let Some(state) = self.app.try_state::<crate::commands::AppState>() {
-                if let Err(error) = state.mcp_discovery.refresh().await {
+            {
+                if let Err(error) = self.ctx.mcp_discovery.refresh().await {
                     tracing::debug!(error = %error, "MCP inventory refresh unavailable during prompt build");
                 }
-                let inventory = state.mcp_discovery.snapshot().await;
+                let inventory = self.ctx.mcp_discovery.snapshot().await;
                 let inventory_block = crate::services::McpDiscoveryService::prompt_block(&inventory);
                 ctx.try_push_section(ContextSectionId::ToolSystem, &mut remaining, &inventory_block);
                 ctx.try_push_section(
@@ -186,10 +188,9 @@ impl ContextMiddleware for SystemPromptMiddleware {
             ctx.try_push_section(ContextSectionId::GraphSession, &mut remaining, "Supported: sin, cos, tan, sqrt, abs, ln, log10, exp, floor, ceil, and named variables.\n");
 
             // Inject current session state if available
-            use crate::commands::AppState;
             let session_id = format!("chat_{}", ctx.chat_id);
-            if let Some(state) = self.app.try_state::<AppState>() {
-                let sessions = state.graph_sessions.try_lock();
+            {
+                let sessions = self.ctx.graph_sessions.try_lock();
                 if let Ok(sessions_guard) = sessions {
                     if let Some(session) = sessions_guard.get(&session_id) {
                         let header = format!(
@@ -464,8 +465,9 @@ impl ContextMiddleware for SystemPromptMiddleware {
                 &mut remaining,
                 "\n\n## Delegation Rule\nUse only `spawn_agent` for delegated child work. It accepts either one task or an `agents` array for bounded parallel work. Do not call or invent `delegate_to_agent`, `handoff_to_agent`, or any separate subagent tool.\n",
             );
-            if let Some(state) = self.app.try_state::<crate::commands::AppState>() {
-                let agents = state
+            {
+                let agents = self
+                    .ctx
                     .agent_registry
                     .list_profiles()
                     .into_iter()

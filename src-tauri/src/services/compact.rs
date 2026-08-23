@@ -78,7 +78,7 @@ pub async fn compact_chat_context(
 
     let (messages_summarized, messages_kept) =
         Runner::compact_conversation_now(
-            app.clone(),
+            app.state::<crate::services::agent_context::AgentContext>().inner().clone(),
             db,
             chat_id.to_string(),
             active_model,

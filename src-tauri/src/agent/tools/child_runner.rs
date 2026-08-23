@@ -263,6 +263,7 @@ pub(crate) fn build_child_runner(params: ChildRunnerParams<'_>) -> Result<Runner
     // db_pool and on_event channel from the parent context.
     let parent = Runner::new(
         app.clone(),
+        app.state::<crate::services::agent_context::AgentContext>().inner().clone(),
         tool_registry,
         agent_registry,
         hook_registry,

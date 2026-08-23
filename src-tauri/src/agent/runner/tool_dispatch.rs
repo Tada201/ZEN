@@ -18,7 +18,6 @@ use crate::tools::permission::PermissionDecision;
 use crate::tools::{ToolInfo, ToolRegistry};
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use tauri::Manager;
 use tokio_util::sync::CancellationToken;
 
 /// Decide which v2 tool schemas to inline-expose alongside the three
@@ -422,11 +421,7 @@ impl Runner {
                         iteration,
                     }));
                     let tool = None;
-                    let tool_service = self
-                        .app
-                        .state::<crate::commands::AppState>()
-                        .tool_service
-                        .clone();
+                    let tool_service = self.ctx.tool_service.clone();
                     let app = self.app.clone();
                     let hook_reg = self.hook_registry.clone();
 
@@ -488,7 +483,7 @@ impl Runner {
                         arguments: tc_args.clone(),
                     };
 
-                    let state = self.app.state::<crate::commands::AppState>();
+                    let state = &self.ctx;
                     let permission_result = state
                         .tool_service
                         .check_permission("agent_runner", &v2_tool_call)
@@ -570,8 +565,7 @@ impl Runner {
                                 }));
 
                                 let tool = None;
-                                let state = self.app.state::<crate::commands::AppState>();
-                                let tool_service = state.tool_service.clone();
+                                let tool_service = self.ctx.tool_service.clone();
                                 let app = self.app.clone();
                                 let channel = self.on_event.clone();
                                 let hook_reg = self.hook_registry.clone();
@@ -871,11 +865,7 @@ impl Runner {
                     }));
 
                     let tool = None;
-                    let tool_service = self
-                        .app
-                        .state::<crate::commands::AppState>()
-                        .tool_service
-                        .clone();
+                    let tool_service = self.ctx.tool_service.clone();
                     let app = self.app.clone();
                     let hook_reg = self.hook_registry.clone();
                     let cache = self.cache.clone();

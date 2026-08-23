@@ -827,6 +827,7 @@ Always use these specialized code blocks for visual scenarios:
     let runner = {
         let mut r = Runner::new(
             app.clone(),
+            app.state::<crate::services::agent_context::AgentContext>().inner().clone(),
             state.tool_registry_v1.clone(),
             state.agent_registry.clone(),
             state.hook_registry.clone(),

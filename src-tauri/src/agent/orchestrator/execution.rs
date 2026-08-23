@@ -2,7 +2,6 @@ use anyhow::Result;
 use serde_json::json;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use tauri::Manager;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
@@ -277,7 +276,7 @@ impl Orchestrator {
         // parent abort still cascades.
         let task_token = token.child_token();
         {
-            let app_state = self.app.state::<crate::commands::AppState>();
+            let app_state = &self.ctx;
             app_state
                 .subagent_cancellation_tokens
                 .lock()
@@ -304,7 +303,7 @@ impl Orchestrator {
         };
         let duration_ms = start_time.elapsed().as_millis() as u64;
         {
-            let app_state = self.app.state::<crate::commands::AppState>();
+            let app_state = &self.ctx;
             app_state
                 .subagent_cancellation_tokens
                 .lock()

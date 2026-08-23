@@ -31,7 +31,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use tokio::sync::{Mutex, Notify, RwLock};
 use tokio_util::sync::CancellationToken;
-use tauri::{Emitter, Manager};
+use tauri::Emitter;
 
 use crate::db::models::ChatMessage;
 
@@ -304,6 +304,25 @@ impl ChatPauseControl {
         self.paused.load(std::sync::atomic::Ordering::SeqCst)
     }
 
+    /// Phase 6: shared pause-wait core, extracted verbatim from the
+    /// historical `wait_for_chat_resume` loop so both the legacy AppHandle
+    /// wrapper and `AgentContext::wait_for_chat_resume` share one body.
+    /// Returns false only when cancellation wins while paused.
+    pub async fn wait_while_paused(&self, token: &CancellationToken) -> bool {
+        while self.is_paused() && !token.is_cancelled() {
+            let notified = self.notify.notified();
+            if !self.is_paused() {
+                break;
+            }
+            tokio::select! {
+                _ = notified => {}
+                _ = token.cancelled() => return false,
+            }
+        }
+
+        !token.is_cancelled()
+    }
+
 }
 
 impl Default for ChatPauseControl {
@@ -312,40 +331,15 @@ impl Default for ChatPauseControl {
     }
 }
 
-/// Wait at a cooperative execution boundary without cancelling the active run.
-/// Returns false only when Stop/cancellation wins while the run is paused.
-pub async fn wait_for_chat_resume(
-    app: &tauri::AppHandle,
-    chat_id: &str,
-    token: &CancellationToken,
-) -> bool {
-    let control = if let Some(state) = app.try_state::<AppState>() {
-        state.chat_pause_controls.lock().await.get(chat_id).cloned()
-    } else {
-        None
-    };
-
-    let Some(control) = control else {
-        return !token.is_cancelled();
-    };
-
-    while control.is_paused() && !token.is_cancelled() {
-        let notified = control.notify.notified();
-        if !control.is_paused() {
-            break;
-        }
-        tokio::select! {
-            _ = notified => {}
-            _ = token.cancelled() => return false,
-        }
-    }
-
-    !token.is_cancelled()
-}
+// Phase 6: the former `wait_for_chat_resume` AppHandle wrapper was deleted —
+// its logic core lives on `ChatPauseControl::wait_while_paused` and every
+// caller reaches it via `AgentContext::wait_for_chat_resume`.
 
 #[allow(clippy::type_complexity)]
 pub struct AppState {
-    pub db: InitState<SqlitePool>,
+    /// Wrapped in `Arc` so `AgentContext` can share the same instance
+    /// (Phase 6 seam); `Deref` keeps every existing call site identical.
+    pub db: Arc<InitState<SqlitePool>>,
     pub llm: InitState<Arc<dyn LlmProvider>>,
     pub tools: crate::tools::GlobalToolRegistry,
     pub tool_registry_v1: Arc<RwLock<crate::agent::tools::ToolRegistry>>,
@@ -366,7 +360,8 @@ pub struct AppState {
     pub chat_cancellation_tokens: Arc<tokio::sync::Mutex<HashMap<String, CancellationToken>>>,
     pub chat_pause_controls: Arc<tokio::sync::Mutex<HashMap<String, Arc<ChatPauseControl>>>>,
     pub rag: InitState<Arc<dyn crate::rag::VectorStore>>,
-    pub conversation_store: InitState<Arc<crate::rag::conversation_store::ConversationStore>>,
+    /// Arc-shared with `AgentContext` (Phase 6 seam); `Deref`-transparent.
+    pub conversation_store: Arc<InitState<Arc<crate::rag::conversation_store::ConversationStore>>>,
     pub workspace_folder: Arc<RwLock<PathBuf>>,
     pub graph_sessions:
         Arc<tokio::sync::Mutex<HashMap<String, crate::canvas::session::GraphSession>>>,
@@ -549,7 +544,7 @@ impl AppState {
         let mcp_consent = Arc::new(crate::services::McpConsentStore::new(security.clone()));
 
         Self {
-            db: InitState::new(),
+            db: Arc::new(InitState::new()),
             llm: InitState::new(),
             tools: tool_registry_v2.clone(),
             tool_registry_v1: tool_registry_v1.clone(),
@@ -572,7 +567,7 @@ impl AppState {
             chat_cancellation_tokens: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             chat_pause_controls: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             rag: InitState::new(),
-            conversation_store: InitState::new(),
+            conversation_store: Arc::new(InitState::new()),
             workspace_folder: workspace_folder_arc.clone(),
             graph_sessions: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             session_memory: Arc::new(RwLock::new(shared_session_memory)),

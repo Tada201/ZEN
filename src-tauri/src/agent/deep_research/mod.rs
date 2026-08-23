@@ -7,11 +7,12 @@ pub(crate) mod types;
 pub(crate) use types::DeepResearchParams;
 
 use serde_json::json;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 use tracing::{error, info};
 
 use crate::agent::event_bus::{AgentEvent, ChatDonePayload};
 use crate::db::queries;
+use crate::services::agent_context::AgentContext;
 
 /// Run the iterative deep research pipeline.
 ///
@@ -34,13 +35,18 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
     } = params;
     info!(chat_id = %chat_id, query = %query, "Starting Iterative Deep Research");
 
+    // Phase 6 seam: acquire the shared context once; every emit below goes
+    // through the EventSink port (byte-identical to the former `app.emit`).
+    let ctx = app.state::<AgentContext>().inner().clone();
+    let events = ctx.events.clone();
+
     // Helper to emit research step events with phase info.
     // Uses &str ref to avoid capturing String by value (keeps closure Fn, not FnOnce).
     let chat_id_ref: &str = &chat_id;
-    let emit_step = |text: &str, status: &str, msg_id: &str, phase: &str, progress_percent: u8| {
-        let _ = app.emit(
+    let emit_step = move |text: &str, status: &str, msg_id: &str, phase: &str, progress_percent: u8| {
+        events.emit(
             "chat:research-step",
-            json!({
+            &json!({
                 "chat_id": chat_id_ref,
                 "message_id": msg_id,
                 "text": text,
@@ -77,11 +83,10 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
     let message_id = message.id.clone();
 
     // 2. Run the iterative research engine
-    let state = app.state::<crate::commands::AppState>();
     let mut engine = engine::IterativeDeepResearcher::new(
         &app,
         llm_provider,
-        &state,
+        &ctx,
         &db,
         &model,
         &config,
@@ -118,7 +123,7 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
                 ..Default::default()
             },
         ).await;
-        let _ = app.emit("chat:message", json!({
+        ctx.events.emit("chat:message", &json!({
             "chat_id": chat_id,
             "id": message_id,
             "timestamp": chrono::Utc::now().to_rfc3339(),
@@ -181,9 +186,9 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
             }
 
             // Emit the final report to the chat UI
-            let _ = app.emit(
+            ctx.events.emit(
                 "chat:message",
-                json!({
+                &json!({
                     "chat_id": chat_id,
                     "id": message_id,
                     "timestamp": chrono::Utc::now().to_rfc3339(),
@@ -269,9 +274,9 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
                 save_artifact(&db, &chat_id, &message_id, &query, &partial).await;
             }
 
-            let _ = app.emit(
+            ctx.events.emit(
                 "chat:message",
-                json!({
+                &json!({
                     "chat_id": chat_id,
                     "id": message_id,
                     "timestamp": chrono::Utc::now().to_rfc3339(),
