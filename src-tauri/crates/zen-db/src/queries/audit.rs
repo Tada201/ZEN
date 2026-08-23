@@ -1,5 +1,5 @@
-use crate::db::models::AuditLogEntry;
-use crate::error::ZenResult;
+use crate::models::AuditLogEntry;
+use zen_core::ZenResult;
 use sqlx::SqlitePool;
 
 pub async fn init_audit_events(pool: &SqlitePool) -> ZenResult<()> {
@@ -17,13 +17,13 @@ pub async fn init_audit_events(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
 
     sqlx::query(
         "CREATE INDEX IF NOT EXISTS idx_audit_events_timestamp ON audit_events(timestamp DESC)",
     )
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
 
     Ok(())
 }
@@ -40,7 +40,7 @@ pub async fn add_audit_event(pool: &SqlitePool, event: &AuditLogEntry) -> ZenRes
     .bind(&event.target)
     .bind(&event.reason)
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(())
 }
 
@@ -51,6 +51,6 @@ pub async fn list_audit_events(pool: &SqlitePool, limit: i64) -> ZenResult<Vec<A
     )
     .bind(limit)
     .fetch_all(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(events)
 }

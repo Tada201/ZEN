@@ -189,7 +189,9 @@ and wire concrete impls into trait seams); their *logic cores* move down.
 ### 3.3 Cross-crate DTO ownership (review finding)
 
 Shared wire/domain types used by 2+ crates live in `zen-core` — specifically:
-`ToolInfo` (today duplicated across `llm/{anthropic,chat,ollama,openai_compat}`,
+`ToolInfo` (historically duplicated across `llm/{anthropic,chat,ollama,openai_compat}`;
+since Phase 2 defined once at `zen-core/src/types.rs:12`, with all llm sites
+consuming it via re-export),
 `llm/mod.rs:87,228`), a `ProviderConfig` **DTO** (the persistence model stays
 in zen-db; app converts at the boundary), event payloads, and risk/approval
 enums consumed by UI-facing types. Rule of thumb: if two crates would need it,
@@ -399,7 +401,9 @@ phase DEFINES seams; adoption happens in later phases.
       takes over the sqlx `#[from]` sugar with its own error type.
 - [x] Create `src-tauri/crates/zen-core`. Deps kept BELOW the plan ceiling
       (serde + derive, serde_json, thiserror, async-trait — only what is
-      used; tokio/tracing/uuid/chrono join when contents need them).
+      used; tokio/tracing/uuid/chrono join when contents need them; note
+      `async-trait` was already consumed at extraction time for the port
+      traits).
       NO reqwest, NO sqlx, NO tauri (tree-verified).
 - [x] `src/error.rs` → `zen-core/src/error.rs` (post-split); app re-exports
       `pub use zen_core::error::{AppError, AppResult, ZenError, ZenResult};`
@@ -442,19 +446,83 @@ RULES.md already forbids SQL outside db/queries.
 **Prerequisites:** Phase 2 (zen-core exists).
 
 **Tasks**
-- [ ] Move `src/db/**` → `crates/zen-db/src/**`. Split `db/mod.rs` (959 lines)
-      DURING the move into `pool.rs`, `migrations.rs`, and per-area modules —
-      do not carry the oversized file across.
-- [ ] zen-db deps: sqlx (sqlite/json/runtime-tokio), tokio, tracing, serde_json,
-      zen-core. NO tauri.
-- [ ] Replace `crate::db::` paths in app crate with `zen_db::` (mechanical).
-- [ ] Migrations: verify idempotency tests still run; migration runner stays
-      invoked from app boot path.
-- [ ] Confirm every query keeps LIMIT/pagination caps per RULES.md.
+- [x] Moved `src/db/**` → `crates/zen-db/src/**` (36 files, 5,458 lines).
+      The 959-line `db/mod.rs` was split DURING the move — not carried
+      across: `pool.rs` (pool construction + connect policy), `error.rs`
+      (crate-local Error + `into_zen()` boundary conversion + `db_err`),
+      `migrations/` (runner + 11 step files, one per schema area), and the
+      20 `queries/` modules + `models.rs` moved verbatim modulo import
+      rewrites (`crate::error::db_err` → `crate::db_err`,
+      `crate::db::models::` → `crate::models::`,
+      `crate::llm::ReasoningCapability` → `zen_core::ReasoningCapability`).
+      App side kept whole via §4.6 shim: `src/db/mod.rs` is now 5 lines
+      (`pub use zen_db::{init_pool, models, queries};`) — audited first that
+      all 87 app consumers use only those 3 symbols.
+- [x] zen-db deps: zen-core, sqlx, tokio, tracing, serde_json + serde/derive,
+      uuid, chrono, thiserror (models derive needs). NO tauri, NO reqwest
+      (tree-verified — the single `grep tauri` match is the `src-tauri`
+      path string in the zen-core path-dep line, same false positive as
+      Phase 2).
+- [x] Call sites: NOT rewritten — relocation doctrine §4.6 (shim above).
+      `crate::db::` paths in the app compile unchanged; shim deleted in
+      Phase 14 with the rest.
+- [x] Migrations: runner lives in zen-db and stays invoked from app boot
+      (via `init_pool` → `run_migrations`); ordering of the 17 step fns +
+      the 2 inline post-steps (`init_session_permissions`,
+      `migrate_legacy_trace_rows`) preserved; `AGENTS.md` rule 0.2 says
+      cross-check `Zen_rs_old/` if ordering is doubted.
+- [x] Pagination audit (RULES.md caps): 9 `fetch_all` statements without
+      explicit LIMIT — all pre-existing, verbatim-moved: chat-scoped fetches
+      (bounded by chat membership), backup/export helpers (must be full
+      sets by definition), and bounded lookups (settings keys, usage
+      buckets). No new unbounded query introduced by the move.
+- [x] **Execution additions (deviations):**
+      1. **Reasoning DTOs relocated to zen-core**: db/models.rs derives on
+         `ReasoningCapability`, which lived in `src/llm/reasoning/mod.rs`.
+         The whole DTO family (ReasoningSupport…ResolvedReasoningRequest)
+         is tauri/reqwest-free and moved verbatim to
+         `zen-core/src/reasoning.rs`; app module re-exports
+         (`pub use zen_core::reasoning::*`) so llm/encoder call sites
+         compile untouched.
+      2. **WAL fix (pre-existing latent bug found by the moved tests)**:
+         `journal_mode=WAL` was a post-connect PRAGMA in the old runner —
+         sqlx pooled connections don't keep pragma-set journal mode, so
+         FRESH databases silently ran in rollback-journal mode (production
+         DBs were converted long ago, masking it). Fixed at the source:
+         `.journal_mode(SqliteJournalMode::Wal)` on `SqliteConnectOptions`
+         in pool.rs; the pragma block is kept in the runner verbatim for
+         the non-WAL pragmas.
+      3. **add_message → BEGIN IMMEDIATE**: its deferred `pool.begin()` +
+         INSERT was a read→write lock upgrade that bypasses the busy
+         handler (SQLITE_BUSY under a concurrent writer). Converted to the
+         repo's established explicit-tx pattern (precedent:
+         update_message, artifacts). This is what the busy-writer test
+         exercises.
+      4. **The busy-writer test had never executed before**: local runs
+         were blocked by STATUS_ENTRYPOINT_NOT_FOUND (tauri-linked exes)
+         and CI runs `--bin zen` only. As a pure crate, zen-db's tests now
+         RUN locally — the test failed initially (findings above) and
+         passes after both fixes.
+      5. gtsm.rs telemetry fns returned `anyhow::Result`; converted to
+         `ZenResult` (command layer already stringified via
+         `.map_err(|e| ZenError::Internal(e.to_string()))` — rendered
+         messages identical).
 
 **Verification gates**
-- `cargo test -p zen-db` green (move existing db tests into the crate).
-- Gate suite green; app boots and reads/writes DB normally.
+- [x] `cargo test -p zen-db` green: **5/5 passed** (including the previously
+      never-executed busy-writer + WAL-mode assertions; 4 were failing
+      before the WAL + BEGIN IMMEDIATE fixes — the move surfaced real
+      behavior, not test drift).
+- [x] Gate suite green: `cargo check --workspace --all-targets` ✅,
+      `cargo clippy --workspace --all-targets -- -D warnings` ✅,
+      `cargo test --workspace --no-run` ✅ (6 test executables incl.
+      zen-db's own), `npm run build` ✅ (frontend untouched by this
+      phase), `cargo metadata` members: zen, zen-core, zen-db,
+      zen-policy-tests. `cargo tree -p zen-db` tauri/reqwest guard: 0
+      real matches (path-string false positive documented). Full
+      `cargo test --workspace` execution remains CI-gated by the
+      pre-existing local loader issue (unchanged); "app boots and
+      reads/writes DB normally" rides on the same CI/manual visual gate.
 
 **Rollback:** git revert phase commit range.
 

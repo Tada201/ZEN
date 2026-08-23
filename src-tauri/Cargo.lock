@@ -13122,6 +13122,7 @@ dependencies = [
  "windows-sys 0.59.0",
  "wiremock",
  "zen-core",
+ "zen-db",
  "zip 4.6.1",
 ]
 
@@ -13133,6 +13134,22 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "zen-db"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "uuid",
+ "zen-core",
 ]
 
 [[package]]

@@ -24,6 +24,7 @@ futures = "0.3"
 async-trait = "0.1"
 anyhow = "1.0"
 zen-core = { path = "crates/zen-core" }
+zen-db = { path = "crates/zen-db" }
 
 [package]
 name = "zen"
@@ -65,6 +66,7 @@ reqwest = { workspace = true, features = ["native-tls", "json", "stream", "multi
 futures = { workspace = true }
 async-trait = { workspace = true }
 zen-core = { workspace = true }
+zen-db = { workspace = true }
 sysinfo = "0.38"
 axum = { version = "0.8", features = ["default", "ws"] }
 tower-http = { version = "0.6", features = ["cors"] }

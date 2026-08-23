@@ -1,5 +1,5 @@
-use crate::db::models::WorkbenchTab;
-use crate::error::ZenResult;
+use crate::models::WorkbenchTab;
+use zen_core::ZenResult;
 use sqlx::SqlitePool;
 
 pub async fn list_workbench_tabs(pool: &SqlitePool, chat_id: &str) -> ZenResult<Vec<WorkbenchTab>> {
@@ -10,7 +10,7 @@ pub async fn list_workbench_tabs(pool: &SqlitePool, chat_id: &str) -> ZenResult<
     .bind(chat_id)
     .fetch_all(pool)
     .await
-    .map_err(crate::error::db_err)
+    .map_err(crate::db_err)
 }
 
 pub async fn upsert_workbench_tab(
@@ -35,7 +35,7 @@ pub async fn upsert_workbench_tab(
     .bind(tab.position)
     .bind(&tab.state_json)
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(())
 }
 
@@ -44,6 +44,6 @@ pub async fn delete_workbench_tab(pool: &SqlitePool, chat_id: &str, tab_id: &str
         .bind(chat_id)
         .bind(tab_id)
         .execute(pool)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
     Ok(())
 }

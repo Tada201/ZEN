@@ -1,4 +1,4 @@
-use crate::error::ZenResult;
+use zen_core::ZenResult;
 use sqlx::SqlitePool;
 
 pub async fn add_clarification_request(
@@ -23,7 +23,7 @@ pub async fn add_clarification_request(
     .bind(options_json)
     .bind(created_at)
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
 
     Ok(())
 }
@@ -45,7 +45,7 @@ pub async fn update_clarification_response(
     .bind(responded_at)
     .bind(chat_id)
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
 
     Ok(())
 }

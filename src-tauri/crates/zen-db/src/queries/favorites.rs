@@ -1,4 +1,4 @@
-use crate::error::ZenResult;
+use zen_core::ZenResult;
 use sqlx::SqlitePool;
 
 const MAX_GTSM_FAVORITES: i64 = 500;
@@ -26,7 +26,7 @@ pub async fn list_favorites(pool: &SqlitePool) -> ZenResult<Vec<GtsmFavorite>> {
     )
     .bind(MAX_GTSM_FAVORITES)
     .fetch_all(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(favorites)
 }
 
@@ -49,7 +49,7 @@ pub async fn save_favorite(pool: &SqlitePool, favorite: &GtsmFavorite) -> ZenRes
     .bind(favorite.lon)
     .bind(favorite.alt)
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(())
 }
 
@@ -57,6 +57,6 @@ pub async fn delete_favorite(pool: &SqlitePool, id: &str) -> ZenResult<()> {
     sqlx::query("DELETE FROM gtsm_favorites WHERE id = ?")
         .bind(id)
         .execute(pool)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
     Ok(())
 }

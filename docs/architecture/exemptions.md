@@ -87,13 +87,6 @@ Reason: Escalation policy and flow coordination in one file.
 Split or Fix Plan: Move to zen-agent during Phase 11 and split into runner/escalation/{policy.rs, flow.rs}.
 Expires: migration/phase-11-done
 
-File: src-tauri/src/db/mod.rs (1,056)
-Owner: backend/db
-Rule Exempted: Rust hard file-size limit
-Reason: Pool setup, inline migration SQL, and module wiring share db/mod.rs.
-Split or Fix Plan: Move to zen-db during Phase 3 and split into pool.rs, migrations.rs, per-area modules (do not carry the oversized file across).
-Expires: migration/phase-03-done
-
 File: src-tauri/src/llm/anthropic.rs (1,011)
 Owner: backend/llm
 Rule Exempted: Rust hard file-size limit

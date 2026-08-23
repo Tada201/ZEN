@@ -8,7 +8,11 @@
 //! adapters convert at their boundary (see app `src/error.rs` helpers).
 
 pub mod error;
+
+pub use error::{ZenError, ZenResult};
+pub use reasoning::ReasoningCapability;
 pub mod ports;
+pub mod reasoning;
 mod types;
 
 pub use types::{ProviderConfig, SystemMetrics, ToolInfo};

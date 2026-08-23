@@ -1,4 +1,4 @@
-use crate::error::ZenResult;
+use zen_core::ZenResult;
 use sqlx::SqlitePool;
 
 pub async fn get_orchestration_plan_counts(pool: &SqlitePool) -> ZenResult<(usize, usize)> {

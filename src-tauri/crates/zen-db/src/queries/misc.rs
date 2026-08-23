@@ -1,5 +1,5 @@
-use crate::db::models::*;
-use crate::error::ZenResult;
+use crate::models::*;
+use zen_core::ZenResult;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
@@ -30,7 +30,7 @@ pub async fn save_orchestration_plan(pool: &SqlitePool, plan: &OrchestrationPlan
     .bind(&plan.created_at)
     .bind(&plan.updated_at)
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(())
 }
 
@@ -58,7 +58,7 @@ pub async fn save_orchestration_task(pool: &SqlitePool, task: &OrchestrationTask
     .bind(&task.created_at)
     .bind(&task.updated_at)
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(())
 }
 
@@ -70,7 +70,7 @@ pub async fn get_orchestration_plan(
         sqlx::query_as::<_, OrchestrationPlan>("SELECT * FROM orchestration_plans WHERE id = ?")
             .bind(plan_id)
             .fetch_one(pool)
-            .await.map_err(crate::error::db_err)?;
+            .await.map_err(crate::db_err)?;
     Ok(plan)
 }
 
@@ -82,7 +82,7 @@ pub async fn get_orchestration_tasks(
         .bind(plan_id)
         .bind(MAX_ORCHESTRATION_TASK_ITEMS)
         .fetch_all(pool)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
     Ok(tasks)
 }
 
@@ -96,7 +96,7 @@ pub async fn get_orchestration_plans_by_chat(
     .bind(chat_id)
     .bind(MAX_ORCHESTRATION_PLAN_ITEMS)
     .fetch_all(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(plans)
 }
 
@@ -111,7 +111,7 @@ pub async fn update_orchestration_task_status(
         .bind(result)
         .bind(task_id)
         .execute(pool)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
     Ok(())
 }
 
@@ -126,13 +126,13 @@ pub async fn update_orchestration_plan_status(
     .bind(status)
     .bind(plan_id)
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(())
 }
 
 // --- Skills, Hooks & Commands ---
 
-use crate::db::models::{Hook, HookLogEntry, Skill, ZenCommand};
+use crate::models::{Hook, HookLogEntry, Skill, ZenCommand};
 
 pub async fn list_skills(pool: &SqlitePool) -> ZenResult<Vec<Skill>> {
     let skills = sqlx::query_as::<_, Skill>(
@@ -140,7 +140,7 @@ pub async fn list_skills(pool: &SqlitePool) -> ZenResult<Vec<Skill>> {
     )
     .bind(MAX_SKILL_ITEMS)
     .fetch_all(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(skills)
 }
 
@@ -149,7 +149,7 @@ pub async fn set_skill_enabled(pool: &SqlitePool, skill_id: &str, enabled: bool)
         .bind(enabled as i32)
         .bind(skill_id)
         .execute(pool)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
     Ok(())
 }
 
@@ -157,7 +157,7 @@ pub async fn list_hooks(pool: &SqlitePool) -> ZenResult<Vec<Hook>> {
     let hooks = sqlx::query_as::<_, Hook>("SELECT * FROM hooks ORDER BY name ASC LIMIT ?")
         .bind(MAX_HOOK_ITEMS)
         .fetch_all(pool)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
     Ok(hooks)
 }
 
@@ -166,7 +166,7 @@ pub async fn set_hook_enabled(pool: &SqlitePool, hook_id: &str, enabled: bool) -
         .bind(enabled as i32)
         .bind(hook_id)
         .execute(pool)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
     Ok(())
 }
 
@@ -175,7 +175,7 @@ pub async fn list_commands(pool: &SqlitePool) -> ZenResult<Vec<ZenCommand>> {
         sqlx::query_as::<_, ZenCommand>("SELECT * FROM zen_commands ORDER BY name ASC LIMIT ?")
             .bind(MAX_COMMAND_ITEMS)
             .fetch_all(pool)
-            .await.map_err(crate::error::db_err)?;
+            .await.map_err(crate::db_err)?;
     Ok(commands)
 }
 
@@ -185,7 +185,7 @@ pub async fn toggle_command(pool: &SqlitePool, id: &str) -> ZenResult<()> {
     )
     .bind(id)
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(())
 }
 
@@ -195,7 +195,7 @@ pub async fn get_hook_logs(pool: &SqlitePool, limit: i64) -> ZenResult<Vec<HookL
     )
     .bind(limit)
     .fetch_all(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(logs)
 }
 
@@ -210,7 +210,7 @@ pub async fn add_hook_log(pool: &SqlitePool, log: &HookLogEntry) -> ZenResult<()
     .bind(&log.result)
     .bind(&log.message)
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(())
 }
 
@@ -233,14 +233,14 @@ pub async fn save_summary(
     .bind(message_count)
     .bind(token_count)
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
 
     let sum = sqlx::query_as::<_, ConversationSummary>(
         "SELECT * FROM conversation_summaries WHERE id = ?",
     )
     .bind(&id)
     .fetch_one(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(sum)
 }
 
@@ -253,7 +253,7 @@ pub async fn get_current_summary(
     )
     .bind(chat_id)
     .fetch_optional(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(sum)
 }
 
@@ -267,7 +267,7 @@ pub async fn get_previous_summaries(
     .bind(chat_id)
     .bind(MAX_PREVIOUS_SUMMARY_ITEMS + 1)
     .fetch_all(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
 
     if summaries.len() > 1 {
         let count = summaries.len();
@@ -286,7 +286,7 @@ pub async fn mark_messages_compacted(
         .bind(chat_id)
         .bind(up_to_created_at)
         .execute(pool)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
     Ok(())
 }
 
@@ -312,7 +312,7 @@ pub async fn mark_messages_compacted_by_ids(pool: &SqlitePool, ids: &[String]) -
     for id in ids {
         q = q.bind(id);
     }
-    q.execute(pool).await.map_err(crate::error::db_err)?;
+    q.execute(pool).await.map_err(crate::db_err)?;
     Ok(())
 }
 
@@ -329,6 +329,6 @@ pub async fn get_active_messages(pool: &SqlitePool, chat_id: &str) -> ZenResult<
     )
     .bind(chat_id)
     .fetch_all(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(msgs)
 }

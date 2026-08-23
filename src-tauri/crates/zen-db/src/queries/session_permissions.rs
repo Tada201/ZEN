@@ -1,4 +1,4 @@
-use crate::error::ZenResult;
+use zen_core::ZenResult;
 use serde::{Deserialize, Serialize};
 use sqlx::{Row, SqlitePool};
 
@@ -27,7 +27,7 @@ pub async fn init_session_permissions(pool: &SqlitePool) -> ZenResult<()> {
         "#,
     )
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
 
     let _ = sqlx::query(
         "CREATE INDEX IF NOT EXISTS idx_session_permissions_chat ON session_permissions(chat_id);",
@@ -63,7 +63,7 @@ pub async fn upsert_session_permission(
     .bind(&perm.pattern)
     .bind(&perm.granted_at)
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(())
 }
 
@@ -79,7 +79,7 @@ pub async fn list_session_permissions_for_chat(
     )
     .bind(chat_id)
     .fetch_all(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(rows)
 }
 
@@ -91,7 +91,7 @@ pub async fn load_session_permission_map(
         sqlx::query("SELECT tool_name, args_hash FROM session_permissions WHERE chat_id = ?")
             .bind(chat_id)
             .fetch_all(pool)
-            .await.map_err(crate::error::db_err)?;
+            .await.map_err(crate::db_err)?;
 
     let mut map = std::collections::HashMap::new();
     for row in rows {
@@ -110,6 +110,6 @@ pub async fn delete_session_permission(pool: &SqlitePool, id: &str) -> ZenResult
     sqlx::query("DELETE FROM session_permissions WHERE id = ?")
         .bind(id)
         .execute(pool)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
     Ok(())
 }

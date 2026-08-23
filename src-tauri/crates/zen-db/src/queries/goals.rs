@@ -4,8 +4,8 @@
 
 use sqlx::SqlitePool;
 
-use crate::db::models::ThreadGoal;
-use crate::error::{ZenError, ZenResult};
+use crate::models::ThreadGoal;
+use zen_core::{ZenError, ZenResult};
 
 pub async fn get_thread_goal(pool: &SqlitePool, chat_id: &str) -> ZenResult<Option<ThreadGoal>> {
     let goal = sqlx::query_as::<_, ThreadGoal>(
@@ -13,7 +13,7 @@ pub async fn get_thread_goal(pool: &SqlitePool, chat_id: &str) -> ZenResult<Opti
     )
     .bind(chat_id)
     .fetch_optional(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(goal)
 }
 
@@ -38,7 +38,7 @@ pub async fn upsert_thread_goal(
     .bind(chat_id)
     .bind(objective)
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     get_thread_goal(pool, chat_id).await?.ok_or_else(|| {
         ZenError::Custom("goal row vanished immediately after upsert".to_string())
     })
@@ -55,7 +55,7 @@ pub async fn set_thread_goal_status(
     .bind(status)
     .bind(chat_id)
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     if result.rows_affected() == 0 {
         return Ok(None);
     }
@@ -68,7 +68,7 @@ pub async fn increment_thread_goal_turns(pool: &SqlitePool, chat_id: &str) -> Ze
     )
     .bind(chat_id)
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(())
 }
 
@@ -76,6 +76,6 @@ pub async fn delete_thread_goal(pool: &SqlitePool, chat_id: &str) -> ZenResult<(
     sqlx::query("DELETE FROM thread_goals WHERE chat_id = ?")
         .bind(chat_id)
         .execute(pool)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
     Ok(())
 }

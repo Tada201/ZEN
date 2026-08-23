@@ -1,5 +1,4 @@
-use crate::error::ZenResult;
-use anyhow::Result;
+use zen_core::ZenResult;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
@@ -10,7 +9,7 @@ const MAX_ENTITY_TRACK_POINTS: i64 = 2_000;
 
 // --- GTSM Geofences ---
 
-use crate::db::models::GtsmGeofence;
+use crate::models::GtsmGeofence;
 
 pub async fn list_geofences(pool: &SqlitePool) -> ZenResult<Vec<GtsmGeofence>> {
     list_geofences_page(pool, MAX_GTSM_GEOFENCE_ITEMS, 0).await
@@ -27,7 +26,7 @@ pub async fn list_geofences_page(
     .bind(limit.clamp(1, MAX_GTSM_GEOFENCE_ITEMS + 1))
     .bind(offset.max(0))
     .fetch_all(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(geofences)
 }
 
@@ -58,7 +57,7 @@ pub async fn save_geofence(pool: &SqlitePool, geofence: &GtsmGeofence) -> ZenRes
     .bind(geofence.box_west)
     .bind(geofence.alert_enabled)
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(())
 }
 
@@ -66,13 +65,13 @@ pub async fn delete_geofence(pool: &SqlitePool, id: &str) -> ZenResult<()> {
     sqlx::query("DELETE FROM gtsm_geofences WHERE id = ?")
         .bind(id)
         .execute(pool)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
     Ok(())
 }
 
 // --- GTSM Markers ---
 
-use crate::db::models::GtsmMarker;
+use crate::models::GtsmMarker;
 
 pub async fn list_markers(pool: &SqlitePool) -> ZenResult<Vec<GtsmMarker>> {
     list_markers_page(pool, MAX_GTSM_MARKER_ITEMS, 0).await
@@ -89,7 +88,7 @@ pub async fn list_markers_page(
     .bind(limit.clamp(1, MAX_GTSM_MARKER_ITEMS + 1))
     .bind(offset.max(0))
     .fetch_all(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(markers)
 }
 
@@ -114,7 +113,7 @@ pub async fn save_marker(pool: &SqlitePool, marker: &GtsmMarker) -> ZenResult<()
     .bind(&marker.icon)
     .bind(&marker.metadata)
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(())
 }
 
@@ -122,7 +121,7 @@ pub async fn delete_marker(pool: &SqlitePool, id: &str) -> ZenResult<()> {
     sqlx::query("DELETE FROM gtsm_markers WHERE id = ?")
         .bind(id)
         .execute(pool)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
     Ok(())
 }
 
@@ -152,13 +151,13 @@ pub async fn record_snapshot(
     pool: &SqlitePool,
     entity_type: &str,
     entities: Vec<(String, f64, f64, f64, Option<String>)>,
-) -> Result<()> {
+) -> ZenResult<()> {
     if entities.is_empty() {
         return Ok(());
     }
 
     let now = chrono::Utc::now().timestamp();
-    let mut tx = pool.begin().await.map_err(crate::error::db_err)?;
+    let mut tx = pool.begin().await.map_err(crate::db_err)?;
 
     for (entity_id, lat, lon, alt, metadata) in &entities {
         sqlx::query(
@@ -172,10 +171,10 @@ pub async fn record_snapshot(
         .bind(alt)
         .bind(metadata)
         .execute(&mut *tx)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
     }
 
-    tx.commit().await.map_err(crate::error::db_err)?;
+    tx.commit().await.map_err(crate::db_err)?;
     tracing::debug!(
         "Recorded {} {} snapshots at timestamp {}",
         entities.len(),
@@ -189,7 +188,7 @@ pub async fn query_history(
     pool: &SqlitePool,
     entity_type: &str,
     timestamp: i64,
-) -> Result<Vec<TelemetrySnapshot>> {
+) -> ZenResult<Vec<TelemetrySnapshot>> {
     query_history_page(pool, entity_type, timestamp, MAX_TELEMETRY_HISTORY_ITEMS, 0).await
 }
 
@@ -199,7 +198,7 @@ pub async fn query_history_page(
     timestamp: i64,
     limit: i64,
     offset: i64,
-) -> Result<Vec<TelemetrySnapshot>> {
+) -> ZenResult<Vec<TelemetrySnapshot>> {
     let nearest_ts: Option<i64> = sqlx::query_scalar(
         "SELECT timestamp FROM telemetry_snapshots
          WHERE entity_type = ?
@@ -209,7 +208,7 @@ pub async fn query_history_page(
     .bind(entity_type)
     .bind(timestamp)
     .fetch_optional(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
 
     let nearest = match nearest_ts {
         Some(ts) => ts,
@@ -227,7 +226,7 @@ pub async fn query_history_page(
     .bind(limit.clamp(1, MAX_TELEMETRY_HISTORY_ITEMS + 1))
     .bind(offset.max(0))
     .fetch_all(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
 
     Ok(rows)
 }
@@ -237,7 +236,7 @@ pub async fn query_entity_track(
     entity_id: &str,
     start_time: i64,
     end_time: i64,
-) -> Result<Vec<TrackPoint>> {
+) -> ZenResult<Vec<TrackPoint>> {
     query_entity_track_page(
         pool,
         entity_id,
@@ -256,7 +255,7 @@ pub async fn query_entity_track_page(
     end_time: i64,
     limit: i64,
     offset: i64,
-) -> Result<Vec<TrackPoint>> {
+) -> ZenResult<Vec<TrackPoint>> {
     let rows = sqlx::query_as::<_, TrackPoint>(
         "SELECT timestamp, lat, lon, alt FROM telemetry_snapshots
          WHERE entity_id = ? AND timestamp BETWEEN ? AND ?
@@ -269,27 +268,27 @@ pub async fn query_entity_track_page(
     .bind(limit.clamp(1, MAX_ENTITY_TRACK_POINTS + 1))
     .bind(offset.max(0))
     .fetch_all(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
 
     Ok(rows)
 }
 
-pub async fn get_available_timerange(pool: &SqlitePool) -> Result<Option<(i64, i64)>> {
+pub async fn get_available_timerange(pool: &SqlitePool) -> ZenResult<Option<(i64, i64)>> {
     let row: Option<(i64, i64)> =
         sqlx::query_as("SELECT MIN(timestamp), MAX(timestamp) FROM telemetry_snapshots")
             .fetch_optional(pool)
-            .await.map_err(crate::error::db_err)?;
+            .await.map_err(crate::db_err)?;
 
     Ok(row)
 }
 
-pub async fn cleanup_old_snapshots(pool: &SqlitePool, max_age_hours: i64) -> Result<u64> {
+pub async fn cleanup_old_snapshots(pool: &SqlitePool, max_age_hours: i64) -> ZenResult<u64> {
     let cutoff = chrono::Utc::now().timestamp() - (max_age_hours * 3600);
 
     let result = sqlx::query("DELETE FROM telemetry_snapshots WHERE timestamp < ?")
         .bind(cutoff)
         .execute(pool)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
 
     let deleted = result.rows_affected();
     if deleted > 0 {
@@ -303,15 +302,15 @@ pub async fn cleanup_old_snapshots(pool: &SqlitePool, max_age_hours: i64) -> Res
     Ok(deleted)
 }
 
-pub async fn get_storage_stats(pool: &SqlitePool) -> Result<(i64, i64)> {
+pub async fn get_storage_stats(pool: &SqlitePool) -> ZenResult<(i64, i64)> {
     let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM telemetry_snapshots")
         .fetch_one(pool)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
 
     let entities: i64 =
         sqlx::query_scalar("SELECT COUNT(DISTINCT entity_id) FROM telemetry_snapshots")
             .fetch_one(pool)
-            .await.map_err(crate::error::db_err)?;
+            .await.map_err(crate::db_err)?;
 
     Ok((total, entities))
 }

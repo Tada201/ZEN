@@ -1,7 +1,7 @@
 use serde::Serialize;
 use sqlx::{FromRow, QueryBuilder, Sqlite, SqlitePool};
 
-use crate::error::ZenResult;
+use zen_core::ZenResult;
 
 const MAX_MODELS: usize = 256;
 const MAX_HISTORY_ITEMS: i64 = 24;
@@ -96,7 +96,7 @@ pub async fn get_provider_usage(
     let models = summaries_query
         .build_query_as::<ModelUsageSummary>()
         .fetch_all(pool)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
 
     let total_requests = models.iter().map(|item| item.requests).sum();
     let total_tokens_in = models.iter().map(|item| item.tokens_in).sum();
@@ -112,7 +112,7 @@ pub async fn get_provider_usage(
     let history = history_query
         .build_query_as::<ModelUsageHistoryItem>()
         .fetch_all(pool)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
 
     let mut daily_query = QueryBuilder::<Sqlite>::new(
         "SELECT strftime('%Y-%m-%d', created_at) AS day, COUNT(*) AS requests, \
@@ -124,7 +124,7 @@ pub async fn get_provider_usage(
     let daily = daily_query
         .build_query_as::<UsageDay>()
         .fetch_all(pool)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
 
     Ok(ProviderUsageSnapshot {
         total_requests,

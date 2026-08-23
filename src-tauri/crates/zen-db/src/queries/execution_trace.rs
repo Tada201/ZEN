@@ -1,4 +1,4 @@
-use crate::error::{ZenError, ZenResult};
+use zen_core::{ZenError, ZenResult};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sqlx::{FromRow, SqlitePool};
@@ -291,7 +291,7 @@ pub async fn upsert_execution_trace(
         .bind(message_id)
         .bind(chat_id)
         .fetch_optional(pool)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
     if role.as_deref() != Some("assistant") {
         return Err(ZenError::Custom("No assistant message found for execution trace".to_string()));
     }
@@ -303,7 +303,7 @@ pub async fn upsert_execution_trace(
     let started_at = steps.iter().filter_map(|step| number_field(step, &["timestamp", "startTime"])).min();
     let completed_at = steps.iter().filter_map(|step| number_field(step, &["completedAt"])).max();
 
-    let mut tx = pool.begin().await.map_err(crate::error::db_err)?;
+    let mut tx = pool.begin().await.map_err(crate::db_err)?;
     sqlx::query(
         "INSERT INTO execution_traces (trace_id, chat_id, message_id, trace_version, status, started_at, completed_at, updated_at, event_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(trace_id) DO UPDATE SET status = excluded.status, trace_version = excluded.trace_version, started_at = excluded.started_at, completed_at = excluded.completed_at, updated_at = excluded.updated_at, event_count = excluded.event_count",
     )
@@ -317,12 +317,12 @@ pub async fn upsert_execution_trace(
     .bind(&now)
     .bind(steps.len() as i64)
     .execute(&mut *tx)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
 
     sqlx::query("DELETE FROM execution_trace_events WHERE trace_id = ?")
         .bind(&trace_id)
         .execute(&mut *tx)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
 
     let mut used_node_ids = HashSet::new();
     let mut last_sequence: i64 = -1;
@@ -392,7 +392,7 @@ pub async fn upsert_execution_trace(
         .bind(duration)
         .bind(retries)
         .execute(&mut *tx)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
     }
 
     // Keep recent traces queryable while bounding long-lived chats.
@@ -403,9 +403,9 @@ pub async fn upsert_execution_trace(
     .bind(chat_id)
     .bind(MAX_TRACES_PER_CHAT)
     .execute(&mut *tx)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
 
-    tx.commit().await.map_err(crate::error::db_err)?;
+    tx.commit().await.map_err(crate::db_err)?;
     get_execution_trace(pool, chat_id, message_id).await?
         .ok_or_else(|| ZenError::Custom("Execution trace was not available after persistence".to_string()))
 }
@@ -421,14 +421,14 @@ pub async fn get_execution_trace(
     .bind(chat_id)
     .bind(message_id)
     .fetch_optional(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     let Some(record) = record else { return Ok(None); };
     let events = sqlx::query_as::<_, ExecutionTraceEventRecord>(
         "SELECT id, trace_id, node_id, run_id, sequence, parent_id, kind, phase, summary, target, result_summary, output_preview, agent_id, agent_name, safe_details_json, payload_json, started_at, completed_at, duration_ms, retry_count FROM execution_trace_events WHERE trace_id = ? ORDER BY sequence ASC, rowid ASC",
     )
     .bind(&record.trace_id)
     .fetch_all(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     let nodes = nodes_from_events(&events, &record.message_id);
     let steps = events
         .iter()
@@ -458,7 +458,7 @@ pub async fn list_execution_traces(
     )
     .bind(chat_id)
     .fetch_all(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     let mut snapshots = Vec::with_capacity(records.len());
     for record in records {
         let events = sqlx::query_as::<_, ExecutionTraceEventRecord>(
@@ -466,7 +466,7 @@ pub async fn list_execution_traces(
         )
         .bind(&record.trace_id)
         .fetch_all(pool)
-        .await.map_err(crate::error::db_err)?;
+        .await.map_err(crate::db_err)?;
         let nodes = nodes_from_events(&events, &record.message_id);
         let steps = events
             .iter()
@@ -498,7 +498,7 @@ pub async fn migrate_legacy_trace_rows(pool: &SqlitePool) -> ZenResult<()> {
         "INSERT OR IGNORE INTO execution_traces (trace_id, chat_id, message_id, trace_version, status, updated_at, event_count) SELECT 'trace:' || id, chat_id, id, 1, COALESCE(json_extract(steps_json, '$.trace_status'), 'checkpoint'), COALESCE(json_extract(steps_json, '$.saved_at'), datetime('now')), 0 FROM messages WHERE role = 'assistant' AND steps_json IS NOT NULL AND json_valid(steps_json)",
     )
     .execute(pool)
-    .await.map_err(crate::error::db_err)?;
+    .await.map_err(crate::db_err)?;
     Ok(())
 }
 
